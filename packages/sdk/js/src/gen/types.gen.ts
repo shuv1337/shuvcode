@@ -7,6 +7,18 @@ export type EventInstallationUpdated = {
   }
 }
 
+export type EventConfigUpdated = {
+  type: "config.updated"
+  properties: {
+    scope: "project" | "global"
+    directory?: string
+    refreshed?: boolean
+    before: unknown
+    after: unknown
+    diff: unknown
+  }
+}
+
 export type EventLspClientDiagnostics = {
   type: "lsp.client.diagnostics"
   properties: {
@@ -642,6 +654,7 @@ export type EventFileWatcherUpdated = {
 
 export type Event =
   | EventInstallationUpdated
+  | EventConfigUpdated
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventMessageUpdated
