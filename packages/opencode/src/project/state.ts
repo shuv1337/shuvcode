@@ -164,6 +164,7 @@ export namespace State {
 
       tasks.push(task)
     }
+    entries.clear()
     recordsByKey.delete(key)
     await Promise.all(tasks)
     disposalFinished = true
