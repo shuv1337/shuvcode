@@ -6,7 +6,6 @@ import z from "zod"
 import { Config } from "../config/config"
 import { spawn } from "child_process"
 import { Instance } from "../project/instance"
-import { State } from "../project/state"
 import { Bus } from "../bus"
 
 export namespace LSP {
@@ -59,9 +58,7 @@ export namespace LSP {
     })
   export type DocumentSymbol = z.infer<typeof DocumentSymbol>
 
-  const state = State.register(
-    "lsp",
-    () => Instance.directory,
+  const state = Instance.state(
     async () => {
       const clients: LSPClient.Info[] = []
       const servers: Record<string, LSPServer.Info> = {}

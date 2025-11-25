@@ -2,8 +2,8 @@ import { FileDiff, Message, Model, Part, Session, SessionStatus, UserMessage } f
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { DataProvider } from "@opencode-ai/ui/context"
-import { createAsync, query, RouteDefinition, useParams } from "@solidjs/router"
-import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Suspense, Switch } from "solid-js"
+import { createAsync, query, useParams } from "@solidjs/router"
+import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
 import { Share } from "~/core/share"
 import { Logo, Mark } from "@opencode-ai/ui/logo"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -16,6 +16,7 @@ import { createStore } from "solid-js/store"
 import z from "zod"
 import NotFound from "../[...404]"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { preloadMultiFileDiff, PreloadMultiFileDiffResult } from "@pierre/precision-diffs/ssr"
 
 const SessionDataMissingError = NamedError.create(
   "SessionDataMissingError",
@@ -36,6 +37,9 @@ const getData = query(async (shareID) => {
     session_diff: {
       [sessionID: string]: FileDiff[]
     }
+    session_diff_preload: {
+      [sessionID: string]: PreloadMultiFileDiffResult<any>[]
+    }
     session_status: {
       [sessionID: string]: SessionStatus
     }
@@ -54,6 +58,9 @@ const getData = query(async (shareID) => {
     session_diff: {
       [share.sessionID]: [],
     },
+    session_diff_preload: {
+      [share.sessionID]: [],
+    },
     session_status: {
       [share.sessionID]: {
         type: "idle",
@@ -70,6 +77,29 @@ const getData = query(async (shareID) => {
         break
       case "session_diff":
         result.session_diff[share.sessionID] = item.data
+        result.session_diff_preload[share.sessionID] = await Promise.all(
+          item.data.map(async (diff) =>
+            preloadMultiFileDiff<any>({
+              oldFile: { name: diff.file, contents: diff.before },
+              newFile: { name: diff.file, contents: diff.after },
+              options: {
+                theme: "OpenCode",
+                themeType: "system",
+                disableLineNumbers: false,
+                overflow: "wrap",
+                diffStyle: "unified",
+                diffIndicators: "bars",
+                disableBackground: false,
+                expansionLineCount: 20,
+                lineDiffType: "none",
+                maxLineDiffLength: 1000,
+                maxLineLengthForHighlighting: 1000,
+                disableFileHeader: true,
+              },
+              // annotations,
+            }),
+          ),
+        )
         break
       case "message":
         result.message[item.data.sessionID] = result.message[item.data.sessionID] ?? []
@@ -141,7 +171,14 @@ export default function () {
               const provider = createMemo(() => activeMessage()?.model?.providerID)
               const modelID = createMemo(() => activeMessage()?.model?.modelID)
               const model = createMemo(() => data().model[data().sessionID]?.find((m) => m.id === modelID()))
-              const diffs = createMemo(() => data().session_diff[data().sessionID] ?? [])
+              const diffs = createMemo(() => {
+                const diffs = data().session_diff[data().sessionID] ?? []
+                const preloaded = data().session_diff_preload[data().sessionID] ?? []
+                return diffs.map((diff) => ({
+                  ...diff,
+                  preloaded: preloaded.find((d) => d.newFile.name === diff.file),
+                }))
+              })
 
               const title = () => (
                 <div class="flex flex-col gap-4 shrink-0">
@@ -226,7 +263,7 @@ export default function () {
                         <div class="flex items-start justify-start h-full min-h-0">
                           <Show when={messages().length > 1}>
                             <>
-                              <div class="xl:hidden absolute right-full">
+                              <div class="md:hidden absolute right-full">
                                 <MessageNav
                                   class="mt-2 mr-3"
                                   messages={messages()}
@@ -237,7 +274,7 @@ export default function () {
                               </div>
                               <div
                                 classList={{
-                                  "hidden xl:block": true,
+                                  "hidden md:block": true,
                                   "absolute right-[90%]": !wide(),
                                   "absolute right-full": wide(),
                                 }}
@@ -267,8 +304,15 @@ export default function () {
                         </div>
                       </div>
                       <Show when={diffs().length > 0}>
-                        <div class="relative grow px-6 pt-14 flex-1 min-h-0 border-l border-border-weak-base">
-                          <SessionReview diffs={diffs()} class="pb-20" />
+                        <div class="relative grow pt-14 flex-1 min-h-0 border-l border-border-weak-base">
+                          <SessionReview
+                            diffs={diffs()}
+                            classes={{
+                              root: "pb-20",
+                              header: "px-6",
+                              container: "px-6",
+                            }}
+                          />
                         </div>
                       </Show>
                     </div>
@@ -279,16 +323,23 @@ export default function () {
                             <Tabs.Trigger value="session" class="w-1/2" classes={{ button: "w-full" }}>
                               Session
                             </Tabs.Trigger>
-                            <Tabs.Trigger value="review" class="w-1/2" classes={{ button: "w-full" }}>
+                            <Tabs.Trigger value="review" class="w-1/2 !border-r-0" classes={{ button: "w-full" }}>
                               5 Files Changed
                             </Tabs.Trigger>
                           </Tabs.List>
                           <Tabs.Content value="session" class="!overflow-hidden">
                             {turns()}
                           </Tabs.Content>
-                          <Tabs.Content value="review" class="!overflow-hidden">
-                            <div class="relative px-4 pt-8 h-full overflow-y-auto no-scrollbar">
-                              <SessionReview diffs={diffs()} class="pb-20" />
+                          <Tabs.Content forceMount value="review" class="!overflow-hidden hidden data-[selected]:block">
+                            <div class="relative h-full pt-8 overflow-y-auto no-scrollbar">
+                              <SessionReview
+                                diffs={diffs()}
+                                classes={{
+                                  root: "pb-20",
+                                  header: "px-4",
+                                  container: "px-4",
+                                }}
+                              />
                             </div>
                           </Tabs.Content>
                         </Tabs>

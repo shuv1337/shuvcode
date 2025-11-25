@@ -95,12 +95,10 @@ export namespace SessionCompaction {
     }
     agent: string
     abort: AbortSignal
+    auto: boolean
   }) {
     const model = await Provider.getModel(input.model.providerID, input.model.modelID)
     const system = [...SystemPrompt.compaction(model.providerID)]
-    const lastFinished = input.messages.find((m) => m.info.role === "assistant" && m.info.finish)?.info as
-      | MessageV2.Assistant
-      | undefined
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "assistant",
@@ -124,10 +122,6 @@ export namespace SessionCompaction {
       time: {
         created: Date.now(),
       },
-      outputEstimate: lastFinished?.outputEstimate,
-      reasoningEstimate: lastFinished?.reasoningEstimate,
-      contextEstimate: lastFinished?.contextEstimate,
-      sentEstimate: lastFinished?.sentEstimate,
     })) as MessageV2.Assistant
     const processor = SessionProcessor.create({
       assistantMessage: msg,
@@ -205,7 +199,7 @@ export namespace SessionCompaction {
         }),
       }),
     )
-    if (result === "continue") {
+    if (result === "continue" && input.auto) {
       const continueMsg = await Session.updateMessage({
         id: Identifier.ascending("message"),
         role: "user",
@@ -230,6 +224,7 @@ export namespace SessionCompaction {
       })
     }
     if (processor.message.error) return "stop"
+    Bus.publish(Event.Compacted, { sessionID: input.sessionID })
     return "continue"
   }
 
@@ -241,6 +236,7 @@ export namespace SessionCompaction {
         providerID: z.string(),
         modelID: z.string(),
       }),
+      auto: z.boolean(),
     }),
     async (input) => {
       const msg = await Session.updateMessage({
@@ -258,6 +254,7 @@ export namespace SessionCompaction {
         messageID: msg.id,
         sessionID: msg.sessionID,
         type: "compaction",
+        auto: input.auto,
       })
     },
   )

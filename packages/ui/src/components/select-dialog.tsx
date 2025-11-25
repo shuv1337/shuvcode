@@ -14,7 +14,6 @@ interface SelectDialogProps<T>
   emptyMessage?: string
   children: (item: T) => JSX.Element
   onSelect?: (value: T | undefined) => void
-  onKeyEvent?: (event: KeyboardEvent, item: T | undefined) => void
 }
 
 export function SelectDialog<T>(props: SelectDialogProps<T>) {
@@ -66,12 +65,9 @@ export function SelectDialog<T>(props: SelectDialogProps<T>) {
     setStore("mouseActive", false)
     if (e.key === "Escape") return
 
-    const all = flat()
-    const selected = all.find((x) => others.key(x) === active())
-    props.onKeyEvent?.(e, selected)
-
     if (e.key === "Enter") {
       e.preventDefault()
+      const selected = flat().find((x) => others.key(x) === active())
       if (selected) handleSelect(selected)
     } else {
       onKeyDown(e)

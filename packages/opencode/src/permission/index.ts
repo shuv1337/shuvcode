@@ -4,7 +4,6 @@ import { Log } from "../util/log"
 import { Identifier } from "../id/id"
 import { Plugin } from "../plugin"
 import { Instance } from "../project/instance"
-import { State } from "../project/state"
 import { Wildcard } from "../util/wildcard"
 
 export namespace Permission {
@@ -50,9 +49,7 @@ export namespace Permission {
     ),
   }
 
-  const state = State.register(
-    "permission",
-    () => Instance.directory,
+  const state = Instance.state(
     () => {
       const pending: {
         [sessionID: string]: {

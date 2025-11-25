@@ -14,18 +14,6 @@ export type EventInstallationUpdateAvailable = {
   }
 }
 
-export type EventConfigUpdated = {
-  type: "config.updated"
-  properties: {
-    scope: "project" | "global"
-    directory?: string
-    refreshed?: boolean
-    before: unknown
-    after: unknown
-    diff: unknown
-  }
-}
-
 export type EventLspClientDiagnostics = {
   type: "lsp.client.diagnostics"
   properties: {
@@ -70,8 +58,6 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
-  sentEstimate?: number
-  contextEstimate?: number
 }
 
 export type ProviderAuthError = {
@@ -144,10 +130,6 @@ export type AssistantMessage = {
       write: number
     }
   }
-  outputEstimate?: number
-  reasoningEstimate?: number
-  contextEstimate?: number
-  sentEstimate?: number
   finish?: string
 }
 
@@ -389,6 +371,7 @@ export type CompactionPart = {
   sessionID: string
   messageID: string
   type: "compaction"
+  auto: boolean
 }
 
 export type Part =
@@ -668,7 +651,6 @@ export type EventFileWatcherUpdated = {
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
-  | EventConfigUpdated
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventMessageUpdated
@@ -821,14 +803,6 @@ export type KeybindsConfig = {
    * Previous recently used model
    */
   model_cycle_recent_reverse?: string
-  /**
-   * Next favorite model
-   */
-  model_cycle_favorite?: string
-  /**
-   * Previous favorite model
-   */
-  model_cycle_favorite_reverse?: string
   /**
    * List available commands
    */
