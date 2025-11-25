@@ -9,6 +9,7 @@ const parser = fs.realpathSync(path.join(dir, "node_modules/@opentui/core/parser
 const worker = "./src/cli/cmd/tui/worker.ts"
 const version = process.env.OPENCODE_VERSION ?? "local"
 const channel = process.env.OPENCODE_CHANNEL ?? "local"
+const base = process.env.OPENCODE_BASE_VERSION ?? version
 
 fs.rmSync(path.join(dir, "dist"), { recursive: true, force: true })
 
@@ -22,6 +23,7 @@ const result = await Bun.build({
   external: ["@opentui/core"],
   define: {
     OPENCODE_VERSION: `'${version}'`,
+    OPENCODE_BASE_VERSION: `'${base}'`,
     OPENCODE_CHANNEL: `'${channel}'`,
     // Leave undefined so runtime picks bundled/dist worker or fallback in code.
     OPENCODE_WORKER_PATH: "undefined",
