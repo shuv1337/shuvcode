@@ -161,8 +161,7 @@ export namespace Installation {
 
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
-  export const BASE_VERSION =
-    typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
+  export const BASE_VERSION = typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
   export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}`
 
   export function displayVersion() {
