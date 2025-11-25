@@ -19,6 +19,7 @@ upstream/tags          ← sst/opencode release tags
 ```
 
 **Key Change**: `integration` becomes the default branch because:
+
 - Workflow files must live on the default branch for scheduled triggers
 - `dev` will be hard reset, which would wipe any workflow configs
 - `integration` is where actual development happens anyway
@@ -42,11 +43,11 @@ Since we're syncing on upstream **releases** (not every dev commit), the workflo
 name: Upstream Sync
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Check for new releases every 15 minutes
-  workflow_dispatch:        # Manual trigger option
+    - cron: "*/15 * * * *" # Check for new releases every 15 minutes
+  workflow_dispatch: # Manual trigger option
     inputs:
       force_sync:
-        description: 'Force sync even if no new release'
+        description: "Force sync even if no new release"
         type: boolean
         default: false
 ```
@@ -79,6 +80,7 @@ fi
 ## Phase 1: Dev Branch Sync (Mirror to Release Tag)
 
 ### Process
+
 ```bash
 # Fetch upstream with tags
 git fetch upstream --tags
@@ -100,6 +102,7 @@ git push origin integration || true
 ```
 
 ### Key Considerations
+
 - Uses `--force` push since dev is a true mirror of upstream releases
 - No merge commits, no local history preserved
 - Dev branch has no protection (mirror-only branch)
@@ -110,6 +113,7 @@ git push origin integration || true
 ## Phase 2: Integration Branch Merge
 
 ### Process
+
 ```bash
 git checkout integration
 git merge dev --no-edit
@@ -124,6 +128,7 @@ git merge dev --no-edit
    - If unresolvable, create GitHub Issue and abort
 
 ### Lock File Resolution (bun.lock)
+
 ```bash
 # Regenerate lock from merged package.json (preferred)
 bun install --frozen-lockfile || bun install
@@ -136,25 +141,27 @@ git add bun.lock
 
 ### Other Conflict Patterns
 
-| File Pattern | Resolution Strategy |
-|--------------|---------------------|
-| `bun.lock` | Regenerate from merged manifest (fallback: accept upstream) |
-| `*.md` (docs) | Accept upstream |
-| `package.json` | Manual review required |
-| Custom feature files | Keep ours (integration) |
-| Shared code with custom changes | Manual review required |
+| File Pattern                    | Resolution Strategy                                         |
+| ------------------------------- | ----------------------------------------------------------- |
+| `bun.lock`                      | Regenerate from merged manifest (fallback: accept upstream) |
+| `*.md` (docs)                   | Accept upstream                                             |
+| `package.json`                  | Manual review required                                      |
+| Custom feature files            | Keep ours (integration)                                     |
+| Shared code with custom changes | Manual review required                                      |
 
 ---
 
 ## Phase 3: Post-Merge Validation
 
 ### Steps
+
 1. Run `bun install` (ensures dependencies are correct)
 2. Run `bun turbo typecheck` (type safety)
 3. Run `bun turbo test` (unit tests)
 4. Verify build: `bun turbo build`
 
 ### Failure Handling
+
 - If validation fails, create GitHub Issue with:
   - Failed step details
   - Error logs
@@ -175,15 +182,18 @@ git add bun.lock
 **Integration SHA**: {{ integration_sha }}
 
 ### Conflicting Files
+
 {{ conflict_list }}
 
 ### Recommended Actions
+
 1. Checkout integration branch locally
 2. Run: `git merge origin/dev`
 3. Resolve conflicts manually
 4. Push resolved integration branch
 
 ### Logs
+
 <details>
 <summary>Merge output</summary>
 {{ merge_output }}
@@ -191,6 +201,7 @@ git add bun.lock
 ```
 
 ### Issue Labels
+
 - `upstream-sync`
 - `needs-manual-review`
 - Auto-assign to repository maintainers
@@ -202,6 +213,7 @@ git add bun.lock
 ### 1. Main Workflow: `.github/workflows/upstream-sync.yml`
 
 Creates the sync pipeline with:
+
 - Scheduled trigger (15 min)
 - Manual dispatch option
 - Dev mirror sync job
@@ -214,6 +226,7 @@ Creates the sync pipeline with:
 ### 2. Conflict Detection Script: `script/sync/detect-conflicts.ts`
 
 TypeScript script that:
+
 - Attempts merge dry-run
 - Parses conflict output
 - Categorizes conflicts by file type
@@ -228,12 +241,14 @@ Pre-formatted issue template for conflict reports
 ## Branch Protection Configuration
 
 ### `dev` Branch (Mirror)
+
 - **No protection** - this is a mirror-only branch
 - Force pushes allowed (needed for sync workflow)
 - No PRs required
 - Not the default branch
 
 ### `integration` Branch (Default)
+
 - This is the **default branch** where:
   - Workflow files live
   - Custom features are developed
@@ -331,24 +346,24 @@ Pre-formatted issue template for conflict reports
 
 ## Success Criteria Validation
 
-| Criteria | Implementation |
-|----------|----------------|
-| Trigger within 15 min of release | `cron: '*/15 * * * *'` polls for new tags |
-| dev syncs with zero manual steps | Hard reset to tag + force push |
-| integration retains custom changes | Merge strategy with "ours" for feature files |
-| Conflicts flagged within 30 min | GitHub Issue created immediately on detection |
-| Audit log maintained | GitHub Actions run history + commit messages + `.github/last-synced-tag` |
+| Criteria                           | Implementation                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| Trigger within 15 min of release   | `cron: '*/15 * * * *'` polls for new tags                                |
+| dev syncs with zero manual steps   | Hard reset to tag + force push                                           |
+| integration retains custom changes | Merge strategy with "ours" for feature files                             |
+| Conflicts flagged within 30 min    | GitHub Issue created immediately on detection                            |
+| Audit log maintained               | GitHub Actions run history + commit messages + `.github/last-synced-tag` |
 
 ---
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                                       | Mitigation                                                     |
+| ------------------------------------------ | -------------------------------------------------------------- |
 | Force push to dev loses unintended changes | Dev is designated mirror-only; all work happens on integration |
-| Frequent conflicts due to active upstream | Lock file auto-resolution; categorized conflict handling |
-| Test failures block sync | Separate validation job; clear failure reporting |
-| GitHub Actions rate limits | 15-min schedule is conservative; skip if no changes |
+| Frequent conflicts due to active upstream  | Lock file auto-resolution; categorized conflict handling       |
+| Test failures block sync                   | Separate validation job; clear failure reporting               |
+| GitHub Actions rate limits                 | 15-min schedule is conservative; skip if no changes            |
 
 ---
 
@@ -379,6 +394,7 @@ Pre-formatted issue template for conflict reports
 ### Force Re-sync
 
 Trigger manual workflow dispatch from GitHub Actions UI or:
+
 ```bash
 gh workflow run upstream-sync.yml
 ```
