@@ -496,7 +496,7 @@ function App() {
             <text fg={theme.text} attributes={TextAttributes.BOLD}>
               code{" "}
             </text>
-            <text fg={theme.textMuted}>v{Installation.VERSION}</text>
+            <text fg={theme.textMuted}>v{Installation.displayVersion()}</text>
           </box>
           <box paddingLeft={1} paddingRight={1}>
             <text fg={theme.textMuted}>{process.cwd().replace(Global.Path.home, "~")}</text>

@@ -4,7 +4,7 @@ import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep, pipe } from "remeda"
+import { mergeDeep } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { resolveGlobalFile } from "./global-file"
@@ -25,6 +25,14 @@ import { pathToFileURL } from "url"
 export namespace Config {
   const log = Log.create({ service: "config" })
   const WINDOWS_RELATIVE_PREFIXES = [".\\", "..\\", "~\\"]
+
+  const mergeConfigWithPlugins = (target: Info, source: Info): Info => {
+    const merged = mergeDeep(target, source)
+    if (target.plugin && source.plugin) {
+      merged.plugin = Array.from(new Set([...target.plugin, ...source.plugin]))
+    }
+    return merged
+  }
 
   const isPathLikePluginSpecifier = (value: unknown): value is string => {
     if (typeof value !== "string") return false
@@ -94,17 +102,17 @@ export namespace Config {
     for (const file of ["opencode.jsonc", "opencode.json"]) {
       const found = await Filesystem.findUp(file, directory, worktree)
       for (const resolved of found.toReversed()) {
-        result = mergeDeep(result, await loadFile(resolved))
+        result = mergeConfigWithPlugins(result, await loadFile(resolved))
       }
     }
 
     if (Flag.OPENCODE_CONFIG) {
-      result = mergeDeep(result, await loadFile(Flag.OPENCODE_CONFIG))
+      result = mergeConfigWithPlugins(result, await loadFile(Flag.OPENCODE_CONFIG))
       log.debug("loaded custom config", { path: Flag.OPENCODE_CONFIG })
     }
 
     if (Flag.OPENCODE_CONFIG_CONTENT) {
-      result = mergeDeep(result, JSON.parse(Flag.OPENCODE_CONFIG_CONTENT))
+      result = mergeConfigWithPlugins(result, JSON.parse(Flag.OPENCODE_CONFIG_CONTENT))
       log.debug("loaded custom config from OPENCODE_CONFIG_CONTENT")
     }
 
@@ -112,7 +120,7 @@ export namespace Config {
       if (value.type === "wellknown") {
         process.env[value.key] = value.token
         const wellknown = (await fetch(`${key}/.well-known/opencode`).then((x) => x.json())) as any
-        result = mergeDeep(result, await load(JSON.stringify(wellknown.config ?? {}), process.cwd()))
+        result = mergeConfigWithPlugins(result, await load(JSON.stringify(wellknown.config ?? {}), process.cwd()))
       }
     }
 
@@ -143,7 +151,7 @@ export namespace Config {
 
       if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
         for (const file of ["opencode.jsonc", "opencode.json"]) {
-          result = mergeDeep(result, await loadFile(path.join(dir, file)))
+          result = mergeConfigWithPlugins(result, await loadFile(path.join(dir, file)))
           result.agent ??= {}
           result.mode ??= {}
           result.plugin ??= []
@@ -162,6 +170,7 @@ export namespace Config {
       result.plugin = []
     }
     result.plugin.push(...pluginFiles)
+    result.plugin = Array.from(new Set(result.plugin))
 
     for (const [name, mode] of Object.entries(result.mode)) {
       result.agent = mergeDeep(result.agent ?? {}, {
@@ -177,10 +186,6 @@ export namespace Config {
     }
 
     if (!result.username) result.username = os.userInfo().username
-
-    if (result.autoshare === true && !result.share) {
-      result.share = "auto"
-    }
 
     if (result.autoshare === true && !result.share) {
       result.share = "auto"
@@ -735,12 +740,10 @@ export namespace Config {
   async function loadGlobalConfig(): Promise<Info> {
     const globalFile = await resolveGlobalFile()
 
-    let result: Info = pipe(
-      {},
-      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.json"))),
-      mergeDeep(await loadFile(globalFile)),
-    )
+    let result: Info = {}
+    result = mergeConfigWithPlugins(result, await loadFile(path.join(Global.Path.config, "config.json")))
+    result = mergeConfigWithPlugins(result, await loadFile(path.join(Global.Path.config, "opencode.json")))
+    result = mergeConfigWithPlugins(result, await loadFile(globalFile))
 
     await import(path.join(Global.Path.config, "config"), {
       with: {
@@ -751,7 +754,7 @@ export namespace Config {
         const { provider, model, ...rest } = mod.default
         if (provider && model) result.model = `${provider}/${model}`
         result["$schema"] = "https://opencode.ai/config.json"
-        result = mergeDeep(result, rest)
+        result = mergeConfigWithPlugins(result, rest)
         await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
         await fs.unlink(path.join(Global.Path.config, "config"))
       })

@@ -497,7 +497,51 @@ test("appends plugins discovered from directories after merging config files", a
       directory: workspace.path,
       fn: async () => {
         const config = await Config.get()
-        expect(config.plugin).toEqual(["local-plugin", `file://${path.join(globalTmp.path, "plugin", "custom.ts")}`])
+        const pluginEntries = config.plugin ?? []
+        const pluginFile = `file://${path.join(globalTmp.path, "plugin", "custom.ts")}`
+        expect(pluginEntries).toEqual(["global-plugin", "local-plugin", pluginFile])
+      },
+    })
+  } finally {
+    ;(Global.Path as any).config = previousGlobalConfig
+  }
+})
+
+test("deduplicates duplicate plugins from global and local configs", async () => {
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.jsonc"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          plugin: ["duplicate-plugin", "global-plugin-1"],
+        }),
+      )
+    },
+  })
+
+  await using workspace = await tmpdir({
+    init: async (dir) => {
+      await fs.mkdir(path.join(dir, ".opencode"), { recursive: true })
+      await Bun.write(
+        path.join(dir, ".opencode", "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          plugin: ["duplicate-plugin", "local-plugin-1"],
+        }),
+      )
+    },
+  })
+
+  const previousGlobalConfig = Global.Path.config
+  ;(Global.Path as any).config = globalTmp.path
+  try {
+    await Instance.provide({
+      directory: workspace.path,
+      fn: async () => {
+        const config = await Config.get()
+        const plugins = config.plugin ?? []
+        expect(plugins).toEqual(["duplicate-plugin", "global-plugin-1", "local-plugin-1"])
       },
     })
   } finally {

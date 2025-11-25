@@ -22,7 +22,7 @@ export function Logo() {
         )}
       </For>
       <box flexDirection="row" justifyContent="flex-end">
-        <text fg={theme.textMuted}>{Installation.VERSION}</text>
+        <text fg={theme.textMuted}>{Installation.displayVersion()}</text>
       </box>
     </box>
   )
