@@ -119,8 +119,14 @@ jobs:
           # Attempt merge with no-commit to detect conflicts first
           if git merge dev --no-commit --no-ff 2>&1; then
             echo "Merge successful, no conflicts"
-            git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration"
-            echo "status=success" >> $GITHUB_OUTPUT
+            # Check if there are changes to commit
+            if git diff --cached --quiet; then
+              echo "Already up to date, nothing to merge"
+              echo "status=up-to-date" >> $GITHUB_OUTPUT
+            else
+              git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration"
+              echo "status=success" >> $GITHUB_OUTPUT
+            fi
           else
             # Check for conflicts
             CONFLICTS=$(git diff --name-only --diff-filter=U)
@@ -175,7 +181,7 @@ jobs:
           git push origin integration
 
       - name: Update last synced tag marker
-        if: steps.merge.outputs.status == 'success' || steps.merge.outputs.status == 'auto-resolved'
+        if: steps.merge.outputs.status == 'success' || steps.merge.outputs.status == 'auto-resolved' || steps.merge.outputs.status == 'up-to-date'
         run: |
           echo "${{ needs.check-release.outputs.latest_tag }}" > .github/last-synced-tag
           git add .github/last-synced-tag
@@ -184,7 +190,7 @@ jobs:
 
   validate:
     needs: [check-release, merge-integration]
-    if: needs.merge-integration.outputs.merge_status == 'success' || needs.merge-integration.outputs.merge_status == 'auto-resolved'
+    if: needs.merge-integration.outputs.merge_status == 'success' || needs.merge-integration.outputs.merge_status == 'auto-resolved' || needs.merge-integration.outputs.merge_status == 'up-to-date'
     runs-on: ubuntu-latest
     outputs:
       validation_status: ${{ steps.validate.outputs.status }}
