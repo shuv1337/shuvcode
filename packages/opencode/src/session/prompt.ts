@@ -388,6 +388,7 @@ export namespace SessionPrompt {
             modelID: model.modelID,
           },
           sessionID,
+          auto: task.auto,
         })
         if (result === "stop") break
         continue
@@ -403,6 +404,7 @@ export namespace SessionPrompt {
           sessionID,
           agent: lastUser.agent,
           model: lastUser.model,
+          auto: true,
         })
         continue
       }
