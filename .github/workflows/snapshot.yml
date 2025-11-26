@@ -9,6 +9,10 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+permissions:
+  contents: write
+  workflows: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -31,5 +35,5 @@ jobs:
         run: |
           ./script/publish.ts
         env:
-          GITHUB_TOKEN: ${{ secrets.SST_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
