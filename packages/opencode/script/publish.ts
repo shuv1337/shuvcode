@@ -21,9 +21,9 @@ await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
-      name: pkg.name + "-ai",
+      name: "@shuvcode/opencode",
       bin: {
-        [pkg.name]: `./bin/${pkg.name}`,
+        opencode: `./bin/${pkg.name}`,
       },
       scripts: {
         postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
@@ -35,27 +35,9 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     2,
   ),
 )
-for (const [name] of Object.entries(binaries)) {
-  try {
-    process.chdir(`./dist/${name}`)
-    if (process.platform !== "win32") {
-      await $`chmod 755 -R .`
-    }
-    await $`bun publish --access public --tag ${Script.channel}`
-  } finally {
-    process.chdir(dir)
-  }
-}
+// Skip binary package publishing (we don't own those NPM names)
+// Just publish the main CLI package
 await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${Script.channel}`
-
-if (!Script.preview) {
-  const major = Script.version.split(".")[0]
-  const majorTag = `latest-${major}`
-  for (const [name] of Object.entries(binaries)) {
-    await $`cd dist/${name} && npm dist-tag add ${name}@${Script.version} ${majorTag}`
-  }
-  await $`cd ./dist/${pkg.name} && npm dist-tag add ${pkg.name}-ai@${Script.version} ${majorTag}`
-}
 
 if (!Script.preview) {
   for (const key of Object.keys(binaries)) {
