@@ -475,6 +475,8 @@ export function Prompt(props: PromptProps) {
         },
       })
     }
+    // Track model as recently used when actually sending a message
+    local.model.addRecent(local.model.current())
     history.append(store.prompt)
     input.extmarks.clear()
     setStore("prompt", {

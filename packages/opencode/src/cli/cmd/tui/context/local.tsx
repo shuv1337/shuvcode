@@ -223,7 +223,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (next >= recent.length) next = 0
           const val = recent[next]
           if (!val) return
-          setModelStore("model", agent.current().name, { ...val })
+          this.set(val)
         },
         cycleFavorite(direction: 1 | -1) {
           const favorites = modelStore.favorite.filter((item) => isModelValid(item))
@@ -246,8 +246,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
           const next = favorites[index]
           if (!next) return
-          setModelStore("model", agent.current().name, { ...next })
-          const uniq = uniqueBy([next, ...modelStore.recent], (x) => x.providerID + x.modelID)
+          this.set(next, { recent: true })
+        },
+        addRecent(model: { providerID: string; modelID: string }) {
+          const uniq = uniqueBy([model, ...modelStore.recent], (x) => x.providerID + x.modelID)
           if (uniq.length > 10) uniq.pop()
           setModelStore("recent", uniq)
           save()
@@ -263,12 +265,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               return
             }
             setModelStore("model", agent.current().name, model)
-            if (options?.recent) {
-              const uniq = uniqueBy([model, ...modelStore.recent], (x) => x.providerID + x.modelID)
-              if (uniq.length > 10) uniq.pop()
-              setModelStore("recent", uniq)
-              save()
-            }
+            if (options?.recent) this.addRecent(model)
           })
         },
         toggleFavorite(model: { providerID: string; modelID: string }) {
