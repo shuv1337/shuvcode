@@ -17,6 +17,14 @@ const CHANNEL = process.env["OPENCODE_CHANNEL"] ?? (await $`git branch --show-cu
 const IS_PREVIEW = CHANNEL !== "latest"
 const VERSION = await (async () => {
   if (process.env["OPENCODE_VERSION"]) return process.env["OPENCODE_VERSION"]
+  // For integration channel, use the upstream version from last-synced-tag
+  if (CHANNEL === "integration") {
+    const tagFile = path.resolve(import.meta.dir, "../../../.github/last-synced-tag")
+    const tag = await Bun.file(tagFile)
+      .text()
+      .then((x) => x.trim())
+    return tag.replace(/^v/, "") // Remove 'v' prefix if present
+  }
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
