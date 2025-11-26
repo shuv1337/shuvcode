@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - dev
-      - fix-snapshot-2
-      - v0
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
