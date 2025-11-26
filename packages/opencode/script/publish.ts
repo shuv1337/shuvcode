@@ -23,7 +23,6 @@ for (const name of Object.keys(binaries)) {
 
 await $`mkdir -p ./dist/${pkg.name}`
 await $`cp -r ./bin ./dist/${pkg.name}/bin`
-await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
 
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
@@ -32,9 +31,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       bin: {
         shuvcode: `./bin/${pkg.name}`,
       },
-      scripts: {
-        postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
-      },
+      // No postinstall needed - bin/opencode is a wrapper script that finds the platform binary
       version: Script.version,
       // Reference our own binary packages (shuvcode-linux-x64, etc.)
       optionalDependencies: binaries,
