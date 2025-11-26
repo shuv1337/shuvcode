@@ -37,6 +37,8 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
 )
 // Skip binary package publishing (we don't own those NPM names)
 // Just publish the main CLI package
+// Copy .npmrc from root if it exists (for CI auth)
+await $`cp ../../.npmrc ./dist/${pkg.name}/.npmrc 2>/dev/null || true`
 await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${Script.channel}`
 
 if (!Script.preview) {
