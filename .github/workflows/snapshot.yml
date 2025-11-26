@@ -29,9 +29,11 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
+      - name: Setup NPM auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
       - name: Publish
         run: |
           ./script/publish.ts
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
