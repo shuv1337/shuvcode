@@ -3,7 +3,7 @@ name: snapshot
 on:
   push:
     branches:
-      - dev
+      - integration
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

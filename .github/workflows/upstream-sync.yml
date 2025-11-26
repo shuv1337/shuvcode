@@ -51,15 +51,18 @@ jobs:
           LATEST_SHA=$(git ls-remote upstream "refs/tags/$LATEST_TAG" | awk '{print $1}')
           echo "Latest upstream SHA: $LATEST_SHA"
 
-          # Get current dev branch SHA
-          DEV_SHA=$(git ls-remote origin refs/heads/dev | awk '{print $1}')
-          echo "Current dev SHA: $DEV_SHA"
+          # Get last synced tag from marker file
+          LAST_SYNCED=""
+          if [ -f .github/last-synced-tag ]; then
+            LAST_SYNCED=$(cat .github/last-synced-tag)
+          fi
+          echo "Last synced tag: $LAST_SYNCED"
 
           # Check if force sync is requested
           FORCE_SYNC="${{ inputs.force_sync }}"
 
-          if [ "$LATEST_SHA" != "$DEV_SHA" ] || [ "$FORCE_SYNC" = "true" ]; then
-            echo "New release detected or force sync requested: $LATEST_TAG ($LATEST_SHA)"
+          if [ "$LATEST_TAG" != "$LAST_SYNCED" ] || [ "$FORCE_SYNC" = "true" ]; then
+            echo "New release detected or force sync requested: $LATEST_TAG"
             echo "new_release=true" >> $GITHUB_OUTPUT
             echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
             echo "latest_sha=$LATEST_SHA" >> $GITHUB_OUTPUT
@@ -68,30 +71,9 @@ jobs:
             echo "new_release=false" >> $GITHUB_OUTPUT
           fi
 
-  sync-dev:
+  merge-upstream:
     needs: check-release
     if: needs.check-release.outputs.new_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: dev
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Add upstream remote
-        run: |
-          git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
-
-      - name: Sync dev to upstream tag
-        run: |
-          git fetch upstream --tags
-          git reset --hard ${{ needs.check-release.outputs.latest_tag }}
-          git push origin dev --force
-
-  merge-integration:
-    needs: [check-release, sync-dev]
     runs-on: ubuntu-latest
     outputs:
       merge_status: ${{ steps.merge.outputs.status }}
@@ -109,15 +91,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch dev branch
+      - name: Add upstream remote
         run: |
-          git fetch origin dev:dev
+          git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+
+      - name: Fetch upstream tag
+        run: |
+          git fetch upstream --tags
+          git fetch upstream tag ${{ needs.check-release.outputs.latest_tag }} --no-tags
 
       - name: Attempt merge
         id: merge
         run: |
           # Attempt merge with no-commit to detect conflicts first
-          if git merge dev --no-commit --no-ff 2>&1; then
+          if git merge ${{ needs.check-release.outputs.latest_tag }} --no-commit --no-ff 2>&1; then
             echo "Merge successful, no conflicts"
             # Check if there are changes to commit
             if git diff --cached --quiet; then
@@ -142,7 +129,7 @@ jobs:
               for file in $CONFLICTS; do
                 case "$file" in
                   bun.lock)
-                    echo "Auto-resolving bun.lock by regenerating..."
+                    echo "Auto-resolving bun.lock by accepting upstream..."
                     git checkout --theirs bun.lock 2>/dev/null || true
                     git add bun.lock
                     ;;
@@ -189,8 +176,8 @@ jobs:
           git push origin integration || true
 
   validate:
-    needs: [check-release, merge-integration]
-    if: needs.merge-integration.outputs.merge_status == 'success' || needs.merge-integration.outputs.merge_status == 'auto-resolved' || needs.merge-integration.outputs.merge_status == 'up-to-date'
+    needs: [check-release, merge-upstream]
+    if: needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved' || needs.merge-upstream.outputs.merge_status == 'up-to-date'
     runs-on: ubuntu-latest
     outputs:
       validation_status: ${{ steps.validate.outputs.status }}
@@ -241,11 +228,11 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
 
   create-issue:
-    needs: [check-release, merge-integration, validate]
+    needs: [check-release, merge-upstream, validate]
     if: |
       always() &&
-      (needs.merge-integration.outputs.merge_status == 'needs-manual' ||
-       needs.merge-integration.outputs.merge_status == 'failed' ||
+      (needs.merge-upstream.outputs.merge_status == 'needs-manual' ||
+       needs.merge-upstream.outputs.merge_status == 'failed' ||
        needs.validate.outputs.validation_status == 'failed')
     runs-on: ubuntu-latest
     steps:
@@ -255,11 +242,11 @@ jobs:
           ref: integration
 
       - name: Create conflict issue
-        if: needs.merge-integration.outputs.merge_status == 'needs-manual'
+        if: needs.merge-upstream.outputs.merge_status == 'needs-manual'
         uses: actions/github-script@v7
         with:
           script: |
-            const conflictFiles = `${{ needs.merge-integration.outputs.conflict_files }}`;
+            const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
             const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
             const latestSha = `${{ needs.check-release.outputs.latest_sha }}`;
 
@@ -278,7 +265,7 @@ jobs:
             ### Recommended Actions
 
             1. Checkout integration branch locally
-            2. Run: \`git fetch origin && git merge origin/dev\`
+            2. Run: \`git fetch upstream && git merge ${latestTag}\`
             3. Resolve conflicts manually
             4. Run validation: \`bun install && bun turbo typecheck && bun turbo test\`
             5. Push resolved integration branch
@@ -287,9 +274,10 @@ jobs:
             ### Manual Sync Commands
 
             \`\`\`bash
-            git fetch origin
+            git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+            git fetch upstream --tags
             git checkout integration
-            git merge origin/dev
+            git merge ${latestTag}
             # Resolve conflicts...
             bun install
             bun turbo typecheck
