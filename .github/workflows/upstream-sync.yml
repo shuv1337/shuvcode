@@ -249,6 +249,21 @@ jobs:
             const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
             const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
             const latestSha = `${{ needs.check-release.outputs.latest_sha }}`;
+            const issueTitle = `[Upstream Sync] Merge conflict with ${latestTag}`;
+
+            // Check if an issue with this title already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-sync'
+            });
+
+            const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
+            if (duplicate) {
+              console.log(`Issue already exists: #${duplicate.number}`);
+              return;
+            }
 
             const body = `## Upstream Sync Conflict Report
 
@@ -289,7 +304,7 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[Upstream Sync] Merge conflict with ${latestTag}`,
+              title: issueTitle,
               body: body,
               labels: ['upstream-sync', 'needs-manual-review']
             });
@@ -301,6 +316,21 @@ jobs:
           script: |
             const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
             const error = `${{ needs.validate.outputs.validation_error }}`;
+            const issueTitle = `[Upstream Sync] Validation failed after merging ${latestTag}`;
+
+            // Check if an issue with this title already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-sync'
+            });
+
+            const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
+            if (duplicate) {
+              console.log(`Issue already exists: #${duplicate.number}`);
+              return;
+            }
 
             const body = `## Upstream Sync Validation Failure
 
@@ -334,7 +364,7 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[Upstream Sync] Validation failed after merging ${latestTag}`,
+              title: issueTitle,
               body: body,
               labels: ['upstream-sync', 'needs-manual-review']
             });
