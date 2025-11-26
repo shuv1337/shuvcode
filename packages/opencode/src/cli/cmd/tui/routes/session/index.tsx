@@ -988,9 +988,7 @@ export function Session() {
                   onNext={handleNextMatch}
                   onPrevious={handlePrevMatch}
                   matchInfo={
-                    matches().length > 0
-                      ? { current: currentMatchIndex(), total: matches().length }
-                      : undefined
+                    matches().length > 0 ? { current: currentMatchIndex(), total: matches().length } : undefined
                   }
                   onExit={() => {
                     setSearchMode(false)
@@ -1021,13 +1019,7 @@ const MIME_BADGE: Record<string, string> = {
   "application/x-directory": "dir",
 }
 
-function SearchHighlighter(props: {
-  text: string
-  query: string
-  messageID: string
-  partID?: string
-  fg?: any
-}) {
+function SearchHighlighter(props: { text: string; query: string; messageID: string; partID?: string; fg?: any }) {
   const ctx = use()
   const { theme } = useTheme()
 
@@ -1047,12 +1039,14 @@ function SearchHighlighter(props: {
         result.push({ text: text.slice(lastIndex, pos), highlight: false, isActive: false })
       }
 
-      const currentMatch = ctx.matches().find(
-        (m) =>
-          m.messageID === props.messageID &&
-          (!props.partID || m.partID === props.partID) &&
-          m.index === ctx.currentMatchIndex(),
-      )
+      const currentMatch = ctx
+        .matches()
+        .find(
+          (m) =>
+            m.messageID === props.messageID &&
+            (!props.partID || m.partID === props.partID) &&
+            m.index === ctx.currentMatchIndex(),
+        )
       const isActive =
         currentMatch?.messageID === props.messageID &&
         (!props.partID || currentMatch?.partID === props.partID) &&
@@ -1088,10 +1082,7 @@ function SearchHighlighter(props: {
     <text fg={props.fg ?? theme.text}>
       <For each={segments()}>
         {(segment) => (
-          <Show
-            when={segment.highlight}
-            fallback={<>{segment.text}</>}
-          >
+          <Show when={segment.highlight} fallback={<>{segment.text}</>}>
             <span
               style={{
                 bg: segment.isActive ? theme.primary : theme.warning,
@@ -1150,10 +1141,7 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
-            <Show
-              when={ctx.searchQuery()}
-              fallback={<text fg={theme.text}>{text()?.text}</text>}
-            >
+            <Show when={ctx.searchQuery()} fallback={<text fg={theme.text}>{text()?.text}</text>}>
               <SearchHighlighter
                 text={text()?.text ?? ""}
                 query={ctx.searchQuery()}

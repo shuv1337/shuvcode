@@ -179,11 +179,7 @@ export function SearchInput(props: SearchInputProps) {
               <text fg={highlight()}>Search</text>
               <Show
                 when={props.matchInfo && props.matchInfo.total > 0}
-                fallback={
-                  <text fg={theme.textMuted}>
-                    {store.input ? "No matches" : "Go through session history"}
-                  </text>
-                }
+                fallback={<text fg={theme.textMuted}>{store.input ? "No matches" : "Go through session history"}</text>}
               >
                 <text fg={theme.text}>
                   {props.matchInfo!.current + 1} of {props.matchInfo!.total}
