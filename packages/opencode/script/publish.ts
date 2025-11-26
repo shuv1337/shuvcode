@@ -21,7 +21,7 @@ await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
     {
-      name: "@shuvcode/opencode",
+      name: "shuvcode",
       bin: {
         opencode: `./bin/${pkg.name}`,
       },
