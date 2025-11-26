@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - run: git fetch --force --tags
 
@@ -34,5 +34,5 @@ jobs:
         run: |
           ./script/publish.ts
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
