@@ -9,9 +9,16 @@ process.chdir(dir)
 
 const { binaries } = await import("./build.ts")
 {
-  const name = `${pkg.name}-${process.platform}-${process.arch}`
+  const name = `shuvcode-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
   console.log(`smoke test: running dist/${name}/bin/opencode --version`)
   await $`./dist/${name}/bin/opencode --version`
+}
+
+// Publish binary packages first
+for (const name of Object.keys(binaries)) {
+  console.log(`publishing binary package: ${name}`)
+  await $`cp ../../.npmrc ./dist/${name}/.npmrc 2>/dev/null || true`
+  await $`cd ./dist/${name} && bun publish --access public --tag ${Script.channel}`.nothrow()
 }
 
 await $`mkdir -p ./dist/${pkg.name}`
@@ -29,14 +36,13 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
         postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
       },
       version: Script.version,
+      // Reference our own binary packages (shuvcode-linux-x64, etc.)
       optionalDependencies: binaries,
     },
     null,
     2,
   ),
 )
-// Skip binary package publishing (we don't own those NPM names)
-// Just publish the main CLI package
 // Copy .npmrc from root if it exists (for CI auth)
 await $`cp ../../.npmrc ./dist/${pkg.name}/.npmrc 2>/dev/null || true`
 await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${Script.channel}`
