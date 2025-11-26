@@ -23,7 +23,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     {
       name: "shuvcode",
       bin: {
-        opencode: `./bin/${pkg.name}`,
+        shuvcode: `./bin/${pkg.name}`,
       },
       scripts: {
         postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
