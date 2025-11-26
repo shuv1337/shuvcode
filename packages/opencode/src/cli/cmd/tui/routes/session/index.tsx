@@ -62,6 +62,7 @@ import { Toast, useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv.tsx"
 import { Editor } from "../../util/editor"
 import stripAnsi from "strip-ansi"
+import { SearchInput, type SearchInputRef } from "../../component/prompt/search.tsx"
 
 addDefaultParsers(parsers.parsers)
 
@@ -75,12 +76,22 @@ class CustomSpeedScroll implements ScrollAcceleration {
   reset(): void {}
 }
 
+type SearchMatch = {
+  messageID: string
+  partID?: string
+  text: string
+  index: number
+}
+
 const context = createContext<{
   width: number
   conceal: () => boolean
   showThinking: () => boolean
   showTimestamps: () => boolean
   sync: ReturnType<typeof useSync>
+  searchQuery: () => string
+  currentMatchIndex: () => number
+  matches: () => SearchMatch[]
 }>()
 
 function use() {
@@ -171,10 +182,86 @@ export function Session() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
+  let search: SearchInputRef
+  const [searchMode, setSearchMode] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [currentMatchIndex, setCurrentMatchIndex] = createSignal(0)
   const keybind = useKeybind()
+
+  const matches = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim()
+    if (!query) return []
+
+    const result: SearchMatch[] = []
+    let matchIndex = 0
+
+    for (const message of messages()) {
+      const parts = sync.data.part[message.id] ?? []
+      for (const part of parts) {
+        if (part.type === "text" && !part.synthetic) {
+          const text = part.text.toLowerCase()
+          let pos = 0
+          while ((pos = text.indexOf(query, pos)) !== -1) {
+            result.push({
+              messageID: message.id,
+              partID: part.id,
+              text: part.text.slice(pos, pos + query.length),
+              index: matchIndex++,
+            })
+            pos += query.length
+          }
+        }
+      }
+    }
+    return result
+  })
+
+  createEffect(() => {
+    const m = matches()
+    if (m.length === 0) {
+      setCurrentMatchIndex(0)
+    } else if (currentMatchIndex() >= m.length) {
+      setCurrentMatchIndex(m.length - 1)
+    }
+  })
+
+  function handleNextMatch() {
+    const m = matches()
+    if (m.length === 0) return
+    const next = (currentMatchIndex() + 1) % m.length
+    setCurrentMatchIndex(next)
+    scrollToMatch(next)
+  }
+
+  function handlePrevMatch() {
+    const m = matches()
+    if (m.length === 0) return
+    const next = currentMatchIndex() === 0 ? m.length - 1 : currentMatchIndex() - 1
+    setCurrentMatchIndex(next)
+    scrollToMatch(next)
+  }
+
+  function scrollToMatch(index: number) {
+    const m = matches()
+    if (index < 0 || index >= m.length) return
+    const match = m[index]
+    const child = scroll?.getChildren().find((c) => c.id === match.messageID)
+    if (child) {
+      const y = child.y - scroll.y
+      if (y < 0 || y >= scroll.height) {
+        scroll.scrollBy(y - Math.floor(scroll.height / 3))
+      }
+    }
+  }
 
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
+
+    if (evt.ctrl && evt.name === "f") {
+      setSearchMode(!searchMode())
+      evt.preventDefault()
+      return
+    }
 
     const first = permissions()[0]
     if (first) {
@@ -731,6 +818,9 @@ export function Session() {
           return contentWidth()
         },
         conceal,
+        searchQuery,
+        currentMatchIndex,
+        matches,
         showThinking,
         showTimestamps,
         sync,
@@ -876,14 +966,39 @@ export function Session() {
               </For>
             </scrollbox>
             <box flexShrink={0}>
-              <Prompt
-                ref={(r) => (prompt = r)}
-                disabled={permissions().length > 0}
-                onSubmit={() => {
-                  toBottom()
-                }}
-                sessionID={route.sessionID}
-              />
+              <Show when={!searchMode()}>
+                <Prompt
+                  ref={(r) => (prompt = r)}
+                  disabled={permissions().length > 0}
+                  onSubmit={() => {
+                    toBottom()
+                  }}
+                  sessionID={route.sessionID}
+                />
+              </Show>
+              <Show when={searchMode()}>
+                <SearchInput
+                  ref={(r) => (search = r)}
+                  sessionID={route.sessionID}
+                  disabled={permissions().length > 0}
+                  onInput={(query) => {
+                    setSearchQuery(query)
+                    setCurrentMatchIndex(0)
+                  }}
+                  onNext={handleNextMatch}
+                  onPrevious={handlePrevMatch}
+                  matchInfo={
+                    matches().length > 0
+                      ? { current: currentMatchIndex(), total: matches().length }
+                      : undefined
+                  }
+                  onExit={() => {
+                    setSearchMode(false)
+                    setSearchQuery("")
+                    setCurrentMatchIndex(0)
+                  }}
+                />
+              </Show>
             </box>
           </Show>
           <Toast />
@@ -904,6 +1019,93 @@ const MIME_BADGE: Record<string, string> = {
   "image/webp": "img",
   "application/pdf": "pdf",
   "application/x-directory": "dir",
+}
+
+function SearchHighlighter(props: {
+  text: string
+  query: string
+  messageID: string
+  partID?: string
+  fg?: any
+}) {
+  const ctx = use()
+  const { theme } = useTheme()
+
+  const segments = createMemo(() => {
+    const query = props.query.toLowerCase()
+    if (!query) return [{ text: props.text, highlight: false, isActive: false }]
+
+    const result: { text: string; highlight: boolean; isActive: boolean }[] = []
+    const text = props.text
+    const lower = text.toLowerCase()
+    let lastIndex = 0
+    let matchCount = 0
+
+    let pos = 0
+    while ((pos = lower.indexOf(query, pos)) !== -1) {
+      if (pos > lastIndex) {
+        result.push({ text: text.slice(lastIndex, pos), highlight: false, isActive: false })
+      }
+
+      const currentMatch = ctx.matches().find(
+        (m) =>
+          m.messageID === props.messageID &&
+          (!props.partID || m.partID === props.partID) &&
+          m.index === ctx.currentMatchIndex(),
+      )
+      const isActive =
+        currentMatch?.messageID === props.messageID &&
+        (!props.partID || currentMatch?.partID === props.partID) &&
+        matchCount ===
+          ctx
+            .matches()
+            .filter(
+              (m) =>
+                m.messageID === props.messageID &&
+                (!props.partID || m.partID === props.partID) &&
+                m.index <= ctx.currentMatchIndex(),
+            ).length -
+            1
+
+      result.push({
+        text: text.slice(pos, pos + query.length),
+        highlight: true,
+        isActive,
+      })
+      lastIndex = pos + query.length
+      pos = lastIndex
+      matchCount++
+    }
+
+    if (lastIndex < text.length) {
+      result.push({ text: text.slice(lastIndex), highlight: false, isActive: false })
+    }
+
+    return result
+  })
+
+  return (
+    <text fg={props.fg ?? theme.text}>
+      <For each={segments()}>
+        {(segment) => (
+          <Show
+            when={segment.highlight}
+            fallback={<>{segment.text}</>}
+          >
+            <span
+              style={{
+                bg: segment.isActive ? theme.primary : theme.warning,
+                fg: theme.background,
+                bold: segment.isActive,
+              }}
+            >
+              {segment.text}
+            </span>
+          </Show>
+        )}
+      </For>
+    </text>
+  )
 }
 
 function UserMessage(props: {
@@ -948,7 +1150,17 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
-            <text fg={theme.text}>{text()?.text}</text>
+            <Show
+              when={ctx.searchQuery()}
+              fallback={<text fg={theme.text}>{text()?.text}</text>}
+            >
+              <SearchHighlighter
+                text={text()?.text ?? ""}
+                query={ctx.searchQuery()}
+                messageID={props.message.id}
+                partID={text()?.id}
+              />
+            </Show>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={1} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
@@ -1101,21 +1313,73 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   )
 }
 
+function MarkdownSearchHighlighter(props: {
+  text: string
+  query: string
+  messageID: string
+  partID?: string
+  syntaxStyle: any
+  conceal: boolean
+}) {
+  const ctx = use()
+  const { theme } = useTheme()
+
+  const content = createMemo(() => {
+    if (!props.query) return props.text
+    const escapedQuery = props.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    // Use ~~ for strikethrough to represent the highlighted system
+    return props.text.replace(new RegExp(escapedQuery, "gi"), "~~$&~~")
+  })
+
+  return (
+    <code
+      filetype="markdown"
+      drawUnstyledText={false}
+      streaming={true}
+      syntaxStyle={props.syntaxStyle}
+      content={content()}
+      conceal={props.conceal}
+      fg={theme.text}
+    />
+  )
+}
+
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+
+  const hasMatch = createMemo(() => {
+    const query = ctx.searchQuery().toLowerCase()
+    if (!query) return false
+    return props.part.text.toLowerCase().includes(query)
+  })
+
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
-        <code
-          filetype="markdown"
-          drawUnstyledText={false}
-          streaming={true}
-          syntaxStyle={syntax()}
-          content={props.part.text.trim()}
-          conceal={ctx.conceal()}
-          fg={theme.text}
-        />
+        <Show
+          when={hasMatch()}
+          fallback={
+            <code
+              filetype="markdown"
+              drawUnstyledText={false}
+              streaming={true}
+              syntaxStyle={syntax()}
+              content={props.part.text.trim()}
+              conceal={ctx.conceal()}
+              fg={theme.text}
+            />
+          }
+        >
+          <MarkdownSearchHighlighter
+            text={props.part.text.trim()}
+            query={ctx.searchQuery()}
+            messageID={props.message.id}
+            partID={props.part.id}
+            syntaxStyle={syntax()}
+            conceal={ctx.conceal()}
+          />
+        </Show>
       </box>
     </Show>
   )
