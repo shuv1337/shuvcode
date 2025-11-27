@@ -113,6 +113,8 @@ process.chdir(dir)
 if (!Script.preview) {
   await $`git commit -am "release: v${Script.version}"`
   await $`git tag v${Script.version}`
+  const latest = `v${Script.version}`
+  await $`git tag -f latest ${latest}`
   await $`git fetch origin`
   // Skip cherry-pick from dev branch (upstream pattern not applicable to fork)
   await $`git push origin HEAD --tags --no-verify --force-with-lease`
