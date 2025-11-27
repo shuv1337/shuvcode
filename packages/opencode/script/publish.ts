@@ -44,6 +44,15 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
 await $`cp ../../.npmrc ./dist/${pkg.name}/.npmrc 2>/dev/null || true`
 await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${Script.channel}`
 
+// For integration channel, also tag as latest
+if (Script.channel === "integration") {
+  console.log(`tagging shuvcode@${Script.version} as latest`)
+  for (const name of Object.keys(binaries)) {
+    await $`npm dist-tag add ${name}@${Script.version} latest`.nothrow()
+  }
+  await $`npm dist-tag add shuvcode@${Script.version} latest`
+}
+
 if (!Script.preview) {
   for (const key of Object.keys(binaries)) {
     if (key.includes("linux")) {
