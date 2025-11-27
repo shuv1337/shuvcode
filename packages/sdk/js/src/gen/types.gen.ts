@@ -904,6 +904,9 @@ export type AgentConfig = {
   tools?: {
     [key: string]: boolean
   }
+  subagents?: {
+    [key: string]: boolean
+  }
   disable?: boolean
   /**
    * Description of when to use the agent
@@ -929,6 +932,9 @@ export type AgentConfig = {
     | unknown
     | string
     | number
+    | {
+        [key: string]: boolean
+      }
     | {
         [key: string]: boolean
       }
@@ -1490,6 +1496,9 @@ export type Agent = {
   }
   prompt?: string
   tools: {
+    [key: string]: boolean
+  }
+  subagents: {
     [key: string]: boolean
   }
   options: {
