@@ -145,6 +145,8 @@ export namespace ToolRegistry {
     }
     if (agent.permission.webfetch === "deny") {
       result["webfetch"] = false
+      result["codesearch"] = false
+      result["websearch"] = false
     }
 
     return result
