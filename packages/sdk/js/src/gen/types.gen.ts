@@ -58,6 +58,8 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
+  sentEstimate?: number
+  contextEstimate?: number
 }
 
 export type ProviderAuthError = {
@@ -130,6 +132,10 @@ export type AssistantMessage = {
       write: number
     }
   }
+  outputEstimate?: number
+  reasoningEstimate?: number
+  contextEstimate?: number
+  sentEstimate?: number
   finish?: string
 }
 
@@ -878,6 +884,9 @@ export type AgentConfig = {
   tools?: {
     [key: string]: boolean
   }
+  subagents?: {
+    [key: string]: boolean
+  }
   disable?: boolean
   /**
    * Description of when to use the agent
@@ -903,6 +912,9 @@ export type AgentConfig = {
     | unknown
     | string
     | number
+    | {
+        [key: string]: boolean
+      }
     | {
         [key: string]: boolean
       }
@@ -1459,6 +1471,9 @@ export type Agent = {
   }
   prompt?: string
   tools: {
+    [key: string]: boolean
+  }
+  subagents: {
     [key: string]: boolean
   }
   options: {
