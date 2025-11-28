@@ -1,0 +1,370 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # Check for new releases every 15 minutes
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: "Force sync even if no new release"
+        type: boolean
+        default: false
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    outputs:
+      new_release: ${{ steps.check.outputs.new_release }}
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      latest_sha: ${{ steps.check.outputs.latest_sha }}
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+
+      - name: Check for new release
+        id: check
+        run: |
+          git fetch upstream --tags
+
+          # Get latest upstream release tag (semver sorted)
+          LATEST_TAG=$(git ls-remote --tags --sort='-v:refname' upstream 'v*' \
+            | sed 's|.*/||' | grep -E '^v[0-9]+' | head -1)
+
+          echo "Latest upstream tag: $LATEST_TAG"
+
+          # Resolve upstream tag to SHA
+          LATEST_SHA=$(git ls-remote upstream "refs/tags/$LATEST_TAG" | awk '{print $1}')
+          echo "Latest upstream SHA: $LATEST_SHA"
+
+          # Get last synced tag from marker file
+          LAST_SYNCED=""
+          if [ -f .github/last-synced-tag ]; then
+            LAST_SYNCED=$(cat .github/last-synced-tag)
+          fi
+          echo "Last synced tag: $LAST_SYNCED"
+
+          # Check if force sync is requested
+          FORCE_SYNC="${{ inputs.force_sync }}"
+
+          if [ "$LATEST_TAG" != "$LAST_SYNCED" ] || [ "$FORCE_SYNC" = "true" ]; then
+            echo "New release detected or force sync requested: $LATEST_TAG"
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "latest_sha=$LATEST_SHA" >> $GITHUB_OUTPUT
+          else
+            echo "No new release detected"
+            echo "new_release=false" >> $GITHUB_OUTPUT
+          fi
+
+  merge-upstream:
+    needs: check-release
+    if: needs.check-release.outputs.new_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      merge_status: ${{ steps.merge.outputs.status }}
+      conflict_files: ${{ steps.merge.outputs.conflict_files }}
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+
+      - name: Fetch upstream tag
+        run: |
+          git fetch upstream --tags
+          git fetch upstream tag ${{ needs.check-release.outputs.latest_tag }} --no-tags
+
+      - name: Attempt merge
+        id: merge
+        run: |
+          # Attempt merge with no-commit to detect conflicts first
+          if git merge ${{ needs.check-release.outputs.latest_tag }} --no-commit --no-ff 2>&1; then
+            echo "Merge successful, no conflicts"
+            # Check if there are changes to commit
+            if git diff --cached --quiet; then
+              echo "Already up to date, nothing to merge"
+              echo "status=up-to-date" >> $GITHUB_OUTPUT
+            else
+              git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration"
+              echo "status=success" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Check for conflicts
+            CONFLICTS=$(git diff --name-only --diff-filter=U)
+            if [ -n "$CONFLICTS" ]; then
+              echo "Conflicts detected in: $CONFLICTS"
+              echo "status=conflict" >> $GITHUB_OUTPUT
+              echo "conflict_files<<EOF" >> $GITHUB_OUTPUT
+              echo "$CONFLICTS" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+
+              # Attempt auto-resolution for known patterns
+              UNRESOLVED=""
+              for file in $CONFLICTS; do
+                case "$file" in
+                  bun.lock)
+                    echo "Auto-resolving bun.lock by accepting upstream..."
+                    git checkout --theirs bun.lock 2>/dev/null || true
+                    git add bun.lock
+                    ;;
+                  *.md)
+                    echo "Auto-resolving $file (accepting upstream)..."
+                    git checkout --theirs "$file"
+                    git add "$file"
+                    ;;
+                  *)
+                    UNRESOLVED="$UNRESOLVED $file"
+                    ;;
+                esac
+              done
+
+              # Check if all conflicts were resolved
+              REMAINING=$(git diff --name-only --diff-filter=U)
+              if [ -z "$REMAINING" ]; then
+                echo "All conflicts auto-resolved"
+                git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration (auto-resolved conflicts)"
+                echo "status=auto-resolved" >> $GITHUB_OUTPUT
+              else
+                echo "Unresolved conflicts remain: $REMAINING"
+                git merge --abort
+                echo "status=needs-manual" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "Merge failed for unknown reason"
+              git merge --abort 2>/dev/null || true
+              echo "status=failed" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Push integration branch
+        if: steps.merge.outputs.status == 'success' || steps.merge.outputs.status == 'auto-resolved'
+        run: |
+          git push origin integration
+
+      - name: Update last synced tag marker
+        if: steps.merge.outputs.status == 'success' || steps.merge.outputs.status == 'auto-resolved' || steps.merge.outputs.status == 'up-to-date'
+        run: |
+          echo "${{ needs.check-release.outputs.latest_tag }}" > .github/last-synced-tag
+          git add .github/last-synced-tag
+          git commit -m "sync: record last synced tag ${{ needs.check-release.outputs.latest_tag }}" || true
+          git push origin integration || true
+
+  validate:
+    needs: [check-release, merge-upstream]
+    if: needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved' || needs.merge-upstream.outputs.merge_status == 'up-to-date'
+    runs-on: ubuntu-latest
+    outputs:
+      validation_status: ${{ steps.validate.outputs.status }}
+      validation_error: ${{ steps.validate.outputs.error }}
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run validation
+        id: validate
+        run: |
+          set +e
+
+          echo "Running typecheck..."
+          bun turbo typecheck
+          if [ $? -ne 0 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "error=typecheck failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "Running tests..."
+          bun turbo test
+          if [ $? -ne 0 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "error=tests failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "Running build..."
+          bun turbo build
+          if [ $? -ne 0 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "error=build failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+
+  create-issue:
+    needs: [check-release, merge-upstream, validate]
+    if: |
+      always() &&
+      (needs.merge-upstream.outputs.merge_status == 'needs-manual' ||
+       needs.merge-upstream.outputs.merge_status == 'failed' ||
+       needs.validate.outputs.validation_status == 'failed')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+
+      - name: Create conflict issue
+        if: needs.merge-upstream.outputs.merge_status == 'needs-manual'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
+            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const latestSha = `${{ needs.check-release.outputs.latest_sha }}`;
+            const issueTitle = `[Upstream Sync] Merge conflict with ${latestTag}`;
+
+            // Check if an issue with this title already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-sync'
+            });
+
+            const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
+            if (duplicate) {
+              console.log(`Issue already exists: #${duplicate.number}`);
+              return;
+            }
+
+            const body = `## Upstream Sync Conflict Report
+
+            **Trigger**: Upstream sync at ${new Date().toISOString()}
+            **Upstream Tag**: ${latestTag}
+            **Upstream SHA**: ${latestSha}
+
+            ### Conflicting Files
+
+            \`\`\`
+            ${conflictFiles}
+            \`\`\`
+
+            ### Recommended Actions
+
+            1. Checkout integration branch locally
+            2. Run: \`git fetch upstream && git merge ${latestTag}\`
+            3. Resolve conflicts manually
+            4. Run validation: \`bun install && bun turbo typecheck && bun turbo test\`
+            5. Push resolved integration branch
+            6. Close this issue
+
+            ### Manual Sync Commands
+
+            \`\`\`bash
+            git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+            git fetch upstream --tags
+            git checkout integration
+            git merge ${latestTag}
+            # Resolve conflicts...
+            bun install
+            bun turbo typecheck
+            bun turbo test
+            git push origin integration
+            \`\`\`
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: body,
+              labels: ['upstream-sync', 'needs-manual-review']
+            });
+
+      - name: Create validation failure issue
+        if: needs.validate.outputs.validation_status == 'failed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const error = `${{ needs.validate.outputs.validation_error }}`;
+            const issueTitle = `[Upstream Sync] Validation failed after merging ${latestTag}`;
+
+            // Check if an issue with this title already exists
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-sync'
+            });
+
+            const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
+            if (duplicate) {
+              console.log(`Issue already exists: #${duplicate.number}`);
+              return;
+            }
+
+            const body = `## Upstream Sync Validation Failure
+
+            **Trigger**: Upstream sync at ${new Date().toISOString()}
+            **Upstream Tag**: ${latestTag}
+            **Error**: ${error}
+
+            ### What happened
+
+            The upstream sync merged successfully, but post-merge validation failed.
+
+            ### Recommended Actions
+
+            1. Check the [workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}) for detailed logs
+            2. Checkout integration branch locally
+            3. Run the failing validation step locally to debug
+            4. Fix any issues and push to integration
+
+            ### Validation Commands
+
+            \`\`\`bash
+            git fetch origin
+            git checkout integration
+            bun install
+            bun turbo typecheck
+            bun turbo test
+            bun turbo build
+            \`\`\`
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: body,
+              labels: ['upstream-sync', 'needs-manual-review']
+            });
