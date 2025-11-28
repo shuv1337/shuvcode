@@ -5,7 +5,6 @@ import { generateObject, type ModelMessage } from "ai"
 import PROMPT_GENERATE from "./generate.txt"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
-import { State } from "../project/state"
 import { mergeDeep } from "remeda"
 
 export namespace Agent {
@@ -41,171 +40,167 @@ export namespace Agent {
     })
   export type Info = z.infer<typeof Info>
 
-  const state = State.register(
-    "agent",
-    () => Instance.directory,
-    async () => {
-      const cfg = await Config.get()
-      const defaultTools = cfg.tools ?? {}
-      const defaultPermission: Info["permission"] = {
-        edit: "allow",
+  const state = Instance.state(async () => {
+    const cfg = await Config.get()
+    const defaultTools = cfg.tools ?? {}
+    const defaultPermission: Info["permission"] = {
+      edit: "allow",
+      bash: {
+        "*": "allow",
+      },
+      webfetch: "allow",
+      doom_loop: "ask",
+      external_directory: "ask",
+    }
+    const agentPermission = mergeAgentPermissions(defaultPermission, cfg.permission ?? {})
+
+    const planPermission = mergeAgentPermissions(
+      {
+        edit: "deny",
         bash: {
-          "*": "allow",
+          "cut*": "allow",
+          "diff*": "allow",
+          "du*": "allow",
+          "file *": "allow",
+          "find * -delete*": "ask",
+          "find * -exec*": "ask",
+          "find * -fprint*": "ask",
+          "find * -fls*": "ask",
+          "find * -fprintf*": "ask",
+          "find * -ok*": "ask",
+          "find *": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "git branch": "allow",
+          "git branch -v": "allow",
+          "grep*": "allow",
+          "head*": "allow",
+          "less*": "allow",
+          "ls*": "allow",
+          "more*": "allow",
+          "pwd*": "allow",
+          "rg*": "allow",
+          "sort --output=*": "ask",
+          "sort -o *": "ask",
+          "sort*": "allow",
+          "stat*": "allow",
+          "tail*": "allow",
+          "tree -o *": "ask",
+          "tree*": "allow",
+          "uniq*": "allow",
+          "wc*": "allow",
+          "whereis*": "allow",
+          "which*": "allow",
+          "*": "ask",
         },
         webfetch: "allow",
-        doom_loop: "ask",
-        external_directory: "ask",
-      }
-      const agentPermission = mergeAgentPermissions(defaultPermission, cfg.permission ?? {})
+      },
+      cfg.permission ?? {},
+    )
 
-      const planPermission = mergeAgentPermissions(
-        {
-          edit: "deny",
-          bash: {
-            "cut*": "allow",
-            "diff*": "allow",
-            "du*": "allow",
-            "file *": "allow",
-            "find * -delete*": "ask",
-            "find * -exec*": "ask",
-            "find * -fprint*": "ask",
-            "find * -fls*": "ask",
-            "find * -fprintf*": "ask",
-            "find * -ok*": "ask",
-            "find *": "allow",
-            "git diff*": "allow",
-            "git log*": "allow",
-            "git show*": "allow",
-            "git status*": "allow",
-            "git branch": "allow",
-            "git branch -v": "allow",
-            "grep*": "allow",
-            "head*": "allow",
-            "less*": "allow",
-            "ls*": "allow",
-            "more*": "allow",
-            "pwd*": "allow",
-            "rg*": "allow",
-            "sort --output=*": "ask",
-            "sort -o *": "ask",
-            "sort*": "allow",
-            "stat*": "allow",
-            "tail*": "allow",
-            "tree -o *": "ask",
-            "tree*": "allow",
-            "uniq*": "allow",
-            "wc*": "allow",
-            "whereis*": "allow",
-            "which*": "allow",
-            "*": "ask",
-          },
-          webfetch: "allow",
-        },
-        cfg.permission ?? {},
-      )
-
-      const result: Record<string, Info> = {
-        general: {
-          name: "general",
-          description:
-            "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.",
-          tools: {
-            todoread: false,
-            todowrite: false,
-            ...defaultTools,
-          },
-          subagents: {},
-          options: {},
-          permission: agentPermission,
-          mode: "subagent",
-          builtIn: true,
-        },
-        build: {
-          name: "build",
-          tools: { ...defaultTools },
-          subagents: {},
-          options: {},
-          permission: agentPermission,
-          mode: "primary",
-          builtIn: true,
-        },
-        plan: {
-          name: "plan",
-          options: {},
-          permission: planPermission,
-          tools: {
-            ...defaultTools,
-          },
-          subagents: {},
-          mode: "primary",
-          builtIn: true,
-        },
-      }
-      for (const [key, value] of Object.entries(cfg.agent ?? {})) {
-        if (value.disable) {
-          delete result[key]
-          continue
-        }
-        let item = result[key]
-        if (!item)
-          item = result[key] = {
-            name: key,
-            mode: "all",
-            permission: agentPermission,
-            options: {},
-            tools: {},
-            subagents: {},
-            builtIn: false,
-          }
-        const {
-          name,
-          model,
-          prompt,
-          tools,
-          subagents,
-          description,
-          temperature,
-          top_p,
-          mode,
-          permission,
-          color,
-          ...extra
-        } = value
-        item.options = {
-          ...item.options,
-          ...extra,
-        }
-        if (model) item.model = Provider.parseModel(model)
-        if (prompt) item.prompt = prompt
-        if (tools)
-          item.tools = {
-            ...item.tools,
-            ...tools,
-          }
-        item.tools = {
+    const result: Record<string, Info> = {
+      general: {
+        name: "general",
+        description:
+          "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.",
+        tools: {
+          todoread: false,
+          todowrite: false,
           ...defaultTools,
-          ...item.tools,
-        }
-        if (subagents)
-          item.subagents = {
-            ...item.subagents,
-            ...subagents,
-          }
-        if (description) item.description = description
-        if (temperature != undefined) item.temperature = temperature
-        if (top_p != undefined) item.topP = top_p
-        if (mode) item.mode = mode
-        if (color) item.color = color
-        // just here for consistency & to prevent it from being added as an option
-        if (name) item.name = name
-
-        if (permission ?? cfg.permission) {
-          item.permission = mergeAgentPermissions(cfg.permission ?? {}, permission ?? {})
-        }
+        },
+        subagents: {},
+        options: {},
+        permission: agentPermission,
+        mode: "subagent",
+        builtIn: true,
+      },
+      build: {
+        name: "build",
+        tools: { ...defaultTools },
+        subagents: {},
+        options: {},
+        permission: agentPermission,
+        mode: "primary",
+        builtIn: true,
+      },
+      plan: {
+        name: "plan",
+        options: {},
+        permission: planPermission,
+        tools: {
+          ...defaultTools,
+        },
+        subagents: {},
+        mode: "primary",
+        builtIn: true,
+      },
+    }
+    for (const [key, value] of Object.entries(cfg.agent ?? {})) {
+      if (value.disable) {
+        delete result[key]
+        continue
       }
-      return result
-    },
-  )
+      let item = result[key]
+      if (!item)
+        item = result[key] = {
+          name: key,
+          mode: "all",
+          permission: agentPermission,
+          options: {},
+          tools: {},
+          subagents: {},
+          builtIn: false,
+        }
+      const {
+        name,
+        model,
+        prompt,
+        tools,
+        subagents,
+        description,
+        temperature,
+        top_p,
+        mode,
+        permission,
+        color,
+        ...extra
+      } = value
+      item.options = {
+        ...item.options,
+        ...extra,
+      }
+      if (model) item.model = Provider.parseModel(model)
+      if (prompt) item.prompt = prompt
+      if (tools)
+        item.tools = {
+          ...item.tools,
+          ...tools,
+        }
+      item.tools = {
+        ...defaultTools,
+        ...item.tools,
+      }
+      if (subagents)
+        item.subagents = {
+          ...item.subagents,
+          ...subagents,
+        }
+      if (description) item.description = description
+      if (temperature != undefined) item.temperature = temperature
+      if (top_p != undefined) item.topP = top_p
+      if (mode) item.mode = mode
+      if (color) item.color = color
+      // just here for consistency & to prevent it from being added as an option
+      if (name) item.name = name
+
+      if (permission ?? cfg.permission) {
+        item.permission = mergeAgentPermissions(cfg.permission ?? {}, permission ?? {})
+      }
+    }
+    return result
+  })
 
   export async function get(agent: string) {
     return state().then((x) => x[agent])

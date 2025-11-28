@@ -10,12 +10,10 @@ import { Command } from "../command"
 import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
-import { ConfigInvalidation } from "../config/invalidation"
 import { ShareNext } from "@/share/share-next"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
-  await ConfigInvalidation.setup()
   await Plugin.init()
   Share.init()
   ShareNext.init()

@@ -8,7 +8,6 @@ import * as Formatter from "./formatter"
 import { Config } from "../config/config"
 import { mergeDeep } from "remeda"
 import { Instance } from "../project/instance"
-import { State } from "../project/state"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -24,47 +23,45 @@ export namespace Format {
     })
   export type Status = z.infer<typeof Status>
 
-  const state = State.register(
-    "format",
-    () => Instance.directory,
-    async () => {
-      const enabled: Record<string, boolean> = {}
-      const cfg = await Config.get()
+  const state = Instance.state(async () => {
+    const enabled: Record<string, boolean> = {}
+    const cfg = await Config.get()
 
-      const formatters: Record<string, Formatter.Info> = {}
-      if (cfg.formatter === false) {
-        log.info("all formatters are disabled")
-        return {
-          enabled,
-          formatters,
-        }
-      }
-
-      for (const item of Object.values(Formatter)) {
-        formatters[item.name] = item
-      }
-      for (const [name, item] of Object.entries(cfg.formatter ?? {})) {
-        if (item.disabled) {
-          delete formatters[name]
-          continue
-        }
-        const result: Formatter.Info = mergeDeep(formatters[name] ?? {}, {
-          command: [],
-          extensions: [],
-          ...item,
-        })
-        if (result.command.length === 0) continue
-        result.enabled = async () => true
-        result.name = name
-        formatters[name] = result
-      }
-
+    const formatters: Record<string, Formatter.Info> = {}
+    if (cfg.formatter === false) {
+      log.info("all formatters are disabled")
       return {
         enabled,
         formatters,
       }
-    },
-  )
+    }
+
+    for (const item of Object.values(Formatter)) {
+      formatters[item.name] = item
+    }
+    for (const [name, item] of Object.entries(cfg.formatter ?? {})) {
+      if (item.disabled) {
+        delete formatters[name]
+        continue
+      }
+      const result: Formatter.Info = mergeDeep(formatters[name] ?? {}, {
+        command: [],
+        extensions: [],
+        ...item,
+      })
+
+      if (result.command.length === 0) continue
+
+      result.enabled = async () => true
+      result.name = name
+      formatters[name] = result
+    }
+
+    return {
+      enabled,
+      formatters,
+    }
+  })
 
   async function isEnabled(item: Formatter.Info) {
     const s = await state()

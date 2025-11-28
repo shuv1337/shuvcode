@@ -4,111 +4,49 @@ import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep } from "remeda"
+import { mergeDeep, pipe } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
-import { resolveGlobalFile } from "./global-file"
+import { lazy } from "../util/lazy"
 import { NamedError } from "@opencode-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
 import { type ParseError as JsoncParseError, parse as parseJsonc, printParseErrorCode } from "jsonc-parser"
 import { Instance } from "../project/instance"
-import { State } from "../project/state"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
-import { Bus } from "../bus"
-import type { ConfigDiff } from "./diff"
-import { pathToFileURL } from "url"
 
 export namespace Config {
   const log = Log.create({ service: "config" })
-  const WINDOWS_RELATIVE_PREFIXES = [".\\", "..\\", "~\\"]
 
-  const mergeConfigWithPlugins = (target: Info, source: Info): Info => {
+  // Custom merge function that concatenates plugin arrays instead of replacing them
+  function mergeConfigWithPlugins(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
+    // If both configs have plugin arrays, concatenate them instead of replacing
     if (target.plugin && source.plugin) {
-      merged.plugin = Array.from(new Set([...target.plugin, ...source.plugin]))
+      const pluginSet = new Set([...target.plugin, ...source.plugin])
+      merged.plugin = Array.from(pluginSet)
     }
     return merged
   }
 
-  const isPathLikePluginSpecifier = (value: unknown): value is string => {
-    if (typeof value !== "string") return false
-    if (value.startsWith("file://")) return true
-    if (value.startsWith("./") || value.startsWith("../")) return true
-    if (value.startsWith("~/")) return true
-    if (WINDOWS_RELATIVE_PREFIXES.some((prefix) => value.startsWith(prefix))) {
-      return true
-    }
-    if (value.startsWith("/") || path.isAbsolute(value)) {
-      return true
-    }
-    return false
-  }
-
-  const resolvePluginFileReference = (plugin: string, configFilepath: string): string => {
-    if (plugin.startsWith("file://")) {
-      return plugin
-    }
-
-    const normalizeWindowsPath = (input: string) => input.replace(/\\/g, "/")
-
-    if (plugin.startsWith("~/")) {
-      const homePath = path.join(os.homedir(), plugin.slice(2))
-      return pathToFileURL(homePath).href
-    }
-
-    if (WINDOWS_RELATIVE_PREFIXES.some((prefix) => plugin.startsWith(prefix))) {
-      const withoutPrefix = plugin.startsWith("~\\")
-        ? path.join(os.homedir(), plugin.slice(2))
-        : path.resolve(path.dirname(configFilepath), plugin)
-      return pathToFileURL(withoutPrefix).href
-    }
-
-    if (path.isAbsolute(plugin)) {
-      return pathToFileURL(plugin).href
-    }
-
-    try {
-      const base = pathToFileURL(configFilepath).href
-      const resolved = new URL(plugin, base).href
-      return normalizeWindowsPath(resolved)
-    } catch {
-      return plugin
-    }
-  }
-
-  export const Event = {
-    Updated: Bus.event(
-      "config.updated",
-      z.object({
-        scope: z.enum(["project", "global"]),
-        directory: z.string().optional(),
-        refreshed: z.boolean().optional(),
-        before: z.any(),
-        after: z.any(),
-        diff: z.any(),
-      }),
-    ),
-  }
-
-  async function loadStateFromDisk() {
-    const directory = Instance.directory
-    const worktree = Instance.worktree
+  export const state = Instance.state(async () => {
     const auth = await Auth.all()
     let result = await global()
-    for (const file of ["opencode.jsonc", "opencode.json"]) {
-      const found = await Filesystem.findUp(file, directory, worktree)
-      for (const resolved of found.toReversed()) {
-        result = mergeConfigWithPlugins(result, await loadFile(resolved))
-      }
-    }
 
+    // Override with custom config if provided
     if (Flag.OPENCODE_CONFIG) {
       result = mergeConfigWithPlugins(result, await loadFile(Flag.OPENCODE_CONFIG))
       log.debug("loaded custom config", { path: Flag.OPENCODE_CONFIG })
+    }
+
+    for (const file of ["opencode.jsonc", "opencode.json"]) {
+      const found = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+      for (const resolved of found.toReversed()) {
+        result = mergeConfigWithPlugins(result, await loadFile(resolved))
+      }
     }
 
     if (Flag.OPENCODE_CONFIG_CONTENT) {
@@ -133,8 +71,8 @@ export namespace Config {
       ...(await Array.fromAsync(
         Filesystem.up({
           targets: [".opencode"],
-          start: directory,
-          stop: worktree,
+          start: Instance.directory,
+          stop: Instance.worktree,
         }),
       )),
     ]
@@ -145,7 +83,6 @@ export namespace Config {
     }
 
     const promises: Promise<void>[] = []
-    const pluginFiles: string[] = []
     for (const dir of directories) {
       await assertValid(dir)
 
@@ -153,6 +90,7 @@ export namespace Config {
         for (const file of ["opencode.jsonc", "opencode.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigWithPlugins(result, await loadFile(path.join(dir, file)))
+          // to satisy the type checker
           result.agent ??= {}
           result.mode ??= {}
           result.plugin ??= []
@@ -163,16 +101,11 @@ export namespace Config {
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
       result.agent = mergeDeep(result.agent, await loadMode(dir))
-      pluginFiles.push(...(await loadPlugin(dir)))
+      result.plugin.push(...(await loadPlugin(dir)))
     }
     await Promise.allSettled(promises)
 
-    if (!result.plugin) {
-      result.plugin = []
-    }
-    result.plugin.push(...pluginFiles)
-    result.plugin = Array.from(new Set(result.plugin))
-
+    // Migrate deprecated mode field to agent field
     for (const [name, mode] of Object.entries(result.mode)) {
       result.agent = mergeDeep(result.agent ?? {}, {
         [name]: {
@@ -188,6 +121,12 @@ export namespace Config {
 
     if (!result.username) result.username = os.userInfo().username
 
+    // Handle migration from autoshare to share field
+    if (result.autoshare === true && !result.share) {
+      result.share = "auto"
+    }
+
+    // Handle migration from autoshare to share field
     if (result.autoshare === true && !result.share) {
       result.share = "auto"
     }
@@ -198,14 +137,7 @@ export namespace Config {
       config: result,
       directories,
     }
-  }
-
-  export const state = State.register("config", () => Instance.directory, loadStateFromDisk)
-
-  export async function readFreshConfig() {
-    const state = await loadStateFromDisk()
-    return state.config
-  }
+  })
 
   const INVALID_DIRS = new Bun.Glob(`{${["agents", "commands", "plugins", "tools"].join(",")}}/`)
   async function assertValid(dir: string) {
@@ -497,8 +429,6 @@ export namespace Config {
       model_list: z.string().optional().default("<leader>m").describe("List available models"),
       model_cycle_recent: z.string().optional().default("f2").describe("Next recently used model"),
       model_cycle_recent_reverse: z.string().optional().default("shift+f2").describe("Previous recently used model"),
-      model_cycle_favorite: z.string().optional().default("none").describe("Next favorite model"),
-      model_cycle_favorite_reverse: z.string().optional().default("none").describe("Previous favorite model"),
       command_list: z.string().optional().default("ctrl+p").describe("List available commands"),
       agent_list: z.string().optional().default("<leader>a").describe("List agents"),
       agent_cycle: z.string().optional().default("tab").describe("Next agent"),
@@ -747,13 +677,13 @@ export namespace Config {
 
   export type Info = z.output<typeof Info>
 
-  async function loadGlobalConfig(): Promise<Info> {
-    const globalFile = await resolveGlobalFile()
-
-    let result: Info = {}
-    result = mergeConfigWithPlugins(result, await loadFile(path.join(Global.Path.config, "config.json")))
-    result = mergeConfigWithPlugins(result, await loadFile(path.join(Global.Path.config, "opencode.json")))
-    result = mergeConfigWithPlugins(result, await loadFile(globalFile))
+  export const global = lazy(async () => {
+    let result: Info = pipe(
+      {},
+      mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.json"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
+    )
 
     await import(path.join(Global.Path.config, "config"), {
       with: {
@@ -764,18 +694,14 @@ export namespace Config {
         const { provider, model, ...rest } = mod.default
         if (provider && model) result.model = `${provider}/${model}`
         result["$schema"] = "https://opencode.ai/config.json"
-        result = mergeConfigWithPlugins(result, rest)
+        result = mergeDeep(result, rest)
         await Bun.write(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
         await fs.unlink(path.join(Global.Path.config, "config"))
       })
       .catch(() => {})
 
     return result
-  }
-
-  export async function global() {
-    return loadGlobalConfig()
-  }
+  })
 
   async function loadFile(filepath: string): Promise<Info> {
     log.info("loading", { path: filepath })
@@ -862,12 +788,12 @@ export namespace Config {
         await Bun.write(configFilepath, JSON.stringify(parsed.data, null, 2))
       }
       const data = parsed.data
-      if (data.plugin?.length) {
+      if (data.plugin) {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
-          if (isPathLikePluginSpecifier(plugin)) {
-            data.plugin[i] = resolvePluginFileReference(plugin, configFilepath)
-          }
+          try {
+            data.plugin[i] = import.meta.resolve!(plugin, configFilepath)
+          } catch (err) {}
         }
       }
       return data
@@ -908,22 +834,11 @@ export namespace Config {
     return state().then((x) => x.config)
   }
 
-  export async function update(input: { scope?: "project" | "global"; update: Info; directory?: string }): Promise<{
-    before: Info
-    after: Info
-    diff: ConfigDiff
-    diffForPublish: ConfigDiff
-    filepath: string
-  }> {
-    const scope = input.scope ?? "project"
-    const directory = input.directory ?? Instance.directory
-
-    const { update: persistUpdate } = await import("./persist")
-    return persistUpdate({
-      scope,
-      update: input.update,
-      directory,
-    })
+  export async function update(config: Info) {
+    const filepath = path.join(Instance.directory, "config.json")
+    const existing = await loadFile(filepath)
+    await Bun.write(filepath, JSON.stringify(mergeDeep(existing, config), null, 2))
+    await Instance.dispose()
   }
 
   export async function directories() {

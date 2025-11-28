@@ -59,7 +59,6 @@ export function DialogModel() {
             if (!provider) return []
             const model = provider.models[item.modelID]
             if (!model) return []
-            const favorite = favorites.some((fav) => fav.providerID === item.providerID && fav.modelID === item.modelID)
             return [
               {
                 key: item,

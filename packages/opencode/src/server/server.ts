@@ -41,7 +41,6 @@ import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { Snapshot } from "@/snapshot"
 import { SessionSummary } from "@/session/summary"
-import { isConfigHotReloadEnabled } from "../config/hot-reload"
 import { GlobalBus } from "@/bus/global"
 import { SessionStatus } from "@/session/status"
 import { ShareNext } from "@/share/share-next"
@@ -84,23 +83,7 @@ function errors(...codes: number[]) {
 
 export namespace Server {
   const log = Log.create({ service: "server" })
-  // Remember last config update sections per directory to enrich subsequent TUI toasts.
-  // Entries auto-expire after a short window.
-  const LastConfigUpdate: Map<string, { scope: "project" | "global"; sections: string[]; at: number }> = new Map()
 
-  // Periodically clean up stale entries from LastConfigUpdate
-  setInterval(() => {
-    const now = Date.now()
-    for (const [dir, entry] of LastConfigUpdate.entries()) {
-      if (now - entry.at > 60_000) {
-        LastConfigUpdate.delete(dir)
-      }
-    }
-  }, 60_000)
-
-  function rememberConfigUpdate(directory: string, scope: "project" | "global", sections: string[]) {
-    LastConfigUpdate.set(directory, { scope, sections, at: Date.now() })
-  }
   export const Event = {
     Connected: Bus.event("server.connected", z.object({})),
   }
@@ -252,57 +235,8 @@ export namespace Server {
         validator("json", Config.Info),
         async (c) => {
           const config = c.req.valid("json")
-          const scope = (c.req.query("scope") as "project" | "global" | undefined) ?? "project"
-          const directory = Instance.directory
-
-          const result = await Config.update({
-            scope,
-            update: config,
-            directory,
-          })
-
-          const publishDiff = result.diffForPublish
-          const hotReloadEnabled = isConfigHotReloadEnabled()
-          const sections = Object.keys(publishDiff).filter((k) => (publishDiff as any)[k] === true)
-          // Remember sections for toast enrichment regardless of hot reload mode
-          rememberConfigUpdate(directory, scope, sections)
-
-          if (hotReloadEnabled && scope === "project") {
-            await Bus.publish(Config.Event.Updated, {
-              scope,
-              directory,
-              refreshed: true,
-              before: result.before,
-              after: result.after,
-              diff: publishDiff,
-            })
-          }
-          if (hotReloadEnabled && scope === "global") {
-            const publishErrors = await Instance.forEach(async (dir) => {
-              await Bus.publish(Config.Event.Updated, {
-                scope,
-                directory: dir,
-                refreshed: true,
-                before: result.before,
-                after: result.after,
-                diff: publishDiff,
-              })
-              rememberConfigUpdate(dir, scope, sections)
-            })
-
-            if (publishErrors.length > 0) {
-              log.error("config.publish.failure", { scope, errors: publishErrors })
-              const details = publishErrors
-                .map((failure) => {
-                  const message = failure.error instanceof Error ? failure.error.message : String(failure.error)
-                  return `${failure.directory}: ${message}`
-                })
-                .join("; ")
-              throw new Error(`Failed to notify directories: ${details}`)
-            }
-          }
-
-          return c.json(result.after)
+          await Config.update(config)
+          return c.json(config)
         },
       )
       .get(
@@ -2000,36 +1934,7 @@ export namespace Server {
         }),
         validator("json", TuiEvent.ToastShow.properties),
         async (c) => {
-          const payload = c.req.valid("json")
-          // Enrich config save toasts that lack detail, e.g. "Saved global config -> undefined".
-          try {
-            const directory = Instance.directory
-            const match = payload.message.match(/Saved (global|project) config/i)
-            if (match) {
-              const scope = (match[1] as string).toLowerCase() as "global" | "project"
-              const now = Date.now()
-              const isFresh = (ts: number) => now - ts < 10_000
-
-              let candidate = LastConfigUpdate.get(directory)
-              if (!candidate || !isFresh(candidate.at) || candidate.scope !== scope) {
-                // Fallback: find the freshest entry with the same scope
-                candidate = Array.from(LastConfigUpdate.values())
-                  .filter((e) => e.scope === scope && isFresh(e.at))
-                  .sort((a, b) => b.at - a.at)[0]
-              }
-
-              if (candidate) {
-                const sectionText = candidate.sections.length > 0 ? candidate.sections.join(", ") : "no changes"
-                // Replace generic arrow-suffix if present, otherwise rebuild the message
-                if (/->\s*undefined$/i.test(payload.message)) {
-                  payload.message = payload.message.replace(/->\s*undefined$/i, `-> ${sectionText}`)
-                } else {
-                  payload.message = `Saved ${candidate.scope} config -> ${sectionText}`
-                }
-              }
-            }
-          } catch {}
-          await Bus.publish(TuiEvent.ToastShow, payload)
+          await Bus.publish(TuiEvent.ToastShow, c.req.valid("json"))
           return c.json(true)
         },
       )
