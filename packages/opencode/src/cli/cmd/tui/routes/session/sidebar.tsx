@@ -204,8 +204,10 @@ export function Sidebar(props: { sessionID: string }) {
                                   flexDirection="row"
                                   gap={1}
                                   paddingLeft={2}
-                                  onMouseDown={() => {
-                                    if (sessionId) route.navigate({ type: "session", sessionID: sessionId })
+                                  onMouseUp={(e) => {
+                                    if (e.button === 0 && sessionId) {
+                                      route.navigate({ type: "session", sessionID: sessionId })
+                                    }
                                   }}
                                 >
                                   <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
