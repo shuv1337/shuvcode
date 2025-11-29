@@ -231,7 +231,7 @@ export function Session() {
     const current = currentMatchIndex()
     const next = (current + 1) % m.length
     setCurrentMatchIndex(next)
-    
+
     if (m.length === 1 || m[current]?.messageID !== m[next]?.messageID) {
       scrollToMatch(next)
     }
@@ -243,7 +243,7 @@ export function Session() {
     const current = currentMatchIndex()
     const next = current === 0 ? m.length - 1 : current - 1
     setCurrentMatchIndex(next)
-    
+
     if (m.length === 1 || m[current]?.messageID !== m[next]?.messageID) {
       scrollToMatch(next)
     }
@@ -1042,10 +1042,9 @@ function SearchHighlighter(props: { text: string; query: string; messageID: stri
     let matchCount = 0
 
     // Pre-filter matches for this message/part
-    const partMatches = ctx.matches().filter(m => 
-      m.messageID === props.messageID && 
-      (!props.partID || m.partID === props.partID)
-    )
+    const partMatches = ctx
+      .matches()
+      .filter((m) => m.messageID === props.messageID && (!props.partID || m.partID === props.partID))
 
     let pos = 0
     while ((pos = lower.indexOf(query, pos)) !== -1) {
@@ -1318,7 +1317,7 @@ function MarkdownSearchHighlighter(props: {
   const content = createMemo(() => {
     if (!props.query) return props.text
     const escapedQuery = props.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    
+
     // Regex to find:
     // 1. Fenced code blocks (```...```)
     // 2. Inline code blocks (`...`)
@@ -1335,28 +1334,30 @@ function MarkdownSearchHighlighter(props: {
         // Determine delimiter (``` or `) based on the start of the match
         const delimiterMatch = match.match(/^`+/)
         const delimiter = delimiterMatch ? delimiterMatch[0] : "`"
-        
+
         // Extract the inner text (remove wrapping backticks)
         const innerContent = match.slice(delimiter.length, -delimiter.length)
-        
+
         // Split content by query, using capturing group () to keep the matched text
         const parts = innerContent.split(new RegExp(`(${escapedQuery})`, "gi"))
-        
-        return parts.map((part, index) => {
-          // Even indices: Content parts (code)
-          // Odd indices: Matched query (highlight)
-          if (index % 2 === 0) {
-            // If this code segment is empty (e.g. match at start/end), return nothing
-            // This prevents creating empty `` blocks
-            if (!part) return ""
-            return `${delimiter}${part}${delimiter}`
-          } else {
-            // This is the match -> Apply highlight style
-            return `~~${part}~~`
-          }
-        }).join("")
+
+        return parts
+          .map((part, index) => {
+            // Even indices: Content parts (code)
+            // Odd indices: Matched query (highlight)
+            if (index % 2 === 0) {
+              // If this code segment is empty (e.g. match at start/end), return nothing
+              // This prevents creating empty `` blocks
+              if (!part) return ""
+              return `${delimiter}${part}${delimiter}`
+            } else {
+              // This is the match -> Apply highlight style
+              return `~~${part}~~`
+            }
+          })
+          .join("")
       }
-      
+
       // Match found outside of any code block
       return `~~${match}~~`
     })
