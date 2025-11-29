@@ -1082,9 +1082,9 @@ function SearchHighlighter(props: { text: string; query: string; messageID: stri
           <Show when={segment.highlight} fallback={<>{segment.text}</>}>
             <span
               style={{
-                bg: segment.isActive ? theme.primary : theme.warning,
+                bg: theme.primary, // segment.isActive ? theme.primary : theme.warning, -> keeping as primary to match markdown
                 fg: theme.background,
-                bold: segment.isActive,
+                // bold: segment.isActive, // disabled because we cant get working for markdown matches
               }}
             >
               {segment.text}
