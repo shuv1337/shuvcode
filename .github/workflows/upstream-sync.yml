@@ -235,6 +235,8 @@ jobs:
        needs.merge-upstream.outputs.merge_status == 'failed' ||
        needs.validate.outputs.validation_status == 'failed')
     runs-on: ubuntu-latest
+    outputs:
+      issue_number: ${{ steps.create-conflict-issue.outputs.issue_number || steps.create-validation-issue.outputs.issue_number }}
     steps:
       - name: Checkout integration branch
         uses: actions/checkout@v4
@@ -242,6 +244,7 @@ jobs:
           ref: integration
 
       - name: Create conflict issue
+        id: create-conflict-issue
         if: needs.merge-upstream.outputs.merge_status == 'needs-manual'
         uses: actions/github-script@v7
         with:
@@ -262,6 +265,8 @@ jobs:
             const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
             if (duplicate) {
               console.log(`Issue already exists: #${duplicate.number}`);
+              core.setOutput('issue_number', duplicate.number);
+              core.setOutput('is_duplicate', 'true');
               return;
             }
 
@@ -301,7 +306,7 @@ jobs:
             \`\`\`
             `;
 
-            await github.rest.issues.create({
+            const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
@@ -309,7 +314,11 @@ jobs:
               labels: ['upstream-sync', 'needs-manual-review']
             });
 
+            core.setOutput('issue_number', issue.data.number);
+            core.setOutput('is_duplicate', 'false');
+
       - name: Create validation failure issue
+        id: create-validation-issue
         if: needs.validate.outputs.validation_status == 'failed'
         uses: actions/github-script@v7
         with:
@@ -329,6 +338,8 @@ jobs:
             const duplicate = existingIssues.data.find(issue => issue.title === issueTitle);
             if (duplicate) {
               console.log(`Issue already exists: #${duplicate.number}`);
+              core.setOutput('issue_number', duplicate.number);
+              core.setOutput('is_duplicate', 'true');
               return;
             }
 
@@ -361,10 +372,201 @@ jobs:
             \`\`\`
             `;
 
-            await github.rest.issues.create({
+            const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
               body: body,
               labels: ['upstream-sync', 'needs-manual-review']
             });
+
+            core.setOutput('issue_number', issue.data.number);
+            core.setOutput('is_duplicate', 'false');
+
+  trigger-opencode:
+    needs: [check-release, merge-upstream, create-issue]
+    if: |
+      always() &&
+      needs.create-issue.outputs.issue_number != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger opencode to resolve conflicts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = parseInt(`${{ needs.create-issue.outputs.issue_number }}`);
+            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
+            const mergeStatus = `${{ needs.merge-upstream.outputs.merge_status }}`;
+
+            // Build the opencode prompt based on the issue type
+            let prompt;
+
+            if (mergeStatus === 'needs-manual') {
+              prompt = `/opencode
+
+            ## Task: Resolve Upstream Merge Conflicts
+
+            Sync the shuvcode fork from upstream sst/opencode tag **${latestTag}**, resolve all merge conflicts, and complete the integration.
+
+            ### Repository Context
+            - **Upstream**: \`sst/opencode\` (original project)
+            - **Fork**: \`kcrommett/shuvcode\` (customized downstream fork)
+            - **Integration branch**: \`integration\` (where we merge upstream changes)
+
+            ### Conflicting Files
+            \`\`\`
+            ${conflictFiles}
+            \`\`\`
+
+            ### Conflict Resolution Strategy
+
+            Follow these resolution patterns for each file type:
+
+            | File Pattern | Resolution |
+            |--------------|------------|
+            | \`STATS.md\`, \`nix/hashes.json\` | Accept upstream (\`git checkout --theirs\`) |
+            | \`bun.lock\` | Delete and regenerate with \`bun install\` |
+            | \`packages/opencode/script/publish.ts\` | Keep ours (fork-specific publishing) |
+            | \`packages/opencode/script/build.ts\` | Keep ours (shuvcode naming) |
+            | \`packages/opencode/bin/opencode\` | Keep ours (shuvcode binary lookup) |
+            | \`packages/script/src/index.ts\` | Keep ours (version logic) |
+            | \`.github/*\` workflow configs | Keep ours (fork-specific workflows) |
+            | \`*.tsx\` with our features | Merge both - preserve our customizations AND upstream improvements |
+
+            ### Step-by-Step Instructions
+
+            1. **Setup upstream remote and fetch**:
+               \`\`\`bash
+               git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
+               git fetch upstream --tags
+               \`\`\`
+
+            2. **Start the merge**:
+               \`\`\`bash
+               git merge ${latestTag} --no-commit --no-ff
+               \`\`\`
+
+            3. **List and resolve each conflict** using the strategy table above:
+               \`\`\`bash
+               git diff --name-only --diff-filter=U
+               \`\`\`
+
+            4. **For each resolved file**:
+               \`\`\`bash
+               git add <file>
+               \`\`\`
+
+            5. **Verify no conflicts remain**:
+               \`\`\`bash
+               git diff --name-only --diff-filter=U  # Should be empty
+               \`\`\`
+
+            6. **Regenerate lockfile** (if bun.lock was conflicted):
+               \`\`\`bash
+               rm -f bun.lock
+               bun install
+               git add bun.lock
+               \`\`\`
+
+            7. **Commit the merge**:
+               \`\`\`bash
+               git commit -m "sync: merge upstream ${latestTag} into integration
+
+               Resolved conflicts:
+               - <list each file and resolution used>"
+               \`\`\`
+
+            8. **Update sync marker**:
+               \`\`\`bash
+               echo "${latestTag}" > .github/last-synced-tag
+               git add .github/last-synced-tag
+               git commit -m "sync: record last synced tag ${latestTag}"
+               \`\`\`
+
+            9. **Run validation**:
+               \`\`\`bash
+               bun install
+               bun turbo typecheck
+               bun turbo test
+               \`\`\`
+
+            10. **Push to origin** (this triggers the snapshot/release workflow):
+                \`\`\`bash
+                git push origin integration
+                \`\`\`
+
+            11. **Close this issue** after successful push:
+                \`\`\`bash
+                gh issue close ${issueNumber} --comment "Resolved - merged upstream ${latestTag}"
+                \`\`\`
+
+            ### Important Notes
+            - **Never force-push** to integration branch
+            - **Always preserve fork-specific changes** in publish.ts, build.ts, bin/opencode
+            - If validation fails, fix the issues before pushing
+            - The snapshot workflow will auto-trigger on push and publish to npm as \`shuvcode\`
+            `;
+            } else {
+              // Validation failure case
+              prompt = `/opencode
+
+            ## Task: Fix Validation Failures After Upstream Merge
+
+            The upstream merge of **${latestTag}** succeeded, but post-merge validation failed.
+
+            ### Instructions
+
+            1. **Pull the latest integration branch**:
+               \`\`\`bash
+               git fetch origin
+               git checkout integration
+               git pull origin integration
+               \`\`\`
+
+            2. **Install dependencies**:
+               \`\`\`bash
+               bun install
+               \`\`\`
+
+            3. **Run validation and identify failures**:
+               \`\`\`bash
+               bun turbo typecheck
+               bun turbo test
+               bun turbo build
+               \`\`\`
+
+            4. **Fix any type errors, test failures, or build issues**
+
+            5. **Commit fixes**:
+               \`\`\`bash
+               git add .
+               git commit -m "fix: resolve validation issues after merging ${latestTag}"
+               \`\`\`
+
+            6. **Re-run validation to confirm fixes**:
+               \`\`\`bash
+               bun turbo typecheck && bun turbo test && bun turbo build
+               \`\`\`
+
+            7. **Push to origin**:
+               \`\`\`bash
+               git push origin integration
+               \`\`\`
+
+            8. **Close this issue**:
+               \`\`\`bash
+               gh issue close ${issueNumber} --comment "Fixed validation issues after merging ${latestTag}"
+               \`\`\`
+            `;
+            }
+
+            // Post the comment to trigger opencode
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: prompt
+            });
+
+            console.log(`Posted opencode trigger comment on issue #${issueNumber}`);
