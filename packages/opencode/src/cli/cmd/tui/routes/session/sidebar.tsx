@@ -269,9 +269,9 @@ export function Sidebar(props: { sessionID: string }) {
           </Show>
           <text fg={theme.textMuted}>{directory()}</text>
           <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
+            <span style={{ fg: theme.success }}>•</span> <b>shuv</b>
             <span style={{ fg: theme.text }}>
-              <b>Code</b>
+              <b>code</b>
             </span>{" "}
             <span>{Installation.VERSION}</span>
           </text>
