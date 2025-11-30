@@ -17,6 +17,7 @@ import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
+import { useToast } from "../../ui/toast"
 import type { FilePart } from "@opencode-ai/sdk"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
@@ -30,10 +31,12 @@ export type PromptProps = {
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
+  initialValue?: string
 }
 
 export type PromptRef = {
   focused: boolean
+  text: string
   set(prompt: PromptInfo): void
   reset(): void
   blur(): void
@@ -277,6 +280,10 @@ export function Prompt(props: PromptProps) {
 
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
+    if (props.initialValue) {
+      input.setText(props.initialValue)
+      setStore("prompt", "input", props.initialValue)
+    }
   })
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
@@ -360,6 +367,9 @@ export function Prompt(props: PromptProps) {
   props.ref?.({
     get focused() {
       return input.focused
+    },
+    get text() {
+      return input.plainText
     },
     focus() {
       input.focus()
@@ -496,6 +506,22 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
+  const toast = useToast()
+  let lastExitAttempt = 0
+
+  async function tryExit() {
+    const now = Date.now()
+    if (now - lastExitAttempt < 2000) {
+      await exit()
+      return
+    }
+    lastExitAttempt = now
+    toast.show({
+      variant: "warning",
+      message: "Press again to exit",
+      duration: 2000,
+    })
+  }
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
@@ -680,7 +706,7 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 if (keybind.match("app_exit", e)) {
-                  await exit()
+                  await tryExit()
                   return
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
