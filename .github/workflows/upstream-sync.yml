@@ -2,7 +2,7 @@ name: Upstream Sync
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # Check for new releases every 15 minutes
+    - cron: "*/5 * * * *" # Check for new releases every 5 minutes
   workflow_dispatch:
     inputs:
       force_sync:
@@ -21,54 +21,102 @@ permissions:
 jobs:
   check-release:
     runs-on: ubuntu-latest
+    container:
+      image: alpine:3.20
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     outputs:
       new_release: ${{ steps.check.outputs.new_release }}
       latest_tag: ${{ steps.check.outputs.latest_tag }}
       latest_sha: ${{ steps.check.outputs.latest_sha }}
     steps:
-      - name: Checkout integration branch
-        uses: actions/checkout@v4
-        with:
-          ref: integration
-          fetch-depth: 0
+      - name: Install tooling
+        run: apk add --no-cache curl jq coreutils
 
-      - name: Add upstream remote
-        run: |
-          git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
-
-      - name: Check for new release
+      - name: Check for new release via API
         id: check
+        env:
+          FORCE_SYNC: ${{ inputs.force_sync }}
+          REPO: ${{ github.repository }}
         run: |
-          git fetch upstream --tags
+          set -euo pipefail
 
-          # Get latest upstream release tag (semver sorted)
-          LATEST_TAG=$(git ls-remote --tags --sort='-v:refname' upstream 'v*' \
-            | sed 's|.*/||' | grep -E '^v[0-9]+' | head -1)
+          api() {
+            local url="$1"
+            if [ -n "${GITHUB_TOKEN:-}" ]; then
+              curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$url"
+            else
+              curl -fsSL -H "Accept: application/vnd.github+json" "$url"
+            fi
+          }
 
-          echo "Latest upstream tag: $LATEST_TAG"
+          api_with_status() {
+            local url="$1"
+            local output="$2"
+            if [ -n "${GITHUB_TOKEN:-}" ]; then
+              curl -sS -w "%{http_code}" -o "$output" -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$url"
+            else
+              curl -sS -w "%{http_code}" -o "$output" -H "Accept: application/vnd.github+json" "$url"
+            fi
+          }
 
-          # Resolve upstream tag to SHA
-          LATEST_SHA=$(git ls-remote upstream "refs/tags/$LATEST_TAG" | awk '{print $1}')
-          echo "Latest upstream SHA: $LATEST_SHA"
+          RELEASE=$(api "https://api.github.com/repos/sst/opencode/releases/latest")
+          LATEST_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
 
-          # Get last synced tag from marker file
-          LAST_SYNCED=""
-          if [ -f .github/last-synced-tag ]; then
-            LAST_SYNCED=$(cat .github/last-synced-tag)
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            echo "Unable to determine latest upstream tag" >&2
+            exit 1
           fi
-          echo "Last synced tag: $LAST_SYNCED"
 
-          # Check if force sync is requested
-          FORCE_SYNC="${{ inputs.force_sync }}"
+          TAG_REF=$(api "https://api.github.com/repos/sst/opencode/git/ref/tags/$LATEST_TAG")
+          REF_TYPE=$(echo "$TAG_REF" | jq -r '.object.type')
+          REF_SHA=$(echo "$TAG_REF" | jq -r '.object.sha')
 
-          if [ "$LATEST_TAG" != "$LAST_SYNCED" ] || [ "$FORCE_SYNC" = "true" ]; then
-            echo "New release detected or force sync requested: $LATEST_TAG"
-            echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-            echo "latest_sha=$LATEST_SHA" >> $GITHUB_OUTPUT
+          if [ -z "$REF_SHA" ] || [ "$REF_SHA" = "null" ]; then
+            echo "Unable to resolve tag ref for $LATEST_TAG" >&2
+            exit 1
+          fi
+
+          if [ "$REF_TYPE" = "tag" ]; then
+            TAG_OBJECT=$(api "https://api.github.com/repos/sst/opencode/git/tags/$REF_SHA")
+            LATEST_SHA=$(echo "$TAG_OBJECT" | jq -r '.object.sha')
+          else
+            LATEST_SHA="$REF_SHA"
+          fi
+
+          if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" = "null" ]; then
+            echo "Unable to resolve commit SHA for $LATEST_TAG" >&2
+            exit 1
+          fi
+
+          TMP=$(mktemp)
+          STATUS=$(api_with_status "https://api.github.com/repos/$REPO/contents/.github/last-synced-tag" "$TMP" || true)
+
+          if [ "$STATUS" = "200" ]; then
+            LAST_SYNCED=$(jq -r '.content' "$TMP" | base64 -d | tr -d '\n')
+          elif [ "$STATUS" = "404" ]; then
+            LAST_SYNCED=""
+          else
+            echo "Failed to read .github/last-synced-tag (status $STATUS)" >&2
+            cat "$TMP" >&2 || true
+            rm -f "$TMP"
+            exit 1
+          fi
+          rm -f "$TMP"
+
+          FORCE=${FORCE_SYNC:-false}
+
+          echo "Latest upstream tag: $LATEST_TAG ($LATEST_SHA)"
+          echo "Last synced tag: ${LAST_SYNCED:-<none>}"
+
+          if [ "$LATEST_TAG" != "$LAST_SYNCED" ] || [ "$FORCE" = "true" ]; then
+            echo "New release detected or force sync requested"
+            echo "new_release=true" >> "$GITHUB_OUTPUT"
+            echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+            echo "latest_sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
           else
             echo "No new release detected"
-            echo "new_release=false" >> $GITHUB_OUTPUT
+            echo "new_release=false" >> "$GITHUB_OUTPUT"
           fi
 
   merge-upstream:
