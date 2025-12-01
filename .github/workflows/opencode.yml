@@ -28,6 +28,14 @@ jobs:
         if: ${{ !github.event.issue.pull_request && contains(github.event.issue.labels.*.name, 'upstream-sync') }}
         run: git checkout integration
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
       - name: Run opencode
         uses: sst/opencode/github@latest
         env:
