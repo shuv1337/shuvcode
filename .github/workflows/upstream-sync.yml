@@ -436,6 +436,51 @@ jobs:
             core.setOutput('issue_number', issue.data.number);
             core.setOutput('is_duplicate', 'false');
 
+  close-issues-on-success:
+    needs: [check-release, merge-upstream, validate]
+    if: |
+      always() &&
+      needs.validate.outputs.validation_status == 'success' &&
+      (needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close related upstream-sync issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+
+            // Find all open upstream-sync issues
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-sync'
+            });
+
+            for (const issue of issues.data) {
+              // Close issues related to this tag or older
+              if (issue.title.includes('[Upstream Sync]')) {
+                console.log(`Closing issue #${issue.number}: ${issue.title}`);
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ Automatically closed - upstream sync to ${latestTag} completed successfully.\n\nValidation passed: typecheck, tests, and build all succeeded.`
+                });
+                
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+              }
+            }
+
   trigger-opencode:
     needs: [check-release, merge-upstream, create-issue]
     if: |
