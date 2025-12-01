@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   check-release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     container:
       image: alpine:3.20
     env:
@@ -122,7 +122,7 @@ jobs:
   merge-upstream:
     needs: check-release
     if: needs.check-release.outputs.new_release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       merge_status: ${{ steps.merge.outputs.status }}
       conflict_files: ${{ steps.merge.outputs.conflict_files }}
@@ -226,7 +226,7 @@ jobs:
   validate:
     needs: [check-release, merge-upstream]
     if: needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved' || needs.merge-upstream.outputs.merge_status == 'up-to-date'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       validation_status: ${{ steps.validate.outputs.status }}
       validation_error: ${{ steps.validate.outputs.error }}
@@ -287,7 +287,7 @@ jobs:
       (needs.merge-upstream.outputs.merge_status == 'needs-manual' ||
        needs.merge-upstream.outputs.merge_status == 'failed' ||
        needs.validate.outputs.validation_status == 'failed')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       issue_number: ${{ steps.create-conflict-issue.outputs.issue_number || steps.create-validation-issue.outputs.issue_number }}
     steps:
@@ -442,7 +442,7 @@ jobs:
       always() &&
       needs.validate.outputs.validation_status == 'success' &&
       (needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - name: Close related upstream-sync issues
         uses: actions/github-script@v7
@@ -486,7 +486,7 @@ jobs:
     if: |
       always() &&
       needs.create-issue.outputs.issue_number != ''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - name: Trigger opencode to resolve conflicts
         uses: actions/github-script@v7
