@@ -39,14 +39,14 @@ All workflows now use hardcoded `blacksmith-4vcpu-ubuntu-2404` runners.
 
 All workflows use `runs-on: blacksmith-4vcpu-ubuntu-2404`:
 
-| Workflow | Purpose |
-|----------|---------|
-| `format.yml` | Code formatting checks |
-| `test.yml` | Run tests |
-| `typecheck.yml` | TypeScript type checking |
-| `snapshot.yml` | Publish `shuvcode` to npm |
-| `upstream-sync.yml` | Sync from sst/opencode |
-| `opencode.yml` | AI agent for conflict resolution |
+| Workflow            | Purpose                          |
+| ------------------- | -------------------------------- |
+| `format.yml`        | Code formatting checks           |
+| `test.yml`          | Run tests                        |
+| `typecheck.yml`     | TypeScript type checking         |
+| `snapshot.yml`      | Publish `shuvcode` to npm        |
+| `upstream-sync.yml` | Sync from sst/opencode           |
+| `opencode.yml`      | AI agent for conflict resolution |
 
 SST-only workflows (deploy, publish, extensions, stats, notifications) were removed.
 
