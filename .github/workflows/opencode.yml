@@ -40,6 +40,6 @@ jobs:
         uses: sst/opencode/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           model: anthropic/claude-opus-4-5
-          token: ${{ secrets.PAT_TOKEN }}
