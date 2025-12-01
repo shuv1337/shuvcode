@@ -35,24 +35,20 @@ All workflows now use hardcoded `blacksmith-4vcpu-ubuntu-2404` runners.
 - [x] Self-hosted runner files removed (security)
 - [x] Secrets configured in new organization
 
-## Workflows Using Blacksmith
+## Workflows
 
-All workflows in `.github/workflows/` now use `runs-on: blacksmith-4vcpu-ubuntu-2404`:
+All workflows use `runs-on: blacksmith-4vcpu-ubuntu-2404`:
 
-- `deploy.yml`
-- `format.yml`
-- `notify-discord.yml`
-- `opencode.yml`
-- `publish.yml`
-- `publish-github-action.yml`
-- `publish-vscode.yml`
-- `snapshot.yml`
-- `stats.yml`
-- `sync-zed-extension.yml`
-- `test.yml`
-- `typecheck.yml`
-- `update-nix-hashes.yml`
-- `upstream-sync.yml`
+| Workflow | Purpose |
+|----------|---------|
+| `format.yml` | Code formatting checks |
+| `test.yml` | Run tests |
+| `typecheck.yml` | TypeScript type checking |
+| `snapshot.yml` | Publish `shuvcode` to npm |
+| `upstream-sync.yml` | Sync from sst/opencode |
+| `opencode.yml` | AI agent for conflict resolution |
+
+SST-only workflows (deploy, publish, extensions, stats, notifications) were removed.
 
 ## Commands Reference
 
