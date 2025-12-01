@@ -14,6 +14,9 @@ declare global {
 export namespace Installation {
   const log = Log.create({ service: "installation" })
 
+  // Package name for npm registry - shuvcode fork uses "shuvcode"
+  const PACKAGE_NAME = "shuvcode"
+
   export type Method = Awaited<ReturnType<typeof method>>
 
   export const Event = {
@@ -57,11 +60,13 @@ export namespace Installation {
   }
 
   export async function method() {
-    if (process.execPath.includes(path.join(".opencode", "bin"))) return "curl"
-    if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
     const exec = process.execPath.toLowerCase()
 
     const checks = [
+      {
+        name: "bun" as const,
+        command: () => $`bun pm ls -g`.throws(false).text(),
+      },
       {
         name: "npm" as const,
         command: () => $`npm list -g --depth=0`.throws(false).text(),
@@ -73,14 +78,6 @@ export namespace Installation {
       {
         name: "pnpm" as const,
         command: () => $`pnpm list -g --depth=0`.throws(false).text(),
-      },
-      {
-        name: "bun" as const,
-        command: () => $`bun pm ls -g`.throws(false).text(),
-      },
-      {
-        name: "brew" as const,
-        command: () => $`brew list --formula opencode`.throws(false).text(),
       },
     ]
 
@@ -94,7 +91,7 @@ export namespace Installation {
 
     for (const check of checks) {
       const output = await check.command()
-      if (output.includes(check.name === "brew" ? "opencode" : "opencode-ai")) {
+      if (output.includes(PACKAGE_NAME)) {
         return check.name
       }
     }
@@ -109,42 +106,23 @@ export namespace Installation {
     }),
   )
 
-  async function getBrewFormula() {
-    const tapFormula = await $`brew list --formula sst/tap/opencode`.throws(false).text()
-    if (tapFormula.includes("opencode")) return "sst/tap/opencode"
-    const coreFormula = await $`brew list --formula opencode`.throws(false).text()
-    if (coreFormula.includes("opencode")) return "opencode"
-    return "opencode"
-  }
-
   export async function upgrade(method: Method, target: string) {
     let cmd
     switch (method) {
-      case "curl":
-        cmd = $`curl -fsSL https://opencode.ai/install | bash`.env({
-          ...process.env,
-          VERSION: target,
-        })
+      case "bun":
+        cmd = $`bun install -g ${PACKAGE_NAME}@${target}`
         break
       case "npm":
-        cmd = $`npm install -g opencode-ai@${target}`
+        cmd = $`npm install -g ${PACKAGE_NAME}@${target}`
         break
       case "pnpm":
-        cmd = $`pnpm install -g opencode-ai@${target}`
+        cmd = $`pnpm install -g ${PACKAGE_NAME}@${target}`
         break
-      case "bun":
-        cmd = $`bun install -g opencode-ai@${target}`
+      case "yarn":
+        cmd = $`yarn global add ${PACKAGE_NAME}@${target}`
         break
-      case "brew": {
-        const formula = await getBrewFormula()
-        cmd = $`brew install ${formula}`.env({
-          HOMEBREW_NO_AUTO_UPDATE: "1",
-          ...process.env,
-        })
-        break
-      }
       default:
-        throw new Error(`Unknown method: ${method}`)
+        throw new Error(`Unknown or unsupported upgrade method: ${method}. Use: bun, npm, pnpm, or yarn`)
     }
     const result = await cmd.quiet().throws(false)
     log.info("upgraded", {
@@ -162,7 +140,7 @@ export namespace Installation {
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
   export const BASE_VERSION = typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
-  export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}`
+  export const USER_AGENT = `shuvcode/${CHANNEL}/${VERSION}`
 
   export function displayVersion() {
     if (!isPreview()) return VERSION
@@ -171,9 +149,8 @@ export namespace Installation {
   }
 
   export async function latest() {
-    const [major] = VERSION.split(".").map((x) => Number(x))
-    const channel = CHANNEL === "latest" ? `latest-${major}` : CHANNEL
-    return fetch(`https://registry.npmjs.org/opencode-ai/${channel}`)
+    // Fetch latest version from npm registry for shuvcode
+    return fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`)
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()
