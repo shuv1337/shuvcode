@@ -21,11 +21,11 @@ The `shuvcode` repository is a public fork of `sst/opencode` that automatically 
 
 All workflows now use hardcoded `blacksmith-4vcpu-ubuntu-2404` runners.
 
-| Runner Type | Status | Notes |
-|-------------|--------|-------|
-| Blacksmith | Active | Fast execution, no queue delays |
-| GitHub-hosted | Removed | Was slow (20+ min queue times) |
-| Self-hosted | Removed | Security concerns for public repos |
+| Runner Type   | Status  | Notes                              |
+| ------------- | ------- | ---------------------------------- |
+| Blacksmith    | Active  | Fast execution, no queue delays    |
+| GitHub-hosted | Removed | Was slow (20+ min queue times)     |
+| Self-hosted   | Removed | Security concerns for public repos |
 
 ### Migration Completed
 
