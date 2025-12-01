@@ -17,7 +17,7 @@ The `shuvcode` repository is a public fork of `sst/opencode` that automatically 
 
 ### CI Runner Configuration
 
-**Decision: Use Blacksmith runners via LatitudesDev organization**
+**Decision: Use Blacksmith runners via Latitudes-Dev organization**
 
 All workflows now use hardcoded `blacksmith-4vcpu-ubuntu-2404` runners.
 
@@ -29,7 +29,7 @@ All workflows now use hardcoded `blacksmith-4vcpu-ubuntu-2404` runners.
 
 ### Migration Completed
 
-- [x] Repository transferred to `LatitudesDev/shuvcode`
+- [x] Repository transferred to `Latitudes-Dev/shuvcode`
 - [x] Blacksmith enabled for the organization
 - [x] All workflows updated to use Blacksmith runners
 - [x] Self-hosted runner files removed (security)
@@ -59,20 +59,20 @@ All workflows in `.github/workflows/` now use `runs-on: blacksmith-4vcpu-ubuntu-
 ### Check Workflow Status
 
 ```bash
-gh run list --repo LatitudesDev/shuvcode --limit 10
-gh run view <run-id> --repo LatitudesDev/shuvcode
+gh run list --repo Latitudes-Dev/shuvcode --limit 10
+gh run view <run-id> --repo Latitudes-Dev/shuvcode
 ```
 
 ### Trigger Upstream Sync Manually
 
 ```bash
-gh workflow run upstream-sync.yml --repo LatitudesDev/shuvcode -f force_sync=true
+gh workflow run upstream-sync.yml --repo Latitudes-Dev/shuvcode -f force_sync=true
 ```
 
 ### View Open Issues
 
 ```bash
-gh issue list --repo LatitudesDev/shuvcode --state open --label upstream-sync
+gh issue list --repo Latitudes-Dev/shuvcode --state open --label upstream-sync
 ```
 
 ## Related Files
@@ -91,4 +91,4 @@ Self-hosted runners on public repos pose security risks: anyone can fork the rep
 
 - Fast execution (no 20+ minute queue delays)
 - Hosted service (no security concerns)
-- Requires GitHub Organization (hence migration to LatitudesDev)
+- Requires GitHub Organization (hence migration to Latitudes-Dev)

@@ -510,7 +510,7 @@ jobs:
 
             ### Repository Context
             - **Upstream**: \`sst/opencode\` (original project)
-            - **Fork**: \`LatitudesDev/shuvcode\` (customized downstream fork)
+            - **Fork**: \`Latitudes-Dev/shuvcode\` (customized downstream fork)
             - **Integration branch**: \`integration\` (where we merge upstream changes)
 
             ### Conflicting Files
