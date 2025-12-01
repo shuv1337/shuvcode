@@ -11,7 +11,7 @@ jobs:
     if: |
       contains(github.event.comment.body, '/oc') ||
       contains(github.event.comment.body, '/opencode')
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       id-token: write
       contents: write
