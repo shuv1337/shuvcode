@@ -1,5 +1,10 @@
 ## IMPORTANT
 
+- This is a FORK of sst/opencode - the fork repo is Latitudes-Dev/shuvcode
+- NEVER create PRs against upstream (sst/opencode)
+- ALWAYS use `--repo Latitudes-Dev/shuvcode` when creating PRs with `gh`
+- All PRs should target the fork repository, not upstream
+
 - Try to keep things in one function unless composable or reusable
 - DO NOT do unnecessary destructuring of variables
 - DO NOT use `else` statements unless necessary
