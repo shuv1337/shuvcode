@@ -4,6 +4,7 @@ import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
+import { iife } from "@/util/iife"
 
 declare global {
   const OPENCODE_VERSION: string
@@ -150,7 +151,13 @@ export namespace Installation {
 
   export async function latest() {
     // Fetch latest version from npm registry for shuvcode
-    return fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`)
+    // Use npm config registry if available, fallback to npmjs.org
+    const registry = await iife(async () => {
+      const r = (await $`npm config get registry`.quiet().nothrow().text()).trim()
+      const reg = r || "https://registry.npmjs.org"
+      return reg.endsWith("/") ? reg.slice(0, -1) : reg
+    })
+    return fetch(`${registry}/${PACKAGE_NAME}/latest`)
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()
