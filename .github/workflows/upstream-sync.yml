@@ -24,6 +24,7 @@ jobs:
     outputs:
       latest_tag: ${{ steps.resolve.outputs.latest_tag }}
       latest_sha: ${{ steps.resolve.outputs.latest_sha }}
+      should_sync: ${{ steps.resolve.outputs.should_sync }}
     steps:
       - name: Resolve tag and SHA
         id: resolve
@@ -50,6 +51,16 @@ jobs:
             exit 1
           fi
 
+          # Check if already synced (early exit to prevent duplicate work)
+          LAST_SYNCED=$(api "https://api.github.com/repos/${{ github.repository }}/contents/.github/last-synced-tag?ref=integration" | jq -r '.content' | base64 -d | tr -d '\n' || echo "")
+          if [ "$LATEST_TAG" = "$LAST_SYNCED" ]; then
+            echo "Tag $LATEST_TAG already synced, skipping"
+            echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+            echo "latest_sha=" >> "$GITHUB_OUTPUT"
+            echo "should_sync=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Resolve tag to commit SHA
           TAG_REF=$(api "https://api.github.com/repos/sst/opencode/git/ref/tags/$LATEST_TAG")
           REF_TYPE=$(echo "$TAG_REF" | jq -r '.object.type')
@@ -65,9 +76,11 @@ jobs:
           echo "Resolved tag: $LATEST_TAG -> $LATEST_SHA"
           echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "latest_sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
+          echo "should_sync=true" >> "$GITHUB_OUTPUT"
 
   merge-upstream:
     needs: resolve-tag
+    if: needs.resolve-tag.outputs.should_sync == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       merge_status: ${{ steps.merge.outputs.status }}
