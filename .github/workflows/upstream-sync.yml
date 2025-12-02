@@ -2,7 +2,7 @@ name: Upstream Sync
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # Check for new releases every 5 minutes
+    - cron: "* * * * *" # Check for new releases every minute
   workflow_dispatch:
     inputs:
       force_sync:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   check-release:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: self-hosted
     container:
       image: alpine:3.20
     env:
