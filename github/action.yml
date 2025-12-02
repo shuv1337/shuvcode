@@ -27,4 +27,4 @@ runs:
         MODEL: ${{ inputs.model }}
         SHARE: ${{ inputs.share }}
         OPENCODE_BIN_PATH: ${{ github.workspace }}/packages/opencode/dist/shuvcode-linux-x64/bin/opencode
-      run: node packages/opencode/bin/opencode github run
+      run: bun packages/opencode/bin/opencode github run
