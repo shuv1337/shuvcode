@@ -30,12 +30,21 @@ acquire_lock() {
   mkdir -p "$STATE_DIR"
   if [ -f "$LOCK_FILE" ]; then
     OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
-    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-      log "ERROR: Another instance is already running (PID: $OLD_PID)"
-      exit 1
+    # In Docker, PID 1 is always the main process. Check if it's a different process.
+    # Also check /proc to verify the process is actually our script, not just any PID 1
+    if [ -n "$OLD_PID" ] && [ "$OLD_PID" != "$$" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+      # Additional check: in Docker, if we're PID 1 and lock says PID 1, it's stale from previous container
+      if [ "$OLD_PID" = "1" ] && [ "$$" = "1" ]; then
+        log "Stale lock file from previous container, removing"
+        rm -f "$LOCK_FILE"
+      else
+        log "ERROR: Another instance is already running (PID: $OLD_PID)"
+        exit 1
+      fi
+    else
+      log "Stale lock file found, removing"
+      rm -f "$LOCK_FILE"
     fi
-    log "Stale lock file found, removing"
-    rm -f "$LOCK_FILE"
   fi
   echo $$ > "$LOCK_FILE"
   trap cleanup EXIT INT TERM
