@@ -418,7 +418,7 @@ function App() {
     toast.show({
       variant: "success",
       title: "Update Complete",
-      message: `OpenCode updated to v${evt.properties.version}`,
+      message: `shuvcode updated to v${evt.properties.version}`,
       duration: 5000,
     })
   })
@@ -427,7 +427,7 @@ function App() {
     toast.show({
       variant: "info",
       title: "Update Available",
-      message: `OpenCode v${evt.properties.version} is available. Run 'opencode upgrade' to update manually.`,
+      message: `shuvcode v${evt.properties.version} is available. Run 'shuvcode upgrade' to update manually.`,
       duration: 10000,
     })
   })
