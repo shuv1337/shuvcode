@@ -1,14 +1,14 @@
 name: Upstream Sync
 
 on:
-  schedule:
-    - cron: "* * * * *" # Check for new releases every minute
+  repository_dispatch:
+    types: [upstream-release]
   workflow_dispatch:
     inputs:
-      force_sync:
-        description: "Force sync even if no new release"
-        type: boolean
-        default: false
+      tag:
+        description: "Tag to sync (leave empty for latest)"
+        type: string
+        required: false
 
 concurrency:
   group: upstream-sync
@@ -19,63 +19,41 @@ permissions:
   issues: write
 
 jobs:
-  check-release:
-    runs-on: self-hosted
-    container:
-      image: alpine:3.20
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
+  resolve-tag:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
-      new_release: ${{ steps.check.outputs.new_release }}
-      latest_tag: ${{ steps.check.outputs.latest_tag }}
-      latest_sha: ${{ steps.check.outputs.latest_sha }}
+      latest_tag: ${{ steps.resolve.outputs.latest_tag }}
+      latest_sha: ${{ steps.resolve.outputs.latest_sha }}
     steps:
-      - name: Install tooling
-        run: apk add --no-cache curl jq coreutils
-
-      - name: Check for new release via API
-        id: check
+      - name: Resolve tag and SHA
+        id: resolve
         env:
-          FORCE_SYNC: ${{ inputs.force_sync }}
-          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ github.event.client_payload.tag || inputs.tag }}
         run: |
           set -euo pipefail
 
           api() {
-            local url="$1"
-            if [ -n "${GITHUB_TOKEN:-}" ]; then
-              curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$url"
-            else
-              curl -fsSL -H "Accept: application/vnd.github+json" "$url"
-            fi
+            curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "$1"
           }
 
-          api_with_status() {
-            local url="$1"
-            local output="$2"
-            if [ -n "${GITHUB_TOKEN:-}" ]; then
-              curl -sS -w "%{http_code}" -o "$output" -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$url"
-            else
-              curl -sS -w "%{http_code}" -o "$output" -H "Accept: application/vnd.github+json" "$url"
-            fi
-          }
-
-          RELEASE=$(api "https://api.github.com/repos/sst/opencode/releases/latest")
-          LATEST_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
+          # Use provided tag or fetch latest
+          if [ -n "${INPUT_TAG:-}" ]; then
+            LATEST_TAG="$INPUT_TAG"
+          else
+            RELEASE=$(api "https://api.github.com/repos/sst/opencode/releases/latest")
+            LATEST_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
+          fi
 
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            echo "Unable to determine latest upstream tag" >&2
+            echo "Unable to determine tag" >&2
             exit 1
           fi
 
+          # Resolve tag to commit SHA
           TAG_REF=$(api "https://api.github.com/repos/sst/opencode/git/ref/tags/$LATEST_TAG")
           REF_TYPE=$(echo "$TAG_REF" | jq -r '.object.type')
           REF_SHA=$(echo "$TAG_REF" | jq -r '.object.sha')
-
-          if [ -z "$REF_SHA" ] || [ "$REF_SHA" = "null" ]; then
-            echo "Unable to resolve tag ref for $LATEST_TAG" >&2
-            exit 1
-          fi
 
           if [ "$REF_TYPE" = "tag" ]; then
             TAG_OBJECT=$(api "https://api.github.com/repos/sst/opencode/git/tags/$REF_SHA")
@@ -84,44 +62,12 @@ jobs:
             LATEST_SHA="$REF_SHA"
           fi
 
-          if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" = "null" ]; then
-            echo "Unable to resolve commit SHA for $LATEST_TAG" >&2
-            exit 1
-          fi
-
-          TMP=$(mktemp)
-          STATUS=$(api_with_status "https://api.github.com/repos/$REPO/contents/.github/last-synced-tag" "$TMP" || true)
-
-          if [ "$STATUS" = "200" ]; then
-            LAST_SYNCED=$(jq -r '.content' "$TMP" | base64 -d | tr -d '\n')
-          elif [ "$STATUS" = "404" ]; then
-            LAST_SYNCED=""
-          else
-            echo "Failed to read .github/last-synced-tag (status $STATUS)" >&2
-            cat "$TMP" >&2 || true
-            rm -f "$TMP"
-            exit 1
-          fi
-          rm -f "$TMP"
-
-          FORCE=${FORCE_SYNC:-false}
-
-          echo "Latest upstream tag: $LATEST_TAG ($LATEST_SHA)"
-          echo "Last synced tag: ${LAST_SYNCED:-<none>}"
-
-          if [ "$LATEST_TAG" != "$LAST_SYNCED" ] || [ "$FORCE" = "true" ]; then
-            echo "New release detected or force sync requested"
-            echo "new_release=true" >> "$GITHUB_OUTPUT"
-            echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
-            echo "latest_sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
-          else
-            echo "No new release detected"
-            echo "new_release=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Resolved tag: $LATEST_TAG -> $LATEST_SHA"
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "latest_sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
 
   merge-upstream:
-    needs: check-release
-    if: needs.check-release.outputs.new_release == 'true'
+    needs: resolve-tag
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       merge_status: ${{ steps.merge.outputs.status }}
@@ -146,20 +92,20 @@ jobs:
       - name: Fetch upstream tag
         run: |
           git fetch upstream --tags
-          git fetch upstream tag ${{ needs.check-release.outputs.latest_tag }} --no-tags
+          git fetch upstream tag ${{ needs.resolve-tag.outputs.latest_tag }} --no-tags
 
       - name: Attempt merge
         id: merge
         run: |
           # Attempt merge with no-commit to detect conflicts first
-          if git merge ${{ needs.check-release.outputs.latest_tag }} --no-commit --no-ff 2>&1; then
+          if git merge ${{ needs.resolve-tag.outputs.latest_tag }} --no-commit --no-ff 2>&1; then
             echo "Merge successful, no conflicts"
             # Check if there are changes to commit
             if git diff --cached --quiet; then
               echo "Already up to date, nothing to merge"
               echo "status=up-to-date" >> $GITHUB_OUTPUT
             else
-              git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration"
+              git commit -m "sync: merge upstream ${{ needs.resolve-tag.outputs.latest_tag }} into integration"
               echo "status=success" >> $GITHUB_OUTPUT
             fi
           else
@@ -196,7 +142,7 @@ jobs:
               REMAINING=$(git diff --name-only --diff-filter=U)
               if [ -z "$REMAINING" ]; then
                 echo "All conflicts auto-resolved"
-                git commit -m "sync: merge upstream ${{ needs.check-release.outputs.latest_tag }} into integration (auto-resolved conflicts)"
+                git commit -m "sync: merge upstream ${{ needs.resolve-tag.outputs.latest_tag }} into integration (auto-resolved conflicts)"
                 echo "status=auto-resolved" >> $GITHUB_OUTPUT
               else
                 echo "Unresolved conflicts remain: $REMAINING"
@@ -218,13 +164,13 @@ jobs:
       - name: Update last synced tag marker
         if: steps.merge.outputs.status == 'success' || steps.merge.outputs.status == 'auto-resolved' || steps.merge.outputs.status == 'up-to-date'
         run: |
-          echo "${{ needs.check-release.outputs.latest_tag }}" > .github/last-synced-tag
+          echo "${{ needs.resolve-tag.outputs.latest_tag }}" > .github/last-synced-tag
           git add .github/last-synced-tag
-          git commit -m "sync: record last synced tag ${{ needs.check-release.outputs.latest_tag }}" || true
+          git commit -m "sync: record last synced tag ${{ needs.resolve-tag.outputs.latest_tag }}" || true
           git push origin integration || true
 
   validate:
-    needs: [check-release, merge-upstream]
+    needs: [resolve-tag, merge-upstream]
     if: needs.merge-upstream.outputs.merge_status == 'success' || needs.merge-upstream.outputs.merge_status == 'auto-resolved' || needs.merge-upstream.outputs.merge_status == 'up-to-date'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
@@ -281,7 +227,7 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
 
   create-issue:
-    needs: [check-release, merge-upstream, validate]
+    needs: [resolve-tag, merge-upstream, validate]
     if: |
       always() &&
       (needs.merge-upstream.outputs.merge_status == 'needs-manual' ||
@@ -303,8 +249,8 @@ jobs:
         with:
           script: |
             const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
-            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
-            const latestSha = `${{ needs.check-release.outputs.latest_sha }}`;
+            const latestTag = `${{ needs.resolve-tag.outputs.latest_tag }}`;
+            const latestSha = `${{ needs.resolve-tag.outputs.latest_sha }}`;
             const issueTitle = `[Upstream Sync] Merge conflict with ${latestTag}`;
 
             // Check if an issue with this title already exists
@@ -376,7 +322,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const latestTag = `${{ needs.resolve-tag.outputs.latest_tag }}`;
             const error = `${{ needs.validate.outputs.validation_error }}`;
             const issueTitle = `[Upstream Sync] Validation failed after merging ${latestTag}`;
 
@@ -437,7 +383,7 @@ jobs:
             core.setOutput('is_duplicate', 'false');
 
   close-issues-on-success:
-    needs: [check-release, merge-upstream, validate]
+    needs: [resolve-tag, merge-upstream, validate]
     if: |
       always() &&
       needs.validate.outputs.validation_status == 'success' &&
@@ -449,7 +395,7 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
-            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const latestTag = `${{ needs.resolve-tag.outputs.latest_tag }}`;
 
             // Find all open upstream-sync issues
             const issues = await github.rest.issues.listForRepo({
@@ -482,7 +428,7 @@ jobs:
             }
 
   trigger-opencode:
-    needs: [check-release, merge-upstream, create-issue]
+    needs: [resolve-tag, merge-upstream, create-issue]
     if: |
       always() &&
       needs.create-issue.outputs.issue_number != ''
@@ -494,7 +440,7 @@ jobs:
           github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             const issueNumber = parseInt(`${{ needs.create-issue.outputs.issue_number }}`);
-            const latestTag = `${{ needs.check-release.outputs.latest_tag }}`;
+            const latestTag = `${{ needs.resolve-tag.outputs.latest_tag }}`;
             const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
             const mergeStatus = `${{ needs.merge-upstream.outputs.merge_status }}`;
 
