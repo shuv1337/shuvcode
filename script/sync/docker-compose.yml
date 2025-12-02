@@ -1,0 +1,20 @@
+services:
+  release-watcher:
+    build: .
+    container_name: release-watcher
+    restart: unless-stopped
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO=Latitudes-Dev/shuvcode
+      - CHECK_INTERVAL=60
+      - STATE_DIR=/data
+    volumes:
+      - watcher-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  watcher-data:
