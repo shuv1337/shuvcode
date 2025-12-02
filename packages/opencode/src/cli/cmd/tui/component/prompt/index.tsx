@@ -25,7 +25,6 @@ import { Locale } from "@/util/locale"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
-import { useToast } from "../../ui/toast"
 
 export type PromptProps = {
   sessionID?: string
@@ -527,7 +526,6 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
-  const toast = useToast()
   let lastExitAttempt = 0
 
   async function tryExit() {

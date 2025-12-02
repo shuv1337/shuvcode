@@ -137,6 +137,7 @@ export function Session() {
 
   const contextLimit = createMemo(() => {
     const c = local.model.current()
+    if (!c) return 200000
     const provider = sync.data.provider.find((p) => p.id === c.providerID)
     return provider?.models[c.modelID]?.limit.context ?? 200000
   })
