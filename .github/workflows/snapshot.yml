@@ -4,20 +4,21 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev
-      - test-bedrock
-      - v0
-      - otui-diffs
+      - integration
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+permissions:
+  contents: write
+
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
 
       - run: git fetch --force --tags
 
@@ -29,9 +30,12 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
+      - name: Setup NPM auth
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+
       - name: Publish
         run: |
           ./script/publish.ts
         env:
-          GITHUB_TOKEN: ${{ secrets.SST_GITHUB_TOKEN }}
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

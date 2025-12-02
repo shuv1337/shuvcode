@@ -4,6 +4,8 @@ import fs from "fs"
 
 const version = "@VERSION@"
 const pkg = path.join(process.cwd(), "packages/opencode")
+const pkgjson = JSON.parse(fs.readFileSync(path.join(pkg, "package.json"), "utf8")) as { version?: string }
+const base = pkgjson.version ?? version
 const parser = fs.realpathSync(path.join(pkg, "./node_modules/@opentui/core/parser.worker.js"))
 const worker = "./src/cli/cmd/tui/worker.ts"
 const target = process.env["BUN_COMPILE_TARGET"]
@@ -54,6 +56,7 @@ const result = await Bun.build({
   entrypoints: ["./src/index.ts", parser, worker],
   define: {
     OPENCODE_VERSION: `'@VERSION@'`,
+    OPENCODE_BASE_VERSION: `'${base}'`,
     OTUI_TREE_SITTER_WORKER_PATH: "/$bunfs/root/" + path.relative(pkg, parser).replace(/\\/g, "/"),
     OPENCODE_CHANNEL: "'latest'",
   },

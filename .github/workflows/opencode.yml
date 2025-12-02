@@ -9,25 +9,37 @@ on:
 jobs:
   opencode:
     if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
-    runs-on: ubuntu-latest
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       id-token: write
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-bun
-
-      - name: Run opencode
-        uses: sst/opencode/github@latest
-        env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/claude-haiku-4-5
+          fetch-depth: 0
+
+      # Checkout integration branch for upstream-sync issues (non-PR issues)
+      - name: Checkout integration branch for sync issues
+        if: ${{ !github.event.issue.pull_request && contains(github.event.issue.labels.*.name, 'upstream-sync') }}
+        run: git checkout integration
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run opencode (fork)
+        uses: Latitudes-Dev/shuvcode/github@integration
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          model: anthropic/claude-opus-4-5

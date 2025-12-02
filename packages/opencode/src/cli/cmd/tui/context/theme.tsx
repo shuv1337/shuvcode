@@ -840,6 +840,14 @@ function getSyntaxRules(theme: Theme) {
         foreground: theme.textMuted,
       },
     },
+    {
+      scope: ["markup.strikethrough"],
+      style: {
+        foreground: theme.background,
+        background: theme.primary,
+        strikethrough: true,
+      },
+    },
     // Additional common highlight groups
     {
       scope: ["string.special", "string.special.url"],
@@ -931,12 +939,6 @@ function getSyntaxRules(theme: Theme) {
       scope: ["tag.delimiter"],
       style: {
         foreground: theme.syntaxOperator,
-      },
-    },
-    {
-      scope: ["markup.strikethrough"],
-      style: {
-        foreground: theme.textMuted,
       },
     },
     {

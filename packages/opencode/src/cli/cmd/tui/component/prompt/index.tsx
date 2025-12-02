@@ -17,11 +17,14 @@ import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
+import { useToast } from "../../ui/toast"
 import type { FilePart } from "@opencode-ai/sdk"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { createColors, createFrames } from "../../ui/spinner.ts"
+import { useDialog } from "@tui/ui/dialog"
+import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 
 export type PromptProps = {
   sessionID?: string
@@ -30,10 +33,12 @@ export type PromptProps = {
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
+  initialValue?: string
 }
 
 export type PromptRef = {
   focused: boolean
+  text: string
   set(prompt: PromptInfo): void
   reset(): void
   blur(): void
@@ -50,11 +55,24 @@ export function Prompt(props: PromptProps) {
   const sdk = useSDK()
   const route = useRoute()
   const sync = useSync()
+  const dialog = useDialog()
+  const toast = useToast()
   const status = createMemo(() => sync.data.session_status[props.sessionID ?? ""] ?? { type: "idle" })
   const history = usePromptHistory()
   const command = useCommandDialog()
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
+
+  function promptModelWarning() {
+    toast.show({
+      variant: "warning",
+      message: "Connect a provider to send prompts",
+      duration: 3000,
+    })
+    if (sync.data.provider.length === 0) {
+      dialog.replace(() => <DialogProviderConnect />)
+    }
+  }
 
   const textareaKeybindings = createMemo(() => {
     const newlineBindings = keybind.all.input_newline || []
@@ -277,6 +295,10 @@ export function Prompt(props: PromptProps) {
 
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
+    if (props.initialValue) {
+      input.setText(props.initialValue)
+      setStore("prompt", "input", props.initialValue)
+    }
   })
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
@@ -361,6 +383,9 @@ export function Prompt(props: PromptProps) {
     get focused() {
       return input.focused
     },
+    get text() {
+      return input.plainText
+    },
     focus() {
       input.focus()
     },
@@ -388,6 +413,11 @@ export function Prompt(props: PromptProps) {
     if (props.disabled) return
     if (autocomplete.visible) return
     if (!store.prompt.input) return
+    const selectedModel = local.model.current()
+    if (!selectedModel) {
+      promptModelWarning()
+      return
+    }
     const sessionID = props.sessionID
       ? props.sessionID
       : await (async () => {
@@ -424,8 +454,8 @@ export function Prompt(props: PromptProps) {
         body: {
           agent: local.agent.current().name,
           model: {
-            providerID: local.model.current().providerID,
-            modelID: local.model.current().modelID,
+            providerID: selectedModel.providerID,
+            modelID: selectedModel.modelID,
           },
           command: inputText,
         },
@@ -448,7 +478,7 @@ export function Prompt(props: PromptProps) {
           command: command.slice(1),
           arguments: args.join(" "),
           agent: local.agent.current().name,
-          model: `${local.model.current().providerID}/${local.model.current().modelID}`,
+          model: `${selectedModel.providerID}/${selectedModel.modelID}`,
           messageID,
         },
       })
@@ -458,10 +488,10 @@ export function Prompt(props: PromptProps) {
           id: sessionID,
         },
         body: {
-          ...local.model.current(),
+          ...selectedModel,
           messageID,
           agent: local.agent.current().name,
-          model: local.model.current(),
+          model: selectedModel,
           parts: [
             {
               id: Identifier.ascending("part"),
@@ -496,6 +526,21 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
+  let lastExitAttempt = 0
+
+  async function tryExit() {
+    const now = Date.now()
+    if (now - lastExitAttempt < 2000) {
+      await exit()
+      return
+    }
+    lastExitAttempt = now
+    toast.show({
+      variant: "warning",
+      message: "Press again to exit",
+      duration: 2000,
+    })
+  }
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
@@ -586,12 +631,16 @@ export function Prompt(props: PromptProps) {
       frames: createFrames({
         color,
         style: "blocks",
-        inactiveFactor: 0.25,
+        inactiveFactor: 0.6,
+        // enableFading: false,
+        minAlpha: 0.3,
       }),
       color: createColors({
         color,
         style: "blocks",
-        inactiveFactor: 0.25,
+        inactiveFactor: 0.6,
+        // enableFading: false,
+        minAlpha: 0.3,
       }),
     }
   })
@@ -676,7 +725,7 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 if (keybind.match("app_exit", e)) {
-                  await exit()
+                  await tryExit()
                   return
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
@@ -809,7 +858,8 @@ export function Prompt(props: PromptProps) {
           borderColor={highlight()}
           customBorderChars={{
             ...EmptyBorder,
-            vertical: "╹",
+            // when the background is transparent, don't draw the vertical line
+            vertical: theme.background.a != 0 ? "╹" : " ",
           }}
         >
           <box
@@ -838,7 +888,8 @@ export function Prompt(props: PromptProps) {
               justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
-                <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                {/* @ts-ignore // SpinnerOptions doesn't support marginLeft */}
+                <spinner marginLeft={1} color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
                 <box flexDirection="row" gap={1} flexShrink={0}>
                   {(() => {
                     const retry = createMemo(() => {

@@ -17,5 +17,6 @@ for (const [key, value] of Object.entries(pkg.exports)) {
   }
 }
 await Bun.write("package.json", JSON.stringify(pkg, null, 2))
-await $`bun publish --tag ${Script.channel} --access public`
+// Skip plugin publish for fork
+console.log("Skipping plugin publish (fork)")
 await Bun.write("package.json", JSON.stringify(original, null, 2))

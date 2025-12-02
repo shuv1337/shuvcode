@@ -5,18 +5,18 @@ import { Installation } from "../../installation"
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
-  describe: "upgrade opencode to the latest or a specific version",
+  describe: "upgrade shuvcode to the latest or a specific version",
   builder: (yargs: Argv) => {
     return yargs
       .positional("target", {
-        describe: "version to upgrade to, for ex '0.1.48' or 'v0.1.48'",
+        describe: "version to upgrade to, for ex '1.0.100' or 'v1.0.100'",
         type: "string",
       })
       .option("method", {
         alias: "m",
         describe: "installation method to use",
         type: "string",
-        choices: ["curl", "npm", "pnpm", "bun", "brew"],
+        choices: ["bun", "npm", "pnpm", "yarn"],
       })
   },
   handler: async (args: { target?: string; method?: string }) => {
@@ -27,7 +27,7 @@ export const UpgradeCommand = {
     const detectedMethod = await Installation.method()
     const method = (args.method as Installation.Method) ?? detectedMethod
     if (method === "unknown") {
-      prompts.log.error(`opencode is installed to ${process.execPath} and may be managed by a package manager`)
+      prompts.log.error(`shuvcode is installed to ${process.execPath} and may be managed by a package manager`)
       const install = await prompts.select({
         message: "Install anyways?",
         options: [
@@ -45,7 +45,7 @@ export const UpgradeCommand = {
     const target = args.target ? args.target.replace(/^v/, "") : await Installation.latest()
 
     if (Installation.VERSION === target) {
-      prompts.log.warn(`opencode upgrade skipped: ${target} is already installed`)
+      prompts.log.warn(`shuvcode upgrade skipped: ${target} is already installed`)
       prompts.outro("Done")
       return
     }

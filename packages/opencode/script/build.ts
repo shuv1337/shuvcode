@@ -87,7 +87,7 @@ await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentu
 await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
 for (const item of targets) {
   const name = [
-    pkg.name,
+    "shuvcode", // Use shuvcode prefix for binary packages
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -96,7 +96,9 @@ for (const item of targets) {
   ]
     .filter(Boolean)
     .join("-")
-  console.log(`building ${name}`)
+  // Bun compile target (e.g., bun-linux-x64)
+  const bunTarget = name.replace("shuvcode", "bun")
+  console.log(`building ${name} (target: ${bunTarget})`)
   await $`mkdir -p dist/${name}/bin`
 
   const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
@@ -110,14 +112,15 @@ for (const item of targets) {
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,
-      target: name.replace(pkg.name, "bun") as any,
+      target: bunTarget as any,
       outfile: `dist/${name}/bin/opencode`,
-      execArgv: [`--user-agent=opencode/${Script.version}`, "--"],
+      execArgv: [`--user-agent=shuvcode/${Script.version}`, "--"],
       windows: {},
     },
     entrypoints: ["./src/index.ts", parserWorker, workerPath],
     define: {
       OPENCODE_VERSION: `'${Script.version}'`,
+      OPENCODE_BASE_VERSION: `'${pkg.version}'`,
       OTUI_TREE_SITTER_WORKER_PATH: "/$bunfs/root/" + path.relative(dir, parserWorker).replaceAll("\\", "/"),
       OPENCODE_WORKER_PATH: workerPath,
       OPENCODE_CHANNEL: `'${Script.channel}'`,

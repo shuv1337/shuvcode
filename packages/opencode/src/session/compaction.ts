@@ -99,6 +99,9 @@ export namespace SessionCompaction {
   }) {
     const model = await Provider.getModel(input.model.providerID, input.model.modelID)
     const system = [...SystemPrompt.compaction(model.providerID)]
+    const lastFinished = input.messages.find((m) => m.info.role === "assistant" && m.info.finish)?.info as
+      | MessageV2.Assistant
+      | undefined
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "assistant",
@@ -122,6 +125,10 @@ export namespace SessionCompaction {
       time: {
         created: Date.now(),
       },
+      outputEstimate: lastFinished?.outputEstimate,
+      reasoningEstimate: lastFinished?.reasoningEstimate,
+      contextEstimate: lastFinished?.contextEstimate,
+      sentEstimate: lastFinished?.sentEstimate,
     })) as MessageV2.Assistant
     const processor = SessionProcessor.create({
       assistantMessage: msg,
@@ -178,7 +185,7 @@ export namespace SessionCompaction {
             content: [
               {
                 type: "text",
-                text: "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.",
+                text: "Summarize our conversation above. This summary will be the only context available when the conversation continues, so preserve critical information including: what was accomplished, current work in progress, files involved, next steps, and any key user requests or constraints. Be concise but detailed enough that work can continue seamlessly.",
               },
             ],
           },

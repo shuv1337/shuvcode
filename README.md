@@ -1,3 +1,28 @@
+# shuvcode
+
+> **A fork of [sst/opencode](https://github.com/sst/opencode)** - The AI coding agent built for the terminal.
+
+This fork serves as an integration testing ground for upstream PRs before they are merged into the main opencode repository. We merge, test, and validate promising features and fixes to help ensure quality contributions to the upstream project.
+
+---
+
+## Merged PRs (Pending Upstream)
+
+The following PRs have been merged into this fork and are awaiting merge into upstream:
+
+| PR                                                 | Title                                       | Status | Description                                                         |
+| -------------------------------------------------- | ------------------------------------------- | ------ | ------------------------------------------------------------------- |
+| [#4898](https://github.com/sst/opencode/pull/4898) | Search in messages                          | Open   | Ctrl+F to search through session messages with highlighting         |
+| [#4791](https://github.com/sst/opencode/pull/4791) | Bash output with ANSI                       | Open   | Full terminal emulation for bash output with color support          |
+| [#4900](https://github.com/sst/opencode/pull/4900) | Double Ctrl+C to exit                       | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits  |
+| [#4709](https://github.com/sst/opencode/pull/4709) | Live token usage during streaming           | Open   | Real-time token tracking and display during model responses         |
+| [#4773](https://github.com/sst/opencode/pull/4773) | Configurable subagent visibility            | Open   | Allow agents to restrict which subagents they can invoke            |
+| [#4865](https://github.com/sst/opencode/pull/4865) | Subagents sidebar with clickable navigation | Open   | Show subagents in sidebar with click-to-navigate and parent keybind |
+
+_Last updated: 2025-11-30_
+
+---
+
 <p align="center">
   <a href="https://opencode.ai">
     <picture>

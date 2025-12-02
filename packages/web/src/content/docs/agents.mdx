@@ -36,7 +36,7 @@ look at these below.
 
 Subagents are specialized assistants that primary agents can invoke for specific tasks. You can also manually invoke them by **@ mentioning** them in your messages.
 
-OpenCode comes with one built-in subagent, **General**. We'll look at this below.
+OpenCode comes with two built-in subagents, **General** and **Explore**. We'll look at this below.
 
 ---
 
@@ -76,6 +76,14 @@ A general-purpose agent for researching complex questions, searching for code, a
 
 ---
 
+### Explore
+
+_Mode_: `subagent`
+
+A fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns, search code for keywords, or answer questions about the codebase.
+
+---
+
 ## Usage
 
 1. For primary agents, use the **Tab** key to cycle through them during a session. You can also use your configured `switch_agent` keybind.
@@ -89,10 +97,11 @@ A general-purpose agent for researching complex questions, searching for code, a
      ```
 
 3. **Navigation between sessions**: When subagents create their own child sessions, you can navigate between the parent session and all child sessions using:
+   - **\<Leader>+Up** (or your configured `session_parent` keybind) to go directly to the parent session
    - **\<Leader>+Right** (or your configured `session_child_cycle` keybind) to cycle forward through parent → child1 → child2 → ... → parent
    - **\<Leader>+Left** (or your configured `session_child_cycle_reverse` keybind) to cycle backward through parent ← child1 ← child2 ← ... ← parent
 
-   This allows you to seamlessly switch between the main conversation and specialized subagent work.
+   You can also click on any subagent task in the sidebar to navigate directly to that subagent's session.
 
 ---
 
@@ -343,6 +352,76 @@ You can also use wildcards to control multiple tools at once. For example, to di
 ```
 
 [Learn more about tools](/docs/tools).
+
+---
+
+### Subagents
+
+Control which subagents this agent can invoke via the Task tool with the `subagents` config.
+
+By default, all subagents are available. Set a subagent to `false` to hide it from this agent.
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "subagents": {
+        "code-reviewer": false
+      }
+    }
+  }
+}
+```
+
+You can also use wildcards to control multiple subagents at once:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "subagents": {
+        "orchestrator-*": false
+      }
+    }
+  }
+}
+```
+
+Longer patterns take precedence over shorter ones. This allows you to exclude a group while keeping specific exceptions:
+
+```json title="opencode.json"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "subagents": {
+        "orchestrator-*": false,
+        "orchestrator-fast": true
+      }
+    }
+  }
+}
+```
+
+You can also configure subagents in Markdown agents:
+
+```markdown title="~/.config/opencode/agent/focused.md"
+---
+description: Agent with limited subagent access
+mode: primary
+subagents:
+  general: true
+  orchestrator-*: false
+---
+
+You are a focused agent with limited subagent access.
+```
+
+:::note
+Filtered subagents will not appear in the Task tool description and cannot be invoked.
+:::
 
 ---
 

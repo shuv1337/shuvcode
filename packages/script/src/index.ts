@@ -17,6 +17,29 @@ const CHANNEL = process.env["OPENCODE_CHANNEL"] ?? (await $`git branch --show-cu
 const IS_PREVIEW = CHANNEL !== "latest"
 const VERSION = await (async () => {
   if (process.env["OPENCODE_VERSION"]) return process.env["OPENCODE_VERSION"]
+  // For integration channel, use upstream version + build number for republishes
+  if (CHANNEL === "integration") {
+    const tagFile = path.resolve(import.meta.dir, "../../../.github/last-synced-tag")
+    const baseVersion = await Bun.file(tagFile)
+      .text()
+      .then((x) => x.trim().replace(/^v/, ""))
+
+    // Check what versions are already published on npm
+    const published = await fetch("https://registry.npmjs.org/shuvcode")
+      .then((res) => (res.ok ? res.json() : { versions: {} }))
+      .then((data: any) => Object.keys(data.versions ?? {}))
+      .catch(() => [])
+
+    // Find highest build number for this base version
+    let buildNum = 0
+    for (const v of published) {
+      if (v === baseVersion) buildNum = Math.max(buildNum, 1)
+      const match = v.match(new RegExp(`^${baseVersion.replace(/\./g, "\\.")}-(\\d+)$`))
+      if (match) buildNum = Math.max(buildNum, parseInt(match[1]) + 1)
+    }
+
+    return buildNum > 0 ? `${baseVersion}-${buildNum}` : baseVersion
+  }
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
