@@ -99,6 +99,7 @@ const context = createContext<{
   showThinking: () => boolean
   showTimestamps: () => boolean
   showTokens: () => boolean
+  usernameVisible: () => boolean
   showDetails: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
@@ -148,6 +149,7 @@ export function Session() {
   const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
   const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
   const [showTokens, setShowTokens] = createSignal(kv.get("tokens", "hide") === "show")
+  const [usernameVisible, setUsernameVisible] = createSignal(kv.get("username_visible", true))
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [bashOutput, setBashOutput] = createSignal<BashOutputView | undefined>(undefined)
   const [promptDraft, setPromptDraft] = createSignal("")
@@ -574,6 +576,20 @@ export function Session() {
       },
     },
     {
+      title: usernameVisible() ? "Hide username" : "Show username",
+      value: "session.username_visible.toggle",
+      keybind: "username_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        setUsernameVisible((prev) => {
+          const next = !prev
+          kv.set("username_visible", next)
+          return next
+        })
+        dialog.clear()
+      },
+    },
+    {
       title: "Toggle code concealment",
       value: "session.toggle.conceal",
       keybind: "messages_toggle_conceal" as any,
@@ -958,6 +974,7 @@ export function Session() {
         showThinking,
         showTimestamps,
         showTokens,
+        usernameVisible,
         showDetails,
         diffWrapMode,
         sync,
@@ -1245,13 +1262,14 @@ function UserMessage(props: {
   pending?: string
 }) {
   const ctx = use()
+  const local = useLocal()
   const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const sync = useSync()
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
-  const color = createMemo(() => (queued() ? theme.accent : theme.secondary))
+  const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
 
   const individualTokens = createMemo(() => {
     return props.parts.reduce((sum, part) => {
@@ -1314,7 +1332,7 @@ function UserMessage(props: {
               </box>
             </Show>
             <text fg={theme.textMuted}>
-              {sync.data.config.username ?? "You"}{" "}
+              {ctx.usernameVisible() ? `${sync.data.config.username ?? "You"} ` : "You"}{" "}
               <Show
                 when={queued()}
                 fallback={
