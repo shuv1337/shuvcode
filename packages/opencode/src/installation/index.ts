@@ -149,9 +149,10 @@ export namespace Installation {
     return `${BASE_VERSION} (${VERSION})`
   }
 
-  export async function latest() {
+  export async function latest(_installMethod?: Method) {
     // Fetch latest version from npm registry for shuvcode
     // Use npm config registry if available, fallback to npmjs.org
+    // Note: shuvcode is not on brew, so we skip brew-specific checks
     const registry = await iife(async () => {
       const r = (await $`npm config get registry`.quiet().nothrow().text()).trim()
       const reg = r || "https://registry.npmjs.org"

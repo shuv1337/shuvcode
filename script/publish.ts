@@ -85,6 +85,7 @@ if (!Script.preview) {
     "jayair",
     "fwang",
     "adamdotdevin",
+    "iamdavidhill",
     "opencode-agent[bot]",
   ]
   const compare =
