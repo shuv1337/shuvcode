@@ -549,21 +549,42 @@ jobs:
                bun turbo test
                \`\`\`
 
-            10. **Push to origin** (this triggers the snapshot/release workflow):
+            10. **Push branch to origin**:
                 \`\`\`bash
-                git push origin integration
+                git push origin HEAD
                 \`\`\`
 
-            11. **Close this issue** after successful push:
+            11. **Create or find existing PR**:
                 \`\`\`bash
-                gh issue close ${issueNumber} --comment "Resolved - merged upstream ${latestTag}"
+                # Check if PR already exists for this branch
+                EXISTING_PR=$(gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number' --repo Latitudes-Dev/shuvcode 2>/dev/null || echo "")
+                if [ -n "$EXISTING_PR" ]; then
+                  echo "PR #$EXISTING_PR already exists"
+                  PR_NUMBER=$EXISTING_PR
+                else
+                  # Create PR targeting integration branch
+                  PR_URL=$(gh pr create --title "sync: merge upstream ${latestTag}" --body "Resolves conflicts from upstream ${latestTag} merge. Closes #${issueNumber}" --base integration --repo Latitudes-Dev/shuvcode)
+                  PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+                  echo "Created PR #$PR_NUMBER"
+                fi
+                \`\`\`
+
+            12. **Wait for CI checks to pass, then merge the PR**:
+                \`\`\`bash
+                # Wait for checks and merge (auto-merge when checks pass)
+                gh pr merge "$PR_NUMBER" --squash --auto --delete-branch --repo Latitudes-Dev/shuvcode
+                \`\`\`
+
+            13. **Close this issue** after PR is merged:
+                \`\`\`bash
+                gh issue close ${issueNumber} --comment "Resolved - merged upstream ${latestTag} via PR #$PR_NUMBER" --repo Latitudes-Dev/shuvcode
                 \`\`\`
 
             ### Important Notes
             - **Never force-push** to integration branch
             - **Always preserve fork-specific changes** in publish.ts, build.ts, bin/opencode
             - If validation fails, fix the issues before pushing
-            - The snapshot workflow will auto-trigger on push and publish to npm as \`shuvcode\`
+            - The PR will be auto-merged once CI checks pass, triggering the snapshot workflow
             `;
             } else {
               // Validation failure case
@@ -607,15 +628,36 @@ jobs:
                bun turbo typecheck && bun turbo test && bun turbo build
                \`\`\`
 
-            7. **Push to origin**:
-               \`\`\`bash
-               git push origin integration
-               \`\`\`
+            7. **Push branch to origin**:
+                \`\`\`bash
+                git push origin HEAD
+                \`\`\`
 
-            8. **Close this issue**:
-               \`\`\`bash
-               gh issue close ${issueNumber} --comment "Fixed validation issues after merging ${latestTag}"
-               \`\`\`
+            8. **Create or find existing PR**:
+                \`\`\`bash
+                # Check if PR already exists for this branch
+                EXISTING_PR=$(gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number' --repo Latitudes-Dev/shuvcode 2>/dev/null || echo "")
+                if [ -n "$EXISTING_PR" ]; then
+                  echo "PR #$EXISTING_PR already exists"
+                  PR_NUMBER=$EXISTING_PR
+                else
+                  # Create PR targeting integration branch
+                  PR_URL=$(gh pr create --title "fix: resolve validation issues after ${latestTag}" --body "Fixes validation failures from upstream ${latestTag} merge. Closes #${issueNumber}" --base integration --repo Latitudes-Dev/shuvcode)
+                  PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+                  echo "Created PR #$PR_NUMBER"
+                fi
+                \`\`\`
+
+            9. **Wait for CI checks to pass, then merge the PR**:
+                \`\`\`bash
+                # Wait for checks and merge (auto-merge when checks pass)
+                gh pr merge "$PR_NUMBER" --squash --auto --delete-branch --repo Latitudes-Dev/shuvcode
+                \`\`\`
+
+            10. **Close this issue** after PR is merged:
+                \`\`\`bash
+                gh issue close ${issueNumber} --comment "Fixed validation issues after merging ${latestTag} via PR #$PR_NUMBER" --repo Latitudes-Dev/shuvcode
+                \`\`\`
             `;
             }
 
