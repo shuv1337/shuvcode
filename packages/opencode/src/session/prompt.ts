@@ -356,7 +356,7 @@ export namespace SessionPrompt {
             agent: lastUser.agent,
             messageID: assistantMessage.id,
             callID: part.callID,
-            extra: { providerID: model.providerID, modelID: model.modelID },
+            extra: { providerID: model.providerID, modelID: model.id },
             metadata: async () => {},
           },
         )
