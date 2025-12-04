@@ -1,6 +1,5 @@
-import type { ModelsDev } from "@/provider/models"
 import { MessageV2 } from "./message-v2"
-import { type StreamTextResult, type Tool as AITool, APICallError } from "ai"
+import { streamText } from "ai"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { Session } from "."
@@ -12,6 +11,7 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Token } from "@/util/token"
+import type { Provider } from "@/provider/provider"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -20,11 +20,19 @@ export namespace SessionProcessor {
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
 
+  export type StreamInput = Parameters<typeof streamText>[0]
+
+  export type TBD = {
+    model: {
+      modelID: string
+      providerID: string
+    }
+  }
+
   export function create(input: {
     assistantMessage: MessageV2.Assistant
     sessionID: string
-    providerID: string
-    model: ModelsDev.Model
+    model: Provider.Model
     abort: AbortSignal
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
@@ -39,7 +47,7 @@ export namespace SessionProcessor {
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
-      async process(fn: () => StreamTextResult<Record<string, AITool>, never>) {
+      async process(streamInput: StreamInput) {
         log.info("process")
         // Initialize from existing estimates (convert tokens to characters) to accumulate across multiple process() calls
         let reasoningTotal = Token.toCharCount(input.assistantMessage.reasoningEstimate ?? 0)
@@ -48,7 +56,7 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
-            const stream = fn()
+            const stream = streamText(streamInput)
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()
@@ -350,11 +358,12 @@ export namespace SessionProcessor {
                   continue
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             log.error("process", {
               error: e,
+              stack: JSON.stringify(e.stack),
             })
-            const error = MessageV2.fromError(e, { providerID: input.providerID })
+            const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             const retry = SessionRetry.retryable(error)
             if (retry !== undefined) {
               attempt++
