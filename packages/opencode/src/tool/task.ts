@@ -10,6 +10,7 @@ import { SessionPrompt } from "../session/prompt"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Wildcard } from "@/util/wildcard"
+import { Config } from "../config/config"
 
 export { DESCRIPTION as TASK_DESCRIPTION }
 
@@ -87,6 +88,8 @@ export const TaskTool = Tool.define("task", async () => {
       ctx.abort.addEventListener("abort", cancel)
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
       const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+
+      const config = await Config.get()
       const result = await SessionPrompt.prompt({
         messageID,
         sessionID: session.id,
@@ -99,6 +102,7 @@ export const TaskTool = Tool.define("task", async () => {
           todowrite: false,
           todoread: false,
           task: false,
+          ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
           ...agent.tools,
         },
         parts: promptParts,
