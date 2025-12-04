@@ -46,5 +46,6 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          OPENCODE_PERMISSION: '{"external_directory": "allow"}'
         with:
           model: anthropic/claude-opus-4-5
