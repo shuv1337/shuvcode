@@ -1,7 +1,7 @@
-# <p align="center"><img width="347" height="71" alt="image" src="https://github.com/user-attachments/assets/fccfbc2d-09eb-46e7-9afb-5d2b06096b73" /></a>
-
+<p align="center"><img width="347" height="71" alt="image" src="https://github.com/user-attachments/assets/fccfbc2d-09eb-46e7-9afb-5d2b06096b73" /></a>
 </p>
-<p align="center"> <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a> <a href="https://www.npmjs.com/package/shuvcode"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a> <a href="https://github.com/Latitudes-Dev/shuvcode/actions/workflows/snapshot.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/Latitudes-Dev/shuvcode/actions/workflows/snapshot.yml?style=flat-square&branch=integration" /></a> </p>
+<p align="center"> <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a> <a href="https://www.npmjs.com/package/shuvcode"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a> </p>
+
 > **A fork of [sst/opencode](https://github.com/sst/opencode)** - The AI coding agent built for the terminal.
 
 This fork serves as an integration testing ground for upstream PRs before they are merged into the main opencode repository. We merge, test, and validate promising features and fixes to help ensure quality contributions to the upstream project.
