@@ -15,7 +15,6 @@ import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import path from "path"
 import { iife } from "@/util/iife"
-import { ptyToText } from "opentui-ansi-vt"
 
 const DEFAULT_MAX_OUTPUT_LENGTH = 30_000
 const MAX_OUTPUT_LENGTH = (() => {
@@ -218,20 +217,6 @@ export const BashTool = Tool.define("bash", async () => {
         shell,
         cwd: Instance.directory,
         env: {
-          // Force color output in as many tools as possible
-          FORCE_COLOR: "3",
-          CLICOLOR: "1",
-          CLICOLOR_FORCE: "1",
-          TERM: "xterm-256color",
-          TERM_PROGRAM: "bash-tool",
-          TERM_COLOR: "1",
-          NO_COLOR: "", // Unset to avoid accidental no-color
-          PY_COLORS: "1",
-          ANSICON: "1",
-          COLORTERM: "truecolor",
-          // Some tools respect these too; although most are covered above
-          NODE_DISABLE_COLORS: "",
-          // Inherit rest of env below
           ...process.env,
         },
         stdio: ["ignore", "pipe", "pipe"],
@@ -249,17 +234,15 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       const append = (chunk: Buffer) => {
-        if (output.length >= MAX_OUTPUT_LENGTH) return
-        output += chunk.toString()
-        if (output.length > MAX_OUTPUT_LENGTH) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH)
+        if (output.length <= MAX_OUTPUT_LENGTH) {
+          output += chunk.toString()
+          ctx.metadata({
+            metadata: {
+              output,
+              description: params.description,
+            },
+          })
         }
-        ctx.metadata({
-          metadata: {
-            output,
-            description: params.description,
-          },
-        })
       }
 
       proc.stdout?.on("data", append)
@@ -314,7 +297,7 @@ export const BashTool = Tool.define("bash", async () => {
       const timeoutTimer = setTimeout(() => {
         timedOut = true
         void killTree()
-      }, timeout)
+      }, timeout + 100)
 
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => {
@@ -339,15 +322,15 @@ export const BashTool = Tool.define("bash", async () => {
 
       if (output.length > MAX_OUTPUT_LENGTH) {
         output = output.slice(0, MAX_OUTPUT_LENGTH)
-        resultMetadata.push(`Output exceeded length limit of ${MAX_OUTPUT_LENGTH} chars`)
+        resultMetadata.push(`bash tool truncated output as it exceeded ${MAX_OUTPUT_LENGTH} char limit`)
       }
 
       if (timedOut) {
-        resultMetadata.push(`Command terminated after exceeding timeout ${timeout} ms`)
+        resultMetadata.push(`bash tool terminated commmand after exceeding timeout ${timeout} ms`)
       }
 
       if (aborted) {
-        resultMetadata.push("Command aborted by user")
+        resultMetadata.push("User aborted the command")
       }
 
       if (resultMetadata.length > 1) {
@@ -362,7 +345,7 @@ export const BashTool = Tool.define("bash", async () => {
           exit: proc.exitCode,
           description: params.description,
         },
-        output: ptyToText(output, { rows: 120, cols: 256 }),
+        output,
       }
     },
   }
