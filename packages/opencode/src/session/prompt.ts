@@ -346,22 +346,55 @@ export namespace SessionPrompt {
         }
         await Session.updatePart(part)
 
-        const result = await taskTool.execute(
-          {
-            prompt: task.prompt,
-            description: task.description,
-            subagent_type: task.agent,
-          },
-          {
-            sessionID,
-            abort,
-            agent: lastUser.agent,
-            messageID: assistantMessage.id,
-            callID: part.callID,
-            extra: { providerID: model.providerID, modelID: model.id },
-            metadata: async () => {},
-          },
-        )
+        const result = await taskTool
+          .execute(
+            {
+              prompt: task.prompt,
+              description: task.description,
+              subagent_type: task.agent,
+            },
+            {
+              sessionID,
+              abort,
+              agent: lastUser.agent,
+              messageID: assistantMessage.id,
+              callID: part.callID,
+              extra: { providerID: model.providerID, modelID: model.id },
+              async metadata(input) {
+                await Session.updatePart({
+                  ...part,
+                  type: "tool",
+                  state: {
+                    ...part.state,
+                    ...input,
+                  },
+                } satisfies MessageV2.ToolPart)
+              },
+            },
+          )
+          .catch(() => {})
+
+        assistantMessage.finish = "tool-calls"
+        assistantMessage.time.completed = Date.now()
+        await Session.updateMessage(assistantMessage)
+
+        if (result && part.state.status === "running") {
+          await Session.updatePart({
+            ...part,
+            state: {
+              status: "completed",
+              input: part.state.input,
+              title: result.title,
+              metadata: result.metadata,
+              output: result.output,
+              attachments: result.attachments,
+              time: {
+                ...part.state.time,
+                end: Date.now(),
+              },
+            },
+          } satisfies MessageV2.ToolPart)
+        }
 
         if (!result) {
           await Session.updatePart({
