@@ -12,16 +12,17 @@ This fork serves as an integration testing ground for upstream PRs before they a
 
 The following PRs have been merged into this fork and are awaiting merge into upstream:
 
-| PR                                                 | Title                                       | Author                                             | Status | Description                                                         |
-| -------------------------------------------------- | ------------------------------------------- | -------------------------------------------------- | ------ | ------------------------------------------------------------------- |
-| [#4898](https://github.com/sst/opencode/pull/4898) | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)         | Open   | Ctrl+F to search through session messages with highlighting         |
-| [#4791](https://github.com/sst/opencode/pull/4791) | Bash output with ANSI                       | [@remorses](https://github.com/remorses)           | Open   | Full terminal emulation for bash output with color support          |
-| [#4900](https://github.com/sst/opencode/pull/4900) | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni) | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits  |
-| [#4709](https://github.com/sst/opencode/pull/4709) | Live token usage during streaming           | [@arsham](https://github.com/arsham)               | Open   | Real-time token tracking and display during model responses         |
-| [#4773](https://github.com/sst/opencode/pull/4773) | Configurable subagent visibility            | [@Sewer56](https://github.com/Sewer56)             | Open   | Allow agents to restrict which subagents they can invoke            |
-| [#4865](https://github.com/sst/opencode/pull/4865) | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)             | Open   | Show subagents in sidebar with click-to-navigate and parent keybind |
+| PR                                                 | Title                                       | Author                                                       | Status | Description                                                            |
+| -------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ---------------------------------------------------------------------- |
+| [#4898](https://github.com/sst/opencode/pull/4898) | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)                   | Open   | Ctrl+F to search through session messages with highlighting            |
+| [#4791](https://github.com/sst/opencode/pull/4791) | Bash output with ANSI                       | [@remorses](https://github.com/remorses)                     | Open   | Full terminal emulation for bash output with color support             |
+| [#4900](https://github.com/sst/opencode/pull/4900) | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni)           | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits     |
+| [#4709](https://github.com/sst/opencode/pull/4709) | Live token usage during streaming           | [@arsham](https://github.com/arsham)                         | Open   | Real-time token tracking and display during model responses            |
+| [#4773](https://github.com/sst/opencode/pull/4773) | Configurable subagent visibility            | [@Sewer56](https://github.com/Sewer56)                       | Open   | Allow agents to restrict which subagents they can invoke               |
+| [#4865](https://github.com/sst/opencode/pull/4865) | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind    |
+| [#4515](https://github.com/sst/opencode/pull/4515) | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Display configured plugins in /status dialog alongside MCP/LSP servers |
 
-_Last updated: 2025-12-04_
+_Last updated: 2025-12-07_
 
 ---
 
