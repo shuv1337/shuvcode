@@ -4,7 +4,7 @@ import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiLogo } from "@opencode-ai/ui/logo"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -47,7 +47,7 @@ export default function Layout(props: ParentProps) {
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
         >
-          <Mark class="shrink-0" />
+          <AsciiLogo class="shrink-0" />
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
           <div class="flex items-center gap-3">
