@@ -4,7 +4,7 @@ import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiMark, AsciiLogo } from "@opencode-ai/ui/logo"
 import { Avatar } from "@opencode-ai/ui/avatar"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -19,6 +19,7 @@ import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { ThemePicker } from "@/components/theme-picker"
+import { FontPicker } from "@/components/font-picker"
 import { createStore } from "solid-js/store"
 import {
   DragDropProvider,
@@ -281,14 +282,16 @@ export default function Layout(props: ParentProps) {
         <A
           href="/"
           classList={{
-            "w-12 shrink-0 px-4 py-3.5": true,
-            "flex items-center justify-start self-stretch": true,
+            "w-12 shrink-0": true,
+            "flex items-center justify-center self-stretch": true,
             "border-r border-border-weak-base": true,
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
         >
-          <Mark class="shrink-0" />
+          <Show when={layout.sidebar.opened()} fallback={<AsciiMark scale={0.5} />}>
+            <AsciiLogo scale={0.75} />
+          </Show>
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
           <Show when={params.dir && layout.projects.list().length > 0}>
@@ -328,8 +331,11 @@ export default function Layout(props: ParentProps) {
                 </Button>
               </Show>
             </div>
-            <div class="flex items-center gap-2">
-              <ThemePicker />
+          </Show>
+          <div class="flex items-center gap-2 ml-auto">
+            <FontPicker />
+            <ThemePicker />
+            <Show when={params.dir && layout.projects.list().length > 0}>
               <Tooltip
                 class="shrink-0"
                 value={
@@ -359,8 +365,8 @@ export default function Layout(props: ParentProps) {
                   </div>
                 </Button>
               </Tooltip>
-            </div>
-          </Show>
+            </Show>
+          </div>
         </div>
       </header>
       <div class="h-[calc(100vh-3rem)] flex">
