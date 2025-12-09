@@ -12,11 +12,12 @@ export interface DialogProps extends DialogRootProps {
   trigger?: JSX.Element
   class?: ComponentProps<"div">["class"]
   classList?: ComponentProps<"div">["classList"]
+  size?: "sm" | "md" | "lg"
 }
 
 export function DialogRoot(props: DialogProps) {
   let trigger!: HTMLElement
-  const [local, others] = splitProps(props, ["trigger", "class", "classList", "children"])
+  const [local, others] = splitProps(props, ["trigger", "class", "classList", "children", "size"])
 
   const resetTabIndex = () => {
     trigger.tabIndex = 0
@@ -45,7 +46,7 @@ export function DialogRoot(props: DialogProps) {
       <Kobalte.Portal>
         <Kobalte.Overlay data-component="dialog-overlay" />
         <div data-component="dialog">
-          <div data-slot="dialog-container">
+          <div data-slot="dialog-container" data-size={local.size}>
             <Kobalte.Content
               data-slot="dialog-content"
               classList={{

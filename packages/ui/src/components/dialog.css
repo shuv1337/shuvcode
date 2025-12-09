@@ -31,6 +31,16 @@
     align-items: center;
     justify-items: start;
 
+    &[data-size="sm"] {
+      width: min(calc(100vw - 16px), 360px);
+      height: auto;
+      max-height: min(calc(100vh - 16px), 480px);
+    }
+
+    &[data-size="md"] {
+      width: min(calc(100vw - 16px), 480px);
+    }
+
     [data-slot="dialog-content"] {
       display: flex;
       flex-direction: column;
