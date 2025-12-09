@@ -13,42 +13,64 @@ function applyFont(font: FontDefinition): void {
   document.documentElement.style.setProperty("--font-family-sans", fontFamily)
 }
 
+function readStoredFontId(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY_FONT) ?? DEFAULT_FONT_ID
+  } catch {
+    return DEFAULT_FONT_ID
+  }
+}
+
+function persistFontId(id: string) {
+  try {
+    localStorage.setItem(STORAGE_KEY_FONT, id)
+  } catch {
+    /* ignore */
+  }
+}
+
+function getSavedFont(): FontDefinition {
+  const savedFontId = readStoredFontId()
+  return getFontById(savedFontId) ?? FONTS[0]
+}
+
+async function ensureFontLoaded(font: FontDefinition): Promise<boolean> {
+  if (!font.googleFontsUrl) return true
+  try {
+    await loadFont(font)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function initFont() {
+  const font = getSavedFont()
+  const loaded = await ensureFontLoaded(font)
+  if (!loaded) {
+    applyFont(FONTS[0])
+    return
+  }
+  applyFont(font)
+}
+
 export function FontPicker() {
-  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(FONTS[0])
+  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(getSavedFont())
   let previewFont: FontDefinition | undefined
 
-  onMount(async () => {
-    const savedFontId = localStorage.getItem(STORAGE_KEY_FONT) ?? DEFAULT_FONT_ID
-    const font = getFontById(savedFontId) ?? FONTS[0]
-
-    if (font.googleFontsUrl) {
-      try {
-        await loadFont(font)
-      } catch {
-        setCurrentFont(FONTS[0])
-        applyFont(FONTS[0])
-        return
-      }
-    }
-
-    setCurrentFont(font)
-    applyFont(font)
+  onMount(() => {
+    void initFont()
   })
 
   async function handleSelect(font: FontDefinition | undefined) {
     if (!font) return
     previewFont = undefined
 
-    if (font.googleFontsUrl) {
-      try {
-        await loadFont(font)
-      } catch {
-        return
-      }
-    }
+    const loaded = await ensureFontLoaded(font)
+    if (!loaded) return
 
     setCurrentFont(font)
-    localStorage.setItem(STORAGE_KEY_FONT, font.id)
+    persistFontId(font.id)
     applyFont(font)
   }
 
@@ -56,13 +78,8 @@ export function FontPicker() {
     if (!font) return
     previewFont = font
 
-    if (font.googleFontsUrl) {
-      try {
-        await loadFont(font)
-      } catch {
-        return
-      }
-    }
+    const loaded = await ensureFontLoaded(font)
+    if (!loaded) return
 
     applyFont(font)
   }
