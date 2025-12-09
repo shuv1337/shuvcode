@@ -16,6 +16,7 @@ import { getFilename } from "@opencode-ai/util/path"
 import { Select } from "@opencode-ai/ui/select"
 import { Session } from "@opencode-ai/sdk/v2/client"
 import { ThemePicker } from "@/components/theme-picker"
+import { FontPicker } from "@/components/font-picker"
 
 export default function Layout(props: ParentProps) {
   const navigate = useNavigate()
@@ -76,6 +77,7 @@ export default function Layout(props: ParentProps) {
             </Button>
           </div>
           <div class="flex items-center gap-2">
+            <FontPicker />
             <ThemePicker />
             <Tooltip
               class="shrink-0"
@@ -112,7 +114,7 @@ export default function Layout(props: ParentProps) {
       <div class="h-[calc(100vh-3rem)] flex">
         <div
           classList={{
-            "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
+            "relative @container w-12 shrink-0 bg-background-base": true,
             "flex flex-col gap-5.5 items-start self-stretch justify-between": true,
             "border-r border-border-weak-base": true,
           }}
@@ -129,7 +131,7 @@ export default function Layout(props: ParentProps) {
               onCollapse={layout.sidebar.close}
             />
           </Show>
-          <div class="grow flex flex-col items-start self-stretch gap-4 p-2 min-h-0">
+          <div class="flex-1 flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
             <Tooltip class="shrink-0" placement="right" value="Toggle sidebar" inactive={layout.sidebar.opened()}>
               <Button
                 variant="ghost"
