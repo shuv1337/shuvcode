@@ -14,11 +14,10 @@ const { binaries } = await import("./build.ts")
   await $`./dist/${name}/bin/opencode --version`
 }
 
-// Publish binary packages first
+// Publish binary packages first using npm with OIDC trusted publishing
 for (const name of Object.keys(binaries)) {
   console.log(`publishing binary package: ${name}`)
-  await $`cp ../../.npmrc ./dist/${name}/.npmrc 2>/dev/null || true`
-  await $`cd ./dist/${name} && bun publish --access public --tag ${Script.channel}`.nothrow()
+  await $`cd ./dist/${name} && npm publish --access public --tag ${Script.channel} --provenance`.nothrow()
 }
 
 await $`mkdir -p ./dist/${pkg.name}`
@@ -40,9 +39,8 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     2,
   ),
 )
-// Copy .npmrc from root if it exists (for CI auth)
-await $`cp ../../.npmrc ./dist/${pkg.name}/.npmrc 2>/dev/null || true`
-await $`cd ./dist/${pkg.name} && bun publish --access public --tag ${Script.channel}`
+// Use npm publish with OIDC trusted publishing (provenance)
+await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${Script.channel} --provenance`
 
 // For integration channel, also tag as latest
 if (Script.channel === "integration") {

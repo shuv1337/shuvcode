@@ -10,6 +10,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   publish:
@@ -28,11 +29,12 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - uses: ./.github/actions/setup-bun
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Setup NPM auth
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+      - uses: ./.github/actions/setup-bun
 
       - name: Publish
         run: |
