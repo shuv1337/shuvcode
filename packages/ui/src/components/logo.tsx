@@ -13,6 +13,30 @@ export const Mark = (props: { class?: string }) => {
   )
 }
 
+export const AsciiMark = (props: { class?: string; scale?: number }) => {
+  const lines = ["█▀▀▀", "▀▀▀█", "▀▀▀▀"]
+  const scale = props.scale ?? 1
+  return (
+    <div
+      data-component="ascii-mark"
+      classList={{ [props.class ?? ""]: !!props.class }}
+      style={{
+        "font-family": "monospace",
+        "line-height": "1",
+        "white-space": "pre",
+        transform: `scale(${scale})`,
+        "transform-origin": "center center",
+        color: "var(--text-strong)",
+        "font-weight": "bold",
+      }}
+    >
+      {lines.map((line) => (
+        <div>{line}</div>
+      ))}
+    </div>
+  )
+}
+
 export const AsciiLogo = (props: { class?: string; scale?: number }) => {
   const lines = [
     { left: "     ▄              ", right: "             ▄     " },
@@ -30,7 +54,7 @@ export const AsciiLogo = (props: { class?: string; scale?: number }) => {
         "line-height": "1",
         "white-space": "pre",
         transform: `scale(${scale})`,
-        "transform-origin": "left center",
+        "transform-origin": "center center",
       }}
     >
       {lines.map((line) => (
