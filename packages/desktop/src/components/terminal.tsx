@@ -4,6 +4,16 @@ import { useSDK } from "@/context/sdk"
 import { SerializeAddon } from "@/addons/serialize"
 import { LocalPTY } from "@/context/session"
 
+function getWebSocketUrl(baseUrl: string, path: string): string {
+  if (baseUrl === "/" || baseUrl === "") {
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:"
+    return `${protocol}//${location.host}${path}`
+  }
+  const url = new URL(baseUrl)
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+  return `${url.origin}${path}`
+}
+
 export interface TerminalProps extends ComponentProps<"div"> {
   pty: LocalPTY
   onSubmit?: () => void
@@ -25,7 +35,11 @@ export const Terminal = (props: TerminalProps) => {
   onMount(async () => {
     ghostty = await Ghostty.load()
 
-    ws = new WebSocket(sdk.url + `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`)
+    const wsUrl = getWebSocketUrl(
+      sdk.url,
+      `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`,
+    )
+    ws = new WebSocket(wsUrl)
     term = new Term({
       cursorBlink: true,
       fontSize: 14,
