@@ -46,14 +46,8 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
 // Use npm publish with OIDC trusted publishing (provenance)
 await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${Script.channel} --provenance`
 
-// For integration channel, also tag as latest
-if (Script.channel === "integration") {
-  console.log(`tagging shuvcode@${Script.version} as latest`)
-  for (const name of Object.keys(binaries)) {
-    await $`npm dist-tag add ${name}@${Script.version} latest`.nothrow()
-  }
-  await $`npm dist-tag add shuvcode@${Script.version} latest`
-}
+// Note: dist-tag commands removed - they require token auth which isn't available with OIDC trusted publishing
+// The --tag flag on npm publish already sets the appropriate tag
 
 if (!Script.preview) {
   for (const key of Object.keys(binaries)) {
