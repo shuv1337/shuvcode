@@ -20,10 +20,6 @@ const CLI_THEMES = CLI_THEME_IDS.filter((id) => !baseThemeIds.has(id)).map((id) 
 
 const THEMES = [...BASE_THEMES, ...CLI_THEMES]
 
-const INITIAL_THEME_ID = normalizeLegacyThemeId(
-  typeof window === "undefined" ? "nightowl" : (localStorage.getItem("theme") ?? "nightowl"),
-)
-
 type Theme = (typeof THEMES)[number]
 
 function formatThemeName(id: string): string {
@@ -39,10 +35,7 @@ function normalizeLegacyThemeId(id: string): string {
   return id
 }
 
-function applyThemeSelection(theme: Theme, setCurrentTheme: (theme: Theme) => void) {
-  setCurrentTheme(theme)
-  localStorage.setItem("theme", theme.id)
-
+function applyTheme(theme: Theme) {
   if (theme.id === "default") {
     document.documentElement.removeAttribute("data-theme")
   } else {
@@ -61,16 +54,34 @@ function applyThemeSelection(theme: Theme, setCurrentTheme: (theme: Theme) => vo
 
 export function ThemePicker() {
   const [currentTheme, setCurrentTheme] = createSignal<Theme>(BASE_THEMES[1])
+  let previewTheme: Theme | undefined
 
   onMount(() => {
-    const savedTheme = normalizeLegacyThemeId(localStorage.getItem("theme") ?? "nightowl")
-    const theme = THEMES.find((t) => t.id === savedTheme) ?? BASE_THEMES[1]
-    applyThemeSelection(theme, setCurrentTheme)
+    const savedId = normalizeLegacyThemeId(localStorage.getItem("theme") ?? "nightowl")
+    const theme = THEMES.find((t) => t.id === savedId) ?? BASE_THEMES[1]
+    setCurrentTheme(theme)
+    applyTheme(theme)
   })
 
-  function handleThemeChange(theme: Theme | undefined) {
+  function handleSelect(theme: Theme | undefined) {
     if (!theme) return
-    applyThemeSelection(theme, setCurrentTheme)
+    previewTheme = undefined
+    setCurrentTheme(theme)
+    localStorage.setItem("theme", theme.id)
+    applyTheme(theme)
+  }
+
+  function handleHighlight(theme: Theme | undefined) {
+    if (!theme) return
+    previewTheme = theme
+    applyTheme(theme)
+  }
+
+  function handleOpenChange(open: boolean) {
+    if (!open && previewTheme) {
+      applyTheme(currentTheme())
+      previewTheme = undefined
+    }
   }
 
   return (
@@ -82,7 +93,9 @@ export function ThemePicker() {
       items={[...THEMES]}
       current={currentTheme()}
       filterKeys={["name", "id"]}
-      onSelect={handleThemeChange}
+      onSelect={handleSelect}
+      onHighlight={handleHighlight}
+      onOpenChange={handleOpenChange}
       trigger={
         <Tooltip class="shrink-0" value="Theme">
           <Button variant="ghost" class="size-6 p-0">
