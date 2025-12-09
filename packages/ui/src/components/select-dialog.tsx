@@ -15,6 +15,7 @@ interface SelectDialogProps<T>
   children: (item: T) => JSX.Element
   onSelect?: (value: T | undefined) => void
   onKeyEvent?: (event: KeyboardEvent, item: T | undefined) => void
+  onHighlight?: (item: T | undefined) => void
 }
 
 export function SelectDialog<T>(props: SelectDialogProps<T>) {
@@ -50,6 +51,12 @@ export function SelectDialog<T>(props: SelectDialogProps<T>) {
     }
     const element = scrollRef?.querySelector(`[data-key="${active()}"]`)
     element?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+  })
+
+  createEffect(() => {
+    const key = active()
+    const item = flat().find((x) => others.key(x) === key)
+    others.onHighlight?.(item)
   })
 
   const handleInput = (value: string) => {
