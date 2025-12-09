@@ -9,16 +9,24 @@
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#F8F7F7" />
-    <meta name="theme-color" content="#131010" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#011627" />
+    <meta name="theme-color" content="#011627" media="(prefers-color-scheme: dark)" />
     <meta property="og:image" content="/social-share.png" />
     <meta property="twitter:image" content="/social-share.png" />
   </head>
   <body class="antialiased overscroll-none select-none text-12-regular">
     <script>
       ;(function () {
-        const savedTheme = localStorage.getItem("theme") || "oc-1"
-        document.documentElement.setAttribute("data-theme", savedTheme)
+        let savedTheme = localStorage.getItem("theme") || "nightowl"
+        // Migrate legacy theme ID
+        if (savedTheme === "oc-1") {
+          savedTheme = "default"
+          localStorage.setItem("theme", savedTheme)
+        }
+        // "default" uses :root styles (no data-theme attribute)
+        if (savedTheme !== "default") {
+          document.documentElement.setAttribute("data-theme", savedTheme)
+        }
       })()
     </script>
     <noscript>You need to enable JavaScript to run this app.</noscript>

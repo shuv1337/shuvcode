@@ -15,6 +15,7 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { getFilename } from "@opencode-ai/util/path"
 import { Select } from "@opencode-ai/ui/select"
 import { Session } from "@opencode-ai/sdk/v2/client"
+import { ThemePicker } from "@/components/theme-picker"
 
 export default function Layout(props: ParentProps) {
   const navigate = useNavigate()
@@ -74,7 +75,8 @@ export default function Layout(props: ParentProps) {
               New session
             </Button>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2">
+            <ThemePicker />
             <Tooltip
               class="shrink-0"
               value={
@@ -261,19 +263,6 @@ export default function Layout(props: ParentProps) {
                 icon="settings-gear"
               >
                 <Show when={layout.sidebar.opened()}>Settings</Show>
-              </Button>
-            </Tooltip>
-            <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
-              <Button
-                as={"a"}
-                href="https://opencode.ai/desktop-feedback"
-                target="_blank"
-                class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px]"
-                variant="ghost"
-                size="large"
-                icon="bubble-5"
-              >
-                <Show when={layout.sidebar.opened()}>Share feedback</Show>
               </Button>
             </Tooltip>
           </div>

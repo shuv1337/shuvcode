@@ -74,15 +74,6 @@ export default function Page() {
       setStore("fileSelectOpen", true)
       return
     }
-    if (event.ctrlKey && event.key.toLowerCase() === "t") {
-      event.preventDefault()
-      const currentTheme = localStorage.getItem("theme") ?? "oc-1"
-      const themes = ["oc-1", "oc-2-paper"]
-      const nextTheme = themes[(themes.indexOf(currentTheme) + 1) % themes.length]
-      localStorage.setItem("theme", nextTheme)
-      document.documentElement.setAttribute("data-theme", nextTheme)
-      return
-    }
     if (event.ctrlKey && event.key.toLowerCase() === "`") {
       event.preventDefault()
       if (event.shiftKey) {
