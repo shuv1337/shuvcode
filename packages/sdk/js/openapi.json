@@ -5010,6 +5010,12 @@
             "additionalProperties": {
               "type": "boolean"
             }
+          },
+          "sentEstimate": {
+            "type": "number"
+          },
+          "contextEstimate": {
+            "type": "number"
           }
         },
         "required": [
@@ -5270,6 +5276,18 @@
               "reasoning",
               "cache"
             ]
+          },
+          "outputEstimate": {
+            "type": "number"
+          },
+          "reasoningEstimate": {
+            "type": "number"
+          },
+          "contextEstimate": {
+            "type": "number"
+          },
+          "sentEstimate": {
+            "type": "number"
           },
           "finish": {
             "type": "string"
@@ -7640,6 +7658,11 @@
             "default": "<leader>left",
             "type": "string"
           },
+          "session_parent": {
+            "description": "Go to parent session",
+            "default": "<leader>up",
+            "type": "string"
+          },
           "terminal_suspend": {
             "description": "Suspend terminal",
             "default": "ctrl+z",
@@ -7664,6 +7687,15 @@
             "type": "string"
           },
           "tools": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "subagents": {
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -9477,6 +9509,15 @@
               "type": "boolean"
             }
           },
+          "subagents": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
           "options": {
             "type": "object",
             "propertyNames": {
@@ -9496,6 +9537,7 @@
           "builtIn",
           "permission",
           "tools",
+          "subagents",
           "options"
         ]
       },

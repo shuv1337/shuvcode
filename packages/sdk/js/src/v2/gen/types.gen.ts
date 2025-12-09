@@ -69,6 +69,8 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
+  sentEstimate?: number
+  contextEstimate?: number
 }
 
 export type ProviderAuthError = {
@@ -141,6 +143,10 @@ export type AssistantMessage = {
       write: number
     }
   }
+  outputEstimate?: number
+  reasoningEstimate?: number
+  contextEstimate?: number
+  sentEstimate?: number
   finish?: string
 }
 
@@ -949,6 +955,10 @@ export type KeybindsConfig = {
    */
   session_child_cycle_reverse?: string
   /**
+   * Go to parent session
+   */
+  session_parent?: string
+  /**
    * Suspend terminal
    */
   terminal_suspend?: string
@@ -960,6 +970,9 @@ export type AgentConfig = {
   top_p?: number
   prompt?: string
   tools?: {
+    [key: string]: boolean
+  }
+  subagents?: {
     [key: string]: boolean
   }
   disable?: boolean
@@ -993,6 +1006,9 @@ export type AgentConfig = {
     | unknown
     | string
     | number
+    | {
+        [key: string]: boolean
+      }
     | {
         [key: string]: boolean
       }
@@ -1592,6 +1608,9 @@ export type Agent = {
   }
   prompt?: string
   tools: {
+    [key: string]: boolean
+  }
+  subagents: {
     [key: string]: boolean
   }
   options: {
