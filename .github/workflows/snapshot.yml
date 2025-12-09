@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   publish:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Must use github-hosted runner for npm trusted publishing with provenance
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
