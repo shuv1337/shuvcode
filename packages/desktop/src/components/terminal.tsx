@@ -91,7 +91,7 @@ export const Terminal = (props: TerminalProps) => {
       term = new Term({
         cursorBlink: true,
         fontSize: 14,
-        fontFamily: "TX-02, monospace",
+        fontFamily: "meslo, Menlo, Monaco, Courier New, monospace",
         allowTransparency: true,
         theme: getTerminalTheme(),
         scrollback: 10_000,

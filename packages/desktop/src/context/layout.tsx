@@ -33,7 +33,12 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     async function loadProjectSessions(directory: string) {
       const [, setStore] = globalSync.child(directory)
       globalSdk.client.session.list({ directory }).then((x) => {
-        const sessions = (x.data ?? [])
+        const data = x.data
+        if (!Array.isArray(data)) {
+          setStore("session", [])
+          return
+        }
+        const sessions = data
           .slice()
           .sort((a, b) => a.id.localeCompare(b.id))
           .slice(0, 5)

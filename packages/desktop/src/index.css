@@ -1,7 +1,8 @@
 @import "@opencode-ai/ui/styles/tailwind";
 
 :root {
-  --font-family-sans: "meslo", "Menlo", "Monaco", "Courier New", monospace;
+  /* Font is set via JavaScript in index.html and font-picker.tsx */
+  /* Default fallback handled in inline script */
 
   a {
     cursor: default;
