@@ -249,8 +249,6 @@ function applyUiTheme(palette: TerminalPalette) {
   const iconWeak = mix(fg, bg, isDark ? 0.55 : 0.5)
   const border = mix(fg, bg, isDark ? 0.75 : 0.8)
   const borderStrong = mix(fg, bg, isDark ? 0.65 : 0.7)
-  const borderSelected = palette.blue
-
   const set = (name: string, value: string) => rootStyle.setProperty(name, value)
 
   set("color-scheme", isDark ? "dark" : "light")
@@ -282,11 +280,13 @@ function applyUiTheme(palette: TerminalPalette) {
   set("--border-strong-base", borderStrong)
   set("--border-strong-hover", borderStrong)
   set("--border-strong-active", borderStrong)
-  set("--border-strong-selected", borderSelected)
-  set("--border-interactive-base", borderSelected)
-  set("--border-interactive-hover", borderSelected)
-  set("--border-interactive-active", borderSelected)
-  set("--border-interactive-selected", borderSelected)
+  set("--border-strong-selected", borderStrong)
+  set("--border-selected", borderStrong)
+  set("--border-weak-selected", `${borderStrong}4D`) // 30% opacity
+  set("--border-interactive-base", borderStrong)
+  set("--border-interactive-hover", borderStrong)
+  set("--border-interactive-active", borderStrong)
+  set("--border-interactive-selected", borderStrong)
   set("--surface-interactive-base", palette.blue)
   set("--text-interactive-base", palette.blue)
   set("--surface-brand-base", palette.blue)
@@ -324,6 +324,8 @@ const uiVars = [
   "--border-strong-hover",
   "--border-strong-active",
   "--border-strong-selected",
+  "--border-selected",
+  "--border-weak-selected",
   "--border-interactive-base",
   "--border-interactive-hover",
   "--border-interactive-active",
