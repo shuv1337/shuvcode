@@ -33,7 +33,7 @@
         }
 
         // Early font initialization to prevent flash
-        var savedFont = localStorage.getItem("ui-font") || "geist"
+        var savedFont = localStorage.getItem("ui-font") || "meslo"
         var fontFamilies = {
           geist: '"Geist", "Geist Fallback", sans-serif',
           meslo: '"meslo", "Menlo", "Monaco", "Courier New", monospace',
@@ -47,7 +47,7 @@
           "jetbrains-mono": '"JetBrains Mono", monospace',
           inconsolata: '"Inconsolata", monospace',
         }
-        var fontFamily = fontFamilies[savedFont] || fontFamilies.geist
+        var fontFamily = fontFamilies[savedFont] || fontFamilies.meslo
         document.documentElement.style.setProperty("--font-family-sans", fontFamily)
       })()
     </script>

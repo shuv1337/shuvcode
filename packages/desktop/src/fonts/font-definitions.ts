@@ -86,7 +86,7 @@ export const FONTS: FontDefinition[] = [
   },
 ]
 
-export const DEFAULT_FONT_ID = "geist"
+export const DEFAULT_FONT_ID = "meslo"
 
 export function getFontById(id: string): FontDefinition | undefined {
   return FONTS.find((f) => f.id === id)
