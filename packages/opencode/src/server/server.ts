@@ -2430,7 +2430,7 @@ export namespace Server {
       .all("/*", async (c) => {
         const desktopHost = Installation.isLocal()
           ? process.env.OPENCODE_DESKTOP_URL || "http://localhost:3000"
-          : process.env.SHUVCODE_DESKTOP_URL || "https://desktop.opencode.ai"
+          : process.env.SHUVCODE_DESKTOP_URL || "https://desktop.shuv.ai"
         const url = new URL(desktopHost)
         return proxy(`${desktopHost}${c.req.path}`, {
           ...c.req,
