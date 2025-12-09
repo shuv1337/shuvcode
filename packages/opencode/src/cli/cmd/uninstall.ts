@@ -94,8 +94,8 @@ async function collectRemovalTargets(args: UninstallArgs, method: Installation.M
     { path: Global.Path.state, label: "State", keep: false },
   ]
 
-  const shellConfig = method === "curl" ? await getShellConfigFile() : null
-  const binary = method === "curl" ? process.execPath : null
+  const shellConfig = null
+  const binary = null
 
   return { directories, shellConfig, binary }
 }
@@ -126,13 +126,12 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
     prompts.log.info(`  ✓ Shell PATH in ${shortenPath(targets.shellConfig)}`)
   }
 
-  if (method !== "curl" && method !== "unknown") {
+  if (method !== "unknown") {
     const cmds: Record<string, string> = {
-      npm: "npm uninstall -g opencode-ai",
-      pnpm: "pnpm uninstall -g opencode-ai",
-      bun: "bun remove -g opencode-ai",
-      yarn: "yarn global remove opencode-ai",
-      brew: "brew uninstall opencode",
+      npm: "npm uninstall -g shuvcode",
+      pnpm: "pnpm uninstall -g shuvcode",
+      bun: "bun remove -g shuvcode",
+      yarn: "yarn global remove shuvcode",
     }
     prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
   }
@@ -175,13 +174,12 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     }
   }
 
-  if (method !== "curl" && method !== "unknown") {
+  if (method !== "unknown") {
     const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "opencode-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "opencode-ai"],
-      bun: ["bun", "remove", "-g", "opencode-ai"],
-      yarn: ["yarn", "global", "remove", "opencode-ai"],
-      brew: ["brew", "uninstall", "opencode"],
+      npm: ["npm", "uninstall", "-g", "shuvcode"],
+      pnpm: ["pnpm", "uninstall", "-g", "shuvcode"],
+      bun: ["bun", "remove", "-g", "shuvcode"],
+      yarn: ["yarn", "global", "remove", "shuvcode"],
     }
 
     const cmd = cmds[method]
@@ -195,17 +193,6 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
       } else {
         spinner.stop("Package removed")
       }
-    }
-  }
-
-  if (method === "curl" && targets.binary) {
-    UI.empty()
-    prompts.log.message("To finish removing the binary, run:")
-    prompts.log.info(`  rm "${targets.binary}"`)
-
-    const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".opencode")) {
-      prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
     }
   }
 
