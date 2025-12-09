@@ -13,6 +13,7 @@
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "paths": {
       "@/*": ["./src/*"]
     }
