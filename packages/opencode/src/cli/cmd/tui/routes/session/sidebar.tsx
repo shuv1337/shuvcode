@@ -1,17 +1,17 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match, createSignal, onCleanup } from "solid-js"
+import { createMemo, For, Show, Switch, Match } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
-import { useRoute } from "../../context/route"
 import { Locale } from "@/util/locale"
 import path from "path"
-import type { AssistantMessage, ToolPart } from "@opencode-ai/sdk"
+import type { AssistantMessage } from "@opencode-ai/sdk/v2"
+import { Global } from "@/global"
 import { Installation } from "@/installation"
+import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 
 export function Sidebar(props: { sessionID: string }) {
   const sync = useSync()
-  const route = useRoute()
   const { theme } = useTheme()
   const session = createMemo(() => sync.session.get(props.sessionID)!)
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
@@ -23,42 +23,10 @@ export function Sidebar(props: { sessionID: string }) {
     diff: true,
     todo: true,
     lsp: true,
-    subagents: true,
   })
-
-  // Animated spinner
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-  const [spinnerIndex, setSpinnerIndex] = createSignal(0)
-
-  const intervalId = setInterval(() => {
-    setSpinnerIndex((prev) => (prev + 1) % spinnerFrames.length)
-  }, 100)
-  onCleanup(() => clearInterval(intervalId))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
-
-  const taskToolParts = createMemo(() => {
-    const parts: ToolPart[] = []
-    for (const message of messages()) {
-      for (const part of sync.data.part[message.id] ?? []) {
-        if (part.type === "tool" && part.tool === "task") parts.push(part)
-      }
-    }
-    return parts
-  })
-
-  const subagentGroups = createMemo(() => {
-    const groups = new Map<string, ToolPart[]>()
-    for (const part of taskToolParts()) {
-      const input = part.state.input as Record<string, unknown>
-      const agentName = input?.subagent_type as string
-      if (!agentName) continue
-      if (!groups.has(agentName)) groups.set(agentName, [])
-      groups.get(agentName)!.push(part)
-    }
-    return Array.from(groups.entries())
-  })
 
   const cost = createMemo(() => {
     const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
@@ -80,6 +48,7 @@ export function Sidebar(props: { sessionID: string }) {
     }
   })
 
+  const keybind = useKeybind()
   const directory = useDirectory()
 
   const hasProviders = createMemo(() =>
@@ -135,11 +104,15 @@ export function Sidebar(props: { sessionID: string }) {
                         <text
                           flexShrink={0}
                           style={{
-                            fg: {
-                              connected: theme.success,
-                              failed: theme.error,
-                              disabled: theme.textMuted,
-                            }[item.status],
+                            fg: (
+                              {
+                                connected: theme.success,
+                                failed: theme.error,
+                                disabled: theme.textMuted,
+                                needs_auth: theme.warning,
+                                needs_client_registration: theme.error,
+                              } as Record<string, typeof theme.success>
+                            )[item.status],
                           }}
                         >
                           •
@@ -147,82 +120,19 @@ export function Sidebar(props: { sessionID: string }) {
                         <text fg={theme.text} wrapMode="word">
                           {key}{" "}
                           <span style={{ fg: theme.textMuted }}>
-                            <Switch>
+                            <Switch fallback={item.status}>
                               <Match when={item.status === "connected"}>Connected</Match>
                               <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
-                              <Match when={item.status === "disabled"}>Disabled in configuration</Match>
+                              <Match when={item.status === "disabled"}>Disabled</Match>
+                              <Match when={(item.status as string) === "needs_auth"}>Needs auth</Match>
+                              <Match when={(item.status as string) === "needs_client_registration"}>
+                                Needs client ID
+                              </Match>
                             </Switch>
                           </span>
                         </text>
                       </box>
                     )}
-                  </For>
-                </Show>
-              </box>
-            </Show>
-            <Show when={subagentGroups().length > 0}>
-              <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => subagentGroups().length > 2 && setExpanded("subagents", !expanded.subagents)}
-                >
-                  <Show when={subagentGroups().length > 2}>
-                    <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>Subagents</b>
-                  </text>
-                </box>
-                <Show when={subagentGroups().length <= 2 || expanded.subagents}>
-                  <For each={subagentGroups()}>
-                    {([agentName, parts]) => {
-                      const hasActive = () =>
-                        parts.some((p) => p.state.status === "running" || p.state.status === "pending")
-                      return (
-                        <box>
-                          <box flexDirection="row" gap={1}>
-                            <text flexShrink={0} style={{ fg: hasActive() ? theme.success : theme.text }}>
-                              •
-                            </text>
-                            <text fg={theme.text} wrapMode="word">
-                              {agentName}
-                            </text>
-                          </box>
-                          <For each={parts}>
-                            {(part) => {
-                              const isActive = () => part.state.status === "running" || part.state.status === "pending"
-                              const isError = () => part.state.status === "error"
-                              const input = part.state.input as Record<string, unknown>
-                              const description = (input?.description as string) ?? ""
-                              const stateMetadata = (part.state as { metadata?: Record<string, unknown> }).metadata
-                              const sessionId = (part.metadata?.sessionId ?? stateMetadata?.sessionId) as
-                                | string
-                                | undefined
-                              return (
-                                <box
-                                  flexDirection="row"
-                                  gap={1}
-                                  paddingLeft={2}
-                                  onMouseUp={(e) => {
-                                    if (e.button === 0 && sessionId) {
-                                      route.navigate({ type: "session", sessionID: sessionId })
-                                    }
-                                  }}
-                                >
-                                  <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
-                                    {isActive() ? spinnerFrames[spinnerIndex()] : isError() ? "✗" : "✓"}
-                                  </text>
-                                  <text fg={isActive() ? theme.text : theme.textMuted} wrapMode="word">
-                                    {description}
-                                  </text>
-                                </box>
-                              )
-                            }}
-                          </For>
-                        </box>
-                      )
-                    }}
                   </For>
                 </Show>
               </box>
@@ -338,7 +248,7 @@ export function Sidebar(props: { sessionID: string }) {
           </box>
         </scrollbox>
 
-        <box flexShrink={0} gap={1}>
+        <box flexShrink={0} gap={1} paddingTop={1}>
           <Show when={!hasProviders()}>
             <box
               backgroundColor={theme.backgroundElement}
@@ -365,11 +275,11 @@ export function Sidebar(props: { sessionID: string }) {
               </box>
             </box>
           </Show>
-          <text fg={theme.textMuted}>{directory()}</text>
+          <text fg={theme.text}>{directory()}</text>
           <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>shuv</b>
+            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
             <span style={{ fg: theme.text }}>
-              <b>code</b>
+              <b>Code</b>
             </span>{" "}
             <span>{Installation.VERSION}</span>
           </text>

@@ -20,16 +20,15 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Build opencode locally
+    - name: Install opencode
       shell: bash
-      run: bun run --filter opencode build -- --single
+      run: curl -fsSL https://opencode.ai/install | bash
 
     - name: Run opencode
       shell: bash
       id: run_opencode
+      run: opencode github run
       env:
         MODEL: ${{ inputs.model }}
         SHARE: ${{ inputs.share }}
         PROMPT: ${{ inputs.prompt }}
-        OPENCODE_BIN_PATH: ${{ github.workspace }}/packages/opencode/dist/shuvcode-linux-x64/bin/opencode
-      run: bun packages/opencode/bin/opencode github run

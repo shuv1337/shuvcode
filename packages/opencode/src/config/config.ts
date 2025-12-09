@@ -325,12 +325,33 @@ export namespace Config {
       ref: "McpLocalConfig",
     })
 
+  export const McpOAuth = z
+    .object({
+      clientId: z
+        .string()
+        .optional()
+        .describe("OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted."),
+      clientSecret: z.string().optional().describe("OAuth client secret (if required by the authorization server)"),
+      scope: z.string().optional().describe("OAuth scopes to request during authorization"),
+    })
+    .strict()
+    .meta({
+      ref: "McpOAuthConfig",
+    })
+  export type McpOAuth = z.infer<typeof McpOAuth>
+
   export const McpRemote = z
     .object({
       type: z.literal("remote").describe("Type of MCP server connection"),
       url: z.string().describe("URL of the remote MCP server"),
       enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
       headers: z.record(z.string(), z.string()).optional().describe("Headers to send with the request"),
+      oauth: z
+        .union([McpOAuth, z.literal(false)])
+        .optional()
+        .describe(
+          "OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.",
+        ),
       timeout: z
         .number()
         .int()
@@ -405,6 +426,7 @@ export namespace Config {
       editor_open: z.string().optional().default("<leader>e").describe("Open external editor"),
       theme_list: z.string().optional().default("<leader>t").describe("List available themes"),
       sidebar_toggle: z.string().optional().default("<leader>b").describe("Toggle sidebar"),
+      scrollbar_toggle: z.string().optional().default("none").describe("Toggle session scrollbar"),
       username_toggle: z.string().optional().default("none").describe("Toggle username visibility"),
       status_view: z.string().optional().default("<leader>s").describe("View status"),
       session_export: z.string().optional().default("<leader>x").describe("Export session to editor"),
