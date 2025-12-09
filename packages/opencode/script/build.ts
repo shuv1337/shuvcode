@@ -143,6 +143,10 @@ for (const item of targets) {
         version: Script.version,
         os: [item.os],
         cpu: [item.arch],
+        repository: {
+          type: "git",
+          url: "https://github.com/Latitudes-Dev/shuvcode",
+        },
       },
       null,
       2,

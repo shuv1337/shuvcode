@@ -34,6 +34,10 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       version: Script.version,
       // Reference our own binary packages (shuvcode-linux-x64, etc.)
       optionalDependencies: binaries,
+      repository: {
+        type: "git",
+        url: "https://github.com/Latitudes-Dev/shuvcode",
+      },
     },
     null,
     2,
