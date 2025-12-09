@@ -7370,6 +7370,9 @@
               "created": {
                 "type": "number"
               },
+              "updated": {
+                "type": "number"
+              },
               "initialized": {
                 "type": "number"
               }
