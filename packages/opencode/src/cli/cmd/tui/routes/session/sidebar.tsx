@@ -241,17 +241,14 @@ export function Sidebar(props: { sessionID: string }) {
                               const isError = () => part.state.status === "error"
                               const input = part.state.input as Record<string, unknown>
                               const description = (input?.description as string) ?? ""
-                              const stateMetadata = (part.state as { metadata?: Record<string, unknown> }).metadata
-                              const sessionId = (part.metadata?.sessionId ?? stateMetadata?.sessionId) as
-                                | string
-                                | undefined
+                              const sessionId = part.sessionID
                               return (
                                 <box
                                   flexDirection="row"
                                   gap={1}
                                   paddingLeft={2}
                                   onMouseDown={() => {
-                                    if (sessionId) route.navigate({ type: "session", sessionID: sessionId })
+                                    route.navigate({ type: "session", sessionID: sessionId })
                                   }}
                                 >
                                   <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
