@@ -608,8 +608,8 @@ html[data-theme="nightowl"] {
   --surface-raised-base: rgba(11, 37, 58, 0.6);
   --surface-float-base: #0b253a;
   --surface-float-base-hover: #0d2b44;
-  --surface-raised-base-hover: rgba(11, 37, 58, 0.7);
-  --surface-raised-base-active: rgba(11, 37, 58, 0.8);
+  --surface-raised-base-hover: rgba(130, 170, 255, 0.15);
+  --surface-raised-base-active: rgba(130, 170, 255, 0.25);
   --surface-raised-strong: rgba(11, 37, 58, 0.7);
   --surface-raised-strong-hover: rgba(11, 37, 58, 0.8);
   --surface-raised-stronger: rgba(11, 37, 58, 0.8);
