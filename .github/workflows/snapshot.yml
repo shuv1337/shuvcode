@@ -39,3 +39,11 @@ jobs:
           ./script/publish.ts
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Deploy Desktop to Cloudflare
+        continue-on-error: true
+        run: |
+          bunx sst deploy --stage production --config sst.desktop.config.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DEFAULT_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
