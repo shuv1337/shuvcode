@@ -5,6 +5,9 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { CLI_THEME_IDS, applyCliTheme, clearTerminalTheme, clearUiTheme } from "@/theme/terminal-themes"
 
+const STORAGE_KEY_THEME = "theme"
+const DEFAULT_THEME_ID = "nightowl"
+
 const BASE_THEMES = [
   { id: "default", name: "Default" },
   { id: "nightowl", name: "Night Owl" },
@@ -35,6 +38,27 @@ function normalizeLegacyThemeId(id: string): string {
   return id
 }
 
+function readStoredThemeId(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY_THEME) ?? DEFAULT_THEME_ID
+  } catch {
+    return DEFAULT_THEME_ID
+  }
+}
+
+function persistThemeId(id: string) {
+  try {
+    localStorage.setItem(STORAGE_KEY_THEME, id)
+  } catch {
+    /* ignore */
+  }
+}
+
+function getStoredTheme(): Theme {
+  const savedId = normalizeLegacyThemeId(readStoredThemeId())
+  return THEMES.find((t) => t.id === savedId) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? BASE_THEMES[1]
+}
+
 function applyTheme(theme: Theme) {
   if (theme.id === "default") {
     document.documentElement.removeAttribute("data-theme")
@@ -52,22 +76,21 @@ function applyTheme(theme: Theme) {
   document.documentElement.dispatchEvent(new CustomEvent("terminal-theme-changed"))
 }
 
+export function initTheme() {
+  applyTheme(getStoredTheme())
+}
+
 export function ThemePicker() {
-  const [currentTheme, setCurrentTheme] = createSignal<Theme>(BASE_THEMES[1])
+  const [currentTheme, setCurrentTheme] = createSignal<Theme>(getStoredTheme())
   let previewTheme: Theme | undefined
 
-  onMount(() => {
-    const savedId = normalizeLegacyThemeId(localStorage.getItem("theme") ?? "nightowl")
-    const theme = THEMES.find((t) => t.id === savedId) ?? BASE_THEMES[1]
-    setCurrentTheme(theme)
-    applyTheme(theme)
-  })
+  onMount(() => applyTheme(currentTheme()))
 
   function handleSelect(theme: Theme | undefined) {
     if (!theme) return
     previewTheme = undefined
     setCurrentTheme(theme)
-    localStorage.setItem("theme", theme.id)
+    persistThemeId(theme.id)
     applyTheme(theme)
   }
 
