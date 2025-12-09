@@ -762,7 +762,7 @@ export function Session() {
       value: "session.parent",
       keybind: "session_parent",
       category: "Session",
-      disabled: true,
+      disabled: !session()?.parentID,
       onSelect: (dialog) => {
         const parentID = session()?.parentID
         if (parentID) {

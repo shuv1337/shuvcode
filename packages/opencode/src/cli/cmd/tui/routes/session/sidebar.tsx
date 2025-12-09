@@ -1,17 +1,17 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, For, Show, Switch, Match, createSignal, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
+import { useRoute } from "../../context/route"
 import { Locale } from "@/util/locale"
 import path from "path"
-import type { AssistantMessage } from "@opencode-ai/sdk/v2"
-import { Global } from "@/global"
+import type { AssistantMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { Installation } from "@/installation"
-import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 
 export function Sidebar(props: { sessionID: string }) {
   const sync = useSync()
+  const route = useRoute()
   const { theme } = useTheme()
   const session = createMemo(() => sync.session.get(props.sessionID)!)
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
@@ -23,10 +23,41 @@ export function Sidebar(props: { sessionID: string }) {
     diff: true,
     todo: true,
     lsp: true,
+    subagents: true,
   })
+
+  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+  const [spinnerIndex, setSpinnerIndex] = createSignal(0)
+
+  const intervalId = setInterval(() => {
+    setSpinnerIndex((prev) => (prev + 1) % spinnerFrames.length)
+  }, 100)
+  onCleanup(() => clearInterval(intervalId))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+
+  const taskToolParts = createMemo(() => {
+    const parts: ToolPart[] = []
+    for (const message of messages()) {
+      for (const part of sync.data.part[message.id] ?? []) {
+        if (part.type === "tool" && part.tool === "task") parts.push(part)
+      }
+    }
+    return parts
+  })
+
+  const subagentGroups = createMemo(() => {
+    const groups = new Map<string, ToolPart[]>()
+    for (const part of taskToolParts()) {
+      const input = part.state.input as Record<string, unknown>
+      const agentName = input?.subagent_type as string
+      if (!agentName) continue
+      if (!groups.has(agentName)) groups.set(agentName, [])
+      groups.get(agentName)!.push(part)
+    }
+    return Array.from(groups.entries())
+  })
 
   const cost = createMemo(() => {
     const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
@@ -48,7 +79,6 @@ export function Sidebar(props: { sessionID: string }) {
     }
   })
 
-  const keybind = useKeybind()
   const directory = useDirectory()
 
   const hasProviders = createMemo(() =>
@@ -176,6 +206,68 @@ export function Sidebar(props: { sessionID: string }) {
                 </For>
               </Show>
             </box>
+            <Show when={subagentGroups().length > 0}>
+              <box>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() => subagentGroups().length > 2 && setExpanded("subagents", !expanded.subagents)}
+                >
+                  <Show when={subagentGroups().length > 2}>
+                    <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
+                  </Show>
+                  <text fg={theme.text}>
+                    <b>Subagents</b>
+                  </text>
+                </box>
+                <Show when={subagentGroups().length <= 2 || expanded.subagents}>
+                  <For each={subagentGroups()}>
+                    {([agentName, parts]) => {
+                      const hasActive = () =>
+                        parts.some((p) => p.state.status === "running" || p.state.status === "pending")
+                      return (
+                        <box>
+                          <box flexDirection="row" gap={1}>
+                            <text flexShrink={0} style={{ fg: hasActive() ? theme.success : theme.text }}>
+                              •
+                            </text>
+                            <text fg={theme.text} wrapMode="word">
+                              {agentName}
+                            </text>
+                          </box>
+                          <For each={parts}>
+                            {(part) => {
+                              const isActive = () => part.state.status === "running" || part.state.status === "pending"
+                              const isError = () => part.state.status === "error"
+                              const input = part.state.input as Record<string, unknown>
+                              const description = (input?.description as string) ?? ""
+                              const sessionId = part.sessionID
+                              return (
+                                <box
+                                  flexDirection="row"
+                                  gap={1}
+                                  paddingLeft={2}
+                                  onMouseDown={() => {
+                                    route.navigate({ type: "session", sessionID: sessionId })
+                                  }}
+                                >
+                                  <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
+                                    {isActive() ? spinnerFrames[spinnerIndex()] : isError() ? "✗" : "✓"}
+                                  </text>
+                                  <text fg={isActive() ? theme.text : theme.textMuted} wrapMode="word">
+                                    {description}
+                                  </text>
+                                </box>
+                              )
+                            }}
+                          </For>
+                        </box>
+                      )
+                    }}
+                  </For>
+                </Show>
+              </box>
+            </Show>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
               <box>
                 <box
@@ -277,9 +369,9 @@ export function Sidebar(props: { sessionID: string }) {
           </Show>
           <text fg={theme.text}>{directory()}</text>
           <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
+            <span style={{ fg: theme.success }}>•</span> <b>shuv</b>
             <span style={{ fg: theme.text }}>
-              <b>Code</b>
+              <b>code</b>
             </span>{" "}
             <span>{Installation.VERSION}</span>
           </text>
