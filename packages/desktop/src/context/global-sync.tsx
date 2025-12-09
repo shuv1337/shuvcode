@@ -161,14 +161,17 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
     })
 
     Promise.all([
-      sdk.client.project.list().then((x) =>
-        setGlobalStore(
-          "projects",
-          x
-            .data!.filter((x) => !x.worktree.includes("opencode-test") && x.vcs)
-            .sort((a, b) => b.time.created - a.time.created),
-        ),
-      ),
+      sdk.client.project
+        .list()
+        .then((x) =>
+          setGlobalStore(
+            "projects",
+            (x.data ?? [])
+              .filter((x) => !x.worktree.includes("opencode-test") && x.vcs)
+              .sort((a, b) => b.time.created - a.time.created),
+          ),
+        )
+        .catch(() => setGlobalStore("projects", [])),
     ]).then(() => setGlobalStore("ready", true))
 
     return {

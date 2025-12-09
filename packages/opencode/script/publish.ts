@@ -15,9 +15,11 @@ const { binaries } = await import("./build.ts")
 }
 
 // Publish binary packages first using npm with OIDC trusted publishing
+// For integration channel, tag as "latest" so users get updates by default
+const publishTag = Script.channel === "integration" ? "latest" : Script.channel
 for (const name of Object.keys(binaries)) {
   console.log(`publishing binary package: ${name}`)
-  await $`cd ./dist/${name} && npm publish --access public --tag ${Script.channel} --provenance`.nothrow()
+  await $`cd ./dist/${name} && npm publish --access public --tag ${publishTag} --provenance`.nothrow()
 }
 
 await $`mkdir -p ./dist/${pkg.name}`
@@ -44,10 +46,8 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
   ),
 )
 // Use npm publish with OIDC trusted publishing (provenance)
-await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${Script.channel} --provenance`
-
-// Note: dist-tag commands removed - they require token auth which isn't available with OIDC trusted publishing
-// The --tag flag on npm publish already sets the appropriate tag
+// For integration channel, tag as "latest" so users get updates by default
+await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${publishTag} --provenance`
 
 if (!Script.preview) {
   for (const key of Object.keys(binaries)) {
