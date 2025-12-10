@@ -32,7 +32,6 @@ export namespace Agent {
         .optional(),
       prompt: z.string().optional(),
       tools: z.record(z.string(), z.boolean()),
-      subagents: z.record(z.string(), z.boolean()),
       options: z.record(z.string(), z.any()),
       maxSteps: z.number().int().positive().optional(),
     })
@@ -110,7 +109,6 @@ export namespace Agent {
           todowrite: false,
           ...defaultTools,
         },
-        subagents: {},
         options: {},
         permission: agentPermission,
         mode: "subagent",
@@ -125,7 +123,6 @@ export namespace Agent {
           write: false,
           ...defaultTools,
         },
-        subagents: {},
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions. (Tools: All tools)`,
         prompt: [
           `You are a file search specialist. You excel at thoroughly navigating and exploring codebases.`,
@@ -155,7 +152,6 @@ export namespace Agent {
       build: {
         name: "build",
         tools: { ...defaultTools },
-        subagents: {},
         options: {},
         permission: agentPermission,
         mode: "primary",
@@ -168,7 +164,6 @@ export namespace Agent {
         tools: {
           ...defaultTools,
         },
-        subagents: {},
         mode: "primary",
         builtIn: true,
       },
@@ -186,7 +181,6 @@ export namespace Agent {
           permission: agentPermission,
           options: {},
           tools: {},
-          subagents: {},
           builtIn: false,
         }
       const {
@@ -194,7 +188,7 @@ export namespace Agent {
         model,
         prompt,
         tools,
-        subagents,
+        subagents: _subagents,
         description,
         temperature,
         top_p,
@@ -219,11 +213,6 @@ export namespace Agent {
         ...defaultTools,
         ...item.tools,
       }
-      if (subagents)
-        item.subagents = {
-          ...item.subagents,
-          ...subagents,
-        }
       if (description) item.description = description
       if (temperature != undefined) item.temperature = temperature
       if (top_p != undefined) item.topP = top_p

@@ -47,7 +47,7 @@ import { Config } from "../config/config"
 import { NamedError } from "@opencode-ai/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
-import { TaskTool, filterSubagents, TASK_DESCRIPTION } from "@/tool/task"
+import { TaskTool, TASK_DESCRIPTION } from "@/tool/task"
 import { SessionStatus } from "./status"
 import { Token } from "@/util/token"
 
@@ -855,22 +855,6 @@ export namespace SessionPrompt {
         }
       }
       tools[key] = item
-    }
-
-    // Regenerate task tool description with filtered subagents
-    if (tools.task) {
-      const all = await Agent.list().then((x) => x.filter((a) => a.mode !== "primary"))
-      const filtered = filterSubagents(all, input.agent.subagents)
-      const description = TASK_DESCRIPTION.replace(
-        "{agents}",
-        filtered
-          .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
-          .join("\n"),
-      )
-      tools.task = {
-        ...tools.task,
-        description,
-      }
     }
 
     return tools

@@ -12,6 +12,7 @@ import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
+import { Token } from "@/util/token"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -53,6 +54,8 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+            let reasoningTotal = 0
+            let textTotal = 0
             const stream = streamText(streamInput)
 
             for await (const value of stream.fullStream) {
@@ -85,6 +88,9 @@ export namespace SessionProcessor {
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     if (part.text) await Session.updatePart({ part, delta: value.text })
+                    // Track reasoning tokens for live display
+                    reasoningTotal += value.text.length
+                    input.assistantMessage.reasoningEstimate = Token.toTokenEstimate(reasoningTotal)
                   }
                   break
 
@@ -311,6 +317,9 @@ export namespace SessionProcessor {
                         part: currentText,
                         delta: value.text,
                       })
+                    // Track output tokens for live display
+                    textTotal += value.text.length
+                    input.assistantMessage.outputEstimate = Token.toTokenEstimate(textTotal)
                   }
                   break
 
