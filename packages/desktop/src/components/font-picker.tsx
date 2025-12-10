@@ -1,42 +1,17 @@
-import { createSignal, onMount } from "solid-js"
+import { createMemo, onMount } from "solid-js"
 import { SelectDialog } from "@opencode-ai/ui/select-dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { FONTS, DEFAULT_FONT_ID, getFontById, type FontDefinition } from "@/fonts/font-definitions"
-import { loadFont } from "@/fonts/font-loader"
-
-function applyFont(font: FontDefinition): void {
-  const fontFamily = `"${font.family}", ${font.fallback}`
-  document.documentElement.style.setProperty("--font-family-sans", fontFamily)
-}
-
-function getDefaultFont(): FontDefinition {
-  return getFontById(DEFAULT_FONT_ID) ?? FONTS[0]
-}
-
-async function ensureFontLoaded(font: FontDefinition): Promise<boolean> {
-  if (!font.googleFontsUrl) return true
-  try {
-    await loadFont(font)
-    return true
-  } catch {
-    return false
-  }
-}
+import { FONTS, getFontById, type FontDefinition } from "@/fonts/font-definitions"
+import { useLayout } from "@/context/layout"
+import { applyFontWithLoad, ensureFontLoaded, applyFont } from "@/fonts/apply-font"
 
 export function FontPicker() {
-  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(getDefaultFont())
+  const layout = useLayout()
+  const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
 
-  onMount(async () => {
-    const font = currentFont()
-    const loaded = await ensureFontLoaded(font)
-    if (loaded) {
-      applyFont(font)
-    } else {
-      applyFont(FONTS[0])
-    }
-  })
+  onMount(() => applyFontWithLoad(currentFont()))
 
   async function handleSelect(font: FontDefinition | undefined) {
     if (!font) return
@@ -44,8 +19,8 @@ export function FontPicker() {
     const loaded = await ensureFontLoaded(font)
     if (!loaded) return
 
-    setCurrentFont(font)
-    applyFont(font)
+    layout.font.set(font.id)
+    applyFont(font.id)
   }
 
   async function handleHighlight(font: FontDefinition | undefined) {
@@ -54,12 +29,12 @@ export function FontPicker() {
     const loaded = await ensureFontLoaded(font)
     if (!loaded) return
 
-    applyFont(font)
+    applyFont(font.id)
   }
 
   function handleOpenChange(open: boolean) {
     if (!open) {
-      applyFont(currentFont())
+      applyFont(currentFont().id)
     }
   }
 

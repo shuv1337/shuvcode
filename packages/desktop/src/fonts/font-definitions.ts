@@ -6,7 +6,16 @@ export type FontDefinition = {
   fallback: string
 }
 
+export const DEFAULT_FONT_ID = "meslo"
+
 export const FONTS: FontDefinition[] = [
+  {
+    id: "meslo",
+    name: "Meslo",
+    family: "meslo",
+    googleFontsUrl: "", // Already loaded via jsDelivr in index.html
+    fallback: '"Menlo", "Monaco", "Courier New", monospace',
+  },
   {
     id: "geist",
     name: "Geist",
@@ -57,13 +66,6 @@ export const FONTS: FontDefinition[] = [
     fallback: "sans-serif",
   },
   {
-    id: "meslo",
-    name: "Meslo",
-    family: "meslo",
-    googleFontsUrl: "", // Already loaded via jsDelivr in index.html
-    fallback: '"Menlo", "Monaco", "Courier New", monospace',
-  },
-  {
     id: "ubuntu-mono",
     name: "Ubuntu Mono",
     family: "Ubuntu Mono",
@@ -85,8 +87,6 @@ export const FONTS: FontDefinition[] = [
     fallback: "monospace",
   },
 ]
-
-export const DEFAULT_FONT_ID = "meslo"
 
 export function getFontById(id: string): FontDefinition | undefined {
   return FONTS.find((f) => f.id === id)

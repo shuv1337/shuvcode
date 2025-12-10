@@ -1,15 +1,19 @@
 import { createStore } from "solid-js/store"
-import { createMemo, onMount } from "solid-js"
+import { createMemo, onMount, createEffect } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
+import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
+import { applyFont } from "@/fonts/apply-font"
+import { DEFAULT_FONT_ID } from "@/fonts/font-definitions"
 
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
   init: () => {
     const globalSdk = useGlobalSDK()
     const globalSync = useGlobalSync()
+
     const [store, setStore] = makePersisted(
       createStore({
         projects: [] as { worktree: string; expanded: boolean }[],
@@ -24,11 +28,24 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           state: "pane" as "pane" | "tab",
         },
+        theme: DEFAULT_THEME_ID,
+        font: DEFAULT_FONT_ID,
       }),
       {
-        name: "default-layout.v6",
+        name: "default-layout.v8",
       },
     )
+
+    // Reactively apply theme and font whenever they change or on init
+    createEffect(() => {
+      const currentTheme = store.theme || DEFAULT_THEME_ID
+      applyTheme(currentTheme)
+    })
+
+    createEffect(() => {
+      const currentFont = store.font || DEFAULT_FONT_ID
+      applyFont(currentFont)
+    })
 
     async function loadProjectSessions(directory: string) {
       const [, setStore] = globalSync.child(directory)
@@ -132,6 +149,18 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         tab() {
           setStore("review", "state", "tab")
+        },
+      },
+      theme: {
+        current: createMemo(() => store.theme ?? DEFAULT_THEME_ID),
+        set(id: string) {
+          setStore("theme", id)
+        },
+      },
+      font: {
+        current: createMemo(() => store.font ?? DEFAULT_FONT_ID),
+        set(id: string) {
+          setStore("font", id)
         },
       },
     }
