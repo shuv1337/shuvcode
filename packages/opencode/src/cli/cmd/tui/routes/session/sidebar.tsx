@@ -241,14 +241,23 @@ export function Sidebar(props: { sessionID: string }) {
                               const isError = () => part.state.status === "error"
                               const input = part.state.input as Record<string, unknown>
                               const description = (input?.description as string) ?? ""
-                              const sessionId = part.sessionID
+
+                              // Get subagent session ID from metadata, not part.sessionID (which is the parent)
+                              const metadata =
+                                part.state.status === "completed"
+                                  ? part.state.metadata
+                                  : ((part.state as { metadata?: Record<string, unknown> }).metadata ?? {})
+                              const subagentSessionId = (metadata?.sessionId as string) ?? undefined
+
                               return (
                                 <box
                                   flexDirection="row"
                                   gap={1}
                                   paddingLeft={2}
                                   onMouseDown={() => {
-                                    route.navigate({ type: "session", sessionID: sessionId })
+                                    if (subagentSessionId) {
+                                      route.navigate({ type: "session", sessionID: subagentSessionId })
+                                    }
                                   }}
                                 >
                                   <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
