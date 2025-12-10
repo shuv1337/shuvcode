@@ -1381,9 +1381,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     const query = ctx.searchQuery()
     if (!query) return props.part.text.trim()
 
-    // Simple text highlight with strikethrough markers
+    // Highlight search matches with ANSI background color
+    // Using yellow background (43) and black foreground (30) for visibility across themes
     const regex = new RegExp(`(${escapeRegex(query)})`, "gi")
-    return props.part.text.trim().replace(regex, "~~$1~~")
+    return props.part.text.trim().replace(regex, "\x1b[43m\x1b[30m$1\x1b[0m")
   })
 
   return (
