@@ -16,7 +16,7 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { getFilename } from "@opencode-ai/util/path"
 import { Select } from "@opencode-ai/ui/select"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { Session } from "@opencode-ai/sdk/v2/client"
+import { Session, Project } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { ThemePicker } from "@/components/theme-picker"
 import { FontPicker } from "@/components/font-picker"
@@ -108,8 +108,8 @@ export default function Layout(props: ParentProps) {
     const { draggable, droppable } = event
     if (draggable && droppable) {
       const projects = layout.projects.list()
-      const fromIndex = projects.findIndex((p) => p.directory === draggable.id.toString())
-      const toIndex = projects.findIndex((p) => p.directory === droppable.id.toString())
+      const fromIndex = projects.findIndex((p) => p.worktree === draggable.id.toString())
+      const toIndex = projects.findIndex((p) => p.worktree === droppable.id.toString())
       if (fromIndex !== toIndex && toIndex !== -1) {
         layout.projects.move(draggable.id.toString(), toIndex)
       }
@@ -142,27 +142,74 @@ export default function Layout(props: ParentProps) {
     return <></>
   }
 
-  const SortableProject = (props: { project: { directory: string; expanded: boolean } }): JSX.Element => {
-    const sortable = createSortable(props.project.directory)
-    const [projectStore] = globalSync.child(props.project.directory)
-    const slug = createMemo(() => base64Encode(props.project.directory))
-    const name = createMemo(() => getFilename(props.project.directory))
+  const ProjectVisual = (props: { project: Project & { expanded: boolean }; class?: string }): JSX.Element => {
+    const name = createMemo(() => getFilename(props.project.worktree))
+    return (
+      <Switch>
+        <Match when={layout.sidebar.opened()}>
+          <Button
+            as={"div"}
+            variant="ghost"
+            data-active
+            class="flex items-center justify-between gap-3 w-full px-1 self-stretch h-8 border-none rounded-lg"
+          >
+            <div class="flex items-center gap-3 p-0 text-left min-w-0 grow">
+              <div class="size-6 shrink-0">
+                <Avatar
+                  fallback={name()}
+                  src={props.project.icon?.url}
+                  background={props.project.icon?.color ?? "var(--surface-info-base)"}
+                  class="size-full"
+                />
+              </div>
+              <span class="truncate text-14-medium text-text-strong">{name()}</span>
+            </div>
+          </Button>
+        </Match>
+        <Match when={true}>
+          <Button
+            variant="ghost"
+            size="large"
+            class="flex items-center justify-center p-0 aspect-square border-none rounded-lg"
+            data-selected={props.project.worktree === currentDirectory()}
+            onClick={() => navigateToProject(props.project.worktree)}
+          >
+            <div class="size-6 shrink-0">
+              <Avatar
+                fallback={name()}
+                src={props.project.icon?.url}
+                background={props.project.icon?.color ?? "var(--surface-info-base)"}
+                class="size-full"
+              />
+            </div>
+          </Button>
+        </Match>
+      </Switch>
+    )
+  }
+
+  const SortableProject = (props: { project: Project & { expanded: boolean } }): JSX.Element => {
+    const sortable = createSortable(props.project.worktree)
+    const [projectStore] = globalSync.child(props.project.worktree)
+    const slug = createMemo(() => base64Encode(props.project.worktree))
+    const name = createMemo(() => getFilename(props.project.worktree))
     return (
       // @ts-ignore
-      <div use:sortable classList={{ "opacity-0": sortable.isActiveDraggable }}>
+      <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Switch>
           <Match when={layout.sidebar.opened()}>
             <Collapsible variant="ghost" defaultOpen class="gap-2 shrink-0">
               <Button
                 as={"div"}
                 variant="ghost"
-                class="group/session flex items-center justify-between gap-3 w-full px-1 self-stretch h-auto border-none"
+                class="group/session flex items-center justify-between gap-3 w-full px-1 self-stretch h-auto border-none rounded-lg"
               >
                 <Collapsible.Trigger class="group/trigger flex items-center gap-3 p-0 text-left min-w-0 grow border-none">
                   <div class="size-6 shrink-0">
                     <Avatar
                       fallback={name()}
-                      background="var(--surface-info-base)"
+                      src={props.project.icon?.url}
+                      background={props.project.icon?.color ?? "var(--surface-info-base)"}
                       class="size-full group-hover/session:hidden"
                     />
                     <Icon
@@ -178,7 +225,7 @@ export default function Layout(props: ParentProps) {
                     <DropdownMenu.Trigger as={IconButton} icon="dot-grid" variant="ghost" />
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content>
-                        <DropdownMenu.Item onSelect={() => closeProject(props.project.directory)}>
+                        <DropdownMenu.Item onSelect={() => closeProject(props.project.worktree)}>
                           <DropdownMenu.ItemLabel>Close Project</DropdownMenu.ItemLabel>
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
@@ -240,18 +287,8 @@ export default function Layout(props: ParentProps) {
             </Collapsible>
           </Match>
           <Match when={true}>
-            <Tooltip placement="right" value={props.project.directory}>
-              <Button
-                variant="ghost"
-                size="large"
-                class="flex items-center justify-center p-0 aspect-square border-none"
-                data-selected={props.project.directory === currentDirectory()}
-                onClick={() => navigateToProject(props.project.directory)}
-              >
-                <div class="size-6 shrink-0 inset-0">
-                  <Avatar fallback={name()} background="var(--surface-info-base)" class="size-full" />
-                </div>
-              </Button>
+            <Tooltip placement="right" value={props.project.worktree}>
+              <ProjectVisual project={props.project} />
             </Tooltip>
           </Match>
         </Switch>
@@ -260,16 +297,12 @@ export default function Layout(props: ParentProps) {
   }
 
   const ProjectDragOverlay = (): JSX.Element => {
-    const activeName = createMemo(() => {
-      if (!store.activeDraggable) return undefined
-      return getFilename(store.activeDraggable)
-    })
+    const project = createMemo(() => layout.projects.list().find((p) => p.worktree === store.activeDraggable))
     return (
-      <Show when={activeName()}>
-        {(name) => (
-          <div class="flex items-center gap-3 px-2 py-1 bg-background-stronger rounded-md border border-border-weak-base">
-            <Avatar fallback={name()} background="var(--surface-info-base)" class="size-6" />
-            <span class="text-14-medium text-text-strong">{name()}</span>
+      <Show when={project()}>
+        {(p) => (
+          <div class="bg-background-base rounded-md">
+            <ProjectVisual project={p()} />
           </div>
         )}
       </Show>
@@ -298,7 +331,7 @@ export default function Layout(props: ParentProps) {
             <div class="flex items-center gap-3">
               <div class="flex items-center gap-2">
                 <Select
-                  options={layout.projects.list().map((project) => project.directory)}
+                  options={layout.projects.list().map((project) => project.worktree)}
                   current={currentDirectory()}
                   label={(x) => getFilename(x)}
                   onSelect={(x) => (x ? navigateToProject(x) : undefined)}
@@ -394,7 +427,7 @@ export default function Layout(props: ParentProps) {
               <Button
                 variant="ghost"
                 size="large"
-                class="group/sidebar-toggle shrink-0 w-full text-left justify-start"
+                class="group/sidebar-toggle shrink-0 w-full text-left justify-start rounded-lg"
                 onClick={layout.sidebar.toggle}
               >
                 <div class="relative -ml-px flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
@@ -430,7 +463,7 @@ export default function Layout(props: ParentProps) {
               <DragDropSensors />
               <ConstrainDragXAxis />
               <div class="w-full min-w-8 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar">
-                <SortableProvider ids={layout.projects.list().map((p) => p.directory)}>
+                <SortableProvider ids={layout.projects.list().map((p) => p.worktree)}>
                   <For each={layout.projects.list()}>{(project) => <SortableProject project={project} />}</For>
                 </SortableProvider>
               </div>
@@ -443,7 +476,7 @@ export default function Layout(props: ParentProps) {
             <Show when={platform.openDirectoryPickerDialog}>
               <Tooltip placement="right" value="Open project" inactive={layout.sidebar.opened()}>
                 <Button
-                  class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px]"
+                  class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg"
                   variant="ghost"
                   size="large"
                   icon="folder-add-left"
@@ -456,12 +489,25 @@ export default function Layout(props: ParentProps) {
             <Tooltip placement="right" value="Settings" inactive={layout.sidebar.opened()}>
               <Button
                 disabled
-                class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px]"
+                class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg"
                 variant="ghost"
                 size="large"
                 icon="settings-gear"
               >
                 <Show when={layout.sidebar.opened()}>Settings</Show>
+              </Button>
+            </Tooltip>
+            <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
+              <Button
+                as={"a"}
+                href="https://opencode.ai/desktop-feedback"
+                target="_blank"
+                class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg"
+                variant="ghost"
+                size="large"
+                icon="bubble-5"
+              >
+                <Show when={layout.sidebar.opened()}>Share feedback</Show>
               </Button>
             </Tooltip>
           </div>
