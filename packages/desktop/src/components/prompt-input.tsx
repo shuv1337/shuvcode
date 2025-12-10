@@ -18,11 +18,23 @@ import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Select } from "@opencode-ai/ui/select"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { type IconName } from "@opencode-ai/ui/icons/provider"
+import type { Command } from "@opencode-ai/sdk/v2"
 
 interface PromptInputProps {
   class?: string
   ref?: (el: HTMLDivElement) => void
 }
+
+type UICommand = {
+  name: string
+  description: string
+  builtin: true
+}
+
+const UI_COMMANDS: UICommand[] = [
+  { name: "undo", description: "Undo the last message", builtin: true },
+  { name: "redo", description: "Redo the last undone message", builtin: true },
+]
 
 const PLACEHOLDERS = [
   "Fix a TODO in the codebase",
@@ -62,8 +74,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const [store, setStore] = createStore<{
     popoverIsOpen: boolean
+    popoverMode: "file" | "command" | null
   }>({
     popoverIsOpen: false,
+    popoverMode: null,
   })
 
   const [placeholder, setPlaceholder] = createSignal(Math.floor(Math.random() * PLACEHOLDERS.length))
@@ -92,16 +106,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   onMount(() => {
     editorRef.addEventListener("paste", handlePaste)
-  })
-  onCleanup(() => {
-    editorRef.removeEventListener("paste", handlePaste)
+    onCleanup(() => {
+      editorRef?.removeEventListener("paste", handlePaste)
+    })
   })
 
   createEffect(() => {
     if (isFocused()) {
       handleInput()
     } else {
-      setStore("popoverIsOpen", false)
+      setStore({ popoverIsOpen: false, popoverMode: null })
     }
   })
 
@@ -109,6 +123,31 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!path) return
     addPart({ type: "file", path, content: "@" + path, start: 0, end: 0 })
   }
+
+  type AnyCommand = Command | UICommand
+  const isUICommand = (cmd: AnyCommand): cmd is UICommand => "builtin" in cmd
+
+  const handleCommandSelect = (command: AnyCommand | undefined) => {
+    if (!command) return
+    editorRef.innerHTML = ""
+    // UI commands like /undo and /redo don't need trailing space for args
+    const needsSpace = !isUICommand(command)
+    editorRef.appendChild(document.createTextNode(`/${command.name}${needsSpace ? " " : ""}`))
+    handleInput()
+    setStore({ popoverIsOpen: false, popoverMode: null })
+    const range = document.createRange()
+    range.selectNodeContents(editorRef)
+    range.collapse(false)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+  }
+
+  const commandList = useFilteredList<AnyCommand>({
+    items: async () => [...UI_COMMANDS, ...(sync.data.command ?? [])],
+    key: (x) => x?.name ?? "",
+    filterKeys: ["name", "description"],
+    onSelect: handleCommandSelect,
+  })
 
   const { flat, active, onInput, onKeyDown, refetch } = useFilteredList<string>({
     items: local.file.searchFilesAndDirectories,
@@ -194,12 +233,29 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const cursorPosition = getCursorPosition(editorRef)
     const rawText = rawParts.map((p) => p.content).join("")
 
+    // Slash command detection - must be at start of input
+    if (rawText.startsWith("/") && cursorPosition <= rawText.split(" ")[0].length) {
+      // Hide autocomplete when command has arguments (e.g., "/command arg")
+      if (rawText.match(/^\/\S+\s+\S+/)) {
+        setStore({ popoverIsOpen: false, popoverMode: null })
+      } else {
+        const slashMatch = rawText.match(/^\/(\S*)/)
+        if (slashMatch) {
+          commandList.onInput(slashMatch[1])
+          setStore({ popoverIsOpen: true, popoverMode: "command" })
+          session.prompt.set(rawParts, cursorPosition)
+          return
+        }
+      }
+    }
+
+    // @ file mention detection
     const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
     if (atMatch) {
       onInput(atMatch[1])
-      setStore("popoverIsOpen", true)
+      setStore({ popoverIsOpen: true, popoverMode: "file" })
     } else if (store.popoverIsOpen) {
-      setStore("popoverIsOpen", false)
+      setStore({ popoverIsOpen: false, popoverMode: null })
     }
 
     session.prompt.set(rawParts, cursorPosition)
@@ -279,7 +335,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (store.popoverIsOpen && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter")) {
-      onKeyDown(event)
+      if (store.popoverMode === "file") {
+        onKeyDown(event)
+      } else if (store.popoverMode === "command") {
+        commandList.onKeyDown(event)
+      }
       event.preventDefault()
       return
     }
@@ -288,10 +348,66 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     if (event.key === "Escape") {
       if (store.popoverIsOpen) {
-        setStore("popoverIsOpen", false)
+        setStore({ popoverIsOpen: false, popoverMode: null })
       } else if (session.working()) {
         abort()
       }
+    }
+  }
+
+  const handleUndo = async () => {
+    const sessionInfo = session.info()
+    if (!sessionInfo) return
+
+    // Abort if working
+    if (session.working()) {
+      await sdk.client.session.abort({ sessionID: sessionInfo.id }).catch(() => {})
+    }
+
+    const revertPoint = sessionInfo.revert?.messageID
+    const messages = session.messages.all()
+    // Find the last user message before the revert point (or last user message if no revert)
+    const message = messages.findLast((x) => (!revertPoint || x.id < revertPoint) && x.role === "user")
+    if (!message) return
+
+    await sdk.client.session.revert({
+      sessionID: sessionInfo.id,
+      messageID: message.id,
+    })
+
+    // Restore the message content to the prompt
+    const parts = sync.data.part[message.id] ?? []
+    const textContent = parts
+      .filter((p) => p.type === "text" && !p.synthetic)
+      .map((p) => (p.type === "text" ? p.text : ""))
+      .join("")
+    editorRef.innerHTML = ""
+    editorRef.appendChild(document.createTextNode(textContent))
+    session.prompt.set([{ type: "text", content: textContent, start: 0, end: textContent.length }], textContent.length)
+  }
+
+  const handleRedo = async () => {
+    const sessionInfo = session.info()
+    if (!sessionInfo) return
+
+    const revertPoint = sessionInfo.revert?.messageID
+    if (!revertPoint) return // Nothing to redo
+
+    const messages = session.messages.all()
+    // Find the next user message after the revert point
+    const message = messages.find((x) => x.role === "user" && x.id > revertPoint)
+
+    if (!message) {
+      // At the end, unrevert all
+      await sdk.client.session.unrevert({ sessionID: sessionInfo.id })
+      editorRef.innerHTML = ""
+      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+    } else {
+      // Move revert point forward
+      await sdk.client.session.revert({
+        sessionID: sessionInfo.id,
+        messageID: message.id,
+      })
     }
   }
 
@@ -304,6 +420,28 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       return
     }
 
+    // UI command detection (undo/redo)
+    if (text === "/undo") {
+      editorRef.innerHTML = ""
+      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+      await handleUndo()
+      return
+    }
+    if (text === "/redo") {
+      editorRef.innerHTML = ""
+      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+      await handleRedo()
+      return
+    }
+
+    // SDK command detection
+    const isSlashCommand = text.startsWith("/")
+    let matchedCommand: Command | undefined
+    if (isSlashCommand) {
+      const commandName = text.split(" ")[0].slice(1) // Remove leading "/"
+      matchedCommand = sync.data.command.find((c) => c.name === commandName)
+    }
+
     let existing = session.info()
     if (!existing) {
       const created = await sdk.client.session.create()
@@ -312,74 +450,67 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     if (!existing) return
 
-    // if (!session.id) {
-    // session.layout.setOpenedTabs(
-    // session.layout.copyTabs("", session.id)
-    // }
-
-    const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
-    const attachments = prompt.filter((part) => part.type === "file")
-
-    // const activeFile = local.context.active()
-    // if (activeFile) {
-    //   registerAttachment(
-    //     activeFile.path,
-    //     activeFile.selection,
-    //     activeFile.name ?? formatAttachmentLabel(activeFile.path, activeFile.selection),
-    //   )
-    // }
-
-    // for (const contextFile of local.context.all()) {
-    //   registerAttachment(
-    //     contextFile.path,
-    //     contextFile.selection,
-    //     formatAttachmentLabel(contextFile.path, contextFile.selection),
-    //   )
-    // }
-
-    const attachmentParts = attachments.map((attachment) => {
-      const absolute = toAbsolutePath(attachment.path)
-      const query = attachment.selection
-        ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
-        : ""
-      return {
-        type: "file" as const,
-        mime: "text/plain",
-        url: `file://${absolute}${query}`,
-        filename: getFilename(attachment.path),
-        source: {
-          type: "file" as const,
-          text: {
-            value: attachment.content,
-            start: attachment.start,
-            end: attachment.end,
-          },
-          path: absolute,
-        },
-      }
-    })
-
     session.layout.setActiveTab(undefined)
     session.messages.setActive(undefined)
     // Clear the editor DOM directly to ensure it's empty
     editorRef.innerHTML = ""
     session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
 
-    sdk.client.session.prompt({
-      sessionID: existing.id,
-      agent: local.agent.current()!.name,
-      model: {
-        modelID: local.model.current()!.id,
-        providerID: local.model.current()!.provider.id,
-      },
-      parts: [
-        {
-          type: "text",
-          text,
+    if (matchedCommand) {
+      const args = text.split(" ").slice(1).join(" ")
+      try {
+        await sdk.client.session.command({
+          sessionID: existing.id,
+          command: matchedCommand.name,
+          arguments: args,
+          agent: local.agent.current()!.name,
+          model: `${local.model.current()!.provider.id}/${local.model.current()!.id}`,
+        })
+      } catch (error) {
+        console.error("Command execution failed:", error)
+      }
+    } else {
+      const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
+      const attachments = prompt.filter((part) => part.type === "file")
+
+      const attachmentParts = attachments.map((attachment) => {
+        const absolute = toAbsolutePath(attachment.path)
+        const query = attachment.selection
+          ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
+          : ""
+        return {
+          type: "file" as const,
+          mime: "text/plain",
+          url: `file://${absolute}${query}`,
+          filename: getFilename(attachment.path),
+          source: {
+            type: "file" as const,
+            text: {
+              value: attachment.content,
+              start: attachment.start,
+              end: attachment.end,
+            },
+            path: absolute,
+          },
+        }
+      })
+
+      sdk.client.session.prompt({
+        sessionID: existing.id,
+        agent: local.agent.current()!.name,
+        model: {
+          modelID: local.model.current()!.id,
+          providerID: local.model.current()!.provider.id,
         },
-        ...attachmentParts,
-      ],
-    })
+        parts: [
+          {
+            type: "text",
+            text,
+          },
+          ...attachmentParts,
+        ],
+      })
+    }
   }
 
   return (
@@ -390,31 +521,69 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                  overflow-auto no-scrollbar flex flex-col p-2 pb-0 rounded-md
                  border border-border-base bg-surface-raised-stronger-non-alpha shadow-md"
         >
-          <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2">No matching files</div>}>
-            <For each={flat()}>
-              {(i) => (
-                <button
-                  classList={{
-                    "w-full flex items-center justify-between rounded-md": true,
-                    "bg-surface-raised-base-hover": active() === i,
-                  }}
-                  onClick={() => handleFileSelect(i)}
-                >
-                  <div class="flex items-center gap-x-2 grow min-w-0">
-                    <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
-                    <div class="flex items-center text-14-regular">
-                      <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
-                        {getDirectory(i)}
-                      </span>
-                      <Show when={!i.endsWith("/")}>
-                        <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
-                      </Show>
+          <Show when={store.popoverMode === "file"}>
+            <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2">No matching files</div>}>
+              <For each={flat()}>
+                {(i) => (
+                  <button
+                    classList={{
+                      "w-full flex items-center justify-between rounded-md": true,
+                      "bg-surface-raised-base-hover": active() === i,
+                    }}
+                    onClick={() => handleFileSelect(i)}
+                  >
+                    <div class="flex items-center gap-x-2 grow min-w-0">
+                      <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
+                      <div class="flex items-center text-14-regular">
+                        <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
+                          {getDirectory(i)}
+                        </span>
+                        <Show when={!i.endsWith("/")}>
+                          <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
+                        </Show>
+                      </div>
                     </div>
-                  </div>
-                  <div class="flex items-center gap-x-1 text-text-muted/40 shrink-0"></div>
-                </button>
-              )}
-            </For>
+                    <div class="flex items-center gap-x-1 text-text-muted/40 shrink-0"></div>
+                  </button>
+                )}
+              </For>
+            </Show>
+          </Show>
+          <Show when={store.popoverMode === "command"}>
+            <Show
+              when={commandList.flat().length > 0}
+              fallback={<div class="text-text-weak px-2">No matching commands</div>}
+            >
+              <For each={commandList.flat()}>
+                {(cmd) => {
+                  const isActive = () => commandList.active() === cmd.name
+                  return (
+                    <button
+                      ref={(el) => {
+                        createEffect(() => {
+                          if (isActive()) el.scrollIntoView({ block: "nearest" })
+                        })
+                      }}
+                      classList={{
+                        "w-full flex items-center justify-between rounded-md p-2": true,
+                        "bg-surface-raised-base-hover": isActive(),
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        handleCommandSelect(cmd)
+                      }}
+                    >
+                      <div class="flex flex-col items-start">
+                        <span class="text-14-medium text-text-strong">/{cmd.name}</span>
+                        <Show when={cmd.description}>
+                          <span class="text-12-regular text-text-weak">{cmd.description}</span>
+                        </Show>
+                      </div>
+                    </button>
+                  )
+                }}
+              </For>
+            </Show>
           </Show>
         </div>
       </Show>
