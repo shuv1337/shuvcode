@@ -143,6 +143,7 @@ export function Session() {
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
   const [showTokens, setShowTokens] = createSignal(kv.get("show_tokens", false))
+  const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
   const [searchMode, setSearchMode] = createSignal(false)
   const [searchQuery, setSearchQuery] = createSignal("")
@@ -503,6 +504,20 @@ export function Session() {
         })
         if (sidebar() === "show") kv.set("sidebar", "auto")
         if (sidebar() === "hide") kv.set("sidebar", "hide")
+        dialog.clear()
+      },
+    },
+    {
+      title: headerVisible() ? "Hide session header" : "Show session header",
+      value: "session.header.toggle",
+      keybind: "header_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        setHeaderVisible((prev) => {
+          const next = !prev
+          kv.set("header_visible", next)
+          return next
+        })
         dialog.clear()
       },
     },
@@ -967,7 +982,7 @@ export function Session() {
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={!sidebarVisible()}>
+            <Show when={!sidebarVisible() && headerVisible()}>
               <Header />
             </Show>
             <Show
