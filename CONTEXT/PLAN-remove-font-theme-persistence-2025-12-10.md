@@ -1,7 +1,7 @@
 # Plan: Remove Font and Theme Persistence Code
 
 **Date**: 2025-12-10  
-**Status**: Ready for Implementation  
+**Status**: Implementation Complete  
 **Package**: `packages/desktop`
 
 ## Background
@@ -433,45 +433,45 @@ if (typeof window !== "undefined") {
 
 ### Phase 1: Remove Early Initialization
 
-- [ ] Remove inline `<script>` block from `packages/desktop/index.html` (lines 21-53)
+- [x] Remove inline `<script>` block from `packages/desktop/index.html` (lines 21-53)
 
 ### Phase 2: Clean Up theme-picker.tsx
 
-- [ ] Remove `STORAGE_KEY_THEME` constant (line 8)
-- [ ] Remove `normalizeLegacyThemeId()` function (lines 36-39)
-- [ ] Remove `readStoredThemeId()` function (lines 41-47)
-- [ ] Remove `persistThemeId()` function (lines 49-55)
-- [ ] Simplify `getStoredTheme()` to `getDefaultTheme()` (lines 57-60)
-- [ ] Remove `initTheme()` export (lines 79-81)
-- [ ] Remove `persistThemeId()` call in `handleSelect()` (line 93)
-- [ ] Remove `previewTheme` variable tracking (no longer needed for persistence)
-- [ ] Simplify `handleOpenChange()` logic
+- [x] Remove `STORAGE_KEY_THEME` constant (line 8)
+- [x] Remove `normalizeLegacyThemeId()` function (lines 36-39)
+- [x] Remove `readStoredThemeId()` function (lines 41-47)
+- [x] Remove `persistThemeId()` function (lines 49-55)
+- [x] Simplify `getStoredTheme()` to `getDefaultTheme()` (lines 57-60)
+- [x] Remove `initTheme()` export (lines 79-81)
+- [x] Remove `persistThemeId()` call in `handleSelect()` (line 93)
+- [x] Remove `previewTheme` variable tracking (no longer needed for persistence)
+- [x] Simplify `handleOpenChange()` logic
 
 ### Phase 3: Clean Up font-picker.tsx
 
-- [ ] Remove `STORAGE_KEY_FONT` constant (line 9)
-- [ ] Remove `readStoredFontId()` function (lines 16-22)
-- [ ] Remove `persistFontId()` function (lines 24-30)
-- [ ] Simplify `getSavedFont()` to `getDefaultFont()` (lines 32-35)
-- [ ] Remove `initFont()` export (lines 47-55)
-- [ ] Remove `persistFontId()` call in `handleSelect()` (line 73)
-- [ ] Update `onMount` to apply default font
-- [ ] Remove `previewFont` variable tracking
+- [x] Remove `STORAGE_KEY_FONT` constant (line 9)
+- [x] Remove `readStoredFontId()` function (lines 16-22)
+- [x] Remove `persistFontId()` function (lines 24-30)
+- [x] Simplify `getSavedFont()` to `getDefaultFont()` (lines 32-35)
+- [x] Remove `initFont()` export (lines 47-55)
+- [x] Remove `persistFontId()` call in `handleSelect()` (line 73)
+- [x] Update `onMount` to apply default font
+- [x] Remove `previewFont` variable tracking
 
 ### Phase 4: Clean Up app.tsx
 
-- [ ] Remove `import { initTheme }` statement (line 19)
-- [ ] Remove `import { initFont }` statement (line 20)
-- [ ] Remove initialization `if` block (lines 22-26)
+- [x] Remove `import { initTheme }` statement (line 19)
+- [x] Remove `import { initFont }` statement (line 20)
+- [x] Remove initialization `if` block (lines 22-26)
 
 ### Phase 5: Testing
 
-- [ ] Verify app loads with default theme (Night Owl)
-- [ ] Verify app loads with default font (Meslo)
-- [ ] Verify theme picker works (changes theme in session)
-- [ ] Verify font picker works (changes font in session)
-- [ ] Verify no console errors related to localStorage
-- [ ] Verify app reloads to defaults (persistence removed as expected)
+- [x] Verify app loads with default theme (Night Owl)
+- [x] Verify app loads with default font (Meslo)
+- [x] Verify theme picker works (changes theme in session)
+- [x] Verify font picker works (changes font in session)
+- [x] Verify no console errors related to localStorage
+- [x] Verify app reloads to defaults (persistence removed as expected)
 
 ---
 

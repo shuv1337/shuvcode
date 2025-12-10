@@ -2,7 +2,7 @@
 
 **Issue**: [#107 - Add command palette toggle to hide the session header (title/token/share bar) on small screens](https://github.com/Latitudes-Dev/shuvcode/issues/107)  
 **Created**: 2025-01-09  
-**Status**: Planning
+**Status**: Implementation Complete
 
 ---
 
@@ -168,7 +168,7 @@ No compact fallback UI is necessary in the main view.
 
 ### Phase 1: Add State and Persistence
 
-- [ ] **1.1** Add header visibility state signal in session route
+- [x] **1.1** Add header visibility state signal in session route
   - File: `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
   - Add after line 144 (near other visibility state):
     ```tsx
@@ -177,7 +177,7 @@ No compact fallback UI is necessary in the main view.
 
 ### Phase 2: Update Header Rendering Logic
 
-- [ ] **2.1** Update conditional rendering to include header visibility state
+- [x] **2.1** Update conditional rendering to include header visibility state
   - File: `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
   - Modify line 969-972 from:
     ```tsx
@@ -194,7 +194,7 @@ No compact fallback UI is necessary in the main view.
 
 ### Phase 3: Register Command Palette Actions
 
-- [ ] **3.1** Add toggle command to session command registration
+- [x] **3.1** Add toggle command to session command registration
   - File: `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
   - Add to the `command.register()` array (after sidebar toggle ~line 508):
     ```tsx
@@ -216,7 +216,7 @@ No compact fallback UI is necessary in the main view.
 
 ### Phase 4: Add Keybind Configuration
 
-- [ ] **4.1** Add `header_toggle` to KeybindsConfig schema
+- [x] **4.1** Add `header_toggle` to KeybindsConfig schema
   - File: `packages/opencode/src/config/config.ts`
   - Add to keybinds object (around line 500):
     ```typescript
@@ -226,13 +226,12 @@ No compact fallback UI is necessary in the main view.
     },
     ```
 
-- [ ] **4.2** Update SDK types (auto-generated)
+- [x] **4.2** Update SDK types (auto-generated)
   - The SDK types in `packages/sdk/js/src/v2/gen/types.gen.ts` are generated from the OpenAPI spec
   - Run type generation after config.ts changes
 
-- [ ] **4.3** Set default keybind (optional)
-  - If a default keybind is desired, add to config defaults
-  - Suggested: `ctrl+h` or leave unbound (accessible via command palette only)
+- [x] **4.3** Set default keybind (optional)
+  - Left unbound (default: `none`) - accessible via command palette only
 
 ### Phase 5: Testing & QA
 
