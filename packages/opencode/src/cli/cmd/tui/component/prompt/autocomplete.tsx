@@ -11,7 +11,6 @@ import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
-import { Wildcard } from "@/util/wildcard"
 import type { PromptInfo } from "./history"
 
 export type AutocompleteRef = {
@@ -185,11 +184,8 @@ export function Autocomplete(props: {
   )
 
   const agents = createMemo(() => {
-    const current = local.agent.current() as { subagents?: Record<string, boolean> }
-    const subagents = current.subagents ?? {}
     return sync.data.agent
       .filter((agent) => !agent.builtIn && agent.mode !== "primary")
-      .filter((agent) => Wildcard.all(agent.name, subagents) !== false)
       .map(
         (agent): AutocompleteOption => ({
           display: "@" + agent.name,
