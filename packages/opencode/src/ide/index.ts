@@ -1,9 +1,10 @@
+import { BusEvent } from "@/bus/bus-event"
+import { Bus } from "@/bus"
 import { spawn } from "bun"
 import z from "zod"
 import path from "path"
 import { NamedError } from "@opencode-ai/util/error"
 import { Log } from "../util/log"
-import { Bus } from "../bus"
 import { Instance } from "../project/instance"
 import { Connection, discoverLockFiles } from "./connection"
 import { Permission } from "../permission"
@@ -44,13 +45,13 @@ export namespace Ide {
   export type Selection = z.infer<typeof Selection>
 
   export const Event = {
-    Installed: Bus.event(
+    Installed: BusEvent.define(
       "ide.installed",
       z.object({
         ide: z.string(),
       }),
     ),
-    SelectionChanged: Bus.event(
+    SelectionChanged: BusEvent.define(
       "ide.selection.updated",
       z.object({
         selection: Selection,
