@@ -19,7 +19,7 @@ const { binaries } = await import("./build.ts")
 const publishTag = Script.channel === "integration" ? "latest" : Script.channel
 for (const name of Object.keys(binaries)) {
   console.log(`publishing binary package: ${name}`)
-  await $`cd ./dist/${name} && npm publish --access public --tag ${publishTag} --provenance`.nothrow()
+  await $`cd ./dist/${name} && npm publish --access public --tag ${publishTag}`.nothrow()
 }
 
 await $`mkdir -p ./dist/${pkg.name}`
@@ -45,9 +45,9 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     2,
   ),
 )
-// Use npm publish with OIDC trusted publishing (provenance)
+// Use npm publish with OIDC trusted publishing
 // For integration channel, tag as "latest" so users get updates by default
-await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${publishTag} --provenance`
+await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${publishTag}`
 
 if (!Script.preview) {
   for (const key of Object.keys(binaries)) {

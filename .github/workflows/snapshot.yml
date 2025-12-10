@@ -14,8 +14,7 @@ permissions:
 
 jobs:
   publish:
-    # Must use github-hosted runner for npm trusted publishing with provenance
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v3
         with:
@@ -34,9 +33,6 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-
-      - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest
 
       - uses: ./.github/actions/setup-bun
 
