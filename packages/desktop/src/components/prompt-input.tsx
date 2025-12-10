@@ -75,9 +75,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const [store, setStore] = createStore<{
     popoverIsOpen: boolean
     popoverMode: "file" | "command" | null
+    inputMode: "normal" | "shell"
   }>({
     popoverIsOpen: false,
     popoverMode: null,
+    inputMode: "normal",
   })
 
   const [placeholder, setPlaceholder] = createSignal(Math.floor(Math.random() * PLACEHOLDERS.length))
@@ -92,6 +94,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   createEffect(() => {
     session.id
     editorRef.focus()
+    setStore("inputMode", "normal")
   })
 
   const isFocused = createFocusSignal(() => editorRef)
@@ -233,6 +236,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const cursorPosition = getCursorPosition(editorRef)
     const rawText = rawParts.map((p) => p.content).join("")
 
+    // Skip autocomplete detection in shell mode
+    if (store.inputMode === "shell") {
+      session.prompt.set(rawParts, cursorPosition)
+      return
+    }
+
     // Slash command detection - must be at start of input
     if (rawText.startsWith("/") && cursorPosition <= rawText.split(" ")[0].length) {
       // Hide autocomplete when command has arguments (e.g., "/command arg")
@@ -334,6 +343,27 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     })
 
   const handleKeyDown = (event: KeyboardEvent) => {
+    // Shell mode entry - ! at position 0
+    if (event.key === "!" && getCursorPosition(editorRef) === 0 && store.inputMode === "normal") {
+      event.preventDefault()
+      setStore("inputMode", "shell")
+      return
+    }
+
+    // Shell mode exit - backspace at position 0 or escape
+    if (store.inputMode === "shell") {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        setStore("inputMode", "normal")
+        return
+      }
+      if (event.key === "Backspace" && getCursorPosition(editorRef) === 0) {
+        event.preventDefault()
+        setStore("inputMode", "normal")
+        return
+      }
+    }
+
     if (store.popoverIsOpen && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter")) {
       if (store.popoverMode === "file") {
         onKeyDown(event)
@@ -417,6 +447,38 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const text = prompt.map((part) => part.content).join("")
     if (text.trim().length === 0) {
       if (session.working()) abort()
+      return
+    }
+
+    // Shell mode submission
+    if (store.inputMode === "shell") {
+      let existing = session.info()
+      if (!existing) {
+        const created = await sdk.client.session.create()
+        existing = created.data ?? undefined
+        if (existing) navigate(existing.id)
+      }
+      if (!existing) return
+
+      session.layout.setActiveTab(undefined)
+      session.messages.setActive(undefined)
+      editorRef.innerHTML = ""
+      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+      setStore("inputMode", "normal")
+
+      try {
+        await sdk.client.session.shell({
+          sessionID: existing.id,
+          agent: local.agent.current()!.name,
+          model: {
+            providerID: local.model.current()!.provider.id,
+            modelID: local.model.current()!.id,
+          },
+          command: text,
+        })
+      } catch (error) {
+        console.error("Shell command execution failed:", error)
+      }
       return
     }
 
@@ -617,62 +679,74 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         </div>
         <div class="relative p-3 flex items-center justify-between">
           <div class="flex items-center justify-start gap-1">
-            <Select
-              options={local.agent.list().map((agent) => agent.name)}
-              current={local.agent.current().name}
-              onSelect={local.agent.set}
-              class="capitalize"
-              variant="ghost"
-            />
-            <SelectDialog
-              title="Select model"
-              placeholder="Search models"
-              emptyMessage="No model results"
-              key={(x) => `${x.provider.id}:${x.id}`}
-              items={local.model.list()}
-              current={local.model.current()}
-              filterKeys={["provider.name", "name", "id"]}
-              groupBy={(x) => (local.model.recent().includes(x) ? "Recent" : x.provider.name)}
-              sortGroupsBy={(a, b) => {
-                const order = ["opencode", "anthropic", "github-copilot", "openai", "google", "openrouter", "vercel"]
-                if (a.category === "Recent" && b.category !== "Recent") return -1
-                if (b.category === "Recent" && a.category !== "Recent") return 1
-                const aProvider = a.items[0].provider.id
-                const bProvider = b.items[0].provider.id
-                if (order.includes(aProvider) && !order.includes(bProvider)) return -1
-                if (!order.includes(aProvider) && order.includes(bProvider)) return 1
-                return order.indexOf(aProvider) - order.indexOf(bProvider)
-              }}
-              onSelect={(x) =>
-                local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, { recent: true })
-              }
-              trigger={
-                <Button as="div" variant="ghost">
-                  {local.model.current()?.name ?? "Select model"}
-                  <span class="ml-0.5 text-text-weak text-12-regular">{local.model.current()?.provider.name}</span>
-                  <Icon name="chevron-down" size="small" />
-                </Button>
+            <Show
+              when={store.inputMode === "normal"}
+              fallback={
+                <div class="flex items-center gap-1.5 px-2 py-1 text-14-medium text-accent-text">
+                  <Icon name="terminal" class="size-4" />
+                  <span>Shell</span>
+                </div>
               }
             >
-              {(i) => (
-                <div class="w-full flex items-center justify-between gap-x-3">
-                  <div class="flex items-center gap-x-2.5 text-text-muted grow min-w-0">
-                    <ProviderIcon name={i.provider.id as IconName} class="size-6 p-0.5 shrink-0" />
-                    <div class="flex gap-x-3 items-baseline flex-[1_0_0]">
-                      <span class="text-14-medium text-text-strong overflow-hidden text-ellipsis">{i.name}</span>
-                      <Show when={false}>
-                        <span class="text-12-medium text-text-weak overflow-hidden text-ellipsis truncate min-w-0">
-                          {DateTime.fromFormat("unknown", "yyyy-MM-dd").toFormat("LLL yyyy")}
-                        </span>
-                      </Show>
+              <Select
+                options={local.agent.list().map((agent) => agent.name)}
+                current={local.agent.current().name}
+                onSelect={local.agent.set}
+                class="capitalize"
+                variant="ghost"
+              />
+            </Show>
+            <Show when={store.inputMode === "normal"}>
+              <SelectDialog
+                title="Select model"
+                placeholder="Search models"
+                emptyMessage="No model results"
+                key={(x) => `${x.provider.id}:${x.id}`}
+                items={local.model.list()}
+                current={local.model.current()}
+                filterKeys={["provider.name", "name", "id"]}
+                groupBy={(x) => (local.model.recent().includes(x) ? "Recent" : x.provider.name)}
+                sortGroupsBy={(a, b) => {
+                  const order = ["opencode", "anthropic", "github-copilot", "openai", "google", "openrouter", "vercel"]
+                  if (a.category === "Recent" && b.category !== "Recent") return -1
+                  if (b.category === "Recent" && a.category !== "Recent") return 1
+                  const aProvider = a.items[0].provider.id
+                  const bProvider = b.items[0].provider.id
+                  if (order.includes(aProvider) && !order.includes(bProvider)) return -1
+                  if (!order.includes(aProvider) && order.includes(bProvider)) return 1
+                  return order.indexOf(aProvider) - order.indexOf(bProvider)
+                }}
+                onSelect={(x) =>
+                  local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, { recent: true })
+                }
+                trigger={
+                  <Button as="div" variant="ghost">
+                    {local.model.current()?.name ?? "Select model"}
+                    <span class="ml-0.5 text-text-weak text-12-regular">{local.model.current()?.provider.name}</span>
+                    <Icon name="chevron-down" size="small" />
+                  </Button>
+                }
+              >
+                {(i) => (
+                  <div class="w-full flex items-center justify-between gap-x-3">
+                    <div class="flex items-center gap-x-2.5 text-text-muted grow min-w-0">
+                      <ProviderIcon name={i.provider.id as IconName} class="size-6 p-0.5 shrink-0" />
+                      <div class="flex gap-x-3 items-baseline flex-[1_0_0]">
+                        <span class="text-14-medium text-text-strong overflow-hidden text-ellipsis">{i.name}</span>
+                        <Show when={false}>
+                          <span class="text-12-medium text-text-weak overflow-hidden text-ellipsis truncate min-w-0">
+                            {DateTime.fromFormat("unknown", "yyyy-MM-dd").toFormat("LLL yyyy")}
+                          </span>
+                        </Show>
+                      </div>
                     </div>
+                    <Show when={!i.cost || i.cost?.input === 0}>
+                      <div class="overflow-hidden text-12-medium text-text-strong">Free</div>
+                    </Show>
                   </div>
-                  <Show when={!i.cost || i.cost?.input === 0}>
-                    <div class="overflow-hidden text-12-medium text-text-strong">Free</div>
-                  </Show>
-                </div>
-              )}
-            </SelectDialog>
+                )}
+              </SelectDialog>
+            </Show>
           </div>
           <Tooltip
             placement="top"
