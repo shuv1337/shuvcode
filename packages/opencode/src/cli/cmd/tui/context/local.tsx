@@ -329,10 +329,35 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
     }
 
+    const ide = {
+      isConnected(name: string) {
+        const status = sync.data.ide[name]
+        return status?.status === "connected"
+      },
+      getWorkspaceFolders(name: string) {
+        const status = sync.data.ide[name]
+        if (status && "workspaceFolders" in status && status.workspaceFolders) {
+          return status.workspaceFolders
+        }
+        return []
+      },
+      async toggle(name: string) {
+        const current = sync.data.ide[name]
+        if (current?.status === "connected") {
+          await sdk.client.ide.disconnect({ name })
+        } else {
+          await sdk.client.ide.connect({ name })
+        }
+        const status = await sdk.client.ide.status()
+        if (status.data) sync.set("ide", status.data)
+      },
+    }
+
     const result = {
       model,
       agent,
       mcp,
+      ide,
     }
     return result
   },

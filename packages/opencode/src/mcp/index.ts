@@ -2,6 +2,7 @@ import { type Tool } from "ai"
 import { experimental_createMCPClient } from "@ai-sdk/mcp"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
+import { WebSocketClientTransport } from "./ws"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { Config } from "../config/config"
@@ -73,9 +74,13 @@ export namespace MCP {
   export type Status = z.infer<typeof Status>
   type MCPClient = Awaited<ReturnType<typeof experimental_createMCPClient>>
 
-  // Store transports for OAuth servers to allow finishing auth
+  // Transport types for MCP connections
   type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
-  const pendingOAuthTransports = new Map<string, TransportWithAuth>()
+  type TransportWithoutAuth = WebSocketClientTransport
+  type Transport = TransportWithAuth | TransportWithoutAuth
+
+  // Store transports for finishing auth
+  const pendingOAuthTransports = new Map<string, Transport>()
 
   const state = Instance.state(
     async () => {
@@ -184,7 +189,7 @@ export namespace MCP {
         )
       }
 
-      const transports: Array<{ name: string; transport: TransportWithAuth }> = [
+      const transports = [
         {
           name: "StreamableHTTP",
           transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
@@ -197,6 +202,12 @@ export namespace MCP {
           transport: new SSEClientTransport(new URL(mcp.url), {
             authProvider,
             requestInit: oauthDisabled && mcp.headers ? { headers: mcp.headers } : undefined,
+          }),
+        },
+        {
+          name: "WebSocket",
+          transport: new WebSocketClientTransport(new URL(mcp.url), {
+            headers: oauthDisabled && mcp.headers ? mcp.headers : undefined,
           }),
         },
       ]

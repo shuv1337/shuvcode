@@ -1,0 +1,3 @@
+#!/bin/bash
+cd /Users/tcdent/Work/opencode
+exec bun run --cwd packages/opencode --conditions=browser src/index.ts "$@"

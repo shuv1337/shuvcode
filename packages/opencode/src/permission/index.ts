@@ -57,6 +57,7 @@ export namespace Permission {
             info: Info
             resolve: () => void
             reject: (e: any) => void
+            onRespond?: (response: Response) => void
           }
         }
       } = {}
@@ -93,6 +94,8 @@ export namespace Permission {
     sessionID: Info["sessionID"]
     messageID: Info["messageID"]
     metadata: Info["metadata"]
+    onSetup?: (info: Info) => void
+    onRespond?: (response: Response) => void
   }) {
     const { pending, approved } = state()
     log.info("asking", {
@@ -135,8 +138,10 @@ export namespace Permission {
         info,
         resolve,
         reject,
+        onRespond: input.onRespond,
       }
       Bus.publish(Event.Updated, info)
+      input.onSetup?.(info)
     })
   }
 
@@ -154,6 +159,7 @@ export namespace Permission {
       permissionID: input.permissionID,
       response: input.response,
     })
+    match.onRespond?.(input.response)
     if (input.response === "reject") {
       match.reject(new RejectedError(input.sessionID, input.permissionID, match.info.callID, match.info.metadata))
       return
