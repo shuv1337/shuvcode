@@ -41,6 +41,7 @@ jobs:
           ./script/publish.ts
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Deploy Desktop to Cloudflare
         continue-on-error: true
