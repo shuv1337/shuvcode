@@ -18,39 +18,6 @@
     <meta property="twitter:image" content="/social-share.png" />
   </head>
   <body class="antialiased overscroll-none select-none text-12-regular">
-    <script>
-      ;(function () {
-        // Early theme initialization to prevent flash
-        let savedTheme = localStorage.getItem("theme") || "nightowl"
-        // Migrate legacy theme ID
-        if (savedTheme === "oc-1") {
-          savedTheme = "default"
-          localStorage.setItem("theme", savedTheme)
-        }
-        // "default" uses :root styles (no data-theme attribute)
-        if (savedTheme !== "default") {
-          document.documentElement.setAttribute("data-theme", savedTheme)
-        }
-
-        // Early font initialization to prevent flash
-        var savedFont = localStorage.getItem("ui-font") || "meslo"
-        var fontFamilies = {
-          geist: '"Geist", "Geist Fallback", sans-serif',
-          meslo: '"meslo", "Menlo", "Monaco", "Courier New", monospace',
-          inter: '"Inter", sans-serif',
-          nunito: '"Nunito", sans-serif',
-          "roboto-condensed": '"Roboto Condensed", sans-serif',
-          oswald: '"Oswald", sans-serif',
-          forum: '"Forum", serif',
-          rubik: '"Rubik", sans-serif',
-          "ubuntu-mono": '"Ubuntu Mono", monospace',
-          "jetbrains-mono": '"JetBrains Mono", monospace',
-          inconsolata: '"Inconsolata", monospace',
-        }
-        var fontFamily = fontFamilies[savedFont] || fontFamilies.meslo
-        document.documentElement.style.setProperty("--font-family-sans", fontFamily)
-      })()
-    </script>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script src="/src/entry.tsx" type="module"></script>

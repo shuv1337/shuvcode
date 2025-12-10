@@ -5,7 +5,6 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { CLI_THEME_IDS, applyCliTheme, clearTerminalTheme, clearUiTheme } from "@/theme/terminal-themes"
 
-const STORAGE_KEY_THEME = "theme"
 const DEFAULT_THEME_ID = "nightowl"
 
 const BASE_THEMES = [
@@ -33,30 +32,8 @@ function formatThemeName(id: string): string {
     .join(" ")
 }
 
-function normalizeLegacyThemeId(id: string): string {
-  if (id === "oc-1") return "default"
-  return id
-}
-
-function readStoredThemeId(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY_THEME) ?? DEFAULT_THEME_ID
-  } catch {
-    return DEFAULT_THEME_ID
-  }
-}
-
-function persistThemeId(id: string) {
-  try {
-    localStorage.setItem(STORAGE_KEY_THEME, id)
-  } catch {
-    /* ignore */
-  }
-}
-
-function getStoredTheme(): Theme {
-  const savedId = normalizeLegacyThemeId(readStoredThemeId())
-  return THEMES.find((t) => t.id === savedId) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? BASE_THEMES[1]
+function getDefaultTheme(): Theme {
+  return THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? BASE_THEMES[1]
 }
 
 function applyTheme(theme: Theme) {
@@ -76,34 +53,25 @@ function applyTheme(theme: Theme) {
   document.documentElement.dispatchEvent(new CustomEvent("terminal-theme-changed"))
 }
 
-export function initTheme() {
-  applyTheme(getStoredTheme())
-}
-
 export function ThemePicker() {
-  const [currentTheme, setCurrentTheme] = createSignal<Theme>(getStoredTheme())
-  let previewTheme: Theme | undefined
+  const [currentTheme, setCurrentTheme] = createSignal<Theme>(getDefaultTheme())
 
   onMount(() => applyTheme(currentTheme()))
 
   function handleSelect(theme: Theme | undefined) {
     if (!theme) return
-    previewTheme = undefined
     setCurrentTheme(theme)
-    persistThemeId(theme.id)
     applyTheme(theme)
   }
 
   function handleHighlight(theme: Theme | undefined) {
     if (!theme) return
-    previewTheme = theme
     applyTheme(theme)
   }
 
   function handleOpenChange(open: boolean) {
-    if (!open && previewTheme) {
+    if (!open) {
       applyTheme(currentTheme())
-      previewTheme = undefined
     }
   }
 

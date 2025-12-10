@@ -6,32 +6,13 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { FONTS, DEFAULT_FONT_ID, getFontById, type FontDefinition } from "@/fonts/font-definitions"
 import { loadFont } from "@/fonts/font-loader"
 
-const STORAGE_KEY_FONT = "ui-font"
-
 function applyFont(font: FontDefinition): void {
   const fontFamily = `"${font.family}", ${font.fallback}`
   document.documentElement.style.setProperty("--font-family-sans", fontFamily)
 }
 
-function readStoredFontId(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY_FONT) ?? DEFAULT_FONT_ID
-  } catch {
-    return DEFAULT_FONT_ID
-  }
-}
-
-function persistFontId(id: string) {
-  try {
-    localStorage.setItem(STORAGE_KEY_FONT, id)
-  } catch {
-    /* ignore */
-  }
-}
-
-function getSavedFont(): FontDefinition {
-  const savedFontId = readStoredFontId()
-  return getFontById(savedFontId) ?? FONTS[0]
+function getDefaultFont(): FontDefinition {
+  return getFontById(DEFAULT_FONT_ID) ?? FONTS[0]
 }
 
 async function ensureFontLoaded(font: FontDefinition): Promise<boolean> {
@@ -44,39 +25,31 @@ async function ensureFontLoaded(font: FontDefinition): Promise<boolean> {
   }
 }
 
-export async function initFont() {
-  const font = getSavedFont()
-  const loaded = await ensureFontLoaded(font)
-  if (!loaded) {
-    applyFont(FONTS[0])
-    return
-  }
-  applyFont(font)
-}
-
 export function FontPicker() {
-  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(getSavedFont())
-  let previewFont: FontDefinition | undefined
+  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(getDefaultFont())
 
-  onMount(() => {
-    void initFont()
+  onMount(async () => {
+    const font = currentFont()
+    const loaded = await ensureFontLoaded(font)
+    if (loaded) {
+      applyFont(font)
+    } else {
+      applyFont(FONTS[0])
+    }
   })
 
   async function handleSelect(font: FontDefinition | undefined) {
     if (!font) return
-    previewFont = undefined
 
     const loaded = await ensureFontLoaded(font)
     if (!loaded) return
 
     setCurrentFont(font)
-    persistFontId(font.id)
     applyFont(font)
   }
 
   async function handleHighlight(font: FontDefinition | undefined) {
     if (!font) return
-    previewFont = font
 
     const loaded = await ensureFontLoaded(font)
     if (!loaded) return
@@ -85,9 +58,8 @@ export function FontPicker() {
   }
 
   function handleOpenChange(open: boolean) {
-    if (!open && previewFont) {
+    if (!open) {
       applyFont(currentFont())
-      previewFont = undefined
     }
   }
 

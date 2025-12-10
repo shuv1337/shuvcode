@@ -14,14 +14,6 @@ import { LayoutProvider } from "./context/layout"
 import { GlobalSDKProvider } from "./context/global-sdk"
 import { SessionProvider } from "./context/session"
 import { Show } from "solid-js"
-import { initTheme } from "@/components/theme-picker"
-import { initFont } from "@/components/font-picker"
-
-// Initialize theme and font from localStorage before render to prevent flash
-if (typeof window !== "undefined") {
-  initTheme()
-  void initFont()
-}
 
 const host = import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "127.0.0.1"
 const port = import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
