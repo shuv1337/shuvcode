@@ -7002,6 +7002,11 @@
             "default": "none",
             "type": "string"
           },
+          "header_toggle": {
+            "description": "Toggle session header visibility",
+            "default": "none",
+            "type": "string"
+          },
           "username_toggle": {
             "description": "Toggle username visibility",
             "default": "none",
