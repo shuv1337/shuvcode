@@ -1,15 +1,20 @@
-import { createMemo, onMount } from "solid-js"
+import { createSignal, onMount } from "solid-js"
 import { SelectDialog } from "@opencode-ai/ui/select-dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { FONTS, getFontById, type FontDefinition } from "@/fonts/font-definitions"
-import { useLayout } from "@/context/layout"
 import { applyFontWithLoad, ensureFontLoaded, applyFont } from "@/fonts/apply-font"
 
+const DEFAULT_FONT_ID = "meslo"
+
+function getDefaultFont(): FontDefinition {
+  return getFontById(DEFAULT_FONT_ID) ?? FONTS[0]
+}
+
 export function FontPicker() {
-  const layout = useLayout()
-  const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
+  const [currentFont, setCurrentFont] = createSignal<FontDefinition>(getDefaultFont())
+  const [previewFont, setPreviewFont] = createSignal<FontDefinition | undefined>()
 
   onMount(() => applyFontWithLoad(currentFont()))
 
@@ -19,22 +24,15 @@ export function FontPicker() {
     const loaded = await ensureFontLoaded(font)
     if (!loaded) return
 
-    layout.font.set(font.id)
-    applyFont(font.id)
-  }
-
-  async function handleHighlight(font: FontDefinition | undefined) {
-    if (!font) return
-
-    const loaded = await ensureFontLoaded(font)
-    if (!loaded) return
-
+    setCurrentFont(font)
+    setPreviewFont(undefined)
     applyFont(font.id)
   }
 
   function handleOpenChange(open: boolean) {
-    if (!open) {
+    if (!open && previewFont()) {
       applyFont(currentFont().id)
+      setPreviewFont(undefined)
     }
   }
 
@@ -48,12 +46,11 @@ export function FontPicker() {
       current={currentFont()}
       filterKeys={["name", "family"]}
       onSelect={handleSelect}
-      onHighlight={handleHighlight}
       onOpenChange={handleOpenChange}
       trigger={
         <Tooltip class="shrink-0" value="Font">
           <Button variant="ghost" class="size-6 p-0">
-            <Icon name="type" size="small" />
+            <Icon name="code-lines" size="small" />
           </Button>
         </Tooltip>
       }
