@@ -1,7 +1,7 @@
 import { useGlobalSync } from "@/context/global-sync"
 import { For, Match, Show, Switch } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
-import { Logo } from "@opencode-ai/ui/logo"
+import { AsciiLogo } from "@opencode-ai/ui/logo"
 import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/util/encode"
@@ -35,11 +35,11 @@ export default function Home() {
   }
 
   return (
-    <div class="mx-auto mt-55">
-      <Logo class="w-xl opacity-12" />
+    <div class="size-full bg-background-base flex flex-col items-center pt-55">
+      <AsciiLogo scale={1.5} class="opacity-30" />
       <Switch>
         <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full flex flex-col gap-4">
+          <div class="mt-20 w-full max-w-xl flex flex-col gap-4">
             <div class="flex gap-2 items-center justify-between pl-3">
               <div class="text-14-medium text-text-strong">Recent projects</div>
               <Show when={platform.openDirectoryPickerDialog}>
