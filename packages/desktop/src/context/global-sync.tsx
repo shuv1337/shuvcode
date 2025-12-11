@@ -13,7 +13,6 @@ import {
   type SessionStatus,
   type ProviderListResponse,
   type ProviderAuthResponse,
-  type Command,
   createOpencodeClient,
 } from "@opencode-ai/sdk/v2/client"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -48,7 +47,6 @@ type State = {
   }
   node: FileNode[]
   changes: File[]
-  command: Command[]
 }
 
 export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimpleContext({
@@ -115,7 +113,6 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
           part: {},
           node: [],
           changes: [],
-          command: [],
         })
         children[directory] = createStore(globalStore.children[directory])
         bootstrapInstance(directory)
@@ -226,21 +223,22 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
     })
 
     async function bootstrap() {
-      const projects = await globalSDK.client.project.list()
-      const data = Array.isArray(projects.data) ? projects.data : []
-      setGlobalStore(
-        "project",
-        data.filter((p) => !p.worktree.includes("opencode-test") && p.vcs).sort((a, b) => a.id.localeCompare(b.id)),
-      )
-      await Promise.all([
+      return Promise.all([
+        globalSDK.client.project.list().then(async (x) => {
+          setGlobalStore(
+            "project",
+            x
+              .data!.filter((p) => !p.worktree.includes("opencode-test") && p.vcs)
+              .sort((a, b) => a.id.localeCompare(b.id)),
+          )
+        }),
         globalSDK.client.provider.list().then((x) => {
           setGlobalStore("provider", x.data ?? {})
         }),
         globalSDK.client.provider.auth().then((x) => {
           setGlobalStore("provider_auth", x.data ?? {})
         }),
-      ])
-      setGlobalStore("ready", true)
+      ]).then(() => setGlobalStore("ready", true))
     }
 
     onMount(() => {

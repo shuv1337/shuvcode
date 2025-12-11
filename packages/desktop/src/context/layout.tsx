@@ -1,13 +1,10 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onMount } from "solid-js"
+import { batch, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { Project } from "@opencode-ai/sdk/v2"
-import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
-import { applyFontWithLoad } from "@/fonts/apply-font"
-import { getFontById, FONTS } from "@/fonts/font-definitions"
 
 const PASTEL_COLORS = [
   "#FCEAFD", // pastel pink
@@ -43,22 +40,23 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           state: "pane" as "pane" | "tab",
         },
-        theme: DEFAULT_THEME_ID,
-        font: FONTS[0].id,
       }),
       {
-        name: "default-layout.v8",
+        name: "default-layout.v7",
       },
     )
-    const [ephemeral, setEphemeral] = createStore({
+    const [ephemeral, setEphemeral] = createStore<{
       connect: {
-        provider: undefined as undefined | string,
-        state: undefined as undefined | "pending" | "complete" | "error",
-        error: undefined as undefined | string,
-      },
+        provider?: string
+        state?: "pending" | "complete" | "error"
+        error?: string
+      }
       dialog: {
-        open: undefined as undefined | Dialog,
-      },
+        open?: Dialog
+      }
+    }>({
+      connect: {},
+      dialog: {},
     })
     const usedColors = new Set<string>()
 
@@ -108,15 +106,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           return loadProjectSessions(project.worktree)
         }),
       )
-    })
-
-    createEffect(() => {
-      applyTheme(store.theme)
-    })
-
-    createEffect(() => {
-      const font = getFontById(store.font) ?? FONTS[0]
-      applyFontWithLoad(font)
     })
 
     return {
@@ -191,22 +180,30 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       dialog: {
         opened: createMemo(() => ephemeral.dialog?.open),
         open(dialog: Dialog) {
-          setEphemeral("dialog", "open", dialog)
-          if (dialog !== "connect") {
-            setEphemeral("connect", {})
-          }
+          batch(() => {
+            // if (dialog !== "connect") {
+            //   setEphemeral("connect", {})
+            // }
+            setEphemeral("dialog", "open", dialog)
+          })
         },
         close(dialog: Dialog) {
-          if (ephemeral.dialog?.open === dialog) {
-            setEphemeral("dialog", "open", undefined)
-            setEphemeral("connect", {})
+          if (ephemeral.dialog.open === dialog) {
+            setEphemeral(
+              produce((state) => {
+                state.dialog.open = undefined
+                state.connect = {}
+              }),
+            )
           }
         },
         connect(provider: string) {
-          batch(() => {
-            setEphemeral("dialog", "open", "connect")
-            setEphemeral("connect", { provider, state: "pending" })
-          })
+          setEphemeral(
+            produce((state) => {
+              state.dialog.open = "connect"
+              state.connect = { provider, state: "pending" }
+            }),
+          )
         },
       },
       connect: {
@@ -230,18 +227,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         clear() {
           setEphemeral("connect", {})
-        },
-      },
-      theme: {
-        current: createMemo(() => store.theme),
-        set(themeId: string) {
-          setStore("theme", themeId)
-        },
-      },
-      font: {
-        current: createMemo(() => store.font),
-        set(fontId: string) {
-          setStore("font", fontId)
         },
       },
     }
