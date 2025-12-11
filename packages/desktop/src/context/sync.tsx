@@ -79,11 +79,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         },
         fetch: async (count = 10) => {
           setStore("limit", (x) => x + count)
-          await load.session()
+          await sdk.client.session.list().then((x) => {
+            const sessions = (x.data ?? [])
+              .slice()
+              .sort((a, b) => a.id.localeCompare(b.id))
+              .slice(0, store.limit)
+            setStore("session", sessions)
+          })
         },
         more: createMemo(() => store.session.length >= store.limit),
       },
-      load,
       absolute,
       get directory() {
         return store.path.directory
