@@ -6,16 +6,42 @@
  * - Attempts a merge dry-run
  * - Parses conflict output
  * - Categorizes conflicts by file type
+ * - Identifies fork-specific feature files that must be preserved
  * - Returns resolution recommendations
  */
 
 import { $ } from "bun"
+import forkFeaturesData from "./fork-features.json"
+
+interface ForkFeature {
+  pr: number
+  title: string
+  author: string
+  status: string
+  description: string
+  files: string[]
+}
+
+interface ForkFeaturesJson {
+  features: ForkFeature[]
+}
+
+const forkFeatures = forkFeaturesData as ForkFeaturesJson
+
+// Build a map of file -> PR info for quick lookup
+const forkFeatureFiles = new Map<string, ForkFeature>()
+for (const feature of forkFeatures.features) {
+  for (const file of feature.files) {
+    forkFeatureFiles.set(file, feature)
+  }
+}
 
 interface ConflictInfo {
   file: string
-  category: "lockfile" | "docs" | "config" | "custom" | "shared"
-  resolution: "auto-upstream" | "auto-regenerate" | "manual"
+  category: "lockfile" | "docs" | "config" | "custom" | "shared" | "fork-feature"
+  resolution: "auto-upstream" | "auto-regenerate" | "manual" | "preserve-fork"
   recommendation: string
+  forkFeature?: ForkFeature
 }
 
 interface DetectionResult {
@@ -25,16 +51,32 @@ interface DetectionResult {
   manualReviewRequired: string[]
 }
 
-function categorizeFile(file: string): ConflictInfo["category"] {
-  if (file === "bun.lock" || file.endsWith(".lock")) return "lockfile"
-  if (file.endsWith(".md")) return "docs"
-  if (file === "package.json" || file.endsWith(".json")) return "config"
-  if (file.startsWith(".github/") || file.startsWith("script/sync/")) return "custom"
-  return "shared"
+function categorizeFile(file: string): { category: ConflictInfo["category"]; forkFeature?: ForkFeature } {
+  // Check if this file is part of a fork feature PR first
+  const forkFeature = forkFeatureFiles.get(file)
+  if (forkFeature) {
+    return { category: "fork-feature", forkFeature }
+  }
+
+  if (file === "bun.lock" || file.endsWith(".lock")) return { category: "lockfile" }
+  if (file.endsWith(".md")) return { category: "docs" }
+  if (file === "package.json" || file.endsWith(".json")) return { category: "config" }
+  if (file.startsWith(".github/") || file.startsWith("script/sync/")) return { category: "custom" }
+  return { category: "shared" }
 }
 
-function getResolution(category: ConflictInfo["category"]): Pick<ConflictInfo, "resolution" | "recommendation"> {
+function getResolution(
+  category: ConflictInfo["category"],
+  forkFeature?: ForkFeature,
+): Pick<ConflictInfo, "resolution" | "recommendation"> {
   switch (category) {
+    case "fork-feature":
+      return {
+        resolution: "preserve-fork",
+        recommendation: forkFeature
+          ? `PRESERVE FORK FEATURE: PR #${forkFeature.pr} "${forkFeature.title}" - Merge carefully to keep our changes while integrating upstream improvements`
+          : "PRESERVE FORK FEATURE: Keep our fork-specific changes",
+      }
     case "lockfile":
       return {
         resolution: "auto-regenerate",
@@ -87,19 +129,20 @@ async function detectConflicts(targetBranch = "dev"): Promise<DetectionResult> {
   const files = conflicts.trim().split("\n").filter(Boolean)
 
   for (const file of files) {
-    const category = categorizeFile(file)
-    const { resolution, recommendation } = getResolution(category)
+    const { category, forkFeature } = categorizeFile(file)
+    const { resolution, recommendation } = getResolution(category, forkFeature)
 
     const info: ConflictInfo = {
       file,
       category,
       resolution,
       recommendation,
+      forkFeature,
     }
 
     result.conflicts.push(info)
 
-    if (resolution === "manual") {
+    if (resolution === "manual" || resolution === "preserve-fork") {
       result.canAutoResolve = false
       result.manualReviewRequired.push(file)
     }
@@ -123,14 +166,50 @@ async function main() {
     process.exit(0)
   }
 
+  // Separate fork feature conflicts from others
+  const forkFeatureConflicts = result.conflicts.filter((c) => c.category === "fork-feature")
+  const otherConflicts = result.conflicts.filter((c) => c.category !== "fork-feature")
+
   console.log(`Found ${result.conflicts.length} conflicting file(s):\n`)
 
-  for (const conflict of result.conflicts) {
-    console.log(`  ${conflict.file}`)
-    console.log(`    Category: ${conflict.category}`)
-    console.log(`    Resolution: ${conflict.resolution}`)
-    console.log(`    Recommendation: ${conflict.recommendation}`)
-    console.log()
+  if (forkFeatureConflicts.length > 0) {
+    console.log("=== FORK FEATURE FILES (MUST PRESERVE) ===\n")
+    console.log("These files contain features from upstream PRs merged into this fork.")
+    console.log("They MUST be carefully merged to preserve our fork-specific changes.\n")
+
+    // Group by PR
+    const byPr = new Map<number, ConflictInfo[]>()
+    for (const conflict of forkFeatureConflicts) {
+      if (conflict.forkFeature) {
+        const existing = byPr.get(conflict.forkFeature.pr) || []
+        existing.push(conflict)
+        byPr.set(conflict.forkFeature.pr, existing)
+      }
+    }
+
+    for (const [pr, conflicts] of byPr) {
+      const feature = conflicts[0]?.forkFeature
+      if (!feature) continue
+      console.log(`  PR #${pr}: ${feature.title}`)
+      console.log(`    Author: @${feature.author}`)
+      console.log(`    Description: ${feature.description}`)
+      console.log(`    Files:`)
+      for (const conflict of conflicts) {
+        console.log(`      - ${conflict.file}`)
+      }
+      console.log()
+    }
+  }
+
+  if (otherConflicts.length > 0) {
+    console.log("=== OTHER CONFLICTS ===\n")
+    for (const conflict of otherConflicts) {
+      console.log(`  ${conflict.file}`)
+      console.log(`    Category: ${conflict.category}`)
+      console.log(`    Resolution: ${conflict.resolution}`)
+      console.log(`    Recommendation: ${conflict.recommendation}`)
+      console.log()
+    }
   }
 
   if (result.canAutoResolve) {

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Fork-specific features from upstream PRs that must be preserved during merges",
+  "lastUpdated": "2025-12-11",
+  "features": [
+    {
+      "pr": 4898,
+      "title": "Search in messages",
+      "author": "OpeOginni",
+      "status": "open",
+      "description": "Ctrl+F to search through session messages with highlighting",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/prompt/search.tsx",
+        "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"
+      ]
+    },
+    {
+      "pr": 4791,
+      "title": "Bash output with ANSI",
+      "author": "remorses",
+      "status": "open",
+      "description": "Full terminal emulation for bash output with color support",
+      "files": [
+        "packages/opencode/package.json",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/tool/bash.ts"
+      ]
+    },
+    {
+      "pr": 4900,
+      "title": "Double Ctrl+C to exit",
+      "author": "AmineGuitouni",
+      "status": "open",
+      "description": "Require double Ctrl+C within 2 seconds to prevent accidental exits",
+      "files": ["packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx"]
+    },
+    {
+      "pr": 4709,
+      "title": "Live token usage during streaming",
+      "author": "arsham",
+      "status": "open",
+      "description": "Real-time token tracking and display during model responses",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/session/compaction.ts",
+        "packages/opencode/src/session/message-v2.ts",
+        "packages/opencode/src/session/processor.ts",
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/src/util/token.ts",
+        "packages/sdk/js/src/gen/types.gen.ts"
+      ]
+    },
+    {
+      "pr": 4865,
+      "title": "Subagents sidebar with clickable navigation",
+      "author": "franlol",
+      "status": "open",
+      "description": "Show subagents in sidebar with click-to-navigate and parent keybind",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+        "packages/opencode/src/config/config.ts",
+        "packages/sdk/js/src/gen/types.gen.ts"
+      ]
+    },
+    {
+      "pr": 4515,
+      "title": "Show plugins in /status",
+      "author": "spoons-and-mirrors",
+      "status": "open",
+      "description": "Display configured plugins in /status dialog alongside MCP/LSP servers",
+      "files": ["packages/opencode/src/cli/cmd/tui/component/dialog-status.tsx"]
+    },
+    {
+      "pr": 0,
+      "title": "Toggle session header visibility",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Command palette option to hide/show the session header when sidebar is hidden",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/config/config.ts"]
+    }
+  ]
+}

@@ -447,6 +447,31 @@ jobs:
       needs.create-issue.outputs.issue_number != ''
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+
+      - name: Read fork features
+        id: fork-features
+        run: |
+          if [ -f "script/sync/fork-features.json" ]; then
+            # Extract features as a formatted list for the prompt
+            FEATURES=$(cat script/sync/fork-features.json | jq -r '.features[] | "- PR #\(.pr): \(.title) (@\(.author))\n  Files: \(.files | join(", "))\n  Description: \(.description)"')
+            echo "features<<EOF" >> $GITHUB_OUTPUT
+            echo "$FEATURES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            # Extract just the file paths for conflict matching
+            FILES=$(cat script/sync/fork-features.json | jq -r '[.features[].files[]] | unique | .[]')
+            echo "files<<EOF" >> $GITHUB_OUTPUT
+            echo "$FILES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "features=" >> $GITHUB_OUTPUT
+            echo "files=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Trigger opencode to resolve conflicts
         uses: actions/github-script@v7
         with:
@@ -456,6 +481,8 @@ jobs:
             const latestTag = `${{ needs.resolve-tag.outputs.latest_tag }}`;
             const conflictFiles = `${{ needs.merge-upstream.outputs.conflict_files }}`;
             const mergeStatus = `${{ needs.merge-upstream.outputs.merge_status }}`;
+            const forkFeatures = `${{ steps.fork-features.outputs.features }}`;
+            const forkFeatureFiles = `${{ steps.fork-features.outputs.files }}`;
 
             // Build the opencode prompt based on the issue type
             let prompt;
@@ -477,12 +504,33 @@ jobs:
             ${conflictFiles}
             \`\`\`
 
+            ### CRITICAL: Fork Feature Files (MUST PRESERVE)
+
+            This fork contains features from upstream PRs that have NOT yet been merged upstream.
+            These features MUST be preserved during the merge. The fork-features.json file at
+            \`script/sync/fork-features.json\` contains the authoritative list.
+
+            **Merged PRs in this fork:**
+            ${forkFeatures}
+
+            **Fork feature files that require special handling:**
+            \`\`\`
+            ${forkFeatureFiles}
+            \`\`\`
+
+            **IMPORTANT**: When any of these files have conflicts:
+            1. Do NOT simply accept upstream changes - this will DELETE our features
+            2. Carefully merge to preserve BOTH upstream improvements AND our fork features
+            3. Read the file content before and after to verify features are preserved
+            4. Test that the feature still works after merging
+
             ### Conflict Resolution Strategy
 
             Follow these resolution patterns for each file type:
 
             | File Pattern | Resolution |
             |--------------|------------|
+            | Fork feature files (see above) | **MERGE CAREFULLY** - preserve our features while integrating upstream changes |
             | \`STATS.md\`, \`nix/hashes.json\` | Accept upstream (\`git checkout --theirs\`) |
             | \`bun.lock\` | Delete and regenerate with \`bun install\` |
             | \`packages/opencode/script/publish.ts\` | Keep ours (fork-specific publishing) |
@@ -490,71 +538,83 @@ jobs:
             | \`packages/opencode/bin/opencode\` | Keep ours (shuvcode binary lookup) |
             | \`packages/script/src/index.ts\` | Keep ours (version logic) |
             | \`.github/*\` workflow configs | Keep ours (fork-specific workflows) |
-            | \`*.tsx\` with our features | Merge both - preserve our customizations AND upstream improvements |
+            | \`README.md\` | Keep ours (fork-specific documentation with PR table) |
 
             ### Step-by-Step Instructions
 
-            1. **Setup upstream remote and fetch**:
+            1. **Review fork-features.json first**:
+               \`\`\`bash
+               cat script/sync/fork-features.json
+               \`\`\`
+               This file lists all PRs and their files that MUST be preserved.
+
+            2. **Setup upstream remote and fetch**:
                \`\`\`bash
                git remote add upstream https://github.com/sst/opencode.git 2>/dev/null || true
                git fetch upstream --tags
                \`\`\`
 
-            2. **Start the merge**:
+            3. **Start the merge**:
                \`\`\`bash
                git merge ${latestTag} --no-commit --no-ff
                \`\`\`
 
-            3. **List and resolve each conflict** using the strategy table above:
+            4. **List conflicts and identify fork feature files**:
                \`\`\`bash
                git diff --name-only --diff-filter=U
                \`\`\`
+               Cross-reference with fork-features.json to identify critical files.
 
-            4. **For each resolved file**:
+            5. **For fork feature file conflicts**: Read both versions, understand the changes, and manually merge to preserve our features while integrating upstream improvements.
+
+            6. **For each resolved file**:
                \`\`\`bash
                git add <file>
                \`\`\`
 
-            5. **Verify no conflicts remain**:
+            7. **Verify no conflicts remain**:
                \`\`\`bash
                git diff --name-only --diff-filter=U  # Should be empty
                \`\`\`
 
-            6. **Regenerate lockfile** (if bun.lock was conflicted):
+            8. **Regenerate lockfile** (if bun.lock was conflicted):
                \`\`\`bash
                rm -f bun.lock
                bun install
                git add bun.lock
                \`\`\`
 
-            7. **Commit the merge**:
+            9. **Commit the merge**:
                \`\`\`bash
                git commit -m "sync: merge upstream ${latestTag} into integration
 
                Resolved conflicts:
-               - <list each file and resolution used>"
+               - <list each file and resolution used>
+               
+               Preserved fork features:
+               - <list PR numbers and features preserved>"
                \`\`\`
 
-            8. **Update sync marker**:
-               \`\`\`bash
-               echo "${latestTag}" > .github/last-synced-tag
-               git add .github/last-synced-tag
-               git commit -m "sync: record last synced tag ${latestTag}"
-               \`\`\`
+            10. **Update sync marker**:
+                \`\`\`bash
+                echo "${latestTag}" > .github/last-synced-tag
+                git add .github/last-synced-tag
+                git commit -m "sync: record last synced tag ${latestTag}"
+                \`\`\`
 
-            9. **Run validation**:
-               \`\`\`bash
-               bun install
-               bun turbo typecheck
-               bun turbo test
-               \`\`\`
+            11. **Run validation**:
+                \`\`\`bash
+                bun install
+                bun turbo typecheck
+                bun turbo test
+                \`\`\`
 
-            10. **Push branch to origin**:
+            12. **Push branch to origin**:
                 \`\`\`bash
                 git push origin HEAD
                 \`\`\`
 
-            11. **Create or find existing PR**:
+            13. **Create or find existing PR**:
                 \`\`\`bash
                 # Check if PR already exists for this branch
                 EXISTING_PR=$(gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number' --repo Latitudes-Dev/shuvcode 2>/dev/null || echo "")
@@ -569,13 +629,13 @@ jobs:
                 fi
                 \`\`\`
 
-            12. **Wait for CI checks to pass, then merge the PR**:
+            14. **Wait for CI checks to pass, then merge the PR**:
                 \`\`\`bash
                 # Wait for checks and merge (auto-merge when checks pass)
                 gh pr merge "$PR_NUMBER" --squash --auto --delete-branch --repo Latitudes-Dev/shuvcode
                 \`\`\`
 
-            13. **Close this issue** after PR is merged:
+            15. **Close this issue** after PR is merged:
                 \`\`\`bash
                 gh issue close ${issueNumber} --comment "Resolved - merged upstream ${latestTag} via PR #$PR_NUMBER" --repo Latitudes-Dev/shuvcode
                 \`\`\`
@@ -583,6 +643,7 @@ jobs:
             ### Important Notes
             - **Never force-push** to integration branch
             - **Always preserve fork-specific changes** in publish.ts, build.ts, bin/opencode
+            - **CRITICAL**: Always preserve fork feature files listed in fork-features.json
             - If validation fails, fix the issues before pushing
             - The PR will be auto-merged once CI checks pass, triggering the snapshot workflow
             `;
@@ -594,46 +655,62 @@ jobs:
 
             The upstream merge of **${latestTag}** succeeded, but post-merge validation failed.
 
+            ### Fork Features Context
+
+            This fork contains features from upstream PRs that have NOT yet been merged upstream.
+            Review \`script/sync/fork-features.json\` to understand what features must be preserved.
+            Validation failures may be related to conflicts between upstream changes and our fork features.
+
+            **Merged PRs in this fork:**
+            ${forkFeatures}
+
             ### Instructions
 
-            1. **Pull the latest integration branch**:
+            1. **Review fork-features.json**:
+               \`\`\`bash
+               cat script/sync/fork-features.json
+               \`\`\`
+
+            2. **Pull the latest integration branch**:
                \`\`\`bash
                git fetch origin
                git checkout integration
                git pull origin integration
                \`\`\`
 
-            2. **Install dependencies**:
+            3. **Install dependencies**:
                \`\`\`bash
                bun install
                \`\`\`
 
-            3. **Run validation and identify failures**:
+            4. **Run validation and identify failures**:
                \`\`\`bash
                bun turbo typecheck
                bun turbo test
                bun turbo build
                \`\`\`
 
-            4. **Fix any type errors, test failures, or build issues**
+            5. **Fix any type errors, test failures, or build issues**
+               - If failures are in fork feature files, ensure you preserve the feature functionality
+               - Cross-reference with fork-features.json to understand what each file should contain
 
-            5. **Commit fixes**:
+            6. **Commit fixes**:
                \`\`\`bash
                git add .
                git commit -m "fix: resolve validation issues after merging ${latestTag}"
                \`\`\`
 
-            6. **Re-run validation to confirm fixes**:
+            7. **Re-run validation to confirm fixes**:
                \`\`\`bash
                bun turbo typecheck && bun turbo test && bun turbo build
                \`\`\`
 
-            7. **Push branch to origin**:
+            8. **Push branch to origin**:
                 \`\`\`bash
                 git push origin HEAD
                 \`\`\`
 
-            8. **Create or find existing PR**:
+            9. **Create or find existing PR**:
                 \`\`\`bash
                 # Check if PR already exists for this branch
                 EXISTING_PR=$(gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number' --repo Latitudes-Dev/shuvcode 2>/dev/null || echo "")
@@ -648,13 +725,13 @@ jobs:
                 fi
                 \`\`\`
 
-            9. **Wait for CI checks to pass, then merge the PR**:
+            10. **Wait for CI checks to pass, then merge the PR**:
                 \`\`\`bash
                 # Wait for checks and merge (auto-merge when checks pass)
                 gh pr merge "$PR_NUMBER" --squash --auto --delete-branch --repo Latitudes-Dev/shuvcode
                 \`\`\`
 
-            10. **Close this issue** after PR is merged:
+            11. **Close this issue** after PR is merged:
                 \`\`\`bash
                 gh issue close ${issueNumber} --comment "Fixed validation issues after merging ${latestTag} via PR #$PR_NUMBER" --repo Latitudes-Dev/shuvcode
                 \`\`\`
