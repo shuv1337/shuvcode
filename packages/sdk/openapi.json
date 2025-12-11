@@ -5023,6 +5023,12 @@
             "additionalProperties": {
               "type": "boolean"
             }
+          },
+          "sentEstimate": {
+            "type": "number"
+          },
+          "contextEstimate": {
+            "type": "number"
           }
         },
         "required": ["id", "sessionID", "role", "time", "agent", "model"]
@@ -5238,6 +5244,18 @@
               }
             },
             "required": ["input", "output", "reasoning", "cache"]
+          },
+          "outputEstimate": {
+            "type": "number"
+          },
+          "reasoningEstimate": {
+            "type": "number"
+          },
+          "contextEstimate": {
+            "type": "number"
+          },
+          "sentEstimate": {
+            "type": "number"
           },
           "finish": {
             "type": "string"
@@ -7041,6 +7059,11 @@
             "default": "none",
             "type": "string"
           },
+          "header_toggle": {
+            "description": "Toggle session header visibility",
+            "default": "none",
+            "type": "string"
+          },
           "username_toggle": {
             "description": "Toggle username visibility",
             "default": "none",
@@ -7164,6 +7187,16 @@
           "model_cycle_recent_reverse": {
             "description": "Previous recently used model",
             "default": "shift+f2",
+            "type": "string"
+          },
+          "model_cycle_favorite": {
+            "description": "Next favorite model",
+            "default": "none",
+            "type": "string"
+          },
+          "model_cycle_favorite_reverse": {
+            "description": "Previous favorite model",
+            "default": "none",
             "type": "string"
           },
           "command_list": {
@@ -7389,6 +7422,11 @@
           "session_child_cycle_reverse": {
             "description": "Previous child session",
             "default": "<leader>left",
+            "type": "string"
+          },
+          "session_parent": {
+            "description": "Go to parent session",
+            "default": "<leader>up",
             "type": "string"
           },
           "terminal_suspend": {
