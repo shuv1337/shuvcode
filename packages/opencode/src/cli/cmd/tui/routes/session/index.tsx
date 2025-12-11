@@ -121,6 +121,7 @@ export function Session() {
   const [usernameVisible, setUsernameVisible] = createSignal(kv.get("username_visible", true))
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
+  const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 
   const wide = createMemo(() => dimensions().width > 120)
@@ -490,6 +491,20 @@ export function Session() {
       },
     },
     {
+      title: headerVisible() ? "Hide session header" : "Show session header",
+      value: "session.header.toggle",
+      keybind: "header_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        setHeaderVisible((prev) => {
+          const next = !prev
+          kv.set("header_visible", next)
+          return next
+        })
+        dialog.clear()
+      },
+    },
+    {
       title: "Page up",
       value: "session.page.up",
       keybind: "messages_page_up",
@@ -830,7 +845,7 @@ export function Session() {
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={!sidebarVisible()}>
+            <Show when={!sidebarVisible() && headerVisible()}>
               <Header />
             </Show>
             <scrollbox
