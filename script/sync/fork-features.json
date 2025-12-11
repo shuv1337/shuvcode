@@ -93,6 +93,93 @@
       "status": "fork-only",
       "description": "Command palette option to hide/show the session header when sidebar is hidden",
       "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/config/config.ts"]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop slash commands and shell input mode",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Desktop app support for slash commands with autocomplete (type / to see commands), shell input mode (type ! to enter shell mode), and /undo /redo commands for session history navigation",
+      "files": ["packages/desktop/src/components/prompt-input.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "UICommand type and UI_COMMANDS array for /undo and /redo",
+          "markers": ["type UICommand =", "const UI_COMMANDS: UICommand[]"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Input mode state for shell command entry",
+          "markers": ["inputMode: \"normal\" | \"shell\"", "popoverMode: \"file\" | \"command\""]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Command autocomplete with useFilteredList",
+          "markers": ["const commandList = useFilteredList<AnyCommand>", "type AnyCommand = Command | UICommand"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Undo/redo handler functions using session.revert",
+          "markers": ["const handleUndo = async", "const handleRedo = async"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Shell mode detection (! prefix) in handleKeyDown",
+          "markers": ["store.inputMode === \"shell\"", "setStore(\"inputMode\", \"shell\")"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "SDK command execution",
+          "markers": ["sdk.client.session.command({", "matchedCommand = sync.data.command?.find"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop Night Owl theme",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Night Owl theme for desktop app with custom CSS variables, plus renamed upstream Default theme to OpenCode",
+      "files": [
+        "packages/ui/src/styles/theme.css",
+        "packages/desktop/src/theme/apply-theme.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/ui/src/styles/theme.css",
+          "description": "Night Owl theme CSS variables",
+          "markers": ["[data-theme=\"nightowl\"]"]
+        },
+        {
+          "file": "packages/desktop/src/theme/apply-theme.ts",
+          "description": "BASE_THEMES including OpenCode theme",
+          "markers": ["{ id: \"opencode\", name: \"OpenCode\" }"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop theme and font pickers",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Theme and font picker UI components in desktop header, with AsciiLogo branding in sidebar",
+      "files": [
+        "packages/desktop/src/pages/layout.tsx",
+        "packages/desktop/src/components/font-picker.tsx",
+        "packages/desktop/src/components/theme-picker.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "ThemePicker and FontPicker imports and usage in header",
+          "markers": ["import { ThemePicker }", "import { FontPicker }", "<ThemePicker", "<FontPicker"]
+        },
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "AsciiLogo/AsciiMark branding in sidebar",
+          "markers": ["import { AsciiLogo, AsciiMark }", "<AsciiLogo", "<AsciiMark"]
+        }
+      ]
     }
   ]
 }
