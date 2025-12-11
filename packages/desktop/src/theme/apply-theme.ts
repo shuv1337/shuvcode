@@ -4,6 +4,7 @@ export const DEFAULT_THEME_ID = "nightowl"
 
 const BASE_THEMES = [
   { id: DEFAULT_THEME_ID, name: "Night Owl" },
+  { id: "opencode", name: "OpenCode" },
   { id: "oc-2-paper", name: "Paper" },
 ]
 
@@ -38,7 +39,13 @@ export function getThemeById(id: string): Theme {
 
 export function applyTheme(themeId: string) {
   const theme = getThemeById(themeId)
-  document.documentElement.setAttribute("data-theme", theme.id)
+
+  // "opencode" theme uses the default :root styles (no data-theme attribute)
+  if (theme.id === "opencode") {
+    document.documentElement.removeAttribute("data-theme")
+  } else {
+    document.documentElement.setAttribute("data-theme", theme.id)
+  }
 
   if (baseThemeIds.has(theme.id)) {
     clearTerminalTheme()

@@ -8,6 +8,8 @@ import { base64Encode } from "@opencode-ai/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
+import { ThemePicker } from "@/components/theme-picker"
+import { FontPicker } from "@/components/font-picker"
 
 export default function Home() {
   const sync = useGlobalSync()
@@ -35,7 +37,11 @@ export default function Home() {
   }
 
   return (
-    <div class="size-full bg-background-base flex flex-col items-center pt-55">
+    <div class="size-full bg-background-base flex flex-col items-center pt-55 relative">
+      <div class="absolute top-4 right-4 flex items-center gap-2">
+        <FontPicker />
+        <ThemePicker />
+      </div>
       <AsciiLogo scale={1.5} class="opacity-30" />
       <Switch>
         <Match when={sync.data.project.length > 0}>
