@@ -4,7 +4,9 @@ import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiMark } from "@opencode-ai/ui/logo"
+import { ThemePicker } from "@/components/theme-picker"
+import { FontPicker } from "@/components/font-picker"
 import { Avatar } from "@opencode-ai/ui/avatar"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
@@ -344,7 +346,7 @@ export default function Layout(props: ParentProps) {
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
         >
-          <Mark class="shrink-0" />
+          <AsciiMark class="shrink-0" />
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
           <Show when={params.dir && layout.projects.list().length > 0}>
@@ -383,6 +385,10 @@ export default function Layout(props: ParentProps) {
                   New session
                 </Button>
               </Show>
+            </div>
+            <div class="flex items-center gap-2 ml-auto">
+              <FontPicker />
+              <ThemePicker />
             </div>
             <div class="flex items-center gap-4">
               <Tooltip
