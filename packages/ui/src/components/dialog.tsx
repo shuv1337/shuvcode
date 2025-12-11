@@ -80,7 +80,7 @@ function DialogDescription(props: DialogDescriptionProps & ComponentProps<"p">) 
 }
 
 function DialogCloseButton(props: DialogCloseButtonProps & ComponentProps<"button">) {
-  return <Kobalte.CloseButton data-slot="dialog-close-button" as={IconButton} icon="close" {...props} />
+  return <Kobalte.CloseButton data-slot="dialog-close-button" as={IconButton} icon="close" variant="ghost" {...props} />
 }
 
 export const Dialog = Object.assign(DialogRoot, {

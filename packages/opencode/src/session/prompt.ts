@@ -346,6 +346,7 @@ export namespace SessionPrompt {
         }
         await Session.updatePart(part)
 
+        let executionError: Error | undefined
         const result = await taskTool
           .execute(
             {
@@ -372,8 +373,11 @@ export namespace SessionPrompt {
               },
             },
           )
-          .catch(() => {})
-
+          .catch((error) => {
+            executionError = error
+            log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
+            return undefined
+          })
         assistantMessage.finish = "tool-calls"
         assistantMessage.time.completed = Date.now()
         await Session.updateMessage(assistantMessage)
@@ -401,7 +405,7 @@ export namespace SessionPrompt {
             ...part,
             state: {
               status: "error",
-              error: "Tool execution failed",
+              error: executionError ? `Tool execution failed: ${executionError.message}` : "Tool execution failed",
               time: {
                 start: part.state.status === "running" ? part.state.time.start : Date.now(),
                 end: Date.now(),
