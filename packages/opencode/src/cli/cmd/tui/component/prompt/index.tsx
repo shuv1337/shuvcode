@@ -96,7 +96,7 @@ function mapTextareaKeybindings(
     ctrl: binding.ctrl || undefined,
     meta: binding.meta || undefined,
     shift: binding.shift || undefined,
-    action,
+    action: action as KeyBinding["action"],
   }))
 }
 
