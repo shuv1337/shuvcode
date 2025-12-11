@@ -98,7 +98,18 @@
         flex-direction: column;
         flex: 1;
         overflow-y: auto;
+
+        &:focus-visible {
+          outline: none;
+        }
       }
+      &:focus-visible {
+        outline: none;
+      }
+    }
+
+    &:focus-visible {
+      outline: none;
     }
   }
 }

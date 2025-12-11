@@ -35,7 +35,7 @@ export function FontPicker() {
       placeholder="Search fonts"
       emptyMessage="No fonts found"
       key={(f) => f.id}
-      items={[...FONTS]}
+      items={() => [...FONTS]}
       current={currentFont()}
       filterKeys={["name", "family"]}
       onSelect={handleSelect}

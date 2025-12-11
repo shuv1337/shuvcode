@@ -9,8 +9,7 @@ const notes = [] as string[]
 console.log("=== publishing ===\n")
 
 if (!Script.preview) {
-  // Use shuvcode npm package for version comparison (fork-specific)
-  const previous = await fetch("https://registry.npmjs.org/shuvcode/latest")
+  const previous = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
       return res.json()
@@ -152,13 +151,10 @@ process.chdir(dir)
 if (!Script.preview) {
   await $`git commit -am "release: v${Script.version}"`
   await $`git tag v${Script.version}`
-  const latest = `v${Script.version}`
-  await $`git tag -f latest ${latest}`
   await $`git fetch origin`
-  // Skip cherry-pick from dev branch (upstream pattern not applicable to fork)
+  await $`git cherry-pick HEAD..origin/dev`.nothrow()
   await $`git push origin HEAD --tags --no-verify --force-with-lease`
   await new Promise((resolve) => setTimeout(resolve, 5_000))
-  // gh release create automatically uses current repo context (Latitudes-Dev/shuvcode)
   await $`gh release create v${Script.version} --title "v${Script.version}" --notes ${notes.join("\n") || "No notable changes"} ./packages/opencode/dist/*.zip ./packages/opencode/dist/*.tar.gz`
   const release = await $`gh release view v${Script.version} --json id,tagName`.json()
   if (process.env.GITHUB_OUTPUT) {
