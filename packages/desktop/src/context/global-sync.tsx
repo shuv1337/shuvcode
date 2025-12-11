@@ -12,6 +12,7 @@ import type {
   Todo,
   SessionStatus,
   ProviderListResponse,
+  Command,
 } from "@opencode-ai/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { Binary } from "@opencode-ai/util/binary"
@@ -44,6 +45,7 @@ type State = {
   }
   node: FileNode[]
   changes: File[]
+  command: Command[]
 }
 
 export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimpleContext({
@@ -81,6 +83,7 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
           part: {},
           node: [],
           changes: [],
+          command: [],
         })
         children[directory] = createStore(globalStore.children[directory])
       }

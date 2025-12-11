@@ -1,10 +1,13 @@
 import { createStore } from "solid-js/store"
-import { createMemo, onMount } from "solid-js"
+import { createEffect, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { Project } from "@opencode-ai/sdk/v2"
+import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
+import { applyFontWithLoad } from "@/fonts/apply-font"
+import { getFontById, FONTS } from "@/fonts/font-definitions"
 
 const PASTEL_COLORS = [
   "#FCEAFD", // pastel pink
@@ -38,9 +41,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           state: "pane" as "pane" | "tab",
         },
+        theme: DEFAULT_THEME_ID,
+        font: FONTS[0].id,
       }),
       {
-        name: "default-layout.v7",
+        name: "default-layout.v8",
       },
     )
     const [ephemeral, setEphemeral] = createStore({
@@ -96,6 +101,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           return loadProjectSessions(project.worktree)
         }),
       )
+    })
+
+    createEffect(() => {
+      applyTheme(store.theme)
+    })
+
+    createEffect(() => {
+      const font = getFontById(store.font) ?? FONTS[0]
+      applyFontWithLoad(font)
     })
 
     return {
@@ -176,6 +190,18 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           if (ephemeral.dialog?.open === dialog) {
             setEphemeral("dialog", "open", undefined)
           }
+        },
+      },
+      theme: {
+        current: createMemo(() => store.theme),
+        set(themeId: string) {
+          setStore("theme", themeId)
+        },
+      },
+      font: {
+        current: createMemo(() => store.font),
+        set(fontId: string) {
+          setStore("font", fontId)
         },
       },
     }

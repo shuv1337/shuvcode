@@ -23,15 +23,6 @@ export function FontPicker() {
     applyFont(font.id)
   }
 
-  async function handleHighlight(font: FontDefinition | undefined) {
-    if (!font) return
-
-    const loaded = await ensureFontLoaded(font)
-    if (!loaded) return
-
-    applyFont(font.id)
-  }
-
   function handleOpenChange(open: boolean) {
     if (!open) {
       applyFont(currentFont().id)
@@ -48,12 +39,11 @@ export function FontPicker() {
       current={currentFont()}
       filterKeys={["name", "family"]}
       onSelect={handleSelect}
-      onHighlight={handleHighlight}
       onOpenChange={handleOpenChange}
       trigger={
         <Tooltip class="shrink-0" value="Font">
           <Button variant="ghost" class="size-6 p-0">
-            <Icon name="type" size="small" />
+            <Icon name="code-lines" size="small" />
           </Button>
         </Tooltip>
       }
