@@ -64,6 +64,18 @@
         "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
         "packages/opencode/src/config/config.ts",
         "packages/sdk/js/src/gen/types.gen.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "goToParent() function and session_parent command registration",
+          "markers": ["function goToParent()", "keybind: \"session_parent\""]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "session_parent keybind in Keybinds schema",
+          "markers": ["session_parent: z.string()"]
+        }
       ]
     },
     {
