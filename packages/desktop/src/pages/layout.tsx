@@ -4,7 +4,7 @@ import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
-import { AsciiMark } from "@opencode-ai/ui/logo"
+import { AsciiMark, AsciiLogo } from "@opencode-ai/ui/logo"
 import { ThemePicker } from "@/components/theme-picker"
 import { FontPicker } from "@/components/font-picker"
 import { Avatar } from "@opencode-ai/ui/avatar"
@@ -346,7 +346,9 @@ export default function Layout(props: ParentProps) {
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
         >
-          <AsciiMark class="shrink-0" />
+          <Show when={layout.sidebar.opened()} fallback={<AsciiMark class="shrink-0" />}>
+            <AsciiLogo scale={0.75} class="shrink-0" />
+          </Show>
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
           <Show when={params.dir && layout.projects.list().length > 0}>
