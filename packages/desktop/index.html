@@ -18,6 +18,20 @@
     <meta property="twitter:image" content="/social-share.png" />
   </head>
   <body class="antialiased overscroll-none select-none text-12-regular">
+    <script>
+      ;(function () {
+        let savedTheme = localStorage.getItem("theme") || "nightowl"
+        // Migrate legacy theme ID
+        if (savedTheme === "oc-1") {
+          savedTheme = "default"
+          localStorage.setItem("theme", savedTheme)
+        }
+        // "default" uses :root styles (no data-theme attribute)
+        if (savedTheme !== "default") {
+          document.documentElement.setAttribute("data-theme", savedTheme)
+        }
+      })()
+    </script>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script src="/src/entry.tsx" type="module"></script>
