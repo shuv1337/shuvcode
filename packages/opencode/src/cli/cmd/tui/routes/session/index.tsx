@@ -25,7 +25,6 @@ import {
   type ScrollAcceleration,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { SearchInput, type SearchInputRef } from "@tui/component/prompt/search"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
@@ -41,7 +40,7 @@ import type { EditTool } from "@/tool/edit"
 import type { PatchTool } from "@/tool/patch"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
-import { useKeyboard, useRenderer, useTerminalDimensions, extend, type BoxProps, type JSX } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions, type BoxProps, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "@tui/context/keybind"
@@ -65,9 +64,6 @@ import { Editor } from "../../util/editor"
 import stripAnsi from "strip-ansi"
 import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
-import { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer"
-
-extend({ "ghostty-terminal": GhosttyTerminalRenderable })
 
 addDefaultParsers(parsers.parsers)
 
@@ -88,31 +84,14 @@ const context = createContext<{
   showTimestamps: () => boolean
   usernameVisible: () => boolean
   showDetails: () => boolean
-  showTokens: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
-  searchQuery: () => string
-  currentMatchIndex: () => number
-  matches: () => SearchMatch[]
-  showBashOutput: (command: string, output: () => string) => void
 }>()
 
 function use() {
   const ctx = useContext(context)
   if (!ctx) throw new Error("useContext must be used within a Session component")
   return ctx
-}
-
-type SearchMatch = {
-  messageID: string
-  partID: string
-  matchIndex: number
-  charOffset: number
-}
-
-type BashOutputView = {
-  command: string
-  output: () => string
 }
 
 export function Session() {
@@ -142,66 +121,7 @@ export function Session() {
   const [usernameVisible, setUsernameVisible] = createSignal(kv.get("username_visible", true))
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
-  const [showTokens, setShowTokens] = createSignal(kv.get("show_tokens", false))
-  const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
-  const [searchMode, setSearchMode] = createSignal(false)
-  const [searchQuery, setSearchQuery] = createSignal("")
-  const [currentMatchIndex, setCurrentMatchIndex] = createSignal(0)
-  const [bashOutput, setBashOutput] = createSignal<BashOutputView | undefined>(undefined)
-
-  function showBashOutput(command: string, output: () => string) {
-    setBashOutput({ command, output })
-  }
-
-  const matches = createMemo(() => {
-    const query = searchQuery()
-    if (!query) return []
-
-    const results: SearchMatch[] = []
-    for (const message of messages()) {
-      const parts = sync.data.part[message.id] ?? []
-      for (const part of parts) {
-        if (part.type !== "text") continue
-        const text = part.text.toLowerCase()
-        const queryLower = query.toLowerCase()
-        let index = 0
-        let pos = text.indexOf(queryLower, index)
-        while (pos !== -1) {
-          results.push({
-            messageID: message.id,
-            partID: part.id,
-            matchIndex: results.length,
-            charOffset: pos,
-          })
-          index = pos + 1
-          pos = text.indexOf(queryLower, index)
-        }
-      }
-    }
-    return results
-  })
-
-  function handleNextMatch() {
-    const m = matches()
-    if (m.length === 0) return
-    setCurrentMatchIndex((prev) => (prev + 1) % m.length)
-    scrollToMatch(currentMatchIndex())
-  }
-
-  function handlePrevMatch() {
-    const m = matches()
-    if (m.length === 0) return
-    setCurrentMatchIndex((prev) => (prev - 1 + m.length) % m.length)
-    scrollToMatch(currentMatchIndex())
-  }
-
-  function scrollToMatch(index: number) {
-    const m = matches()[index]
-    if (!m) return
-    const child = scroll.getChildren().find((c) => c.id === m.messageID || c.id === "text-" + m.partID)
-    if (child) scroll.scrollBy(child.y - scroll.y - 1)
-  }
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -272,19 +192,6 @@ export function Session() {
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
 
-    if (bashOutput()) {
-      if (evt.name === "escape") {
-        setBashOutput(undefined)
-        return
-      }
-      return
-    }
-
-    if (evt.ctrl && evt.name === "f") {
-      setSearchMode(true)
-      return
-    }
-
     const first = permissions()[0]
     if (first) {
       const response = iife(() => {
@@ -332,16 +239,6 @@ export function Session() {
 
   const command = useCommandDialog()
   command.register(() => [
-    {
-      title: "Search messages",
-      value: "session.search",
-      keybind: "session_search" as const,
-      category: "Session",
-      onSelect: (dialog) => {
-        setSearchMode(true)
-        dialog.clear()
-      },
-    },
     ...(sync.data.config.share !== "disabled"
       ? [
           {
@@ -508,20 +405,6 @@ export function Session() {
       },
     },
     {
-      title: headerVisible() ? "Hide session header" : "Show session header",
-      value: "session.header.toggle",
-      keybind: "header_toggle",
-      category: "Session",
-      onSelect: (dialog) => {
-        setHeaderVisible((prev) => {
-          const next = !prev
-          kv.set("header_visible", next)
-          return next
-        })
-        dialog.clear()
-      },
-    },
-    {
       title: usernameVisible() ? "Hide username" : "Show username",
       value: "session.username_visible.toggle",
       keybind: "username_toggle",
@@ -589,19 +472,6 @@ export function Session() {
         const newValue = !showDetails()
         setShowDetails(newValue)
         kv.set("tool_details_visibility", newValue)
-        dialog.clear()
-      },
-    },
-    {
-      title: showTokens() ? "Hide tokens" : "Show tokens",
-      value: "session.toggle.tokens",
-      category: "Session",
-      onSelect: (dialog) => {
-        setShowTokens((prev) => {
-          const next = !prev
-          kv.set("show_tokens", next)
-          return next
-        })
         dialog.clear()
       },
     },
@@ -887,23 +757,6 @@ export function Session() {
         dialog.clear()
       },
     },
-    {
-      title: "Go to parent session",
-      value: "session.parent",
-      keybind: "session_parent",
-      category: "Session",
-      disabled: !session()?.parentID,
-      onSelect: (dialog) => {
-        const parentID = session()?.parentID
-        if (parentID) {
-          navigate({
-            type: "session",
-            sessionID: parentID,
-          })
-        }
-        dialog.clear()
-      },
-    },
   ])
 
   const revertInfo = createMemo(() => session()?.revert)
@@ -970,178 +823,139 @@ export function Session() {
         showTimestamps,
         usernameVisible,
         showDetails,
-        showTokens,
         diffWrapMode,
         sync,
-        searchQuery,
-        currentMatchIndex,
-        matches,
-        showBashOutput,
       }}
     >
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={!sidebarVisible() && headerVisible()}>
+            <Show when={!sidebarVisible()}>
               <Header />
             </Show>
-            <Show
-              when={bashOutput()}
-              fallback={
-                <scrollbox
-                  ref={(r) => (scroll = r)}
-                  verticalScrollbarOptions={{
-                    paddingLeft: 1,
-                    visible: showScrollbar(),
-                    trackOptions: {
-                      backgroundColor: theme.backgroundElement,
-                      foregroundColor: theme.border,
-                    },
-                  }}
-                  stickyScroll={true}
-                  stickyStart="bottom"
-                  flexGrow={1}
-                  scrollAcceleration={scrollAcceleration()}
-                >
-                  <For each={messages()}>
-                    {(message, index) => (
-                      <Switch>
-                        <Match when={message.id === revert()?.messageID}>
-                          {(function () {
-                            const command = useCommandDialog()
-                            const [hover, setHover] = createSignal(false)
-                            const dialog = useDialog()
-
-                            const handleUnrevert = async () => {
-                              const confirmed = await DialogConfirm.show(
-                                dialog,
-                                "Confirm Redo",
-                                "Are you sure you want to restore the reverted messages?",
-                              )
-                              if (confirmed) {
-                                command.trigger("session.redo")
-                              }
-                            }
-
-                            return (
-                              <box
-                                onMouseOver={() => setHover(true)}
-                                onMouseOut={() => setHover(false)}
-                                onMouseUp={handleUnrevert}
-                                marginTop={1}
-                                flexShrink={0}
-                                border={["left"]}
-                                customBorderChars={SplitBorder.customBorderChars}
-                                borderColor={theme.backgroundPanel}
-                              >
-                                <box
-                                  paddingTop={1}
-                                  paddingBottom={1}
-                                  paddingLeft={2}
-                                  backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
-                                >
-                                  <text fg={theme.textMuted}>{revert()!.reverted.length} message reverted</text>
-                                  <text fg={theme.textMuted}>
-                                    <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to
-                                    restore
-                                  </text>
-                                  <Show when={revert()!.diffFiles?.length}>
-                                    <box marginTop={1}>
-                                      <For each={revert()!.diffFiles}>
-                                        {(file) => (
-                                          <text>
-                                            {file.filename}
-                                            <Show when={file.additions > 0}>
-                                              <span style={{ fg: theme.diffAdded }}> +{file.additions}</span>
-                                            </Show>
-                                            <Show when={file.deletions > 0}>
-                                              <span style={{ fg: theme.diffRemoved }}> -{file.deletions}</span>
-                                            </Show>
-                                          </text>
-                                        )}
-                                      </For>
-                                    </box>
-                                  </Show>
-                                </box>
-                              </box>
-                            )
-                          })()}
-                        </Match>
-                        <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
-                          <></>
-                        </Match>
-                        <Match when={message.role === "user"}>
-                          <UserMessage
-                            index={index()}
-                            onMouseUp={() => {
-                              if (renderer.getSelection()?.getSelectedText()) return
-                              dialog.replace(() => (
-                                <DialogMessage
-                                  messageID={message.id}
-                                  sessionID={route.sessionID}
-                                  setPrompt={(promptInfo) => prompt.set(promptInfo)}
-                                />
-                              ))
-                            }}
-                            message={message as UserMessage}
-                            parts={sync.data.part[message.id] ?? []}
-                            pending={pending()}
-                          />
-                        </Match>
-                        <Match when={message.role === "assistant"}>
-                          <AssistantMessage
-                            last={lastAssistant()?.id === message.id}
-                            message={message as AssistantMessage}
-                            parts={sync.data.part[message.id] ?? []}
-                          />
-                        </Match>
-                      </Switch>
-                    )}
-                  </For>
-                </scrollbox>
-              }
+            <scrollbox
+              ref={(r) => (scroll = r)}
+              verticalScrollbarOptions={{
+                paddingLeft: 1,
+                visible: showScrollbar(),
+                trackOptions: {
+                  backgroundColor: theme.backgroundElement,
+                  foregroundColor: theme.border,
+                },
+              }}
+              stickyScroll={true}
+              stickyStart="bottom"
+              flexGrow={1}
+              scrollAcceleration={scrollAcceleration()}
             >
-              <box flexGrow={1}>
-                <box paddingLeft={2}>
-                  <text fg={theme.text}>$ {bashOutput()!.command}</text>
-                </box>
-                <ghostty-terminal ansi={bashOutput()!.output()} flexGrow={1} />
-                <text fg={theme.textMuted}>ESC to close · PageUp/PageDown to scroll</text>
-              </box>
-            </Show>
+              <For each={messages()}>
+                {(message, index) => (
+                  <Switch>
+                    <Match when={message.id === revert()?.messageID}>
+                      {(function () {
+                        const command = useCommandDialog()
+                        const [hover, setHover] = createSignal(false)
+                        const dialog = useDialog()
+
+                        const handleUnrevert = async () => {
+                          const confirmed = await DialogConfirm.show(
+                            dialog,
+                            "Confirm Redo",
+                            "Are you sure you want to restore the reverted messages?",
+                          )
+                          if (confirmed) {
+                            command.trigger("session.redo")
+                          }
+                        }
+
+                        return (
+                          <box
+                            onMouseOver={() => setHover(true)}
+                            onMouseOut={() => setHover(false)}
+                            onMouseUp={handleUnrevert}
+                            marginTop={1}
+                            flexShrink={0}
+                            border={["left"]}
+                            customBorderChars={SplitBorder.customBorderChars}
+                            borderColor={theme.backgroundPanel}
+                          >
+                            <box
+                              paddingTop={1}
+                              paddingBottom={1}
+                              paddingLeft={2}
+                              backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
+                            >
+                              <text fg={theme.textMuted}>{revert()!.reverted.length} message reverted</text>
+                              <text fg={theme.textMuted}>
+                                <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to
+                                restore
+                              </text>
+                              <Show when={revert()!.diffFiles?.length}>
+                                <box marginTop={1}>
+                                  <For each={revert()!.diffFiles}>
+                                    {(file) => (
+                                      <text fg={theme.text}>
+                                        {file.filename}
+                                        <Show when={file.additions > 0}>
+                                          <span style={{ fg: theme.diffAdded }}> +{file.additions}</span>
+                                        </Show>
+                                        <Show when={file.deletions > 0}>
+                                          <span style={{ fg: theme.diffRemoved }}> -{file.deletions}</span>
+                                        </Show>
+                                      </text>
+                                    )}
+                                  </For>
+                                </box>
+                              </Show>
+                            </box>
+                          </box>
+                        )
+                      })()}
+                    </Match>
+                    <Match when={revert()?.messageID && message.id >= revert()!.messageID}>
+                      <></>
+                    </Match>
+                    <Match when={message.role === "user"}>
+                      <UserMessage
+                        index={index()}
+                        onMouseUp={() => {
+                          if (renderer.getSelection()?.getSelectedText()) return
+                          dialog.replace(() => (
+                            <DialogMessage
+                              messageID={message.id}
+                              sessionID={route.sessionID}
+                              setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                            />
+                          ))
+                        }}
+                        message={message as UserMessage}
+                        parts={sync.data.part[message.id] ?? []}
+                        pending={pending()}
+                      />
+                    </Match>
+                    <Match when={message.role === "assistant"}>
+                      <AssistantMessage
+                        last={lastAssistant()?.id === message.id}
+                        message={message as AssistantMessage}
+                        parts={sync.data.part[message.id] ?? []}
+                      />
+                    </Match>
+                  </Switch>
+                )}
+              </For>
+            </scrollbox>
             <box flexShrink={0}>
-              <Show
-                when={!searchMode()}
-                fallback={
-                  <SearchInput
-                    sessionID={route.sessionID}
-                    onInput={(query) => {
-                      setSearchQuery(query)
-                      setCurrentMatchIndex(0)
-                    }}
-                    onExit={() => {
-                      setSearchMode(false)
-                      setSearchQuery("")
-                      prompt.focus()
-                    }}
-                    onNext={handleNextMatch}
-                    onPrevious={handlePrevMatch}
-                    matchInfo={{ current: currentMatchIndex(), total: matches().length }}
-                  />
-                }
-              >
-                <Prompt
-                  ref={(r) => {
-                    prompt = r
-                    promptRef.set(r)
-                  }}
-                  disabled={permissions().length > 0}
-                  onSubmit={() => {
-                    toBottom()
-                  }}
-                  sessionID={route.sessionID}
-                />
-              </Show>
+              <Prompt
+                ref={(r) => {
+                  prompt = r
+                  promptRef.set(r)
+                }}
+                disabled={permissions().length > 0}
+                onSubmit={() => {
+                  toBottom()
+                }}
+                sessionID={route.sessionID}
+              />
             </box>
             <Show when={!sidebarVisible()}>
               <Footer />
@@ -1246,9 +1060,6 @@ function UserMessage(props: {
                 <span> </span>
                 <span style={{ bg: theme.accent, fg: theme.backgroundPanel, bold: true }}> QUEUED </span>
               </Show>
-              <Show when={ctx.showTokens() && props.message.sentEstimate}>
-                <span style={{ fg: theme.textMuted }}> · ~{props.message.sentEstimate?.toLocaleString()} tokens</span>
-              </Show>
             </text>
           </box>
         </box>
@@ -1269,7 +1080,6 @@ function UserMessage(props: {
 function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
   const local = useLocal()
   const { theme } = useTheme()
-  const ctx = use()
   const sync = useSync()
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
 
@@ -1284,15 +1094,6 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     if (!user || !user.time) return 0
     return props.message.time.completed - user.time.created
   })
-
-  // Token calculations for live display
-  const inputTokens = createMemo(() => {
-    const sent = props.message.sentEstimate ?? 0
-    const context = props.message.contextEstimate ?? 0
-    return sent + context
-  })
-  const outputTokens = createMemo(() => props.message.tokens?.output ?? props.message.outputEstimate ?? 0)
-  const reasoningTokens = createMemo(() => props.message.tokens?.reasoning ?? props.message.reasoningEstimate ?? 0)
 
   return (
     <>
@@ -1336,12 +1137,6 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
               </Show>
             </text>
-            <Show when={ctx.showTokens()}>
-              <text fg={theme.textMuted}>
-                IN ~{inputTokens().toLocaleString()}↓ OUT ~{outputTokens().toLocaleString()}↑
-                <Show when={reasoningTokens()}> ~{reasoningTokens().toLocaleString()} think</Show>
-              </text>
-            </Show>
           </box>
         </Match>
       </Switch>
@@ -1391,17 +1186,6 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
-
-  const highlightedText = createMemo(() => {
-    const query = ctx.searchQuery()
-    if (!query) return props.part.text.trim()
-
-    // Highlight search matches with ANSI background color
-    // Using yellow background (43) and black foreground (30) for visibility across themes
-    const regex = new RegExp(`(${escapeRegex(query)})`, "gi")
-    return props.part.text.trim().replace(regex, "\x1b[43m\x1b[30m$1\x1b[0m")
-  })
-
   return (
     <Show when={props.part.text.trim()}>
       <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
@@ -1410,7 +1194,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
           drawUnstyledText={false}
           streaming={true}
           syntaxStyle={syntax()}
-          content={highlightedText()}
+          content={props.part.text.trim()}
           conceal={ctx.conceal()}
           fg={theme.text}
         />
@@ -1582,12 +1366,8 @@ ToolRegistry.register<typeof BashTool>({
   name: "bash",
   container: "block",
   render(props) {
-    const output = createMemo(() => props.metadata.output?.trim() ?? "")
+    const output = createMemo(() => stripAnsi(props.metadata.output?.trim() ?? ""))
     const { theme } = useTheme()
-    const lines = createMemo(() => output().split("\n"))
-    const isTruncated = createMemo(() => lines().length > 20)
-    const { showBashOutput } = use()
-
     return (
       <>
         <ToolTitle icon="#" fallback="Writing command..." when={props.input.command}>
@@ -1598,18 +1378,8 @@ ToolRegistry.register<typeof BashTool>({
         </Show>
         <Show when={output()}>
           <box>
-            <ghostty-terminal ansi={output()} limit={20} />
+            <text fg={theme.text}>{output()}</text>
           </box>
-          <Show when={isTruncated()}>
-            <text
-              fg={theme.accent}
-              onMouseDown={() => {
-                showBashOutput(props.input.command ?? "bash", output)
-              }}
-            >
-              Click to see full output ({lines().length} lines)
-            </text>
-          </Show>
         </Show>
       </>
     )
@@ -1733,11 +1503,15 @@ ToolRegistry.register<typeof TaskTool>({
         <Show when={props.metadata.summary?.length}>
           <box>
             <For each={props.metadata.summary ?? []}>
-              {(task) => (
-                <text style={{ fg: task.state.status === "error" ? theme.error : theme.textMuted }}>
-                  ∟ {Locale.titlecase(task.tool)} {task.state.status === "completed" ? task.state.title : ""}
-                </text>
-              )}
+              {(task, index) => {
+                const summary = props.metadata.summary ?? []
+                return (
+                  <text style={{ fg: task.state.status === "error" ? theme.error : theme.textMuted }}>
+                    {index() === summary.length - 1 ? "└" : "├"} {Locale.titlecase(task.tool)}{" "}
+                    {task.state.status === "completed" ? task.state.title : ""}
+                  </text>
+                )
+              }}
             </For>
           </box>
         </Show>
@@ -1931,8 +1705,4 @@ function filetype(input?: string) {
   const language = LANGUAGE_EXTENSIONS[ext]
   if (["typescriptreact", "javascriptreact", "javascript"].includes(language)) return "typescript"
   return language
-}
-
-function escapeRegex(str: string) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }

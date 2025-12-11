@@ -3,7 +3,6 @@ import { createEffect, on, Component, Show, For, onMount, onCleanup, Switch, Mat
 import { createStore } from "solid-js/store"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
-import { DateTime } from "luxon"
 import { ContentPart, DEFAULT_PROMPT, isPromptEqual, Prompt, useSession } from "@/context/session"
 import { useSDK } from "@/context/sdk"
 import { useNavigate } from "@solidjs/router"
@@ -14,27 +13,22 @@ import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { Select } from "@opencode-ai/ui/select"
+import { Tag } from "@opencode-ai/ui/tag"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { type IconName } from "@opencode-ai/ui/icons/provider"
-import type { Command } from "@opencode-ai/sdk/v2"
+import { useLayout } from "@/context/layout"
+import { popularProviders, useProviders } from "@/hooks/use-providers"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { List, ListRef } from "@opencode-ai/ui/list"
+import { iife } from "@opencode-ai/util/iife"
+import { Input } from "@opencode-ai/ui/input"
+import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
+import { IconName } from "@opencode-ai/ui/icons/provider"
 
 interface PromptInputProps {
   class?: string
   ref?: (el: HTMLDivElement) => void
 }
-
-type UICommand = {
-  name: string
-  description: string
-  builtin: true
-}
-
-const UI_COMMANDS: UICommand[] = [
-  { name: "undo", description: "Undo the last message", builtin: true },
-  { name: "redo", description: "Redo the last undone message", builtin: true },
-]
 
 const PLACEHOLDERS = [
   "Fix a TODO in the codebase",
@@ -70,16 +64,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const sync = useSync()
   const local = useLocal()
   const session = useSession()
+  const layout = useLayout()
+  const providers = useProviders()
   let editorRef!: HTMLDivElement
 
   const [store, setStore] = createStore<{
     popoverIsOpen: boolean
-    popoverMode: "file" | "command" | null
-    inputMode: "normal" | "shell"
   }>({
     popoverIsOpen: false,
-    popoverMode: null,
-    inputMode: "normal",
   })
 
   const [placeholder, setPlaceholder] = createSignal(Math.floor(Math.random() * PLACEHOLDERS.length))
@@ -94,7 +86,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   createEffect(() => {
     session.id
     editorRef.focus()
-    setStore("inputMode", "normal")
   })
 
   const isFocused = createFocusSignal(() => editorRef)
@@ -109,16 +100,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   onMount(() => {
     editorRef.addEventListener("paste", handlePaste)
-    onCleanup(() => {
-      editorRef?.removeEventListener("paste", handlePaste)
-    })
+  })
+  onCleanup(() => {
+    editorRef.removeEventListener("paste", handlePaste)
   })
 
   createEffect(() => {
     if (isFocused()) {
       handleInput()
     } else {
-      setStore({ popoverIsOpen: false, popoverMode: null })
+      setStore("popoverIsOpen", false)
     }
   })
 
@@ -126,31 +117,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!path) return
     addPart({ type: "file", path, content: "@" + path, start: 0, end: 0 })
   }
-
-  type AnyCommand = Command | UICommand
-  const isUICommand = (cmd: AnyCommand): cmd is UICommand => "builtin" in cmd
-
-  const handleCommandSelect = (command: AnyCommand | undefined) => {
-    if (!command) return
-    editorRef.innerHTML = ""
-    // UI commands like /undo and /redo don't need trailing space for args
-    const needsSpace = !isUICommand(command)
-    editorRef.appendChild(document.createTextNode(`/${command.name}${needsSpace ? " " : ""}`))
-    handleInput()
-    setStore({ popoverIsOpen: false, popoverMode: null })
-    const range = document.createRange()
-    range.selectNodeContents(editorRef)
-    range.collapse(false)
-    window.getSelection()?.removeAllRanges()
-    window.getSelection()?.addRange(range)
-  }
-
-  const commandList = useFilteredList<AnyCommand>({
-    items: async () => [...UI_COMMANDS, ...(sync.data.command ?? [])],
-    key: (x) => x?.name ?? "",
-    filterKeys: ["name", "description"],
-    onSelect: handleCommandSelect,
-  })
 
   const { flat, active, onInput, onKeyDown, refetch } = useFilteredList<string>({
     items: local.file.searchFilesAndDirectories,
@@ -236,35 +202,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const cursorPosition = getCursorPosition(editorRef)
     const rawText = rawParts.map((p) => p.content).join("")
 
-    // Skip autocomplete detection in shell mode
-    if (store.inputMode === "shell") {
-      session.prompt.set(rawParts, cursorPosition)
-      return
-    }
-
-    // Slash command detection - must be at start of input
-    if (rawText.startsWith("/") && cursorPosition <= rawText.split(" ")[0].length) {
-      // Hide autocomplete when command has arguments (e.g., "/command arg")
-      if (rawText.match(/^\/\S+\s+\S+/)) {
-        setStore({ popoverIsOpen: false, popoverMode: null })
-      } else {
-        const slashMatch = rawText.match(/^\/(\S*)/)
-        if (slashMatch) {
-          commandList.onInput(slashMatch[1])
-          setStore({ popoverIsOpen: true, popoverMode: "command" })
-          session.prompt.set(rawParts, cursorPosition)
-          return
-        }
-      }
-    }
-
-    // @ file mention detection
     const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
     if (atMatch) {
       onInput(atMatch[1])
-      setStore({ popoverIsOpen: true, popoverMode: "file" })
+      setStore("popoverIsOpen", true)
     } else if (store.popoverIsOpen) {
-      setStore({ popoverIsOpen: false, popoverMode: null })
+      setStore("popoverIsOpen", false)
     }
 
     session.prompt.set(rawParts, cursorPosition)
@@ -343,33 +286,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     })
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Shell mode entry - ! at position 0
-    if (event.key === "!" && getCursorPosition(editorRef) === 0 && store.inputMode === "normal") {
-      event.preventDefault()
-      setStore("inputMode", "shell")
-      return
-    }
-
-    // Shell mode exit - backspace at position 0 or escape
-    if (store.inputMode === "shell") {
-      if (event.key === "Escape") {
-        event.preventDefault()
-        setStore("inputMode", "normal")
-        return
-      }
-      if (event.key === "Backspace" && getCursorPosition(editorRef) === 0) {
-        event.preventDefault()
-        setStore("inputMode", "normal")
-        return
-      }
-    }
-
     if (store.popoverIsOpen && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter")) {
-      if (store.popoverMode === "file") {
-        onKeyDown(event)
-      } else if (store.popoverMode === "command") {
-        commandList.onKeyDown(event)
-      }
+      onKeyDown(event)
       event.preventDefault()
       return
     }
@@ -378,66 +296,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     if (event.key === "Escape") {
       if (store.popoverIsOpen) {
-        setStore({ popoverIsOpen: false, popoverMode: null })
+        setStore("popoverIsOpen", false)
       } else if (session.working()) {
         abort()
       }
-    }
-  }
-
-  const handleUndo = async () => {
-    const sessionInfo = session.info()
-    if (!sessionInfo) return
-
-    // Abort if working
-    if (session.working()) {
-      await sdk.client.session.abort({ sessionID: sessionInfo.id }).catch(() => {})
-    }
-
-    const revertPoint = sessionInfo.revert?.messageID
-    const messages = session.messages.all()
-    // Find the last user message before the revert point (or last user message if no revert)
-    const message = messages.findLast((x) => (!revertPoint || x.id < revertPoint) && x.role === "user")
-    if (!message) return
-
-    await sdk.client.session.revert({
-      sessionID: sessionInfo.id,
-      messageID: message.id,
-    })
-
-    // Restore the message content to the prompt
-    const parts = sync.data.part[message.id] ?? []
-    const textContent = parts
-      .filter((p) => p.type === "text" && !p.synthetic)
-      .map((p) => (p.type === "text" ? p.text : ""))
-      .join("")
-    editorRef.innerHTML = ""
-    editorRef.appendChild(document.createTextNode(textContent))
-    session.prompt.set([{ type: "text", content: textContent, start: 0, end: textContent.length }], textContent.length)
-  }
-
-  const handleRedo = async () => {
-    const sessionInfo = session.info()
-    if (!sessionInfo) return
-
-    const revertPoint = sessionInfo.revert?.messageID
-    if (!revertPoint) return // Nothing to redo
-
-    const messages = session.messages.all()
-    // Find the next user message after the revert point
-    const message = messages.find((x) => x.role === "user" && x.id > revertPoint)
-
-    if (!message) {
-      // At the end, unrevert all
-      await sdk.client.session.unrevert({ sessionID: sessionInfo.id })
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-    } else {
-      // Move revert point forward
-      await sdk.client.session.revert({
-        sessionID: sessionInfo.id,
-        messageID: message.id,
-      })
     }
   }
 
@@ -450,60 +312,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       return
     }
 
-    // Shell mode submission
-    if (store.inputMode === "shell") {
-      let existing = session.info()
-      if (!existing) {
-        const created = await sdk.client.session.create()
-        existing = created.data ?? undefined
-        if (existing) navigate(existing.id)
-      }
-      if (!existing) return
-
-      session.layout.setActiveTab(undefined)
-      session.messages.setActive(undefined)
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      setStore("inputMode", "normal")
-
-      try {
-        await sdk.client.session.shell({
-          sessionID: existing.id,
-          agent: local.agent.current()!.name,
-          model: {
-            providerID: local.model.current()!.provider.id,
-            modelID: local.model.current()!.id,
-          },
-          command: text,
-        })
-      } catch (error) {
-        console.error("Shell command execution failed:", error)
-      }
-      return
-    }
-
-    // UI command detection (undo/redo)
-    if (text === "/undo") {
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      await handleUndo()
-      return
-    }
-    if (text === "/redo") {
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      await handleRedo()
-      return
-    }
-
-    // SDK command detection
-    const isSlashCommand = text.startsWith("/")
-    let matchedCommand: Command | undefined
-    if (isSlashCommand) {
-      const commandName = text.split(" ")[0].slice(1) // Remove leading "/"
-      matchedCommand = sync.data.command.find((c) => c.name === commandName)
-    }
-
     let existing = session.info()
     if (!existing) {
       const created = await sdk.client.session.create()
@@ -512,67 +320,74 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     if (!existing) return
 
+    // if (!session.id) {
+    // session.layout.setOpenedTabs(
+    // session.layout.copyTabs("", session.id)
+    // }
+
+    const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
+    const attachments = prompt.filter((part) => part.type === "file")
+
+    // const activeFile = local.context.active()
+    // if (activeFile) {
+    //   registerAttachment(
+    //     activeFile.path,
+    //     activeFile.selection,
+    //     activeFile.name ?? formatAttachmentLabel(activeFile.path, activeFile.selection),
+    //   )
+    // }
+
+    // for (const contextFile of local.context.all()) {
+    //   registerAttachment(
+    //     contextFile.path,
+    //     contextFile.selection,
+    //     formatAttachmentLabel(contextFile.path, contextFile.selection),
+    //   )
+    // }
+
+    const attachmentParts = attachments.map((attachment) => {
+      const absolute = toAbsolutePath(attachment.path)
+      const query = attachment.selection
+        ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
+        : ""
+      return {
+        type: "file" as const,
+        mime: "text/plain",
+        url: `file://${absolute}${query}`,
+        filename: getFilename(attachment.path),
+        source: {
+          type: "file" as const,
+          text: {
+            value: attachment.content,
+            start: attachment.start,
+            end: attachment.end,
+          },
+          path: absolute,
+        },
+      }
+    })
+
     session.layout.setActiveTab(undefined)
     session.messages.setActive(undefined)
     // Clear the editor DOM directly to ensure it's empty
     editorRef.innerHTML = ""
     session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
 
-    if (matchedCommand) {
-      const args = text.split(" ").slice(1).join(" ")
-      try {
-        await sdk.client.session.command({
-          sessionID: existing.id,
-          command: matchedCommand.name,
-          arguments: args,
-          agent: local.agent.current()!.name,
-          model: `${local.model.current()!.provider.id}/${local.model.current()!.id}`,
-        })
-      } catch (error) {
-        console.error("Command execution failed:", error)
-      }
-    } else {
-      const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
-      const attachments = prompt.filter((part) => part.type === "file")
-
-      const attachmentParts = attachments.map((attachment) => {
-        const absolute = toAbsolutePath(attachment.path)
-        const query = attachment.selection
-          ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
-          : ""
-        return {
-          type: "file" as const,
-          mime: "text/plain",
-          url: `file://${absolute}${query}`,
-          filename: getFilename(attachment.path),
-          source: {
-            type: "file" as const,
-            text: {
-              value: attachment.content,
-              start: attachment.start,
-              end: attachment.end,
-            },
-            path: absolute,
-          },
-        }
-      })
-
-      sdk.client.session.prompt({
-        sessionID: existing.id,
-        agent: local.agent.current()!.name,
-        model: {
-          modelID: local.model.current()!.id,
-          providerID: local.model.current()!.provider.id,
+    sdk.client.session.prompt({
+      sessionID: existing.id,
+      agent: local.agent.current()!.name,
+      model: {
+        modelID: local.model.current()!.id,
+        providerID: local.model.current()!.provider.id,
+      },
+      parts: [
+        {
+          type: "text",
+          text,
         },
-        parts: [
-          {
-            type: "text",
-            text,
-          },
-          ...attachmentParts,
-        ],
-      })
-    }
+        ...attachmentParts,
+      ],
+    })
   }
 
   return (
@@ -583,69 +398,31 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                  overflow-auto no-scrollbar flex flex-col p-2 pb-0 rounded-md
                  border border-border-base bg-surface-raised-stronger-non-alpha shadow-md"
         >
-          <Show when={store.popoverMode === "file"}>
-            <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2">No matching files</div>}>
-              <For each={flat()}>
-                {(i) => (
-                  <button
-                    classList={{
-                      "w-full flex items-center justify-between rounded-md": true,
-                      "bg-surface-raised-base-hover": active() === i,
-                    }}
-                    onClick={() => handleFileSelect(i)}
-                  >
-                    <div class="flex items-center gap-x-2 grow min-w-0">
-                      <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
-                      <div class="flex items-center text-14-regular">
-                        <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
-                          {getDirectory(i)}
-                        </span>
-                        <Show when={!i.endsWith("/")}>
-                          <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
-                        </Show>
-                      </div>
+          <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2">No matching files</div>}>
+            <For each={flat()}>
+              {(i) => (
+                <button
+                  classList={{
+                    "w-full flex items-center justify-between rounded-md": true,
+                    "bg-surface-raised-base-hover": active() === i,
+                  }}
+                  onClick={() => handleFileSelect(i)}
+                >
+                  <div class="flex items-center gap-x-2 grow min-w-0">
+                    <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
+                    <div class="flex items-center text-14-regular">
+                      <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
+                        {getDirectory(i)}
+                      </span>
+                      <Show when={!i.endsWith("/")}>
+                        <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
+                      </Show>
                     </div>
-                    <div class="flex items-center gap-x-1 text-text-muted/40 shrink-0"></div>
-                  </button>
-                )}
-              </For>
-            </Show>
-          </Show>
-          <Show when={store.popoverMode === "command"}>
-            <Show
-              when={commandList.flat().length > 0}
-              fallback={<div class="text-text-weak px-2">No matching commands</div>}
-            >
-              <For each={commandList.flat()}>
-                {(cmd) => {
-                  const isActive = () => commandList.active() === cmd.name
-                  return (
-                    <button
-                      ref={(el) => {
-                        createEffect(() => {
-                          if (isActive()) el.scrollIntoView({ block: "nearest" })
-                        })
-                      }}
-                      classList={{
-                        "w-full flex items-center justify-between rounded-md p-2": true,
-                        "bg-surface-raised-base-hover": isActive(),
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        handleCommandSelect(cmd)
-                      }}
-                    >
-                      <div class="flex flex-col items-start">
-                        <span class="text-14-medium text-text-strong">/{cmd.name}</span>
-                        <Show when={cmd.description}>
-                          <span class="text-12-regular text-text-weak">{cmd.description}</span>
-                        </Show>
-                      </div>
-                    </button>
-                  )
-                }}
-              </For>
-            </Show>
+                  </div>
+                  <div class="flex items-center gap-x-1 text-text-muted/40 shrink-0"></div>
+                </button>
+              )}
+            </For>
           </Show>
         </div>
       </Show>
@@ -679,73 +456,186 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         </div>
         <div class="relative p-3 flex items-center justify-between">
           <div class="flex items-center justify-start gap-1">
-            <Show
-              when={store.inputMode === "normal"}
-              fallback={
-                <div class="flex items-center gap-1.5 px-2 py-1 text-14-medium text-accent-text">
-                  <Icon name="terminal" class="size-4" />
-                  <span>Shell</span>
-                </div>
-              }
-            >
-              <Select
-                options={local.agent.list().map((agent) => agent.name)}
-                current={local.agent.current().name}
-                onSelect={local.agent.set}
-                class="capitalize"
-                variant="ghost"
-              />
-            </Show>
-            <Show when={store.inputMode === "normal"}>
-              <SelectDialog
-                title="Select model"
-                placeholder="Search models"
-                emptyMessage="No model results"
-                key={(x) => `${x.provider.id}:${x.id}`}
-                items={local.model.list()}
-                current={local.model.current()}
-                filterKeys={["provider.name", "name", "id"]}
-                groupBy={(x) => (local.model.recent().includes(x) ? "Recent" : x.provider.name)}
-                sortGroupsBy={(a, b) => {
-                  const order = ["opencode", "anthropic", "github-copilot", "openai", "google", "openrouter", "vercel"]
-                  if (a.category === "Recent" && b.category !== "Recent") return -1
-                  if (b.category === "Recent" && a.category !== "Recent") return 1
-                  const aProvider = a.items[0].provider.id
-                  const bProvider = b.items[0].provider.id
-                  if (order.includes(aProvider) && !order.includes(bProvider)) return -1
-                  if (!order.includes(aProvider) && order.includes(bProvider)) return 1
-                  return order.indexOf(aProvider) - order.indexOf(bProvider)
-                }}
-                onSelect={(x) =>
-                  local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, { recent: true })
-                }
-                trigger={
-                  <Button as="div" variant="ghost">
-                    {local.model.current()?.name ?? "Select model"}
-                    <span class="ml-0.5 text-text-weak text-12-regular">{local.model.current()?.provider.name}</span>
-                    <Icon name="chevron-down" size="small" />
-                  </Button>
-                }
-              >
-                {(i) => (
-                  <div class="w-full flex items-center justify-between gap-x-3">
-                    <div class="flex items-center gap-x-2.5 text-text-muted grow min-w-0">
-                      <ProviderIcon name={i.provider.id as IconName} class="size-6 p-0.5 shrink-0" />
-                      <div class="flex gap-x-3 items-baseline flex-[1_0_0]">
-                        <span class="text-14-medium text-text-strong overflow-hidden text-ellipsis">{i.name}</span>
-                        <Show when={false}>
-                          <span class="text-12-medium text-text-weak overflow-hidden text-ellipsis truncate min-w-0">
-                            {DateTime.fromFormat("unknown", "yyyy-MM-dd").toFormat("LLL yyyy")}
-                          </span>
+            <Select
+              options={local.agent.list().map((agent) => agent.name)}
+              current={local.agent.current().name}
+              onSelect={local.agent.set}
+              class="capitalize"
+              variant="ghost"
+            />
+            <Button as="div" variant="ghost" onClick={() => layout.dialog.open("model")}>
+              {local.model.current()?.name ?? "Select model"}
+              <span class="ml-0.5 text-text-weak text-12-regular">{local.model.current()?.provider.name}</span>
+              <Icon name="chevron-down" size="small" />
+            </Button>
+            <Show when={layout.dialog.opened() === "model"}>
+              <Switch>
+                <Match when={providers().connected().length > 0}>
+                  <SelectDialog
+                    defaultOpen
+                    onOpenChange={(open) => {
+                      if (open) {
+                        layout.dialog.open("model")
+                      } else {
+                        layout.dialog.close("model")
+                      }
+                    }}
+                    title="Select model"
+                    placeholder="Search models"
+                    emptyMessage="No model results"
+                    key={(x) => `${x.provider.id}:${x.id}`}
+                    items={local.model.list()}
+                    current={local.model.current()}
+                    filterKeys={["provider.name", "name", "id"]}
+                    // groupBy={(x) => (local.model.recent().includes(x) ? "Recent" : x.provider.name)}
+                    groupBy={(x) => x.provider.name}
+                    sortGroupsBy={(a, b) => {
+                      if (a.category === "Recent" && b.category !== "Recent") return -1
+                      if (b.category === "Recent" && a.category !== "Recent") return 1
+                      const aProvider = a.items[0].provider.id
+                      const bProvider = b.items[0].provider.id
+                      if (popularProviders.includes(aProvider) && !popularProviders.includes(bProvider)) return -1
+                      if (!popularProviders.includes(aProvider) && popularProviders.includes(bProvider)) return 1
+                      return popularProviders.indexOf(aProvider) - popularProviders.indexOf(bProvider)
+                    }}
+                    onSelect={(x) =>
+                      local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, { recent: true })
+                    }
+                    actions={
+                      <Button
+                        class="h-7 -my-1 text-14-medium"
+                        icon="plus-small"
+                        tabIndex={-1}
+                        onClick={() => layout.dialog.open("provider")}
+                      >
+                        Connect provider
+                      </Button>
+                    }
+                  >
+                    {(i) => (
+                      <div class="w-full flex items-center gap-x-2.5">
+                        <span>{i.name}</span>
+                        <Show when={!i.cost || i.cost?.input === 0}>
+                          <Tag>Free</Tag>
+                        </Show>
+                        <Show when={i.latest}>
+                          <Tag>Latest</Tag>
                         </Show>
                       </div>
-                    </div>
-                    <Show when={!i.cost || i.cost?.input === 0}>
-                      <div class="overflow-hidden text-12-medium text-text-strong">Free</div>
-                    </Show>
-                  </div>
-                )}
-              </SelectDialog>
+                    )}
+                  </SelectDialog>
+                </Match>
+                <Match when={true}>
+                  {iife(() => {
+                    let listRef: ListRef | undefined
+                    const handleKey = (e: KeyboardEvent) => {
+                      if (e.key === "Escape") return
+                      listRef?.onKeyDown(e)
+                    }
+                    return (
+                      <Dialog
+                        modal
+                        defaultOpen
+                        onOpenChange={(open) => {
+                          if (open) {
+                            layout.dialog.open("model")
+                          } else {
+                            layout.dialog.close("model")
+                          }
+                        }}
+                      >
+                        <Dialog.Header>
+                          <Dialog.Title>Select model</Dialog.Title>
+                          <Dialog.CloseButton tabIndex={-1} />
+                        </Dialog.Header>
+                        <Dialog.Body>
+                          <Input hidden type="text" class="opacity-0 size-0" autofocus onKeyDown={handleKey} />
+                          <div class="flex flex-col gap-3 px-2.5">
+                            <div class="text-14-medium text-text-base px-2.5">Free models provided by OpenCode</div>
+                            <List
+                              ref={(ref) => (listRef = ref)}
+                              items={local.model.list()}
+                              current={local.model.current()}
+                              key={(x) => `${x.provider.id}:${x.id}`}
+                              onSelect={(x) => {
+                                local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
+                                  recent: true,
+                                })
+                                layout.dialog.close("model")
+                              }}
+                            >
+                              {(i) => (
+                                <div class="w-full flex items-center gap-x-2.5">
+                                  <span>{i.name}</span>
+                                  <Tag>Free</Tag>
+                                  <Show when={i.latest}>
+                                    <Tag>Latest</Tag>
+                                  </Show>
+                                </div>
+                              )}
+                            </List>
+                            <div />
+                            <div />
+                          </div>
+                          <div class="px-1.5 pb-1.5">
+                            <div class="w-full rounded-sm border border-border-weak-base bg-surface-raised-base">
+                              <div class="w-full flex flex-col items-start gap-4 px-1.5 pt-4 pb-6">
+                                <div class="px-2 text-14-medium text-text-base">
+                                  Add more models from popular providers
+                                </div>
+                                <List
+                                  class="w-full"
+                                  key={(x) => x?.id}
+                                  items={providers().popular()}
+                                  activeIcon="plus-small"
+                                  sortBy={(a, b) => {
+                                    if (popularProviders.includes(a.id) && popularProviders.includes(b.id))
+                                      return popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id)
+                                    return a.name.localeCompare(b.name)
+                                  }}
+                                  onSelect={(x) => {
+                                    layout.dialog.close("model")
+                                  }}
+                                >
+                                  {(i) => (
+                                    <div class="w-full flex items-center gap-x-4">
+                                      <ProviderIcon
+                                        data-slot="list-item-extra-icon"
+                                        id={i.id as IconName}
+                                        // TODO: clean this up after we update icon in models.dev
+                                        classList={{
+                                          "text-icon-weak-base": true,
+                                          "size-4 mx-0.5": i.id === "opencode",
+                                          "size-5": i.id !== "opencode",
+                                        }}
+                                      />
+                                      <span>{i.name}</span>
+                                      <Show when={i.id === "opencode"}>
+                                        <Tag>Recommended</Tag>
+                                      </Show>
+                                      <Show when={i.id === "anthropic"}>
+                                        <div class="text-14-regular text-text-weak">
+                                          Connect with Claude Pro/Max or API key
+                                        </div>
+                                      </Show>
+                                    </div>
+                                  )}
+                                </List>
+                                <Button variant="ghost" class="w-full justify-start">
+                                  <div class="flex items-center gap-2">
+                                    <Icon name="plus-small" />
+                                    <div class="text-text-strong">View all providers</div>
+                                  </div>
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </Dialog.Body>
+                      </Dialog>
+                    )
+                  })}
+                </Match>
+              </Switch>
             </Show>
           </div>
           <Tooltip
@@ -772,7 +662,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               disabled={!session.prompt.dirty() && !session.working()}
               icon={session.working() ? "stop" : "arrow-up"}
               variant="primary"
-              class="h-7 w-8 absolute right-2 bottom-2"
+              class="h-10 w-8 absolute right-2 bottom-2"
             />
           </Tooltip>
         </div>

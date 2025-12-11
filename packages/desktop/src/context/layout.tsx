@@ -1,19 +1,29 @@
 import { createStore } from "solid-js/store"
-import { createMemo, onMount, createEffect } from "solid-js"
+import { createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
-import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
-import { applyFont } from "@/fonts/apply-font"
-import { DEFAULT_FONT_ID } from "@/fonts/font-definitions"
+import { Project } from "@opencode-ai/sdk/v2"
+
+const PASTEL_COLORS = [
+  "#FCEAFD", // pastel pink
+  "#FFDFBA", // pastel peach
+  "#FFFFBA", // pastel yellow
+  "#BAFFC9", // pastel green
+  "#EAF6FD", // pastel blue
+  "#EFEAFD", // pastel lavender
+  "#FEC8D8", // pastel rose
+  "#D4F0F0", // pastel cyan
+  "#FDF0EA", // pastel coral
+  "#C1E1C1", // pastel mint
+]
 
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
   init: () => {
     const globalSdk = useGlobalSDK()
     const globalSync = useGlobalSync()
-
     const [store, setStore] = makePersisted(
       createStore({
         projects: [] as { worktree: string; expanded: boolean }[],
@@ -28,51 +38,26 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           state: "pane" as "pane" | "tab",
         },
-        theme: DEFAULT_THEME_ID,
-        font: DEFAULT_FONT_ID,
       }),
       {
-        name: "default-layout.v8",
+        name: "default-layout.v7",
       },
     )
-
-    // Reactively apply theme and font whenever they change or on init
-    createEffect(() => {
-      const currentTheme = store.theme || DEFAULT_THEME_ID
-      applyTheme(currentTheme)
+    const [ephemeral, setEphemeral] = createStore({
+      dialog: {
+        open: undefined as undefined | "provider" | "model",
+      },
     })
+    const usedColors = new Set<string>()
 
-    createEffect(() => {
-      const currentFont = store.font || DEFAULT_FONT_ID
-      applyFont(currentFont)
-    })
-
-    async function loadProjectSessions(directory: string) {
-      const [, setStore] = globalSync.child(directory)
-      globalSdk.client.session.list({ directory }).then((x) => {
-        const data = x.data
-        if (!Array.isArray(data)) {
-          setStore("session", [])
-          return
-        }
-        const sessions = data
-          .slice()
-          .sort((a, b) => a.id.localeCompare(b.id))
-          .slice(0, 5)
-        setStore("session", sessions)
-      })
+    function pickAvailableColor() {
+      const available = PASTEL_COLORS.filter((c) => !usedColors.has(c))
+      if (available.length === 0) return PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)]
+      return available[Math.floor(Math.random() * available.length)]
     }
 
-    onMount(() => {
-      Promise.all(
-        store.projects.map(({ worktree }) => {
-          return loadProjectSessions(worktree)
-        }),
-      )
-    })
-
     function enrich(project: { worktree: string; expanded: boolean }) {
-      const metadata = globalSync.data.projects.find((x) => x.worktree === project.worktree)
+      const metadata = globalSync.data.project.find((x) => x.worktree === project.worktree)
       if (!metadata) return []
       return [
         {
@@ -82,13 +67,44 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       ]
     }
 
+    function colorize(project: Project & { expanded: boolean }) {
+      if (project.icon?.color) return project
+      const color = pickAvailableColor()
+      usedColors.add(color)
+      project.icon = { ...project.icon, color }
+      globalSdk.client.project.update({ projectID: project.id, icon: { color } })
+      return project
+    }
+
+    const enriched = createMemo(() => store.projects.flatMap(enrich))
+    const list = createMemo(() => enriched().flatMap(colorize))
+
+    async function loadProjectSessions(directory: string) {
+      const [, setStore] = globalSync.child(directory)
+      globalSdk.client.session.list({ directory }).then((x) => {
+        const sessions = (x.data ?? [])
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .slice(0, 5)
+        setStore("session", sessions)
+      })
+    }
+
+    onMount(() => {
+      Promise.all(
+        store.projects.map((project) => {
+          return loadProjectSessions(project.worktree)
+        }),
+      )
+    })
+
     return {
       projects: {
-        list: createMemo(() => store.projects.flatMap(enrich)),
+        list,
         open(directory: string) {
           if (store.projects.find((x) => x.worktree === directory)) return
           loadProjectSessions(directory)
-          setStore("projects", (x) => [...x, { worktree: directory, expanded: true }])
+          setStore("projects", (x) => [{ worktree: directory, expanded: true }, ...x])
         },
         close(directory: string) {
           setStore("projects", (x) => x.filter((x) => x.worktree !== directory))
@@ -151,16 +167,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("review", "state", "tab")
         },
       },
-      theme: {
-        current: createMemo(() => store.theme ?? DEFAULT_THEME_ID),
-        set(id: string) {
-          setStore("theme", id)
+      dialog: {
+        opened: createMemo(() => ephemeral.dialog?.open),
+        open(dialog: "provider" | "model") {
+          setEphemeral("dialog", "open", dialog)
         },
-      },
-      font: {
-        current: createMemo(() => store.font ?? DEFAULT_FONT_ID),
-        set(id: string) {
-          setStore("font", id)
+        close(dialog: "provider" | "model") {
+          if (ephemeral.dialog?.open === dialog) {
+            setEphemeral("dialog", "open", undefined)
+          }
         },
       },
     }
