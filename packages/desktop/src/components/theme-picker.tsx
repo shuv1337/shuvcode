@@ -18,11 +18,6 @@ export function ThemePicker() {
     applyTheme(theme.id)
   }
 
-  function handleHighlight(theme: Theme | undefined) {
-    if (!theme) return
-    applyTheme(theme.id)
-  }
-
   function handleOpenChange(open: boolean) {
     if (!open) {
       applyTheme(currentTheme().id)
@@ -39,12 +34,11 @@ export function ThemePicker() {
       current={currentTheme()}
       filterKeys={["name", "id"]}
       onSelect={handleSelect}
-      onHighlight={handleHighlight}
       onOpenChange={handleOpenChange}
       trigger={
         <Tooltip class="shrink-0" value="Theme">
           <Button variant="ghost" class="size-6 p-0">
-            <Icon name="droplet" size="small" />
+            <Icon name="glasses" size="small" />
           </Button>
         </Tooltip>
       }

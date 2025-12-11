@@ -1,7 +1,7 @@
 import { useGlobalSync } from "@/context/global-sync"
 import { For, Match, Show, Switch } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
-import { AsciiLogo } from "@opencode-ai/ui/logo"
+import { Logo } from "@opencode-ai/ui/logo"
 import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/util/encode"
@@ -35,11 +35,11 @@ export default function Home() {
   }
 
   return (
-    <div class="size-full bg-background-base flex flex-col items-center pt-55">
-      <AsciiLogo scale={1.5} class="opacity-30" />
+    <div class="mx-auto mt-55">
+      <Logo class="w-xl opacity-12" />
       <Switch>
-        <Match when={sync.data.projects.length > 0}>
-          <div class="mt-20 w-full max-w-xl flex flex-col gap-4">
+        <Match when={sync.data.project.length > 0}>
+          <div class="mt-20 w-full flex flex-col gap-4">
             <div class="flex gap-2 items-center justify-between pl-3">
               <div class="text-14-medium text-text-strong">Recent projects</div>
               <Show when={platform.openDirectoryPickerDialog}>
@@ -50,7 +50,7 @@ export default function Home() {
             </div>
             <ul class="flex flex-col gap-2">
               <For
-                each={sync.data.projects
+                each={sync.data.project
                   .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
                   .slice(0, 5)}
               >
@@ -72,7 +72,7 @@ export default function Home() {
           </div>
         </Match>
         <Match when={true}>
-          <div class="mt-30 flex flex-col items-center gap-3">
+          <div class="mt-30 mx-auto flex flex-col items-center gap-3">
             <Icon name="folder-add-left" size="large" />
             <div class="flex flex-col gap-1 items-center justify-center">
               <div class="text-14-medium text-text-strong">No recent projects</div>
