@@ -226,22 +226,21 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
     })
 
     async function bootstrap() {
-      return Promise.all([
-        globalSDK.client.project.list().then(async (x) => {
-          setGlobalStore(
-            "project",
-            x
-              .data!.filter((p) => !p.worktree.includes("opencode-test") && p.vcs)
-              .sort((a, b) => a.id.localeCompare(b.id)),
-          )
-        }),
+      const projects = await globalSDK.client.project.list()
+      const data = Array.isArray(projects.data) ? projects.data : []
+      setGlobalStore(
+        "project",
+        data.filter((p) => !p.worktree.includes("opencode-test") && p.vcs).sort((a, b) => a.id.localeCompare(b.id)),
+      )
+      await Promise.all([
         globalSDK.client.provider.list().then((x) => {
           setGlobalStore("provider", x.data ?? {})
         }),
         globalSDK.client.provider.auth().then((x) => {
           setGlobalStore("provider_auth", x.data ?? {})
         }),
-      ]).then(() => setGlobalStore("ready", true))
+      ])
+      setGlobalStore("ready", true)
     }
 
     onMount(() => {
