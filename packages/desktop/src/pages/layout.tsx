@@ -353,7 +353,15 @@ export default function Layout(props: ParentProps) {
           </Show>
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
-          <Show when={params.dir && layout.projects.list().length > 0}>
+          <Show
+            when={params.dir && layout.projects.list().length > 0}
+            fallback={
+              <div class="flex items-center gap-2 ml-auto">
+                <FontPicker />
+                <ThemePicker />
+              </div>
+            }
+          >
             <div class="flex items-center gap-3">
               <div class="flex items-center gap-2">
                 <Select
