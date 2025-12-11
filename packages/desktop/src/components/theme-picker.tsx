@@ -30,7 +30,7 @@ export function ThemePicker() {
       placeholder="Search themes"
       emptyMessage="No themes found"
       key={(t) => t.id}
-      items={[...THEMES]}
+      items={() => [...THEMES]}
       current={currentTheme()}
       filterKeys={["name", "id"]}
       onSelect={handleSelect}

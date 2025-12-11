@@ -1,10 +1,13 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createMemo, onMount } from "solid-js"
+import { batch, createEffect, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { Project } from "@opencode-ai/sdk/v2"
+import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
+import { applyFont } from "@/fonts/apply-font"
+import { DEFAULT_FONT_ID } from "@/fonts/font-definitions"
 
 const PASTEL_COLORS = [
   "#FCEAFD", // pastel pink
@@ -40,11 +43,24 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           state: "pane" as "pane" | "tab",
         },
+        theme: DEFAULT_THEME_ID,
+        font: DEFAULT_FONT_ID,
       }),
       {
-        name: "default-layout.v7",
+        name: "default-layout.v8",
       },
     )
+
+    // Reactively apply theme and font whenever they change or on init
+    createEffect(() => {
+      const currentTheme = store.theme || DEFAULT_THEME_ID
+      applyTheme(currentTheme)
+    })
+
+    createEffect(() => {
+      const currentFont = store.font || DEFAULT_FONT_ID
+      applyFont(currentFont)
+    })
     const [ephemeral, setEphemeral] = createStore<{
       connect: {
         provider?: string
@@ -227,6 +243,18 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         clear() {
           setEphemeral("connect", {})
+        },
+      },
+      theme: {
+        current: createMemo(() => store.theme ?? DEFAULT_THEME_ID),
+        set(id: string) {
+          setStore("theme", id)
+        },
+      },
+      font: {
+        current: createMemo(() => store.font ?? DEFAULT_FONT_ID),
+        set(id: string) {
+          setStore("font", id)
         },
       },
     }
