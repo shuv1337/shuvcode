@@ -340,7 +340,9 @@ export default function Layout(props: ParentProps) {
           href="/"
           classList={{
             "w-12 shrink-0 px-4 py-3.5": true,
-            "flex items-center justify-start self-stretch": true,
+            "flex items-center self-stretch": true,
+            "justify-center": layout.sidebar.opened(),
+            "justify-start": !layout.sidebar.opened(),
             "border-r border-border-weak-base": true,
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
