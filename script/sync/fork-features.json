@@ -140,10 +140,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Night Owl theme for desktop app with custom CSS variables, plus renamed upstream Default theme to OpenCode",
-      "files": [
-        "packages/ui/src/styles/theme.css",
-        "packages/desktop/src/theme/apply-theme.ts"
-      ],
+      "files": ["packages/ui/src/styles/theme.css", "packages/desktop/src/theme/apply-theme.ts"],
       "criticalCode": [
         {
           "file": "packages/ui/src/styles/theme.css",
