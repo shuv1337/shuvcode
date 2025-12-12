@@ -25,6 +25,7 @@ import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
+import type { Path } from "@opencode-ai/sdk"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -64,6 +65,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       ide: { [key: string]: IdeStatus }
       formatter: FormatterStatus[]
       vcs: VcsInfo | undefined
+      path: Path
     }>({
       provider_next: {
         all: [],
@@ -89,6 +91,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       ide: {},
       formatter: [],
       vcs: undefined,
+      path: { state: "", config: "", worktree: "", directory: "" },
     })
 
     const sdk = useSDK()
@@ -290,6 +293,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.session.status().then((x) => setStore("session_status", x.data!)),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", x.data ?? {})),
             sdk.client.vcs.get().then((x) => setStore("vcs", x.data)),
+            sdk.client.path.get().then((x) => setStore("path", x.data!)),
           ]).then(() => {
             setStore("status", "complete")
           })

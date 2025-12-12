@@ -14,9 +14,16 @@ import { LayoutProvider } from "./context/layout"
 import { GlobalSDKProvider } from "./context/global-sdk"
 import { SessionProvider } from "./context/session"
 import { Show } from "solid-js"
+import { NotificationProvider } from "./context/notification"
+
+declare global {
+  interface Window {
+    __OPENCODE__?: { updaterEnabled?: boolean; port?: number }
+  }
+}
 
 const host = import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "127.0.0.1"
-const port = import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
+const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 
 const url =
   new URLSearchParams(document.location.search).get("url") ||
@@ -31,25 +38,27 @@ export function App() {
         <GlobalSDKProvider url={url}>
           <GlobalSyncProvider>
             <LayoutProvider>
-              <MetaProvider>
-                <Font />
-                <Router root={Layout}>
-                  <Route path="/" component={Home} />
-                  <Route path="/:dir" component={DirectoryLayout}>
-                    <Route path="/" component={() => <Navigate href="session" />} />
-                    <Route
-                      path="/session/:id?"
-                      component={(p) => (
-                        <Show when={p.params.id || true} keyed>
-                          <SessionProvider>
-                            <Session />
-                          </SessionProvider>
-                        </Show>
-                      )}
-                    />
-                  </Route>
-                </Router>
-              </MetaProvider>
+              <NotificationProvider>
+                <MetaProvider>
+                  <Font />
+                  <Router root={Layout}>
+                    <Route path="/" component={Home} />
+                    <Route path="/:dir" component={DirectoryLayout}>
+                      <Route path="/" component={() => <Navigate href="session" />} />
+                      <Route
+                        path="/session/:id?"
+                        component={(p) => (
+                          <Show when={p.params.id || true} keyed>
+                            <SessionProvider>
+                              <Session />
+                            </SessionProvider>
+                          </Show>
+                        )}
+                      />
+                    </Route>
+                  </Router>
+                </MetaProvider>
+              </NotificationProvider>
             </LayoutProvider>
           </GlobalSyncProvider>
         </GlobalSDKProvider>

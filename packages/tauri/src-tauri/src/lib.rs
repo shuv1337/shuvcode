@@ -1,10 +1,12 @@
 use std::{
-    net::SocketAddr,
+    net::{SocketAddr, TcpListener},
     process::Command,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindow};
+use tauri::{
+    AppHandle, LogicalSize, Manager, Monitor, RunEvent, TitleBarStyle, WebviewUrl, WebviewWindow,
+};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -18,7 +20,13 @@ fn get_sidecar_port() -> u16 {
         .map(|s| s.to_string())
         .or_else(|| std::env::var("OPENCODE_PORT").ok())
         .and_then(|port_str| port_str.parse().ok())
-        .unwrap_or(4096)
+        .unwrap_or_else(|| {
+            TcpListener::bind("127.0.0.1:0")
+                .expect("Failed to bind to find free port")
+                .local_addr()
+                .expect("Failed to get local address")
+                .port()
+        })
 }
 
 fn find_and_kill_process_on_port(port: u16) -> Result<(), Box<dyn std::error::Error>> {
@@ -60,6 +68,8 @@ fn spawn_sidecar(app: &AppHandle, port: u16) -> CommandChild {
         .shell()
         .sidecar("opencode")
         .unwrap()
+        .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
+        .env("OPENCODE_CLIENT", "desktop")
         .args(["serve", &format!("--port={port}")])
         .spawn()
         .expect("Failed to spawn opencode");
@@ -99,6 +109,9 @@ pub fn run() {
     let updater_enabled = option_env!("TAURI_SIGNING_PRIVATE_KEY").is_some();
 
     let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
@@ -159,16 +172,23 @@ pub fn run() {
                     None
                 };
 
+                let primary_monitor = app.primary_monitor().ok().flatten();
+                let size = primary_monitor
+                    .map(|m| m.size().to_logical(m.scale_factor()))
+                    .unwrap_or(LogicalSize::new(1920, 1080));
+
                 let mut window_builder =
                     WebviewWindow::builder(&app, "main", WebviewUrl::App("/".into()))
                         .title("OpenCode")
-                        .inner_size(800.0, 600.0)
+                        .inner_size(size.width as f64, size.height as f64)
                         .decorations(true)
                         .zoom_hotkeys_enabled(true)
+                        .title_bar_style(TitleBarStyle::Overlay)
                         .initialization_script(format!(
                             r#"
                           window.__OPENCODE__ ??= {{}};
-                          window.__OPENCODE__.updaterEnabled = {updater_enabled}
+                          window.__OPENCODE__.updaterEnabled = {updater_enabled};
+                          window.__OPENCODE__.port = {port};
                         "#
                         ));
 
