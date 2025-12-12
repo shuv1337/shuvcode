@@ -60,6 +60,8 @@ export default function Layout(props: ParentProps) {
   const currentDirectory = createMemo(() => base64Decode(params.dir ?? ""))
   const sessions = createMemo(() => globalSync.child(currentDirectory())[0].session ?? [])
   const currentSession = createMemo(() => sessions().find((s) => s.id === params.id))
+  const currentSessionId = createMemo(() => currentSession()?.id)
+  const otherSessions = createMemo(() => sessions().filter((s) => s.id !== currentSessionId()))
   const providers = useProviders()
 
   function navigateToProject(directory: string | undefined) {
@@ -112,6 +114,17 @@ export default function Layout(props: ParentProps) {
   createEffect(() => {
     const sidebarWidth = layout.sidebar.opened() ? layout.sidebar.width() : 48
     document.documentElement.style.setProperty("--dialog-left-margin", `${sidebarWidth}px`)
+  })
+
+  onMount(() => {
+    const mediaQuery = window.matchMedia("(max-width: 40rem)")
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      if (event.matches) layout.sidebar.close()
+      if (event.matches) layout.terminal.close()
+    }
+    handleChange(mediaQuery)
+    mediaQuery.addEventListener("change", handleChange)
+    onCleanup(() => mediaQuery.removeEventListener("change", handleChange))
   })
 
   function getDraggableId(event: unknown): string | undefined {
@@ -341,15 +354,14 @@ export default function Layout(props: ParentProps) {
           classList={{
             "w-12 shrink-0 px-4 py-3.5": true,
             "flex items-center self-stretch": true,
-            "justify-center": layout.sidebar.opened(),
-            "justify-start": !layout.sidebar.opened(),
+            "justify-center": true,
             "border-r border-border-weak-base": true,
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
         >
-          <Show when={layout.sidebar.opened()} fallback={<AsciiMark class="shrink-0" />}>
-            <AsciiLogo scale={0.75} class="shrink-0" />
+          <Show when={layout.sidebar.opened()} fallback={<AsciiMark class="shrink-0 scale-90" />}>
+            <AsciiLogo scale={0.65} class="shrink-0" />
           </Show>
         </A>
         <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
@@ -362,7 +374,7 @@ export default function Layout(props: ParentProps) {
               </div>
             }
           >
-            <div class="flex items-center gap-3 min-w-0 grow">
+            <div class="flex items-center gap-3 min-w-0 grow flex-nowrap">
               <div class="flex items-center gap-2 min-w-0">
                 <Select
                   options={layout.projects.list().map((project) => project.worktree)}
@@ -375,13 +387,90 @@ export default function Layout(props: ParentProps) {
                 >
                   {/* @ts-ignore */}
                   {(i) => (
-                    <div class="flex items-center gap-2">
-                      <Icon name="folder" size="small" />
-                      <div class="text-text-strong">{getFilename(i)}</div>
+                    <div class="flex items-center gap-2 min-w-0">
+                      <Icon name="folder" size="small" class="shrink-0" />
+                      <div class="text-text-strong truncate">{getFilename(i)}</div>
                     </div>
                   )}
                 </Select>
-                <div class="text-text-weaker">/</div>
+                <div class="text-text-weaker hidden sm:block">/</div>
+              </div>
+              <div class="flex items-center min-w-0 sm:hidden">
+                <DropdownMenu>
+                  <DropdownMenu.Trigger
+                    as={Button}
+                    variant="ghost"
+                    class="flex-1 justify-between gap-3 min-w-0 text-14-regular text-text-base"
+                  >
+                    <span class="truncate text-14-regular text-text-base lowercase">session</span>
+                    <Icon name="chevron-down" size="small" class="shrink-0 text-icon-base" />
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content>
+                      <div class="flex flex-col gap-1 py-1">
+                        <DropdownMenu.Item onSelect={() => navigate(`/${params.dir}/session`)}>
+                          <DropdownMenu.ItemLabel>
+                            <div class="flex items-center gap-2 min-w-0">
+                              <Icon name="plus-small" size="small" class="shrink-0 text-icon-base" />
+                              <span class="truncate">New session</span>
+                            </div>
+                          </DropdownMenu.ItemLabel>
+                          <Show when={!currentSessionId()}>
+                            <DropdownMenu.ItemIndicator>
+                              <Icon name="check-small" size="small" />
+                            </DropdownMenu.ItemIndicator>
+                          </Show>
+                        </DropdownMenu.Item>
+                        <Show when={currentSession()}>
+                          {(session) => (
+                            <DropdownMenu.Item onSelect={() => navigateToSession(session())}>
+                              <DropdownMenu.ItemLabel>
+                                <div class="flex items-center gap-2 min-w-0">
+                                  <Icon name="dot-grid" size="small" class="shrink-0 text-icon-base" />
+                                  <div class="flex flex-col min-w-0">
+                                    <span class="truncate">{session().title}</span>
+                                    <span class="text-12-regular text-text-weak">Current session</span>
+                                  </div>
+                                </div>
+                              </DropdownMenu.ItemLabel>
+                              <DropdownMenu.ItemIndicator>
+                                <Icon name="check-small" size="small" />
+                              </DropdownMenu.ItemIndicator>
+                            </DropdownMenu.Item>
+                          )}
+                        </Show>
+                      </div>
+                      <Show when={otherSessions().length}>
+                        <DropdownMenu.Separator />
+                        <div class="flex flex-col gap-1 max-h-60 overflow-y-auto pr-1">
+                          <For each={otherSessions()}>
+                            {(session) => (
+                              <DropdownMenu.Item onSelect={() => navigateToSession(session)}>
+                                <DropdownMenu.ItemLabel>
+                                  <div class="flex items-center gap-2 min-w-0">
+                                    <span class="truncate">{session.title}</span>
+                                  </div>
+                                </DropdownMenu.ItemLabel>
+                              </DropdownMenu.Item>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu>
+              </div>
+              <Show when={currentSession()}>
+                <Button
+                  as={A}
+                  href={`/${params.dir}/session`}
+                  icon="plus-small"
+                  class="hidden sm:inline-flex shrink-0 whitespace-nowrap order-2 sm:order-none"
+                >
+                  New session
+                </Button>
+              </Show>
+              <div class="hidden sm:flex items-center gap-2 min-w-0 sm:max-w-md sm:flex-1">
                 <Select
                   options={sessions()}
                   current={currentSession()}
@@ -390,21 +479,21 @@ export default function Layout(props: ParentProps) {
                   value={(x) => x.id}
                   onSelect={navigateToSession}
                   class="text-14-regular text-text-base"
-                  rootClass="min-w-0 grow max-w-md"
+                  rootClass="min-w-0 grow basis-full sm:basis-auto sm:max-w-md"
                   variant="ghost"
-                />
+                >
+                  {/* @ts-ignore */}
+                  {(session) => (
+                    <div class="min-w-0 truncate">{session ? session.title : "New session"}</div>
+                  )}
+                </Select>
               </div>
-              <Show when={currentSession()}>
-                <Button as={A} href={`/${params.dir}/session`} icon="plus-small" class="shrink-0 whitespace-nowrap">
-                  New session
-                </Button>
-              </Show>
             </div>
             <div class="flex items-center gap-2 ml-auto">
               <FontPicker />
               <ThemePicker />
             </div>
-            <div class="flex items-center gap-4">
+            <div class="hidden sm:flex items-center gap-4">
               <Tooltip
                 class="shrink-0"
                 value={

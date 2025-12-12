@@ -573,10 +573,10 @@ export default function Page() {
             />
           </div>
         </Show>
-        <div class="hidden shrink-0 w-56 p-2 h-full overflow-y-auto">
+        <div class="hidden xl:block shrink-0 w-56 p-2 h-full overflow-y-auto">
           {/* <FileTree path="" onFileClick={ handleTabClick} /> */}
         </div>
-        <div class="hidden shrink-0 w-56 p-2">
+        <div class="hidden xl:block shrink-0 w-56 p-2">
           <Show
             when={local.file.changes().length}
             fallback={<div class="px-2 text-xs text-text-muted">No changes</div>}
@@ -640,7 +640,7 @@ export default function Page() {
       </div>
       <Show when={layout.terminal.opened()}>
         <div
-          class="relative w-full flex flex-col shrink-0 border-t border-border-weak-base"
+          class="relative w-full hidden sm:flex flex-col shrink-0 border-t border-border-weak-base"
           style={{ height: `${layout.terminal.height()}px` }}
         >
           <ResizeHandle
