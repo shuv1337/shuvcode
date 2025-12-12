@@ -8,3 +8,13 @@
     cursor: default;
   }
 }
+
+@media (max-width: 40rem) {
+  input,
+  textarea,
+  select,
+  button,
+  [contenteditable] {
+    font-size: 16px;
+  }
+}
