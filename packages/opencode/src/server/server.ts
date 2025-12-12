@@ -2072,7 +2072,7 @@ export namespace Server {
               description: "IDE connected successfully",
               content: {
                 "application/json": {
-                  schema: resolver(z.record(z.string(), Ide.Status)),
+                  schema: resolver(z.boolean()),
                 },
               },
             },
@@ -2081,7 +2081,8 @@ export namespace Server {
         validator("param", z.object({ name: z.string() })),
         async (c) => {
           const { name } = c.req.valid("param")
-          return c.json(await Ide.connect(name))
+          await Ide.connect(name)
+          return c.json(true)
         },
       )
       .post(
@@ -2094,7 +2095,7 @@ export namespace Server {
               description: "IDE disconnected successfully",
               content: {
                 "application/json": {
-                  schema: resolver(z.record(z.string(), Ide.Status)),
+                  schema: resolver(z.boolean()),
                 },
               },
             },
@@ -2102,7 +2103,8 @@ export namespace Server {
         }),
         validator("param", z.object({ name: z.string() })),
         async (c) => {
-          return c.json(await Ide.disconnect())
+          await Ide.disconnect()
+          return c.json(true)
         },
       )
       .get(

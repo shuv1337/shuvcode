@@ -88,17 +88,20 @@ export const EditTool = Tool.define("edit", {
             title: "Edit this file: " + filePath,
             metadata: { filePath, diff },
             onSetup: (info) => {
-              if (!Ide.active()) return
-              Ide.openDiff(filePath, contentNew).then((response) => {
-                Permission.respond({
-                  sessionID: info.sessionID,
-                  permissionID: info.id,
-                  response,
+              if (Ide.active()) {
+                Ide.openDiff(filePath, contentNew).then((response) => {
+                  Permission.respond({
+                    sessionID: info.sessionID,
+                    permissionID: info.id,
+                    response,
+                  })
                 })
-              })
+              }
             },
             onRespond: () => {
-              Ide.closeTab(filePath).catch(() => {})
+              if (Ide.active()) {
+                Ide.closeTab(filePath).catch(() => {})
+              }
             },
           })
         }
@@ -129,17 +132,20 @@ export const EditTool = Tool.define("edit", {
           title: "Edit this file: " + filePath,
           metadata: { filePath, diff },
           onSetup: (info) => {
-            if (!Ide.active()) return
-            Ide.openDiff(filePath, contentNew).then((response) => {
-              Permission.respond({
-                sessionID: info.sessionID,
-                permissionID: info.id,
-                response,
+            if (Ide.active()) {
+              Ide.openDiff(filePath, contentNew).then((response) => {
+                Permission.respond({
+                  sessionID: info.sessionID,
+                  permissionID: info.id,
+                  response,
+                })
               })
-            })
+            }
           },
           onRespond: () => {
-            Ide.closeTab(filePath).catch(() => {})
+            if (Ide.active()) {
+              Ide.closeTab(filePath).catch(() => {})
+            }
           },
         })
       }

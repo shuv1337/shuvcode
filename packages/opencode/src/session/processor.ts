@@ -213,17 +213,12 @@ export namespace SessionProcessor {
                 case "tool-error": {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
-                    const err = value.error as any
                     await Session.updatePart({
                       ...match,
                       state: {
                         status: "error",
                         input: value.input,
-                        error: [
-                          err?.code && `[${err.code}]`,
-                          err?.toString(),
-                          err?.data,
-                        ].filter(Boolean).join(" "),
+                        error: (value.error as any).toString(),
                         metadata: value.error instanceof Permission.RejectedError ? value.error.metadata : undefined,
                         time: {
                           start: match.state.time.start,

@@ -112,7 +112,10 @@ export namespace Ide {
   let activeConnection: Connection | null = null
 
   function tabName(filePath: string) {
-    return `[opencode] Edit: ${path.basename(filePath)} ⧉`
+    // TODO this is used for a string match in claudecode.nvim that we could
+    // change if we incorporate a dedicated plugin
+    // (must start with ✻ and end with ⧉))
+    return `✻ [opencode] Edit: ${path.basename(filePath)} ⧉`
   }
 
   export async function status(): Promise<Record<string, Status>> {
@@ -130,7 +133,7 @@ export namespace Ide {
     return result
   }
 
-  export async function connect(key: string): Promise<Record<string, Status>> {
+  export async function connect(key: string): Promise<void> {
     if (activeConnection) {
       await disconnect()
     }
@@ -150,8 +153,6 @@ export namespace Ide {
     }
 
     activeConnection = connection
-
-    return status()
   }
 
   function handleNotification(method: string, params: unknown, instanceDirectory: string) {
@@ -170,42 +171,47 @@ export namespace Ide {
     }
   }
 
-  export async function disconnect(): Promise<Record<string, Status>> {
-    if (!activeConnection) {
-      return status()
+  export async function disconnect(): Promise<void> {
+    if (activeConnection) {
+      log.info("IDE disconnecting", { key: activeConnection.key })
+      await activeConnection.close()
+      activeConnection = null
     }
-
-    await activeConnection.close()
-    activeConnection = null
-
-    return status()
   }
 
   export function active(): Connection | null {
     return activeConnection
   }
 
+  const DiffResponse = {
+    FILE_SAVED: "once",
+    DIFF_REJECTED: "reject",
+  } as const satisfies Record<string, Permission.Response>
+
   export async function openDiff(filePath: string, newContents: string): Promise<Permission.Response> {
-    if (!activeConnection) {
+    const connection = active()
+    if (!connection) {
       throw new Error("No IDE connected")
     }
     const name = tabName(filePath)
     log.info("openDiff", { tabName: name })
-    const result = await activeConnection.request<{ content: Array<{ type: string; text: string }> }>("openDiff", {
+    const result = await connection.request<{ content: Array<{ type: string; text: string }> }>("openDiff", {
       old_file_path: filePath,
       new_file_path: filePath,
       new_file_contents: newContents,
       tab_name: name,
     })
     log.info("openDiff result", { text: result.content?.[0]?.text })
-    const text = result.content?.[0]?.text
-    if (text === "FILE_SAVED") return "once"
-    if (text === "DIFF_REJECTED") return "reject"
+    const text = result.content?.[0]?.text as keyof typeof DiffResponse | undefined
+    if (text && text in DiffResponse) return DiffResponse[text]
     throw new Error(`Unexpected openDiff result: ${text}`)
   }
 
   export async function closeTab(filePath: string): Promise<void> {
-    if (!activeConnection) return
-    await activeConnection.request("close_tab", { tab_name: tabName(filePath) })
+    const connection = active()
+    if (!connection) {
+      throw new Error("No IDE connected")
+    }
+    await connection.request("close_tab", { tab_name: tabName(filePath) })
   }
 }

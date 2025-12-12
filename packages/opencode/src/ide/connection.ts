@@ -1,13 +1,12 @@
 import z from "zod/v4"
-import os from "os"
 import path from "path"
 import { Glob } from "bun"
 import { Log } from "../util/log"
 import { WebSocketClientTransport, McpError } from "../mcp/ws"
+import { Config } from "../config/config"
 
 const log = Log.create({ service: "ide" })
 
-const LOCK_DIR = path.join(os.homedir(), ".claude", "ide")
 const WS_PREFIX = "ws://127.0.0.1"
 
 const LockFile = {
@@ -36,9 +35,15 @@ type LockFile = z.infer<typeof LockFile.schema>
 
 export async function discoverLockFiles(): Promise<Map<string, LockFile>> {
   const results = new Map<string, LockFile>()
+  const config = await Config.get()
+
+  if (!config.ide?.lockfile_dir) {
+    log.debug("ide.lockfile_dir not configured, skipping IDE discovery")
+    return results
+  }
 
   const glob = new Glob("*.lock")
-  for await (const file of glob.scan({ cwd: LOCK_DIR, absolute: true })) {
+  for await (const file of glob.scan({ cwd: config.ide.lockfile_dir, absolute: true })) {
     const lockFile = await LockFile.fromFile(file)
     if (!lockFile) continue
 
@@ -71,6 +76,11 @@ export class Connection {
   }
 
   static async create(key: string): Promise<Connection> {
+    const config = await Config.get()
+    if (!config.ide?.auth_header_name) {
+      throw new Error("ide.auth_header_name is required in config")
+    }
+
     const discovered = await discoverLockFiles()
     const lockFile = discovered.get(key)
     if (!lockFile) {
@@ -79,8 +89,7 @@ export class Connection {
 
     const transport = new WebSocketClientTransport(lockFile.url, {
       headers: {
-        // TODO research standardized header for this
-        "x-claude-code-ide-authorization": lockFile.authToken,
+        [config.ide.auth_header_name]: lockFile.authToken,
       },
     })
 

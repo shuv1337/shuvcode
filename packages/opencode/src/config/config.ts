@@ -671,6 +671,13 @@ export namespace Config {
           url: z.string().optional().describe("Enterprise URL"),
         })
         .optional(),
+      ide: z
+        .object({
+          lockfile_dir: z.string().optional().describe("Directory containing IDE lock files for WebSocket connections"),
+          auth_header_name: z.string().optional().describe("HTTP header name for IDE WebSocket authentication"),
+        })
+        .optional()
+        .describe("IDE integration settings"),
       experimental: z
         .object({
           hook: z
