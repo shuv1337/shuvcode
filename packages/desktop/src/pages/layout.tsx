@@ -661,7 +661,7 @@ export default function Layout(props: ParentProps) {
             <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
               <Button
                 as={"a"}
-                href="https://opencode.ai/desktop-feedback"
+                href="https://github.com/Latitudes-Dev/shuvcode/issues"
                 target="_blank"
                 class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg px-2"
                 variant="ghost"
