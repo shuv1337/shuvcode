@@ -1,9 +1,13 @@
 [data-component="select"] {
   [data-slot="select-select-trigger"] {
+    max-width: 100%;
+    min-width: 0;
     padding: 0 4px 0 8px;
     box-shadow: none;
 
     [data-slot="select-select-trigger-value"] {
+      flex: 1 1 auto;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
