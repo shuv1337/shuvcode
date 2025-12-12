@@ -666,7 +666,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             }}
           />
           <Show when={!session.prompt.dirty() && store.inputMode === "normal"}>
-            <div class="absolute top-0 left-0 px-5 py-3 text-14-regular text-text-weak pointer-events-none">
+            <div class="absolute top-0 left-0 right-0 px-5 py-3 text-14-regular text-text-weak pointer-events-none truncate">
               Ask anything... "{PLACEHOLDERS[placeholder()]}"
             </div>
           </Show>
