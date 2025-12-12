@@ -21,13 +21,14 @@ declare global {
   }
 }
 
-const host = import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "127.0.0.1"
+const host = import.meta.env.VITE_OPENCODE_SERVER_HOST || "127.0.0.1"
 const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 
 // Determine if we're in development mode (Vite sets this)
 const isDev = import.meta.env.DEV
 
 // Check if running on a known production domain (accessed via API server proxy)
+// Production hosts use relative "/" path to go through the API proxy
 const isProductionHost =
   location.hostname.includes("opencode.ai") ||
   location.hostname.includes("shuv.ai") ||
@@ -36,18 +37,16 @@ const isProductionHost =
 // URL priority:
 // 1. ?url= query parameter (explicit override)
 // 2. Tauri injected port (desktop app with local server)
-// 3. Development mode (local dev server)
-// 4. Production hosts or localhost use relative "/" (same-origin via API server proxy)
-// 5. Other cases (e.g., local IP access in dev) use explicit URL
+// 3. Production hosts use relative "/" (same-origin via API server proxy)
+// 4. Development mode uses explicit host:port
+// 5. Other cases (e.g., local IP access) use explicit URL
 const url =
   new URLSearchParams(document.location.search).get("url") ||
   (window.__OPENCODE__?.port
     ? `http://${host}:${window.__OPENCODE__.port}`
-    : isDev
-      ? `http://${host}:${port}`
-      : isProductionHost
-        ? "/"
-        : `http://${host}:${port}`)
+    : isProductionHost
+      ? "/"
+      : `http://${host}:${port}`)
 
 export function App() {
   return (
