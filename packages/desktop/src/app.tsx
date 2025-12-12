@@ -24,23 +24,34 @@ declare global {
 const host = import.meta.env.VITE_OPENCODE_SERVER_HOST || location.hostname || "127.0.0.1"
 const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 
-// Check if running on a known production or loopback host (same-origin API proxy)
-const isProductionHost =
+// Check if we should use same-origin requests (relative "/" URL)
+// This is needed when:
+// - Running behind a reverse proxy (HTTPS) that proxies API requests
+// - Running on known production hosts
+// In local dev mode with HTTP, we can hit the API server directly
+const isSecure = location.protocol === "https:"
+const isKnownHost =
   location.hostname.includes("opencode.ai") ||
   location.hostname.includes("shuv.ai") ||
-  ["localhost", "127.0.0.1", "0.0.0.0"].includes(location.hostname) ||
   location.hostname.endsWith(".local")
+const isLoopback = ["localhost", "127.0.0.1", "0.0.0.0"].includes(location.hostname)
+
+// Use same-origin when:
+// - On HTTPS (must use same-origin to avoid mixed content)
+// - On known production hosts
+// - On loopback in non-dev mode (production build)
+const useSameOrigin = isSecure || isKnownHost || (isLoopback && !import.meta.env.DEV)
 
 // URL priority:
 // 1. ?url= query parameter (explicit override)
 // 2. Tauri injected port (desktop app with local server)
-// 3. Known hosts (prod/loopback) use relative "/" to hit the proxy on the same origin
+// 3. Same-origin mode uses relative "/" to hit the proxy
 // 4. Other cases fall back to explicit host:port
 const url =
   new URLSearchParams(document.location.search).get("url") ||
   (window.__OPENCODE__?.port
     ? `http://${host}:${window.__OPENCODE__.port}`
-    : isProductionHost
+    : useSameOrigin
       ? "/"
       : `http://${host}:${port}`)
 

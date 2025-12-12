@@ -82,7 +82,8 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
         session: () =>
           sdk.session.list().then((x) => {
-            const sessions = (x.data ?? [])
+            const data = Array.isArray(x.data) ? x.data : []
+            const sessions = data
               .slice()
               .sort((a, b) => a.id.localeCompare(b.id))
               .slice(0, store.limit)

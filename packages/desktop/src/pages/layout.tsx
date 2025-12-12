@@ -121,6 +121,7 @@ export default function Layout(props: ParentProps) {
     const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
       if (event.matches) layout.sidebar.close()
       if (event.matches) layout.terminal.close()
+      if (event.matches) layout.review.tab()
     }
     handleChange(mediaQuery)
     mediaQuery.addEventListener("change", handleChange)
