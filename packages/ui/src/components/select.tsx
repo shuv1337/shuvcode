@@ -14,6 +14,9 @@ export type SelectProps<T> = Omit<ComponentProps<typeof Kobalte<T>>, "value" | "
   onSelect?: (value: T | undefined) => void
   class?: ComponentProps<"div">["class"]
   classList?: ComponentProps<"div">["classList"]
+  /** Classes applied to the root Kobalte element for flex layout sizing (e.g., min-w-0, grow, max-w-*) */
+  rootClass?: ComponentProps<"div">["class"]
+  rootClassList?: ComponentProps<"div">["classList"]
   children?: (item: T | undefined) => JSX.Element
 }
 
@@ -21,6 +24,8 @@ export function Select<T>(props: SelectProps<T> & ButtonProps) {
   const [local, others] = splitProps(props, [
     "class",
     "classList",
+    "rootClass",
+    "rootClassList",
     "placeholder",
     "options",
     "current",
@@ -46,6 +51,10 @@ export function Select<T>(props: SelectProps<T> & ButtonProps) {
     <Kobalte<T, { category: string; options: T[] }>
       {...others}
       data-component="select"
+      classList={{
+        ...(local.rootClassList ?? {}),
+        [local.rootClass ?? ""]: !!local.rootClass,
+      }}
       value={local.current}
       options={grouped()}
       optionValue={(x) => (local.value ? local.value(x) : (x as string))}
