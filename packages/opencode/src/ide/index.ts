@@ -111,7 +111,7 @@ export namespace Ide {
   // Connection
   let activeConnection: Connection | null = null
 
-  function tabName(filePath: string) {
+  function diffTabName(filePath: string) {
     // TODO this is used for a string match in claudecode.nvim that we could
     // change if we incorporate a dedicated plugin
     // (must start with ✻ and end with ⧉))
@@ -193,7 +193,7 @@ export namespace Ide {
     if (!connection) {
       throw new Error("No IDE connected")
     }
-    const name = tabName(filePath)
+    const name = diffTabName(filePath)
     log.info("openDiff", { tabName: name })
     const result = await connection.request<{ content: Array<{ type: string; text: string }> }>("openDiff", {
       old_file_path: filePath,
@@ -207,11 +207,15 @@ export namespace Ide {
     throw new Error(`Unexpected openDiff result: ${text}`)
   }
 
-  export async function closeTab(filePath: string): Promise<void> {
+  async function closeTab(tabName: string): Promise<void> {
     const connection = active()
     if (!connection) {
       throw new Error("No IDE connected")
     }
-    await connection.request("close_tab", { tab_name: tabName(filePath) })
+    await connection.request("close_tab", { tab_name: tabName })
+  }
+
+  export async function closeDiff(filePath: string): Promise<void> {
+    await closeTab(diffTabName(filePath))
   }
 }

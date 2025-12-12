@@ -100,7 +100,7 @@ export const EditTool = Tool.define("edit", {
             },
             onRespond: () => {
               if (Ide.active()) {
-                Ide.closeTab(filePath).catch(() => {})
+                Ide.closeDiff(filePath).catch(() => {})
               }
             },
           })
@@ -144,7 +144,7 @@ export const EditTool = Tool.define("edit", {
           },
           onRespond: () => {
             if (Ide.active()) {
-              Ide.closeTab(filePath).catch(() => {})
+              Ide.closeDiff(filePath).catch(() => {})
             }
           },
         })
