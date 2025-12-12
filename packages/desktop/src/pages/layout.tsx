@@ -362,14 +362,15 @@ export default function Layout(props: ParentProps) {
               </div>
             }
           >
-            <div class="flex items-center gap-3">
-              <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3 min-w-0 grow">
+              <div class="flex items-center gap-2 min-w-0">
                 <Select
                   options={layout.projects.list().map((project) => project.worktree)}
                   current={currentDirectory()}
                   label={(x) => getFilename(x)}
                   onSelect={(x) => (x ? navigateToProject(x) : undefined)}
                   class="text-14-regular text-text-base"
+                  rootClass="min-w-0 shrink"
                   variant="ghost"
                 >
                   {/* @ts-ignore */}
@@ -388,12 +389,13 @@ export default function Layout(props: ParentProps) {
                   label={(x) => x.title}
                   value={(x) => x.id}
                   onSelect={navigateToSession}
-                  class="text-14-regular text-text-base max-w-md"
+                  class="text-14-regular text-text-base"
+                  rootClass="min-w-0 grow max-w-md"
                   variant="ghost"
                 />
               </div>
               <Show when={currentSession()}>
-                <Button as={A} href={`/${params.dir}/session`} icon="plus-small">
+                <Button as={A} href={`/${params.dir}/session`} icon="plus-small" class="shrink-0 whitespace-nowrap">
                   New session
                 </Button>
               </Show>
