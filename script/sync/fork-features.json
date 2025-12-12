@@ -198,8 +198,9 @@
       "criticalCode": [
         {
           "file": "packages/enterprise/src/routes/share/[shareID].tsx",
-          "description": "Rebranded share page header with Latitudes-Dev/shuvcode GitHub link and static OG image",
+          "description": "Rebranded share page with shuvcode ASCII logo, GitHub link, and static OG image",
           "markers": [
+            "import { AsciiLogo, AsciiMark } from",
             "href=\"https://github.com/Latitudes-Dev/shuvcode\"",
             "return `/social-share.png`",
             "content=\"shuvcode - AI coding agent"
@@ -241,8 +242,8 @@
         },
         {
           "file": "packages/enterprise/src/entry-server.tsx",
-          "description": "HTML document title changed to shuvcode",
-          "markers": ["<title>shuvcode</title>"]
+          "description": "HTML document with Night Owl theme, Meslo font, and shuvcode title",
+          "markers": ["<title>shuvcode</title>", "data-theme=\"nightowl\"", "#011627", "meslo"]
         },
         {
           "file": "packages/enterprise/public/site.webmanifest",

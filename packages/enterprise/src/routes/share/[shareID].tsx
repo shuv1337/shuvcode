@@ -6,7 +6,7 @@ import { DiffComponentProvider } from "@opencode-ai/ui/context/diff"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
 import { Share } from "~/core/share"
-import { Logo, Mark } from "@opencode-ai/ui/logo"
+import { AsciiLogo, AsciiMark } from "@opencode-ai/ui/logo"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { createDefaultOptions } from "@opencode-ai/ui/pierre"
@@ -227,8 +227,8 @@ export default function () {
                     const title = () => (
                       <div class="flex flex-col gap-4">
                         <div class="h-8 flex gap-4 items-center justify-start self-stretch">
-                          <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base">
-                            <Mark class="shrink-0 w-3 my-0.5" />
+                          <div class="pl-1 pr-2 flex items-center gap-1.5 bg-surface-strong shadow-xs-border-base">
+                            <AsciiMark scale={0.35} class="shrink-0" />
                             <div class="text-12-mono text-text-base">v{info().version}</div>
                           </div>
                           <div class="flex gap-2 items-center">
@@ -263,7 +263,7 @@ export default function () {
                           </For>
                         </div>
                         <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
-                          <Logo class="w-58.5 opacity-12" />
+                          <AsciiLogo scale={1.5} class="opacity-20" />
                         </div>
                       </div>
                     )
@@ -273,8 +273,8 @@ export default function () {
                     return (
                       <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
                         <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
-                          <div class="">
-                            <Mark />
+                          <div class="flex items-center">
+                            <AsciiMark scale={0.6} />
                           </div>
                           <div class="flex gap-3 items-center">
                             <IconButton
@@ -336,7 +336,7 @@ export default function () {
                                   }}
                                 >
                                   <div classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}>
-                                    <Logo class="w-58.5 opacity-12" />
+                                    <AsciiLogo scale={1.5} class="opacity-20" />
                                   </div>
                                 </SessionTurn>
                               </div>
