@@ -41,12 +41,12 @@ This plan is written to match the current repo behavior and to be secure-by-defa
 
 ## Proposed Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENCODE_LOCAL_UI` | Enable local UI serving | `false` |
-| `OPENCODE_LOCAL_UI_PATH` | Absolute path to UI `dist/` | unset |
-| `OPENCODE_LOCAL_UI_DEV_URL` | Dev-server URL fallback | `http://localhost:3000` |
-| `OPENCODE_CORS_ORIGINS` | Optional explicit CORS allowlist | unset |
+| Variable                    | Description                      | Default                 |
+| --------------------------- | -------------------------------- | ----------------------- |
+| `OPENCODE_LOCAL_UI`         | Enable local UI serving          | `false`                 |
+| `OPENCODE_LOCAL_UI_PATH`    | Absolute path to UI `dist/`      | unset                   |
+| `OPENCODE_LOCAL_UI_DEV_URL` | Dev-server URL fallback          | `http://localhost:3000` |
+| `OPENCODE_CORS_ORIGINS`     | Optional explicit CORS allowlist | unset                   |
 
 ## Implementation Plan
 
@@ -64,6 +64,7 @@ Modify the existing catch-all proxy at `packages/opencode/src/server/server.ts:2
 4. Restrict UI serving/proxying to `GET`/`HEAD` only (do not forward arbitrary methods).
 
 Notes:
+
 - Do **not** build paths with `path.join(root, "/...")` patterns; leading `/` discards `root` and creates security bugs. Use `serveStatic` and/or `rewriteRequestPath`.
 
 ### B) Server: Self-host defaults (CORS + reverse proxy compatibility)
@@ -73,7 +74,7 @@ Self-hosting becomes unsafe if the HTTP port is reachable by untrusted clients (
 1. **CORS tightening for local UI mode**
    - When `OPENCODE_LOCAL_UI=true`, UI+API are same-origin; default to **not** using wildcard CORS.
    - If cross-origin clients are required, allow them only via an explicit allowlist (`OPENCODE_CORS_ORIGINS`) rather than default wildcard.
-   - Keep existing permissive behavior when *not* in local UI mode so `desktop.shuv.ai` (remote UI) continues to work.
+   - Keep existing permissive behavior when _not_ in local UI mode so `desktop.shuv.ai` (remote UI) continues to work.
 
 2. **Reverse proxy notes (documentation)**
    - Document reverse proxy requirements:
@@ -83,21 +84,25 @@ Self-hosting becomes unsafe if the HTTP port is reachable by untrusted clients (
 ### C) CLI: Flags for `web` and `serve`
 
 Add flags to both:
+
 - `packages/opencode/src/cli/cmd/web.ts:29`
 - `packages/opencode/src/cli/cmd/serve.ts:4`
 
 Proposed flags:
+
 - `--local-ui` (boolean)
 - `--ui-path <path>` (string; implies `--local-ui`)
 - `--ui-dev-url <url>` (string; implies `--local-ui`)
 - `--no-open` (boolean; for `web` only)
 
 Implementation detail:
+
 - Set env vars **before** calling `Server.listen(...)`.
 
 ### D) Docker: Self-host bundle (workspace-correct build)
 
 Create a new bundle under `docker/self-host/`:
+
 - `docker/self-host/docker-compose.yml`
 - `docker/self-host/Dockerfile`
 - `docker/self-host/.dockerignore` (exclude host `node_modules`, `dist`, etc.)
@@ -125,6 +130,7 @@ Create a new bundle under `docker/self-host/`:
 #### `Dockerfile` (pinned + workspace-aware)
 
 Constraints from repo:
+
 - Bun is pinned by root `package.json` and enforced by `packages/script/src/index.ts:12`.
 - Desktop and opencode both depend on workspace packages (e.g. `packages/desktop/package.json:32`, `packages/opencode/package.json:69`).
 
@@ -139,6 +145,7 @@ Proposed approach:
    - `/app/packages/opencode/dist/shuvcode-linux-x64/bin/opencode` → `/usr/local/bin/opencode`
 
 Also note:
+
 - There is an existing minimal Dockerfile at `packages/opencode/Dockerfile:1`. This plan adds a separate self-host bundle; it does not replace the existing Docker packaging unless explicitly decided later.
 
 ### E) Testing & Acceptance Criteria
@@ -158,6 +165,7 @@ Add/ensure coverage for:
 ## Usage (Updated)
 
 ### Local (no Docker)
+
 ```bash
 # Build UI once
 bun --cwd packages/desktop run build
@@ -167,12 +175,14 @@ opencode web --port 4096 --local-ui --ui-path packages/desktop/dist
 ```
 
 ### Docker (recommended, localhost-only)
+
 ```bash
 cd docker/self-host
 PROJECTS_DIR=~/code docker compose up -d
 ```
 
 ### Docker (LAN binding for reverse proxy)
+
 ```bash
 cd docker/self-host
 PROJECTS_DIR=~/code SHUVCODE_BIND_ADDR=0.0.0.0 docker compose up -d
@@ -181,11 +191,13 @@ PROJECTS_DIR=~/code SHUVCODE_BIND_ADDR=0.0.0.0 docker compose up -d
 ## Security Notes (Updated)
 
 Container isolation reduces blast radius, but self-host mode is still powerful:
+
 - PTY endpoints (`packages/opencode/src/server/server.ts:202`, `packages/opencode/src/server/server.ts:323`) are effectively a shell.
 - Directory selection (`packages/opencode/src/server/server.ts:175`) is intentionally unrestricted; mount only what you want the agent to access.
 - If binding to `0.0.0.0`, assume the service is reachable by other machines; do not expose it to untrusted networks without an authenticating reverse proxy (or equivalent network controls).
 
 Optional hardening (compose):
+
 ```yaml
 security_opt:
   - no-new-privileges:true
