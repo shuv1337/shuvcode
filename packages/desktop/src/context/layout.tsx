@@ -108,7 +108,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         const sessions = (x.data ?? [])
           .slice()
           .sort((a, b) => a.id.localeCompare(b.id))
-          .slice(0, 5)
+          .slice(0, 10)
         setStore("session", sessions)
       })
     }

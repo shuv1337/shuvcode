@@ -52,7 +52,7 @@ export default function Home() {
               <For
                 each={sync.data.project
                   .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-                  .slice(0, 5)}
+                  .slice(0, 10)}
               >
                 {(project) => (
                   <Button
