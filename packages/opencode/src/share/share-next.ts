@@ -147,8 +147,11 @@ export namespace ShareNext {
   export async function remove(sessionID: string) {
     log.info("removing share", { sessionID })
     const share = await get(sessionID)
-    if (!share) return
-    await fetch(`${await url()}/api/share/${share.id}`, {
+    if (!share) {
+      log.info("no share found to remove", { sessionID })
+      return
+    }
+    const response = await fetch(`${await url()}/api/share/${share.id}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
@@ -157,7 +160,11 @@ export namespace ShareNext {
         secret: share.secret,
       }),
     })
+    if (!response.ok) {
+      log.error("failed to remove share from server", { sessionID, status: response.status })
+    }
     await Storage.remove(["session_share", sessionID])
+    log.info("share removed", { sessionID })
   }
 
   async function fullSync(sessionID: string) {

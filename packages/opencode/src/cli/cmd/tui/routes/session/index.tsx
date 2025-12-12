@@ -257,18 +257,18 @@ export function Session() {
             disabled: !!session()?.share?.url,
             category: "Session",
             onSelect: async (dialog: any) => {
-              await sdk.client.session
-                .share({
+              dialog.clear()
+              try {
+                const res = await sdk.client.session.share({
                   sessionID: route.sessionID,
                 })
-                .then((res) =>
-                  Clipboard.copy(res.data!.share!.url).catch(() =>
-                    toast.show({ message: "Failed to copy URL to clipboard", variant: "error" }),
-                  ),
-                )
-                .then(() => toast.show({ message: "Share URL copied to clipboard!", variant: "success" }))
-                .catch(() => toast.show({ message: "Failed to share session", variant: "error" }))
-              dialog.clear()
+                if (res.data?.share?.url) {
+                  await Clipboard.copy(res.data.share.url).catch(() => {})
+                  toast.show({ message: "Share URL copied to clipboard!", variant: "success" })
+                }
+              } catch {
+                toast.show({ message: "Failed to share session", variant: "error" })
+              }
             },
           },
         ]
@@ -330,11 +330,14 @@ export function Session() {
       keybind: "session_unshare",
       disabled: !session()?.share?.url,
       category: "Session",
-      onSelect: (dialog) => {
-        sdk.client.session.unshare({
-          sessionID: route.sessionID,
-        })
+      onSelect: async (dialog) => {
         dialog.clear()
+        await sdk.client.session
+          .unshare({
+            sessionID: route.sessionID,
+          })
+          .then(() => toast.show({ message: "Session unshared", variant: "success" }))
+          .catch(() => toast.show({ message: "Failed to unshare session", variant: "error" }))
       },
     },
     {
