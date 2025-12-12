@@ -1,7 +1,7 @@
 # Plan: Share Functionality for shuv.ai Infrastructure
 
 **Created:** 2025-01-13  
-**Updated:** 2025-12-11 (Implementation complete for Phase 1 & 2)  
+**Updated:** 2025-12-12 (Phase 1-3 complete, Phase 4 infrastructure verified)  
 **Goal:** Enable `/share` functionality for shuvcode by deploying rebranded share infrastructure to `share.shuv.ai`
 
 ---
@@ -450,31 +450,23 @@ The import command must handle both formats with appropriate transformation.
 
 ### Phase 4: Testing
 
-- [ ] **4.1 Local Testing**
+- [x] **4.1 Infrastructure Verification**
+  - Verified `https://share.shuv.ai` returns HTTP 200
+  - Verified `/share/{id}` route returns HTTP 200
+  - Verified API endpoint `/api/share/{id}/data` returns empty array for non-existent shares
+  - Deployment successful via GitHub Actions snapshot workflow
 
-  ```bash
-  cd packages/enterprise
+- [x] **4.2 Test Short URL Redirect**
+  - Tested `https://share.shuv.ai/s/test123`
+  - Verified HTTP 301 redirect with `Location: /share/test123`
+  - Fixed: Converted from SolidJS component redirect to API route for proper server-side 301
 
-  # Set test environment
-  export OPENCODE_STORAGE_ADAPTER=r2
-  export OPENCODE_STORAGE_ACCOUNT_ID=your-account-id
-  export OPENCODE_STORAGE_BUCKET=your-test-bucket
-  export OPENCODE_STORAGE_ACCESS_KEY_ID=your-key
-  export OPENCODE_STORAGE_SECRET_ACCESS_KEY=your-secret
-
-  bun run dev
-  ```
-
-- [ ] **4.2 Test Share Flow End-to-End**
+- [ ] **4.3 Test Share Flow End-to-End** (Manual Testing Required)
   1. Start shuvcode CLI: `bun dev` in `packages/opencode`
   2. Create a session and run `/share`
   3. Verify share URL is `https://share.shuv.ai/share/{id}`
   4. Visit share URL and verify page renders
   5. Test `/unshare` to remove share
-
-- [ ] **4.3 Test Short URL Redirect**
-  - Visit `https://share.shuv.ai/s/{id}`
-  - Verify it redirects to `https://share.shuv.ai/share/{id}`
 
 - [ ] **4.4 Test GitHub Action Integration**
   - Create test PR with `@shuvcode` trigger
@@ -614,11 +606,11 @@ Users can override the share URL if needed in `opencode.json`:
 
 ### Phase 4 Complete
 
-- [ ] Full share/unshare flow works end-to-end
-- [ ] Share pages publicly accessible at `share.shuv.ai/share/{id}`
-- [ ] Short URLs redirect correctly
-- [ ] Import from all URL formats works
-- [ ] Legacy `opencode.ai/s/*` import still works
+- [x] Infrastructure live at `share.shuv.ai`
+- [x] Short URLs redirect correctly (HTTP 301)
+- [ ] Full share/unshare flow works end-to-end (requires manual CLI testing)
+- [ ] Import from all URL formats works (requires manual testing)
+- [ ] Legacy `opencode.ai/s/*` import still works (requires manual testing)
 
 ---
 
