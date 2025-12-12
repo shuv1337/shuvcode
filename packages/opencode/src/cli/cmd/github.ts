@@ -400,7 +400,7 @@ export const GithubRunCommand = cmd({
           ? (payload as PullRequestReviewCommentEvent).pull_request.number
           : (payload as IssueCommentEvent).issue.number
       const runUrl = `/${owner}/${repo}/actions/runs/${runId}`
-      const shareBaseUrl = isMock ? "https://dev.opencode.ai" : "https://opencode.ai"
+      const shareBaseUrl = isMock ? "https://share.dev.shuv.ai" : "https://share.shuv.ai"
 
       let appToken: string
       let octoRest: Octokit

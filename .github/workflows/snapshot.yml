@@ -50,3 +50,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DEFAULT_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Share to Cloudflare
+        continue-on-error: true
+        run: |
+          bunx sst deploy --stage production --config sst.share.config.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DEFAULT_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SST_SECRET_R2ACCESSKEY: ${{ secrets.R2_ACCESS_KEY_ID }}
+          SST_SECRET_R2SECRETKEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

@@ -177,6 +177,67 @@
           "markers": ["import { AsciiLogo, AsciiMark }", "<AsciiLogo", "<AsciiMark"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Share functionality for shuv.ai infrastructure",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Enable /share functionality for shuvcode by deploying rebranded share infrastructure to share.shuv.ai. Includes CLI defaults, import command dual-API support, and enterprise package rebranding.",
+      "files": [
+        "packages/enterprise/src/routes/share/[shareID].tsx",
+        "packages/enterprise/src/routes/s/[id].tsx",
+        "packages/opencode/src/share/share-next.ts",
+        "packages/opencode/src/cli/cmd/github.ts",
+        "packages/opencode/src/cli/cmd/import.ts",
+        "sst.share.config.ts",
+        ".github/workflows/snapshot.yml"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/enterprise/src/routes/share/[shareID].tsx",
+          "description": "Rebranded share page header with Latitudes-Dev/shuvcode GitHub link and static OG image",
+          "markers": [
+            "href=\"https://github.com/Latitudes-Dev/shuvcode\"",
+            "return `/social-share.png`",
+            "content=\"shuvcode - AI coding agent"
+          ]
+        },
+        {
+          "file": "packages/enterprise/src/routes/s/[id].tsx",
+          "description": "Short URL redirect route /s/{id} to /share/{id}",
+          "markers": ["throw redirect(`/share/${params.id}`, 301)"]
+        },
+        {
+          "file": "packages/opencode/src/share/share-next.ts",
+          "description": "Default share URL changed to share.shuv.ai with SHUVCODE_SHARE_URL env var support",
+          "markers": ["process.env.SHUVCODE_SHARE_URL", "https://share.shuv.ai"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/github.ts",
+          "description": "Share base URLs updated to share.shuv.ai / share.dev.shuv.ai",
+          "markers": ["https://share.dev.shuv.ai", "https://share.shuv.ai"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/import.ts",
+          "description": "Dual API format support for legacy opencode.ai and enterprise shuv.ai URLs",
+          "markers": [
+            "const legacyMatch = args.file.match",
+            "const enterpriseMatch = args.file.match",
+            "share.shuv.ai/api/share"
+          ]
+        },
+        {
+          "file": "sst.share.config.ts",
+          "description": "SST deployment config for share service to shuv.ai domain",
+          "markers": ["name: \"shuv-share\"", "domain: \"share.\" + domain"]
+        },
+        {
+          "file": ".github/workflows/snapshot.yml",
+          "description": "Share deployment step in CI workflow",
+          "markers": ["Deploy Share to Cloudflare", "sst.share.config.ts"]
+        }
+      ]
     }
   ]
 }

@@ -24,7 +24,6 @@ import { Diff as SSRDiff } from "@opencode-ai/ui/diff-ssr"
 import { clientOnly } from "@solidjs/start"
 import { type IconName } from "@opencode-ai/ui/icons/provider"
 import { Meta } from "@solidjs/meta"
-import { Base64 } from "js-base64"
 
 const ClientOnlyDiff = clientOnly(() => import("@opencode-ai/ui/diff").then((m) => ({ default: m.Diff })))
 
@@ -172,32 +171,13 @@ export default function () {
           if (!match().found) throw new Error(`Session ${data().sessionID} not found`)
           const info = createMemo(() => data().session[match().index])
           const ogImage = createMemo(() => {
-            const models = new Set<string>()
-            const messages = data().message[data().sessionID] ?? []
-            for (const msg of messages) {
-              if (msg.role === "assistant" && msg.modelID) {
-                models.add(msg.modelID)
-              }
-            }
-            const modelIDs = Array.from(models)
-            const encodedTitle = encodeURIComponent(Base64.encode(encodeURIComponent(info().title.substring(0, 700))))
-            let modelParam: string
-            if (modelIDs.length === 1) {
-              modelParam = modelIDs[0]
-            } else if (modelIDs.length === 2) {
-              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs[1]}`)
-            } else if (modelIDs.length > 2) {
-              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs.length - 1} others`)
-            } else {
-              modelParam = "unknown"
-            }
-            const version = `v${info().version}`
-            return `https://social-cards.sst.dev/opencode-share/${encodedTitle}.png?model=${modelParam}&version=${version}&id=${data().shareID}`
+            // Use static fallback image for shuvcode
+            return `/social-share.png`
           })
 
           return (
             <>
-              <Meta name="description" content="opencode - The AI coding agent built for the terminal." />
+              <Meta name="description" content="shuvcode - AI coding agent for the terminal." />
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <DiffComponentProvider component={ClientOnlyDiff}>
@@ -294,14 +274,12 @@ export default function () {
                       <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
                         <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
                           <div class="">
-                            <a href="https://opencode.ai">
-                              <Mark />
-                            </a>
+                            <Mark />
                           </div>
                           <div class="flex gap-3 items-center">
                             <IconButton
                               as={"a"}
-                              href="https://github.com/sst/opencode"
+                              href="https://github.com/Latitudes-Dev/shuvcode"
                               target="_blank"
                               icon="github"
                               variant="ghost"

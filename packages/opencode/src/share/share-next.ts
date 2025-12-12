@@ -12,7 +12,7 @@ export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
 
   async function url() {
-    return Config.get().then((x) => x.enterprise?.url ?? "https://opncd.ai")
+    return Config.get().then((x) => x.enterprise?.url ?? process.env.SHUVCODE_SHARE_URL ?? "https://share.shuv.ai")
   }
 
   export async function init() {

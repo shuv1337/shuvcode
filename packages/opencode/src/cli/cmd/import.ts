@@ -31,39 +31,90 @@ export const ImportCommand = cmd({
       const isUrl = args.file.startsWith("http://") || args.file.startsWith("https://")
 
       if (isUrl) {
-        const urlMatch = args.file.match(/https?:\/\/opencode\.ai\/s\/([a-zA-Z0-9_-]+)/)
-        if (!urlMatch) {
-          process.stdout.write(`Invalid URL format. Expected: https://opencode.ai/s/<slug>`)
+        // Match both legacy (opencode.ai/s/) and enterprise (shuv.ai/share/ or shuv.ai/s/) URLs
+        const legacyMatch = args.file.match(/https?:\/\/opencode\.ai\/s\/([a-zA-Z0-9_-]+)/)
+        const enterpriseMatch = args.file.match(/https?:\/\/(?:share\.)?shuv\.ai\/(?:share|s)\/([a-zA-Z0-9_-]+)/)
+
+        const isLegacy = !!legacyMatch
+        const isShuv = !!enterpriseMatch
+        const slug = legacyMatch?.[1] ?? enterpriseMatch?.[1]
+
+        if (!slug) {
+          process.stdout.write(`Invalid URL format. Expected:`)
+          process.stdout.write(EOL)
+          process.stdout.write(`  - https://opencode.ai/s/<slug>`)
+          process.stdout.write(EOL)
+          process.stdout.write(`  - https://share.shuv.ai/share/<slug>`)
           process.stdout.write(EOL)
           return
         }
 
-        const slug = urlMatch[1]
-        const response = await fetch(`https://api.opencode.ai/share_data?id=${slug}`)
+        if (isShuv) {
+          // Enterprise API format
+          const response = await fetch(`https://share.shuv.ai/api/share/${slug}/data`)
+          if (!response.ok) {
+            process.stdout.write(`Failed to fetch share data: ${response.statusText}`)
+            process.stdout.write(EOL)
+            return
+          }
 
-        if (!response.ok) {
-          process.stdout.write(`Failed to fetch share data: ${response.statusText}`)
-          process.stdout.write(EOL)
-          return
-        }
+          const data = (await response.json()) as Array<{
+            type: "session" | "message" | "part" | "session_diff" | "model"
+            data: any
+          }>
 
-        const data = await response.json()
+          // Transform enterprise format to legacy format
+          let info: Session.Info | undefined
+          const messagesMap: Record<string, { info: any; parts: any[] }> = {}
 
-        if (!data.info || !data.messages || Object.keys(data.messages).length === 0) {
-          process.stdout.write(`Share not found: ${slug}`)
-          process.stdout.write(EOL)
-          return
-        }
-
-        exportData = {
-          info: data.info,
-          messages: Object.values(data.messages).map((msg: any) => {
-            const { parts, ...info } = msg
-            return {
-              info,
-              parts,
+          for (const item of data) {
+            if (item.type === "session") {
+              info = item.data
+            } else if (item.type === "message") {
+              const msgId = item.data.id
+              messagesMap[msgId] = messagesMap[msgId] ?? { info: item.data, parts: [] }
+              messagesMap[msgId].info = item.data
+            } else if (item.type === "part") {
+              const msgId = item.data.messageID
+              messagesMap[msgId] = messagesMap[msgId] ?? { info: {}, parts: [] }
+              messagesMap[msgId].parts.push(item.data)
             }
-          }),
+          }
+
+          if (!info) {
+            process.stdout.write(`Share not found: ${slug}`)
+            process.stdout.write(EOL)
+            return
+          }
+
+          exportData = {
+            info,
+            messages: Object.values(messagesMap),
+          }
+        } else {
+          // Legacy API format
+          const response = await fetch(`https://api.opencode.ai/share_data?id=${slug}`)
+          if (!response.ok) {
+            process.stdout.write(`Failed to fetch share data: ${response.statusText}`)
+            process.stdout.write(EOL)
+            return
+          }
+
+          const data = await response.json()
+
+          if (!data.info || !data.messages || Object.keys(data.messages).length === 0) {
+            process.stdout.write(`Share not found: ${slug}`)
+            process.stdout.write(EOL)
+            return
+          }
+
+          exportData = {
+            info: data.info,
+            messages: Object.values(data.messages).map((msg: any) => {
+              const { parts, ...info } = msg
+              return { info, parts }
+            }),
+          }
         }
       } else {
         const file = Bun.file(args.file)
