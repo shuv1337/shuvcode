@@ -36,11 +36,11 @@ export default function Home() {
 
   return (
     <div class="size-full bg-background-base flex flex-col items-center pt-55">
-      <AsciiLogo scale={1.5} class="opacity-30" />
+      <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-[0.85] max-[40rem]:origin-center" />
       <Switch>
         <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full max-w-xl flex flex-col gap-4">
-            <div class="flex gap-2 items-center justify-between pl-3">
+          <div class="mt-20 w-full max-w-xl flex flex-col gap-4 px-3">
+            <div class="flex gap-2 items-center justify-between">
               <div class="text-14-medium text-text-strong">Recent projects</div>
               <Show when={platform.openDirectoryPickerDialog}>
                 <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
@@ -58,13 +58,13 @@ export default function Home() {
                   <Button
                     size="large"
                     variant="ghost"
-                    class="text-14-mono text-left justify-between px-3"
+                    class="text-14-mono text-left justify-between px-3 gap-3"
                     onClick={() => openProject(project.worktree)}
                   >
-                    {project.worktree}
-                    <div class="text-14-regular text-text-weak">
+                    <span class="truncate min-w-0">{project.worktree}</span>
+                    <span class="text-14-regular text-text-weak shrink-0">
                       {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
-                    </div>
+                    </span>
                   </Button>
                 )}
               </For>
