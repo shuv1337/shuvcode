@@ -16,12 +16,18 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
       [key: string]: Event
     }>()
 
-    sdk.global.event().then(async (events) => {
-      for await (const event of events.stream) {
-        // console.log("event", event)
-        emitter.emit(event.directory ?? "global", event.payload)
-      }
-    })
+    sdk.global
+      .event()
+      .then(async (events) => {
+        for await (const event of events.stream) {
+          // console.log("event", event)
+          emitter.emit(event.directory ?? "global", event.payload)
+        }
+      })
+      .catch((error) => {
+        if (error.name === "AbortError") return
+        console.error("Event stream error:", error)
+      })
 
     onCleanup(() => {
       abort.abort()
