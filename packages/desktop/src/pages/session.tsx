@@ -412,21 +412,21 @@ export default function Page() {
                           sessionID={session.id!}
                           messageID={session.messages.active()?.id!}
                           classes={{
-                            root: "pb-20 flex-1 min-w-0",
+                            root: "pb-20 flex-1 min-w-0 overflow-x-hidden",
                             content: "pb-20",
                             container:
-                              "w-full " +
+                              "w-full max-w-full " +
                               (wide()
-                                ? "max-w-146 mx-auto px-6"
+                                ? "max-w-146 mx-auto px-4 sm:px-6"
                                 : session.messages.user().length > 1
-                                  ? "pr-6 pl-18"
-                                  : "px-6"),
+                                  ? "pr-4 pl-12 sm:pr-6 sm:pl-18"
+                                  : "px-4 sm:px-6"),
                           }}
                         />
                       </div>
                     </Match>
                     <Match when={true}>
-                      <div class="size-full flex flex-col pb-45 justify-end items-start gap-4 flex-[1_0_0] self-stretch max-w-146 mx-auto px-6">
+                      <div class="size-full flex flex-col pb-45 justify-end items-start gap-4 flex-[1_0_0] self-stretch max-w-146 mx-auto px-4 sm:px-6">
                         <div class="text-20-medium text-text-weaker">New session</div>
                         <div class="flex justify-center items-center gap-3">
                           <Icon name="folder" size="small" />
@@ -451,8 +451,8 @@ export default function Page() {
                       </div>
                     </Match>
                   </Switch>
-                  <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50">
-                    <div class="w-full max-w-146 px-6">
+                  <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50 px-4 sm:px-0">
+                    <div class="w-full max-w-146 sm:px-6">
                       <PromptInput
                         ref={(el) => {
                           inputRef = el
@@ -565,7 +565,7 @@ export default function Page() {
           </DragOverlay>
         </DragDropProvider>
         <Show when={session.layout.tabs.active}>
-          <div class="absolute inset-x-0 px-6 max-w-146 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
+          <div class="absolute inset-x-0 px-4 sm:px-6 max-w-146 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
             <PromptInput
               ref={(el) => {
                 inputRef = el
