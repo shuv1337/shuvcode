@@ -384,6 +384,7 @@ export default function Layout(props: ParentProps) {
                   class="text-14-regular text-text-base"
                   rootClass="min-w-0 shrink"
                   variant="ghost"
+                  size="large"
                 >
                   {/* @ts-ignore */}
                   {(i) => (
@@ -400,13 +401,14 @@ export default function Layout(props: ParentProps) {
                   <DropdownMenu.Trigger
                     as={Button}
                     variant="ghost"
+                    size="large"
                     class="flex-1 justify-between gap-3 min-w-0 text-14-regular text-text-base"
                   >
-                    <span class="truncate text-14-regular text-text-base lowercase">session</span>
+                    <span class="truncate text-text-base lowercase">session</span>
                     <Icon name="chevron-down" size="small" class="shrink-0 text-icon-base" />
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
-                    <DropdownMenu.Content>
+                    <DropdownMenu.Content class="max-w-[calc(100vw-2rem)]">
                       <div class="flex flex-col gap-1 py-1">
                         <DropdownMenu.Item onSelect={() => navigate(`/${params.dir}/session`)}>
                           <DropdownMenu.ItemLabel>
@@ -424,7 +426,7 @@ export default function Layout(props: ParentProps) {
                         <Show when={currentSession()}>
                           {(session) => (
                             <DropdownMenu.Item onSelect={() => navigateToSession(session())}>
-                              <DropdownMenu.ItemLabel>
+                              <DropdownMenu.ItemLabel class="min-w-0">
                                 <div class="flex items-center gap-2 min-w-0">
                                   <Icon name="dot-grid" size="small" class="shrink-0 text-icon-base" />
                                   <div class="flex flex-col min-w-0">
@@ -446,7 +448,7 @@ export default function Layout(props: ParentProps) {
                           <For each={otherSessions()}>
                             {(session) => (
                               <DropdownMenu.Item onSelect={() => navigateToSession(session)}>
-                                <DropdownMenu.ItemLabel>
+                                <DropdownMenu.ItemLabel class="min-w-0">
                                   <div class="flex items-center gap-2 min-w-0">
                                     <span class="truncate">{session.title}</span>
                                   </div>
@@ -481,6 +483,7 @@ export default function Layout(props: ParentProps) {
                   class="text-14-regular text-text-base"
                   rootClass="min-w-0 grow basis-full sm:basis-auto sm:max-w-md"
                   variant="ghost"
+                  size="large"
                 >
                   {/* @ts-ignore */}
                   {(session) => <div class="min-w-0 truncate">{session ? session.title : "New session"}</div>}
