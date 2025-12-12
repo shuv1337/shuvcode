@@ -187,6 +187,8 @@
       "files": [
         "packages/enterprise/src/routes/share/[shareID].tsx",
         "packages/enterprise/src/routes/s/[id].ts",
+        "packages/enterprise/src/entry-server.tsx",
+        "packages/enterprise/public/site.webmanifest",
         "packages/opencode/src/share/share-next.ts",
         "packages/opencode/src/cli/cmd/github.ts",
         "packages/opencode/src/cli/cmd/import.ts",
@@ -236,6 +238,16 @@
           "file": ".github/workflows/snapshot.yml",
           "description": "Share deployment step in CI workflow",
           "markers": ["Deploy Share to Cloudflare", "sst.share.config.ts"]
+        },
+        {
+          "file": "packages/enterprise/src/entry-server.tsx",
+          "description": "HTML document title changed to shuvcode",
+          "markers": ["<title>shuvcode</title>"]
+        },
+        {
+          "file": "packages/enterprise/public/site.webmanifest",
+          "description": "Web app manifest name changed to shuvcode",
+          "markers": ["\"name\": \"shuvcode\""]
         }
       ]
     }
