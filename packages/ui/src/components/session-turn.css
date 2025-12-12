@@ -309,4 +309,32 @@
     align-self: stretch;
     gap: 12px;
   }
+
+  [data-slot="session-turn-markdown"] table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    table-layout: auto;
+  }
+
+  [data-slot="session-turn-markdown"] th {
+    text-align: left;
+    padding: 8px;
+    font-weight: 500;
+    color: var(--text-weak);
+    border-bottom: 1px solid var(--border-weak-base);
+    white-space: nowrap;
+  }
+
+  [data-slot="session-turn-markdown"] td {
+    text-align: left;
+    padding: 8px;
+    color: var(--text-base);
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-subtle-base);
+  }
+
+  [data-slot="session-turn-markdown"] td:first-child {
+    font-family: monospace;
+  }
 }
