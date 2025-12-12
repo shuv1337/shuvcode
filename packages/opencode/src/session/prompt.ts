@@ -5,6 +5,7 @@ import z from "zod"
 import { Identifier } from "../id/id"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
+import { Flag } from "../flag/flag"
 import { SessionRevert } from "./revert"
 import { Session } from "."
 import { Agent } from "../agent/agent"
@@ -590,6 +591,7 @@ export namespace SessionPrompt {
                 "x-opencode-project": Instance.project.id,
                 "x-opencode-session": sessionID,
                 "x-opencode-request": lastUser.id,
+                "x-opencode-client": Flag.OPENCODE_CLIENT,
               }
             : undefined),
           ...model.headers,

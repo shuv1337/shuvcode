@@ -6,6 +6,7 @@ import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
 import { Log } from "../util/log"
 import { iife } from "@/util/iife"
+import { Flag } from "../flag/flag"
 
 declare global {
   const OPENCODE_VERSION: string
@@ -142,7 +143,7 @@ export namespace Installation {
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
   export const BASE_VERSION = typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
-  export const USER_AGENT = `shuvcode/${CHANNEL}/${VERSION}`
+  export const USER_AGENT = `shuvcode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
 
   export function displayVersion() {
     if (!isPreview()) return VERSION
