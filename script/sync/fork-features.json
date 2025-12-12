@@ -277,6 +277,41 @@
           "markers": ["\"name\": \"shuvcode\""]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop mobile responsiveness and dev server improvements",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Auto-switch review panel to tab mode on mobile breakpoint, fix API URL resolution for localhost/HTTPS, add Vite proxy for API routes, and defensive array handling in global-sync",
+      "files": [
+        "packages/desktop/src/pages/layout.tsx",
+        "packages/desktop/src/app.tsx",
+        "packages/desktop/src/context/global-sync.tsx",
+        "packages/desktop/vite.config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "Auto-switch review panel to tab mode on mobile breakpoint (40rem)",
+          "markers": ["if (event.matches) layout.review.tab()"]
+        },
+        {
+          "file": "packages/desktop/src/app.tsx",
+          "description": "Smart API URL resolution based on protocol and environment",
+          "markers": ["const isSecure = location.protocol === \"https:\"", "const useSameOrigin ="]
+        },
+        {
+          "file": "packages/desktop/src/context/global-sync.tsx",
+          "description": "Defensive array check for session list API response",
+          "markers": ["const data = Array.isArray(x.data) ? x.data : []"]
+        },
+        {
+          "file": "packages/desktop/vite.config.ts",
+          "description": "Vite dev server proxy configuration for API routes",
+          "markers": ["const apiRoutes = [", "proxy: Object.fromEntries"]
+        }
+      ]
     }
   ]
 }
