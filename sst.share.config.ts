@@ -16,11 +16,6 @@ export default $config({
       return `${$app.stage}.dev.shuv.ai`
     })()
 
-    const SECRET = {
-      R2AccessKey: new sst.Secret("R2AccessKey"),
-      R2SecretKey: new sst.Secret("R2SecretKey"),
-    }
-
     const storage = new sst.cloudflare.Bucket("ShareStorage")
 
     new sst.cloudflare.x.SolidStart("Share", {
@@ -30,8 +25,8 @@ export default $config({
       environment: {
         OPENCODE_STORAGE_ADAPTER: "r2",
         OPENCODE_STORAGE_ACCOUNT_ID: sst.cloudflare.DEFAULT_ACCOUNT_ID,
-        OPENCODE_STORAGE_ACCESS_KEY_ID: SECRET.R2AccessKey.value,
-        OPENCODE_STORAGE_SECRET_ACCESS_KEY: SECRET.R2SecretKey.value,
+        OPENCODE_STORAGE_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID!,
+        OPENCODE_STORAGE_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY!,
         OPENCODE_STORAGE_BUCKET: storage.name,
       },
     })

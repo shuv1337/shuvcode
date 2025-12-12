@@ -58,5 +58,5 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DEFAULT_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          SST_SECRET_R2ACCESSKEY: ${{ secrets.R2_ACCESS_KEY_ID }}
-          SST_SECRET_R2SECRETKEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
