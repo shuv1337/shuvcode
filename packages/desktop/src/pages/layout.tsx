@@ -483,9 +483,7 @@ export default function Layout(props: ParentProps) {
                   variant="ghost"
                 >
                   {/* @ts-ignore */}
-                  {(session) => (
-                    <div class="min-w-0 truncate">{session ? session.title : "New session"}</div>
-                  )}
+                  {(session) => <div class="min-w-0 truncate">{session ? session.title : "New session"}</div>}
                 </Select>
               </div>
             </div>
