@@ -242,8 +242,14 @@
         },
         {
           "file": "packages/enterprise/src/entry-server.tsx",
-          "description": "HTML document with Night Owl theme, Meslo font, and shuvcode title",
-          "markers": ["<title>shuvcode</title>", "data-theme=\"nightowl\"", "#011627", "meslo"]
+          "description": "HTML document with Night Owl theme, Meslo font family CSS vars, and shuvcode title",
+          "markers": [
+            "<title>shuvcode</title>",
+            "data-theme=\"nightowl\"",
+            "#011627",
+            "meslo",
+            "--font-family-sans: 'Meslo'"
+          ]
         },
         {
           "file": "packages/enterprise/public/site.webmanifest",

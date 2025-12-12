@@ -235,21 +235,19 @@ export namespace Session {
 
   export const unshare = fn(Identifier.schema("session"), async (id) => {
     const cfg = await Config.get()
-    if (cfg.enterprise?.url) {
-      const { ShareNext } = await import("@/share/share-next")
-      await ShareNext.remove(id)
-      await update(id, (draft) => {
-        draft.share = undefined
-      })
-    }
-    const share = await getShare(id)
-    if (!share) return
-    await Storage.remove(["share", id])
+    // Use ShareNext for unsharing (same as share() function)
+    const { ShareNext } = await import("@/share/share-next")
+    await ShareNext.remove(id)
     await update(id, (draft) => {
       draft.share = undefined
     })
-    const { Share } = await import("../share/share")
-    await Share.remove(id, share.secret)
+    // Also clean up legacy share if it exists
+    const share = await getShare(id)
+    if (share) {
+      await Storage.remove(["share", id])
+      const { Share } = await import("../share/share")
+      await Share.remove(id, share.secret)
+    }
   })
 
   export async function update(id: string, editor: (session: Info) => void) {
