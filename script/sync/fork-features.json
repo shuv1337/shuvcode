@@ -186,7 +186,7 @@
       "description": "Enable /share functionality for shuvcode by deploying rebranded share infrastructure to share.shuv.ai. Includes CLI defaults, import command dual-API support, and enterprise package rebranding.",
       "files": [
         "packages/enterprise/src/routes/share/[shareID].tsx",
-        "packages/enterprise/src/routes/s/[id].tsx",
+        "packages/enterprise/src/routes/s/[id].ts",
         "packages/opencode/src/share/share-next.ts",
         "packages/opencode/src/cli/cmd/github.ts",
         "packages/opencode/src/cli/cmd/import.ts",
@@ -204,9 +204,9 @@
           ]
         },
         {
-          "file": "packages/enterprise/src/routes/s/[id].tsx",
-          "description": "Short URL redirect route /s/{id} to /share/{id}",
-          "markers": ["throw redirect(`/share/${params.id}`, 301)"]
+          "file": "packages/enterprise/src/routes/s/[id].ts",
+          "description": "Short URL redirect API route /s/{id} to /share/{id} with HTTP 301",
+          "markers": ["Location: `/share/${id}`", "status: 301"]
         },
         {
           "file": "packages/opencode/src/share/share-next.ts",
