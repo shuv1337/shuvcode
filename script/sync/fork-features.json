@@ -312,6 +312,41 @@
           "markers": ["const apiRoutes = [", "proxy: Object.fromEntries"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop mobile viewport overflow fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix horizontal overflow on mobile devices when viewing chat sessions. Content, text entry box, and submit button no longer spill outside viewport requiring horizontal scrolling.",
+      "files": ["packages/desktop/src/pages/session.tsx", "packages/desktop/src/components/prompt-input.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Tabs.Content overflow-hidden and flex containers with min-w-0",
+          "markers": ["overflow-hidden", "min-w-0 min-h-0"]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "PromptInput containers with max-w-full for mobile and overflow-hidden",
+          "markers": ["max-w-full sm:max-w-146", "overflow-hidden"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Root container max-w-full constraint",
+          "markers": ["max-w-full _max-h-[320px]"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Bottom bar with min-w-0 overflow-hidden for proper flex shrinking",
+          "markers": ["min-w-0 overflow-hidden", "flex items-center justify-between min-w-0"]
+        },
+        {
+          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "description": "Model button with truncation and responsive provider name visibility",
+          "markers": ["class=\"truncate\"", "hidden sm:inline", "min-w-0 max-w-full"]
+        }
+      ]
     }
   ]
 }

@@ -171,6 +171,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSelect: handleCommandSelect,
   })
 
+  // Refetch command list when server commands load (fixes mobile viewport issue)
+  createEffect(
+    on(
+      () => sync.data.command?.length ?? 0,
+      () => commandList.refetch(),
+      { defer: true },
+    ),
+  )
+
   const { flat, active, onInput, onKeyDown, refetch } = useFilteredList<string>({
     items: local.file.searchFilesAndDirectories,
     key: (x) => x,

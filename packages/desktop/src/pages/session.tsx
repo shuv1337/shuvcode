@@ -385,23 +385,23 @@ export default function Page() {
                 </div>
               </Tabs.List>
             </div>
-            <Tabs.Content value="chat" class="@container select-text flex flex-col flex-1 min-h-0 overflow-y-hidden">
+            <Tabs.Content value="chat" class="@container select-text flex flex-col flex-1 min-h-0 overflow-hidden">
               <div
                 classList={{
-                  "w-full flex-1 min-h-0": true,
+                  "w-full flex-1 min-h-0 min-w-0": true,
                   grid: layout.review.state() === "tab",
                   flex: layout.review.state() === "pane",
                 }}
               >
                 <div
                   classList={{
-                    "relative shrink-0 py-3 flex flex-col gap-6 flex-1 min-h-0 w-full": true,
+                    "relative shrink-0 py-3 flex flex-col gap-6 flex-1 min-h-0 min-w-0 w-full": true,
                     "max-w-146 mx-auto": !wide(),
                   }}
                 >
                   <Switch>
                     <Match when={session.id}>
-                      <div class="flex items-start justify-start h-full min-h-0">
+                      <div class="flex items-start justify-start h-full min-h-0 min-w-0 w-full">
                         <SessionMessageRail
                           messages={session.messages.user()}
                           current={session.messages.active()}
@@ -565,12 +565,14 @@ export default function Page() {
           </DragOverlay>
         </DragDropProvider>
         <Show when={session.layout.tabs.active}>
-          <div class="absolute inset-x-0 px-4 sm:px-6 max-w-146 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
-            <PromptInput
-              ref={(el) => {
-                inputRef = el
-              }}
-            />
+          <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50 px-4 sm:px-0">
+            <div class="w-full max-w-146 sm:px-6">
+              <PromptInput
+                ref={(el) => {
+                  inputRef = el
+                }}
+              />
+            </div>
           </div>
         </Show>
         <div class="hidden xl:block shrink-0 w-56 p-2 h-full overflow-y-auto">
