@@ -3,6 +3,7 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 import { Global } from "../../global"
+import { getDirectorySize, formatSize, shortenPath } from "../util"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
@@ -303,42 +304,4 @@ async function cleanShellConfig(file: string) {
 
   const output = filtered.join("\n") + "\n"
   await Bun.write(file, output)
-}
-
-async function getDirectorySize(dir: string): Promise<number> {
-  let total = 0
-
-  const walk = async (current: string) => {
-    const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => [])
-
-    for (const entry of entries) {
-      const full = path.join(current, entry.name)
-      if (entry.isDirectory()) {
-        await walk(full)
-        continue
-      }
-      if (entry.isFile()) {
-        const stat = await fs.stat(full).catch(() => null)
-        if (stat) total += stat.size
-      }
-    }
-  }
-
-  await walk(dir)
-  return total
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-function shortenPath(p: string): string {
-  const home = os.homedir()
-  if (p.startsWith(home)) {
-    return p.replace(home, "~")
-  }
-  return p
 }
