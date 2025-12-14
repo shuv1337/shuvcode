@@ -1,4 +1,16 @@
-import { createEffect, createMemo, For, Match, onCleanup, onMount, ParentProps, Show, Switch, type JSX } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  onMount,
+  ParentProps,
+  Show,
+  Switch,
+  type JSX,
+} from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, getAvatarColors } from "@/context/layout"
@@ -17,7 +29,6 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { getFilename } from "@opencode-ai/util/path"
-import { Select } from "@opencode-ai/ui/select"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session, Project, ProviderAuthMethod, ProviderAuthAuthorization } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
@@ -44,6 +55,9 @@ import { TextField } from "@opencode-ai/ui/text-field"
 import { showToast, Toast } from "@opencode-ai/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { useNotification } from "@/context/notification"
+import { Binary } from "@opencode-ai/util/binary"
+import { Select } from "@opencode-ai/ui/select"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
@@ -56,6 +70,7 @@ export default function Layout(props: ParentProps) {
   const globalSync = useGlobalSync()
   const layout = useLayout()
   const platform = usePlatform()
+  const notification = useNotification()
   const navigate = useNavigate()
   const currentDirectory = createMemo(() => base64Decode(params.dir ?? ""))
   const sessions = createMemo(() => globalSync.child(currentDirectory())[0].session ?? [])
@@ -81,9 +96,11 @@ export default function Layout(props: ParentProps) {
   }
 
   function closeProject(directory: string) {
+    const index = layout.projects.list().findIndex((x) => x.worktree === directory)
+    const next = layout.projects.list()[index + 1]
     layout.projects.close(directory)
-    // TODO: more intelligent navigation
-    navigate("/")
+    if (next) navigateToProject(next.worktree)
+    else navigate("/")
   }
 
   async function chooseProject() {
@@ -109,6 +126,7 @@ export default function Layout(props: ParentProps) {
     if (!params.dir || !params.id) return
     const directory = base64Decode(params.dir)
     setStore("lastSession", directory, params.id)
+    notification.session.markViewed(params.id)
   })
 
   createEffect(() => {
@@ -180,8 +198,53 @@ export default function Layout(props: ParentProps) {
     return <></>
   }
 
+  const ProjectAvatar = (props: {
+    project: Project
+    class?: string
+    expandable?: boolean
+    notify?: boolean
+  }): JSX.Element => {
+    const notification = useNotification()
+    const notifications = createMemo(() => notification.project.unseen(props.project.worktree))
+    const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
+    const name = createMemo(() => getFilename(props.project.worktree))
+    const mask = "radial-gradient(circle 5px at calc(100% - 2px) 2px, transparent 5px, black 5.5px)"
+    const opencode = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
+
+    return (
+      <div class="relative size-6 shrink-0">
+        <Avatar
+          fallback={name()}
+          src={props.project.id === opencode ? "https://opencode.ai/favicon.svg" : props.project.icon?.url}
+          {...getAvatarColors(props.project.icon?.color)}
+          class={`size-full ${props.class ?? ""}`}
+          style={
+            notifications().length > 0 && props.notify ? { "-webkit-mask-image": mask, "mask-image": mask } : undefined
+          }
+        />
+        <Show when={props.expandable}>
+          <Icon
+            name="chevron-right"
+            size="large"
+            class="hidden size-full items-center justify-center text-text-subtle group-hover/session:flex group-data-[expanded]/trigger:rotate-90 transition-transform duration-50"
+          />
+        </Show>
+        <Show when={notifications().length > 0 && props.notify}>
+          <div
+            classList={{
+              "absolute -top-0.5 -right-0.5 size-1.5 rounded-full": true,
+              "bg-icon-critical-base": hasError(),
+              "bg-text-interactive-base": !hasError(),
+            }}
+          />
+        </Show>
+      </div>
+    )
+  }
+
   const ProjectVisual = (props: { project: Project & { expanded: boolean }; class?: string }): JSX.Element => {
     const name = createMemo(() => getFilename(props.project.worktree))
+    const current = createMemo(() => base64Decode(params.dir ?? ""))
     return (
       <Switch>
         <Match when={layout.sidebar.opened()}>
@@ -192,14 +255,7 @@ export default function Layout(props: ParentProps) {
             class="flex items-center justify-between gap-3 w-full px-1 self-stretch h-8 border-none rounded-lg"
           >
             <div class="flex items-center gap-3 p-0 text-left min-w-0 grow">
-              <div class="size-6 shrink-0">
-                <Avatar
-                  fallback={name()}
-                  src={props.project.icon?.url}
-                  {...getAvatarColors(props.project.icon?.color)}
-                  class="size-full"
-                />
-              </div>
+              <ProjectAvatar project={props.project} />
               <span class="truncate text-14-medium text-text-strong">{name()}</span>
             </div>
           </Button>
@@ -209,17 +265,10 @@ export default function Layout(props: ParentProps) {
             variant="ghost"
             size="large"
             class="flex items-center justify-center p-0 aspect-square border-none rounded-lg"
-            data-selected={props.project.worktree === currentDirectory()}
+            data-selected={props.project.worktree === current()}
             onClick={() => navigateToProject(props.project.worktree)}
           >
-            <div class="size-6 shrink-0">
-              <Avatar
-                fallback={name()}
-                src={props.project.icon?.url}
-                {...getAvatarColors(props.project.icon?.color)}
-                class="size-full"
-              />
-            </div>
+            <ProjectAvatar project={props.project} notify />
           </Button>
         </Match>
       </Switch>
@@ -227,35 +276,31 @@ export default function Layout(props: ParentProps) {
   }
 
   const SortableProject = (props: { project: Project & { expanded: boolean } }): JSX.Element => {
+    const notification = useNotification()
     const sortable = createSortable(props.project.worktree)
-    const [projectStore] = globalSync.child(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
     const name = createMemo(() => getFilename(props.project.worktree))
+    const [store, setStore] = globalSync.child(props.project.worktree)
+    const sessions = createMemo(() => store.session ?? [])
+    const [expanded, setExpanded] = createSignal(true)
     return (
       // @ts-ignore
       <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Switch>
           <Match when={layout.sidebar.opened()}>
-            <Collapsible variant="ghost" defaultOpen class="gap-2 shrink-0">
+            <Collapsible variant="ghost" defaultOpen class="gap-2 shrink-0" onOpenChange={setExpanded}>
               <Button
                 as={"div"}
                 variant="ghost"
                 class="group/session flex items-center justify-between gap-3 w-full px-1 self-stretch h-auto border-none rounded-lg"
               >
                 <Collapsible.Trigger class="group/trigger flex items-center gap-3 p-0 text-left min-w-0 grow border-none">
-                  <div class="size-6 shrink-0">
-                    <Avatar
-                      fallback={name()}
-                      src={props.project.icon?.url}
-                      {...getAvatarColors(props.project.icon?.color)}
-                      class="size-full group-hover/session:hidden"
-                    />
-                    <Icon
-                      name="chevron-right"
-                      size="large"
-                      class="hidden size-full items-center justify-center text-text-subtle group-hover/session:flex group-data-[expanded]/trigger:rotate-90 transition-transform duration-50"
-                    />
-                  </div>
+                  <ProjectAvatar
+                    project={props.project}
+                    class="group-hover/session:hidden"
+                    expandable
+                    notify={!expanded()}
+                  />
                   <span class="truncate text-14-medium text-text-strong">{name()}</span>
                 </Collapsible.Trigger>
                 <div class="flex invisible gap-1 items-center group-hover/session:visible has-[[data-expanded]]:visible">
@@ -276,50 +321,105 @@ export default function Layout(props: ParentProps) {
               </Button>
               <Collapsible.Content>
                 <nav class="hidden @[4rem]:flex w-full flex-col gap-1.5">
-                  <For each={projectStore.session}>
+                  <For each={sessions()}>
                     {(session) => {
                       const updated = createMemo(() => DateTime.fromMillis(session.time.updated))
+                      const notifications = createMemo(() => notification.session.unseen(session.id))
+                      const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
+                      async function archive(session: Session) {
+                        await globalSDK.client.session.update({
+                          directory: session.directory,
+                          sessionID: session.id,
+                          time: { archived: Date.now() },
+                        })
+                        setStore(
+                          produce((draft) => {
+                            const match = Binary.search(draft.session, session.id, (s) => s.id)
+                            if (match.found) draft.session.splice(match.index, 1)
+                          }),
+                        )
+                      }
                       return (
-                        <A
-                          data-active={session.id === params.id}
-                          href={`${slug()}/session/${session.id}`}
-                          class="group/session focus:outline-none cursor-default"
+                        <div
+                          class="group/session relative w-full pl-4 pr-1 py-1 rounded-md cursor-default transition-colors
+                                 hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
                         >
-                          <Tooltip placement="right" value={session.title}>
-                            <div
-                              class="w-full pl-4 pr-2 py-1 rounded-md
-                                   group-data-[active=true]/session:bg-surface-raised-base-hover
-                                   group-hover/session:bg-surface-raised-base-hover
-                                   group-focus/session:bg-surface-raised-base-hover"
+                          <Tooltip placement="right" value={session.title} gutter={10}>
+                            <A
+                              href={`${slug()}/session/${session.id}`}
+                              class="flex flex-col min-w-0 text-left w-full focus:outline-none"
                             >
-                              <div class="flex items-center self-stretch gap-6 justify-between">
+                              <div class="flex items-center self-stretch gap-6 justify-between transition-[padding] group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7">
                                 <span class="text-14-regular text-text-strong overflow-hidden text-ellipsis truncate">
                                   {session.title}
                                 </span>
-                                <span class="text-12-regular text-text-weak text-right whitespace-nowrap">
-                                  {Math.abs(updated().diffNow().as("seconds")) < 60
-                                    ? "Now"
-                                    : updated()
-                                        .toRelative({
-                                          style: "short",
-                                          unit: ["days", "hours", "minutes"],
-                                        })
-                                        ?.replace(" ago", "")
-                                        ?.replace(/ days?/, "d")
-                                        ?.replace(" min.", "m")
-                                        ?.replace(" hr.", "h")}
-                                </span>
+                                <div class="shrink-0 group-hover/session:hidden group-active/session:hidden group-focus-within/session:hidden">
+                                  <Switch>
+                                    <Match when={hasError()}>
+                                      <div class="size-1.5 mr-1.5 rounded-full bg-text-diff-delete-base" />
+                                    </Match>
+                                    <Match when={notifications().length > 0}>
+                                      <div class="size-1.5 mr-1.5 rounded-full bg-text-interactive-base" />
+                                    </Match>
+                                    <Match when={true}>
+                                      <span class="text-12-regular text-text-weak text-right whitespace-nowrap">
+                                        {Math.abs(updated().diffNow().as("seconds")) < 60
+                                          ? "Now"
+                                          : updated()
+                                              .toRelative({
+                                                style: "short",
+                                                unit: ["days", "hours", "minutes"],
+                                              })
+                                              ?.replace(" ago", "")
+                                              ?.replace(/ days?/, "d")
+                                              ?.replace(" min.", "m")
+                                              ?.replace(" hr.", "h")}
+                                      </span>
+                                    </Match>
+                                  </Switch>
+                                </div>
                               </div>
-                              <div class="hidden _flex justify-between items-center self-stretch">
-                                <span class="text-12-regular text-text-weak">{`${session.summary?.files || "No"} file${session.summary?.files !== 1 ? "s" : ""} changed`}</span>
-                                <Show when={session.summary}>{(summary) => <DiffChanges changes={summary()} />}</Show>
-                              </div>
-                            </div>
+                              <Show when={session.summary?.files}>
+                                <div class="flex justify-between items-center self-stretch">
+                                  <span class="text-12-regular text-text-weak">{`${session.summary?.files || "No"} file${session.summary?.files !== 1 ? "s" : ""} changed`}</span>
+                                  <Show when={session.summary}>{(summary) => <DiffChanges changes={summary()} />}</Show>
+                                </div>
+                              </Show>
+                            </A>
                           </Tooltip>
-                        </A>
+                          <div class="hidden group-hover/session:flex group-active/session:flex group-focus-within/session:flex text-text-base gap-1 items-center absolute top-1 right-1">
+                            {/* <IconButton icon="dot-grid" variant="ghost" /> */}
+                            <Tooltip placement="right" value="Archive session">
+                              <IconButton icon="archive" variant="ghost" onClick={() => archive(session)} />
+                            </Tooltip>
+                          </div>
+                        </div>
                       )
                     }}
                   </For>
+                  <Show when={sessions().length === 0}>
+                    <div
+                      class="group/session relative w-full pl-4 pr-1 py-1 rounded-md cursor-default transition-colors
+                             hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
+                    >
+                      <div class="flex items-center self-stretch w-full">
+                        <div class="flex-1 min-w-0">
+                          <Tooltip placement="right" value="New session">
+                            <A
+                              href={`${slug()}/session`}
+                              class="flex flex-col gap-1 min-w-0 text-left w-full focus:outline-none"
+                            >
+                              <div class="flex items-center self-stretch gap-6 justify-between">
+                                <span class="text-14-regular text-text-strong overflow-hidden text-ellipsis truncate">
+                                  New session
+                                </span>
+                              </div>
+                            </A>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
                 </nav>
               </Collapsible.Content>
             </Collapsible>
@@ -348,7 +448,7 @@ export default function Layout(props: ParentProps) {
   }
 
   return (
-    <div class="relative h-screen flex flex-col">
+    <div class="relative flex-1 min-h-0 flex flex-col">
       <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
         <A
           href="/"
@@ -529,7 +629,7 @@ export default function Layout(props: ParentProps) {
           </Show>
         </div>
       </header>
-      <div class="h-[calc(100vh-3rem)] flex">
+      <div class="flex-1 min-h-0 flex">
         <div
           classList={{
             "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
