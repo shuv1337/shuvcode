@@ -32,10 +32,22 @@
   border: none;
   background: none;
   padding: 0;
+  cursor: pointer;
 
   &[data-active] [data-slot="message-nav-tick-line"] {
     background-color: var(--icon-strong-base);
     width: 100%;
+  }
+}
+
+/* Touch-friendly targets for coarse pointers (mobile/touch devices) */
+@media (pointer: coarse), (hover: none) {
+  [data-slot="message-nav-tick-button"] {
+    /* Increase touch target to 44x44px minimum (WCAG 2.5.5) */
+    min-height: 44px;
+    min-width: 44px;
+    /* Keep visual tick small by using padding to expand hitbox */
+    padding: 16px 10px;
   }
 }
 
