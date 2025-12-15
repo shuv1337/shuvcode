@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-12",
+  "lastUpdated": "2025-12-15",
   "features": [
     {
       "pr": 4898,
@@ -156,25 +156,54 @@
     },
     {
       "pr": 0,
-      "title": "Desktop theme and font pickers",
+      "title": "Desktop theme/font pickers, branding, and inline header",
       "author": "fork",
       "status": "fork-only",
-      "description": "Theme and font picker UI components in desktop header, with AsciiLogo branding in sidebar",
+      "description": "Inline header in layout.tsx with shuvcode ASCII branding (AsciiLogo when expanded, AsciiMark when collapsed), theme/font picker buttons, mobile session dropdown, and responsive layout. Upstream refactored header into separate component which lost these customizations.",
       "files": [
         "packages/desktop/src/pages/layout.tsx",
         "packages/desktop/src/components/font-picker.tsx",
-        "packages/desktop/src/components/theme-picker.tsx"
+        "packages/desktop/src/components/theme-picker.tsx",
+        "packages/ui/src/components/logo.tsx"
       ],
       "criticalCode": [
         {
           "file": "packages/desktop/src/pages/layout.tsx",
-          "description": "ThemePicker and FontPicker imports and usage in header",
-          "markers": ["import { ThemePicker }", "import { FontPicker }", "<ThemePicker", "<FontPicker"]
+          "description": "Inline header with shuvcode branding, theme/font pickers, mobile dropdown",
+          "markers": [
+            "import { AsciiLogo, AsciiMark }",
+            "import { ThemePicker }",
+            "import { FontPicker }",
+            "import { Select }",
+            "<AsciiLogo scale={0.55}",
+            "<AsciiMark scale={0.45}",
+            "<FontPicker />",
+            "<ThemePicker />",
+            "max-w-[calc(100vw-2rem)]",
+            "sm:hidden",
+            "hidden sm:flex"
+          ]
         },
         {
           "file": "packages/desktop/src/pages/layout.tsx",
-          "description": "AsciiLogo/AsciiMark branding in sidebar",
-          "markers": ["import { AsciiLogo, AsciiMark }", "<AsciiLogo", "<AsciiMark"]
+          "description": "Mobile media query for auto-collapse sidebar/terminal/review",
+          "markers": [
+            "onMount(() =>",
+            "matchMedia(\"(max-width: 40rem)\")",
+            "layout.sidebar.close()",
+            "layout.terminal.close()",
+            "layout.review.tab()"
+          ]
+        },
+        {
+          "file": "packages/ui/src/components/logo.tsx",
+          "description": "AsciiLogo/AsciiMark definitions for shuvcode branding",
+          "markers": [
+            "export const AsciiMark",
+            "export const AsciiLogo",
+            "data-component=\"ascii-mark\"",
+            "data-component=\"ascii-logo\""
+          ]
         }
       ]
     },
