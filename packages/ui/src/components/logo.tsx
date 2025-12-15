@@ -13,9 +13,10 @@ export const Mark = (props: { class?: string }) => {
   )
 }
 
-export const AsciiMark = (props: { class?: string; scale?: number }) => {
+export const AsciiMark = (props: { class?: string; scale?: number; origin?: "center" | "left" }) => {
   const lines = ["█▀▀▀", "▀▀▀█", "▀▀▀▀"]
   const scale = props.scale ?? 1
+  const origin = props.origin ?? "center"
   return (
     <div
       data-component="ascii-mark"
@@ -25,7 +26,7 @@ export const AsciiMark = (props: { class?: string; scale?: number }) => {
         "line-height": "1",
         "white-space": "pre",
         transform: `scale(${scale})`,
-        "transform-origin": "center center",
+        "transform-origin": origin === "left" ? "left center" : "center center",
         color: "var(--text-strong)",
         "font-weight": "bold",
       }}
@@ -37,7 +38,7 @@ export const AsciiMark = (props: { class?: string; scale?: number }) => {
   )
 }
 
-export const AsciiLogo = (props: { class?: string; scale?: number }) => {
+export const AsciiLogo = (props: { class?: string; scale?: number; origin?: "center" | "left" }) => {
   const lines = [
     { left: "     ▄              ", right: "             ▄     " },
     { left: "█▀▀▀ █▀▀█ █  █ █  █ ", right: "█▀▀▀ █▀▀█ █▀▀█ █▀▀█" },
@@ -45,6 +46,7 @@ export const AsciiLogo = (props: { class?: string; scale?: number }) => {
     { left: "▀▀▀▀ ▀  ▀ ▀▀▀▀  ▀▀  ", right: "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀" },
   ]
   const scale = props.scale ?? 0.8
+  const origin = props.origin ?? "center"
   return (
     <div
       data-component="ascii-logo"
@@ -54,7 +56,7 @@ export const AsciiLogo = (props: { class?: string; scale?: number }) => {
         "line-height": "1",
         "white-space": "pre",
         transform: `scale(${scale})`,
-        "transform-origin": "center center",
+        "transform-origin": origin === "left" ? "left center" : "center center",
       }}
     >
       {lines.map((line) => (
