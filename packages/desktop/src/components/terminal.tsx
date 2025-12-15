@@ -2,7 +2,7 @@ import { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
 import { ComponentProps, onCleanup, onMount, splitProps } from "solid-js"
 import { useSDK } from "@/context/sdk"
 import { SerializeAddon } from "@/addons/serialize"
-import { LocalPTY } from "@/context/session"
+import { LocalPTY } from "@/context/terminal"
 
 function getWebSocketUrl(baseUrl: string, path: string): string {
   if (baseUrl === "/" || baseUrl === "") {

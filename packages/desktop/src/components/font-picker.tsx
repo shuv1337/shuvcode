@@ -1,14 +1,17 @@
 import { createMemo, onMount } from "solid-js"
-import { SelectDialog } from "@opencode-ai/ui/select-dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Dialog } from "@opencode-ai/ui/dialog"
+import { List } from "@opencode-ai/ui/list"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { FONTS, getFontById, type FontDefinition } from "@/fonts/font-definitions"
 import { useLayout } from "@/context/layout"
 import { applyFontWithLoad, ensureFontLoaded, applyFont } from "@/fonts/apply-font"
 
 export function FontPicker() {
   const layout = useLayout()
+  const dialog = useDialog()
   const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
 
   onMount(() => applyFontWithLoad(currentFont()))
@@ -21,38 +24,38 @@ export function FontPicker() {
 
     layout.font.set(font.id)
     applyFont(font.id)
+    dialog.pop()
   }
 
-  function handleOpenChange(open: boolean) {
-    if (!open) {
-      applyFont(currentFont().id)
-    }
+  function openDialog() {
+    const originalFont = currentFont().id
+    dialog.push(
+      <Dialog title="Select Font">
+        <List
+          search={{ placeholder: "Search fonts", autofocus: true }}
+          emptyMessage="No fonts found"
+          key={(f: FontDefinition) => f.id}
+          items={() => [...FONTS]}
+          current={currentFont()}
+          filterKeys={["name", "family"]}
+          onSelect={handleSelect}
+        >
+          {(font: FontDefinition) => (
+            <div class="flex items-center gap-2" style={{ "font-family": `"${font.family}", monospace` }}>
+              <span class="text-14-medium text-text-strong">{font.name}</span>
+            </div>
+          )}
+        </List>
+      </Dialog>,
+      () => applyFont(originalFont),
+    )
   }
 
   return (
-    <SelectDialog
-      title="Select Font"
-      placeholder="Search fonts"
-      emptyMessage="No fonts found"
-      key={(f) => f.id}
-      items={() => [...FONTS]}
-      current={currentFont()}
-      filterKeys={["name", "family"]}
-      onSelect={handleSelect}
-      onOpenChange={handleOpenChange}
-      trigger={
-        <Tooltip class="shrink-0" value="Font">
-          <Button variant="ghost" class="size-6 p-0">
-            <Icon name="code-lines" size="small" />
-          </Button>
-        </Tooltip>
-      }
-    >
-      {(font) => (
-        <div class="flex items-center gap-2" style={{ "font-family": `"${font.family}", monospace` }}>
-          <span class="text-14-medium text-text-strong">{font.name}</span>
-        </div>
-      )}
-    </SelectDialog>
+    <Tooltip class="shrink-0" value="Font">
+      <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
+        <Icon name="code-lines" size="small" />
+      </Button>
+    </Tooltip>
   )
 }

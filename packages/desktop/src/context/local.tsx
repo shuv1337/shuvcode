@@ -1,12 +1,14 @@
 import { createStore, produce, reconcile } from "solid-js/store"
 import { batch, createEffect, createMemo } from "solid-js"
-import { uniqueBy } from "remeda"
+import { filter, firstBy, flat, groupBy, mapValues, pipe, uniqueBy, values } from "remeda"
 import type { FileContent, FileNode, Model, Provider, File as FileStatus } from "@opencode-ai/sdk/v2"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { useProviders } from "@/hooks/use-providers"
+import { makePersisted } from "@solid-primitives/storage"
+import { DateTime } from "luxon"
 
 export type LocalFile = FileNode &
   Partial<{
@@ -29,44 +31,6 @@ export type LocalModel = Omit<Model, "provider"> & {
   latest?: boolean
 }
 export type ModelKey = { providerID: string; modelID: string }
-
-export type ModelPrefs = {
-  recent: ModelKey[]
-  favorite: ModelKey[]
-}
-
-function isValidModelKey(x: unknown): x is ModelKey {
-  return (
-    typeof x === "object" &&
-    x !== null &&
-    typeof (x as ModelKey).providerID === "string" &&
-    typeof (x as ModelKey).modelID === "string"
-  )
-}
-
-function safeParseModelPrefs(raw: string | null): ModelPrefs {
-  const empty = { recent: [], favorite: [] }
-  if (!raw) return empty
-  try {
-    const parsed = JSON.parse(raw)
-    // Legacy format: bare array is treated as recent
-    if (Array.isArray(parsed)) {
-      return { recent: parsed.filter(isValidModelKey), favorite: [] }
-    }
-    // New format: object with recent and favorite
-    if (parsed && typeof parsed === "object") {
-      return {
-        recent: Array.isArray(parsed.recent) ? parsed.recent.filter(isValidModelKey) : [],
-        favorite: Array.isArray(parsed.favorite) ? parsed.favorite.filter(isValidModelKey) : [],
-      }
-    }
-    return empty
-  } catch {
-    return empty
-  }
-}
-
-const MAX_FAVORITES = 20
 
 export type FileContext = { type: "file"; path: string; selection?: TextSelection }
 export type ContextItem = FileContext
@@ -116,7 +80,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     })
 
     const agent = (() => {
-      const list = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent"))
+      const list = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden))
       const [store, setStore] = createStore<{
         current: string
       }>({
@@ -146,38 +110,62 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     })()
 
     const model = (() => {
-      const [store, setStore] = createStore<{
+      const [store, setStore] = makePersisted(
+        createStore<{
+          user: (ModelKey & { visibility: "show" | "hide"; favorite?: boolean })[]
+          recent: ModelKey[]
+        }>({
+          user: [],
+          recent: [],
+        }),
+        { name: "model.v1" },
+      )
+
+      const [ephemeral, setEphemeral] = createStore<{
         model: Record<string, ModelKey>
-        recent: ModelKey[]
-        favorite: ModelKey[]
       }>({
         model: {},
-        recent: [],
-        favorite: [],
       })
 
-      const prefs = safeParseModelPrefs(localStorage.getItem("model"))
-      setStore("recent", prefs.recent)
-      setStore("favorite", prefs.favorite)
-
-      function savePrefs() {
-        localStorage.setItem("model", JSON.stringify({ recent: store.recent, favorite: store.favorite }))
-      }
-
-      createEffect(() => {
-        savePrefs()
-      })
-
-      const list = createMemo(() =>
+      const available = createMemo(() =>
         providers.connected().flatMap((p) =>
           Object.values(p.models).map((m) => ({
             ...m,
-            name: m.name.replace("(latest)", "").trim(),
             provider: p,
-            latest: m.name.includes("(latest)"),
           })),
         ),
       )
+
+      const latest = createMemo(() =>
+        pipe(
+          available(),
+          filter((x) => Math.abs(DateTime.fromISO(x.release_date).diffNow().as("months")) < 6),
+          groupBy((x) => x.provider.id),
+          mapValues((models) =>
+            pipe(
+              models,
+              groupBy((x) => x.family),
+              values(),
+              (groups) =>
+                groups.flatMap((g) => {
+                  const first = firstBy(g, [(x) => x.release_date, "desc"])
+                  return first ? [{ modelID: first.id, providerID: first.provider.id }] : []
+                }),
+            ),
+          ),
+          values(),
+          flat(),
+        ),
+      )
+
+      const list = createMemo(() =>
+        available().map((m) => ({
+          ...m,
+          name: m.name.replace("(latest)", "").trim(),
+          latest: m.name.includes("(latest)"),
+        })),
+      )
+
       const find = (key: ModelKey) => list().find((m) => m.id === key?.modelID && m.provider.id === key.providerID)
 
       const fallbackModel = createMemo(() => {
@@ -209,10 +197,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         throw new Error("No default model found")
       })
 
-      const currentModel = createMemo(() => {
+      const current = createMemo(() => {
         const a = agent.current()
         const key = getFirstValidModel(
-          () => store.model[a.name],
+          () => ephemeral.model[a.name],
           () => a.model,
           fallbackModel,
         )!
@@ -223,10 +211,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       const cycle = (direction: 1 | -1) => {
         const recentList = recent()
-        const current = currentModel()
-        if (!current) return
+        const currentModel = current()
+        if (!currentModel) return
 
-        const index = recentList.findIndex((x) => x?.provider.id === current.provider.id && x?.id === current.id)
+        const index = recentList.findIndex(
+          (x) => x?.provider.id === currentModel.provider.id && x?.id === currentModel.id,
+        )
         if (index === -1) return
 
         let next = index + direction
@@ -242,42 +232,41 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         })
       }
 
-      const isFavorite = (key: ModelKey) =>
-        store.favorite.some((x) => x.providerID === key.providerID && x.modelID === key.modelID)
-
-      const toggleFavorite = (key: ModelKey) => {
-        batch(() => {
-          if (isFavorite(key)) {
-            setStore(
-              "favorite",
-              store.favorite.filter((x) => x.providerID !== key.providerID || x.modelID !== key.modelID),
-            )
-          } else {
-            const next = [key, ...store.favorite]
-            if (next.length > MAX_FAVORITES) next.pop()
-            setStore("favorite", next)
-          }
-          savePrefs()
-        })
+      function updateVisibility(model: ModelKey, visibility: "show" | "hide") {
+        const index = store.user.findIndex((x) => x.modelID === model.modelID && x.providerID === model.providerID)
+        if (index >= 0) {
+          setStore("user", index, { visibility })
+        } else {
+          setStore("user", store.user.length, { ...model, visibility })
+        }
       }
 
       return {
-        current: currentModel,
+        current,
         recent,
         list,
         cycle,
-        favorite: () => store.favorite,
-        isFavorite,
-        toggleFavorite,
         set(model: ModelKey | undefined, options?: { recent?: boolean }) {
           batch(() => {
-            setStore("model", agent.current().name, model ?? fallbackModel())
+            setEphemeral("model", agent.current().name, model ?? fallbackModel())
+            if (model) updateVisibility(model, "show")
             if (options?.recent && model) {
               const uniq = uniqueBy([model, ...store.recent], (x) => x.providerID + x.modelID)
               if (uniq.length > 5) uniq.pop()
               setStore("recent", uniq)
             }
           })
+        },
+        visible(model: ModelKey) {
+          const user = store.user.find((x) => x.modelID === model.modelID && x.providerID === model.providerID)
+          return (
+            user?.visibility !== "hide" &&
+            (latest().find((x) => x.modelID === model.modelID && x.providerID === model.providerID) ||
+              user?.visibility === "show")
+          )
+        },
+        setVisibility(model: ModelKey, visible: boolean) {
+          updateVisibility(model, visible ? "show" : "hide")
         },
       }
     })()
@@ -417,7 +406,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           case "file.watcher.updated":
             const relativePath = relative(event.properties.file)
             if (relativePath.startsWith(".git/")) return
-            load(relativePath)
+            if (store.node[relativePath]) load(relativePath)
             break
         }
       })

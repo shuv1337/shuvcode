@@ -12,6 +12,11 @@ import { getFontById, FONTS } from "@/fonts/font-definitions"
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 export type AvatarColorKey = (typeof AVATAR_COLOR_KEYS)[number]
 
+type SessionTabs = {
+  active?: string
+  all: string[]
+}
+
 export function getAvatarColors(key?: string) {
   if (key && AVATAR_COLOR_KEYS.includes(key as AvatarColorKey)) {
     return {
@@ -48,9 +53,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         theme: DEFAULT_THEME_ID,
         font: FONTS[0].id,
+        sessionTabs: {} as Record<string, SessionTabs>,
       }),
       {
-        name: "default-layout.v8",
+        name: "default-layout.v9",
       },
     )
     const [ephemeral, setEphemeral] = createStore<{
@@ -246,6 +252,86 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         set(fontId: string) {
           setStore("font", fontId)
         },
+      },
+      tabs(sessionKey: string) {
+        const tabs = createMemo(() => store.sessionTabs[sessionKey] ?? { all: [] })
+        return {
+          tabs,
+          active: createMemo(() => tabs().active),
+          all: createMemo(() => tabs().all),
+          setActive(tab: string | undefined) {
+            if (!store.sessionTabs[sessionKey]) {
+              setStore("sessionTabs", sessionKey, { all: [], active: tab })
+            } else {
+              setStore("sessionTabs", sessionKey, "active", tab)
+            }
+          },
+          setAll(all: string[]) {
+            if (!store.sessionTabs[sessionKey]) {
+              setStore("sessionTabs", sessionKey, { all, active: undefined })
+            } else {
+              setStore("sessionTabs", sessionKey, "all", all)
+            }
+          },
+          async open(tab: string) {
+            if (tab === "chat") {
+              if (!store.sessionTabs[sessionKey]) {
+                setStore("sessionTabs", sessionKey, { all: [], active: undefined })
+              } else {
+                setStore("sessionTabs", sessionKey, "active", undefined)
+              }
+              return
+            }
+            const current = store.sessionTabs[sessionKey] ?? { all: [] }
+            if (tab !== "review") {
+              if (!current.all.includes(tab)) {
+                if (!store.sessionTabs[sessionKey]) {
+                  setStore("sessionTabs", sessionKey, { all: [tab], active: tab })
+                } else {
+                  setStore("sessionTabs", sessionKey, "all", [...current.all, tab])
+                  setStore("sessionTabs", sessionKey, "active", tab)
+                }
+                return
+              }
+            }
+            if (!store.sessionTabs[sessionKey]) {
+              setStore("sessionTabs", sessionKey, { all: [], active: tab })
+            } else {
+              setStore("sessionTabs", sessionKey, "active", tab)
+            }
+          },
+          close(tab: string) {
+            const current = store.sessionTabs[sessionKey]
+            if (!current) return
+            batch(() => {
+              setStore(
+                "sessionTabs",
+                sessionKey,
+                "all",
+                current.all.filter((x) => x !== tab),
+              )
+              if (current.active === tab) {
+                const index = current.all.findIndex((f) => f === tab)
+                const previous = current.all[Math.max(0, index - 1)]
+                setStore("sessionTabs", sessionKey, "active", previous)
+              }
+            })
+          },
+          move(tab: string, to: number) {
+            const current = store.sessionTabs[sessionKey]
+            if (!current) return
+            const index = current.all.findIndex((f) => f === tab)
+            if (index === -1) return
+            setStore(
+              "sessionTabs",
+              sessionKey,
+              "all",
+              produce((opened) => {
+                opened.splice(to, 0, opened.splice(index, 1)[0])
+              }),
+            )
+          },
+        }
       },
     }
   },

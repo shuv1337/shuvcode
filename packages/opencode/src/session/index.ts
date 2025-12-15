@@ -234,7 +234,6 @@ export namespace Session {
   })
 
   export const unshare = fn(Identifier.schema("session"), async (id) => {
-    const cfg = await Config.get()
     // Use ShareNext for unsharing (same as share() function)
     const { ShareNext } = await import("@/share/share-next")
     await ShareNext.remove(id)

@@ -1,46 +1,34 @@
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { createEffect, on, Component, Show, For, onMount, onCleanup, Switch, Match, createMemo } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, produce } from "solid-js/store"
 import { makePersisted } from "@solid-primitives/storage"
 import { createFocusSignal } from "@solid-primitives/active-element"
 import { useLocal } from "@/context/local"
-import { ContentPart, DEFAULT_PROMPT, isPromptEqual, Prompt, useSession } from "@/context/session"
+import { ContentPart, DEFAULT_PROMPT, isPromptEqual, Prompt, usePrompt, ImageAttachmentPart } from "@/context/prompt"
+import { useLayout } from "@/context/layout"
 import { useSDK } from "@/context/sdk"
-import { useNavigate } from "@solidjs/router"
+import { useNavigate, useParams } from "@solidjs/router"
 import { useSync } from "@/context/sync"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
-import { SelectDialog } from "@opencode-ai/ui/select-dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Select } from "@opencode-ai/ui/select"
-import { Tag } from "@opencode-ai/ui/tag"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { useLayout } from "@/context/layout"
-import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { Dialog } from "@opencode-ai/ui/dialog"
-import { List, ListRef } from "@opencode-ai/ui/list"
-import { iife } from "@opencode-ai/util/iife"
-import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
-import { IconName } from "@opencode-ai/ui/icons/provider"
-import type { Command } from "@opencode-ai/sdk/v2"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { DialogSelectModel } from "@/components/dialog-select-model"
+import { DialogSelectModelUnpaid } from "@/components/dialog-select-model-unpaid"
+import { useProviders } from "@/hooks/use-providers"
+import { useCommand, formatKeybind } from "@/context/command"
+
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
 
 interface PromptInputProps {
   class?: string
   ref?: (el: HTMLDivElement) => void
 }
-
-type UICommand = {
-  name: string
-  description: string
-  builtin: true
-}
-
-const UI_COMMANDS: UICommand[] = [
-  { name: "undo", description: "Undo the last message", builtin: true },
-  { name: "redo", description: "Redo the last undone message", builtin: true },
-]
 
 const PLACEHOLDERS = [
   "Fix a TODO in the codebase",
@@ -70,31 +58,54 @@ const PLACEHOLDERS = [
   "How do environment variables work here?",
 ]
 
+interface SlashCommand {
+  id: string
+  trigger: string
+  title: string
+  description?: string
+  keybind?: string
+  type: "builtin" | "custom"
+}
+
 export const PromptInput: Component<PromptInputProps> = (props) => {
   const navigate = useNavigate()
   const sdk = useSDK()
   const sync = useSync()
   const local = useLocal()
-  const session = useSession()
+  const prompt = usePrompt()
   const layout = useLayout()
+  const params = useParams()
+  const dialog = useDialog()
   const providers = useProviders()
+  const command = useCommand()
   let editorRef!: HTMLDivElement
-  let popoverScrollRef: HTMLDivElement | undefined
+  let fileInputRef!: HTMLInputElement
+
+  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
+  const tabs = createMemo(() => layout.tabs(sessionKey()))
+  const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
+  const status = createMemo(
+    () =>
+      sync.data.session_status[params.id ?? ""] ?? {
+        type: "idle",
+      },
+  )
+  const working = createMemo(() => status()?.type !== "idle")
 
   const [store, setStore] = createStore<{
-    popoverIsOpen: boolean
-    popoverMode: "file" | "command" | null
-    inputMode: "normal" | "shell"
+    popover: "file" | "slash" | null
     historyIndex: number
     savedPrompt: Prompt | null
     placeholder: number
+    dragging: boolean
+    imageAttachments: ImageAttachmentPart[]
   }>({
-    popoverIsOpen: false,
-    popoverMode: null,
-    inputMode: "normal",
+    popover: null,
     historyIndex: -1,
     savedPrompt: null,
     placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
+    dragging: false,
+    imageAttachments: [],
   })
 
   const MAX_HISTORY = 100
@@ -110,59 +121,48 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   const clonePromptParts = (prompt: Prompt): Prompt =>
-    prompt.map((part) =>
-      part.type === "text"
-        ? { ...part }
-        : {
-            ...part,
-            selection: part.selection ? { ...part.selection } : undefined,
-          },
-    )
+    prompt.map((part) => {
+      if (part.type === "text") return { ...part }
+      if (part.type === "image") return { ...part }
+      return {
+        ...part,
+        selection: part.selection ? { ...part.selection } : undefined,
+      }
+    })
 
-  const promptLength = (prompt: Prompt) => prompt.reduce((len, part) => len + part.content.length, 0)
+  const promptLength = (prompt: Prompt) =>
+    prompt.reduce((len, part) => len + ("content" in part ? part.content.length : 0), 0)
 
-  const applyHistoryPrompt = (prompt: Prompt, position: "start" | "end") => {
-    const length = position === "start" ? 0 : promptLength(prompt)
-    session.prompt.set(prompt, length)
+  const applyHistoryPrompt = (p: Prompt, position: "start" | "end") => {
+    const length = position === "start" ? 0 : promptLength(p)
+    prompt.set(p, length)
     requestAnimationFrame(() => {
       editorRef.focus()
       setCursorPosition(editorRef, length)
     })
   }
 
-  const getCaretLineState = () => {
+  const getCaretState = () => {
     const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return { collapsed: false, onFirstLine: false, onLastLine: false }
-    const range = selection.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    const editorRect = editorRef.getBoundingClientRect()
-    const style = window.getComputedStyle(editorRef)
-    const paddingTop = parseFloat(style.paddingTop) || 0
-    const paddingBottom = parseFloat(style.paddingBottom) || 0
-    let lineHeight = parseFloat(style.lineHeight)
-    if (!Number.isFinite(lineHeight)) lineHeight = parseFloat(style.fontSize) || 16
-    const scrollTop = editorRef.scrollTop
-    let relativeTop = rect.top - editorRect.top - paddingTop + scrollTop
-    if (!Number.isFinite(relativeTop)) relativeTop = scrollTop
-    relativeTop = Math.max(0, relativeTop)
-    let caretHeight = rect.height
-    if (!caretHeight || !Number.isFinite(caretHeight)) caretHeight = lineHeight
-    const relativeBottom = relativeTop + caretHeight
-    const contentHeight = Math.max(caretHeight, editorRef.scrollHeight - paddingTop - paddingBottom)
-    const threshold = Math.max(2, lineHeight / 2)
-
+    const textLength = promptLength(prompt.current())
+    if (!selection || selection.rangeCount === 0) {
+      return { collapsed: false, cursorPosition: 0, textLength }
+    }
+    const anchorNode = selection.anchorNode
+    if (!anchorNode || !editorRef.contains(anchorNode)) {
+      return { collapsed: false, cursorPosition: 0, textLength }
+    }
     return {
       collapsed: selection.isCollapsed,
-      onFirstLine: relativeTop <= threshold,
-      onLastLine: contentHeight - relativeBottom <= threshold,
+      cursorPosition: getCursorPosition(editorRef),
+      textLength,
     }
   }
 
   createEffect(() => {
-    session.id
+    params.id
     editorRef.focus()
-    setStore("inputMode", "normal")
-    if (session.id) return
+    if (params.id) return
     const interval = setInterval(() => {
       setStore("placeholder", (prev) => (prev + 1) % PLACEHOLDERS.length)
     }, 6500)
@@ -171,12 +171,87 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const isFocused = createFocusSignal(() => editorRef)
 
-  const handlePaste = (event: ClipboardEvent) => {
+  const addImageAttachment = async (file: File) => {
+    if (!ACCEPTED_FILE_TYPES.includes(file.type)) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const attachment: ImageAttachmentPart = {
+        type: "image",
+        id: crypto.randomUUID(),
+        filename: file.name,
+        mime: file.type,
+        dataUrl,
+      }
+      setStore(
+        produce((draft) => {
+          draft.imageAttachments.push(attachment)
+        }),
+      )
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeImageAttachment = (id: string) => {
+    setStore(
+      produce((draft) => {
+        draft.imageAttachments = draft.imageAttachments.filter((a) => a.id !== id)
+      }),
+    )
+  }
+
+  const handlePaste = async (event: ClipboardEvent) => {
+    const clipboardData = event.clipboardData
+    if (!clipboardData) return
+
+    const items = Array.from(clipboardData.items)
+    const imageItems = items.filter((item) => ACCEPTED_FILE_TYPES.includes(item.type))
+
+    if (imageItems.length > 0) {
+      event.preventDefault()
+      event.stopPropagation()
+      for (const item of imageItems) {
+        const file = item.getAsFile()
+        if (file) await addImageAttachment(file)
+      }
+      return
+    }
+
     event.preventDefault()
     event.stopPropagation()
-    // @ts-expect-error
-    const plainText = (event.clipboardData || window.clipboardData)?.getData("text/plain") ?? ""
+    const plainText = clipboardData.getData("text/plain") ?? ""
     addPart({ type: "text", content: plainText, start: 0, end: 0 })
+  }
+
+  const handleDragOver = (event: DragEvent) => {
+    event.preventDefault()
+    const hasFiles = event.dataTransfer?.types.includes("Files")
+    if (hasFiles) {
+      setStore("dragging", true)
+    }
+  }
+
+  const handleDragLeave = (event: DragEvent) => {
+    const related = event.relatedTarget as Node | null
+    const form = event.currentTarget as HTMLElement
+    if (!related || !form.contains(related)) {
+      setStore("dragging", false)
+    }
+  }
+
+  const handleDrop = async (event: DragEvent) => {
+    event.preventDefault()
+    setStore("dragging", false)
+
+    const files = event.dataTransfer?.files
+    if (!files) return
+
+    for (const file of Array.from(files)) {
+      if (ACCEPTED_FILE_TYPES.includes(file.type)) {
+        await addImageAttachment(file)
+      }
+    }
   }
 
   onMount(() => {
@@ -190,7 +265,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (isFocused()) {
       handleInput()
     } else {
-      setStore({ popoverIsOpen: false, popoverMode: null })
+      setStore("popover", null)
     }
   })
 
@@ -199,73 +274,76 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     addPart({ type: "file", path, content: "@" + path, start: 0, end: 0 })
   }
 
-  type AnyCommand = Command | UICommand
-  const isUICommand = (cmd: AnyCommand): cmd is UICommand => "builtin" in cmd
-
-  const handleCommandSelect = (command: AnyCommand | undefined) => {
-    if (!command) return
-    editorRef.innerHTML = ""
-    // UI commands like /undo and /redo don't need trailing space for args
-    const needsSpace = !isUICommand(command)
-    editorRef.appendChild(document.createTextNode(`/${command.name}${needsSpace ? " " : ""}`))
-    handleInput()
-    setStore({ popoverIsOpen: false, popoverMode: null })
-    const range = document.createRange()
-    range.selectNodeContents(editorRef)
-    range.collapse(false)
-    window.getSelection()?.removeAllRanges()
-    window.getSelection()?.addRange(range)
-  }
-
-  const commandList = useFilteredList<AnyCommand>({
-    items: async () => [...UI_COMMANDS, ...(sync.data.command ?? [])],
-    key: (x) => x?.name ?? "",
-    filterKeys: ["name", "description"],
-    onSelect: handleCommandSelect,
-  })
-
-  // Refetch command list when server commands load (fixes mobile viewport issue)
-  createEffect(
-    on(
-      () => sync.data.command?.length ?? 0,
-      () => commandList.refetch(),
-      { defer: true },
-    ),
-  )
-
-  const { flat, active, onInput, onKeyDown, refetch } = useFilteredList<string>({
+  const { flat, active, onInput, onKeyDown } = useFilteredList<string>({
     items: local.file.searchFilesAndDirectories,
     key: (x) => x,
     onSelect: handleFileSelect,
   })
 
-  // Auto-scroll for command mode popover
-  createEffect(() => {
-    if (!store.popoverIsOpen || store.popoverMode !== "command") return
-    const activeKey = commandList.active()
-    if (!activeKey || !popoverScrollRef) return
+  const slashCommands = createMemo<SlashCommand[]>(() => {
+    const builtin = command.options
+      .filter((opt) => !opt.disabled && !opt.id.startsWith("suggested.") && opt.slash)
+      .map((opt) => ({
+        id: opt.id,
+        trigger: opt.slash!,
+        title: opt.title,
+        description: opt.description,
+        keybind: opt.keybind,
+        type: "builtin" as const,
+      }))
 
-    const element = popoverScrollRef.querySelector(`[data-key="${activeKey}"]`)
-    if (element) {
-      element.scrollIntoView({ block: "nearest", behavior: "smooth" })
-    }
+    const custom = sync.data.command.map((cmd) => ({
+      id: `custom.${cmd.name}`,
+      trigger: cmd.name,
+      title: cmd.name,
+      description: cmd.description,
+      type: "custom" as const,
+    }))
+
+    return [...custom, ...builtin]
   })
 
-  // Auto-scroll for file mode popover
-  createEffect(() => {
-    if (!store.popoverIsOpen || store.popoverMode !== "file") return
-    const activeKey = active()
-    if (!activeKey || !popoverScrollRef) return
+  const handleSlashSelect = (cmd: SlashCommand | undefined) => {
+    if (!cmd) return
+    setStore("popover", null)
 
-    const element = popoverScrollRef.querySelector(`[data-key="${activeKey}"]`)
-    if (element) {
-      element.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    if (cmd.type === "custom") {
+      const text = `/${cmd.trigger} `
+      editorRef.innerHTML = ""
+      editorRef.textContent = text
+      prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+      requestAnimationFrame(() => {
+        editorRef.focus()
+        const range = document.createRange()
+        const sel = window.getSelection()
+        range.selectNodeContents(editorRef)
+        range.collapse(false)
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+      })
+      return
     }
+
+    editorRef.innerHTML = ""
+    prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+    command.trigger(cmd.id, "slash")
+  }
+
+  const {
+    flat: slashFlat,
+    active: slashActive,
+    onInput: slashOnInput,
+    onKeyDown: slashOnKeyDown,
+  } = useFilteredList<SlashCommand>({
+    items: slashCommands,
+    key: (x) => x?.id,
+    filterKeys: ["trigger", "title", "description"],
+    onSelect: handleSlashSelect,
   })
 
   createEffect(
     on(
-      () => session.prompt.current(),
+      () => prompt.current(),
       (currentParts) => {
         const domParts = parseFromDOM()
         if (isPromptEqual(currentParts, domParts)) return
@@ -334,30 +412,19 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const handleInput = () => {
     const rawParts = parseFromDOM()
     const cursorPosition = getCursorPosition(editorRef)
-    const rawText = rawParts.map((p) => p.content).join("")
-
-    // Skip autocomplete detection in shell mode
-    if (store.inputMode === "shell") {
-      session.prompt.set(rawParts, cursorPosition)
-      return
-    }
-
-    // Check for slash command at start of input
-    const slashMatch = rawText.match(/^\/(\S*)$/)
-    if (slashMatch) {
-      // Hide autocomplete when command has arguments (e.g., "/command arg")
-      commandList.onInput(slashMatch[1])
-      setStore({ popoverIsOpen: true, popoverMode: "command" })
-      session.prompt.set(rawParts, cursorPosition)
-      return
-    }
+    const rawText = rawParts.map((p) => ("content" in p ? p.content : "")).join("")
 
     const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
+    const slashMatch = rawText.match(/^\/(\S*)$/)
+
     if (atMatch) {
       onInput(atMatch[1])
-      setStore({ popoverIsOpen: true, popoverMode: "file" })
-    } else if (store.popoverIsOpen) {
-      setStore({ popoverIsOpen: false, popoverMode: null })
+      setStore("popover", "file")
+    } else if (slashMatch) {
+      slashOnInput(slashMatch[1])
+      setStore("popover", "slash")
+    } else {
+      setStore("popover", null)
     }
 
     if (store.historyIndex >= 0) {
@@ -365,7 +432,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       setStore("savedPrompt", null)
     }
 
-    session.prompt.set(rawParts, cursorPosition)
+    prompt.set(rawParts, cursorPosition)
   }
 
   const addPart = (part: ContentPart) => {
@@ -373,8 +440,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!selection || selection.rangeCount === 0) return
 
     const cursorPosition = getCursorPosition(editorRef)
-    const prompt = session.prompt.current()
-    const rawText = prompt.map((p) => p.content).join("")
+    const currentPrompt = prompt.current()
+    const rawText = currentPrompt.map((p) => ("content" in p ? p.content : "")).join("")
     const textBeforeCursor = rawText.substring(0, cursorPosition)
     const atMatch = textBeforeCursor.match(/@(\S*)$/)
 
@@ -391,8 +458,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const range = selection.getRangeAt(0)
 
       if (atMatch) {
-        // let node: Node | null = range.startContainer
-        // let offset = range.startOffset
         let runningLength = 0
 
         const walker = document.createTreeWalker(editorRef, NodeFilter.SHOW_TEXT, null)
@@ -432,17 +497,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     handleInput()
-    setStore("popoverIsOpen", false)
+    setStore("popover", null)
   }
 
   const abort = () =>
     sdk.client.session.abort({
-      sessionID: session.id!,
+      sessionID: params.id!,
     })
 
   const addToHistory = (prompt: Prompt) => {
     const text = prompt
-      .map((p) => p.content)
+      .map((p) => ("content" in p ? p.content : ""))
       .join("")
       .trim()
     if (!text) return
@@ -450,7 +515,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const entry = clonePromptParts(prompt)
     const lastEntry = history.entries[0]
     if (lastEntry) {
-      const lastText = lastEntry.map((p) => p.content).join("")
+      const lastText = lastEntry.map((p) => ("content" in p ? p.content : "")).join("")
       if (lastText === text) return
     }
 
@@ -464,7 +529,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (direction === "up") {
       if (entries.length === 0) return false
       if (current === -1) {
-        setStore("savedPrompt", clonePromptParts(session.prompt.current()))
+        setStore("savedPrompt", clonePromptParts(prompt.current()))
         setStore("historyIndex", 0)
         applyHistoryPrompt(entries[0], "start")
         return true
@@ -500,51 +565,25 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Handle ! at start of input to enter shell mode
-    if (event.key === "!" && getCursorPosition(editorRef) === 0 && store.inputMode === "normal") {
-      event.preventDefault()
-      setStore("inputMode", "shell")
-      return
-    }
-
-    // Handle shell mode specific keys
-    if (store.inputMode === "shell") {
-      if (event.key === "Escape") {
-        setStore("inputMode", "normal")
-        return
-      }
-      if (event.key === "Backspace" && getCursorPosition(editorRef) === 0) {
-        setStore("inputMode", "normal")
-        return
-      }
-    }
-
-    // Handle popover navigation based on mode
-    if (
-      store.popoverIsOpen &&
-      (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter" || event.key === "Tab")
-    ) {
-      event.preventDefault()
-      if (store.popoverMode === "command") {
-        commandList.onKeyDown(event)
-      } else {
+    if (store.popover && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter")) {
+      if (store.popover === "file") {
         onKeyDown(event)
+      } else {
+        slashOnKeyDown(event)
       }
+      event.preventDefault()
       return
     }
 
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      const { collapsed, onFirstLine, onLastLine } = getCaretLineState()
+      if (event.altKey || event.ctrlKey || event.metaKey) return
+      const { collapsed, cursorPosition, textLength } = getCaretState()
       if (!collapsed) return
-      const cursorPos = getCursorPosition(editorRef)
-      const textLength = promptLength(session.prompt.current())
       const inHistory = store.historyIndex >= 0
-      const isStart = cursorPos === 0
-      const isEnd = cursorPos === textLength
-      const atAbsoluteStart = onFirstLine && isStart
-      const atAbsoluteEnd = onLastLine && isEnd
-      const allowUp = (inHistory && isEnd) || atAbsoluteStart
-      const allowDown = (inHistory && isStart) || atAbsoluteEnd
+      const atAbsoluteStart = cursorPosition === 0
+      const atAbsoluteEnd = cursorPosition === textLength
+      const allowUp = (inHistory && atAbsoluteEnd) || atAbsoluteStart
+      const allowDown = (inHistory && atAbsoluteStart) || atAbsoluteEnd
 
       if (event.key === "ArrowUp") {
         if (!allowUp) return
@@ -565,122 +604,29 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       handleSubmit(event)
     }
     if (event.key === "Escape") {
-      if (store.popoverIsOpen) {
-        setStore({ popoverIsOpen: false, popoverMode: null })
-      } else if (session.working()) {
+      if (store.popover) {
+        setStore("popover", null)
+      } else if (working()) {
         abort()
       }
     }
   }
 
-  const handleUndo = async () => {
-    const sessionInfo = session.info()
-    if (!sessionInfo) return
-
-    // Abort if working
-    if (session.working()) {
-      await sdk.client.session.abort({ sessionID: sessionInfo.id }).catch(() => {})
-    }
-
-    const revertPoint = sessionInfo.revert?.messageID
-    const messages = session.messages.all()
-    // Find the last user message before the revert point (or last user message if no revert)
-    const message = messages.findLast((x) => (!revertPoint || x.id < revertPoint) && x.role === "user")
-    if (!message) return
-
-    await sdk.client.session.revert({
-      sessionID: sessionInfo.id,
-      messageID: message.id,
-    })
-
-    // Restore the message content to the prompt
-    const parts = sync.data.part[message.id] ?? []
-    const textContent = parts
-      .filter((p) => p.type === "text" && !p.synthetic)
-      .map((p) => (p.type === "text" ? p.text : ""))
-      .join("")
-    editorRef.innerHTML = ""
-    editorRef.appendChild(document.createTextNode(textContent))
-    session.prompt.set([{ type: "text", content: textContent, start: 0, end: textContent.length }], textContent.length)
-  }
-
-  const handleRedo = async () => {
-    const sessionInfo = session.info()
-    if (!sessionInfo) return
-
-    const revertPoint = sessionInfo.revert?.messageID
-    if (!revertPoint) return // Nothing to redo
-
-    const messages = session.messages.all()
-    // Find the next user message after the revert point
-    const message = messages.find((x) => x.role === "user" && x.id > revertPoint)
-
-    if (!message) {
-      // At the end, unrevert all
-      await sdk.client.session.unrevert({ sessionID: sessionInfo.id })
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-    } else {
-      // Move revert point forward
-      await sdk.client.session.revert({
-        sessionID: sessionInfo.id,
-        messageID: message.id,
-      })
-    }
-  }
-
   const handleSubmit = async (event: Event) => {
     event.preventDefault()
-    const prompt = session.prompt.current()
-    const text = prompt.map((part) => part.content).join("")
-    if (text.trim().length === 0) {
-      if (session.working()) abort()
+    const currentPrompt = prompt.current()
+    const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
+    const hasImageAttachments = store.imageAttachments.length > 0
+    if (text.trim().length === 0 && !hasImageAttachments) {
+      if (working()) abort()
       return
     }
 
-    // Handle shell mode - execute command directly
-    if (store.inputMode === "shell") {
-      const shellCommand = text.trim()
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      setStore("inputMode", "normal")
-
-      if (session.id) {
-        await sdk.client.session.shell({
-          sessionID: session.id,
-          command: shellCommand,
-        })
-      }
-      return
-    }
-
-    // UI command detection (undo/redo)
-    if (text === "/undo") {
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      await handleUndo()
-      return
-    }
-    if (text === "/redo") {
-      editorRef.innerHTML = ""
-      session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-      await handleRedo()
-      return
-    }
-
-    // SDK command detection
-    const isSlashCommand = text.startsWith("/")
-    let matchedCommand: Command | undefined
-    if (isSlashCommand) {
-      const commandName = text.split(" ")[0].slice(1) // Remove leading "/"
-      matchedCommand = sync.data.command?.find((cmd) => cmd.name === commandName)
-    }
-
-    addToHistory(prompt)
+    addToHistory(currentPrompt)
     setStore("historyIndex", -1)
     setStore("savedPrompt", null)
 
-    let existing = session.info()
+    let existing = info()
     if (!existing) {
       const created = await sdk.client.session.create()
       existing = created.data ?? undefined
@@ -688,133 +634,141 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
     if (!existing) return
 
-    session.layout.setActiveTab(undefined)
-    session.messages.setActive(undefined)
-    // Clear the editor DOM directly to ensure it's empty
-    editorRef.innerHTML = ""
-    session.prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+    const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
+    const attachments = currentPrompt.filter(
+      (part) => part.type === "file",
+    ) as import("@/context/prompt").FileAttachmentPart[]
 
-    if (matchedCommand) {
-      const args = text.split(" ").slice(1).join(" ")
-      try {
-        await sdk.client.session.command({
+    const fileAttachmentParts = attachments.map((attachment) => {
+      const absolute = toAbsolutePath(attachment.path)
+      const query = attachment.selection
+        ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
+        : ""
+      return {
+        type: "file" as const,
+        mime: "text/plain",
+        url: `file://${absolute}${query}`,
+        filename: getFilename(attachment.path),
+        source: {
+          type: "file" as const,
+          text: {
+            value: attachment.content,
+            start: attachment.start,
+            end: attachment.end,
+          },
+          path: absolute,
+        },
+      }
+    })
+
+    const imageAttachmentParts = store.imageAttachments.map((attachment) => ({
+      type: "file" as const,
+      mime: attachment.mime,
+      url: attachment.dataUrl,
+      filename: attachment.filename,
+    }))
+
+    tabs().setActive(undefined)
+    editorRef.innerHTML = ""
+    prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
+    setStore("imageAttachments", [])
+
+    if (text.startsWith("/")) {
+      const [cmdName, ...args] = text.split(" ")
+      const commandName = cmdName.slice(1)
+      const customCommand = sync.data.command.find((c) => c.name === commandName)
+      if (customCommand) {
+        sdk.client.session.command({
           sessionID: existing.id,
-          command: matchedCommand.name,
-          arguments: args,
+          command: commandName,
+          arguments: args.join(" "),
           agent: local.agent.current()!.name,
           model: `${local.model.current()!.provider.id}/${local.model.current()!.id}`,
         })
-      } catch (error) {
-        console.error("Command execution failed:", error)
+        return
       }
-    } else {
-      const toAbsolutePath = (path: string) => (path.startsWith("/") ? path : sync.absolute(path))
-      const attachments = prompt.filter((part) => part.type === "file")
-
-      const attachmentParts = attachments.map((attachment) => {
-        const absolute = toAbsolutePath(attachment.path)
-        const query = attachment.selection
-          ? `?start=${attachment.selection.startLine}&end=${attachment.selection.endLine}`
-          : ""
-        return {
-          type: "file" as const,
-          mime: "text/plain",
-          url: `file://${absolute}${query}`,
-          filename: getFilename(attachment.path),
-          source: {
-            type: "file" as const,
-            text: {
-              value: attachment.content,
-              start: attachment.start,
-              end: attachment.end,
-            },
-            path: absolute,
-          },
-        }
-      })
-
-      sdk.client.session.prompt({
-        sessionID: existing.id,
-        agent: local.agent.current()!.name,
-        model: {
-          modelID: local.model.current()!.id,
-          providerID: local.model.current()!.provider.id,
-        },
-        parts: [
-          {
-            type: "text",
-            text,
-          },
-          ...attachmentParts,
-        ],
-      })
     }
+
+    sdk.client.session.prompt({
+      sessionID: existing.id,
+      agent: local.agent.current()!.name,
+      model: {
+        modelID: local.model.current()!.id,
+        providerID: local.model.current()!.provider.id,
+      },
+      parts: [
+        {
+          type: "text",
+          text,
+        },
+        ...fileAttachmentParts,
+        ...imageAttachmentParts,
+      ],
+    })
   }
 
   return (
     <div class="relative size-full _max-h-[320px] flex flex-col gap-3">
-      <Show when={store.popoverIsOpen}>
+      <Show when={store.popover}>
         <div
-          ref={popoverScrollRef}
-          onMouseDown={(e) => e.preventDefault()}
-          class="absolute inset-x-0 -top-3 -translate-y-full origin-bottom-left max-h-[252px] min-h-10
-                 overflow-auto no-scrollbar flex flex-col p-2 pb-0 rounded-md
+          class="absolute inset-x-0 -top-3 -translate-y-full origin-bottom-left max-h-80 min-h-10
+                 overflow-auto no-scrollbar flex flex-col p-2 rounded-md
                  border border-border-base bg-surface-raised-stronger-non-alpha shadow-md"
         >
           <Switch>
-            <Match when={store.popoverMode === "command"}>
-              <Show
-                when={commandList.flat().length > 0}
-                fallback={<div class="text-text-weak px-2">No matching commands</div>}
-              >
-                <For each={commandList.flat()}>
-                  {(cmd) => (
+            <Match when={store.popover === "file"}>
+              <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2 py-1">No matching files</div>}>
+                <For each={flat()}>
+                  {(i) => (
                     <button
-                      data-key={cmd.name}
                       classList={{
-                        "w-full flex items-center justify-between rounded-md px-2 py-1.5": true,
-                        "bg-surface-raised-base-hover": commandList.active() === cmd.name,
+                        "w-full flex items-center gap-x-2 rounded-md px-2 py-0.5": true,
+                        "bg-surface-raised-base-hover": active() === i,
                       }}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleCommandSelect(cmd)}
+                      onClick={() => handleFileSelect(i)}
                     >
-                      <div class="flex items-center gap-x-2 grow min-w-0">
-                        <Icon name="console" class="shrink-0 size-4 text-icon-weak-base" />
-                        <div class="flex items-center gap-2 text-14-regular">
-                          <span class="text-text-strong">/{cmd.name}</span>
-                          <span class="text-text-weak">{cmd.description}</span>
-                        </div>
+                      <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
+                      <div class="flex items-center text-14-regular min-w-0">
+                        <span class="text-text-weak whitespace-nowrap truncate min-w-0">{getDirectory(i)}</span>
+                        <Show when={!i.endsWith("/")}>
+                          <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
+                        </Show>
                       </div>
                     </button>
                   )}
                 </For>
               </Show>
             </Match>
-            <Match when={store.popoverMode === "file"}>
-              <Show when={flat().length > 0} fallback={<div class="text-text-weak px-2">No matching files</div>}>
-                <For each={flat()}>
-                  {(i) => (
+            <Match when={store.popover === "slash"}>
+              <Show
+                when={slashFlat().length > 0}
+                fallback={<div class="text-text-weak px-2 py-1">No matching commands</div>}
+              >
+                <For each={slashFlat()}>
+                  {(cmd) => (
                     <button
-                      data-key={i}
                       classList={{
-                        "w-full flex items-center justify-between rounded-md": true,
-                        "bg-surface-raised-base-hover": active() === i,
+                        "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
+                        "bg-surface-raised-base-hover": slashActive() === cmd.id,
                       }}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleFileSelect(i)}
+                      onClick={() => handleSlashSelect(cmd)}
                     >
-                      <div class="flex items-center gap-x-2 grow min-w-0">
-                        <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
-                        <div class="flex items-center text-14-regular">
-                          <span class="text-text-weak whitespace-nowrap overflow-hidden overflow-ellipsis truncate min-w-0">
-                            {getDirectory(i)}
-                          </span>
-                          <Show when={!i.endsWith("/")}>
-                            <span class="text-text-strong whitespace-nowrap">{getFilename(i)}</span>
-                          </Show>
-                        </div>
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-14-regular text-text-strong whitespace-nowrap">/{cmd.trigger}</span>
+                        <Show when={cmd.description}>
+                          <span class="text-14-regular text-text-weak truncate">{cmd.description}</span>
+                        </Show>
                       </div>
-                      <div class="flex items-center gap-x-1 text-text-muted/40 shrink-0"></div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <Show when={cmd.type === "custom"}>
+                          <span class="text-11-regular text-text-subtle px-1.5 py-0.5 bg-surface-base rounded">
+                            custom
+                          </span>
+                        </Show>
+                        <Show when={cmd.keybind}>
+                          <span class="text-12-regular text-text-subtle">{formatKeybind(cmd.keybind!)}</span>
+                        </Show>
+                      </div>
                     </button>
                   )}
                 </For>
@@ -825,18 +779,59 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       </Show>
       <form
         onSubmit={handleSubmit}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         classList={{
-          "bg-surface-raised-stronger-non-alpha border border-border-strong-base": true,
-          "rounded-md overflow-clip focus-within:border-transparent focus-within:shadow-xs-border-select": true,
+          "bg-surface-raised-stronger-non-alpha shadow-xs-border relative": true,
+          "rounded-md overflow-clip focus-within:shadow-xs-border": true,
+          "border-icon-info-active border-dashed": store.dragging,
           [props.class ?? ""]: !!props.class,
         }}
       >
-        <div class="relative max-h-[240px] overflow-y-auto">
-          <Show when={store.inputMode === "shell"}>
-            <div class="absolute top-0 left-0 px-2 py-3 text-14-regular text-icon-warning-base pointer-events-none font-mono">
-              !
+        <Show when={store.dragging}>
+          <div class="absolute inset-0 z-10 flex items-center justify-center bg-surface-raised-stronger-non-alpha/90 pointer-events-none">
+            <div class="flex flex-col items-center gap-2 text-text-weak">
+              <Icon name="photo" class="size-8" />
+              <span class="text-14-regular">Drop images or PDFs here</span>
             </div>
-          </Show>
+          </div>
+        </Show>
+        <Show when={store.imageAttachments.length > 0}>
+          <div class="flex flex-wrap gap-2 px-3 pt-3">
+            <For each={store.imageAttachments}>
+              {(attachment) => (
+                <div class="relative group">
+                  <Show
+                    when={attachment.mime.startsWith("image/")}
+                    fallback={
+                      <div class="size-16 rounded-md bg-surface-base flex items-center justify-center border border-border-base">
+                        <Icon name="folder" class="size-6 text-text-weak" />
+                      </div>
+                    }
+                  >
+                    <img
+                      src={attachment.dataUrl}
+                      alt={attachment.filename}
+                      class="size-16 rounded-md object-cover border border-border-base"
+                    />
+                  </Show>
+                  <button
+                    type="button"
+                    onClick={() => removeImageAttachment(attachment.id)}
+                    class="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-surface-raised-stronger-non-alpha border border-border-base flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-raised-base-hover"
+                  >
+                    <Icon name="close" class="size-3 text-text-weak" />
+                  </button>
+                  <div class="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-black/50 rounded-b-md">
+                    <span class="text-10-regular text-white truncate block">{attachment.filename}</span>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+        <div class="relative max-h-[240px] overflow-y-auto">
           <div
             ref={(el) => {
               editorRef = el
@@ -846,20 +841,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             classList={{
-              "w-full py-3 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
-              "px-5": store.inputMode === "normal",
-              "pl-6 pr-5": store.inputMode === "shell",
+              "w-full px-5 py-3 text-14-regular text-text-strong focus:outline-none whitespace-pre-wrap": true,
               "[&>[data-type=file]]:text-icon-info-active": true,
             }}
           />
-          <Show when={!session.prompt.dirty() && store.inputMode === "normal"}>
-            <div class="absolute top-0 left-0 right-0 px-5 py-3 text-14-regular text-text-weak pointer-events-none truncate">
+          <Show when={!prompt.dirty() && store.imageAttachments.length === 0}>
+            <div class="absolute top-0 left-0 px-5 py-3 text-14-regular text-text-weak pointer-events-none">
               Ask anything... "{PLACEHOLDERS[store.placeholder]}"
-            </div>
-          </Show>
-          <Show when={!session.prompt.dirty() && store.inputMode === "shell"}>
-            <div class="absolute top-0 left-0 pl-6 pr-5 py-3 text-14-regular text-text-weak pointer-events-none">
-              Enter shell command...
             </div>
           </Show>
         </div>
@@ -872,302 +860,68 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               class="capitalize"
               variant="ghost"
             />
-            <Button as="div" variant="ghost" onClick={() => layout.dialog.open("model")}>
+            <Button
+              as="div"
+              variant="ghost"
+              onClick={() =>
+                dialog.push(() => (providers.paid().length > 0 ? <DialogSelectModel /> : <DialogSelectModelUnpaid />))
+              }
+            >
               {local.model.current()?.name ?? "Select model"}
               <span class="ml-0.5 text-text-weak text-12-regular">{local.model.current()?.provider.name}</span>
               <Icon name="chevron-down" size="small" />
             </Button>
-            <Show when={layout.dialog.opened() === "model"}>
-              <Switch>
-                <Match when={providers.paid().length > 0}>
-                  {iife(() => {
-                    const models = createMemo(() =>
-                      local.model
-                        .list()
-                        .filter((m) =>
-                          layout.connect.state() === "complete" ? m.provider.id === layout.connect.provider() : true,
-                        ),
-                    )
-                    return (
-                      <SelectDialog
-                        defaultOpen
-                        onOpenChange={(open) => {
-                          if (open) {
-                            layout.dialog.open("model")
-                          } else {
-                            layout.dialog.close("model")
-                          }
-                        }}
-                        title="Select model"
-                        placeholder="Search models"
-                        emptyMessage="No model results"
-                        key={(x) => `${x.provider.id}:${x.id}`}
-                        items={models}
-                        current={local.model.current()}
-                        filterKeys={["provider.name", "name", "id"]}
-                        sortBy={(a, b) => a.name.localeCompare(b.name)}
-                        groupBy={(x) =>
-                          local.model.isFavorite({ providerID: x.provider.id, modelID: x.id })
-                            ? "Favorites"
-                            : x.provider.name
-                        }
-                        sortGroupsBy={(a, b) => {
-                          if (a.category === "Favorites" && b.category !== "Favorites") return -1
-                          if (b.category === "Favorites" && a.category !== "Favorites") return 1
-                          const aProvider = a.items[0]?.provider.id
-                          const bProvider = b.items[0]?.provider.id
-                          const aPopular = popularProviders.includes(aProvider)
-                          const bPopular = popularProviders.includes(bProvider)
-                          if (aPopular && !bPopular) return -1
-                          if (!aPopular && bPopular) return 1
-                          if (aPopular && bPopular) {
-                            return popularProviders.indexOf(aProvider) - popularProviders.indexOf(bProvider)
-                          }
-                          return a.category.localeCompare(b.category)
-                        }}
-                        onSelect={(x) =>
-                          local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
-                            recent: true,
-                          })
-                        }
-                        actions={
-                          <Button
-                            class="h-7 -my-1 text-14-medium"
-                            icon="plus-small"
-                            tabIndex={-1}
-                            onClick={() => layout.dialog.open("provider")}
-                          >
-                            Connect provider
-                          </Button>
-                        }
-                        itemActions={(i) => (
-                          <button
-                            type="button"
-                            class="p-1 hover:bg-surface-raised-base-hover rounded"
-                            aria-label={
-                              local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                ? "Remove from favorites"
-                                : "Add to favorites"
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              local.model.toggleFavorite({ providerID: i.provider.id, modelID: i.id })
-                            }}
-                          >
-                            <Icon
-                              name={
-                                local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                  ? "star-filled"
-                                  : "star"
-                              }
-                              size="small"
-                              class={
-                                local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                  ? "text-icon-warning-base"
-                                  : "text-icon-weak-base"
-                              }
-                            />
-                          </button>
-                        )}
-                      >
-                        {(i) => (
-                          <div class="w-full flex items-center gap-x-2.5">
-                            <span>{i.name}</span>
-                            <Show when={i.provider.id === "opencode" && (!i.cost || i.cost?.input === 0)}>
-                              <Tag>Free</Tag>
-                            </Show>
-                            <Show when={i.latest}>
-                              <Tag>Latest</Tag>
-                            </Show>
-                          </div>
-                        )}
-                      </SelectDialog>
-                    )
-                  })}
-                </Match>
-                <Match when={true}>
-                  {iife(() => {
-                    let listRef: ListRef | undefined
-                    const handleKey = (e: KeyboardEvent) => {
-                      if (e.key === "Escape") return
-                      listRef?.onKeyDown(e)
-                    }
-
-                    onMount(() => {
-                      document.addEventListener("keydown", handleKey)
-                      onCleanup(() => {
-                        document.removeEventListener("keydown", handleKey)
-                      })
-                    })
-
-                    return (
-                      <Dialog
-                        modal
-                        defaultOpen
-                        onOpenChange={(open) => {
-                          if (open) {
-                            layout.dialog.open("model")
-                          } else {
-                            layout.dialog.close("model")
-                          }
-                        }}
-                      >
-                        <Dialog.Header>
-                          <Dialog.Title>Select model</Dialog.Title>
-                          <Dialog.CloseButton tabIndex={-1} />
-                        </Dialog.Header>
-                        <Dialog.Body>
-                          <div class="flex flex-col gap-3 px-2.5">
-                            <div class="text-14-medium text-text-base px-2.5">Free models provided by OpenCode</div>
-                            <List
-                              ref={(ref) => (listRef = ref)}
-                              items={local.model.list}
-                              current={local.model.current()}
-                              key={(x) => `${x.provider.id}:${x.id}`}
-                              onSelect={(x) => {
-                                local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
-                                  recent: true,
-                                })
-                                layout.dialog.close("model")
-                              }}
-                              actions={(i) => (
-                                <button
-                                  type="button"
-                                  class="p-1 hover:bg-surface-raised-base-hover rounded"
-                                  aria-label={
-                                    local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                      ? "Remove from favorites"
-                                      : "Add to favorites"
-                                  }
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    local.model.toggleFavorite({ providerID: i.provider.id, modelID: i.id })
-                                  }}
-                                >
-                                  <Icon
-                                    name={
-                                      local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                        ? "star-filled"
-                                        : "star"
-                                    }
-                                    size="small"
-                                    class={
-                                      local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
-                                        ? "text-icon-warning-base"
-                                        : "text-icon-weak-base"
-                                    }
-                                  />
-                                </button>
-                              )}
-                            >
-                              {(i) => (
-                                <div class="w-full flex items-center gap-x-2.5">
-                                  <span>{i.name}</span>
-                                  <Tag>Free</Tag>
-                                  <Show when={i.latest}>
-                                    <Tag>Latest</Tag>
-                                  </Show>
-                                </div>
-                              )}
-                            </List>
-                            <div />
-                            <div />
-                          </div>
-                          <div class="px-1.5 pb-1.5">
-                            <div class="w-full rounded-sm border border-border-weak-base bg-surface-raised-base">
-                              <div class="w-full flex flex-col items-start gap-4 px-1.5 pt-4 pb-4">
-                                <div class="px-2 text-14-medium text-text-base">
-                                  Add more models from popular providers
-                                </div>
-                                <div class="w-full">
-                                  <List
-                                    class="w-full"
-                                    key={(x) => x?.id}
-                                    items={providers.popular}
-                                    activeIcon="plus-small"
-                                    sortBy={(a, b) => {
-                                      if (popularProviders.includes(a.id) && popularProviders.includes(b.id))
-                                        return popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id)
-                                      return a.name.localeCompare(b.name)
-                                    }}
-                                    onSelect={(x) => {
-                                      if (!x) return
-                                      layout.dialog.connect(x.id)
-                                    }}
-                                  >
-                                    {(i) => (
-                                      <div class="w-full flex items-center gap-x-4">
-                                        <ProviderIcon
-                                          data-slot="list-item-extra-icon"
-                                          id={i.id as IconName}
-                                          // TODO: clean this up after we update icon in models.dev
-                                          classList={{
-                                            "text-icon-weak-base": true,
-                                            "size-4 mx-0.5": i.id === "opencode",
-                                            "size-5": i.id !== "opencode",
-                                          }}
-                                        />
-                                        <span>{i.name}</span>
-                                        <Show when={i.id === "opencode"}>
-                                          <Tag>Recommended</Tag>
-                                        </Show>
-                                        <Show when={i.id === "anthropic"}>
-                                          <div class="text-14-regular text-text-weak">
-                                            Connect with Claude Pro/Max or API key
-                                          </div>
-                                        </Show>
-                                      </div>
-                                    )}
-                                  </List>
-                                  <Button
-                                    variant="ghost"
-                                    class="w-full justify-start px-[11px] py-3.5 gap-4.5 text-14-medium"
-                                    icon="dot-grid"
-                                    onClick={() => {
-                                      layout.dialog.open("provider")
-                                    }}
-                                  >
-                                    View all providers
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </Dialog.Body>
-                      </Dialog>
-                    )
-                  })}
-                </Match>
-              </Switch>
-            </Show>
           </div>
-          <Tooltip
-            placement="top"
-            value={
-              <Switch>
-                <Match when={session.working()}>
-                  <div class="flex items-center gap-2">
-                    <span>Stop</span>
-                    <span class="text-icon-base text-12-medium text-[10px]!">ESC</span>
-                  </div>
-                </Match>
-                <Match when={true}>
-                  <div class="flex items-center gap-2">
-                    <span>Send</span>
-                    <Icon name="enter" size="small" class="text-icon-base" />
-                  </div>
-                </Match>
-              </Switch>
-            }
-          >
-            <IconButton
-              type="submit"
-              disabled={!session.prompt.dirty() && !session.working()}
-              icon={session.working() ? "stop" : "arrow-up"}
-              variant="primary"
-              class="h-10 w-8 absolute right-2 bottom-2"
+          <div class="flex items-center gap-1 absolute right-2 bottom-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(",")}
+              class="hidden"
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0]
+                if (file) addImageAttachment(file)
+                e.currentTarget.value = ""
+              }}
             />
-          </Tooltip>
+            <Tooltip placement="top" value="Attach image">
+              <IconButton
+                type="button"
+                icon="photo"
+                variant="ghost"
+                class="h-10 w-8"
+                onClick={() => fileInputRef.click()}
+              />
+            </Tooltip>
+            <Tooltip
+              placement="top"
+              inactive={!prompt.dirty() && !working()}
+              value={
+                <Switch>
+                  <Match when={working()}>
+                    <div class="flex items-center gap-2">
+                      <span>Stop</span>
+                      <span class="text-icon-base text-12-medium text-[10px]!">ESC</span>
+                    </div>
+                  </Match>
+                  <Match when={true}>
+                    <div class="flex items-center gap-2">
+                      <span>Send</span>
+                      <Icon name="enter" size="small" class="text-icon-base" />
+                    </div>
+                  </Match>
+                </Switch>
+              }
+            >
+              <IconButton
+                type="submit"
+                disabled={!prompt.dirty() && store.imageAttachments.length === 0 && !working()}
+                icon={working() ? "stop" : "arrow-up"}
+                variant="primary"
+                class="h-10 w-8"
+              />
+            </Tooltip>
+          </div>
         </div>
       </form>
     </div>

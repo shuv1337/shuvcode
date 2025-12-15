@@ -53,6 +53,7 @@ const icons = {
   check: `<path d="M5 11.9657L8.37838 14.7529L15 5.83398" stroke="currentColor" stroke-linecap="square"/>`,
   star: `<path d="M10 2.5L12.09 7.36L17.5 7.9L13.5 11.44L14.58 16.75L10 14L5.42 16.75L6.5 11.44L2.5 7.9L7.91 7.36L10 2.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`,
   "star-filled": `<path d="M10 2.5L12.09 7.36L17.5 7.9L13.5 11.44L14.58 16.75L10 14L5.42 16.75L6.5 11.44L2.5 7.9L7.91 7.36L10 2.5Z" fill="currentColor"/>`,
+  photo: `<path d="M16.6665 16.6666L11.6665 11.6666L9.99984 13.3333L6.6665 9.99996L3.08317 13.5833M2.9165 2.91663H17.0832V17.0833H2.9165V2.91663ZM13.3332 7.49996C13.3332 8.30537 12.6803 8.95829 11.8748 8.95829C11.0694 8.95829 10.4165 8.30537 10.4165 7.49996C10.4165 6.69454 11.0694 6.04163 11.8748 6.04163C12.6803 6.04163 13.3332 6.69454 13.3332 7.49996Z" stroke="currentColor" stroke-linecap="square"/>`,
 }
 
 export interface IconProps extends ComponentProps<"svg"> {
