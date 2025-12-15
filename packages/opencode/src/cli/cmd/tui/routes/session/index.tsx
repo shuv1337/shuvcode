@@ -25,6 +25,7 @@ import {
   type ScrollAcceleration,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
+import { SearchInput, type SearchInputRef } from "@tui/component/prompt/search"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
@@ -124,6 +125,36 @@ export function Session() {
   const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 
+  // Search state
+  const [searchMode, setSearchMode] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [currentMatchIndex, setCurrentMatchIndex] = createSignal(0)
+
+  // Compute search matches from messages
+  const searchMatches = createMemo(() => {
+    const query = searchQuery().toLowerCase()
+    if (!query) return []
+
+    const matches: { messageID: string; index: number }[] = []
+    const msgs = messages()
+
+    for (const msg of msgs) {
+      const parts = sync.data.part[msg.id] ?? []
+      for (const part of parts) {
+        if (part.type === "text" && !part.synthetic) {
+          const text = part.text.toLowerCase()
+          let startIndex = 0
+          let idx: number
+          while ((idx = text.indexOf(query, startIndex)) !== -1) {
+            matches.push({ messageID: msg.id, index: idx })
+            startIndex = idx + 1
+          }
+        }
+      }
+    }
+    return matches
+  })
+
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
     if (session()?.parentID) return false
@@ -188,10 +219,21 @@ export function Session() {
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
+  let searchRef: SearchInputRef
   const keybind = useKeybind()
 
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
+
+    // Toggle search mode
+    if (keybind.match("session_search", evt)) {
+      setSearchMode((prev) => !prev)
+      if (!searchMode()) {
+        setSearchQuery("")
+        setCurrentMatchIndex(0)
+      }
+      return
+    }
 
     const first = permissions()[0]
     if (first) {
@@ -245,6 +287,43 @@ export function Session() {
     }
   }
 
+  // Search navigation functions
+  function scrollToMatch(index: number) {
+    const matches = searchMatches()
+    if (matches.length === 0 || index < 0 || index >= matches.length) return
+
+    const match = matches[index]
+    const child = scroll.getChildren().find((c) => c.id === match.messageID)
+    if (child) {
+      scroll.scrollBy(child.y - scroll.y - 1)
+    }
+  }
+
+  function nextMatch() {
+    const matches = searchMatches()
+    if (matches.length === 0) return
+
+    const nextIndex = (currentMatchIndex() + 1) % matches.length
+    setCurrentMatchIndex(nextIndex)
+    scrollToMatch(nextIndex)
+  }
+
+  function previousMatch() {
+    const matches = searchMatches()
+    if (matches.length === 0) return
+
+    const prevIndex = (currentMatchIndex() - 1 + matches.length) % matches.length
+    setCurrentMatchIndex(prevIndex)
+    scrollToMatch(prevIndex)
+  }
+
+  function exitSearch() {
+    setSearchMode(false)
+    setSearchQuery("")
+    setCurrentMatchIndex(0)
+    prompt?.focus()
+  }
+
   const command = useCommandDialog()
   command.register(() => [
     ...(sync.data.config.share !== "disabled"
@@ -273,6 +352,16 @@ export function Session() {
           },
         ]
       : []),
+    {
+      title: "Search in messages",
+      value: "session.search",
+      keybind: "session_search",
+      category: "Session",
+      onSelect: (dialog) => {
+        setSearchMode(true)
+        dialog.clear()
+      },
+    },
     {
       title: "Rename session",
       value: "session.rename",
@@ -982,17 +1071,41 @@ export function Session() {
               </For>
             </scrollbox>
             <box flexShrink={0}>
-              <Prompt
-                ref={(r) => {
-                  prompt = r
-                  promptRef.set(r)
-                }}
-                disabled={permissions().length > 0}
-                onSubmit={() => {
-                  toBottom()
-                }}
-                sessionID={route.sessionID}
-              />
+              <Show
+                when={searchMode()}
+                fallback={
+                  <Prompt
+                    ref={(r) => {
+                      prompt = r
+                      promptRef.set(r)
+                    }}
+                    disabled={permissions().length > 0}
+                    onSubmit={() => {
+                      toBottom()
+                    }}
+                    sessionID={route.sessionID}
+                  />
+                }
+              >
+                <SearchInput
+                  ref={(r) => (searchRef = r)}
+                  sessionID={route.sessionID}
+                  onInput={(query) => {
+                    setSearchQuery(query)
+                    setCurrentMatchIndex(0)
+                    if (query && searchMatches().length > 0) {
+                      scrollToMatch(0)
+                    }
+                  }}
+                  onNext={nextMatch}
+                  onPrevious={previousMatch}
+                  onExit={exitSearch}
+                  matchInfo={{
+                    current: currentMatchIndex(),
+                    total: searchMatches().length,
+                  }}
+                />
+              </Show>
             </box>
             <Show when={!sidebarVisible()}>
               <Footer />
