@@ -8543,6 +8543,15 @@
           },
           "subtask": {
             "type": "boolean"
+          },
+          "sessionOnly": {
+            "type": "boolean"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": ["name", "template"]
