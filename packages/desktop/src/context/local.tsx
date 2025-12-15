@@ -30,6 +30,44 @@ export type LocalModel = Omit<Model, "provider"> & {
 }
 export type ModelKey = { providerID: string; modelID: string }
 
+export type ModelPrefs = {
+  recent: ModelKey[]
+  favorite: ModelKey[]
+}
+
+function isValidModelKey(x: unknown): x is ModelKey {
+  return (
+    typeof x === "object" &&
+    x !== null &&
+    typeof (x as ModelKey).providerID === "string" &&
+    typeof (x as ModelKey).modelID === "string"
+  )
+}
+
+function safeParseModelPrefs(raw: string | null): ModelPrefs {
+  const empty = { recent: [], favorite: [] }
+  if (!raw) return empty
+  try {
+    const parsed = JSON.parse(raw)
+    // Legacy format: bare array is treated as recent
+    if (Array.isArray(parsed)) {
+      return { recent: parsed.filter(isValidModelKey), favorite: [] }
+    }
+    // New format: object with recent and favorite
+    if (parsed && typeof parsed === "object") {
+      return {
+        recent: Array.isArray(parsed.recent) ? parsed.recent.filter(isValidModelKey) : [],
+        favorite: Array.isArray(parsed.favorite) ? parsed.favorite.filter(isValidModelKey) : [],
+      }
+    }
+    return empty
+  } catch {
+    return empty
+  }
+}
+
+const MAX_FAVORITES = 20
+
 export type FileContext = { type: "file"; path: string; selection?: TextSelection }
 export type ContextItem = FileContext
 
@@ -111,15 +149,23 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const [store, setStore] = createStore<{
         model: Record<string, ModelKey>
         recent: ModelKey[]
+        favorite: ModelKey[]
       }>({
         model: {},
         recent: [],
+        favorite: [],
       })
 
-      const value = localStorage.getItem("model")
-      setStore("recent", JSON.parse(value ?? "[]"))
+      const prefs = safeParseModelPrefs(localStorage.getItem("model"))
+      setStore("recent", prefs.recent)
+      setStore("favorite", prefs.favorite)
+
+      function savePrefs() {
+        localStorage.setItem("model", JSON.stringify({ recent: store.recent, favorite: store.favorite }))
+      }
+
       createEffect(() => {
-        localStorage.setItem("model", JSON.stringify(store.recent))
+        savePrefs()
       })
 
       const list = createMemo(() =>
@@ -196,11 +242,33 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         })
       }
 
+      const isFavorite = (key: ModelKey) =>
+        store.favorite.some((x) => x.providerID === key.providerID && x.modelID === key.modelID)
+
+      const toggleFavorite = (key: ModelKey) => {
+        batch(() => {
+          if (isFavorite(key)) {
+            setStore(
+              "favorite",
+              store.favorite.filter((x) => x.providerID !== key.providerID || x.modelID !== key.modelID),
+            )
+          } else {
+            const next = [key, ...store.favorite]
+            if (next.length > MAX_FAVORITES) next.pop()
+            setStore("favorite", next)
+          }
+          savePrefs()
+        })
+      }
+
       return {
         current: currentModel,
         recent,
         list,
         cycle,
+        favorite: () => store.favorite,
+        isFavorite,
+        toggleFavorite,
         set(model: ModelKey | undefined, options?: { recent?: boolean }) {
           batch(() => {
             setStore("model", agent.current().name, model ?? fallbackModel())
