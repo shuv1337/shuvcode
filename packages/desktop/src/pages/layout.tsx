@@ -872,9 +872,7 @@ export default function Layout(props: ParentProps) {
                   />
                 </div>
                 <Show when={layout.sidebar.opened()}>
-                  <div class="hidden group-hover/sidebar-toggle:block group-active/sidebar-toggle:block text-text-strong">
-                    Toggle sidebar
-                  </div>
+                  <div class="text-text-strong">Toggle sidebar</div>
                 </Show>
               </Button>
             </Tooltip>
