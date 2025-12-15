@@ -6,11 +6,12 @@ import { List, ListRef, ListProps } from "./list"
 import { TextField } from "./text-field"
 
 interface SelectDialogProps<T>
-  extends Omit<ListProps<T>, "filter">,
+  extends Omit<ListProps<T>, "filter" | "actions">,
     Pick<DialogProps, "trigger" | "onOpenChange" | "defaultOpen"> {
   title: string
   placeholder?: string
   actions?: JSX.Element
+  itemActions?: (item: T) => JSX.Element
 }
 
 export function SelectDialog<T>(props: SelectDialogProps<T>) {
@@ -92,6 +93,7 @@ export function SelectDialog<T>(props: SelectDialogProps<T>) {
             filter={filter()}
             onSelect={handleSelect}
             onKeyEvent={others.onKeyEvent}
+            actions={others.itemActions}
           >
             {others.children}
           </List>

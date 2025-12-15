@@ -51,6 +51,8 @@ const icons = {
   "circle-check": `<path d="M12.4987 7.91732L8.7487 12.5007L7.08203 10.834M17.9154 10.0007C17.9154 14.3729 14.371 17.9173 9.9987 17.9173C5.62644 17.9173 2.08203 14.3729 2.08203 10.0007C2.08203 5.6284 5.62644 2.08398 9.9987 2.08398C14.371 2.08398 17.9154 5.6284 17.9154 10.0007Z" stroke="currentColor" stroke-linecap="square"/>`,
   copy: `<path d="M6.2513 6.24935V2.91602H17.0846V13.7493H13.7513M13.7513 6.24935V17.0827H2.91797V6.24935H13.7513Z" stroke="currentColor" stroke-linecap="round"/>`,
   check: `<path d="M5 11.9657L8.37838 14.7529L15 5.83398" stroke="currentColor" stroke-linecap="square"/>`,
+  star: `<path d="M10 2.5L12.09 7.36L17.5 7.9L13.5 11.44L14.58 16.75L10 14L5.42 16.75L6.5 11.44L2.5 7.9L7.91 7.36L10 2.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`,
+  "star-filled": `<path d="M10 2.5L12.09 7.36L17.5 7.9L13.5 11.44L14.58 16.75L10 14L5.42 16.75L6.5 11.44L2.5 7.9L7.91 7.36L10 2.5Z" fill="currentColor"/>`,
 }
 
 export interface IconProps extends ComponentProps<"svg"> {

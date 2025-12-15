@@ -10,6 +10,7 @@ export interface ListProps<T> extends FilteredListProps<T> {
   onKeyEvent?: (event: KeyboardEvent, item: T | undefined) => void
   activeIcon?: IconProps["name"]
   filter?: string
+  actions?: (item: T) => JSX.Element
 }
 
 export interface ListRef {
@@ -112,25 +113,30 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
               <div data-slot="list-items">
                 <For each={group.items}>
                   {(item, i) => (
-                    <button
-                      data-slot="list-item"
-                      data-key={props.key(item)}
-                      data-active={props.key(item) === active()}
-                      data-selected={item === props.current}
-                      onClick={() => handleSelect(item, i())}
-                      onMouseMove={() => {
-                        setStore("mouseActive", true)
-                        setActive(props.key(item))
-                      }}
-                    >
-                      {props.children(item)}
-                      <Show when={item === props.current}>
-                        <Icon data-slot="list-item-selected-icon" name="check-small" />
+                    <div data-slot="list-item-row">
+                      <button
+                        data-slot="list-item"
+                        data-key={props.key(item)}
+                        data-active={props.key(item) === active()}
+                        data-selected={item === props.current}
+                        onClick={() => handleSelect(item, i())}
+                        onMouseMove={() => {
+                          setStore("mouseActive", true)
+                          setActive(props.key(item))
+                        }}
+                      >
+                        {props.children(item)}
+                        <Show when={item === props.current}>
+                          <Icon data-slot="list-item-selected-icon" name="check-small" />
+                        </Show>
+                        <Show when={props.activeIcon}>
+                          {(icon) => <Icon data-slot="list-item-active-icon" name={icon()} />}
+                        </Show>
+                      </button>
+                      <Show when={props.actions}>
+                        <div data-slot="list-item-actions">{props.actions!(item)}</div>
                       </Show>
-                      <Show when={props.activeIcon}>
-                        {(icon) => <Icon data-slot="list-item-active-icon" name={icon()} />}
-                      </Show>
-                    </button>
+                    </div>
                   )}
                 </For>
               </div>
