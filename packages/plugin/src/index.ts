@@ -189,4 +189,15 @@ export interface Hooks {
     input: { sessionID: string; messageID: string; partID: string },
     output: { text: string },
   ) => Promise<void>
+  /**
+   * Register custom plugin commands (accessible via /command in TUI)
+   */
+  "plugin.command"?: {
+    [key: string]: {
+      description: string
+      aliases?: string[]
+      sessionOnly?: boolean
+      execute(input: { sessionID?: string; client: ReturnType<typeof createOpencodeClient> }): Promise<void>
+    }
+  }
 }
