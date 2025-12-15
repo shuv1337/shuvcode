@@ -867,6 +867,10 @@ export type KeybindsConfig = {
    */
   session_compact?: string
   /**
+   * Search in session messages
+   */
+  session_search?: string
+  /**
    * Scroll messages up by one page
    */
   messages_page_up?: string
