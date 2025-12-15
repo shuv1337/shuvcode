@@ -73,7 +73,6 @@ export function App() {
                     root={(props) => (
                       <DialogProvider>
                         <CommandProvider>
-                          <DialogRoot />
                           <Layout>{props.children}</Layout>
                         </CommandProvider>
                       </DialogProvider>

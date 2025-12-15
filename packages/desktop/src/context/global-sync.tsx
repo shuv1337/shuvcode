@@ -290,7 +290,7 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
           const data = Array.isArray(x.data) ? x.data : []
           setGlobalStore(
             "project",
-            data.filter((p) => !p.worktree.includes("opencode-test") && p.vcs).sort((a, b) => a.id.localeCompare(b.id)),
+            data.filter((p) => !p.worktree.includes("opencode-test")).sort((a, b) => a.id.localeCompare(b.id)),
           )
         }),
         globalSDK.client.provider.list().then((x) => {
