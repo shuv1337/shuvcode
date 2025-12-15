@@ -105,6 +105,53 @@
       align-items: flex-start;
       align-self: stretch;
 
+      /* Direct list-item (without row wrapper) */
+      > [data-slot="list-item"] {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        height: 28px;
+        padding: 4px 10px;
+        align-items: center;
+        color: var(--text-strong);
+        scroll-margin-top: 28px;
+
+        /* text-14-medium */
+        font-family: var(--font-family-sans);
+        font-size: 14px;
+        font-style: normal;
+        font-weight: var(--font-weight-medium);
+        line-height: var(--line-height-large);
+        letter-spacing: var(--letter-spacing-normal);
+
+        [data-slot="list-item-selected-icon"] {
+          color: var(--icon-strong-base);
+          margin-left: auto;
+        }
+        [data-slot="list-item-active-icon"] {
+          display: none;
+          color: var(--icon-strong-base);
+          margin-left: auto;
+        }
+
+        &[data-active="true"] {
+          border-radius: var(--radius-md);
+          background: var(--surface-raised-base-hover);
+
+          [data-slot="list-item-active-icon"] {
+            display: block;
+          }
+        }
+
+        &:active {
+          background: var(--surface-raised-base-active);
+        }
+
+        &:focus-visible {
+          outline: none;
+        }
+      }
+
       [data-slot="list-item-row"] {
         display: flex;
         width: 100%;
