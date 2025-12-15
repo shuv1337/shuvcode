@@ -1,4 +1,4 @@
-import { createMemo, onMount } from "solid-js"
+import { createMemo, createSignal, onMount } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -9,12 +9,11 @@ import { FONTS, getFontById, type FontDefinition } from "@/fonts/font-definition
 import { useLayout } from "@/context/layout"
 import { applyFontWithLoad, ensureFontLoaded, applyFont } from "@/fonts/apply-font"
 
-export function FontPicker() {
+function DialogSelectFont(props: { originalFont: string }) {
   const layout = useLayout()
   const dialog = useDialog()
-  const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
-
-  onMount(() => applyFontWithLoad(currentFont()))
+  const [previewFont, setPreviewFont] = createSignal(props.originalFont)
+  const currentFont = createMemo(() => getFontById(previewFont()) ?? FONTS[0])
 
   async function handleSelect(font: FontDefinition | undefined) {
     if (!font) return
@@ -27,26 +26,49 @@ export function FontPicker() {
     dialog.pop()
   }
 
+  async function handleActiveChange(font: FontDefinition | undefined) {
+    if (!font) return
+
+    const loaded = await ensureFontLoaded(font)
+    if (!loaded) return
+
+    setPreviewFont(font.id)
+    applyFont(font.id)
+  }
+
+  return (
+    <Dialog title="Select Font">
+      <List
+        search={{ placeholder: "Search fonts", autofocus: true }}
+        emptyMessage="No fonts found"
+        key={(f: FontDefinition) => f.id}
+        items={() => [...FONTS]}
+        current={currentFont()}
+        filterKeys={["name", "family"]}
+        onSelect={handleSelect}
+        onActiveChange={handleActiveChange}
+      >
+        {(font: FontDefinition) => (
+          <div class="flex items-center gap-2" style={{ "font-family": `"${font.family}", monospace` }}>
+            <span class="text-14-medium text-text-strong">{font.name}</span>
+          </div>
+        )}
+      </List>
+    </Dialog>
+  )
+}
+
+export function FontPicker() {
+  const layout = useLayout()
+  const dialog = useDialog()
+  const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
+
+  onMount(() => applyFontWithLoad(currentFont()))
+
   function openDialog() {
     const originalFont = currentFont().id
     dialog.push(
-      <Dialog title="Select Font">
-        <List
-          search={{ placeholder: "Search fonts", autofocus: true }}
-          emptyMessage="No fonts found"
-          key={(f: FontDefinition) => f.id}
-          items={() => [...FONTS]}
-          current={currentFont()}
-          filterKeys={["name", "family"]}
-          onSelect={handleSelect}
-        >
-          {(font: FontDefinition) => (
-            <div class="flex items-center gap-2" style={{ "font-family": `"${font.family}", monospace` }}>
-              <span class="text-14-medium text-text-strong">{font.name}</span>
-            </div>
-          )}
-        </List>
-      </Dialog>,
+      () => <DialogSelectFont originalFont={originalFont} />,
       () => applyFont(originalFont),
     )
   }

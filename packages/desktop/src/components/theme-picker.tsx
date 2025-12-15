@@ -1,4 +1,4 @@
-import { createMemo, onMount } from "solid-js"
+import { createMemo, createSignal, onMount } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -8,12 +8,11 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
 import { THEMES, getThemeById, applyTheme, type Theme } from "@/theme/apply-theme"
 
-export function ThemePicker() {
+function DialogSelectTheme(props: { originalTheme: string }) {
   const layout = useLayout()
   const dialog = useDialog()
-  const currentTheme = createMemo(() => getThemeById(layout.theme.current()))
-
-  onMount(() => applyTheme(currentTheme().id))
+  const [previewTheme, setPreviewTheme] = createSignal(props.originalTheme)
+  const currentTheme = createMemo(() => getThemeById(previewTheme()))
 
   function handleSelect(theme: Theme | undefined) {
     if (!theme) return
@@ -22,26 +21,45 @@ export function ThemePicker() {
     dialog.pop()
   }
 
+  function handleActiveChange(theme: Theme | undefined) {
+    if (!theme) return
+    setPreviewTheme(theme.id)
+    applyTheme(theme.id)
+  }
+
+  return (
+    <Dialog title="Select Theme">
+      <List
+        search={{ placeholder: "Search themes", autofocus: true }}
+        emptyMessage="No themes found"
+        key={(t: Theme) => t.id}
+        items={() => [...THEMES]}
+        current={currentTheme()}
+        filterKeys={["name", "id"]}
+        onSelect={handleSelect}
+        onActiveChange={handleActiveChange}
+      >
+        {(theme: Theme) => (
+          <div class="flex items-center gap-2">
+            <span class="text-14-medium text-text-strong">{theme.name}</span>
+          </div>
+        )}
+      </List>
+    </Dialog>
+  )
+}
+
+export function ThemePicker() {
+  const layout = useLayout()
+  const dialog = useDialog()
+  const currentTheme = createMemo(() => getThemeById(layout.theme.current()))
+
+  onMount(() => applyTheme(currentTheme().id))
+
   function openDialog() {
     const originalTheme = currentTheme().id
     dialog.push(
-      <Dialog title="Select Theme">
-        <List
-          search={{ placeholder: "Search themes", autofocus: true }}
-          emptyMessage="No themes found"
-          key={(t: Theme) => t.id}
-          items={() => [...THEMES]}
-          current={currentTheme()}
-          filterKeys={["name", "id"]}
-          onSelect={handleSelect}
-        >
-          {(theme: Theme) => (
-            <div class="flex items-center gap-2">
-              <span class="text-14-medium text-text-strong">{theme.name}</span>
-            </div>
-          )}
-        </List>
-      </Dialog>,
+      () => <DialogSelectTheme originalTheme={originalTheme} />,
       () => applyTheme(originalTheme),
     )
   }
