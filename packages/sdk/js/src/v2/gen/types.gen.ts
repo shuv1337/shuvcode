@@ -1619,6 +1619,8 @@ export type Command = {
   model?: string
   template: string
   subtask?: boolean
+  sessionOnly?: boolean
+  aliases?: Array<string>
 }
 
 export type Model = {
