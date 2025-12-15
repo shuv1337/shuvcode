@@ -506,14 +506,15 @@ export function Prompt(props: PromptProps) {
       inputText.startsWith("/") &&
       iife(() => {
         const command = inputText.split(" ")[0].slice(1)
-        console.log(command)
-        return sync.data.command.some((x) => x.name === command)
+        return sync.data.command.some((x) => x.name === command || x.aliases?.includes(command))
       })
     ) {
       let [command, ...args] = inputText.split(" ")
+      const commandName = command.slice(1)
+      const resolved = sync.data.command.find((x) => x.name === commandName || x.aliases?.includes(commandName))
       sdk.client.session.command({
         sessionID,
-        command: command.slice(1),
+        command: resolved?.name ?? commandName,
         arguments: args.join(" "),
         agent: local.agent.current().name,
         model: `${selectedModel.providerID}/${selectedModel.modelID}`,

@@ -208,10 +208,14 @@ export function Autocomplete(props: {
   const commands = createMemo((): AutocompleteOption[] => {
     const results: AutocompleteOption[] = []
     const s = session()
+
     for (const command of sync.data.command) {
+      if (command.sessionOnly && !s) continue
+
       results.push({
         display: "/" + command.name,
         description: command.description,
+        aliases: command.aliases?.map((a) => "/" + a),
         onSelect: () => {
           const newText = "/" + command.name + " "
           const cursor = props.input().logicalCursor
