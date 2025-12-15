@@ -872,16 +872,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         current={local.model.current()}
                         filterKeys={["provider.name", "name", "id"]}
                         sortBy={(a, b) => a.name.localeCompare(b.name)}
-                        // groupBy={(x) => (local.model.recent().includes(x) ? "Recent" : x.provider.name)}
-                        groupBy={(x) => x.provider.name}
+                        groupBy={(x) =>
+                          local.model.isFavorite({ providerID: x.provider.id, modelID: x.id })
+                            ? "Favorites"
+                            : x.provider.name
+                        }
                         sortGroupsBy={(a, b) => {
-                          if (a.category === "Recent" && b.category !== "Recent") return -1
-                          if (b.category === "Recent" && a.category !== "Recent") return 1
-                          const aProvider = a.items[0].provider.id
-                          const bProvider = b.items[0].provider.id
-                          if (popularProviders.includes(aProvider) && !popularProviders.includes(bProvider)) return -1
-                          if (!popularProviders.includes(aProvider) && popularProviders.includes(bProvider)) return 1
-                          return popularProviders.indexOf(aProvider) - popularProviders.indexOf(bProvider)
+                          if (a.category === "Favorites" && b.category !== "Favorites") return -1
+                          if (b.category === "Favorites" && a.category !== "Favorites") return 1
+                          const aProvider = a.items[0]?.provider.id
+                          const bProvider = b.items[0]?.provider.id
+                          const aPopular = popularProviders.includes(aProvider)
+                          const bPopular = popularProviders.includes(bProvider)
+                          if (aPopular && !bPopular) return -1
+                          if (!aPopular && bPopular) return 1
+                          if (aPopular && bPopular) {
+                            return popularProviders.indexOf(aProvider) - popularProviders.indexOf(bProvider)
+                          }
+                          return a.category.localeCompare(b.category)
                         }}
                         onSelect={(x) =>
                           local.model.set(x ? { modelID: x.id, providerID: x.provider.id } : undefined, {
@@ -898,6 +906,35 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                             Connect provider
                           </Button>
                         }
+                        itemActions={(i) => (
+                          <button
+                            type="button"
+                            class="p-1 hover:bg-surface-raised-base-hover rounded"
+                            aria-label={
+                              local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                ? "Remove from favorites"
+                                : "Add to favorites"
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              local.model.toggleFavorite({ providerID: i.provider.id, modelID: i.id })
+                            }}
+                          >
+                            <Icon
+                              name={
+                                local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                  ? "star-filled"
+                                  : "star"
+                              }
+                              size="small"
+                              class={
+                                local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                  ? "text-icon-warning-base"
+                                  : "text-icon-weak-base"
+                              }
+                            />
+                          </button>
+                        )}
                       >
                         {(i) => (
                           <div class="w-full flex items-center gap-x-2.5">
@@ -959,6 +996,35 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                                 })
                                 layout.dialog.close("model")
                               }}
+                              actions={(i) => (
+                                <button
+                                  type="button"
+                                  class="p-1 hover:bg-surface-raised-base-hover rounded"
+                                  aria-label={
+                                    local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                      ? "Remove from favorites"
+                                      : "Add to favorites"
+                                  }
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    local.model.toggleFavorite({ providerID: i.provider.id, modelID: i.id })
+                                  }}
+                                >
+                                  <Icon
+                                    name={
+                                      local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                        ? "star-filled"
+                                        : "star"
+                                    }
+                                    size="small"
+                                    class={
+                                      local.model.isFavorite({ providerID: i.provider.id, modelID: i.id })
+                                        ? "text-icon-warning-base"
+                                        : "text-icon-weak-base"
+                                    }
+                                  />
+                                </button>
+                              )}
                             >
                               {(i) => (
                                 <div class="w-full flex items-center gap-x-2.5">
