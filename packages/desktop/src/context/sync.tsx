@@ -14,7 +14,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
     const load = {
       project: () => sdk.client.project.current().then((x) => setStore("project", x.data!.id)),
-      provider: () => sdk.client.provider.list().then((x) => setStore("provider", x.data!)),
+      provider: () =>
+        sdk.client.provider.list().then((x) => setStore("provider", x.data ?? { all: [], connected: [], default: {} })),
       path: () => sdk.client.path.get().then((x) => setStore("path", x.data!)),
       agent: () => sdk.client.app.agents().then((x) => setStore("agent", x.data ?? [])),
       session: () =>

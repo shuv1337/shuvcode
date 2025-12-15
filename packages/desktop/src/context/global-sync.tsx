@@ -118,7 +118,8 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
       })
       const load = {
         project: () => sdk.project.current().then((x) => setStore("project", x.data!.id)),
-        provider: () => sdk.provider.list().then((x) => setStore("provider", x.data!)),
+        provider: () =>
+          sdk.provider.list().then((x) => setStore("provider", x.data ?? { all: [], connected: [], default: {} })),
         path: () => sdk.path.get().then((x) => setStore("path", x.data!)),
         agent: () => sdk.app.agents().then((x) => setStore("agent", x.data ?? [])),
         session: () => loadSessions(directory),
@@ -256,7 +257,7 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
           )
         }),
         globalSDK.client.provider.list().then((x) => {
-          setGlobalStore("provider", x.data ?? {})
+          setGlobalStore("provider", x.data ?? { all: [], connected: [], default: {} })
         }),
         globalSDK.client.provider.auth().then((x) => {
           setGlobalStore("provider_auth", x.data ?? {})
