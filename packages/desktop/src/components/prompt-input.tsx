@@ -79,6 +79,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const layout = useLayout()
   const providers = useProviders()
   let editorRef!: HTMLDivElement
+  let popoverScrollRef: HTMLDivElement | undefined
 
   const [store, setStore] = createStore<{
     popoverIsOpen: boolean
@@ -236,6 +237,30 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     items: local.file.searchFilesAndDirectories,
     key: (x) => x,
     onSelect: handleFileSelect,
+  })
+
+  // Auto-scroll for command mode popover
+  createEffect(() => {
+    if (!store.popoverIsOpen || store.popoverMode !== "command") return
+    const activeKey = commandList.active()
+    if (!activeKey || !popoverScrollRef) return
+
+    const element = popoverScrollRef.querySelector(`[data-key="${activeKey}"]`)
+    if (element) {
+      element.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    }
+  })
+
+  // Auto-scroll for file mode popover
+  createEffect(() => {
+    if (!store.popoverIsOpen || store.popoverMode !== "file") return
+    const activeKey = active()
+    if (!activeKey || !popoverScrollRef) return
+
+    const element = popoverScrollRef.querySelector(`[data-key="${activeKey}"]`)
+    if (element) {
+      element.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    }
   })
 
   createEffect(
@@ -495,13 +520,16 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }
 
     // Handle popover navigation based on mode
-    if (store.popoverIsOpen && (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter")) {
+    if (
+      store.popoverIsOpen &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "Enter" || event.key === "Tab")
+    ) {
+      event.preventDefault()
       if (store.popoverMode === "command") {
         commandList.onKeyDown(event)
       } else {
         onKeyDown(event)
       }
-      event.preventDefault()
       return
     }
 
@@ -727,6 +755,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     <div class="relative size-full _max-h-[320px] flex flex-col gap-3">
       <Show when={store.popoverIsOpen}>
         <div
+          ref={popoverScrollRef}
+          onMouseDown={(e) => e.preventDefault()}
           class="absolute inset-x-0 -top-3 -translate-y-full origin-bottom-left max-h-[252px] min-h-10
                  overflow-auto no-scrollbar flex flex-col p-2 pb-0 rounded-md
                  border border-border-base bg-surface-raised-stronger-non-alpha shadow-md"
@@ -740,10 +770,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 <For each={commandList.flat()}>
                   {(cmd) => (
                     <button
+                      data-key={cmd.name}
                       classList={{
                         "w-full flex items-center justify-between rounded-md px-2 py-1.5": true,
                         "bg-surface-raised-base-hover": commandList.active() === cmd.name,
                       }}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleCommandSelect(cmd)}
                     >
                       <div class="flex items-center gap-x-2 grow min-w-0">
@@ -763,10 +795,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 <For each={flat()}>
                   {(i) => (
                     <button
+                      data-key={i}
                       classList={{
                         "w-full flex items-center justify-between rounded-md": true,
                         "bg-surface-raised-base-hover": active() === i,
                       }}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleFileSelect(i)}
                     >
                       <div class="flex items-center gap-x-2 grow min-w-0">
