@@ -3,7 +3,7 @@ import { useLayout } from "@/context/layout"
 import { Session } from "@opencode-ai/sdk/v2/client"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiLogo, AsciiMark } from "@opencode-ai/ui/logo"
 import { Select } from "@opencode-ai/ui/select"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { base64Decode } from "@opencode-ai/util/encode"
@@ -28,14 +28,16 @@ export function Header(props: {
       <A
         href="/"
         classList={{
-          "w-12 shrink-0 px-4 py-3.5": true,
-          "flex items-center justify-start self-stretch": true,
+          "w-12 shrink-0": true,
+          "flex items-center justify-center self-stretch overflow-hidden": true,
           "border-r border-border-weak-base": true,
         }}
         style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
         data-tauri-drag-region
       >
-        <Mark class="shrink-0" />
+        <Show when={layout.sidebar.opened()} fallback={<AsciiMark scale={0.45} />}>
+          <AsciiLogo scale={0.55} />
+        </Show>
       </A>
       <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
         <Show when={params.dir && layout.projects.list().length > 0}>
