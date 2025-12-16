@@ -120,7 +120,7 @@ for (const item of targets) {
       autoloadBunfig: false,
       autoloadDotenv: false,
       target: bunTarget as any,
-      outfile: `dist/${name}/bin/opencode`,
+      outfile: `dist/${name}/bin/shuvcode`,
       execArgv: [`--user-agent=shuvcode/${Script.version}`, "--"],
       windows: {},
     },

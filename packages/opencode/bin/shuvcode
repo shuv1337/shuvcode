@@ -45,7 +45,7 @@ if (!arch) {
   arch = os.arch()
 }
 const base = "shuvcode-" + platform + "-" + arch
-const binary = platform === "windows" ? "opencode.exe" : "opencode"
+const binary = platform === "windows" ? "shuvcode.exe" : "shuvcode"
 
 function findBinary(startDir) {
   let current = startDir

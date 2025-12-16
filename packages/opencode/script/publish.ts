@@ -10,8 +10,8 @@ process.chdir(dir)
 const { binaries } = await import("./build.ts")
 {
   const name = `shuvcode-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
-  console.log(`smoke test: running dist/${name}/bin/opencode --version`)
-  await $`./dist/${name}/bin/opencode --version`
+  console.log(`smoke test: running dist/${name}/bin/shuvcode --version`)
+  await $`./dist/${name}/bin/shuvcode --version`
 }
 
 // Publish binary packages first using npm with OIDC trusted publishing
@@ -30,9 +30,9 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     {
       name: "shuvcode",
       bin: {
-        shuvcode: `./bin/${pkg.name}`,
+        shuvcode: "./bin/shuvcode",
       },
-      // No postinstall needed - bin/opencode is a wrapper script that finds the platform binary
+      // No postinstall needed - bin/shuvcode is a wrapper script that finds the platform binary
       version: Script.version,
       // Reference our own binary packages (shuvcode-linux-x64, etc.)
       optionalDependencies: binaries,
