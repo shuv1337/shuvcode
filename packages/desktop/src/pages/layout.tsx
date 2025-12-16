@@ -969,13 +969,10 @@ export default function Layout(props: ParentProps) {
                 <Show when={layout.sidebar.opened()}>Share feedback</Show>
               </Button>
             </Tooltip>
-            <Show when={layout.sidebar.opened()}>
-              <div class="flex items-center gap-2 px-2">
-                <FontPicker />
-                <ThemePicker />
-              </div>
-            </Show>
           </div>
+          <Show when={layout.sidebar.opened()}>
+            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__}</div>
+          </Show>
         </div>
         <main class="size-full overflow-x-hidden flex flex-col items-start">{props.children}</main>
       </div>

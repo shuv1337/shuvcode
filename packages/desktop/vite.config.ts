@@ -1,6 +1,8 @@
 import { defineConfig } from "vite"
+import { readFileSync } from "fs"
 import desktopPlugin from "./vite"
 
+const pkg = JSON.parse(readFileSync("./package.json", "utf-8"))
 const apiPort = process.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 const apiTarget = `http://127.0.0.1:${apiPort}`
 
@@ -32,6 +34,9 @@ const apiRoutes = [
 
 export default defineConfig({
   plugins: [desktopPlugin] as any,
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     host: "0.0.0.0",
     allowedHosts: true,

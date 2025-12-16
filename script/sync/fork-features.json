@@ -405,6 +405,35 @@
           "markers": ["class=\"truncate\"", "hidden sm:inline", "min-w-0 max-w-full"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop sidebar version display",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Display package version in sidebar bottom left when expanded, for easy version identification in web UI",
+      "files": [
+        "packages/desktop/src/pages/layout.tsx",
+        "packages/desktop/src/env.d.ts",
+        "packages/desktop/vite.config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/vite.config.ts",
+          "description": "Define __APP_VERSION__ from package.json at build time",
+          "markers": ["__APP_VERSION__", "pkg.version"]
+        },
+        {
+          "file": "packages/desktop/src/env.d.ts",
+          "description": "TypeScript declaration for __APP_VERSION__ global",
+          "markers": ["declare const __APP_VERSION__"]
+        },
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "Version display in sidebar bottom",
+          "markers": ["v{__APP_VERSION__}", "text-11-regular text-text-weaker"]
+        }
+      ]
     }
   ]
 }
