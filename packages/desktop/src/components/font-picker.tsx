@@ -67,7 +67,7 @@ export function FontPicker() {
 
   function openDialog() {
     const originalFont = currentFont().id
-    dialog.push(
+    dialog.replace(
       () => <DialogSelectFont originalFont={originalFont} />,
       () => applyFont(originalFont),
     )

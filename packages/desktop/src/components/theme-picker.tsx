@@ -58,7 +58,7 @@ export function ThemePicker() {
 
   function openDialog() {
     const originalTheme = currentTheme().id
-    dialog.push(
+    dialog.replace(
       () => <DialogSelectTheme originalTheme={originalTheme} />,
       () => applyTheme(originalTheme),
     )
