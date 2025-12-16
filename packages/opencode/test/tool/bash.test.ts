@@ -34,6 +34,25 @@ describe("tool.bash", () => {
       },
     })
   })
+
+  test("sanitizes carriage returns in tool output", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          {
+            command: "printf 'hello\rworld\n'",
+            description: "Print carriage return output",
+          },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.output).toContain("world")
+        expect(result.output).not.toContain("\r")
+      },
+    })
+  })
 })
 
 describe("tool.bash permissions", () => {

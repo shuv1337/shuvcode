@@ -15,6 +15,7 @@ import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import path from "path"
 import { Shell } from "@/shell/shell"
+import { ptyToText } from "ghostty-opentui"
 
 const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH || 30_000
 const DEFAULT_TIMEOUT = Flag.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -213,7 +214,7 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
       })
 
-      let output = ""
+      let rawOutput = ""
 
       // Initialize metadata with empty output
       ctx.metadata({
@@ -224,11 +225,11 @@ export const BashTool = Tool.define("bash", async () => {
       })
 
       const append = (chunk: Buffer) => {
-        if (output.length <= MAX_OUTPUT_LENGTH) {
-          output += chunk.toString()
+        if (rawOutput.length <= MAX_OUTPUT_LENGTH) {
+          rawOutput += chunk.toString()
           ctx.metadata({
             metadata: {
-              output,
+              output: rawOutput,
               description: params.description,
             },
           })
@@ -280,10 +281,10 @@ export const BashTool = Tool.define("bash", async () => {
         })
       })
 
-      let resultMetadata: String[] = ["<bash_metadata>"]
+      const resultMetadata: string[] = ["<bash_metadata>"]
 
-      if (output.length > MAX_OUTPUT_LENGTH) {
-        output = output.slice(0, MAX_OUTPUT_LENGTH)
+      if (rawOutput.length > MAX_OUTPUT_LENGTH) {
+        rawOutput = rawOutput.slice(0, MAX_OUTPUT_LENGTH)
         resultMetadata.push(`bash tool truncated output as it exceeded ${MAX_OUTPUT_LENGTH} char limit`)
       }
 
@@ -295,19 +296,26 @@ export const BashTool = Tool.define("bash", async () => {
         resultMetadata.push("User aborted the command")
       }
 
-      if (resultMetadata.length > 1) {
-        resultMetadata.push("</bash_metadata>")
-        output += "\n\n" + resultMetadata.join("\n")
-      }
+      const outputForModel = ptyToText(rawOutput, { rows: 120, cols: 256 })
+
+      const finalRawOutput = (() => {
+        if (resultMetadata.length <= 1) return rawOutput
+        return rawOutput + "\n\n" + resultMetadata.concat(["</bash_metadata>"]).join("\n")
+      })()
+
+      const finalOutputForModel = (() => {
+        if (resultMetadata.length <= 1) return outputForModel
+        return outputForModel + "\n\n" + resultMetadata.concat(["</bash_metadata>"]).join("\n")
+      })()
 
       return {
         title: params.description,
         metadata: {
-          output,
+          output: finalRawOutput,
           exit: proc.exitCode,
           description: params.description,
         },
-        output,
+        output: finalOutputForModel,
       }
     },
   }
