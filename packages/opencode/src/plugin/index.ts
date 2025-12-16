@@ -1,6 +1,5 @@
 import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencode-ai/plugin"
 import { pathToFileURL } from "node:url"
-import { createRequire } from "node:module"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
@@ -9,7 +8,6 @@ import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { Global } from "../global"
 import * as path from "node:path"
 
 export namespace Plugin {
@@ -35,32 +33,29 @@ export namespace Plugin {
       plugins.push("opencode-copilot-auth@0.0.9")
       plugins.push("opencode-anthropic-auth@0.0.5")
     }
-    // Create a require function rooted in the cache directory
-    // This is necessary for compiled binaries where import.meta.url points to $bunfs
-    const cachePackageJson = path.join(Global.Path.cache, "package.json")
-    const cacheRequire = createRequire(pathToFileURL(cachePackageJson).href)
-
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
-      let pluginPath: string
+      let pluginUrl: string
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
-        pluginPath = await BunProc.install(pkg, version)
+        // BunProc.install now returns the bundled file path directly
+        const pluginPath = await BunProc.install(pkg, version)
+        pluginUrl = pathToFileURL(pluginPath).href
       } else {
         // Resolve relative file:// paths against the working directory
         const filePath = plugin.substring("file://".length)
         if (!path.isAbsolute(filePath)) {
-          pluginPath = path.resolve(Instance.directory, filePath)
+          pluginUrl = pathToFileURL(path.resolve(Instance.directory, filePath)).href
         } else {
-          pluginPath = filePath
+          pluginUrl = pathToFileURL(filePath).href
         }
       }
       try {
-        // Use require() instead of import() to avoid $bunfs resolution issues in compiled binaries
-        // createRequire with a real filesystem base path ensures proper module resolution
-        const mod = cacheRequire(pluginPath)
+        // Use dynamic import() with absolute file:// URLs for ES module compatibility
+        // pathToFileURL ensures proper URL encoding regardless of import.meta.url context
+        const mod = await import(pluginUrl)
         for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
           const init = await fn(input)
           hooks.push(init)
@@ -69,13 +64,11 @@ export namespace Plugin {
         const err = e as Error
         // Check for module resolution issues
         if (err.message?.includes("Cannot find module")) {
-          const isCompiled = import.meta.url.includes("$bunfs")
           log.error("failed to load plugin", {
             plugin,
             error: err.message,
-            hint: isCompiled
-              ? "Module resolution may fail in compiled binaries. Try running with 'bun' directly."
-              : process.platform === "win32"
+            hint:
+              process.platform === "win32"
                 ? "This plugin may use subpath exports which have known issues on Windows."
                 : "Check that the plugin is installed correctly.",
           })
