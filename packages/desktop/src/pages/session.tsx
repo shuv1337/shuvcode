@@ -652,12 +652,7 @@ export default function Page() {
                               root: "pb-20 flex-1 min-w-0 overflow-x-hidden",
                               content: "pb-20",
                               container:
-                                "w-full max-w-full " +
-                                (wide()
-                                  ? "max-w-146 mx-auto px-4 sm:px-6"
-                                  : visibleUserMessages().length > 1
-                                    ? "pr-4 pl-12 sm:pr-6 sm:pl-18"
-                                    : "px-4 sm:px-6"),
+                                "w-full max-w-full " + (wide() ? "max-w-146 mx-auto px-4 sm:px-6" : "pr-4 sm:pr-6"),
                             }}
                           />
                         </Show>

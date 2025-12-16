@@ -1,41 +1,21 @@
 [data-component="session-message-rail"] {
-  display: contents;
+  display: flex;
+  flex-shrink: 0;
 }
 
 [data-slot="session-message-rail-compact"],
 [data-slot="session-message-rail-full"] {
-  position: absolute;
-  left: 1.5rem;
-  margin-top: 0.625rem;
+  flex-shrink: 0;
+  padding-top: 0.625rem;
+  padding-left: 0.5rem;
+  padding-right: 0.25rem;
 }
 
+/* Always show compact rail only, hide full */
 [data-slot="session-message-rail-compact"] {
   display: flex;
 }
 
 [data-slot="session-message-rail-full"] {
   display: none;
-}
-
-@container (min-width: 72rem) {
-  [data-slot="session-message-rail-compact"] {
-    display: none;
-  }
-  [data-slot="session-message-rail-full"] {
-    display: flex;
-  }
-}
-
-[data-component="session-message-rail"] [data-slot="session-message-rail-full"] {
-  transform: none;
-}
-
-[data-component="session-message-rail"][data-wide] [data-slot="session-message-rail-full"] {
-  margin-top: 0.125rem;
-  left: calc(((100% - min(100%, 36.5rem)) / 2) - 1.5rem);
-  transform: translateX(-100%);
-}
-
-[data-component="session-message-rail"]:not([data-wide]) [data-slot="session-message-rail-full"] {
-  margin-top: 0.625rem;
 }
