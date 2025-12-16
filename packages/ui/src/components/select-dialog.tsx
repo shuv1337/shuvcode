@@ -17,7 +17,7 @@ export function SelectDialog<T>(props: SelectDialogProps<T>) {
 
   const handleSelect = (item: T | undefined, index: number) => {
     others.onSelect?.(item, index)
-    dialog.pop()
+    dialog.close()
   }
 
   return (
