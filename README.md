@@ -12,16 +12,45 @@ This fork serves as an integration testing ground for upstream PRs before they a
 
 The following PRs have been merged into this fork and are awaiting merge into upstream:
 
-| PR                                                 | Title                                       | Author                                                       | Status | Description                                                            |
-| -------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ---------------------------------------------------------------------- |
-| [#4898](https://github.com/sst/opencode/pull/4898) | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)                   | Open   | Ctrl+F to search through session messages with highlighting            |
-| [#4791](https://github.com/sst/opencode/pull/4791) | Bash output with ANSI                       | [@remorses](https://github.com/remorses)                     | Open   | Full terminal emulation for bash output with color support             |
-| [#4900](https://github.com/sst/opencode/pull/4900) | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni)           | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits     |
-| [#4709](https://github.com/sst/opencode/pull/4709) | Live token usage during streaming           | [@arsham](https://github.com/arsham)                         | Open   | Real-time token tracking and display during model responses            |
-| [#4865](https://github.com/sst/opencode/pull/4865) | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind    |
-| [#4515](https://github.com/sst/opencode/pull/4515) | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Display configured plugins in /status dialog alongside MCP/LSP servers |
+| PR                                                                            | Title                                       | Author                                                       | Status | Description                                                               |
+| ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ------------------------------------------------------------------------- |
+| [#4898](https://github.com/sst/opencode/pull/4898)                            | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)                   | Open   | Ctrl+F to search through session messages with highlighting               |
+| [#4791](https://github.com/sst/opencode/pull/4791)                            | Bash output with ANSI                       | [@remorses](https://github.com/remorses)                     | Open   | Full terminal emulation for bash output with color support                |
+| [#4900](https://github.com/sst/opencode/pull/4900)                            | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni)           | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits        |
+| [#4709](https://github.com/sst/opencode/pull/4709)                            | Live token usage during streaming           | [@arsham](https://github.com/arsham)                         | Open   | Real-time token tracking and display during model responses               |
+| [#4865](https://github.com/sst/opencode/pull/4865)                            | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind       |
+| [#4515](https://github.com/sst/opencode/pull/4515)                            | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Display configured plugins in /status dialog alongside MCP/LSP servers    |
+| [#4411](https://github.com/sst/opencode/pull/4411)                            | Plugin Commands                             | [@thdxr](https://github.com/thdxr)                           | Merged | Register custom `/commands` from plugins with aliases and sessionOnly     |
+| [#5563](https://github.com/sst/opencode/pull/5563)                            | Ask TUI Tool                                | [@ariane-emory](https://github.com/ariane-emory)             | Open   | Ask tool for agents to collect user input via select/confirm/text dialogs |
+| [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
-_Last updated: 2025-12-10_
+_Last updated: 2025-12-15_
+
+---
+
+## Feature Highlights
+
+### Granular File Permissions
+
+Restrict which files an agent can edit using glob patterns:
+
+```jsonc
+{
+  "agent": {
+    "plan": {
+      "permission": {
+        "edit": {
+          "**/*.md": "allow",
+          "CONTEXT/**": "allow",
+          "*": "deny",
+        },
+      },
+    },
+  },
+}
+```
+
+Precedence rules: exact match > more path segments > longer pattern > `*` fallback
 
 ---
 
