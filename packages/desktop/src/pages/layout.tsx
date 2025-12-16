@@ -239,7 +239,7 @@ export default function Layout(props: ParentProps) {
   ])
 
   function connectProvider() {
-    dialog.replace(() => <DialogSelectProvider />)
+    dialog.show(() => <DialogSelectProvider />)
   }
 
   function navigateToProject(directory: string | undefined) {
