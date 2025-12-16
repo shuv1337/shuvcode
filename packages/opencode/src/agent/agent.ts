@@ -50,7 +50,11 @@ export namespace Agent {
 
   const state = Instance.state(async () => {
     const cfg = await Config.get()
-    const defaultTools = cfg.tools ?? {}
+    const configTools = cfg.tools ?? {}
+    const defaultTools: Record<string, boolean> = {
+      ask: false,
+      ...configTools,
+    }
     const defaultPermission: Info["permission"] = {
       edit: "allow",
       bash: {
@@ -122,7 +126,8 @@ export namespace Agent {
         options: {},
         permission: planPermission,
         tools: {
-          ...defaultTools,
+          ask: true,
+          ...configTools,
         },
         mode: "primary",
         native: true,
@@ -177,7 +182,9 @@ export namespace Agent {
         hidden: true,
         permission: agentPermission,
         prompt: PROMPT_TITLE,
-        tools: {},
+        tools: {
+          ask: false,
+        },
       },
       summary: {
         name: "summary",
@@ -187,7 +194,9 @@ export namespace Agent {
         hidden: true,
         permission: agentPermission,
         prompt: PROMPT_SUMMARY,
-        tools: {},
+        tools: {
+          ask: false,
+        },
       },
     }
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {

@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test"
 import { Config } from "../../src/config/config"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
@@ -498,6 +499,70 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
         (p) => p.includes("global-plugin") || p.includes("local-plugin") || p.includes("duplicate-plugin"),
       )
       expect(pluginNames.length).toBe(3)
+    },
+  })
+})
+
+test("defaults ask tool enabled only for plan agent", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const plan = await Agent.get("plan")
+      const build = await Agent.get("build")
+      const explore = await Agent.get("explore")
+
+      expect(plan).toBeDefined()
+      expect(build).toBeDefined()
+      expect(explore).toBeDefined()
+
+      expect(plan?.tools.ask).toBe(true)
+      expect(build?.tools.ask).toBe(false)
+      expect(explore?.tools.ask).toBe(false)
+    },
+  })
+})
+
+test("config tools.ask can disable ask in plan", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          tools: { ask: false },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const plan = await Agent.get("plan")
+      expect(plan?.tools.ask).toBe(false)
+    },
+  })
+})
+
+test("config tools.ask can enable ask in build", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          tools: { ask: true },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(build?.tools.ask).toBe(true)
     },
   })
 })
