@@ -73,9 +73,10 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
         return store.leader
       },
       parse(evt: ParsedKey): Keybind.Info {
-        // Handle special case for Ctrl+Underscore (represented as \x1F)
+        // Handle special case for Ctrl+/ (represented as \x1F in terminals)
+        // \x1F is the Unit Separator control character sent by Ctrl+/
         if (evt.name === "\x1F") {
-          return Keybind.fromParsedKey({ ...evt, name: "_", ctrl: true }, store.leader)
+          return Keybind.fromParsedKey({ ...evt, name: "/", ctrl: true }, store.leader)
         }
         return Keybind.fromParsedKey(evt, store.leader)
       },
