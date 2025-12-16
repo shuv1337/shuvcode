@@ -7,6 +7,7 @@ import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
+import * as path from "node:path"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -39,6 +40,12 @@ export namespace Plugin {
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
         // Convert to file:// URL for proper module resolution from the cache directory
         plugin = "file://" + (await BunProc.install(pkg, version))
+      } else {
+        // Resolve relative file:// paths against the working directory
+        const filePath = plugin.substring("file://".length)
+        if (!path.isAbsolute(filePath)) {
+          plugin = "file://" + path.resolve(Instance.directory, filePath)
+        }
       }
       const mod = await import(plugin)
       for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
@@ -82,7 +89,7 @@ export namespace Plugin {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
     for (const hook of hooks) {
-      await hook.config?.(config)
+      await hook.config?.(config as any)
     }
     Bus.subscribeAll(async (input) => {
       const hooks = await state().then((x) => x.hooks)
