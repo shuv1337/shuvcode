@@ -1,6 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
 import z from "zod"
+import { Question } from "@/question"
 
 export const TuiEvent = {
   PromptAppend: BusEvent.define("tui.prompt.append", z.object({ text: z.string() })),
@@ -37,4 +37,6 @@ export const TuiEvent = {
       duration: z.number().default(5000).optional().describe("Duration in milliseconds"),
     }),
   ),
+  QuestionRequest: BusEvent.define("tui.question.request", Question.Request),
+  QuestionResponse: BusEvent.define("tui.question.response", Question.Response),
 }
