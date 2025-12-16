@@ -1,8 +1,8 @@
-import { TextAttributes } from "@opentui/core"
+import { ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme, selectedForeground } from "@tui/context/theme"
-import { For, Show, Switch, Match, createMemo } from "solid-js"
+import { For, Show, Switch, Match, createEffect, createMemo, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { useDialog } from "@tui/ui/dialog"
 import type { Question } from "@/question"
 import { DialogQuestionSelect } from "./dialog-question-select"
@@ -41,8 +41,76 @@ export function DialogQuestion(props: DialogQuestionProps) {
     activeButton: "submit" as "submit" | "cancel",
   })
 
+  const dimensions = useTerminalDimensions()
+  let scroll: ScrollBoxRenderable | undefined
+
+  onMount(() => {
+    dialog.setSize("large")
+  })
+
+  const bodyMaxHeight = createMemo(() => {
+    // Dialog is rendered starting at ~1/4 screen height, so keep content <= ~3/4.
+    const maxDialogHeight = Math.max(10, Math.floor(dimensions().height * 0.75) - 2)
+    const chromeHeight = 4 // header + footer
+    return Math.max(6, maxDialogHeight - chromeHeight)
+  })
+
+  const summaryWidth = createMemo(() => Math.max(20, Math.min(56, dimensions().width - 10)))
+
+  function truncate(text: string, max: number) {
+    if (text.length <= max) return text
+    return text.slice(0, Math.max(0, max - 3)) + "..."
+  }
+
+  function formatSummaryAnswer(question: Question.Item, value: unknown): string {
+    switch (question.type) {
+      case "select": {
+        const v = typeof value === "string" ? value : question.defaultValue
+        if (!v) return "(not answered)"
+        return question.options.find((o) => o.value === v)?.label ?? v
+      }
+      case "multi-select": {
+        const values = Array.isArray(value) ? value : (question.defaultValue ?? [])
+        if (values.length === 0) return "(none selected)"
+        const labels = values
+          .map((v) => question.options.find((o) => o.value === v)?.label ?? v)
+          .slice(0, 2)
+          .join(", ")
+        return values.length > 2 ? `${labels} +${values.length - 2}` : labels
+      }
+      case "confirm": {
+        const v = typeof value === "boolean" ? value : question.defaultValue
+        if (typeof v !== "boolean") return "(not answered)"
+        return v ? "Yes" : "No"
+      }
+      case "text": {
+        const v = typeof value === "string" ? value : question.defaultValue
+        const trimmed = (v ?? "").trim()
+        if (!trimmed) return "(empty)"
+        return truncate(trimmed, Math.min(summaryWidth(), 40))
+      }
+    }
+  }
+
   // Unused but kept for future use
   const _currentQuestion = createMemo(() => props.request.questions[store.currentIndex])
+
+  createEffect(() => {
+    const current = props.request.questions[store.currentIndex]
+    if (!current) return
+    if (!scroll) return
+
+    const target = scroll.getChildren().find((child) => child.id === current.id)
+    if (!target) return
+
+    const y = target.y - scroll.y
+    if (y >= scroll.height) {
+      scroll.scrollBy(y - scroll.height + 1)
+    }
+    if (y < 0) {
+      scroll.scrollBy(y)
+    }
+  })
 
   function setAnswer(id: string, value: unknown) {
     setStore("answers", id, value)
@@ -97,6 +165,16 @@ export function DialogQuestion(props: DialogQuestionProps) {
       evt.preventDefault()
     }
 
+    if (evt.ctrl && evt.name === "u") {
+      scroll?.scrollBy(-Math.max(1, Math.floor((scroll?.height ?? 0) / 2)))
+      evt.preventDefault()
+    }
+
+    if (evt.ctrl && evt.name === "d") {
+      scroll?.scrollBy(Math.max(1, Math.floor((scroll?.height ?? 0) / 2)))
+      evt.preventDefault()
+    }
+
     // Enter to submit (when on last question or button focused)
     if (evt.name === "return") {
       if (store.activeButton === "cancel") {
@@ -119,58 +197,80 @@ export function DialogQuestion(props: DialogQuestionProps) {
         <text fg={theme.textMuted}>esc</text>
       </box>
 
-      <box paddingTop={1} gap={2}>
+      <scrollbox
+        scrollbarOptions={{ visible: false }}
+        ref={(r: ScrollBoxRenderable) => {
+          scroll = r
+        }}
+        maxHeight={bodyMaxHeight()}
+      >
         <For each={props.request.questions}>
           {(question, index) => {
             const active = createMemo(() => index() === store.currentIndex)
+            const answerSummary = createMemo(() => formatSummaryAnswer(question, store.answers[question.id]))
+
             return (
-              <box paddingLeft={active() ? 2 : 1}>
-                <Switch>
-                  <Match when={question.type === "select"}>
-                    <DialogQuestionSelect
-                      question={question as Question.SelectQuestion}
-                      value={store.answers[question.id] as string | undefined}
-                      onChange={(v) => setAnswer(question.id, v)}
-                      active={active()}
-                    />
-                  </Match>
-                  <Match when={question.type === "multi-select"}>
-                    <DialogQuestionMultiSelect
-                      question={question as Question.MultiSelectQuestion}
-                      value={(store.answers[question.id] as string[]) ?? []}
-                      onChange={(v) => setAnswer(question.id, v)}
-                      active={active()}
-                    />
-                  </Match>
-                  <Match when={question.type === "confirm"}>
-                    <DialogQuestionConfirm
-                      question={question as Question.ConfirmQuestion}
-                      value={store.answers[question.id] as boolean | undefined}
-                      onChange={(v) => setAnswer(question.id, v)}
-                      active={active()}
-                    />
-                  </Match>
-                  <Match when={question.type === "text"}>
-                    <DialogQuestionText
-                      question={question as Question.TextQuestion}
-                      value={store.answers[question.id] as string | undefined}
-                      onChange={(v) => setAnswer(question.id, v)}
-                      active={active()}
-                    />
-                  </Match>
-                </Switch>
+              <box id={question.id} paddingLeft={active() ? 2 : 1} onMouseUp={() => setStore("currentIndex", index())}>
+                <Show
+                  when={active()}
+                  fallback={
+                    <box flexDirection="row" gap={2} overflow="hidden">
+                      <text fg={theme.textMuted}>▸ {index() + 1}.</text>
+                      <text fg={theme.text}>{truncate(question.message, summaryWidth())}</text>
+                      <box flexGrow={1} />
+                      <text fg={theme.textMuted}>{truncate(answerSummary(), 24)}</text>
+                    </box>
+                  }
+                >
+                  <Switch>
+                    <Match when={question.type === "select"}>
+                      <DialogQuestionSelect
+                        question={question as Question.SelectQuestion}
+                        value={store.answers[question.id] as string | undefined}
+                        onChange={(v) => setAnswer(question.id, v)}
+                        active={true}
+                      />
+                    </Match>
+                    <Match when={question.type === "multi-select"}>
+                      <DialogQuestionMultiSelect
+                        question={question as Question.MultiSelectQuestion}
+                        value={(store.answers[question.id] as string[]) ?? []}
+                        onChange={(v) => setAnswer(question.id, v)}
+                        active={true}
+                      />
+                    </Match>
+                    <Match when={question.type === "confirm"}>
+                      <DialogQuestionConfirm
+                        question={question as Question.ConfirmQuestion}
+                        value={store.answers[question.id] as boolean | undefined}
+                        onChange={(v) => setAnswer(question.id, v)}
+                        active={true}
+                      />
+                    </Match>
+                    <Match when={question.type === "text"}>
+                      <DialogQuestionText
+                        question={question as Question.TextQuestion}
+                        value={store.answers[question.id] as string | undefined}
+                        onChange={(v) => setAnswer(question.id, v)}
+                        active={true}
+                      />
+                    </Match>
+                  </Switch>
+                </Show>
               </box>
             )
           }}
         </For>
-      </box>
+      </scrollbox>
 
-      <box flexDirection="row" justifyContent="flex-end" paddingBottom={1} paddingTop={1} gap={1}>
+      <box flexDirection="row" justifyContent="flex-end" gap={2}>
         <Show when={props.request.questions.length > 1}>
           <text fg={theme.textMuted}>
-            {store.currentIndex + 1}/{props.request.questions.length} (tab to navigate)
+            {store.currentIndex + 1}/{props.request.questions.length} tab next
           </text>
         </Show>
+        <text fg={theme.textMuted}>ctrl+u/d scroll</text>
+        <text fg={theme.textMuted}>enter submit</text>
         <box flexGrow={1} />
         <For each={["cancel", "submit"]}>
           {(key) => (
