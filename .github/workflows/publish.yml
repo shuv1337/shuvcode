@@ -204,3 +204,11 @@ jobs:
           releaseId: ${{ needs.publish.outputs.releaseId }}
           tagName: ${{ needs.publish.outputs.tagName }}
           releaseAssetNamePattern: opencode-desktop-[platform]-[arch][ext]
+
+  publish-release:
+    needs:
+      - publish
+      - publish-tauri
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - run: gh release edit ${{ steps.publish.outputs.tagName }} --draft=false
