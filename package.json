@@ -88,6 +88,7 @@
     "@types/node": "catalog:"
   },
   "patchedDependencies": {
+    "ghostty-opentui@1.3.7": "patches/ghostty-opentui@1.3.7.patch",
     "ghostty-web@0.3.0": "patches/ghostty-web@0.3.0.patch"
   }
 }

@@ -1,0 +1,50 @@
+diff --git a/src/native-lib.cjs b/src/native-lib.cjs
+--- a/src/native-lib.cjs
++++ b/src/native-lib.cjs
+@@ -1,33 +1,26 @@
+ const { platform, arch } = require("os")
++const path = require("path")
+ 
+ function loadNativeModule() {
+-  // Try development path first
+-  try {
+-    return require("../zig-out/lib/ghostty-opentui.node")
+-  } catch {}
+-
+-  // Load platform-specific dist path (hardcoded for static analysis)
+   const p = platform()
+   const a = arch()
+ 
+-  if (p === "darwin" && a === "arm64") {
+-    return require("../dist/darwin-arm64/ghostty-opentui.node")
+-  }
+-  if (p === "darwin") {
+-    return require("../dist/darwin-x64/ghostty-opentui.node")
+-  }
+-  if (p === "linux" && a === "arm64") {
+-    return require("../dist/linux-arm64/ghostty-opentui.node")
+-  }
+-  if (p === "linux") {
+-    return require("../dist/linux-x64/ghostty-opentui.node")
+-  }
++  // Windows fallback - no native module
+   if (p === "win32") {
+-    // Windows fallback - no native module
+     return null
+   }
+ 
+-  throw new Error(`Unsupported platform: ${p}-${a}`)
++  // Use dynamic require to prevent bundler from trying to resolve all paths
++  // at compile time. The path is computed at runtime based on platform/arch.
++  const archName = a === "arm64" ? "arm64" : "x64"
++  const modulePath = path.join(__dirname, "..", "dist", `${p}-${archName}`, "ghostty-opentui.node")
++
++  try {
++    return require(modulePath)
++  } catch (e) {
++    // Native module not available - fallback will be used
++    return null
++  }
+ }
+ 
+ const native = loadNativeModule()
