@@ -21,7 +21,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#4865](https://github.com/sst/opencode/pull/4865)                            | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind       |
 | [#4515](https://github.com/sst/opencode/pull/4515)                            | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Display configured plugins in /status dialog alongside MCP/LSP servers    |
 | [#4411](https://github.com/sst/opencode/pull/4411)                            | Plugin Commands                             | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Register custom `/commands` from plugins with aliases and sessionOnly     |
-| [#5563](https://github.com/sst/opencode/pull/5563)                            | Ask TUI Tool                                | [@ariane-emory](https://github.com/ariane-emory)             | Open   | Ask tool for agents to collect user input via select/confirm/text dialogs |
+| [#5563](https://github.com/sst/opencode/pull/5563)                            | Ask TUI Tool                                | [@dbpolito](https://github.com/dbpolito)                     | Open   | Ask tool for agents to collect user input via select/confirm/text dialogs |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
 _Last updated: 2025-12-15_
