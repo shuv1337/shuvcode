@@ -139,6 +139,7 @@ export const { use: useGlobalSync, provider: GlobalSyncProvider } = createSimple
     }
 
     globalSDK.event.listen((e) => {
+      console.log(e)
       const directory = e.name
       const event = e.details
 

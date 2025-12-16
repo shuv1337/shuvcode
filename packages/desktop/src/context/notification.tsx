@@ -51,6 +51,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
     // })
 
     globalSDK.event.listen((e) => {
+      console.log(e)
       const directory = e.name
       const event = e.details
       const base = {
@@ -58,7 +59,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
         time: Date.now(),
         viewed: false,
       }
-      switch (event.type) {
+      switch (event?.type) {
         case "session.idle": {
           const sessionID = event.properties.sessionID
           const [syncStore] = globalSync.child(directory)
