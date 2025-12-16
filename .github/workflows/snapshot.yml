@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - integration
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "LICENSE"
+      - ".editorconfig"
+      - ".prettierignore"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

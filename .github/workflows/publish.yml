@@ -6,6 +6,13 @@ on:
     branches:
       - dev
       - snapshot-*
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "LICENSE"
+      - ".editorconfig"
+      - ".prettierignore"
   workflow_dispatch:
     inputs:
       bump:
