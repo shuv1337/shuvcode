@@ -32,6 +32,7 @@ export type PromptProps = {
   sessionID?: string
   disabled?: boolean
   onSubmit?: () => void
+  onSearchToggle?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
@@ -760,6 +761,11 @@ export function Prompt(props: PromptProps) {
                 }
                 if (keybind.match("app_exit", e)) {
                   await tryExit()
+                  return
+                }
+                if (keybind.match("session_search", e)) {
+                  props.onSearchToggle?.()
+                  e.preventDefault()
                   return
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {

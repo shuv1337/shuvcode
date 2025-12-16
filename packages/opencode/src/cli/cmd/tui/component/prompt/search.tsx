@@ -99,10 +99,8 @@ export function SearchInput(props: SearchInputProps) {
 
   function submit() {
     if (props.disabled) return
-    if (!store.input) return
-    props.onSubmit?.(store.input)
-    input.clear()
-    setStore("input", "")
+    // On Enter, navigate to next match instead of clearing
+    props.onNext?.()
   }
 
   onMount(() => {
@@ -159,7 +157,8 @@ export function SearchInput(props: SearchInputProps) {
                   return
                 }
 
-                if (e.name === "escape" || (e.ctrl && e.name === "f")) {
+                // Exit on escape or the same keybind used to enter search mode (ctrl+/)
+                if (e.name === "escape" || keybind.match("session_search", e)) {
                   props.onExit?.()
                   e.preventDefault()
                   return
