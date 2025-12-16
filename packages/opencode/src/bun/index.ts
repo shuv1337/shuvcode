@@ -116,9 +116,11 @@ export namespace BunProc {
 
     // Bundle the plugin with all dependencies for compiled binary compatibility
     // This creates a single file that doesn't require subpath export resolution
-    await Bun.file(bundledDir).exists().then(async (exists) => {
-      if (!exists) await Bun.$`mkdir -p ${bundledDir}`
-    })
+    await Bun.file(bundledDir)
+      .exists()
+      .then(async (exists) => {
+        if (!exists) await Bun.$`mkdir -p ${bundledDir}`
+      })
 
     // Find the entry point from package.json
     const installedPkgJson = Bun.file(path.join(mod, "package.json"))
