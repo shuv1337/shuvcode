@@ -23,8 +23,8 @@ Review the PRs listed in README.md and verify each feature is still implemented 
 
 Produce a markdown table summary like:
 
-| PR | Feature | Status | Notes |
-|----|---------|--------|-------|
+| PR    | Feature      | Status | Notes             |
+| ----- | ------------ | ------ | ----------------- |
 | #XXXX | Feature name | STATUS | Brief explanation |
 
 Then list any action items for features that need attention.
