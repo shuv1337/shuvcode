@@ -1,4 +1,5 @@
 import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencode-ai/plugin"
+import { pathToFileURL } from "node:url"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
@@ -34,23 +35,45 @@ export namespace Plugin {
     }
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
+      let pluginUrl: string
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
         // Convert to file:// URL for proper module resolution from the cache directory
-        plugin = "file://" + (await BunProc.install(pkg, version))
+        // Use pathToFileURL for cross-platform compatibility (especially Windows)
+        pluginUrl = pathToFileURL(await BunProc.install(pkg, version)).href
       } else {
         // Resolve relative file:// paths against the working directory
         const filePath = plugin.substring("file://".length)
         if (!path.isAbsolute(filePath)) {
-          plugin = "file://" + path.resolve(Instance.directory, filePath)
+          pluginUrl = pathToFileURL(path.resolve(Instance.directory, filePath)).href
+        } else {
+          pluginUrl = plugin
         }
       }
-      const mod = await import(plugin)
-      for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-        const init = await fn(input)
-        hooks.push(init)
+      try {
+        const mod = await import(pluginUrl)
+        for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+          const init = await fn(input)
+          hooks.push(init)
+        }
+      } catch (e) {
+        const err = e as Error
+        // Check for Windows-specific module resolution issues with subpath exports
+        if (process.platform === "win32" && err.message?.includes("Cannot find module")) {
+          log.error("failed to load plugin (Windows module resolution issue)", {
+            plugin,
+            error: err.message,
+            hint: "This plugin may use subpath exports which have known issues on Windows. Try removing it from your config.",
+          })
+        } else {
+          log.error("failed to load plugin", {
+            plugin,
+            error: err.message,
+          })
+        }
+        throw e
       }
     }
 
