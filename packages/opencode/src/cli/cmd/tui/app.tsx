@@ -29,6 +29,8 @@ import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
+import { DialogQuestion } from "@tui/component/dialog-question"
+import type { Question } from "@/question"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
@@ -161,7 +163,7 @@ function App() {
   const local = useLocal()
   const kv = useKV()
   const command = useCommandDialog()
-  const { event } = useSDK()
+  const { event, client: sdkClient } = useSDK()
   const toast = useToast()
   const { theme, mode, setMode } = useTheme()
   const sync = useSync()
@@ -470,6 +472,55 @@ function App() {
       variant: evt.properties.variant,
       duration: evt.properties.duration,
     })
+  })
+
+  // Handle question requests from the Ask tool
+  event.on(TuiEvent.QuestionRequest.type as any, (evt: any) => {
+    const request = evt.properties as Question.Request
+    dialog.replace(
+      () => (
+        <DialogQuestion
+          request={request}
+          onSubmit={(answers) => {
+            sdkClient.tui.publish({
+              body: {
+                type: TuiEvent.QuestionResponse.type,
+                properties: {
+                  questionID: request.questionID,
+                  status: "ok",
+                  answers,
+                },
+              },
+            } as any)
+          }}
+          onCancel={() => {
+            sdkClient.tui.publish({
+              body: {
+                type: TuiEvent.QuestionResponse.type,
+                properties: {
+                  questionID: request.questionID,
+                  status: "cancel",
+                  answers: [],
+                },
+              },
+            } as any)
+          }}
+        />
+      ),
+      () => {
+        // On escape/close, send cancel response
+        sdkClient.tui.publish({
+          body: {
+            type: TuiEvent.QuestionResponse.type,
+            properties: {
+              questionID: request.questionID,
+              status: "cancel",
+              answers: [],
+            },
+          },
+        } as any)
+      },
+    )
   })
 
   event.on(SessionApi.Event.Deleted.type, (evt) => {

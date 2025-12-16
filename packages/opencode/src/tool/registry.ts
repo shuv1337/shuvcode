@@ -1,3 +1,4 @@
+import { AskTool } from "./ask"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -89,6 +90,7 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
+      AskTool,
       BashTool,
       ReadTool,
       GlobTool,
@@ -136,9 +138,12 @@ export namespace ToolRegistry {
   export async function enabled(agent: Agent.Info): Promise<Record<string, boolean>> {
     const result: Record<string, boolean> = {}
 
+    // Only disable tools globally if edit is a string "deny"
+    // If edit is an object with patterns, per-file checks happen in the tools
     if (agent.permission.edit === "deny") {
       result["edit"] = false
       result["write"] = false
+      result["patch"] = false
     }
     if (agent.permission.bash["*"] === "deny" && Object.keys(agent.permission.bash).length === 1) {
       result["bash"] = false
