@@ -23,7 +23,7 @@ function DialogSelectFont(props: { originalFont: string }) {
 
     layout.font.set(font.id)
     applyFont(font.id)
-    dialog.pop()
+    dialog.close()
   }
 
   async function handleActiveChange(font: FontDefinition | undefined) {
@@ -67,7 +67,7 @@ export function FontPicker() {
 
   function openDialog() {
     const originalFont = currentFont().id
-    dialog.replace(
+    dialog.show(
       () => <DialogSelectFont originalFont={originalFont} />,
       () => applyFont(originalFont),
     )

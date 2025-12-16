@@ -18,7 +18,7 @@ function DialogSelectTheme(props: { originalTheme: string }) {
     if (!theme) return
     layout.theme.set(theme.id)
     applyTheme(theme.id)
-    dialog.pop()
+    dialog.close()
   }
 
   function handleActiveChange(theme: Theme | undefined) {
@@ -58,7 +58,7 @@ export function ThemePicker() {
 
   function openDialog() {
     const originalTheme = currentTheme().id
-    dialog.replace(
+    dialog.show(
       () => <DialogSelectTheme originalTheme={originalTheme} />,
       () => applyTheme(originalTheme),
     )

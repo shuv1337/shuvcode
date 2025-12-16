@@ -2,6 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-15",
+  "apiDependencies": [
+    {
+      "api": "useDialog",
+      "location": "packages/ui/src/context/dialog.tsx",
+      "description": "Dialog context API used by fork-specific components",
+      "currentSignature": "{ show(element, onClose?), close(), active }",
+      "affectedFiles": [
+        "packages/desktop/src/components/font-picker.tsx",
+        "packages/desktop/src/components/theme-picker.tsx"
+      ],
+      "migrationHistory": [
+        {
+          "version": "v1.0.162",
+          "change": "dialog.replace() -> dialog.show(), dialog.pop() -> dialog.close()"
+        }
+      ]
+    }
+  ],
   "features": [
     {
       "pr": 4898,
@@ -166,6 +184,7 @@
         "packages/desktop/src/components/theme-picker.tsx",
         "packages/ui/src/components/logo.tsx"
       ],
+      "apiDependency": "useDialog",
       "criticalCode": [
         {
           "file": "packages/desktop/src/pages/layout.tsx",
@@ -183,6 +202,16 @@
             "sm:hidden",
             "hidden sm:flex"
           ]
+        },
+        {
+          "file": "packages/desktop/src/components/font-picker.tsx",
+          "description": "Font picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
+          "markers": ["dialog.show(", "dialog.close()"]
+        },
+        {
+          "file": "packages/desktop/src/components/theme-picker.tsx",
+          "description": "Theme picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
+          "markers": ["dialog.show(", "dialog.close()"]
         },
         {
           "file": "packages/desktop/src/pages/layout.tsx",
