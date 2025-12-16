@@ -725,7 +725,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         "w-full flex items-center gap-x-2 rounded-md px-2 py-0.5": true,
                         "bg-surface-raised-base-hover": active() === i,
                       }}
-                      onClick={() => handleFileSelect(i)}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        handleFileSelect(i)
+                      }}
                     >
                       <FileIcon node={{ path: i, type: "file" }} class="shrink-0 size-4" />
                       <div class="flex items-center text-14-regular min-w-0">
@@ -751,7 +754,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
                         "bg-surface-raised-base-hover": slashActive() === cmd.id,
                       }}
-                      onClick={() => handleSlashSelect(cmd)}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        handleSlashSelect(cmd)
+                      }}
                     >
                       <div class="flex items-center gap-2 min-w-0">
                         <span class="text-14-regular text-text-strong whitespace-nowrap">/{cmd.trigger}</span>
