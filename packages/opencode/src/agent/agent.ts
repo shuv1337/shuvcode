@@ -5,6 +5,8 @@ import { generateObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
 import { mergeDeep } from "remeda"
+import { minimatch } from "minimatch"
+import * as path from "node:path"
 
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -24,7 +26,7 @@ export namespace Agent {
       temperature: z.number().optional(),
       color: z.string().optional(),
       permission: z.object({
-        edit: Config.Permission,
+        edit: z.union([Config.Permission, z.record(z.string(), Config.Permission)]),
         bash: z.record(z.string(), Config.Permission),
         webfetch: Config.Permission.optional(),
         doom_loop: Config.Permission.optional(),
@@ -294,9 +296,84 @@ export namespace Agent {
     })
     return result.object
   }
+
+  /**
+   * Resolve file permission from a permission value that may be a string or a pattern map.
+   *
+   * Precedence rules (most specific wins):
+   * 1. Exact match wins
+   * 2. More path segments wins
+   * 3. Longer pattern wins (tiebreaker)
+   * 4. "*" is always fallback
+   */
+  export function resolveFilePermission(input: {
+    permission: Config.Permission | Record<string, Config.Permission>
+    filePath: string
+    baseDir: string
+  }): Config.Permission {
+    const { permission, filePath, baseDir } = input
+
+    // If permission is a string, return it directly (backward compatible)
+    if (typeof permission === "string") {
+      return permission
+    }
+
+    // Normalize filePath to relative path under baseDir
+    const resolved = path.resolve(filePath)
+    const relative = path.relative(baseDir, resolved)
+
+    // Convert to POSIX separators for minimatch compatibility
+    const posixPath = relative.replace(/\\/g, "/")
+
+    // Detect platform for case sensitivity
+    const isCaseInsensitive = process.platform === "darwin" || process.platform === "win32"
+
+    // Evaluate patterns with deterministic precedence
+    type Match = { pattern: string; permission: Config.Permission; score: number }
+    const matches: Match[] = []
+
+    for (const [pattern, perm] of Object.entries(permission)) {
+      // Skip * fallback for now, we'll use it only if nothing else matches
+      if (pattern === "*") continue
+
+      const matched = minimatch(posixPath, pattern, {
+        nocase: isCaseInsensitive,
+        dot: true, // match dotfiles
+      })
+
+      if (matched) {
+        // Calculate precedence score:
+        // - Exact match gets highest score
+        // - More path segments = higher score
+        // - Longer pattern = higher score (tiebreaker)
+        const isExact = pattern === posixPath || pattern === relative
+        const segments = pattern.split("/").filter((s) => s && s !== "**").length
+        const score = isExact ? 10000 : segments * 100 + pattern.length
+
+        matches.push({ pattern, permission: perm, score })
+      }
+    }
+
+    // Sort by score descending (highest score = most specific = wins)
+    matches.sort((a, b) => b.score - a.score)
+
+    // Return the most specific match, or fall back to * pattern, or default to "allow"
+    if (matches.length > 0) {
+      return matches[0].permission
+    }
+
+    // Use * fallback if defined
+    if (permission["*"]) {
+      return permission["*"]
+    }
+
+    // Default to allow (backward compatible behavior)
+    return "allow"
+  }
 }
 
 function mergeAgentPermissions(basePermission: any, overridePermission: any): Agent.Info["permission"] {
+  // Normalize bash to object form
   if (typeof basePermission.bash === "string") {
     basePermission.bash = {
       "*": basePermission.bash,
@@ -307,7 +384,22 @@ function mergeAgentPermissions(basePermission: any, overridePermission: any): Ag
       "*": overridePermission.bash,
     }
   }
+  // Normalize edit to object form if override is an object (more specific wins)
+  // If base is string and override is object, convert base to object with * fallback
+  if (typeof basePermission.edit === "string" && typeof overridePermission.edit === "object") {
+    basePermission.edit = {
+      "*": basePermission.edit,
+    }
+  }
+  // If base is object and override is string, convert override to * fallback in object
+  if (typeof basePermission.edit === "object" && typeof overridePermission.edit === "string") {
+    overridePermission.edit = {
+      "*": overridePermission.edit,
+    }
+  }
+
   const merged = mergeDeep(basePermission ?? {}, overridePermission ?? {}) as any
+
   let mergedBash
   if (merged.bash) {
     if (typeof merged.bash === "string") {
@@ -324,8 +416,19 @@ function mergeAgentPermissions(basePermission: any, overridePermission: any): Ag
     }
   }
 
+  // Merge edit similar to bash - keep as object if either was object
+  let mergedEdit: Config.Permission | Record<string, Config.Permission> = merged.edit ?? "allow"
+  if (typeof mergedEdit === "object") {
+    mergedEdit = mergeDeep(
+      {
+        "*": "allow" as Config.Permission,
+      },
+      mergedEdit,
+    ) as Record<string, Config.Permission>
+  }
+
   const result: Agent.Info["permission"] = {
-    edit: merged.edit ?? "allow",
+    edit: mergedEdit,
     webfetch: merged.webfetch ?? "allow",
     bash: mergedBash ?? { "*": "allow" },
     doom_loop: merged.doom_loop,

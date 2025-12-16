@@ -151,8 +151,51 @@ export const PatchTool = Tool.define("patch", {
       }
     }
 
-    // Check permissions if needed
-    if (agent.permission.edit === "ask") {
+    // Check permissions for all files
+    const deniedFiles: string[] = []
+    const askFiles: string[] = []
+
+    for (const change of fileChanges) {
+      const resolvedPermission = Agent.resolveFilePermission({
+        permission: agent.permission.edit,
+        filePath: change.filePath,
+        baseDir: Instance.directory,
+      })
+
+      if (resolvedPermission === "deny") {
+        deniedFiles.push(change.filePath)
+      } else if (resolvedPermission === "ask") {
+        askFiles.push(change.filePath)
+      }
+
+      // Also check move destination if applicable
+      if (change.movePath) {
+        const movePermission = Agent.resolveFilePermission({
+          permission: agent.permission.edit,
+          filePath: change.movePath,
+          baseDir: Instance.directory,
+        })
+        if (movePermission === "deny") {
+          deniedFiles.push(change.movePath)
+        } else if (movePermission === "ask") {
+          askFiles.push(change.movePath)
+        }
+      }
+    }
+
+    // If any file is denied, reject the entire patch
+    if (deniedFiles.length > 0) {
+      throw new Permission.RejectedError(
+        ctx.sessionID,
+        "edit",
+        ctx.callID,
+        { files: deniedFiles },
+        `Patch denied: editing these files is not permitted: ${deniedFiles.join(", ")}`,
+      )
+    }
+
+    // If any file requires ask, prompt once for all
+    if (askFiles.length > 0) {
       await Permission.ask({
         type: "edit",
         sessionID: ctx.sessionID,
@@ -161,6 +204,7 @@ export const PatchTool = Tool.define("patch", {
         title: `Apply patch to ${fileChanges.length} files`,
         metadata: {
           diff: totalDiff,
+          askFiles,
         },
       })
     }

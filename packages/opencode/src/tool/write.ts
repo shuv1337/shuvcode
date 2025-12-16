@@ -57,7 +57,25 @@ export const WriteTool = Tool.define("write", {
     const exists = await file.exists()
     if (exists) await FileTime.assert(ctx.sessionID, filepath)
 
-    if (agent.permission.edit === "ask")
+    // Resolve permission for this specific file
+    const resolvedPermission = Agent.resolveFilePermission({
+      permission: agent.permission.edit,
+      filePath: filepath,
+      baseDir: Instance.directory,
+    })
+
+    // Check for deny first
+    if (resolvedPermission === "deny") {
+      throw new Permission.RejectedError(
+        ctx.sessionID,
+        "write",
+        ctx.callID,
+        { filepath },
+        `Writing to file ${filepath} is denied by permission configuration`,
+      )
+    }
+
+    if (resolvedPermission === "ask")
       await Permission.ask({
         type: "write",
         sessionID: ctx.sessionID,

@@ -76,11 +76,29 @@ export const EditTool = Tool.define("edit", {
     let diff = ""
     let contentOld = ""
     let contentNew = ""
+    // Resolve permission for this specific file
+    const resolvedPermission = Agent.resolveFilePermission({
+      permission: agent.permission.edit,
+      filePath,
+      baseDir: Instance.directory,
+    })
+
+    // Check for deny first
+    if (resolvedPermission === "deny") {
+      throw new Permission.RejectedError(
+        ctx.sessionID,
+        "edit",
+        ctx.callID,
+        { filepath: filePath },
+        `Editing file ${filePath} is denied by permission configuration`,
+      )
+    }
+
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         contentNew = params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
-        if (agent.permission.edit === "ask") {
+        if (resolvedPermission === "ask") {
           await Permission.ask({
             type: "edit",
             sessionID: ctx.sessionID,
@@ -112,7 +130,7 @@ export const EditTool = Tool.define("edit", {
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
       )
-      if (agent.permission.edit === "ask") {
+      if (resolvedPermission === "ask") {
         await Permission.ask({
           type: "edit",
           sessionID: ctx.sessionID,
