@@ -29,6 +29,7 @@ import { SearchInput, type SearchInputRef } from "@tui/component/prompt/search"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
+import { Token } from "@/util/token"
 import type { Tool } from "@/tool/tool"
 import type { ReadTool } from "@/tool/read"
 import type { WriteTool } from "@/tool/write"
@@ -84,12 +85,14 @@ const context = createContext<{
   conceal: () => boolean
   showThinking: () => boolean
   showTimestamps: () => boolean
+  showTokens: () => boolean
   usernameVisible: () => boolean
   showDetails: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
   searchQuery: () => string
   currentMatchMessageID: () => string | undefined
+  contextLimit: () => number
 }>()
 
 function use() {
@@ -183,6 +186,7 @@ export function Session() {
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
   const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
+  const [showTokens, setShowTokens] = createSignal(kv.get("tokens", "hide") === "show")
   const [usernameVisible, setUsernameVisible] = createSignal(kv.get("username_visible", true))
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
@@ -316,6 +320,13 @@ export function Session() {
   }
 
   const local = useLocal()
+
+  const contextLimit = createMemo(() => {
+    const c = local.model.current()
+    if (!c) return 200000
+    const provider = sync.data.provider.find((p) => p.id === c.providerID)
+    return provider?.models[c.modelID]?.limit.context ?? 200000
+  })
 
   function moveChild(direction: number) {
     const parentID = session()?.parentID ?? session()?.id
@@ -607,6 +618,19 @@ export function Session() {
         setShowThinking((prev) => {
           const next = !prev
           kv.set("thinking_visibility", next)
+          return next
+        })
+        dialog.clear()
+      },
+    },
+    {
+      title: showTokens() ? "Hide tokens" : "Show tokens",
+      value: "session.toggle.tokens",
+      category: "Session",
+      onSelect: (dialog) => {
+        setShowTokens((prev) => {
+          const next = !prev
+          kv.set("tokens", next ? "show" : "hide")
           return next
         })
         dialog.clear()
@@ -1004,11 +1028,13 @@ export function Session() {
         conceal,
         showThinking,
         showTimestamps,
+        showTokens,
         usernameVisible,
         showDetails,
         diffWrapMode,
         sync,
         searchQuery,
+        contextLimit,
         currentMatchMessageID: () => {
           const matches = searchMatches()
           const idx = currentMatchIndex()
@@ -1216,6 +1242,13 @@ function UserMessage(props: {
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
 
+  const individualTokens = createMemo(() => {
+    return props.parts.reduce((sum, part) => {
+      if (part.type === "text") return sum + Token.estimate(part.text)
+      return sum
+    }, 0)
+  })
+
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
   return (
@@ -1277,6 +1310,9 @@ function UserMessage(props: {
                 <span> </span>
                 <span style={{ bg: theme.accent, fg: theme.backgroundPanel, bold: true }}> QUEUED </span>
               </Show>
+              <Show when={ctx.showTokens() && !queued() && individualTokens() > 0}>
+                <span style={{ fg: theme.textMuted }}> ⬝~{individualTokens().toLocaleString()} tok</span>
+              </Show>
             </text>
           </box>
         </box>
@@ -1295,6 +1331,7 @@ function UserMessage(props: {
 }
 
 function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; last: boolean }) {
+  const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
@@ -1310,6 +1347,63 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     const user = messages().find((x) => x.role === "user" && x.id === props.message.parentID)
     if (!user || !user.time) return 0
     return props.message.time.completed - user.time.created
+  })
+
+  // OUT tokens (sent TO API) - includes user text + tool results from previous assistant
+  const outEstimate = createMemo(() => props.message.sentEstimate)
+
+  // IN tokens (from API TO computer)
+  const inTokens = createMemo(() => props.message.tokens.output)
+  const inEstimate = createMemo(() => props.message.outputEstimate)
+
+  // Reasoning tokens (must be defined BEFORE inDisplay)
+  const reasoningTokens = createMemo(() => props.message.tokens.reasoning)
+  const reasoningEstimate = createMemo(() => props.message.reasoningEstimate)
+
+  const outDisplay = createMemo(() => {
+    const estimate = outEstimate()
+    if (estimate !== undefined) return "~" + estimate.toLocaleString()
+    const tokens = props.message.tokens.input
+    if (tokens > 0) return tokens.toLocaleString()
+    return "0"
+  })
+
+  const inDisplay = createMemo(() => {
+    const estimate = inEstimate()
+    if (estimate !== undefined) return "~" + estimate.toLocaleString()
+    const tokens = inTokens()
+    if (tokens > 0) return tokens.toLocaleString()
+    // Show ~0 during streaming when we have reasoning but no output yet
+    if (reasoningEstimate() !== undefined || reasoningTokens() > 0) return "~0"
+    return undefined
+  })
+
+  const tokensDisplay = createMemo(() => {
+    const inVal = inDisplay()
+    if (!inVal) return undefined
+    return `${inVal}↓/${outDisplay()}↑`
+  })
+
+  const reasoningDisplay = createMemo(() => {
+    const estimate = reasoningEstimate()
+    if (estimate !== undefined) return "~" + estimate.toLocaleString()
+    const tokens = reasoningTokens()
+    if (tokens > 0) return tokens.toLocaleString()
+    return undefined
+  })
+
+  const contextEstimate = createMemo(() => props.message.contextEstimate)
+
+  const cumulativeTokens = createMemo(() => {
+    const estimate = contextEstimate()
+    if (estimate !== undefined) return estimate
+    return props.message.tokens.input + props.message.tokens.cache.read + props.message.tokens.cache.write
+  })
+
+  const percentage = createMemo(() => {
+    const limit = ctx.contextLimit()
+    if (!limit) return 0
+    return Math.round((cumulativeTokens() / limit) * 100)
   })
 
   return (
@@ -1352,6 +1446,22 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+              </Show>
+              <Show when={ctx.showTokens() && (tokensDisplay() || reasoningDisplay())}>
+                <span style={{ fg: theme.textMuted }}>
+                  {" "}
+                  ⬝ {tokensDisplay()} tok
+                  <Show when={reasoningDisplay()}>
+                    {" · "}
+                    {reasoningDisplay()} think
+                  </Show>
+                  <Show
+                    when={cumulativeTokens() > 0 || inEstimate() !== undefined || reasoningEstimate() !== undefined}
+                  >
+                    {" · "}
+                    {cumulativeTokens().toLocaleString()} context ({percentage()}%)
+                  </Show>
+                </span>
               </Show>
             </text>
           </box>

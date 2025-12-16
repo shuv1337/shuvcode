@@ -256,6 +256,8 @@ export namespace SessionProcessor {
                   input.assistantMessage.finish = value.finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
+                  // Set contextEstimate from actual usage
+                  input.assistantMessage.contextEstimate = usage.tokens.input + usage.tokens.cache.read
                   await Session.updatePart({
                     id: Identifier.ascending("part"),
                     reason: value.finishReason,
@@ -267,6 +269,9 @@ export namespace SessionProcessor {
                     cost: usage.cost,
                   })
                   await Session.updateMessage(input.assistantMessage)
+                  // Clear streaming estimates now that real tokens are available
+                  input.assistantMessage.outputEstimate = undefined
+                  input.assistantMessage.reasoningEstimate = undefined
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
