@@ -55,6 +55,7 @@ export function Select<T>(props: SelectProps<T> & ButtonProps) {
         ...(local.rootClassList ?? {}),
         [local.rootClass ?? ""]: !!local.rootClass,
       }}
+      placement="bottom-start"
       value={local.current}
       options={grouped()}
       optionValue={(x) => (local.value ? local.value(x) : (x as string))}
