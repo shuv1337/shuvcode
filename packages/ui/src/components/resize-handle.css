@@ -8,6 +8,12 @@
     width: 8px;
     transform: translateX(50%);
     cursor: ew-resize;
+
+    &[data-reverse="true"] {
+      inset-inline-end: unset;
+      inset-inline-start: 0;
+      transform: translateX(-50%);
+    }
   }
 
   &[data-direction="vertical"] {
