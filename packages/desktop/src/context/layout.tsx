@@ -50,6 +50,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         review: {
           state: "pane" as "pane" | "tab",
+          width: 450,
         },
         theme: DEFAULT_THEME_ID,
         font: FONTS[0].id,
@@ -187,6 +188,10 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         tab() {
           setStore("review", "state", "tab")
+        },
+        width: createMemo(() => store.review?.width ?? 450),
+        resize(width: number) {
+          setStore("review", "width", width)
         },
       },
       dialog: {

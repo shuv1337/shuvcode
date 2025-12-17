@@ -16,6 +16,7 @@ import { useCodeComponent } from "@opencode-ai/ui/context/code"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { SessionMessageRail } from "@opencode-ai/ui/session-message-rail"
 import { SessionReview } from "@opencode-ai/ui/session-review"
+import { showToast } from "@opencode-ai/ui/toast"
 import {
   DragDropProvider,
   DragDropSensors,
@@ -316,6 +317,43 @@ export default function Page() {
         // Navigate to the message before the new revert point
         const priorMsg = userMessages().findLast((x) => x.id < nextMessage.id)
         setActiveMessage(priorMsg)
+      },
+    },
+    {
+      id: "session.share",
+      title: "Share session",
+      description: "Create a shareable link for the session",
+      category: "Session",
+      slash: "share",
+      disabled: !params.id || !!info()?.share?.url || sync.data.config.share === "disabled",
+      onSelect: async () => {
+        if (!params.id) return
+        try {
+          const res = await sdk.client.session.share({ sessionID: params.id })
+          if (res.data?.share?.url) {
+            await navigator.clipboard.writeText(res.data.share.url)
+            showToast({ title: "Share URL copied to clipboard!", variant: "success" })
+          }
+        } catch {
+          showToast({ title: "Failed to share session", variant: "error" })
+        }
+      },
+    },
+    {
+      id: "session.unshare",
+      title: "Unshare session",
+      description: "Remove the shareable link",
+      category: "Session",
+      slash: "unshare",
+      disabled: !params.id || !info()?.share?.url,
+      onSelect: async () => {
+        if (!params.id) return
+        try {
+          await sdk.client.session.unshare({ sessionID: params.id })
+          showToast({ title: "Session unshared", variant: "success" })
+        } catch {
+          showToast({ title: "Failed to unshare session", variant: "error" })
+        }
       },
     },
   ])
@@ -654,7 +692,7 @@ export default function Page() {
                               root: "pb-20 flex-1 min-w-0 overflow-x-hidden",
                               content: "pb-20",
                               container:
-                                "w-full max-w-full " + (wide() ? "max-w-146 mx-auto px-4 sm:px-6" : "pr-4 sm:pr-6"),
+                                "w-full max-w-full " + (wide() ? "max-w-146 mx-auto px-4 sm:px-6" : "px-4 sm:px-6"),
                             }}
                           />
                         </Show>
@@ -699,9 +737,20 @@ export default function Page() {
                 <Show when={layout.review.state() === "pane" && diffs().length}>
                   <div
                     classList={{
-                      "relative grow pt-3 flex-1 min-h-0 border-l border-border-weak-base": true,
+                      "relative pt-3 shrink-0 min-h-0 border-l border-border-weak-base": true,
                     }}
+                    style={{ width: `${layout.review.width()}px` }}
                   >
+                    <ResizeHandle
+                      direction="horizontal"
+                      reverse
+                      size={layout.review.width()}
+                      min={300}
+                      max={window.innerWidth * 0.5}
+                      collapseThreshold={100}
+                      onResize={layout.review.resize}
+                      onCollapse={() => layout.review.tab()}
+                    />
                     <SessionReview
                       classes={{
                         root: "pb-20",
