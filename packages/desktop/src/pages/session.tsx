@@ -24,9 +24,8 @@ import {
   SortableProvider,
   closestCenter,
   createSortable,
-  useDragDropContext,
 } from "@thisbeyond/solid-dnd"
-import type { DragEvent, Transformer } from "@thisbeyond/solid-dnd"
+import type { DragEvent } from "@thisbeyond/solid-dnd"
 import type { JSX } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
@@ -43,6 +42,7 @@ import { AssistantMessage, UserMessage } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { extractPromptFromParts } from "@/utils/prompt"
+import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
 
 export default function Page() {
   const layout = useLayout()
@@ -260,11 +260,18 @@ export default function Page() {
       onSelect: () => local.agent.move(1),
     },
     {
+      id: "agent.cycle.reverse",
+      title: "Cycle agent backwards",
+      description: "Switch to the previous agent",
+      category: "Agent",
+      keybind: "shift+mod+.",
+      onSelect: () => local.agent.move(-1),
+    },
+    {
       id: "session.undo",
       title: "Undo",
       description: "Undo the last message",
       category: "Session",
-      keybind: "mod+z",
       slash: "undo",
       disabled: !params.id || visibleUserMessages().length === 0,
       onSelect: async () => {
@@ -294,7 +301,6 @@ export default function Page() {
       title: "Redo",
       description: "Redo the last undone message",
       category: "Session",
-      keybind: "mod+shift+z",
       slash: "redo",
       disabled: !params.id || !info()?.revert?.messageID,
       onSelect: async () => {
@@ -361,19 +367,6 @@ export default function Page() {
   const handleKeyDown = (event: KeyboardEvent) => {
     if ((document.activeElement as HTMLElement)?.dataset?.component === "terminal") return
     if (dialog.active) return
-
-    if (event.key === "PageUp" || event.key === "PageDown") {
-      const scrollContainer = document.querySelector('[data-slot="session-turn-content"]') as HTMLElement
-      if (scrollContainer) {
-        event.preventDefault()
-        const scrollAmount = scrollContainer.clientHeight * 0.8
-        scrollContainer.scrollBy({
-          top: event.key === "PageUp" ? -scrollAmount : scrollAmount,
-          behavior: "instant",
-        })
-      }
-      return
-    }
 
     const focused = document.activeElement === inputRef
     if (focused) {
@@ -555,36 +548,6 @@ export default function Page() {
         </div>
       </div>
     )
-  }
-
-  const ConstrainDragYAxis = (): JSX.Element => {
-    const context = useDragDropContext()
-    if (!context) return <></>
-    const [, { onDragStart, onDragEnd, addTransformer, removeTransformer }] = context
-    const transformer: Transformer = {
-      id: "constrain-y-axis",
-      order: 100,
-      callback: (transform) => ({ ...transform, y: 0 }),
-    }
-    onDragStart((event) => {
-      const id = getDraggableId(event)
-      if (!id) return
-      addTransformer("draggables", id, transformer)
-    })
-    onDragEnd((event) => {
-      const id = getDraggableId(event)
-      if (!id) return
-      removeTransformer("draggables", id, transformer.id)
-    })
-    return <></>
-  }
-
-  const getDraggableId = (event: unknown): string | undefined => {
-    if (typeof event !== "object" || event === null) return undefined
-    if (!("draggable" in event)) return undefined
-    const draggable = (event as { draggable?: { id?: unknown } }).draggable
-    if (!draggable) return undefined
-    return typeof draggable.id === "string" ? draggable.id : undefined
   }
 
   const wide = createMemo(() => layout.review.state() === "tab" || !diffs().length)
@@ -776,7 +739,7 @@ export default function Page() {
               </div>
             </Tabs.Content>
             <Show when={layout.review.state() === "tab" && diffs().length}>
-              <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden">
+              <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden contain-strict">
                 <div
                   classList={{
                     "relative pt-3 flex-1 min-h-0 overflow-hidden": true,
@@ -850,7 +813,7 @@ export default function Page() {
           </DragOverlay>
         </DragDropProvider>
         <Show when={tabs().active()}>
-          <div class="absolute inset-x-0 px-6 max-w-146 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
+          <div class="absolute inset-x-0 px-6 max-w-200 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
             <PromptInput
               ref={(el) => {
                 inputRef = el

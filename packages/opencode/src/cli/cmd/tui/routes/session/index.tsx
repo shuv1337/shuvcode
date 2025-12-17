@@ -384,7 +384,7 @@ export function Session() {
     const parentID = session()?.parentID ?? session()?.id
     let children = sync.data.session
       .filter((x) => x.parentID === parentID || x.id === parentID)
-      .toSorted((b, a) => a.id.localeCompare(b.id))
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     if (children.length === 1) return
     let next = children.findIndex((x) => x.id === session()?.id) + direction
     if (next >= children.length) next = 0
@@ -556,7 +556,7 @@ export function Session() {
       keybind: "messages_undo",
       category: "Session",
       onSelect: async (dialog) => {
-        const status = sync.data.session_status[route.sessionID]
+        const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         const revert = session().revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
@@ -840,7 +840,10 @@ export function Session() {
       keybind: "messages_copy",
       category: "Session",
       onSelect: (dialog) => {
-        const lastAssistantMessage = messages().findLast((msg) => msg.role === "assistant")
+        const revertID = session()?.revert?.messageID
+        const lastAssistantMessage = messages().findLast(
+          (msg) => msg.role === "assistant" && (!revertID || msg.id < revertID),
+        )
         if (!lastAssistantMessage) {
           toast.show({ message: "No assistant messages found", variant: "error" })
           dialog.clear()
@@ -1866,20 +1869,24 @@ ToolRegistry.register<typeof WriteTool>({
       return props.metadata.diagnostics?.[filePath] ?? []
     })
 
+    const done = !!props.input.filePath
+
     return (
       <>
-        <ToolTitle icon="←" fallback="Preparing write..." when={props.input.filePath}>
+        <ToolTitle icon="←" fallback="Preparing write..." when={done}>
           Wrote {props.input.filePath}
         </ToolTitle>
-        <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
-          <code
-            conceal={false}
-            fg={theme.text}
-            filetype={filetype(props.input.filePath!)}
-            syntaxStyle={syntax()}
-            content={code()}
-          />
-        </line_number>
+        <Show when={done}>
+          <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
+            <code
+              conceal={false}
+              fg={theme.text}
+              filetype={filetype(props.input.filePath!)}
+              syntaxStyle={syntax()}
+              content={code()}
+            />
+          </line_number>
+        </Show>
         <Show when={diagnostics().length}>
           <For each={diagnostics()}>
             {(diagnostic) => (

@@ -1,10 +1,10 @@
 import { createStore, produce } from "solid-js/store"
 import { batch, createEffect, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
-import { makePersisted } from "@solid-primitives/storage"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
 import { Project } from "@opencode-ai/sdk/v2"
+import { persisted } from "@/utils/persist"
 import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
 import { applyFontWithLoad } from "@/fonts/apply-font"
 import { getFontById, FONTS } from "@/fonts/font-definitions"
@@ -37,7 +37,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
   init: () => {
     const globalSdk = useGlobalSDK()
     const globalSync = useGlobalSync()
-    const [store, setStore] = makePersisted(
+    const [store, setStore, _, ready] = persisted(
+      "layout.v3",
       createStore({
         projects: [] as { worktree: string; expanded: boolean }[],
         sidebar: {
@@ -56,9 +57,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         font: FONTS[0].id,
         sessionTabs: {} as Record<string, SessionTabs>,
       }),
-      {
-        name: "default-layout.v9",
-      },
     )
     const [ephemeral, setEphemeral] = createStore<{
       connect: {
@@ -122,6 +120,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     })
 
     return {
+      ready,
       projects: {
         list,
         open(directory: string) {
