@@ -18,6 +18,32 @@ import { Shell } from "@/shell/shell"
 import { ptyToText } from "ghostty-opentui"
 
 const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH || 30_000
+
+/**
+ * Process carriage returns in output text.
+ * When \r appears mid-line, subsequent text overwrites from line start.
+ * This handles cases where ptyToText doesn't fully process terminal sequences.
+ */
+function processCarriageReturns(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line.includes("\r")) return line
+      // Process each segment separated by \r, keeping only what would be visible
+      const segments = line.split("\r")
+      let result = ""
+      for (const segment of segments) {
+        // Each \r returns cursor to start, so new text overwrites from position 0
+        if (segment.length >= result.length) {
+          result = segment
+        } else {
+          result = segment + result.slice(segment.length)
+        }
+      }
+      return result
+    })
+    .join("\n")
+}
 const DEFAULT_TIMEOUT = Flag.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 export const log = Log.create({ service: "bash-tool" })
@@ -296,7 +322,7 @@ export const BashTool = Tool.define("bash", async () => {
         resultMetadata.push("User aborted the command")
       }
 
-      const outputForModel = ptyToText(rawOutput, { rows: 120, cols: 256 })
+      const outputForModel = processCarriageReturns(ptyToText(rawOutput, { rows: 120, cols: 256 }))
 
       const finalRawOutput = (() => {
         if (resultMetadata.length <= 1) return rawOutput

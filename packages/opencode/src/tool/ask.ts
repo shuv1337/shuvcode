@@ -9,6 +9,176 @@ import { Permission } from "../permission"
 
 const DEFAULT_TIMEOUT = 5 * 60 * 1000 // 5 minutes
 
+// =============================================================================
+// Normalization helpers for permissive input parsing
+// =============================================================================
+
+/**
+ * Normalize a single option: string -> {value, label} or fill missing value/label
+ */
+function normalizeOption(opt: unknown): { value: string; label: string; hint?: string } {
+  if (typeof opt === "string") {
+    return { value: opt, label: opt }
+  }
+  if (opt && typeof opt === "object") {
+    const obj = opt as Record<string, unknown>
+    const value = typeof obj.value === "string" ? obj.value : undefined
+    const label = typeof obj.label === "string" ? obj.label : undefined
+    const hint = typeof obj.hint === "string" ? obj.hint : undefined
+    // Fill missing value/label from the other
+    const resolvedValue = value ?? label ?? ""
+    const resolvedLabel = label ?? value ?? ""
+    return { value: resolvedValue, label: resolvedLabel, ...(hint ? { hint } : {}) }
+  }
+  return { value: String(opt), label: String(opt) }
+}
+
+/**
+ * Normalize options array: handle string arrays or objects with partial fields
+ */
+function normalizeOptions(options: unknown): { value: string; label: string; hint?: string }[] {
+  if (!Array.isArray(options)) return []
+  return options.map(normalizeOption)
+}
+
+/**
+ * Extract message from common alias keys: text, prompt, question
+ */
+function extractMessage(q: Record<string, unknown>): string | undefined {
+  if (typeof q.message === "string") return q.message
+  if (typeof q.text === "string") return q.text
+  if (typeof q.prompt === "string") return q.prompt
+  if (typeof q.question === "string") return q.question
+  return undefined
+}
+
+/**
+ * Normalize type field to canonical values
+ */
+function normalizeType(type: unknown): string {
+  if (typeof type !== "string") return "text"
+  const lower = type.toLowerCase().replace(/[_-]/g, "")
+  if (lower === "multiselect" || lower === "multi") return "multi-select"
+  if (lower === "select" || lower === "multiselect" || lower === "confirm" || lower === "text") {
+    // return as-is for canonical types
+  }
+  // Map common variations
+  if (type === "multi_select" || type === "multiselect") return "multi-select"
+  return type
+}
+
+/**
+ * Normalize defaultValue for multi-select (wrap string in array)
+ */
+function normalizeMultiSelectDefault(val: unknown): string[] | undefined {
+  if (val === undefined || val === null) return undefined
+  if (Array.isArray(val)) return val.map((v) => String(v))
+  if (typeof val === "string") return [val]
+  return undefined
+}
+
+/**
+ * Normalize a single question object
+ */
+function normalizeQuestion(q: unknown): Record<string, unknown> {
+  if (!q || typeof q !== "object") return { type: "text", id: "", message: "" }
+  const raw = q as Record<string, unknown>
+
+  const type = normalizeType(raw.type)
+  const message = extractMessage(raw)
+  const id = typeof raw.id === "string" ? raw.id : `q-${Math.random().toString(36).slice(2, 9)}`
+
+  const base: Record<string, unknown> = { type, id, message }
+
+  if (type === "select" || type === "multi-select") {
+    base.options = normalizeOptions(raw.options)
+  }
+
+  if (type === "select") {
+    if (typeof raw.defaultValue === "string") base.defaultValue = raw.defaultValue
+  }
+
+  if (type === "multi-select") {
+    base.defaultValue = normalizeMultiSelectDefault(raw.defaultValue)
+    if (typeof raw.min === "number") base.min = raw.min
+    if (typeof raw.max === "number") base.max = raw.max
+  }
+
+  if (type === "confirm") {
+    if (typeof raw.defaultValue === "boolean") base.defaultValue = raw.defaultValue
+  }
+
+  if (type === "text") {
+    if (typeof raw.placeholder === "string") base.placeholder = raw.placeholder
+    if (typeof raw.defaultValue === "string") base.defaultValue = raw.defaultValue
+    if (typeof raw.validate === "string") base.validate = raw.validate
+  }
+
+  return base
+}
+
+/**
+ * Normalize the entire questions array
+ */
+function normalizeQuestions(questions: unknown): unknown[] {
+  if (!Array.isArray(questions)) return []
+  return questions.map(normalizeQuestion)
+}
+
+/**
+ * Normalize timeout: accept string containing digits
+ */
+function normalizeTimeout(timeout: unknown): number | undefined {
+  if (typeof timeout === "number") return timeout
+  if (typeof timeout === "string") {
+    const parsed = parseInt(timeout, 10)
+    if (!isNaN(parsed) && parsed > 0) return parsed
+  }
+  return undefined
+}
+
+/**
+ * Format validation errors with actionable guidance for models
+ */
+function formatAskValidationError(error: z.ZodError): string {
+  const issues = error.issues.map((issue) => {
+    const path = issue.path.join(".")
+    return `- ${path}: ${issue.message}`
+  })
+
+  return [
+    "The ask tool was called with invalid arguments.",
+    "",
+    "Issues found:",
+    ...issues,
+    "",
+    "Required format:",
+    '- questions[].type: "select" | "multi-select" | "confirm" | "text"',
+    "- questions[].id: unique string identifier",
+    "- questions[].message: the question text (required)",
+    "- questions[].options (for select/multi-select): array of {value: string, label: string}",
+    "",
+    "Example valid call:",
+    JSON.stringify(
+      {
+        questions: [
+          {
+            type: "select",
+            id: "choice",
+            message: "Which option do you prefer?",
+            options: [
+              { value: "a", label: "Option A" },
+              { value: "b", label: "Option B" },
+            ],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  ].join("\n")
+}
+
 // State for pending questions - uses Instance.state for proper cleanup on disposal
 const state = Instance.state(
   () => {
@@ -41,10 +211,20 @@ const state = Instance.state(
   },
 )
 
-export const AskTool = Tool.define("ask", {
-  description:
-    "Ask the user a question and wait for their response. Supports select (single choice), multi-select (multiple choices), confirm (yes/no), and text (free-form input) question types. Use this when you need clarification or input from the user to proceed.",
-  parameters: z.object({
+// Permissive parameters schema with preprocessing
+// The JSON schema sent to models remains strict (guiding correct output)
+// But at runtime, we normalize common deviations before validation
+const AskParameters = z.preprocess(
+  (input) => {
+    if (!input || typeof input !== "object") return input
+    const raw = input as Record<string, unknown>
+    return {
+      ...raw,
+      questions: normalizeQuestions(raw.questions),
+      timeout: normalizeTimeout(raw.timeout),
+    }
+  },
+  z.object({
     questions: z
       .array(
         z.discriminatedUnion("type", [
@@ -100,6 +280,13 @@ export const AskTool = Tool.define("ask", {
     title: z.string().optional().describe("Optional title for the question dialog"),
     timeout: z.number().optional().describe("Timeout in milliseconds (default: 5 minutes)"),
   }),
+)
+
+export const AskTool = Tool.define("ask", {
+  description:
+    "Ask the user a question and wait for their response. Supports select (single choice), multi-select (multiple choices), confirm (yes/no), and text (free-form input) question types. Use this when you need clarification or input from the user to proceed.",
+  parameters: AskParameters,
+  formatValidationError: formatAskValidationError,
   async execute(params, ctx) {
     const questionID = Identifier.ascending("question")
     const s = await state()
