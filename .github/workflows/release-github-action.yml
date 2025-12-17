@@ -3,7 +3,7 @@ name: release-github-action
 on:
   push:
     branches:
-      - dev
+      - integration
     paths:
       - "github/**"
 
@@ -24,6 +24,6 @@ jobs:
 
       - name: Release
         run: |
-          git config --global user.email "opencode@sst.dev"
-          git config --global user.name "opencode"
+          git config --global user.email "shuvcode@latitudes.dev"
+          git config --global user.name "shuvcode"
           ./github/script/release
