@@ -10,32 +10,67 @@ import { lazy } from "@opencode-ai/util/lazy"
 import {} from "process"
 import { Installation } from "@/installation"
 import { Shell } from "@/shell/shell"
+import { NamedError } from "@opencode-ai/util/error"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
 
+  export const PtyUnavailableError = NamedError.create(
+    "PtyUnavailableError",
+    z.object({
+      reason: z.string(),
+    }),
+  )
+
+  let ptyLoadError: Error | undefined
+
   const pty = lazy(async () => {
-    if (!Installation.isLocal()) {
-      const path = require(
-        `bun-pty/rust-pty/target/release/${
-          process.platform === "win32"
-            ? "rust_pty.dll"
-            : process.platform === "linux" && process.arch === "x64"
-              ? "librust_pty.so"
-              : process.platform === "darwin" && process.arch === "x64"
-                ? "librust_pty.dylib"
-                : process.platform === "darwin" && process.arch === "arm64"
-                  ? "librust_pty_arm64.dylib"
-                  : process.platform === "linux" && process.arch === "arm64"
-                    ? "librust_pty_arm64.so"
-                    : ""
-        }`,
-      )
-      process.env.BUN_PTY_LIB = path
+    if (ptyLoadError) throw ptyLoadError
+    try {
+      if (!Installation.isLocal()) {
+        const path = require(
+          `bun-pty/rust-pty/target/release/${
+            process.platform === "win32"
+              ? "rust_pty.dll"
+              : process.platform === "linux" && process.arch === "x64"
+                ? "librust_pty.so"
+                : process.platform === "darwin" && process.arch === "x64"
+                  ? "librust_pty.dylib"
+                  : process.platform === "darwin" && process.arch === "arm64"
+                    ? "librust_pty_arm64.dylib"
+                    : process.platform === "linux" && process.arch === "arm64"
+                      ? "librust_pty_arm64.so"
+                      : ""
+          }`,
+        )
+        process.env.BUN_PTY_LIB = path
+      }
+      const { spawn } = await import("bun-pty")
+      return spawn
+    } catch (e) {
+      const error = e as Error
+      const message = error.message || String(e)
+      if (message.includes("GLIBC")) {
+        ptyLoadError = new PtyUnavailableError({
+          reason: `Terminal requires a newer version of GLIBC. ${message}`,
+        })
+      } else if (message.includes("dlopen") || message.includes("ERR_DLOPEN_FAILED")) {
+        ptyLoadError = new PtyUnavailableError({
+          reason: `Failed to load terminal native library: ${message}`,
+        })
+      } else {
+        ptyLoadError = new PtyUnavailableError({
+          reason: `Terminal unavailable: ${message}`,
+        })
+      }
+      log.error("PTY load failed", { error: message })
+      throw ptyLoadError
     }
-    const { spawn } = await import("bun-pty")
-    return spawn
   })
+
+  export function isAvailable() {
+    return !ptyLoadError
+  }
 
   export const Info = z
     .object({
