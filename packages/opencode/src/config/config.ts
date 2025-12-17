@@ -177,8 +177,9 @@ export namespace Config {
     const hasGitIgnore = await Bun.file(gitignore).exists()
     if (!hasGitIgnore) await Bun.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
 
+    // Use BASE_VERSION for @opencode-ai/plugin since it's published by upstream without our -N suffix
     await BunProc.run(
-      ["add", "@opencode-ai/plugin@" + (Installation.isLocal() ? "latest" : Installation.VERSION), "--exact"],
+      ["add", "@opencode-ai/plugin@" + (Installation.isLocal() ? "latest" : Installation.BASE_VERSION), "--exact"],
       {
         cwd: dir,
       },

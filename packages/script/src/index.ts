@@ -26,14 +26,25 @@ const CHANNEL = await (async () => {
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
 
+// Base version is the upstream version without any build suffix (e.g., "1.0.164" from "1.0.164-2")
+// This is needed for installing @opencode-ai/plugin which doesn't get republished by the fork
+let BASE_VERSION: string | undefined
+
 const VERSION = await (async () => {
-  if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
+  if (env.OPENCODE_VERSION) {
+    // Strip any -N suffix to get base version
+    BASE_VERSION = env.OPENCODE_VERSION.replace(/-\d+$/, "")
+    return env.OPENCODE_VERSION
+  }
   // For integration channel, use upstream version + build number for republishes
   if (CHANNEL === "integration") {
     const tagFile = path.resolve(import.meta.dir, "../../../.github/last-synced-tag")
     const baseVersion = await Bun.file(tagFile)
       .text()
       .then((x) => x.trim().replace(/^v/, ""))
+
+    // Store the base version for later use
+    BASE_VERSION = baseVersion
 
     // Check what versions are already published on npm
     const published = await fetch("https://registry.npmjs.org/shuvcode")
@@ -51,7 +62,11 @@ const VERSION = await (async () => {
 
     return buildNum > 0 ? `${baseVersion}-${buildNum}` : baseVersion
   }
-  if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+  if (IS_PREVIEW) {
+    const version = `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+    BASE_VERSION = version // Preview versions don't have a separate base
+    return version
+  }
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
@@ -60,9 +75,16 @@ const VERSION = await (async () => {
     .then((data: any) => data.version)
   const [major, minor, patch] = version.split(".").map((x: string) => Number(x) || 0)
   const t = env.OPENCODE_BUMP?.toLowerCase()
-  if (t === "major") return `${major + 1}.0.0`
-  if (t === "minor") return `${major}.${minor + 1}.0`
-  return `${major}.${minor}.${patch + 1}`
+  if (t === "major") {
+    BASE_VERSION = `${major + 1}.0.0`
+    return BASE_VERSION
+  }
+  if (t === "minor") {
+    BASE_VERSION = `${major}.${minor + 1}.0`
+    return BASE_VERSION
+  }
+  BASE_VERSION = `${major}.${minor}.${patch + 1}`
+  return BASE_VERSION
 })()
 
 export const Script = {
@@ -71,6 +93,9 @@ export const Script = {
   },
   get version() {
     return VERSION
+  },
+  get baseVersion() {
+    return BASE_VERSION ?? VERSION
   },
   get preview() {
     return IS_PREVIEW
