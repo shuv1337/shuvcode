@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-15",
+  "lastUpdated": "2025-12-17",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -103,6 +103,39 @@
       "status": "open",
       "description": "Display configured plugins in /status dialog alongside MCP/LSP servers",
       "files": ["packages/opencode/src/cli/cmd/tui/component/dialog-status.tsx"]
+    },
+    {
+      "pr": 5508,
+      "title": "Cache management command",
+      "author": "JosXa",
+      "status": "open",
+      "description": "Add opencode cache info and opencode cache clean commands for plugin cache management",
+      "files": [
+        "packages/opencode/src/cli/cmd/cache.ts",
+        "packages/opencode/src/cli/cmd/uninstall.ts",
+        "packages/opencode/src/cli/util.ts",
+        "packages/opencode/src/index.ts"
+      ]
+    },
+    {
+      "pr": "fork-140",
+      "title": "Toggle transparent background",
+      "author": "JosXa",
+      "status": "open",
+      "description": "Command palette toggle for transparent TUI background, works with any theme",
+      "files": ["packages/opencode/src/cli/cmd/tui/app.tsx", "packages/opencode/src/cli/cmd/tui/context/theme.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+          "description": "Transparent state in Theme context and resolveTheme function",
+          "markers": ["transparent", "setTransparent", "resolveTheme"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
+          "description": "Toggle transparency command in command palette",
+          "markers": ["Toggle transparency", "setTransparent"]
+        }
+      ]
     },
     {
       "pr": 0,
@@ -408,14 +441,15 @@
     },
     {
       "pr": 0,
-      "title": "Desktop sidebar version display",
+      "title": "Desktop review pane resizing and share commands",
       "author": "fork",
       "status": "fork-only",
-      "description": "Display package version in sidebar bottom left when expanded, for easy version identification in web UI",
+      "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing. Includes UI package enhancement for reverse prop on ResizeHandle.",
       "files": [
-        "packages/desktop/src/pages/layout.tsx",
-        "packages/desktop/src/env.d.ts",
-        "packages/desktop/vite.config.ts"
+        "packages/desktop/src/context/layout.tsx",
+        "packages/desktop/src/pages/session.tsx",
+        "packages/ui/src/components/resize-handle.tsx",
+        "packages/ui/src/components/resize-handle.css"
       ],
       "criticalCode": [
         {
@@ -432,6 +466,57 @@
           "file": "packages/desktop/src/pages/layout.tsx",
           "description": "Version display in sidebar bottom",
           "markers": ["v{__APP_VERSION__}", "text-11-regular text-text-weaker"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop review pane resizing and share commands",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing",
+      "files": ["packages/desktop/src/context/layout.tsx", "packages/desktop/src/pages/session.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/context/layout.tsx",
+          "description": "Review pane width state and resize method in layout context",
+          "markers": ["review:", "width: 450", "resize(width: number)"]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "ResizeHandle for review pane with horizontal reverse direction",
+          "markers": [
+            "<ResizeHandle",
+            "direction=\"horizontal\"",
+            "reverse",
+            "layout.review.width()",
+            "layout.review.resize"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Left padding fix for side-by-side mode (px-4 instead of pr-4)",
+          "markers": ["px-4 sm:px-6"]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "/share slash command for session sharing",
+          "markers": ["id: \"session.share\"", "slash: \"share\"", "sdk.client.session.share"]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "/unshare slash command to remove shareable link",
+          "markers": ["id: \"session.unshare\"", "slash: \"unshare\"", "sdk.client.session.unshare"]
+        },
+        {
+          "file": "packages/ui/src/components/resize-handle.tsx",
+          "description": "Reverse prop for right-side panel resize handles",
+          "markers": ["reverse?: boolean", "props.reverse"]
+        },
+        {
+          "file": "packages/ui/src/components/resize-handle.css",
+          "description": "CSS for reversed horizontal resize handle positioning",
+          "markers": ["[data-resize-handle][data-direction=\"horizontal\"][data-reverse=\"true\"]"]
         }
       ]
     }

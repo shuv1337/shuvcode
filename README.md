@@ -39,9 +39,11 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#4515](https://github.com/sst/opencode/pull/4515)                            | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Display configured plugins in /status dialog alongside MCP/LSP servers    |
 | [#4411](https://github.com/sst/opencode/pull/4411)                            | Plugin Commands                             | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Register custom `/commands` from plugins with aliases and sessionOnly     |
 | [#5563](https://github.com/sst/opencode/pull/5563)                            | Ask TUI Tool                                | [@dbpolito](https://github.com/dbpolito)                     | Open   | Ask tool for agents to collect user input via select/confirm/text dialogs |
+| [#5508](https://github.com/sst/opencode/pull/5508)                            | Cache management command                    | [@JosXa](https://github.com/JosXa)                           | Open   | `opencode cache info` and `opencode cache clean` for plugin cache mgmt    |
+| [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme        |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
-_Last updated: 2025-12-15_
+_Last updated: 2025-12-17_
 
 ---
 
