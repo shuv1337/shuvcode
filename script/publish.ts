@@ -173,8 +173,8 @@ const dir = new URL("..", import.meta.url).pathname
 process.chdir(dir)
 
 if (!Script.preview) {
-  await $`git commit -am "release: v${Script.version}"`
-  await $`git tag v${Script.version}`
+  await $`git commit -am "release: v${Script.version}"`.nothrow()
+  await $`git tag v${Script.version}`.nothrow()
   await $`git fetch origin`
   await $`git cherry-pick HEAD..origin/integration`.nothrow()
   await $`git push origin HEAD --tags --no-verify --force-with-lease`
