@@ -1,7 +1,7 @@
 {
   "name": "@opencode-ai/tauri",
   "private": true,
-  "version": "1.0.166-13",
+  "version": "1.0.166-14",
   "type": "module",
   "scripts": {
     "typecheck": "tsgo -b",
