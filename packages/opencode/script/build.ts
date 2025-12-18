@@ -84,9 +84,11 @@ const targets = singleFlag
 await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
+const deps = pkg.dependencies as Record<string, string>
 if (!skipInstall) {
-  await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
-  await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
+  await $`bun install --os="*" --cpu="*" @opentui/core@${deps["@opentui/core"]}`
+  await $`bun install --os="*" --cpu="*" @parcel/watcher@${deps["@parcel/watcher"]}`
+  await $`bun install --os="*" --cpu="*" ghostty-opentui@${deps["ghostty-opentui"]}`
 }
 for (const item of targets) {
   const name = [

@@ -43,7 +43,15 @@
         "packages/opencode/package.json",
         "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
         "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-        "packages/opencode/src/tool/bash.ts"
+        "packages/opencode/src/tool/bash.ts",
+        "packages/opencode/script/build.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/script/build.ts",
+          "description": "Cross-platform install for ghostty-opentui native bindings required for build",
+          "markers": ["bun install --os=\"*\" --cpu=\"*\" ghostty-opentui"]
+        }
       ]
     },
     {
