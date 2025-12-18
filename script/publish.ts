@@ -24,7 +24,8 @@ if (!Script.preview) {
   const tagExists = await $`git rev-parse ${previousTag} 2>/dev/null`.nothrow()
   let log = ""
   if (tagExists.exitCode === 0) {
-    log = await $`git log ${previousTag}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
+    log =
+      await $`git log ${previousTag}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
   } else {
     console.log(`Tag ${previousTag} not found locally, skipping changelog generation`)
   }
