@@ -17,7 +17,7 @@
  */
 
 const DISCORD_API = "https://discord.com/api/v10"
-const EMBED_COLOR = 0x5865F2 // Discord blurple
+const EMBED_COLOR = 0x5865f2 // Discord blurple
 
 interface DiscordEmbed {
   title: string
