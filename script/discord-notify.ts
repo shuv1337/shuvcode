@@ -28,14 +28,17 @@ interface DiscordEmbed {
   footer: { text: string }
 }
 
-async function postToDiscord(threadId: string, token: string, embed: DiscordEmbed): Promise<void> {
+async function postToDiscord(threadId: string, token: string, content: string, embed: DiscordEmbed): Promise<void> {
+  const body = { content, embeds: [embed] }
+  console.log("Request body:", JSON.stringify(body, null, 2).slice(0, 500) + "...")
+
   const response = await fetch(`${DISCORD_API}/channels/${threadId}/messages`, {
     method: "POST",
     headers: {
       Authorization: token,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ embeds: [embed] }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
@@ -106,7 +109,10 @@ async function main(): Promise<void> {
 
   console.log(`Posting release notes for ${cleanVersion} to Discord...`)
   console.log(`Changelog length: ${description.length} characters`)
-  await postToDiscord(threadId, token, embed)
+
+  // Include a text content as well since some Discord configurations require it
+  const content = `**${embed.title}** has been released!`
+  await postToDiscord(threadId, token, content, embed)
 }
 
 main().catch((error) => {
