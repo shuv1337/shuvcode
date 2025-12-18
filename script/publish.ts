@@ -19,8 +19,15 @@ if (!Script.preview) {
   // e.g., if previous is 1.0.166-13, we compare from v1.0.166-13
   const previousTag = `v${previous}`
   console.log(`Comparing changes from ${previousTag} to HEAD`)
-  const log =
-    await $`git log ${previousTag}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
+
+  // Check if the tag exists locally before trying to compare
+  const tagExists = await $`git rev-parse ${previousTag} 2>/dev/null`.nothrow()
+  let log = ""
+  if (tagExists.exitCode === 0) {
+    log = await $`git log ${previousTag}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
+  } else {
+    console.log(`Tag ${previousTag} not found locally, skipping changelog generation`)
+  }
 
   const commits = log
     .split("\n")
@@ -111,9 +118,10 @@ IMPORTANT: ONLY return a bulleted list of changes, do not include any other info
     "iamdavidhill",
     "opencode-agent[bot]",
   ]
-  const compare =
-    await $`gh api "/repos/Latitudes-Dev/shuvcode/compare/${previousTag}...HEAD" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.text()
   const contributors = new Map<string, string[]>()
+  const compareResult =
+    await $`gh api "/repos/Latitudes-Dev/shuvcode/compare/${previousTag}...HEAD" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.nothrow()
+  const compare = compareResult.exitCode === 0 ? compareResult.text() : ""
 
   for (const line of compare.split("\n").filter(Boolean)) {
     const { login, message } = JSON.parse(line) as { login: string | null; message: string }
