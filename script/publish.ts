@@ -16,8 +16,10 @@ if (!Script.preview) {
     })
     .then((data: any) => data.version)
 
+  // Use base version (without -N suffix) for git log since tags follow upstream naming
+  const previousBase = previous.replace(/-\d+$/, "")
   const log =
-    await $`git log v${previous}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin`.text()
+    await $`git log v${previousBase}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin`.text()
 
   const commits = log
     .split("\n")
