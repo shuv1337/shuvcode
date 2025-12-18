@@ -2,17 +2,17 @@ name: publish
 run-name: "${{ format('release {0}', inputs.bump) }}"
 
 on:
-  push:
-    branches:
-      - integration
-      - snapshot-*
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - "LICENSE"
-      - ".editorconfig"
-      - ".prettierignore"
+  #   push:
+  #     branches:
+  #       - integration
+  #       - snapshot-*
+  #     paths-ignore:
+  #       - "**.md"
+  #       - "docs/**"
+  #       - ".github/ISSUE_TEMPLATE/**"
+  #       - "LICENSE"
+  #       - ".editorconfig"
+  #       - ".prettierignore"
   workflow_dispatch:
     inputs:
       bump:
