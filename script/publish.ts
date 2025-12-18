@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { createOpencode } from "@opencode-ai/sdk"
 import { Script } from "@opencode-ai/script"
 
 const notes = [] as string[]
@@ -26,56 +25,76 @@ if (!Script.preview) {
     .filter((line) => line && !line.match(/^\w+ (ignore:|test:|chore:|ci:|release:)/i))
     .join("\n")
 
-  // Generate changelog using LLM
-  const opencode = await createOpencode()
-  const session = await opencode.client.session.create()
-  console.log("generating changelog since " + previous)
-  const raw = await opencode.client.session
-    .prompt({
-      path: {
-        id: session.data!.id,
-      },
-      body: {
-        model: {
-          providerID: "opencode",
-          modelID: "claude-sonnet-4-5",
+  // Generate changelog using Anthropic API directly (no opencode binary needed)
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+  if (anthropicKey && commits.trim()) {
+    console.log("generating changelog since " + previous)
+    const prompt = `Analyze these commits and generate a changelog of all notable user facing changes.
+
+Commits between ${previous} and HEAD:
+${commits}
+
+- Do NOT make general statements about "improvements", be very specific about what was changed.
+- Do NOT include any information about code changes if they do not affect the user facing changes.
+- For commits that are already well-written and descriptive, avoid rewording them. Simply capitalize the first letter, fix any misspellings, and ensure proper English grammar.
+- DO NOT read any other commits than the ones listed above (THIS IS IMPORTANT TO AVOID DUPLICATING THINGS IN OUR CHANGELOG)
+- If a commit was made and then reverted do not include it in the changelog. If the commits only include a revert but not the original commit, then include the revert in the changelog.
+
+IMPORTANT: ONLY return a bulleted list of changes, do not include any other information. Do not include a preamble like "Based on my analysis..."
+
+<example>
+- Added ability to @ mention agents
+- Fixed a bug where the TUI would render improperly on some terminals
+</example>`
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
         },
-        parts: [
-          {
-            type: "text",
-            text: `
-          Analyze these commits and generate a changelog of all notable user facing changes.
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5-20250514",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      })
 
-          Commits between ${previous} and HEAD:
-          ${commits}
-
-          - Do NOT make general statements about "improvements", be very specific about what was changed.
-          - Do NOT include any information about code changes if they do not affect the user facing changes.
-          - For commits that are already well-written and descriptive, avoid rewording them. Simply capitalize the first letter, fix any misspellings, and ensure proper English grammar.
-          - DO NOT read any other commits than the ones listed above (THIS IS IMPORTANT TO AVOID DUPLICATING THINGS IN OUR CHANGELOG)
-          - If a commit was made and then reverted do not include it in the changelog. If the commits only include a revert but not the original commit, then include the revert in the changelog.
-
-          IMPORTANT: ONLY return a bulleted list of changes, do not include any other information. Do not include a preamble like "Based on my analysis..."
-
-          <example>
-          - Added ability to @ mention agents
-          - Fixed a bug where the TUI would render improperly on some terminals
-          </example>
-          `,
-          },
-        ],
-      },
-    })
-    .then((x) => x.data?.parts?.find((y) => y.type === "text")?.text)
-  for (const line of raw?.split("\n") ?? []) {
-    if (line.startsWith("- ")) {
-      notes.push(line)
+      if (response.ok) {
+        const data = (await response.json()) as { content: Array<{ type: string; text?: string }> }
+        const raw = data.content?.find((c) => c.type === "text")?.text
+        for (const line of raw?.split("\n") ?? []) {
+          if (line.startsWith("- ")) {
+            notes.push(line)
+          }
+        }
+        console.log("---- Generated Changelog ----")
+        console.log(notes.join("\n"))
+        console.log("-----------------------------")
+      } else {
+        console.log("Anthropic API error:", response.status, await response.text())
+        console.log("Falling back to commit-based changelog")
+      }
+    } catch (error) {
+      console.log("Failed to generate changelog with LLM:", error)
+      console.log("Falling back to commit-based changelog")
     }
   }
-  console.log("---- Generated Changelog ----")
-  console.log(notes.join("\n"))
-  console.log("-----------------------------")
-  opencode.server.close()
+
+  // Fallback: use commit messages directly if LLM generation failed or unavailable
+  if (notes.length === 0) {
+    for (const commit of commits.split("\n")) {
+      const message = commit.replace(/^\w+\s+/, "")
+      if (message) {
+        notes.push(`- ${message.charAt(0).toUpperCase()}${message.slice(1)}`)
+      }
+    }
+    console.log("---- Changelog (from commits) ----")
+    console.log(notes.join("\n"))
+    console.log("----------------------------------")
+  }
 
   // Get contributors
   const team = [
