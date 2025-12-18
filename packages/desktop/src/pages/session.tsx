@@ -1,4 +1,17 @@
-import { For, onCleanup, onMount, Show, Match, Switch, createResource, createMemo, createEffect, on } from "solid-js"
+import {
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  Match,
+  Switch,
+  createResource,
+  createMemo,
+  createEffect,
+  on,
+  createRenderEffect,
+  batch,
+} from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { useLocal, type LocalFile } from "@/context/local"
 import { createStore } from "solid-js/store"
@@ -131,7 +144,8 @@ export default function Page() {
     clickTimer: undefined as number | undefined,
     activeDraggable: undefined as string | undefined,
     activeTerminalDraggable: undefined as string | undefined,
-    stepsExpanded: false,
+    userInteracted: false,
+    stepsExpanded: true,
   })
   let inputRef!: HTMLDivElement
 
@@ -160,7 +174,28 @@ export default function Page() {
     ),
   )
 
+  createEffect(() => {
+    params.id
+    const status = sync.data.session_status[params.id ?? ""] ?? { type: "idle" }
+    batch(() => {
+      setStore("userInteracted", false)
+      setStore("stepsExpanded", status.type !== "idle")
+    })
+  })
+
   const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? { type: "idle" })
+  const working = createMemo(() => status().type !== "idle" && activeMessage()?.id === lastUserMessage()?.id)
+
+  createRenderEffect((prev) => {
+    const isWorking = working()
+    if (!prev && isWorking) {
+      setStore("stepsExpanded", true)
+    }
+    if (prev && !isWorking && !store.userInteracted) {
+      setStore("stepsExpanded", false)
+    }
+    return isWorking
+  }, working())
 
   command.register(() => [
     {
@@ -365,11 +400,15 @@ export default function Page() {
   ])
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if ((document.activeElement as HTMLElement)?.dataset?.component === "terminal") return
+    const activeElement = document.activeElement as HTMLElement | undefined
+    if (activeElement) {
+      const isProtected = activeElement.closest("[data-prevent-autofocus]")
+      const isInput = /^(INPUT|TEXTAREA|SELECT)$/.test(activeElement.tagName) || activeElement.isContentEditable
+      if (isProtected || isInput) return
+    }
     if (dialog.active) return
 
-    const focused = document.activeElement === inputRef
-    if (focused) {
+    if (activeElement === inputRef) {
       if (event.key === "Escape") inputRef?.blur()
       return
     }
@@ -650,7 +689,8 @@ export default function Page() {
                             sessionID={params.id!}
                             messageID={activeMessage()!.id}
                             stepsExpanded={store.stepsExpanded}
-                            onStepsExpandedChange={(expanded) => setStore("stepsExpanded", expanded)}
+                            onStepsExpandedToggle={() => setStore("stepsExpanded", (x) => !x)}
+                            onUserInteracted={() => setStore("userInteracted", true)}
                             classes={{
                               root: "pb-20 flex-1 min-w-0 overflow-x-hidden",
                               content: "pb-20",
