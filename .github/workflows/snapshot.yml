@@ -44,12 +44,27 @@ jobs:
       - uses: ./.github/actions/setup-bun
 
       - name: Publish
+        id: publish
         run: |
           ./script/publish.ts
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Publish Release (undraft)
+        if: success() && steps.publish.outputs.tagName
+        run: gh release edit ${{ steps.publish.outputs.tagName }} --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Post to Discord
+        if: success() && steps.publish.outputs.tagName
+        continue-on-error: true
+        run: |
+          ./script/discord-notify.ts "${{ steps.publish.outputs.tagName }}" "${{ steps.publish.outputs.changelog }}"
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_THREAD_ID: ${{ secrets.DISCORD_THREAD_ID }}
       - name: Deploy Desktop to Cloudflare
         continue-on-error: true
         run: |

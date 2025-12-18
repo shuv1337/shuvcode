@@ -158,6 +158,16 @@ if (!Script.preview) {
   await $`gh release create v${Script.version} --repo Latitudes-Dev/shuvcode -d --title "v${Script.version}" --notes ${notes.join("\n") || "No notable changes"} ./packages/opencode/dist/*.zip ./packages/opencode/dist/*.tar.gz`
   const release = await $`gh release view v${Script.version} --repo Latitudes-Dev/shuvcode --json id,tagName`.json()
   if (process.env.GITHUB_OUTPUT) {
-    await Bun.write(process.env.GITHUB_OUTPUT, `releaseId=${release.id}\ntagName=${release.tagName}\n`)
+    // Use heredoc delimiter for multiline changelog output
+    const delimiter = `CHANGELOG_EOF_${Date.now()}`
+    const output = [
+      `releaseId=${release.id}`,
+      `tagName=${release.tagName}`,
+      `changelog<<${delimiter}`,
+      notes.join("\n"),
+      delimiter,
+      "",
+    ].join("\n")
+    await Bun.write(process.env.GITHUB_OUTPUT, output)
   }
 }
