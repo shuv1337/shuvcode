@@ -67,11 +67,12 @@ jobs:
       - name: Post to Discord
         if: success() && steps.publish.outputs.tagName
         continue-on-error: true
-        run: |
-          ./script/discord-notify.ts "${{ steps.publish.outputs.tagName }}" "${{ steps.publish.outputs.changelog }}"
+        run: ./script/discord-notify.ts
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_THREAD_ID: ${{ secrets.DISCORD_THREAD_ID }}
+          RELEASE_VERSION: ${{ steps.publish.outputs.tagName }}
+          RELEASE_CHANGELOG: ${{ steps.publish.outputs.changelog }}
       - name: Deploy Desktop to Cloudflare
         continue-on-error: true
         run: |

@@ -7,17 +7,17 @@
  * Uses Discord REST API directly (no library dependencies).
  *
  * Environment variables:
- *   DISCORD_TOKEN    - Discord user token (self-bot)
- *   DISCORD_THREAD_ID - Forum thread ID to post to
- *
- * Usage:
- *   ./script/discord-notify.ts <version> <changelog>
+ *   DISCORD_TOKEN      - Discord user token (self-bot)
+ *   DISCORD_THREAD_ID  - Forum thread ID to post to
+ *   RELEASE_VERSION    - Version being released (e.g., v1.0.166-11)
+ *   RELEASE_CHANGELOG  - Changelog content
  *
  * Warning: Self-bots violate Discord ToS and may result in account termination.
  */
 
 const DISCORD_API = "https://discord.com/api/v10"
 const EMBED_COLOR = 0x5865f2 // Discord blurple
+const MAX_DESCRIPTION_LENGTH = 4000 // Discord embed description limit is 4096
 
 interface DiscordEmbed {
   title: string
@@ -46,9 +46,22 @@ async function postToDiscord(threadId: string, token: string, embed: DiscordEmbe
   console.log("Successfully posted release notes to Discord")
 }
 
+function truncateChangelog(changelog: string, maxLength: number): string {
+  if (changelog.length <= maxLength) return changelog
+
+  // Find a good breaking point (end of a line)
+  const truncated = changelog.slice(0, maxLength - 50)
+  const lastNewline = truncated.lastIndexOf("\n")
+  const cutoff = lastNewline > 0 ? lastNewline : maxLength - 50
+
+  return changelog.slice(0, cutoff) + "\n\n*...and more changes. See GitHub for full changelog.*"
+}
+
 async function main(): Promise<void> {
   const token = process.env.DISCORD_TOKEN
   const threadId = process.env.DISCORD_THREAD_ID
+  const version = process.env.RELEASE_VERSION
+  const changelog = process.env.RELEASE_CHANGELOG
 
   if (!token) {
     console.error("Error: DISCORD_TOKEN environment variable is required")
@@ -60,16 +73,16 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const [version, changelog] = process.argv.slice(2)
-
   if (!version) {
-    console.error("Error: Version argument is required")
-    console.error("Usage: ./script/discord-notify.ts <version> [changelog]")
+    console.error("Error: RELEASE_VERSION environment variable is required")
     process.exit(1)
   }
 
   const cleanVersion = version.startsWith("v") ? version : `v${version}`
-  const description = changelog?.trim() || "No notable changes in this release."
+  let description = changelog?.trim() || "No notable changes in this release."
+
+  // Truncate if too long for Discord embed
+  description = truncateChangelog(description, MAX_DESCRIPTION_LENGTH)
 
   const embed: DiscordEmbed = {
     title: `shuvcode ${cleanVersion}`,
@@ -92,6 +105,7 @@ async function main(): Promise<void> {
   }
 
   console.log(`Posting release notes for ${cleanVersion} to Discord...`)
+  console.log(`Changelog length: ${description.length} characters`)
   await postToDiscord(threadId, token, embed)
 }
 
