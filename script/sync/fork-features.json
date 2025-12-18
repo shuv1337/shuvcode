@@ -100,7 +100,7 @@
       "pr": 4515,
       "title": "Show plugins in /status",
       "author": "spoons-and-mirrors",
-      "status": "open",
+      "status": "merged",
       "description": "Display configured plugins in /status dialog alongside MCP/LSP servers",
       "files": ["packages/opencode/src/cli/cmd/tui/component/dialog-status.tsx"]
     },
@@ -115,6 +115,48 @@
         "packages/opencode/src/cli/cmd/uninstall.ts",
         "packages/opencode/src/cli/util.ts",
         "packages/opencode/src/index.ts"
+      ]
+    },
+    {
+      "pr": "ariane-emory/glob-permissions",
+      "title": "Granular File Permissions",
+      "author": "ariane-emory",
+      "status": "branch",
+      "description": "Glob pattern support for permission.edit to restrict agent file access with precedence rules",
+      "files": [
+        "packages/opencode/src/agent/agent.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/tool/edit.ts",
+        "packages/opencode/src/tool/write.ts",
+        "packages/opencode/src/tool/patch.ts",
+        "packages/opencode/src/tool/registry.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/agent/agent.ts",
+          "description": "resolveFilePermission() function and glob pattern matching logic",
+          "markers": ["export function resolveFilePermission", "minimatch", "sortedPatterns"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "permission.edit union type schema (string or record)",
+          "markers": ["z.union([Config.Permission, z.record(z.string(), Config.Permission)])"]
+        },
+        {
+          "file": "packages/opencode/src/tool/edit.ts",
+          "description": "File permission resolution before edit operations",
+          "markers": ["Agent.resolveFilePermission"]
+        },
+        {
+          "file": "packages/opencode/src/tool/write.ts",
+          "description": "File permission resolution before write operations",
+          "markers": ["Agent.resolveFilePermission"]
+        },
+        {
+          "file": "packages/opencode/src/tool/patch.ts",
+          "description": "File permission resolution for all files in a patch",
+          "markers": ["Agent.resolveFilePermission"]
+        }
       ]
     },
     {
