@@ -24,7 +24,8 @@ const CHANNEL = await (async () => {
   if (env.OPENCODE_VERSION && !env.OPENCODE_VERSION.startsWith("0.0.0-")) return "latest"
   return await $`git branch --show-current`.text().then((x) => x.trim())
 })()
-const IS_PREVIEW = CHANNEL !== "latest"
+// For the fork, "integration" is also a release channel (not preview)
+const IS_PREVIEW = CHANNEL !== "latest" && CHANNEL !== "integration"
 
 // Base version is the upstream version without any build suffix (e.g., "1.0.164" from "1.0.164-2")
 // This is needed for installing @opencode-ai/plugin which doesn't get republished by the fork
