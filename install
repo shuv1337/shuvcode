@@ -42,10 +42,10 @@ case "$combo" in
     ;;
 esac
 
-# We publish platform binaries to npm as packages like:
-#   shuvcode-linux-x64, shuvcode-darwin-arm64, shuvcode-windows-x64-baseline, etc.
-# and install by downloading the package tarball (.tgz) from the npm registry.
-archive_ext=".tgz"
+archive_ext=".zip"
+if [ "$os" = "linux" ]; then
+  archive_ext=".tar.gz"
+fi
 
 is_musl=false
 if [ "$os" = "linux" ]; then
@@ -84,37 +84,36 @@ if [ "$is_musl" = "true" ]; then
   target="$target-musl"
 fi
 
-npm_package="$APP-$target"
+filename="$APP-$target$archive_ext"
 
 
-if ! command -v tar >/dev/null 2>&1; then
-    echo -e "${RED}Error: 'tar' is required but not installed.${NC}"
-    exit 1
+if [ "$os" = "linux" ]; then
+    if ! command -v tar >/dev/null 2>&1; then
+         echo -e "${RED}Error: 'tar' is required but not installed.${NC}"
+         exit 1
+    fi
+else
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo -e "${RED}Error: 'unzip' is required but not installed.${NC}"
+        exit 1
+    fi
 fi
 
 INSTALL_DIR=$HOME/.shuvcode/bin
 mkdir -p "$INSTALL_DIR"
 
-npm_registry="https://registry.npmjs.org"
-
 if [ -z "$requested_version" ]; then
-    npm_manifest_url="${npm_registry}/${npm_package}/latest"
+    url="https://github.com/Latitudes-Dev/shuvcode/releases/latest/download/$filename"
+    specific_version=$(curl -s https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+
+    if [[ $? -ne 0 || -z "$specific_version" ]]; then
+        echo -e "${RED}Failed to fetch version information${NC}"
+        exit 1
+    fi
 else
-    npm_manifest_url="${npm_registry}/${npm_package}/${requested_version}"
+    url="https://github.com/Latitudes-Dev/shuvcode/releases/download/v${requested_version}/$filename"
+    specific_version=$requested_version
 fi
-
-npm_manifest=$(curl -fsSL "$npm_manifest_url" 2>/dev/null || true)
-
-specific_version=$(printf "%s" "$npm_manifest" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
-tarball_url=$(printf "%s" "$npm_manifest" | sed -n 's/.*"tarball":"\([^"]*\)".*/\1/p')
-
-if [[ -z "$specific_version" || -z "$tarball_url" ]]; then
-    echo -e "${RED}Failed to fetch version information${NC}"
-    echo -e "${MUTED}Tried: ${NC}$npm_manifest_url"
-    exit 1
-fi
-
-archive_filename="${npm_package}-${specific_version}${archive_ext}"
 
 print_message() {
     local level=$1
@@ -136,7 +135,7 @@ check_version() {
 
 
         ## TODO: check if version is installed
-        # installed_version=$(opencode version)
+        # installed_version=$(shuvcode version)
         installed_version="0.0.1"
         installed_version=$(echo $installed_version | awk '{print $2}')
 
@@ -243,53 +242,28 @@ download_and_install() {
     print_message info "\n${MUTED}Installing ${NC}shuvcode ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/shuvcode_install_$$"
     mkdir -p "$tmp_dir"
-
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$tarball_url" "$tmp_dir/$archive_filename"; then
+    
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
         # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
-        curl -f -# -L -o "$tmp_dir/$archive_filename" "$tarball_url"
+        curl -f -# -L -o "$tmp_dir/$filename" "$url"
     fi
 
-    tar -xzf "$tmp_dir/$archive_filename" -C "$tmp_dir"
-
-    local src=""
-    local dest=""
+    if [ "$os" = "linux" ]; then
+        tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
+    else
+        unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
+    fi
 
     if [ "$os" = "windows" ]; then
-        if [ -f "$tmp_dir/package/bin/shuvcode.exe" ]; then
-            src="$tmp_dir/package/bin/shuvcode.exe"
-        elif [ -f "$tmp_dir/bin/shuvcode.exe" ]; then
-            src="$tmp_dir/bin/shuvcode.exe"
-        fi
-
-        if [ -z "$src" ]; then
-            print_message error "Downloaded package did not contain shuvcode.exe"
-            exit 1
-        fi
-
-        dest="${INSTALL_DIR}/shuvcode.exe"
-        mv "$src" "$dest"
-        chmod 755 "$dest" 2>/dev/null || true
-
+        mv "$tmp_dir/shuvcode.exe" "$INSTALL_DIR"
+        chmod 755 "${INSTALL_DIR}/shuvcode.exe" 2>/dev/null || true
         # Convenience shim so `shuvcode` works in bash
         printf '%s\n' '#!/usr/bin/env bash' 'exec "$(dirname "$0")/shuvcode.exe" "$@"' > "${INSTALL_DIR}/shuvcode"
         chmod 755 "${INSTALL_DIR}/shuvcode" 2>/dev/null || true
     else
-        if [ -f "$tmp_dir/package/bin/shuvcode" ]; then
-            src="$tmp_dir/package/bin/shuvcode"
-        elif [ -f "$tmp_dir/bin/shuvcode" ]; then
-            src="$tmp_dir/bin/shuvcode"
-        fi
-
-        if [ -z "$src" ]; then
-            print_message error "Downloaded package did not contain shuvcode"
-            exit 1
-        fi
-
-        dest="${INSTALL_DIR}/shuvcode"
-        mv "$src" "$dest"
-        chmod 755 "$dest"
+        mv "$tmp_dir/shuvcode" "$INSTALL_DIR"
+        chmod 755 "${INSTALL_DIR}/shuvcode"
     fi
-
     rm -rf "$tmp_dir"
 }
 
@@ -395,4 +369,3 @@ echo -e "shuvcode      ${MUTED}# Run command${NC}"
 echo -e ""
 echo -e "${MUTED}A fork of opencode. For more info visit ${NC}https://shuv.ai"
 echo -e ""
-
