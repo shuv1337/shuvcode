@@ -1,15 +1,12 @@
-import { BoxRenderable, TextareaRenderable, type KeyBinding } from "@opentui/core"
-import { createEffect, createMemo, createSignal, type JSX, onMount, Show } from "solid-js"
+import { BoxRenderable, TextareaRenderable, type KeyBinding, RGBA } from "@opentui/core"
+import { createEffect, createMemo, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
 import { createStore } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
-import { Locale } from "@/util/locale"
 import { useLocal } from "@tui/context/local"
-import { RGBA } from "@opentui/core"
-import { useSDK } from "@tui/context/sdk"
-import { useSync } from "@tui/context/sync"
 import { useExit } from "../../context/exit"
+import { useToast } from "../../ui/toast"
 
 export type SearchInputProps = {
   disabled?: boolean
@@ -39,9 +36,24 @@ export function SearchInput(props: SearchInputProps) {
   const exit = useExit()
   const keybind = useKeybind()
   const local = useLocal()
-  const sdk = useSDK()
-  const sync = useSync()
+  const toast = useToast()
   const { theme } = useTheme()
+
+  let lastExitAttempt = 0
+
+  async function tryExit() {
+    const now = Date.now()
+    if (now - lastExitAttempt < 2000) {
+      await exit()
+      return
+    }
+    lastExitAttempt = now
+    toast.show({
+      variant: "warning",
+      message: "Press again to exit",
+      duration: 2000,
+    })
+  }
 
   const highlight = createMemo(() => {
     const agent = local.agent.current()
@@ -165,7 +177,7 @@ export function SearchInput(props: SearchInputProps) {
                 }
 
                 if (keybind.match("app_exit", e)) {
-                  await exit()
+                  await tryExit()
                   return
                 }
               }}
