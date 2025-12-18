@@ -3,7 +3,7 @@
 /**
  * Discord Release Notes Notifier
  *
- * Posts release notes to a Discord forum thread using a rich embed.
+ * Posts release notes to a Discord forum thread as plain markdown.
  * Uses Discord REST API directly (no library dependencies).
  *
  * Environment variables:
@@ -11,26 +11,13 @@
  *   DISCORD_THREAD_ID  - Forum thread ID to post to
  *   RELEASE_VERSION    - Version being released (e.g., v1.0.166-11)
  *   RELEASE_CHANGELOG  - Changelog content
- *
- * Warning: Self-bots violate Discord ToS and may result in account termination.
  */
 
 const DISCORD_API = "https://discord.com/api/v10"
-const EMBED_COLOR = 0x5865f2 // Discord blurple
-const MAX_DESCRIPTION_LENGTH = 4000 // Discord embed description limit is 4096
+const MAX_CONTENT_LENGTH = 2000 // Discord message content limit
 
-interface DiscordEmbed {
-  title: string
-  description: string
-  color: number
-  fields: Array<{ name: string; value: string; inline?: boolean }>
-  timestamp: string
-  footer: { text: string }
-}
-
-async function postToDiscord(threadId: string, token: string, content: string, embed: DiscordEmbed): Promise<void> {
-  const body = { content, embeds: [embed] }
-  console.log("Request body:", JSON.stringify(body, null, 2).slice(0, 500) + "...")
+async function postToDiscord(threadId: string, token: string, content: string): Promise<void> {
+  console.log("Request body:", JSON.stringify({ content }, null, 2).slice(0, 500) + "...")
 
   const response = await fetch(`${DISCORD_API}/channels/${threadId}/messages`, {
     method: "POST",
@@ -38,7 +25,7 @@ async function postToDiscord(threadId: string, token: string, content: string, e
       Authorization: token,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ content }),
   })
 
   if (!response.ok) {
@@ -82,37 +69,25 @@ async function main(): Promise<void> {
   }
 
   const cleanVersion = version.startsWith("v") ? version : `v${version}`
-  let description = changelog?.trim() || "No notable changes in this release."
+  const releaseUrl = `https://github.com/Latitudes-Dev/shuvcode/releases/tag/${cleanVersion}`
+  const npmUrl = `https://www.npmjs.com/package/shuvcode/v/${cleanVersion.slice(1)}`
 
-  // Truncate if too long for Discord embed
-  description = truncateChangelog(description, MAX_DESCRIPTION_LENGTH)
+  // Build plain markdown content
+  let content = `**shuvcode ${cleanVersion}** has been released!\n\n`
 
-  const embed: DiscordEmbed = {
-    title: `shuvcode ${cleanVersion}`,
-    description,
-    color: EMBED_COLOR,
-    fields: [
-      {
-        name: "GitHub Release",
-        value: `[View Release](https://github.com/Latitudes-Dev/shuvcode/releases/tag/${cleanVersion})`,
-        inline: true,
-      },
-      {
-        name: "npm",
-        value: `[shuvcode@${cleanVersion.slice(1)}](https://www.npmjs.com/package/shuvcode/v/${cleanVersion.slice(1)})`,
-        inline: true,
-      },
-    ],
-    timestamp: new Date().toISOString(),
-    footer: { text: "shuvcode release" },
+  if (changelog?.trim()) {
+    content += changelog.trim() + "\n\n"
   }
 
-  console.log(`Posting release notes for ${cleanVersion} to Discord...`)
-  console.log(`Changelog length: ${description.length} characters`)
+  content += `[GitHub Release](${releaseUrl}) | [npm](${npmUrl})`
 
-  // Include a text content as well since some Discord configurations require it
-  const content = `**${embed.title}** has been released!`
-  await postToDiscord(threadId, token, content, embed)
+  // Truncate if too long for Discord
+  content = truncateChangelog(content, MAX_CONTENT_LENGTH)
+
+  console.log(`Posting release notes for ${cleanVersion} to Discord...`)
+  console.log(`Content length: ${content.length} characters`)
+
+  await postToDiscord(threadId, token, content)
 }
 
 main().catch((error) => {
