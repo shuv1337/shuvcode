@@ -15,10 +15,12 @@ if (!Script.preview) {
     })
     .then((data: any) => data.version)
 
-  // Use base version (without -N suffix) for git log since tags follow upstream naming
-  const previousBase = previous.replace(/-\d+$/, "")
+  // Use the full previous version (including -N suffix) since our fork tags include the suffix
+  // e.g., if previous is 1.0.166-13, we compare from v1.0.166-13
+  const previousTag = `v${previous}`
+  console.log(`Comparing changes from ${previousTag} to HEAD`)
   const log =
-    await $`git log v${previousBase}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
+    await $`git log ${previousTag}..HEAD --oneline --format="%h %s" -- packages/opencode packages/sdk packages/plugin packages/tauri packages/desktop`.text()
 
   const commits = log
     .split("\n")
@@ -110,7 +112,7 @@ IMPORTANT: ONLY return a bulleted list of changes, do not include any other info
     "opencode-agent[bot]",
   ]
   const compare =
-    await $`gh api "/repos/Latitudes-Dev/shuvcode/compare/v${previousBase}...HEAD" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.text()
+    await $`gh api "/repos/Latitudes-Dev/shuvcode/compare/${previousTag}...HEAD" --jq '.commits[] | {login: .author.login, message: .commit.message}'`.text()
   const contributors = new Map<string, string[]>()
 
   for (const line of compare.split("\n").filter(Boolean)) {
