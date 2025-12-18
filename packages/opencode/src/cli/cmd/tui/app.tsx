@@ -177,13 +177,15 @@ function App() {
   const exit = useExit()
   const promptRef = usePromptRef()
 
+  const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+
   createEffect(() => {
     console.log(JSON.stringify(route.data))
   })
 
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
+    if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
       renderer.setTerminalTitle("OpenCode")
@@ -461,6 +463,21 @@ function App() {
         renderer.suspend()
         // pid=0 means send the signal to all processes in the process group
         process.kill(0, "SIGTSTP")
+      },
+    },
+    {
+      title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
+      value: "terminal.title.toggle",
+      keybind: "terminal_title_toggle",
+      category: "System",
+      onSelect: (dialog) => {
+        setTerminalTitleEnabled((prev) => {
+          const next = !prev
+          kv.set("terminal_title_enabled", next)
+          if (!next) renderer.setTerminalTitle("")
+          return next
+        })
+        dialog.clear()
       },
     },
   ])
