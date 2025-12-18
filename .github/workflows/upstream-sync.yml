@@ -104,7 +104,6 @@ jobs:
 
       - name: Fetch upstream tag
         run: |
-          git fetch upstream --tags
           git fetch upstream tag ${{ needs.resolve-tag.outputs.latest_tag }} --no-tags
 
       - name: Attempt merge
