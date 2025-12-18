@@ -43,6 +43,11 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
+      - name: Configure Git
+        run: |
+          git config --global user.email "shuvcode@latitudes.dev"
+          git config --global user.name "shuvcode"
+
       - name: Publish
         id: publish
         run: |
