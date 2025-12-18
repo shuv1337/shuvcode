@@ -79,7 +79,7 @@ async function main(): Promise<void> {
     content += changelog.trim() + "\n\n"
   }
 
-  content += `[GitHub Release](${releaseUrl}) | [npm](${npmUrl})`
+  content += `[GitHub Release](<${releaseUrl}>) | [npm](<${npmUrl}>)`
 
   // Truncate if too long for Discord
   content = truncateChangelog(content, MAX_CONTENT_LENGTH)
