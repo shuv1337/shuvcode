@@ -979,6 +979,14 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
       async function assertPermissions() {
         console.log(`Asserting permissions for user ${actor}...`)
 
+        // GitHub App bots don't return proper permissions via the collaborator API
+        // even when they have write access. Allow trusted bots that are installed on the repo.
+        const trustedBots = ["opencode-agent[bot]", "coderabbitai[bot]"]
+        if (trustedBots.includes(actor)) {
+          console.log(`  ${actor} is a trusted bot, skipping permission check`)
+          return
+        }
+
         let permission
         try {
           const response = await octoRest.repos.getCollaboratorPermissionLevel({
