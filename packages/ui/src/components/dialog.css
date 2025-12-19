@@ -42,6 +42,11 @@
       width: min(calc(100vw - 16px), 480px);
     }
 
+    &[data-size="lg"] {
+      width: min(calc(100vw - 16px), 480px);
+      height: min(calc(100vh - 16px), 640px);
+    }
+
     [data-slot="dialog-content"] {
       display: flex;
       flex-direction: column;
