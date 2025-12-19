@@ -242,7 +242,10 @@ export namespace Project {
 
       // Check if it's already a git repo with commits
       const gitDir = path.join(projectPath, ".git")
-      const isGitRepo = await fs.access(gitDir).then(() => true).catch(() => false)
+      const isGitRepo = await fs
+        .access(gitDir)
+        .then(() => true)
+        .catch(() => false)
 
       if (!isGitRepo) {
         // Initialize git and create empty initial commit (required for project ID which is the first commit hash)

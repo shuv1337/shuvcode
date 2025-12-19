@@ -283,7 +283,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const [store, setStore] = createStore({
       themes: DEFAULT_THEMES,
       mode: kv.get("theme_mode", props.mode),
-      active: (sync.data.config.theme ?? kv.get("theme", "opencode")) as string,
+      active: (sync.data.config.theme ?? kv.get("theme", "nightowl")) as string,
       transparent: kv.get("theme_transparent", false),
       ready: false,
     })
@@ -309,7 +309,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.opencode, store.mode, store.transparent)
+      return resolveTheme(store.themes[store.active] ?? store.themes.nightowl, store.mode, store.transparent)
     })
 
     const syntax = createMemo(() => generateSyntax(values()))
