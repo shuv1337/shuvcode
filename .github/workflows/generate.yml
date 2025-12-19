@@ -2,11 +2,8 @@ name: generate
 
 on:
   push:
-    branches-ignore:
-      - production
-  pull_request:
-    branches-ignore:
-      - production
+    branches:
+      - dev
   workflow_dispatch:
 
 jobs:

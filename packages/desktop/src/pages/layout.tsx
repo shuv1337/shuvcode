@@ -50,6 +50,7 @@ import { useNotification } from "@/context/notification"
 import { Binary } from "@opencode-ai/util/binary"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
+import { DialogCreateProject } from "@/components/dialog-create-project"
 import { useCommand } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 
@@ -275,6 +276,10 @@ export default function Layout(props: ParentProps) {
 
   function connectProvider() {
     dialog.show(() => <DialogSelectProvider />)
+  }
+
+  function createProject() {
+    dialog.show(() => <DialogCreateProject />)
   }
 
   function navigateToProject(directory: string | undefined) {
@@ -977,6 +982,17 @@ export default function Layout(props: ParentProps) {
                 </Button>
               </Tooltip>
             </Show>
+            <Tooltip placement="right" value="Create project" inactive={layout.sidebar.opened()}>
+              <Button
+                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+                variant="ghost"
+                size="large"
+                icon="folder-add-left"
+                onClick={createProject}
+              >
+                <Show when={layout.sidebar.opened()}>Create project</Show>
+              </Button>
+            </Tooltip>
             {/* <Tooltip placement="right" value="Settings" inactive={layout.sidebar.opened()}> */}
             {/*   <Button */}
             {/*     disabled */}

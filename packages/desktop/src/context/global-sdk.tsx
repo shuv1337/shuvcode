@@ -8,18 +8,17 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
   init: (props: { url: string }) => {
     const platform = usePlatform()
 
-    const sdk = createOpencodeClient({
+    const eventSdk = createOpencodeClient({
       baseUrl: props.url,
       signal: AbortSignal.timeout(1000 * 60 * 10),
       fetch: platform.fetch,
       throwOnError: true,
     })
-
     const emitter = createGlobalEmitter<{
       [key: string]: Event
     }>()
 
-    sdk.global
+    eventSdk.global
       .event()
       .then(async (events) => {
         for await (const event of events.stream) {
@@ -31,6 +30,13 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
         if (error.name === "AbortError") return
         console.error("Event stream error:", error)
       })
+
+    const sdk = createOpencodeClient({
+      baseUrl: props.url,
+      signal: AbortSignal.timeout(1000 * 60 * 10),
+      fetch: platform.fetch,
+      throwOnError: true,
+    })
 
     return { url: props.url, client: sdk, event: emitter }
   },
