@@ -8209,6 +8209,12 @@
                 "description": "Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column",
                 "type": "string",
                 "enum": ["auto", "stacked"]
+              },
+              "density": {
+                "description": "Control TUI layout density: 'auto' adapts to terminal height, 'comfortable' uses standard spacing, 'compact' reduces vertical whitespace",
+                "default": "auto",
+                "type": "string",
+                "enum": ["auto", "comfortable", "compact"]
               }
             }
           },
