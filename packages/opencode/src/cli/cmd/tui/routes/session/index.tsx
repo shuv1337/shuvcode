@@ -135,6 +135,7 @@ const context = createContext<{
   showTokens: () => boolean
   usernameVisible: () => boolean
   showDetails: () => boolean
+  userMessageMarkdown: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
   searchQuery: () => string
@@ -240,6 +241,7 @@ export function Session() {
   const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
   const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
   const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
+  const [userMessageMarkdown, setUserMessageMarkdown] = createSignal(kv.get("user_message_markdown", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 
   // Search state
@@ -788,6 +790,19 @@ export function Session() {
       },
     },
     {
+      title: userMessageMarkdown() ? "Disable user message markdown" : "Enable user message markdown",
+      value: "session.toggle.user_message_markdown",
+      category: "Session",
+      onSelect: (dialog) => {
+        setUserMessageMarkdown((prev) => {
+          const next = !prev
+          kv.set("user_message_markdown", next)
+          return next
+        })
+        dialog.clear()
+      },
+    },
+    {
       title: "Page up",
       value: "session.page.up",
       keybind: "messages_page_up",
@@ -1139,6 +1154,7 @@ export function Session() {
         showTokens,
         usernameVisible,
         showDetails,
+        userMessageMarkdown,
         diffWrapMode,
         sync,
         searchQuery,
@@ -1374,7 +1390,7 @@ function UserMessage(props: {
   const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const sync = useSync()
-  const { theme } = useTheme()
+  const { theme, syntax } = useTheme()
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
@@ -1411,7 +1427,29 @@ function UserMessage(props: {
             backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
             flexShrink={0}
           >
-            <HighlightedText text={text()?.text ?? ""} messageID={props.message.id} />
+            <Show
+              when={ctx.searchQuery()}
+              fallback={
+                <Switch>
+                  <Match when={ctx.userMessageMarkdown()}>
+                    <code
+                      filetype="markdown"
+                      drawUnstyledText={false}
+                      streaming={false}
+                      syntaxStyle={syntax()}
+                      content={text()?.text ?? ""}
+                      conceal={ctx.conceal()}
+                      fg={theme.text}
+                    />
+                  </Match>
+                  <Match when={!ctx.userMessageMarkdown()}>
+                    <text fg={theme.text}>{text()?.text}</text>
+                  </Match>
+                </Switch>
+              }
+            >
+              <HighlightedText text={text()?.text ?? ""} messageID={props.message.id} />
+            </Show>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={1} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
