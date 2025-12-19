@@ -23,10 +23,19 @@ import {
   addDefaultParsers,
   MacOSScrollAccel,
   type ScrollAcceleration,
+  type ColorInput,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { SearchInput, type SearchInputRef } from "@tui/component/prompt/search"
-import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
+import type {
+  AssistantMessage,
+  Part,
+  ToolPart,
+  UserMessage,
+  TextPart,
+  ReasoningPart,
+  ToolState,
+} from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import { Token } from "@/util/token"
@@ -71,7 +80,6 @@ import { ptyToText } from "ghostty-opentui"
 import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
-
 declare module "@opentui/solid" {
   interface OpenTUIComponents {
     "ghostty-terminal": typeof GhosttyTerminalRenderable
@@ -79,6 +87,25 @@ declare module "@opentui/solid" {
 }
 
 addDefaultParsers(parsers.parsers)
+
+// Module-level shared spinner - ONE interval for all tool spinners
+const SPINNER_FRAMES = ["⣀⠀", "⣤⠀", "⣶⠀", "⣶⣶", "⠀⣶", "⠀⣤", "⠀⣀"]
+
+const SPINNER_INTERVAL_MS = 60
+
+// Lazy-initialized: interval only starts when first subscriber reads the signal
+let spinnerInitialized = false
+const [spinnerIndex, setSpinnerIndex] = createSignal(0)
+
+export function getSpinnerFrame(): string {
+  if (!spinnerInitialized) {
+    spinnerInitialized = true
+    setInterval(() => {
+      setSpinnerIndex((prev) => (prev + 1) % SPINNER_FRAMES.length)
+    }, SPINNER_INTERVAL_MS)
+  }
+  return SPINNER_FRAMES[spinnerIndex()]
+}
 
 extend({ "ghostty-terminal": GhosttyTerminalRenderable })
 
@@ -99,6 +126,7 @@ type BashOutputView = {
 
 const context = createContext<{
   width: number
+  height: number
   conceal: () => boolean
   showThinking: () => boolean
   showTimestamps: () => boolean
@@ -1100,6 +1128,9 @@ export function Session() {
         get width() {
           return contentWidth()
         },
+        get height() {
+          return dimensions().height
+        },
         conceal,
         showThinking,
         showTimestamps,
@@ -1653,6 +1684,7 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const { theme } = useTheme()
   const { showDetails } = use()
   const sync = useSync()
+  const local = useLocal()
   const [margin, setMargin] = createSignal(0)
   const component = createMemo(() => {
     // Hide tool if showDetails is false and tool completed successfully
@@ -1726,6 +1758,8 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
           metadata={metadata}
           permission={permission?.metadata ?? {}}
           output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          status={props.part.state.status}
+          agentColor={local.agent.color(props.message.mode)}
         />
         {props.part.state.status === "error" && (
           <box paddingLeft={2}>
@@ -1764,10 +1798,13 @@ type ToolProps<T extends Tool.Info> = {
   permission: Record<string, any>
   tool: string
   output?: string
+  status: ToolState["status"]
+  agentColor: ColorInput
 }
 function GenericTool(props: ToolProps<any>) {
+  const isRunning = props.status === "running"
   return (
-    <ToolTitle icon="⚙" fallback="Writing command..." when={true}>
+    <ToolTitle icon="⚙" fallback="Writing command..." when={true} loading={isRunning} loadingColor={props.agentColor}>
       {props.tool} {input(props.input)}
     </ToolTitle>
   )
@@ -1795,18 +1832,32 @@ const ToolRegistry = (() => {
   }
 })()
 
-function ToolTitle(props: { fallback: string; when: any; icon: string; children: JSX.Element }) {
+function ToolTitle(props: {
+  fallback: string
+  when: any
+  icon: string
+  children: JSX.Element
+  loading?: boolean
+  loadingColor?: ColorInput
+}) {
   const { theme } = useTheme()
   return (
     <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
       <Show fallback={<>~ {props.fallback}</>} when={props.when}>
-        <span style={{ bold: true }}>{props.icon}</span> {props.children}
+        <span style={{ bold: true }}>{props.icon}</span>
+        <Show when={props.loading}>
+          <span style={{ fg: props.loadingColor, bold: true }}> {getSpinnerFrame()}</span>
+        </Show>{" "}
+        {props.children}
       </Show>
     </text>
   )
 }
 
-const BASH_DISPLAY_LINES = 20
+// Maximum lines for bash output on large terminals
+const BASH_MAX_DISPLAY_LINES = 20
+// Minimum lines to show even on very small terminals
+const BASH_MIN_DISPLAY_LINES = 4
 
 ToolRegistry.register<typeof BashTool>({
   name: "bash",
@@ -1816,16 +1867,31 @@ ToolRegistry.register<typeof BashTool>({
     const ctx = use()
     const { theme } = useTheme()
 
+    // Only show spinner for "running" status
+    // "pending" means waiting for input or permission - show fallback text instead
+    const isRunning = props.status === "running"
+
+    // Dynamic line limit based on terminal height
+    // Reserve lines for: prompt area (~4), header (~2), tool title (~2), command (~1), footer (~2), margins (~3)
+    // Total overhead ~14 lines. Use about 40% of remaining height for bash output.
+    const displayLines = createMemo(() => {
+      const terminalHeight = ctx.height
+      const availableHeight = Math.max(0, terminalHeight - 14)
+      const targetLines = Math.floor(availableHeight * 0.4)
+      return Math.max(BASH_MIN_DISPLAY_LINES, Math.min(BASH_MAX_DISPLAY_LINES, targetLines))
+    })
+
     // For line counting and truncation detection, use plain text
     const plainOutput = createMemo(() => ptyToText(stripAnsi(rawOutput()), { rows: 120, cols: 256 }))
 
     const displayOutput = createMemo(() => {
       const lines = rawOutput().split("\n")
-      if (lines.length <= BASH_DISPLAY_LINES) return rawOutput()
-      return lines.slice(0, BASH_DISPLAY_LINES).join("\n") + `\n... (${lines.length - BASH_DISPLAY_LINES} more lines)`
+      const limit = displayLines()
+      if (lines.length <= limit) return rawOutput()
+      return lines.slice(0, limit).join("\n") + `\n... (${lines.length - limit} more lines)`
     })
 
-    const truncated = createMemo(() => plainOutput().split("\n").length > BASH_DISPLAY_LINES)
+    const truncated = createMemo(() => plainOutput().split("\n").length > displayLines())
 
     return (
       <box>
@@ -1840,8 +1906,8 @@ ToolRegistry.register<typeof BashTool>({
               Keep rows==limit so layout height stays accurate. */}
           <ghostty-terminal
             ansi={displayOutput()}
-            rows={BASH_DISPLAY_LINES}
-            limit={BASH_DISPLAY_LINES}
+            rows={displayLines()}
+            limit={displayLines()}
             trimEnd
             cols={Math.max(ctx.width, 40)}
           />
@@ -1855,6 +1921,12 @@ ToolRegistry.register<typeof BashTool>({
             <text fg={theme.textMuted}>Click to view full output</text>
           </box>
         </Show>
+        {/* Show spinner at bottom of output when running - ensures visibility even when output is truncated */}
+        <Show when={isRunning}>
+          <text fg={props.agentColor} paddingLeft={3} paddingTop={-5} paddingBottom={-5}>
+            {getSpinnerFrame()}
+          </text>
+        </Show>
       </box>
     )
   },
@@ -1864,9 +1936,16 @@ ToolRegistry.register<typeof ReadTool>({
   name: "read",
   container: "inline",
   render(props) {
+    const isRunning = props.status === "running"
     return (
       <>
-        <ToolTitle icon="→" fallback="Reading file..." when={props.input.filePath}>
+        <ToolTitle
+          icon="→"
+          fallback="Reading file..."
+          when={props.input.filePath}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           Read {normalizePath(props.input.filePath!)} {input(props.input, ["filePath"])}
         </ToolTitle>
       </>
@@ -1879,6 +1958,7 @@ ToolRegistry.register<typeof WriteTool>({
   container: "block",
   render(props) {
     const { theme, syntax } = useTheme()
+    const isRunning = props.status === "running"
     const code = createMemo(() => {
       if (!props.input.content) return ""
       return props.input.content
@@ -1893,7 +1973,13 @@ ToolRegistry.register<typeof WriteTool>({
 
     return (
       <>
-        <ToolTitle icon="←" fallback="Preparing write..." when={done}>
+        <ToolTitle
+          icon="←"
+          fallback="Preparing write..."
+          when={done}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           Wrote {props.input.filePath}
         </ToolTitle>
         <Show when={done}>
@@ -1925,9 +2011,16 @@ ToolRegistry.register<typeof GlobTool>({
   name: "glob",
   container: "inline",
   render(props) {
+    const isRunning = props.status === "running"
     return (
       <>
-        <ToolTitle icon="✱" fallback="Finding files..." when={props.input.pattern}>
+        <ToolTitle
+          icon="✱"
+          fallback="Finding files..."
+          when={props.input.pattern}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           Glob "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
           <Show when={props.metadata.count}>({props.metadata.count} matches)</Show>
         </ToolTitle>
@@ -1940,8 +2033,15 @@ ToolRegistry.register<typeof GrepTool>({
   name: "grep",
   container: "inline",
   render(props) {
+    const isRunning = props.status === "running"
     return (
-      <ToolTitle icon="✱" fallback="Searching content..." when={props.input.pattern}>
+      <ToolTitle
+        icon="✱"
+        fallback="Searching content..."
+        when={props.input.pattern}
+        loading={isRunning}
+        loadingColor={props.agentColor}
+      >
         Grep "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
         <Show when={props.metadata.matches}>({props.metadata.matches} matches)</Show>
       </ToolTitle>
@@ -1953,6 +2053,7 @@ ToolRegistry.register<typeof ListTool>({
   name: "list",
   container: "inline",
   render(props) {
+    const isRunning = props.status === "running"
     const dir = createMemo(() => {
       if (props.input.path) {
         return normalizePath(props.input.path)
@@ -1961,7 +2062,13 @@ ToolRegistry.register<typeof ListTool>({
     })
     return (
       <>
-        <ToolTitle icon="→" fallback="Listing directory..." when={props.input.path !== undefined}>
+        <ToolTitle
+          icon="→"
+          fallback="Listing directory..."
+          when={props.input.path !== undefined}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           List {dir()}
         </ToolTitle>
       </>
@@ -1975,10 +2082,17 @@ ToolRegistry.register<typeof TaskTool>({
   render(props) {
     const { theme } = useTheme()
     const keybind = useKeybind()
+    const isRunning = props.status === "running"
 
     return (
       <>
-        <ToolTitle icon="◉" fallback="Delegating..." when={props.input.subagent_type ?? props.input.description}>
+        <ToolTitle
+          icon="◉"
+          fallback="Delegating..."
+          when={props.input.subagent_type ?? props.input.description}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           {Locale.titlecase(props.input.subagent_type ?? "unknown")} Task "{props.input.description}"
         </ToolTitle>
         <Show when={props.metadata.summary?.length}>
@@ -2009,8 +2123,15 @@ ToolRegistry.register<typeof WebFetchTool>({
   name: "webfetch",
   container: "inline",
   render(props) {
+    const isRunning = props.status === "running"
     return (
-      <ToolTitle icon="%" fallback="Fetching from the web..." when={(props.input as any).url}>
+      <ToolTitle
+        icon="%"
+        fallback="Fetching from the web..."
+        when={(props.input as any).url}
+        loading={isRunning}
+        loadingColor={props.agentColor}
+      >
         WebFetch {(props.input as any).url}
       </ToolTitle>
     )
@@ -2023,8 +2144,15 @@ ToolRegistry.register({
   render(props: ToolProps<any>) {
     const input = props.input as any
     const metadata = props.metadata as any
+    const isRunning = props.status === "running"
     return (
-      <ToolTitle icon="◇" fallback="Searching code..." when={input.query}>
+      <ToolTitle
+        icon="◇"
+        fallback="Searching code..."
+        when={input.query}
+        loading={isRunning}
+        loadingColor={props.agentColor}
+      >
         Exa Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
       </ToolTitle>
     )
@@ -2037,8 +2165,15 @@ ToolRegistry.register({
   render(props: ToolProps<any>) {
     const input = props.input as any
     const metadata = props.metadata as any
+    const isRunning = props.status === "running"
     return (
-      <ToolTitle icon="◈" fallback="Searching web..." when={input.query}>
+      <ToolTitle
+        icon="◈"
+        fallback="Searching web..."
+        when={input.query}
+        loading={isRunning}
+        loadingColor={props.agentColor}
+      >
         Exa Web Search "{input.query}" <Show when={metadata.numResults}>({metadata.numResults} results)</Show>
       </ToolTitle>
     )
@@ -2051,6 +2186,7 @@ ToolRegistry.register<typeof EditTool>({
   render(props) {
     const ctx = use()
     const { theme, syntax } = useTheme()
+    const isRunning = props.status === "running"
 
     const view = createMemo(() => {
       const diffStyle = ctx.sync.data.config.tui?.diff_style
@@ -2071,7 +2207,13 @@ ToolRegistry.register<typeof EditTool>({
 
     return (
       <>
-        <ToolTitle icon="←" fallback="Preparing edit..." when={props.input.filePath}>
+        <ToolTitle
+          icon="←"
+          fallback="Preparing edit..."
+          when={props.input.filePath}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           Edit {normalizePath(props.input.filePath!)}{" "}
           {input({
             replaceAll: props.input.replaceAll,
@@ -2121,9 +2263,16 @@ ToolRegistry.register<typeof PatchTool>({
   container: "block",
   render(props) {
     const { theme } = useTheme()
+    const isRunning = props.status === "running"
     return (
       <>
-        <ToolTitle icon="%" fallback="Preparing patch..." when={true}>
+        <ToolTitle
+          icon="%"
+          fallback="Preparing patch..."
+          when={true}
+          loading={isRunning}
+          loadingColor={props.agentColor}
+        >
           Patch
         </ToolTitle>
         <Show when={props.output}>
@@ -2141,10 +2290,17 @@ ToolRegistry.register<typeof TodoWriteTool>({
   container: "block",
   render(props) {
     const { theme } = useTheme()
+    const isRunning = props.status === "running"
     return (
       <>
         <Show when={!props.input.todos?.length}>
-          <ToolTitle icon="⚙" fallback="Updating todos..." when={true}>
+          <ToolTitle
+            icon="⚙"
+            fallback="Updating todos..."
+            when={true}
+            loading={isRunning}
+            loadingColor={props.agentColor}
+          >
             Updating todos...
           </ToolTitle>
         </Show>

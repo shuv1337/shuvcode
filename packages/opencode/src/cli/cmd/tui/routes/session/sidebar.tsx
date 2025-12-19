@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match, createSignal, onCleanup } from "solid-js"
+import { createMemo, For, Show, Switch, Match } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { useRoute } from "../../context/route"
@@ -9,6 +9,7 @@ import type { AssistantMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
+import { getSpinnerFrame } from "./index"
 
 export function Sidebar(props: { sessionID: string }) {
   const sync = useSync()
@@ -26,14 +27,6 @@ export function Sidebar(props: { sessionID: string }) {
     lsp: true,
     subagents: true,
   })
-
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-  const [spinnerIndex, setSpinnerIndex] = createSignal(0)
-
-  const intervalId = setInterval(() => {
-    setSpinnerIndex((prev) => (prev + 1) % spinnerFrames.length)
-  }, 100)
-  onCleanup(() => clearInterval(intervalId))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
@@ -264,7 +257,7 @@ export function Sidebar(props: { sessionID: string }) {
                                   }}
                                 >
                                   <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
-                                    {isActive() ? spinnerFrames[spinnerIndex()] : isError() ? "✗" : "✓"}
+                                    {isActive() ? getSpinnerFrame() : isError() ? "✗" : "✓"}
                                   </text>
                                   <text fg={isActive() ? theme.text : theme.textMuted} wrapMode="word">
                                     {description}
