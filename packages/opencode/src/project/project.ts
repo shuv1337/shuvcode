@@ -2,12 +2,14 @@ import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { $ } from "bun"
+import fs from "fs/promises"
 import { Storage } from "../storage/storage"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
 import { Session } from "../session"
 import { work } from "../util/queue"
 import { fn } from "@opencode-ai/util/fn"
+import { NamedError } from "@opencode-ai/util/error"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
@@ -216,6 +218,54 @@ export namespace Project {
         },
       })
       return result
+    },
+  )
+
+  export const CreateError = NamedError.create("CreateProjectError", z.object({ message: z.string() }))
+
+  export const create = fn(
+    z.object({
+      path: z.string().min(1),
+      name: z.string().optional(),
+    }),
+    async (input) => {
+      const expandedPath = Filesystem.expanduser(input.path)
+      const projectPath = path.resolve(expandedPath)
+
+      // Validate absolute path
+      if (!path.isAbsolute(expandedPath)) {
+        throw new CreateError({ message: "Path must be absolute" })
+      }
+
+      // Create directory if it doesn't exist
+      await fs.mkdir(projectPath, { recursive: true })
+
+      // Check if it's already a git repo with commits
+      const gitDir = path.join(projectPath, ".git")
+      const isGitRepo = await fs.access(gitDir).then(() => true).catch(() => false)
+
+      if (!isGitRepo) {
+        // Initialize git and create empty initial commit (required for project ID which is the first commit hash)
+        await $`git init`.cwd(projectPath).quiet()
+        await $`git commit --allow-empty -m "Initial commit"`.cwd(projectPath).quiet()
+      } else {
+        // Check if there are any commits
+        const hasCommits = await $`git rev-list -n 1 --all`.cwd(projectPath).quiet().nothrow().text()
+        if (!hasCommits.trim()) {
+          await $`git commit --allow-empty -m "Initial commit"`.cwd(projectPath).quiet()
+        }
+      }
+
+      // Register project using fromDirectory
+      const project = await fromDirectory(projectPath)
+
+      // Set custom name if provided
+      if (input.name) {
+        await update({ projectID: project.id, name: input.name })
+        return { ...project, name: input.name }
+      }
+
+      return project
     },
   )
 }

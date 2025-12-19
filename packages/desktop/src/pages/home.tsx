@@ -8,12 +8,15 @@ import { base64Encode } from "@opencode-ai/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
 import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { DialogCreateProject } from "@/components/dialog-create-project"
 
 export default function Home() {
   const sync = useGlobalSync()
   const layout = useLayout()
   const platform = usePlatform()
   const navigate = useNavigate()
+  const dialog = useDialog()
   const homedir = createMemo(() => sync.data.path.home)
 
   function openProject(directory: string) {
@@ -43,11 +46,21 @@ export default function Home() {
           <div class="mt-20 w-full flex flex-col gap-4">
             <div class="flex gap-2 items-center justify-between pl-3">
               <div class="text-14-medium text-text-strong">Recent projects</div>
-              <Show when={platform.openDirectoryPickerDialog}>
-                <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                  Open project
+              <div class="flex gap-2">
+                <Button
+                  icon="plus"
+                  size="normal"
+                  class="pl-2 pr-3"
+                  onClick={() => dialog.show(() => <DialogCreateProject />)}
+                >
+                  Create project
                 </Button>
-              </Show>
+                <Show when={platform.openDirectoryPickerDialog}>
+                  <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
+                    Open project
+                  </Button>
+                </Show>
+              </div>
             </div>
             <ul class="flex flex-col gap-2">
               <For
@@ -77,14 +90,19 @@ export default function Home() {
             <Icon name="folder-add-left" size="large" />
             <div class="flex flex-col gap-1 items-center justify-center">
               <div class="text-14-medium text-text-strong">No recent projects</div>
-              <div class="text-12-regular text-text-weak">Get started by opening a local project</div>
+              <div class="text-12-regular text-text-weak">Get started by creating or opening a project</div>
             </div>
             <div />
-            <Show when={platform.openDirectoryPickerDialog}>
-              <Button class="px-3" onClick={chooseProject}>
-                Open project
+            <div class="flex gap-3">
+              <Button class="px-3" onClick={() => dialog.show(() => <DialogCreateProject />)}>
+                Create project
               </Button>
-            </Show>
+              <Show when={platform.openDirectoryPickerDialog}>
+                <Button class="px-3" variant="ghost" onClick={chooseProject}>
+                  Open project
+                </Button>
+              </Show>
+            </div>
           </div>
         </Match>
       </Switch>

@@ -29,6 +29,7 @@ import { Command } from "../command"
 import { ProviderAuth } from "../provider/auth"
 import { Global } from "../global"
 import { ProjectRoute } from "./project"
+import { Project } from "../project/project"
 import { ToolRegistry } from "../tool/registry"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { SessionPrompt } from "../session/prompt"
@@ -70,6 +71,7 @@ export namespace Server {
           let status: ContentfulStatusCode
           if (err instanceof Storage.NotFoundError) status = 404
           else if (err instanceof Provider.ModelNotFoundError) status = 400
+          else if (err instanceof Project.CreateError) status = 400
           else status = 500
           return c.json(err.toObject(), { status })
         }

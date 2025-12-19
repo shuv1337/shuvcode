@@ -1,8 +1,14 @@
 import { realpathSync } from "fs"
 import { exists } from "fs/promises"
+import { homedir } from "os"
 import { dirname, join, relative } from "path"
 
 export namespace Filesystem {
+  export function expanduser(p: string): string {
+    if (p === "~") return homedir()
+    if (p.startsWith("~/")) return join(homedir(), p.slice(2))
+    return p
+  }
   /**
    * On Windows, normalize a path to its canonical casing using the filesystem.
    * This is needed because Windows paths are case-insensitive but LSP servers

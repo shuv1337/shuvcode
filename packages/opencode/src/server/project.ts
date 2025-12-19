@@ -50,6 +50,31 @@ export const ProjectRoute = new Hono()
       return c.json(Instance.project)
     },
   )
+  .post(
+    "/",
+    describeRoute({
+      summary: "Create project",
+      description: "Create a new project directory and initialize it as a git repository.",
+      operationId: "project.create",
+      responses: {
+        200: {
+          description: "Created project information",
+          content: {
+            "application/json": {
+              schema: resolver(Project.Info),
+            },
+          },
+        },
+        ...errors(400),
+      },
+    }),
+    validator("json", Project.create.schema),
+    async (c) => {
+      const body = c.req.valid("json")
+      const project = await Project.create(body)
+      return c.json(project)
+    },
+  )
   .patch(
     "/:projectID",
     describeRoute({
