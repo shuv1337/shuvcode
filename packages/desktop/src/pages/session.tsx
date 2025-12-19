@@ -809,23 +809,41 @@ export default function Page() {
                   },
                 )
                 return (
-                  <Tabs.Content value={tab} class="select-text mt-3">
-                    <Switch>
-                      <Match when={file()}>
-                        {(f) => (
-                          <Dynamic
-                            component={codeComponent}
-                            file={{
-                              name: f().path,
-                              contents: f().content?.content ?? "",
-                              cacheKey: checksum(f().content?.content ?? ""),
-                            }}
-                            overflow="scroll"
-                            class="pb-40"
-                          />
-                        )}
-                      </Match>
-                    </Switch>
+                  <Tabs.Content value={tab} class="select-text flex flex-col h-full mt-3">
+                    <Show when={file()?.content} keyed>
+                      {(content) => {
+                        const f = file()!
+                        const isPreviewableImage =
+                          content.encoding === "base64" &&
+                          content.mimeType?.startsWith("image/") &&
+                          content.mimeType !== "image/svg+xml"
+                        return (
+                          <Switch>
+                            <Match when={isPreviewableImage}>
+                              <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-40">
+                                <img
+                                  src={`data:${content.mimeType};base64,${content.content}`}
+                                  alt={f.path}
+                                  class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
+                                />
+                              </div>
+                            </Match>
+                            <Match when={true}>
+                              <Dynamic
+                                component={codeComponent}
+                                file={{
+                                  name: f.path,
+                                  contents: content.content ?? "",
+                                  cacheKey: checksum(content.content ?? ""),
+                                }}
+                                overflow="scroll"
+                                class="pb-40"
+                              />
+                            </Match>
+                          </Switch>
+                        )
+                      }}
+                    </Show>
                   </Tabs.Content>
                 )
               }}
