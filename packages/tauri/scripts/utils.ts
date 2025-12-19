@@ -3,22 +3,22 @@ import { $ } from "bun"
 export const SIDECAR_BINARIES: Array<{ rustTarget: string; ocBinary: string; assetExt: string }> = [
   {
     rustTarget: "aarch64-apple-darwin",
-    ocBinary: "opencode-darwin-arm64",
+    ocBinary: "shuvcode-darwin-arm64",
     assetExt: "zip",
   },
   {
     rustTarget: "x86_64-apple-darwin",
-    ocBinary: "opencode-darwin-x64",
+    ocBinary: "shuvcode-darwin-x64",
     assetExt: "zip",
   },
   {
     rustTarget: "x86_64-pc-windows-msvc",
-    ocBinary: "opencode-windows-x64",
+    ocBinary: "shuvcode-windows-x64",
     assetExt: "zip",
   },
   {
     rustTarget: "x86_64-unknown-linux-gnu",
-    ocBinary: "opencode-linux-x64",
+    ocBinary: "shuvcode-linux-x64",
     assetExt: "tar.gz",
   },
 ]
