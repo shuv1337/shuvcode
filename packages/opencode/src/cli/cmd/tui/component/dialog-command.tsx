@@ -27,7 +27,9 @@ function init() {
   const dialog = useDialog()
   const keybind = useKeybind()
   const options = createMemo(() => {
-    const all = registrations().flatMap((x) => x())
+    const all = registrations()
+      .flatMap((x) => x())
+      .filter((x) => !!x)
     const suggested = all.filter((x) => x.suggested)
     return [
       ...suggested.map((x) => ({
