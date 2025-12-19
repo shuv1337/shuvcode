@@ -102,7 +102,11 @@ export default function Layout(props: ParentProps) {
 
   // Header helpers
   const currentDirectory = createMemo(() => base64Decode(params.dir ?? ""))
-  const sessions = createMemo(() => globalSync.child(currentDirectory())[0].session ?? [])
+  const sessions = createMemo(() => {
+    const dir = currentDirectory()
+    if (!dir) return []
+    return globalSync.child(dir)[0].session ?? []
+  })
   const currentSession = createMemo(() => sessions().find((s) => s.id === params.id))
   const currentSessionId = createMemo(() => currentSession()?.id)
   const otherSessions = createMemo(() => sessions().filter((s) => s.id !== currentSessionId()))
