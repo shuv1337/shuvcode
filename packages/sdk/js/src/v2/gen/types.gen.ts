@@ -1471,6 +1471,10 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Control TUI layout density: 'auto' adapts to terminal height, 'comfortable' uses standard spacing, 'compact' reduces vertical whitespace
+     */
+    density?: "auto" | "comfortable" | "compact"
   }
   /**
    * Command configuration, see https://opencode.ai/docs/commands
