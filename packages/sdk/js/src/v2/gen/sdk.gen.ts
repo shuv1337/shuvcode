@@ -52,6 +52,7 @@ import type {
   PathGetResponses,
   PermissionRespondErrors,
   PermissionRespondResponses,
+  ProjectBrowseResponses,
   ProjectCreateErrors,
   ProjectCreateResponses,
   ProjectCurrentResponses,
@@ -327,6 +328,38 @@ export class Project extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Browse directories
+   *
+   * Browse directories from the user's home directory to find potential projects. Supports fuzzy search filtering.
+   */
+  public browse<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      query?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "query" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProjectBrowseResponses, unknown, ThrowOnError>({
+      url: "/project/browse",
+      ...options,
+      ...params,
     })
   }
 }

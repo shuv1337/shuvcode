@@ -881,6 +881,13 @@ export type NotFoundError = {
   }
 }
 
+export type DirectoryInfo = {
+  path: string
+  name: string
+  isGitRepo: boolean
+  isExistingProject: boolean
+}
+
 /**
  * Custom keybind configurations
  */
@@ -2113,6 +2120,26 @@ export type ProjectUpdateResponses = {
 }
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+
+export type ProjectBrowseData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    query?: string
+    limit?: number
+  }
+  url: "/project/browse"
+}
+
+export type ProjectBrowseResponses = {
+  /**
+   * List of directories
+   */
+  200: Array<DirectoryInfo>
+}
+
+export type ProjectBrowseResponse = ProjectBrowseResponses[keyof ProjectBrowseResponses]
 
 export type PtyListData = {
   body?: never
