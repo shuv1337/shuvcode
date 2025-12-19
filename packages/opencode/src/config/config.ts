@@ -584,6 +584,13 @@ export namespace Config {
       .enum(["auto", "stacked"])
       .optional()
       .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+    density: z
+      .enum(["auto", "comfortable", "compact"])
+      .optional()
+      .default("auto")
+      .describe(
+        "Control TUI layout density: 'auto' adapts to terminal height, 'comfortable' uses standard spacing, 'compact' reduces vertical whitespace",
+      ),
   })
 
   export const Layout = z.enum(["auto", "stretch"]).meta({
