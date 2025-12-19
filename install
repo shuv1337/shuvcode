@@ -213,11 +213,11 @@ download_with_progress() {
     {
         local length=0
         local bytes=0
-        
+
         while IFS=" " read -r -a line; do
             [ "${#line[@]}" -lt 2 ] && continue
             local tag="${line[0]} ${line[1]}"
-            
+
             if [ "$tag" = "0000: content-length:" ]; then
                 length="${line[2]}"
                 length=$(echo "$length" | tr -d '\r')
@@ -242,7 +242,7 @@ download_and_install() {
     print_message info "\n${MUTED}Installing ${NC}shuvcode ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/shuvcode_install_$$"
     mkdir -p "$tmp_dir"
-    
+
     if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
         # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
         curl -f -# -L -o "$tmp_dir/$filename" "$url"
@@ -356,13 +356,11 @@ if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
 fi
 
 echo -e ""
-echo -e "${MUTED}      ${NC}     ▄     "
-echo -e "${MUTED}█▀▀▀ █ █ █ █ █ ${NC}█▀▀▀ █▀▀█ █▀▀█ █▀▀█"
-echo -e "${MUTED}▀▀▀█ █▀▀█ █ █ █ ${NC}█░░░ █░░█ █░░█ █▀▀▀"
-echo -e "${MUTED}▀▀▀▀ ▀  ▀ ▀▀▀▀ ${NC}▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"
+echo -e "${MUTED}     ▄              ${NC}             ▄     "
+echo -e "${MUTED}█▀▀▀ █▀▀█ █  █ █  █ ${NC}█▀▀▀ █▀▀█ █▀▀█ █▀▀█"
+echo -e "${MUTED}▀▀▀█ █░░█ █░░█ █░░█ ${NC}█░░░ █░░█ █░░█ █▀▀▀"
+echo -e "${MUTED}▀▀▀▀ ▀  ▀ ▀▀▀▀  ▀▀  ${NC}▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"
 echo -e ""
-echo -e ""
-echo -e "${MUTED}Shuvcode includes free models, to start:${NC}"
 echo -e ""
 echo -e "cd <project>  ${MUTED}# Open directory${NC}"
 echo -e "shuvcode      ${MUTED}# Run command${NC}"
