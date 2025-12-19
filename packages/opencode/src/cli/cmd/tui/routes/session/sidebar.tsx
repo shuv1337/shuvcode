@@ -10,11 +10,13 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "./index"
+import { useLayoutDensity } from "../../util/layout-density"
 
 export function Sidebar(props: { sessionID: string }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
+  const density = useLayoutDensity()
   const session = createMemo(() => sync.session.get(props.sessionID)!)
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
@@ -86,8 +88,8 @@ export function Sidebar(props: { sessionID: string }) {
       <box
         backgroundColor={theme.backgroundPanel}
         width={42}
-        paddingTop={1}
-        paddingBottom={1}
+        paddingTop={density.tokens().sidebarPaddingY}
+        paddingBottom={density.tokens().sidebarPaddingY}
         paddingLeft={2}
         paddingRight={2}
       >

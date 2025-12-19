@@ -10,6 +10,7 @@ import { useDirectory } from "../context/directory"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
+import { useLayoutDensity } from "../util/layout-density"
 
 // TODO: what is the best way to do this?
 let once = false
@@ -19,6 +20,7 @@ export function Home() {
   const { theme } = useTheme()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
+  const density = useLayoutDensity()
   const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
@@ -77,7 +79,15 @@ export function Home() {
         </box>
         <Toast />
       </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
+      <box
+        paddingTop={density.tokens().homePaddingY}
+        paddingBottom={density.tokens().homePaddingY}
+        paddingLeft={2}
+        paddingRight={2}
+        flexDirection="row"
+        flexShrink={0}
+        gap={2}
+      >
         <text fg={theme.textMuted}>{directory()}</text>
         <box gap={1} flexDirection="row" flexShrink={0}>
           <Show when={mcp()}>
