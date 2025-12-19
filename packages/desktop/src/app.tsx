@@ -66,7 +66,7 @@ export function App() {
   return (
     <MetaProvider>
       <Font />
-      <ErrorBoundary fallback={ErrorPage}>
+      <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
         <DialogProvider>
           <MarkedProvider>
             <DiffComponentProvider component={Diff}>
