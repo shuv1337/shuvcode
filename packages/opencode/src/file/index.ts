@@ -72,12 +72,46 @@ export namespace File {
     })
   export type Content = z.infer<typeof Content>
 
-  async function shouldEncode(file: BunFile): Promise<boolean> {
+  /**
+   * Check if a buffer contains binary content by looking for null bytes
+   * or a high ratio of non-printable characters in the first chunk
+   */
+  function isBinaryContent(buffer: ArrayBuffer): boolean {
+    const bytes = new Uint8Array(buffer)
+    const checkLength = Math.min(bytes.length, 8192) // Check first 8KB
+
+    if (checkLength === 0) return false
+
+    let nullBytes = 0
+    let nonPrintable = 0
+
+    for (let i = 0; i < checkLength; i++) {
+      const byte = bytes[i]
+      if (byte === 0) {
+        nullBytes++
+        // A single null byte is a strong binary indicator
+        if (nullBytes > 0) return true
+      }
+      // Count non-printable, non-whitespace bytes (excluding common control chars)
+      // Printable ASCII: 32-126, plus tab(9), newline(10), carriage return(13)
+      if (byte < 9 || (byte > 13 && byte < 32) || byte === 127) {
+        nonPrintable++
+      }
+    }
+
+    // If more than 10% non-printable characters, likely binary
+    return nonPrintable / checkLength > 0.1
+  }
+
+  async function shouldEncode(file: BunFile): Promise<boolean | "check"> {
     const type = file.type?.toLowerCase()
     if (!type) return false
 
     if (type.startsWith("text/")) return false
     if (type.includes("charset=")) return false
+
+    // SVG is XML text and should be displayed with syntax highlighting, not as base64
+    if (type === "image/svg+xml") return false
 
     const parts = type.split("/", 2)
     const top = parts[0]
@@ -87,7 +121,9 @@ export namespace File {
     const tops = ["image", "audio", "video", "font", "model", "multipart"]
     if (tops.includes(top)) return true
 
-    if (type === "application/octet-stream") return true
+    // For application/octet-stream, we need to check the content
+    // Many text files (Dockerfile, Makefile, etc.) get this fallback type
+    if (type === "application/octet-stream") return "check"
 
     const bins = [
       "zip",
@@ -243,6 +279,33 @@ export namespace File {
     }
 
     const encode = await shouldEncode(bunFile)
+
+    // For "check" case (application/octet-stream), read the buffer and check if binary
+    if (encode === "check") {
+      const buffer = await bunFile.arrayBuffer().catch(() => new ArrayBuffer(0))
+      if (isBinaryContent(buffer)) {
+        const content = Buffer.from(buffer).toString("base64")
+        const mimeType = bunFile.type || "application/octet-stream"
+        return { type: "text", content, mimeType, encoding: "base64" }
+      }
+      // It's actually text, decode and continue with normal text handling
+      const content = new TextDecoder().decode(buffer).trim()
+      // Continue to git diff handling below with this content
+      if (project.vcs === "git") {
+        let diff = await $`git diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
+        if (!diff.trim()) diff = await $`git diff --staged ${file}`.cwd(Instance.directory).quiet().nothrow().text()
+        if (diff.trim()) {
+          const original = await $`git show HEAD:${file}`.cwd(Instance.directory).quiet().nothrow().text()
+          const patch = structuredPatch(file, file, original, content, "old", "new", {
+            context: Infinity,
+            ignoreWhitespace: true,
+          })
+          const diffStr = formatPatch(patch)
+          return { type: "text", content, patch, diff: diffStr }
+        }
+      }
+      return { type: "text", content }
+    }
 
     if (encode) {
       const buffer = await bunFile.arrayBuffer().catch(() => new ArrayBuffer(0))
