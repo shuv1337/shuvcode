@@ -39,12 +39,12 @@ export default function Home() {
   }
 
   return (
-    <div class="size-full bg-background-base flex flex-col items-center pt-55">
-      <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-[0.85] max-[40rem]:origin-center" />
+    <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom">
+      <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-75 max-[40rem]:origin-center" />
       <Switch>
         <Match when={sync.data.project.length > 0}>
-          <div class="mt-20 w-full max-w-xl flex flex-col gap-4 px-3">
-            <div class="flex gap-2 items-center justify-between">
+          <div class="mt-10 sm:mt-20 w-full max-w-xl flex flex-col gap-4 px-4 sm:px-3">
+            <div class="flex gap-2 items-center justify-between flex-wrap">
               <div class="text-14-medium text-text-strong">Recent projects</div>
               <div class="flex gap-2">
                 <Button
@@ -53,11 +53,13 @@ export default function Home() {
                   class="pl-2 pr-3"
                   onClick={() => dialog.show(() => <DialogCreateProject />)}
                 >
-                  Create project
+                  <span class="hidden sm:inline">Create project</span>
+                  <span class="sm:hidden">Create</span>
                 </Button>
                 <Show when={platform.openDirectoryPickerDialog}>
                   <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                    Open project
+                    <span class="hidden sm:inline">Open project</span>
+                    <span class="sm:hidden">Open</span>
                   </Button>
                 </Show>
               </div>
