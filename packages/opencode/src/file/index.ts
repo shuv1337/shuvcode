@@ -1,5 +1,4 @@
 import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
 import z from "zod"
 import { $ } from "bun"
 import type { BunFile } from "bun"
@@ -105,6 +104,7 @@ export namespace File {
 
   async function shouldEncode(file: BunFile): Promise<boolean | "check"> {
     const type = file.type?.toLowerCase()
+    log.info("shouldEncode", { type })
     if (!type) return false
 
     if (type.startsWith("text/")) return false
@@ -131,7 +131,6 @@ export namespace File {
       "bzip",
       "compressed",
       "binary",
-      "stream",
       "pdf",
       "msword",
       "powerpoint",
@@ -355,9 +354,11 @@ export namespace File {
     }
     const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
     const nodes: Node[] = []
-    for (const entry of await fs.promises.readdir(resolved, {
-      withFileTypes: true,
-    })) {
+    for (const entry of await fs.promises
+      .readdir(resolved, {
+        withFileTypes: true,
+      })
+      .catch(() => [])) {
       if (exclude.includes(entry.name)) continue
       const fullPath = path.join(resolved, entry.name)
       const relativePath = path.relative(Instance.directory, fullPath)

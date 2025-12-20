@@ -10,7 +10,7 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
 
     const eventSdk = createOpencodeClient({
       baseUrl: props.url,
-      signal: AbortSignal.timeout(1000 * 60 * 10),
+      // signal: AbortSignal.timeout(1000 * 60 * 10),
       fetch: platform.fetch,
       throwOnError: true,
     })
