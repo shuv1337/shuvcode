@@ -169,7 +169,12 @@ export const DialogCreateProject: Component = () => {
   }
 
   function handleSelect(dir: DirectoryInfo | undefined) {
-    if (!dir || dir.isExistingProject) return
+    if (!dir) return
+    if (dir.isExistingProject) {
+      dialog.close()
+      openProject(dir.path)
+      return
+    }
     setSelectedDir(dir)
     // Immediately add the project on selection
     handleAddExisting(dir)
@@ -217,7 +222,7 @@ export const DialogCreateProject: Component = () => {
               emptyMessage="No folders found"
             >
               {(dir) => (
-                <div class="flex items-center gap-3 w-full" classList={{ "opacity-50": dir.isExistingProject }}>
+                <div class="flex items-center gap-3 w-full">
                   <span class="text-text-weak shrink-0">
                     <Icon name={dir.isGitRepo ? "github" : "folder"} />
                   </span>
@@ -230,7 +235,7 @@ export const DialogCreateProject: Component = () => {
                   </Show>
                   <Show when={dir.isExistingProject}>
                     <span class="shrink-0 text-12-regular text-text-weak bg-surface-base px-2 py-0.5 rounded">
-                      added
+                      open
                     </span>
                   </Show>
                 </div>
