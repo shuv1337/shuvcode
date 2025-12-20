@@ -9,7 +9,7 @@ import type { AssistantMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
-import { getSpinnerFrame } from "./index"
+import { getSpinnerFrame } from "../../util/spinners"
 import { useLayoutDensity } from "../../util/layout-density"
 
 export function Sidebar(props: { sessionID: string }) {

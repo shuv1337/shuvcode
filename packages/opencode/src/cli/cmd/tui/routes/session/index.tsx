@@ -82,6 +82,19 @@ import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import { useLayoutDensity } from "../../util/layout-density"
+import {
+  getSpinnerFrame as _getSpinnerFrame,
+  setSpinnerStyle,
+  getSpinnerStyle,
+  DEFAULT_SPINNER_KEY,
+} from "../../util/spinners"
+import { DialogSpinnerList } from "../../component/dialog-spinner"
+
+// Re-export for backward compatibility
+export { getSpinnerFrame } from "../../util/spinners"
+
+// Local alias
+const getSpinnerFrame = _getSpinnerFrame
 
 declare module "@opentui/solid" {
   interface OpenTUIComponents {
@@ -90,25 +103,6 @@ declare module "@opentui/solid" {
 }
 
 addDefaultParsers(parsers.parsers)
-
-// Module-level shared spinner - ONE interval for all tool spinners
-const SPINNER_FRAMES = ["⣀⠀", "⣤⠀", "⣶⠀", "⣶⣶", "⠀⣶", "⠀⣤", "⠀⣀"]
-
-const SPINNER_INTERVAL_MS = 60
-
-// Lazy-initialized: interval only starts when first subscriber reads the signal
-let spinnerInitialized = false
-const [spinnerIndex, setSpinnerIndex] = createSignal(0)
-
-export function getSpinnerFrame(): string {
-  if (!spinnerInitialized) {
-    spinnerInitialized = true
-    setInterval(() => {
-      setSpinnerIndex((prev) => (prev + 1) % SPINNER_FRAMES.length)
-    }, SPINNER_INTERVAL_MS)
-  }
-  return SPINNER_FRAMES[spinnerIndex()]
-}
 
 extend({ "ghostty-terminal": GhosttyTerminalRenderable })
 
@@ -244,6 +238,12 @@ export function Session() {
   const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [userMessageMarkdown, setUserMessageMarkdown] = createSignal(kv.get("user_message_markdown", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
+
+  // Initialize spinner style from KV store
+  const savedSpinnerStyle = kv.get("spinner_style", DEFAULT_SPINNER_KEY)
+  if (savedSpinnerStyle) {
+    setSpinnerStyle(savedSpinnerStyle)
+  }
 
   // Search state
   const [searchMode, setSearchMode] = createSignal(false)
@@ -820,6 +820,14 @@ export function Session() {
           return next
         })
         dialog.clear()
+      },
+    },
+    {
+      title: "Change spinner style",
+      value: "session.spinner.style",
+      category: "Session",
+      onSelect: (dialog) => {
+        dialog.replace(() => <DialogSpinnerList />)
       },
     },
     {
