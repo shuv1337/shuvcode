@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import { readFileSync } from "fs"
+import { VitePWA } from "vite-plugin-pwa"
 import desktopPlugin from "./vite"
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf-8"))
@@ -33,7 +34,66 @@ const apiRoutes = [
 ]
 
 export default defineConfig({
-  plugins: [desktopPlugin] as any,
+  plugins: [
+    desktopPlugin,
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.ico", "favicon.svg", "favicon-96x96.png", "apple-touch-icon.png"],
+      manifest: false, // Use the existing site.webmanifest
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Don't cache API routes
+        navigateFallbackDenylist: apiRoutes.map((route) => new RegExp(`^${route}`)),
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gstatic-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "jsdelivr-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true, // Enable PWA in development mode for testing
+      },
+    }),
+  ] as any,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

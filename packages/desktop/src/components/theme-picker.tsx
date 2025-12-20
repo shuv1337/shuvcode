@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from "solid-js"
+import { createMemo, createSignal, onMount, Show } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -49,7 +49,7 @@ function DialogSelectTheme(props: { originalTheme: string }) {
   )
 }
 
-export function ThemePicker() {
+export function ThemePicker(props: { class?: string; mobile?: boolean }) {
   const layout = useLayout()
   const dialog = useDialog()
   const currentTheme = createMemo(() => getThemeById(layout.theme.current()))
@@ -65,10 +65,19 @@ export function ThemePicker() {
   }
 
   return (
-    <Tooltip class="shrink-0" value="Theme">
-      <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
-        <Icon name="glasses" size="small" />
+    <Show
+      when={props.mobile}
+      fallback={
+        <Tooltip class={`shrink-0 ${props.class ?? ""}`} value="Theme">
+          <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
+            <Icon name="glasses" size="small" />
+          </Button>
+        </Tooltip>
+      }
+    >
+      <Button variant="ghost" size="large" class="w-full justify-start gap-3 px-2" icon="glasses" onClick={openDialog}>
+        <span class="text-14-medium text-text-strong">Theme</span>
       </Button>
-    </Tooltip>
+    </Show>
   )
 }

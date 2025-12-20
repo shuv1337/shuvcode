@@ -8,6 +8,38 @@
   }
 }
 
+/* Safe area utilities for mobile devices (notch, home indicator, etc.) */
+@utility pt-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility pl-safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+@utility pr-safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+@utility p-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+@utility mt-safe-top {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+@utility mb-safe-bottom {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @utility truncate-start {
   text-overflow: ellipsis;
   overflow: hidden;

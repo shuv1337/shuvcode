@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from "solid-js"
+import { createMemo, createSignal, onMount, Show } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
@@ -58,7 +58,7 @@ function DialogSelectFont(props: { originalFont: string }) {
   )
 }
 
-export function FontPicker() {
+export function FontPicker(props: { class?: string; mobile?: boolean }) {
   const layout = useLayout()
   const dialog = useDialog()
   const currentFont = createMemo(() => getFontById(layout.font.current()) ?? FONTS[0])
@@ -74,10 +74,25 @@ export function FontPicker() {
   }
 
   return (
-    <Tooltip class="shrink-0" value="Font">
-      <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
-        <Icon name="code-lines" size="small" />
+    <Show
+      when={props.mobile}
+      fallback={
+        <Tooltip class={`shrink-0 ${props.class ?? ""}`} value="Font">
+          <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
+            <Icon name="code-lines" size="small" />
+          </Button>
+        </Tooltip>
+      }
+    >
+      <Button
+        variant="ghost"
+        size="large"
+        class="w-full justify-start gap-3 px-2"
+        icon="code-lines"
+        onClick={openDialog}
+      >
+        <span class="text-14-medium text-text-strong">Font</span>
       </Button>
-    </Tooltip>
+    </Show>
   )
 }

@@ -1,6 +1,7 @@
 {
   "name": "shuvcode",
   "short_name": "shuvcode",
+  "description": "AI-powered coding assistant",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -13,9 +14,19 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  "start_url": "/",
+  "scope": "/",
+  "theme_color": "#011627",
+  "background_color": "#011627",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "display_override": ["standalone", "fullscreen"]
 }

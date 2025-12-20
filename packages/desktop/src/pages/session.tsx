@@ -727,7 +727,10 @@ export default function Page() {
                       </div>
                     </Match>
                   </Switch>
-                  <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50 px-4 sm:px-0">
+                  <div
+                    class="absolute inset-x-0 flex flex-col justify-center items-center z-50 px-4 sm:px-0"
+                    style={{ bottom: "max(2rem, calc(var(--safe-area-inset-bottom, 0px) + 0.5rem))" }}
+                  >
                     <div class="w-full max-w-146 sm:px-6">
                       <PromptInput
                         ref={(el) => {
@@ -871,7 +874,10 @@ export default function Page() {
           </DragOverlay>
         </DragDropProvider>
         <Show when={tabs().active()}>
-          <div class="absolute inset-x-0 px-6 max-w-200 flex flex-col justify-center items-center z-50 mx-auto bottom-8">
+          <div
+            class="absolute inset-x-0 px-4 sm:px-6 max-w-200 flex flex-col justify-center items-center z-50 mx-auto"
+            style={{ bottom: "max(2rem, calc(var(--safe-area-inset-bottom, 0px) + 0.5rem))" }}
+          >
             <PromptInput
               ref={(el) => {
                 inputRef = el

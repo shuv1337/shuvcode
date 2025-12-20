@@ -58,6 +58,7 @@ export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
     lastSession: {} as { [directory: string]: string },
     activeDraggable: undefined as string | undefined,
+    mobileMenuOpen: false,
   })
 
   let scrollContainerRef: HTMLDivElement | undefined
@@ -695,14 +696,27 @@ export default function Layout(props: ParentProps) {
   }
 
   return (
-    <div class="relative flex-1 min-h-0 flex flex-col">
+    <div
+      class="relative flex-1 min-h-0 flex flex-col"
+      style={{ "padding-top": "var(--safe-area-inset-top)", "padding-bottom": "var(--safe-area-inset-bottom)" }}
+    >
       <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
+        {/* Mobile hamburger menu button */}
+        <button
+          class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch border-r border-border-weak-base"
+          onClick={() => setStore("mobileMenuOpen", true)}
+          aria-label="Open menu"
+        >
+          <Icon name="menu" size="normal" />
+        </button>
         <A
           href="/"
           classList={{
             "w-12 shrink-0": true,
-            "flex items-center justify-center self-stretch overflow-hidden": true,
+            "items-center justify-center self-stretch overflow-hidden": true,
             "border-r border-border-weak-base": true,
+            "hidden sm:flex": !layout.sidebar.opened(),
+            flex: layout.sidebar.opened(),
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
           data-tauri-drag-region
@@ -715,7 +729,7 @@ export default function Layout(props: ParentProps) {
           <Show
             when={params.dir && layout.projects.list().length > 0}
             fallback={
-              <div class="flex items-center gap-2 ml-auto">
+              <div class="hidden sm:flex items-center gap-2 ml-auto">
                 <FontPicker />
                 <ThemePicker />
               </div>
@@ -837,7 +851,7 @@ export default function Layout(props: ParentProps) {
                 </Select>
               </div>
             </div>
-            <div class="flex items-center gap-2 ml-auto">
+            <div class="hidden sm:flex items-center gap-2 ml-auto">
               <FontPicker />
               <ThemePicker />
             </div>
@@ -879,8 +893,10 @@ export default function Layout(props: ParentProps) {
         <div
           classList={{
             "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
-            "flex flex-col gap-5.5 items-start self-stretch justify-between": true,
+            "flex-col gap-5.5 items-start self-stretch justify-between": true,
             "border-r border-border-weak-base contain-strict": true,
+            "hidden sm:flex": !layout.sidebar.opened(),
+            flex: layout.sidebar.opened(),
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
         >
@@ -1036,6 +1052,129 @@ export default function Layout(props: ParentProps) {
         </div>
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">{props.children}</main>
       </div>
+
+      {/* Mobile fullscreen menu overlay */}
+      <Show when={store.mobileMenuOpen}>
+        <div
+          class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
+          style={{
+            "padding-top": "var(--safe-area-inset-top)",
+            "padding-bottom": "var(--safe-area-inset-bottom)",
+            "padding-left": "var(--safe-area-inset-left)",
+            "padding-right": "var(--safe-area-inset-right)",
+          }}
+        >
+          {/* Mobile menu header */}
+          <div class="h-12 shrink-0 border-b border-border-weak-base flex items-center justify-between px-4">
+            <A href="/" class="flex items-center" onClick={() => setStore("mobileMenuOpen", false)}>
+              <AsciiLogo scale={0.55} />
+            </A>
+            <IconButton
+              icon="close"
+              variant="ghost"
+              onClick={() => setStore("mobileMenuOpen", false)}
+              aria-label="Close menu"
+            />
+          </div>
+
+          {/* Mobile menu content */}
+          <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            {/* Projects section */}
+            <Show when={layout.projects.list().length > 0}>
+              <div class="flex flex-col gap-2">
+                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Projects</div>
+                <For each={layout.projects.list()}>
+                  {(project) => {
+                    const name = () => getFilename(project.worktree)
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="large"
+                        class="w-full justify-start gap-3 px-2"
+                        onClick={() => {
+                          navigateToProject(project.worktree)
+                          setStore("mobileMenuOpen", false)
+                        }}
+                      >
+                        <ProjectAvatar project={project} notify />
+                        <span class="truncate text-14-medium text-text-strong">{name()}</span>
+                      </Button>
+                    )
+                  }}
+                </For>
+              </div>
+            </Show>
+
+            {/* Actions section */}
+            <div class="flex flex-col gap-2">
+              <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Actions</div>
+              <Button
+                variant="ghost"
+                size="large"
+                class="w-full justify-start gap-3 px-2"
+                icon="plus"
+                onClick={() => {
+                  setStore("mobileMenuOpen", false)
+                  connectProvider()
+                }}
+              >
+                <span class="text-14-medium text-text-strong">Connect provider</span>
+              </Button>
+              <Show when={platform.openDirectoryPickerDialog}>
+                <Button
+                  variant="ghost"
+                  size="large"
+                  class="w-full justify-start gap-3 px-2"
+                  icon="folder-add-left"
+                  onClick={() => {
+                    setStore("mobileMenuOpen", false)
+                    chooseProject()
+                  }}
+                >
+                  <span class="text-14-medium text-text-strong">Open project</span>
+                </Button>
+              </Show>
+              <Button
+                variant="ghost"
+                size="large"
+                class="w-full justify-start gap-3 px-2"
+                icon="folder-add-left"
+                onClick={() => {
+                  setStore("mobileMenuOpen", false)
+                  createProject()
+                }}
+              >
+                <span class="text-14-medium text-text-strong">Create project</span>
+              </Button>
+              <Button
+                as="a"
+                href="https://opencode.ai/desktop-feedback"
+                target="_blank"
+                variant="ghost"
+                size="large"
+                class="w-full justify-start gap-3 px-2"
+                icon="bubble-5"
+                onClick={() => setStore("mobileMenuOpen", false)}
+              >
+                <span class="text-14-medium text-text-strong">Share feedback</span>
+              </Button>
+            </div>
+
+            {/* Settings section */}
+            <div class="flex flex-col gap-2">
+              <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Settings</div>
+              <FontPicker mobile />
+              <ThemePicker mobile />
+            </div>
+          </div>
+
+          {/* Mobile menu footer */}
+          <div class="shrink-0 border-t border-border-weak-base p-4">
+            <div class="text-11-regular text-text-weaker">v{__APP_VERSION__}</div>
+          </div>
+        </div>
+      </Show>
+
       <Toast.Region />
     </div>
   )
