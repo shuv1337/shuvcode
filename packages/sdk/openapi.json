@@ -104,14 +104,14 @@
           }
         ],
         "summary": "Create project",
-        "description": "Create a new project directory and initialize it as a git repository.",
+        "description": "Create a new project directory and initialize it as a git repository, or add an existing directory as a project.",
         "responses": {
           "200": {
-            "description": "Created project information",
+            "description": "Created or added project information",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Project"
+                  "$ref": "#/components/schemas/ProjectCreateResult"
                 }
               }
             }
@@ -7388,6 +7388,19 @@
         },
         "required": ["directory", "payload"]
       },
+      "ProjectCreateResult": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "created": {
+            "description": "True if a new project was created, false if an existing project was added",
+            "type": "boolean"
+          }
+        },
+        "required": ["project", "created"]
+      },
       "BadRequestError": {
         "type": "object",
         "properties": {
@@ -7473,6 +7486,11 @@
           "sidebar_toggle": {
             "description": "Toggle sidebar",
             "default": "<leader>b",
+            "type": "string"
+          },
+          "sessions_sidebar_toggle": {
+            "description": "Toggle sessions sidebar",
+            "default": "none",
             "type": "string"
           },
           "scrollbar_toggle": {

@@ -83,15 +83,17 @@ export const DialogCreateProject: Component = () => {
         return
       }
 
-      const project = result.data!
+      const { project, created } = result.data!
       dialog.close()
       openProject(project.worktree)
 
       showToast({
         variant: "success",
         icon: "circle-check",
-        title: "Project created",
-        description: `Created project at ${project.worktree}`,
+        title: created ? "Project created" : "Project added",
+        description: created
+          ? `Created project at ${project.worktree.replace(homedir(), "~")}`
+          : `Added ${project.worktree.replace(homedir(), "~")}`,
       })
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : "Failed to create project"
@@ -118,7 +120,7 @@ export const DialogCreateProject: Component = () => {
         return
       }
 
-      const project = result.data!
+      const { project } = result.data!
       dialog.close()
       openProject(project.worktree)
 
@@ -151,7 +153,7 @@ export const DialogCreateProject: Component = () => {
           setStore("loading", false)
           return
         }
-        const project = createResult.data!
+        const { project } = createResult.data!
         dialog.close()
         openProject(project.worktree)
         showToast({

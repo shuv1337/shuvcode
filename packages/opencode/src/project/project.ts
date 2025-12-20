@@ -223,12 +223,20 @@ export namespace Project {
 
   export const CreateError = NamedError.create("CreateProjectError", z.object({ message: z.string() }))
 
+  export const CreateResult = z
+    .object({
+      project: Info,
+      created: z.boolean().describe("True if a new project was created, false if an existing project was added"),
+    })
+    .meta({ ref: "ProjectCreateResult" })
+  export type CreateResult = z.infer<typeof CreateResult>
+
   export const create = fn(
     z.object({
       path: z.string().min(1),
       name: z.string().optional(),
     }),
-    async (input) => {
+    async (input): Promise<CreateResult> => {
       const expandedPath = Filesystem.expanduser(input.path)
       const projectPath = path.resolve(expandedPath)
 
@@ -236,6 +244,12 @@ export namespace Project {
       if (!path.isAbsolute(expandedPath)) {
         throw new CreateError({ message: "Path must be absolute" })
       }
+
+      // Check if directory already exists
+      const directoryExists = await fs
+        .access(projectPath)
+        .then(() => true)
+        .catch(() => false)
 
       // Create directory if it doesn't exist
       await fs.mkdir(projectPath, { recursive: true })
@@ -246,6 +260,9 @@ export namespace Project {
         .access(gitDir)
         .then(() => true)
         .catch(() => false)
+
+      // Determine if this is a newly created project or an existing one being added
+      const isNewlyCreated = !directoryExists || !isGitRepo
 
       if (!isGitRepo) {
         // Initialize git and create empty initial commit (required for project ID which is the first commit hash)
@@ -265,10 +282,10 @@ export namespace Project {
       // Set custom name if provided
       if (input.name) {
         await update({ projectID: project.id, name: input.name })
-        return { ...project, name: input.name }
+        return { project: { ...project, name: input.name }, created: isNewlyCreated }
       }
 
-      return project
+      return { project, created: isNewlyCreated }
     },
   )
 }

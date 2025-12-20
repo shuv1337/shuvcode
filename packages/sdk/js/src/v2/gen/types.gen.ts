@@ -866,6 +866,14 @@ export type GlobalEvent = {
   payload: Event
 }
 
+export type ProjectCreateResult = {
+  project: Project
+  /**
+   * True if a new project was created, false if an existing project was added
+   */
+  created: boolean
+}
+
 export type BadRequestError = {
   data: unknown
   errors: Array<{
@@ -2061,9 +2069,9 @@ export type ProjectCreateError = ProjectCreateErrors[keyof ProjectCreateErrors]
 
 export type ProjectCreateResponses = {
   /**
-   * Created project information
+   * Created or added project information
    */
-  200: Project
+  200: ProjectCreateResult
 }
 
 export type ProjectCreateResponse = ProjectCreateResponses[keyof ProjectCreateResponses]

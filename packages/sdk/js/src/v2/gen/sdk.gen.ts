@@ -236,7 +236,7 @@ export class Project extends HeyApiClient {
   /**
    * Create project
    *
-   * Create a new project directory and initialize it as a git repository.
+   * Create a new project directory and initialize it as a git repository, or add an existing directory as a project.
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
