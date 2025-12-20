@@ -66,6 +66,14 @@ The desktop file viewer now displays actual image previews for PNG, JPG, GIF, an
 
 ---
 
+### TUI Spinner Styles
+
+Choose from 60+ animated spinner styles for tool execution indicators. Access via the command palette with `Change spinner style`. Your selection is persisted across sessions.
+
+Available styles include braille patterns, block animations, geometric shapes, and creative concepts like moon phases, clock sweeps, and bouncing balls.
+
+---
+
 ### TUI Layout Density
 
 The TUI automatically adapts its vertical spacing for small terminals (< 28 rows). Configure via `tui.density`:

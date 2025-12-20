@@ -750,6 +750,36 @@
     },
     {
       "pr": 0,
+      "title": "TUI configurable spinner styles",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Choose from 60+ animated spinner styles for tool execution indicators via command palette. Selection persisted to KV store.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+          "description": "SPINNERS collection and spinner state management functions",
+          "markers": ["export const SPINNERS", "setSpinnerStyle", "getSpinnerStyle", "getSpinnerFrame"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+          "description": "DialogSpinnerList component with live preview animation",
+          "markers": ["export function DialogSpinnerList", "currentFrame", "onMove", "kv.set(\"spinner_style\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Command palette action and spinner style initialization from KV",
+          "markers": ["Change spinner style", "session.spinner.style", "kv.get(\"spinner_style\"", "setSpinnerStyle"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
       "title": "TUI layout density for small terminals",
       "author": "fork",
       "status": "fork-only",
