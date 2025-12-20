@@ -38,7 +38,7 @@ export const DialogSelectProvider: Component = () => {
         }}
       >
         {(i) => (
-          <div class="px-1.25 w-full flex items-center gap-x-4">
+          <div class="px-1.25 w-full min-w-0 flex items-center gap-x-4">
             <ProviderIcon
               data-slot="list-item-extra-icon"
               id={i.id as IconName}
@@ -49,12 +49,12 @@ export const DialogSelectProvider: Component = () => {
                 "size-5": i.id !== "opencode",
               }}
             />
-            <span>{i.name}</span>
+            <span class="shrink-0">{i.name}</span>
             <Show when={i.id === "opencode"}>
               <Tag>Recommended</Tag>
             </Show>
             <Show when={i.id === "anthropic"}>
-              <div class="text-14-regular text-text-weak">Connect with Claude Pro/Max or API key</div>
+              <div class="text-14-regular text-text-weak ml-auto truncate">Connect with Claude Pro/Max or API key</div>
             </Show>
           </div>
         )}
