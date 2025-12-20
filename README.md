@@ -66,6 +66,26 @@ The desktop file viewer now displays actual image previews for PNG, JPG, GIF, an
 
 ---
 
+### TUI Layout Density
+
+The TUI automatically adapts its vertical spacing for small terminals (< 28 rows). Configure via `tui.density`:
+
+- `auto` (default): Switches to compact mode on small terminals
+- `comfortable`: Standard spacing with footer and hints
+- `compact`: Reduced padding, hides footer and secondary hints
+
+Toggle density from the command palette or set in config:
+
+```jsonc
+{
+  "tui": {
+    "density": "auto",
+  },
+}
+```
+
+---
+
 ### Granular File Permissions
 
 Restrict which files an agent can edit using glob patterns:

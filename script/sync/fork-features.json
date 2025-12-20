@@ -747,6 +747,66 @@
           "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI layout density for small terminals",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Responsive TUI layout that reduces vertical whitespace on small terminals. Includes tui.density config option (auto/comfortable/compact) and command palette toggles.",
+      "files": [
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/cli/cmd/tui/util/layout-density.ts",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-command.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "tui.density config option schema",
+          "markers": ["density: z", ".enum([\"auto\", \"comfortable\", \"compact\"])"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/layout-density.ts",
+          "description": "useLayoutDensity hook with auto-detection and toggle functions",
+          "markers": ["export function useLayoutDensity()", "COMPACT_HEIGHT_THRESHOLD", "tokens", "toggle", "reset"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Density applied to session layout padding and command palette items",
+          "markers": [
+            "const density = useLayoutDensity()",
+            "density.tokens().paddingY",
+            "density.tokens().gap",
+            "density.tokens().showFooter",
+            "session.toggle.density",
+            "session.reset.density"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+          "description": "Density applied to sidebar padding",
+          "markers": ["density.tokens().sidebarPaddingY"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
+          "description": "Density applied to home page bottom bar padding",
+          "markers": ["density.tokens().homePaddingY"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Density controls secondary hints visibility",
+          "markers": ["density.tokens().showSecondaryHints"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-command.tsx",
+          "description": "Filter undefined command options to prevent errors",
+          "markers": [".filter((x) => !!x)"]
+        }
+      ]
     }
   ]
 }
