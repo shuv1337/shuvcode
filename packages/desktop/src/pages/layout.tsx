@@ -1,19 +1,7 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  onMount,
-  ParentProps,
-  Show,
-  Switch,
-  type JSX,
-} from "solid-js"
+import { createEffect, createMemo, For, Match, onCleanup, onMount, ParentProps, Show, Switch, type JSX } from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
-import { useLayout, getAvatarColors } from "@/context/layout"
+import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"
 import { useGlobalSync } from "@/context/global-sync"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
 import { AsciiLogo, AsciiMark } from "@opencode-ai/ui/logo"
@@ -31,7 +19,7 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
-import { Session, Project } from "@opencode-ai/sdk/v2/client"
+import { Session } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { createStore, produce } from "solid-js/store"
 import {
@@ -381,7 +369,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const ProjectAvatar = (props: {
-    project: Project
+    project: LocalProject
     class?: string
     expandable?: boolean
     notify?: boolean
@@ -424,7 +412,7 @@ export default function Layout(props: ParentProps) {
     )
   }
 
-  const ProjectVisual = (props: { project: Project & { expanded: boolean }; class?: string }): JSX.Element => {
+  const ProjectVisual = (props: { project: LocalProject; class?: string }): JSX.Element => {
     const name = createMemo(() => getFilename(props.project.worktree))
     const current = createMemo(() => base64Decode(params.dir ?? ""))
     return (
@@ -460,7 +448,7 @@ export default function Layout(props: ParentProps) {
   const SessionItem = (props: {
     session: Session
     slug: string
-    project: Project
+    project: LocalProject
     depth?: number
     childrenMap: Map<string, Session[]>
   }): JSX.Element => {
@@ -550,7 +538,7 @@ export default function Layout(props: ParentProps) {
     )
   }
 
-  const SortableProject = (props: { project: Project & { expanded: boolean } }): JSX.Element => {
+  const SortableProject = (props: { project: LocalProject }): JSX.Element => {
     const sortable = createSortable(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
     const name = createMemo(() => getFilename(props.project.worktree))
@@ -575,13 +563,21 @@ export default function Layout(props: ParentProps) {
       setProjectStore("limit", (limit) => limit + 5)
       await globalSync.project.loadSessions(props.project.worktree)
     }
-    const [expanded, setExpanded] = createSignal(true)
+    const handleOpenChange = (open: boolean) => {
+      if (open) layout.projects.expand(props.project.worktree)
+      else layout.projects.collapse(props.project.worktree)
+    }
     return (
       // @ts-ignore
       <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Switch>
           <Match when={layout.sidebar.opened()}>
-            <Collapsible variant="ghost" defaultOpen class="gap-2 shrink-0" onOpenChange={setExpanded}>
+            <Collapsible
+              variant="ghost"
+              open={props.project.expanded}
+              class="gap-2 shrink-0"
+              onOpenChange={handleOpenChange}
+            >
               <Button
                 as={"div"}
                 variant="ghost"
@@ -592,7 +588,7 @@ export default function Layout(props: ParentProps) {
                     project={props.project}
                     class="group-hover/session:hidden"
                     expandable
-                    notify={!expanded()}
+                    notify={!props.project.expanded}
                   />
                   <span class="truncate text-14-medium text-text-strong">{name()}</span>
                 </Collapsible.Trigger>
