@@ -138,20 +138,20 @@ Learn more about [agents](https://opencode.ai/docs/agents).
 
 A NERDTree-style sidebar for managing sessions. Toggle with `ctrl+n`.
 
-| Key | Action |
-| --- | --- |
-| `j/k` or `↑/↓` | Move cursor |
+| Key            | Action                       |
+| -------------- | ---------------------------- |
+| `j/k` or `↑/↓` | Move cursor                  |
 | `Enter` or `o` | Open session / Toggle expand |
-| `O` | Expand all children |
-| `x` | Collapse parent |
-| `X` | Collapse all |
-| `p` | Go to parent |
-| `g/G` | Jump to top/bottom |
-| `n` | New session |
-| `r` | Rename session |
-| `d` | Delete session |
-| `?` | Show help |
-| `q` or `Esc` | Close sidebar |
+| `O`            | Expand all children          |
+| `x`            | Collapse parent              |
+| `X`            | Collapse all                 |
+| `p`            | Go to parent                 |
+| `g/G`          | Jump to top/bottom           |
+| `n`            | New session                  |
+| `r`            | Rename session               |
+| `d`            | Delete session               |
+| `?`            | Show help                    |
+| `q` or `Esc`   | Close sidebar                |
 
 ### Documentation
 

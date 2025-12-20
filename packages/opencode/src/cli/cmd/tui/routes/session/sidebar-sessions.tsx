@@ -123,12 +123,19 @@ export function SessionsSidebar(props: { onClose: () => void }) {
   }
 
   async function deleteSession(sessionId: string) {
-    const confirmed = await DialogConfirm.show(dialog, "Delete Session", "Are you sure you want to delete this session?")
+    const confirmed = await DialogConfirm.show(
+      dialog,
+      "Delete Session",
+      "Are you sure you want to delete this session?",
+    )
     if (confirmed) sdk.client.session.delete({ sessionID: sessionId })
   }
 
   async function renameSession(session: Session) {
-    const newTitle = await DialogPrompt.show(dialog, "Rename Session", { value: session.title, placeholder: "Enter new name" })
+    const newTitle = await DialogPrompt.show(dialog, "Rename Session", {
+      value: session.title,
+      placeholder: "Enter new name",
+    })
     if (newTitle && newTitle !== session.title) {
       sdk.client.session.update({ sessionID: session.id, title: newTitle })
     }
