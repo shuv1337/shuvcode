@@ -575,13 +575,21 @@ export default function Layout(props: ParentProps) {
       setProjectStore("limit", (limit) => limit + 5)
       await globalSync.project.loadSessions(props.project.worktree)
     }
-    const [expanded, setExpanded] = createSignal(true)
+    const handleOpenChange = (open: boolean) => {
+      if (open) layout.projects.expand(props.project.worktree)
+      else layout.projects.collapse(props.project.worktree)
+    }
     return (
       // @ts-ignore
       <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Switch>
           <Match when={layout.sidebar.opened()}>
-            <Collapsible variant="ghost" defaultOpen class="gap-2 shrink-0" onOpenChange={setExpanded}>
+            <Collapsible
+              variant="ghost"
+              open={props.project.expanded}
+              class="gap-2 shrink-0"
+              onOpenChange={handleOpenChange}
+            >
               <Button
                 as={"div"}
                 variant="ghost"
@@ -592,7 +600,7 @@ export default function Layout(props: ParentProps) {
                     project={props.project}
                     class="group-hover/session:hidden"
                     expandable
-                    notify={!expanded()}
+                    notify={!props.project.expanded}
                   />
                   <span class="truncate text-14-medium text-text-strong">{name()}</span>
                 </Collapsible.Trigger>
