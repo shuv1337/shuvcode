@@ -14,6 +14,7 @@ import { DialogModel, useConnected } from "@tui/component/dialog-model"
 import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
+import { DialogSpinnerList } from "@tui/component/dialog-spinner"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
@@ -420,6 +421,14 @@ function App() {
         dialog.clear()
       },
       category: "System",
+    },
+    {
+      title: "Change spinner style",
+      value: "spinner.style",
+      category: "System",
+      onSelect: () => {
+        dialog.replace(() => <DialogSpinnerList />)
+      },
     },
     {
       title: "Help",

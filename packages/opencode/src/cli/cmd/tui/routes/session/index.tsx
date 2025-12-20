@@ -82,13 +82,7 @@ import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import { useLayoutDensity } from "../../util/layout-density"
-import {
-  getSpinnerFrame as _getSpinnerFrame,
-  setSpinnerStyle,
-  getSpinnerStyle,
-  DEFAULT_SPINNER_KEY,
-} from "../../util/spinners"
-import { DialogSpinnerList } from "../../component/dialog-spinner"
+import { getSpinnerFrame as _getSpinnerFrame, setSpinnerStyle, DEFAULT_SPINNER_KEY } from "../../util/spinners"
 
 // Re-export for backward compatibility
 export { getSpinnerFrame } from "../../util/spinners"
@@ -827,14 +821,6 @@ export function Session() {
           return next
         })
         dialog.clear()
-      },
-    },
-    {
-      title: "Change spinner style",
-      value: "session.spinner.style",
-      category: "Session",
-      onSelect: (dialog) => {
-        dialog.replace(() => <DialogSpinnerList />)
       },
     },
     {
