@@ -34,8 +34,6 @@ type Dialog = "provider" | "model" | "connect"
 
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
 
-export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
-
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
   init: () => {
