@@ -43,11 +43,17 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme        |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
-_Last updated: 2025-12-17_
+_Last updated: 2025-12-19_
 
 ---
 
 ## Feature Highlights
+
+### Desktop Image Preview
+
+The desktop file viewer now displays actual image previews for PNG, JPG, GIF, and WEBP files instead of showing raw base64 text. Images are centered and scaled to fit within the viewport with scrolling support for large images. SVG files are excluded from image preview and render as syntax-highlighted XML code.
+
+---
 
 ### Granular File Permissions
 

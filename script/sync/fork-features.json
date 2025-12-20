@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-17",
+  "lastUpdated": "2025-12-19",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -567,6 +567,63 @@
           "file": "packages/ui/src/components/resize-handle.css",
           "description": "CSS for reversed horizontal resize handle positioning",
           "markers": ["[data-resize-handle][data-direction=\"horizontal\"][data-reverse=\"true\"]"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Improved text file detection for SVG and extensionless files",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix SVG and text files (Dockerfile, Makefile, etc.) being incorrectly base64 encoded. Added binary content detection to properly serve text files with syntax highlighting.",
+      "files": ["packages/opencode/src/file/index.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "isBinaryContent() function to detect actual binary content via null bytes",
+          "markers": ["function isBinaryContent(buffer: ArrayBuffer)", "nullBytes", "nonPrintable"]
+        },
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "SVG exclusion from base64 encoding - treat as text",
+          "markers": ["if (type === \"image/svg+xml\") return false"]
+        },
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "Check application/octet-stream files for binary content before encoding",
+          "markers": ["if (type === \"application/octet-stream\") return \"check\"", "if (encode === \"check\")"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop image preview in file viewer",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Display actual image previews for PNG, JPG, GIF, WEBP files in file viewer tabs. Images are centered and scaled to fit with scroll support for large images. SVG renders as syntax-highlighted code.",
+      "files": ["packages/desktop/src/pages/session.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Image preview detection logic excluding SVG",
+          "markers": [
+            "content.encoding === \"base64\"",
+            "content.mimeType?.startsWith(\"image/\")",
+            "content.mimeType !== \"image/svg+xml\""
+          ]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Image rendering with data URL and centered container",
+          "markers": [
+            "src={`data:${content.mimeType};base64,${content.content}`}",
+            "flex-1 min-h-0 overflow-auto flex items-center justify-center"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Wait for file content to load before rendering to prevent blank pages",
+          "markers": ["<Show when={file()?.content} keyed>"]
         }
       ]
     }
