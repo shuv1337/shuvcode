@@ -49,6 +49,17 @@ _Last updated: 2025-12-19_
 
 ## Feature Highlights
 
+### Add Existing Project Dialog
+
+The desktop "Create project" button now opens an improved "Add Project" dialog with two tabs:
+
+- **Add Existing**: Browse and search folders from your home directory with fuzzy search, see git repo indicators, and add existing projects with one click
+- **Create New**: Original path input for creating new project directories
+
+The folder browser scans up to 2 levels deep from `$HOME`, prioritizes git repositories, and shows which folders are already added as projects.
+
+---
+
 ### Desktop Image Preview
 
 The desktop file viewer now displays actual image previews for PNG, JPG, GIF, and WEBP files instead of showing raw base64 text. Images are centered and scaled to fit within the viewport with scrolling support for large images. SVG files are excluded from image preview and render as syntax-highlighted XML code.

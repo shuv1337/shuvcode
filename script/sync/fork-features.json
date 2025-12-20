@@ -626,6 +626,127 @@
           "markers": ["<Show when={file()?.content} keyed>"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Shell command cwd fix for new projects",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix shell commands failing on first message in newly created projects by using session.directory instead of Instance.directory for working directory",
+      "files": ["packages/opencode/src/session/prompt.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Use session.directory as authoritative cwd source in shell function",
+          "markers": ["const cwd = session.directory", "// Use session.directory as the authoritative source for cwd"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Project browse API endpoint",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Add GET /project/browse endpoint for discovering potential projects from $HOME with fuzzy search, git repo detection, and existing project indicators",
+      "files": [
+        "packages/opencode/src/server/project.ts",
+        "packages/sdk/js/src/v2/gen/sdk.gen.ts",
+        "packages/sdk/js/src/v2/gen/types.gen.ts",
+        "packages/sdk/openapi.json"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/server/project.ts",
+          "description": "DirectoryInfo schema and scanDirectories function",
+          "markers": [
+            "const DirectoryInfo = z",
+            "async function scanDirectories(rootPath: string, maxDepth = 2)",
+            "isGitRepo",
+            "isExistingProject"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/server/project.ts",
+          "description": "GET /browse endpoint with fuzzy search via fuzzysort",
+          "markers": ["\"/browse\"", "operationId: \"project.browse\"", "fuzzysort.go(query, allDirs"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Dialog size prop",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Add size prop to Dialog component with sm, md, lg variants for different dialog heights",
+      "files": ["packages/ui/src/components/dialog.tsx", "packages/ui/src/components/dialog.css"],
+      "criticalCode": [
+        {
+          "file": "packages/ui/src/components/dialog.tsx",
+          "description": "Size prop on DialogProps and data-size attribute",
+          "markers": ["size?: \"sm\" | \"md\" | \"lg\"", "data-size={props.size}"]
+        },
+        {
+          "file": "packages/ui/src/components/dialog.css",
+          "description": "Large dialog size variant with 640px height",
+          "markers": ["&[data-size=\"lg\"]", "height: min(calc(100vh - 16px), 640px)"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Prevent globalSync.child error on home page",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Guard against calling globalSync.child() with empty directory when on home page",
+      "files": ["packages/desktop/src/pages/layout.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "Guard sessions memo to return empty array when no directory",
+          "markers": ["const dir = currentDirectory()", "if (!dir) return []"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Add existing project dialog with folder browser",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Redesigned create project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input. Uses List component for keyboard navigation and shows git/added badges.",
+      "files": ["packages/desktop/src/components/dialog-create-project.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "description": "Tab state and switcher buttons",
+          "markers": [
+            "const [activeTab, setActiveTab] = createSignal<\"create\" | \"existing\">(\"existing\")",
+            "variant={activeTab() === \"existing\" ? \"secondary\" : \"ghost\"}"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "description": "Fetch directories function for List component",
+          "markers": [
+            "async function fetchDirectories(query: string): Promise<DirectoryInfo[]>",
+            "globalSDK.client.project.browse"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "description": "List component with folder browser",
+          "markers": ["<List<DirectoryInfo>", "items={fetchDirectories}", "filterKeys={[\"name\", \"path\"]}"]
+        },
+        {
+          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "description": "Directory item rendering with git/added badges",
+          "markers": ["dir.isGitRepo ? \"github\" : \"folder\"", "dir.isExistingProject"]
+        },
+        {
+          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "description": "Dialog uses lg size for more folder visibility",
+          "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
+        }
+      ]
     }
   ]
 }
