@@ -50,16 +50,17 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
 await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${publishTag}`
 
 if (!Script.preview) {
+  // Create archives for GitHub release
   for (const key of Object.keys(binaries)) {
     if (key.includes("linux")) {
-      await $`cd dist/${key}/bin && tar -czf ../../${key}.tar.gz *`
+      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
     } else {
-      await $`cd dist/${key}/bin && zip -r ../../${key}.zip *`
+      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
 
   // Skip upstream-specific publishing (AUR, Homebrew, Docker) for fork
   // These distribution channels are managed by the upstream sst/opencode project
-  // Our fork publishes to npm as "shuvcode" and creates GitHub releases on kcrommett/shuvcode
+  // Our fork publishes to npm as "shuvcode" and creates GitHub releases on Latitudes-Dev/shuvcode
   console.log("Skipping AUR, Homebrew, and Docker publishing (upstream-only)")
 }
