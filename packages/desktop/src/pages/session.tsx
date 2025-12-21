@@ -738,7 +738,7 @@ export default function Page() {
                       },
                     )
                     return (
-                      <Tabs.Content value={tab} class="select-text flex flex-col h-full mt-3">
+                      <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden contain-strict">
                         <Show when={file()?.content} keyed>
                           {(content) => {
                             const f = file()!
@@ -758,16 +758,18 @@ export default function Page() {
                                   </div>
                                 </Match>
                                 <Match when={true}>
-                                  <Dynamic
-                                    component={codeComponent}
-                                    file={{
-                                      name: f.path,
-                                      contents: content.content ?? "",
-                                      cacheKey: checksum(content.content ?? ""),
-                                    }}
-                                    overflow="scroll"
-                                    class="pb-40"
-                                  />
+                                  <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
+                                    <Dynamic
+                                      component={codeComponent}
+                                      file={{
+                                        name: f.path,
+                                        contents: content.content ?? "",
+                                        cacheKey: checksum(content.content ?? ""),
+                                      }}
+                                      overflow="scroll"
+                                      class="pb-40"
+                                    />
+                                  </div>
                                 </Match>
                               </Switch>
                             )
