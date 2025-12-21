@@ -146,13 +146,19 @@ export namespace BunProc {
       })
 
       if (!result.success) {
-        log.error("failed to bundle plugin", {
+        log.error("failed to bundle plugin - falling back to unbundled module", {
           pkg,
           logs: result.logs,
+          unbundledPath: mod,
         })
         // Fall back to unbundled module
         return mod
       }
+
+      log.info("successfully bundled plugin", {
+        pkg,
+        bundledFile,
+      })
 
       // Copy non-JS assets (HTML, CSS, etc.) that plugins may need at runtime
       // Some bundled code uses __dirname + ".." to find assets, so copy to both
@@ -160,9 +166,10 @@ export namespace BunProc {
       await copyPluginAssets(mod, bundledDir)
       await copyPluginAssets(mod, Global.Path.cache)
     } catch (e) {
-      log.error("failed to bundle plugin", {
+      log.error("failed to bundle plugin - falling back to unbundled module", {
         pkg,
         error: (e as Error).message,
+        unbundledPath: mod,
       })
       // Fall back to unbundled module
       return mod
