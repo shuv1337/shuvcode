@@ -51,6 +51,9 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
           height: 280,
         },
+        session: {
+          width: 600,
+        },
         review: {
           state: "pane" as "pane" | "tab",
           width: 450,
@@ -185,15 +188,25 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("terminal", "height", height)
         },
       },
+      session: {
+        width: createMemo(() => store.session?.width ?? 600),
+        resize(width: number) {
+          if (!store.session) {
+            setStore("session", { width })
+          } else {
+            setStore("session", "width", width)
+          }
+        },
+      },
       review: {
-        state: createMemo(() => store.review?.state ?? "closed"),
+        state: createMemo(() => store.review?.state ?? "pane"),
+        width: createMemo(() => store.review?.width ?? 450),
         pane() {
           setStore("review", "state", "pane")
         },
         tab() {
           setStore("review", "state", "tab")
         },
-        width: createMemo(() => store.review?.width ?? 450),
         resize(width: number) {
           setStore("review", "width", width)
         },
@@ -283,14 +296,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             }
           },
           async open(tab: string) {
-            if (tab === "chat") {
-              if (!store.sessionTabs[sessionKey]) {
-                setStore("sessionTabs", sessionKey, { all: [], active: undefined })
-              } else {
-                setStore("sessionTabs", sessionKey, "active", undefined)
-              }
-              return
-            }
             const current = store.sessionTabs[sessionKey] ?? { all: [] }
             if (tab !== "review") {
               if (!current.all.includes(tab)) {
