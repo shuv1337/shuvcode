@@ -8,9 +8,11 @@ RUN apk add libgcc libstdc++ ripgrep
 
 FROM base AS build-amd64
 COPY dist/shuvcode-linux-x64-baseline-musl/bin/shuvcode /usr/local/bin/shuvcode
+COPY static /usr/local/bin/static
 
 FROM base AS build-arm64
 COPY dist/shuvcode-linux-arm64-musl/bin/shuvcode /usr/local/bin/shuvcode
+COPY static /usr/local/bin/static
 
 ARG TARGETARCH
 FROM build-${TARGETARCH}
