@@ -228,6 +228,16 @@ export function Session() {
 
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = createSignal<"show" | "hide" | "auto">(kv.get("sidebar", "auto"))
+
+  const hw = 1
+  const min = 20
+  const max = 80
+
+  function clamp(n: number) {
+    return Math.max(min, Math.min(max, n))
+  }
+
+  const [w, setW] = createSignal(clamp(kv.get("sidebar_width", 42)))
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
   const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
@@ -256,6 +266,33 @@ export function Session() {
 
   // Bash output viewer state
   const [bashOutput, setBashOutput] = createSignal<BashOutputView | undefined>(undefined)
+
+  // Sidebar resize drag state
+  const [drag, setDrag] = createSignal(false)
+  const [sx, setSx] = createSignal(0)
+  const [sw, setSw] = createSignal(0)
+  const [hov, setHov] = createSignal(false)
+
+  function save() {
+    kv.set("sidebar_width", w())
+  }
+
+  function down(x: number) {
+    setDrag(true)
+    setSx(x)
+    setSw(w())
+  }
+
+  function move(x: number) {
+    if (!drag()) return
+    setW(clamp(sw() + (sx() - x)))
+  }
+
+  function up() {
+    if (!drag()) return
+    setDrag(false)
+    save()
+  }
 
   // Compute search matches from messages
   const searchMatches = createMemo(() => {
@@ -289,7 +326,9 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? w() + hw : 0) - 4)
+
+  createEffect(() => !sidebarVisible() && setDrag(false))
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -1199,7 +1238,18 @@ export function Session() {
         showBashOutput: setBashOutput,
       }}
     >
-      <box flexDirection="row">
+      <box
+        flexDirection="row"
+        onMouseDrag={(e) => {
+          move(e.x)
+        }}
+        onMouseUp={() => {
+          up()
+        }}
+        onMouseDragEnd={() => {
+          up()
+        }}
+      >
         <box
           flexGrow={1}
           paddingBottom={density.tokens().paddingY}
@@ -1405,7 +1455,25 @@ export function Session() {
           <Toast />
         </box>
         <Show when={sidebarVisible()}>
-          <Sidebar sessionID={route.sessionID} />
+          <>
+            <box
+              width={hw}
+              border={["left", "right"]}
+              customBorderChars={SplitBorder.customBorderChars}
+              borderColor={drag() ? theme.borderActive : hov() ? theme.primary : theme.border}
+              onMouseOver={() => {
+                setHov(true)
+              }}
+              onMouseOut={() => {
+                setHov(false)
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                down(e.x)
+              }}
+            />
+            <Sidebar sessionID={route.sessionID} width={w()} />
+          </>
         </Show>
       </box>
     </context.Provider>

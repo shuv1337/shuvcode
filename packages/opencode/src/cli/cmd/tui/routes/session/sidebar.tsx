@@ -12,7 +12,7 @@ import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
 import { useLayoutDensity } from "../../util/layout-density"
 
-export function Sidebar(props: { sessionID: string }) {
+export function Sidebar(props: { sessionID: string; width: number }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
@@ -87,7 +87,7 @@ export function Sidebar(props: { sessionID: string }) {
     <Show when={session()}>
       <box
         backgroundColor={theme.backgroundPanel}
-        width={42}
+        width={props.width}
         paddingTop={density.tokens().sidebarPaddingY}
         paddingBottom={density.tokens().sidebarPaddingY}
         paddingLeft={2}
