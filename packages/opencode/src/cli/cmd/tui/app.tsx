@@ -15,7 +15,7 @@ import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogIde } from "@tui/component/dialog-ide"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
-import { DialogSpinnerList } from "@tui/component/dialog-spinner"
+import { DialogSpinnerList, DialogSpinnerInterval } from "@tui/component/dialog-spinner"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
@@ -438,6 +438,14 @@ function App() {
       category: "System",
       onSelect: () => {
         dialog.replace(() => <DialogSpinnerList />)
+      },
+    },
+    {
+      title: "Change spinner interval",
+      value: "spinner.interval",
+      category: "System",
+      onSelect: () => {
+        dialog.replace(() => <DialogSpinnerInterval />)
       },
     },
     {

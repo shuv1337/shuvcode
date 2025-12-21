@@ -109,8 +109,28 @@ export const SPINNERS: Record<string, string[]> = {
 /** Default spinner key */
 export const DEFAULT_SPINNER_KEY = "DUAL_DOTS_SPIN"
 
-/** Spinner interval in milliseconds */
-export const SPINNER_INTERVAL_MS = 60
+/** Default spinner interval in milliseconds */
+export const DEFAULT_SPINNER_INTERVAL_MS = 60
+
+/** Minimum spinner interval in milliseconds */
+export const MIN_SPINNER_INTERVAL_MS = 20
+
+/** Maximum spinner interval in milliseconds */
+export const MAX_SPINNER_INTERVAL_MS = 500
+
+/** @deprecated Use DEFAULT_SPINNER_INTERVAL_MS instead */
+export const SPINNER_INTERVAL_MS = DEFAULT_SPINNER_INTERVAL_MS
+
+/** Preset interval options for the UI */
+export const SPINNER_INTERVAL_PRESETS = [
+  { label: "Fastest (20ms)", value: 20 },
+  { label: "Fast (40ms)", value: 40 },
+  { label: "Default (60ms)", value: 60 },
+  { label: "Moderate (80ms)", value: 80 },
+  { label: "Slow (120ms)", value: 120 },
+  { label: "Slower (200ms)", value: 200 },
+  { label: "Slowest (500ms)", value: 500 },
+] as const
 
 /**
  * Get all available spinner keys sorted alphabetically
@@ -142,7 +162,22 @@ export function getSpinnerPreview(key: string): string {
 // Module-level shared spinner state
 let spinnerInitialized = false
 let currentSpinnerKey = DEFAULT_SPINNER_KEY
+let currentSpinnerInterval = DEFAULT_SPINNER_INTERVAL_MS
+let spinnerIntervalId: ReturnType<typeof setInterval> | null = null
 const [spinnerIndex, setSpinnerIndex] = createSignal(0)
+
+/**
+ * Start or restart the spinner interval
+ */
+function startSpinnerInterval() {
+  if (spinnerIntervalId !== null) {
+    clearInterval(spinnerIntervalId)
+  }
+  spinnerIntervalId = setInterval(() => {
+    const frames = SPINNERS[currentSpinnerKey] || SPINNERS[DEFAULT_SPINNER_KEY]
+    setSpinnerIndex((prev) => (prev + 1) % frames.length)
+  }, currentSpinnerInterval)
+}
 
 /**
  * Initialize the spinner interval (called once on first use)
@@ -150,10 +185,7 @@ const [spinnerIndex, setSpinnerIndex] = createSignal(0)
 function initSpinner() {
   if (spinnerInitialized) return
   spinnerInitialized = true
-  setInterval(() => {
-    const frames = SPINNERS[currentSpinnerKey] || SPINNERS[DEFAULT_SPINNER_KEY]
-    setSpinnerIndex((prev) => (prev + 1) % frames.length)
-  }, SPINNER_INTERVAL_MS)
+  startSpinnerInterval()
 }
 
 /**
@@ -171,6 +203,25 @@ export function setSpinnerStyle(key: string) {
  */
 export function getSpinnerStyle(): string {
   return currentSpinnerKey
+}
+
+/**
+ * Set the current spinner interval in milliseconds
+ */
+export function setSpinnerInterval(ms: number) {
+  const clamped = Math.max(MIN_SPINNER_INTERVAL_MS, Math.min(MAX_SPINNER_INTERVAL_MS, ms))
+  currentSpinnerInterval = clamped
+  setSpinnerIndex(0)
+  if (spinnerInitialized) {
+    startSpinnerInterval()
+  }
+}
+
+/**
+ * Get the current spinner interval in milliseconds
+ */
+export function getSpinnerInterval(): number {
+  return currentSpinnerInterval
 }
 
 /**
