@@ -79,8 +79,24 @@ export namespace ModelsDev {
     const file = Bun.file(filepath)
     const result = await file.json().catch(() => {})
     if (result) return result as Record<string, Provider>
-    const json = await data()
-    return JSON.parse(json) as Record<string, Provider>
+    // Macro may not be available at runtime (e.g., when running with --conditions=browser)
+    // Fall back to fetching directly from the API
+    if (typeof data === "function") {
+      const json = await data()
+      return JSON.parse(json) as Record<string, Provider>
+    }
+    // Direct fetch fallback when macro is unavailable
+    const response = await fetch("https://models.dev/api.json", {
+      headers: {
+        "User-Agent": Installation.USER_AGENT,
+      },
+      signal: AbortSignal.timeout(10 * 1000),
+    })
+    if (response.ok) {
+      const json = await response.text()
+      return JSON.parse(json) as Record<string, Provider>
+    }
+    throw new Error("Failed to fetch models from models.dev and no cached data available")
   }
 
   export async function refresh() {
