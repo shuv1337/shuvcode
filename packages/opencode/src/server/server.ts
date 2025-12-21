@@ -85,7 +85,7 @@ export namespace Server {
         })
       })
       .use(async (c, next) => {
-        const skipLogging = c.req.path === "/log"
+        const skipLogging = c.req.path === "/log" || c.req.path.startsWith("/assets/")
         if (!skipLogging) {
           log.info("request", {
             method: c.req.method,
