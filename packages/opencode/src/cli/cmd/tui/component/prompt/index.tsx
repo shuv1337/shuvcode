@@ -20,6 +20,7 @@ import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
+import { Ide } from "@/ide"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { createColors, createFrames } from "../../ui/spinner.ts"
@@ -44,7 +45,6 @@ export type PromptRef = {
   reset(): void
   blur(): void
   focus(): void
-  submit(): void
 }
 
 const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
@@ -116,7 +116,7 @@ export function Prompt(props: PromptProps) {
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
-  const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
+  const status = createMemo(() => sync.data.session_status[props.sessionID ?? ""] ?? { type: "idle" })
   const history = usePromptHistory()
   const command = useCommandDialog()
   const renderer = useRenderer()
@@ -312,6 +312,10 @@ export function Prompt(props: PromptProps) {
     input.insertText(evt.properties.text)
   })
 
+  sdk.event.on(Ide.Event.SelectionChanged.type, (evt) => {
+    updateIdeSelection(evt.properties.selection)
+  })
+
   createEffect(() => {
     if (props.disabled) input.cursorColor = theme.backgroundElement
     if (!props.disabled) input.cursorColor = theme.text
@@ -341,6 +345,49 @@ export function Prompt(props: PromptProps) {
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
   })
+
+  // Track IDE selection extmark so we can update/remove it
+  let ideSelectionExtmarkId: number | null = null
+
+  function removeExtmark(extmarkId: number) {
+    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
+    const extmark = allExtmarks.find((e) => e.id === extmarkId)
+    const partIndex = store.extmarkToPartIndex.get(extmarkId)
+
+    if (partIndex !== undefined) {
+      setStore(
+        produce((draft) => {
+          draft.prompt.parts.splice(partIndex, 1)
+          draft.extmarkToPartIndex.delete(extmarkId)
+          const newMap = new Map<number, number>()
+          for (const [id, idx] of draft.extmarkToPartIndex) {
+            newMap.set(id, idx > partIndex ? idx - 1 : idx)
+          }
+          draft.extmarkToPartIndex = newMap
+        }),
+      )
+    }
+
+    if (extmark) {
+      const savedOffset = input.cursorOffset
+      input.cursorOffset = extmark.start
+      const start = { ...input.logicalCursor }
+      input.cursorOffset = extmark.end + 1
+      input.deleteRange(start.row, start.col, input.logicalCursor.row, input.logicalCursor.col)
+      input.cursorOffset =
+        savedOffset > extmark.start
+          ? Math.max(extmark.start, savedOffset - (extmark.end + 1 - extmark.start))
+          : savedOffset
+    }
+
+    input.extmarks.delete(extmarkId)
+  }
+
+  function updateIdeSelection(selection: Ide.Selection | null) {
+    // Selection is now displayed in footer via local.selection
+    // No visual insertion in the input needed
+    // Content will be included at submit time from local.selection
+  }
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
@@ -448,14 +495,11 @@ export function Prompt(props: PromptProps) {
       })
       setStore("extmarkToPartIndex", new Map())
     },
-    submit() {
-      submit()
-    },
   })
 
   async function submit() {
     if (props.disabled) return
-    if (autocomplete?.visible) return
+    if (autocomplete.visible) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
@@ -476,6 +520,8 @@ export function Prompt(props: PromptProps) {
     const messageID = Identifier.ascending("message")
     let inputText = store.prompt.input
 
+    // IDE selection is displayed in footer only - not injected into message
+
     // Expand pasted text inline before submitting
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
     const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
@@ -494,9 +540,6 @@ export function Prompt(props: PromptProps) {
 
     // Filter out text parts (pasted content) since they're now expanded inline
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
-
-    // Capture mode before it gets reset
-    const currentMode = store.mode
 
     if (store.mode === "shell") {
       sdk.client.session.shell({
@@ -539,6 +582,12 @@ export function Prompt(props: PromptProps) {
             type: "text",
             text: inputText,
           },
+          ...(local.selection.current()?.text ? [{
+            id: Identifier.ascending("part"),
+            type: "text" as const,
+            text: `\n\n[IDE Selection: ${local.selection.current()!.filePath.split("/").pop() || local.selection.current()!.filePath}:${local.selection.current()!.selection.start.line + 1}-${local.selection.current()!.selection.end.line + 1}]\n\`\`\`\n${local.selection.current()!.text}\n\`\`\``,
+            synthetic: true,
+          }] : []),
           ...nonTextParts.map((x) => ({
             id: Identifier.ascending("part"),
             ...x,
@@ -546,16 +595,14 @@ export function Prompt(props: PromptProps) {
         ],
       })
     }
-    history.append({
-      ...store.prompt,
-      mode: currentMode,
-    })
+    history.append(store.prompt)
     input.extmarks.clear()
     setStore("prompt", {
       input: "",
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    ideSelectionExtmarkId = null
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
@@ -715,8 +762,8 @@ export function Prompt(props: PromptProps) {
           >
             <textarea
               placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
-              textColor={keybind.leader ? theme.textMuted : theme.text}
-              focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+              textColor={theme.text}
+              focusedTextColor={theme.text}
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
@@ -742,12 +789,8 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 if (keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
-                    e.preventDefault()
-                    return
-                  }
+                  await exit()
+                  return
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
                   setStore("mode", "shell")
@@ -773,7 +816,6 @@ export function Prompt(props: PromptProps) {
                     if (item) {
                       input.setText(item.input)
                       setStore("prompt", item)
-                      setStore("mode", item.mode ?? "normal")
                       restoreExtmarksFromParts(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
@@ -865,7 +907,7 @@ export function Prompt(props: PromptProps) {
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                  <text flexShrink={0} fg={theme.text}>
                     {local.model.parsed().model}
                   </text>
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
@@ -880,7 +922,8 @@ export function Prompt(props: PromptProps) {
           borderColor={highlight()}
           customBorderChars={{
             ...EmptyBorder,
-            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
+            // when the background is transparent, don't draw the vertical line
+            vertical: theme.background.a != 0 ? "╹" : " ",
           }}
         >
           <box
@@ -888,7 +931,7 @@ export function Prompt(props: PromptProps) {
             border={["bottom"]}
             borderColor={theme.backgroundElement}
             customBorderChars={
-              theme.backgroundElement.a !== 0
+              theme.background.a != 0
                 ? {
                     ...EmptyBorder,
                     horizontal: "▀",
