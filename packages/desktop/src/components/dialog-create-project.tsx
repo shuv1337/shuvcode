@@ -5,6 +5,7 @@ import { useGlobalSDK } from "@/context/global-sdk"
 import { useLayout } from "@/context/layout"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { TextField } from "@opencode-ai/ui/text-field"
+import { Switch } from "@opencode-ai/ui/switch"
 import { Button } from "@opencode-ai/ui/button"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { showToast } from "@opencode-ai/ui/toast"
@@ -35,6 +36,8 @@ export const DialogCreateProject: Component = () => {
 
   const [store, setStore] = createStore({
     path: "",
+    repo: "",
+    degit: false,
     error: undefined as string | undefined,
     loading: false,
   })
@@ -74,7 +77,11 @@ export const DialogCreateProject: Component = () => {
     setStore("loading", true)
 
     try {
-      const result = await globalSDK.client.project.create({ path })
+      const result = await globalSDK.client.project.create({
+        path,
+        repo: store.repo.trim() || undefined,
+        degit: store.degit,
+      })
 
       if (result.error) {
         const errorMessage = (result.error as { message?: string }).message || "Failed to create project"
@@ -282,6 +289,23 @@ export const DialogCreateProject: Component = () => {
               validationState={store.error && activeTab() === "create" ? "invalid" : undefined}
               error={activeTab() === "create" ? store.error : undefined}
             />
+            <TextField
+              type="text"
+              label="Git repository URL (optional)"
+              placeholder="https://github.com/user/repo"
+              name="repo"
+              value={store.repo}
+              onChange={(value) => setStore("repo", value)}
+            />
+            <div class="flex items-center gap-2">
+              <Switch
+                checked={store.degit}
+                onChange={(checked) => setStore("degit", checked)}
+                disabled={!store.repo.trim()}
+              >
+                Degit (remove .git history after cloning)
+              </Switch>
+            </div>
             <div class="flex gap-3 justify-end pt-2">
               <Button variant="ghost" onClick={() => dialog.close()} disabled={store.loading}>
                 Cancel

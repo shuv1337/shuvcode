@@ -251,6 +251,8 @@ export class Project extends HeyApiClient {
       directory?: string
       path?: string
       name?: string
+      repo?: string
+      degit?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -262,6 +264,8 @@ export class Project extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "path" },
             { in: "body", key: "name" },
+            { in: "body", key: "repo" },
+            { in: "body", key: "degit" },
           ],
         },
       ],

@@ -1,5 +1,7 @@
 export namespace Flag {
   export const OPENCODE_AUTO_SHARE = truthy("OPENCODE_AUTO_SHARE")
+  export const OPENCODE_GIT_USER_NAME = process.env["OPENCODE_GIT_USER_NAME"] || "shuvcode"
+  export const OPENCODE_GIT_USER_EMAIL = process.env["OPENCODE_GIT_USER_EMAIL"] || "shuvcode@localhost"
   export const OPENCODE_GIT_BASH_PATH = process.env["OPENCODE_GIT_BASH_PATH"]
   export const OPENCODE_CONFIG = process.env["OPENCODE_CONFIG"]
   export const OPENCODE_CONFIG_DIR = process.env["OPENCODE_CONFIG_DIR"]

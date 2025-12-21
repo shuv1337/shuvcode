@@ -235,6 +235,8 @@ export namespace Project {
     z.object({
       path: z.string().min(1),
       name: z.string().optional(),
+      repo: z.string().optional(),
+      degit: z.boolean().optional(),
     }),
     async (input): Promise<CreateResult> => {
       const expandedPath = Filesystem.expanduser(input.path)
@@ -254,20 +256,51 @@ export namespace Project {
       // Create directory if it doesn't exist
       await fs.mkdir(projectPath, { recursive: true })
 
+      if (input.repo) {
+        const entries = await fs.readdir(projectPath)
+        if (entries.length > 0) {
+          const isGit = await fs
+            .access(path.join(projectPath, ".git"))
+            .then(() => true)
+            .catch(() => false)
+          if (!isGit) {
+            throw new CreateError({ message: "Directory is not empty" })
+          }
+        } else {
+          await $`git clone ${input.repo} .`.cwd(projectPath).quiet()
+        }
+      }
+
       // Check if it's already a git repo with commits
       const gitDir = path.join(projectPath, ".git")
-      const isGitRepo = await fs
+      let isGitRepo = await fs
         .access(gitDir)
         .then(() => true)
         .catch(() => false)
 
+      if (input.degit && isGitRepo) {
+        await fs.rm(gitDir, { recursive: true, force: true })
+        isGitRepo = false
+      }
+
       // Determine if this is a newly created project or an existing one being added
-      const isNewlyCreated = !directoryExists || !isGitRepo
+      const isNewlyCreated = !directoryExists || !isGitRepo || Boolean(input.repo)
 
       if (!isGitRepo) {
-        // Initialize git and create empty initial commit (required for project ID which is the first commit hash)
+        // Initialize git and create initial commit (required for project ID which is the first commit hash)
         await $`git init`.cwd(projectPath).quiet()
-        await $`git commit --allow-empty -m "Initial commit"`.cwd(projectPath).quiet()
+        const entries = await fs.readdir(projectPath)
+        const hasFiles = entries.some((e) => e !== ".git")
+        if (hasFiles) {
+          await $`git add .`.cwd(projectPath).quiet()
+          await $`git -c user.name=${Flag.OPENCODE_GIT_USER_NAME} -c user.email=${Flag.OPENCODE_GIT_USER_EMAIL} commit -m "Initial commit"`
+            .cwd(projectPath)
+            .quiet()
+        } else {
+          await $`git -c user.name=${Flag.OPENCODE_GIT_USER_NAME} -c user.email=${Flag.OPENCODE_GIT_USER_EMAIL} commit --allow-empty -m "Initial commit"`
+            .cwd(projectPath)
+            .quiet()
+        }
       } else {
         // Check if there are any commits
         const hasCommits = await $`git rev-list -n 1 --all`.cwd(projectPath).quiet().nothrow().text()
