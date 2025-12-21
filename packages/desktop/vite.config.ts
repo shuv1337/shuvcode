@@ -42,6 +42,7 @@ export default defineConfig({
       manifest: false, // Use the existing site.webmanifest
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MiB - allow larger JS bundles
         // Don't cache API routes
         navigateFallbackDenylist: apiRoutes.map((route) => new RegExp(`^${route}`)),
         runtimeCaching: [
