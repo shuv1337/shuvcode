@@ -685,7 +685,12 @@ export default function Layout(props: ParentProps) {
   return (
     <div
       class="relative flex-1 min-h-0 flex flex-col bg-background-base"
-      style={{ "padding-top": "var(--safe-area-inset-top)", "padding-bottom": "var(--safe-area-inset-bottom)" }}
+      style={{
+        "padding-top": "var(--safe-area-inset-top)",
+        "padding-bottom": "var(--safe-area-inset-bottom)",
+        "padding-left": "var(--safe-area-inset-left)",
+        "padding-right": "var(--safe-area-inset-right)",
+      }}
     >
       <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
         {/* Mobile hamburger menu button */}
@@ -810,6 +815,21 @@ export default function Layout(props: ParentProps) {
                   </DropdownMenu.Portal>
                 </DropdownMenu>
               </div>
+              {/* Mobile review button - shows file count when there are changes */}
+              <Show when={layout.mobileReview.visible()}>
+                <button
+                  class="sm:hidden flex items-center gap-2 px-3 h-full text-14-medium text-text-strong"
+                  onClick={() => layout.mobileReview.onOpen()?.()}
+                >
+                  <Show when={layout.mobileReview.filesCount() > 0}>
+                    <span class="text-12-medium h-5 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                      {layout.mobileReview.filesCount()}
+                    </span>
+                  </Show>
+                  <span>Review</span>
+                  <Icon name="chevron-right" size="small" class="text-icon-base" />
+                </button>
+              </Show>
               <Show when={currentSession()}>
                 <Button
                   as={A}

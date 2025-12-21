@@ -72,9 +72,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       dialog: {
         open?: Dialog
       }
+      mobileReview: {
+        visible?: boolean
+        filesCount?: number
+        onOpen?: () => void
+      }
     }>({
       connect: {},
       dialog: {},
+      mobileReview: {},
     })
     const usedColors = new Set<AvatarColorKey>()
 
@@ -261,6 +267,17 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         clear() {
           setEphemeral("connect", {})
+        },
+      },
+      mobileReview: {
+        visible: createMemo(() => ephemeral.mobileReview?.visible ?? false),
+        filesCount: createMemo(() => ephemeral.mobileReview?.filesCount ?? 0),
+        onOpen: createMemo(() => ephemeral.mobileReview?.onOpen),
+        register(filesCount: number, onOpen: () => void) {
+          setEphemeral("mobileReview", { visible: true, filesCount, onOpen })
+        },
+        unregister() {
+          setEphemeral("mobileReview", { visible: false, filesCount: 0, onOpen: undefined })
         },
       },
       theme: {
