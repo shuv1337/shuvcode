@@ -1069,7 +1069,7 @@ export default function Layout(props: ParentProps) {
             </Tooltip>
           </div>
           <Show when={layout.sidebar.opened()}>
-            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__}</div>
+            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
           </Show>
         </div>
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
@@ -1198,7 +1198,7 @@ export default function Layout(props: ParentProps) {
 
           {/* Mobile menu footer */}
           <div class="shrink-0 border-t border-border-weak-base p-4">
-            <div class="text-11-regular text-text-weaker">v{__APP_VERSION__}</div>
+            <div class="text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
           </div>
         </div>
       </Show>

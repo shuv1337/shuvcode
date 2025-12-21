@@ -88,6 +88,8 @@ const VERSION = await (async () => {
   return BASE_VERSION
 })()
 
+const COMMIT_HASH = await $`git rev-parse --short HEAD`.text().then((x) => x.trim()).catch(() => "unknown")
+
 export const Script = {
   get channel() {
     return CHANNEL
@@ -100,6 +102,9 @@ export const Script = {
   },
   get preview() {
     return IS_PREVIEW
+  },
+  get commitHash() {
+    return COMMIT_HASH
   },
 }
 console.log(`opencode script`, JSON.stringify(Script, null, 2))

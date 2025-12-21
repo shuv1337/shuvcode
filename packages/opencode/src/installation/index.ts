@@ -13,6 +13,7 @@ declare global {
   const OPENCODE_VERSION: string
   const OPENCODE_CHANNEL: string
   const OPENCODE_BASE_VERSION: string
+  const OPENCODE_COMMIT_HASH: string
 }
 
 export namespace Installation {
@@ -149,6 +150,7 @@ export namespace Installation {
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
   export const BASE_VERSION = typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
+  export const COMMIT_HASH = typeof OPENCODE_COMMIT_HASH === "string" ? OPENCODE_COMMIT_HASH : "unknown"
   export const USER_AGENT = `shuvcode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
 
   export function displayVersion() {

@@ -3,7 +3,16 @@ import { readFileSync } from "fs"
 import { VitePWA } from "vite-plugin-pwa"
 import desktopPlugin from "./vite"
 
+import { execSync } from "child_process"
+
 const pkg = JSON.parse(readFileSync("./package.json", "utf-8"))
+const commitHash = process.env.OPENCODE_COMMIT_HASH || (() => {
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim()
+  } catch {
+    return "unknown"
+  }
+})()
 const apiPort = process.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 const apiTarget = `http://127.0.0.1:${apiPort}`
 
@@ -97,6 +106,7 @@ export default defineConfig({
   ] as any,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __COMMIT_HASH__: JSON.stringify(commitHash),
   },
   server: {
     host: "0.0.0.0",

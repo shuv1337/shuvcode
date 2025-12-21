@@ -394,7 +394,8 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             <span style={{ fg: theme.text }}>
               <b>code</b>
             </span>{" "}
-            <span>{Installation.VERSION}</span>
+            <span>{Installation.VERSION}</span>{" "}
+            <span>({Installation.COMMIT_HASH})</span>
           </text>
         </box>
       </box>

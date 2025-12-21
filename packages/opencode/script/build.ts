@@ -143,6 +143,7 @@ for (const item of targets) {
     define: {
       OPENCODE_VERSION: `'${Script.version}'`,
       OPENCODE_BASE_VERSION: `'${Script.baseVersion}'`,
+      OPENCODE_COMMIT_HASH: `'${Script.commitHash}'`,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
       OPENCODE_WORKER_PATH: workerPath,
       OPENCODE_CHANNEL: `'${Script.channel}'`,
