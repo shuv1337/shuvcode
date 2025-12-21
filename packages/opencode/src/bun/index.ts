@@ -65,13 +65,20 @@ export namespace BunProc {
     using _ = await Lock.write("bun-install")
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
+    const bundledDir = path.join(Global.Path.cache, "bundled")
+    const bundledFile = path.join(bundledDir, `${pkg.replace(/\//g, "-")}.js`)
     const pkgjson = Bun.file(path.join(Global.Path.cache, "package.json"))
     const parsed = await pkgjson.json().catch(async () => {
-      const result = { dependencies: {} }
+      const result = { dependencies: {}, bundled: {} }
       await Bun.write(pkgjson.name!, JSON.stringify(result, null, 2))
       return result
     })
-    if (parsed.dependencies[pkg] === version) return mod
+
+    // Check if already installed and bundled
+    const bundledExists = await Bun.file(bundledFile).exists()
+    if (parsed.dependencies[pkg] === version && bundledExists) {
+      return bundledFile
+    }
 
     // Build command arguments
     const args = ["add", "--force", "--exact", "--cwd", Global.Path.cache, pkg + "@" + version]
@@ -107,8 +114,95 @@ export namespace BunProc {
       }
     }
 
+    // Bundle the plugin with all dependencies for compiled binary compatibility
+    // This creates a single file that doesn't require subpath export resolution
+    await Bun.file(bundledDir)
+      .exists()
+      .then(async (exists) => {
+        if (!exists) await Bun.$`mkdir -p ${bundledDir}`
+      })
+
+    // Find the entry point from package.json
+    const installedPkgJson = Bun.file(path.join(mod, "package.json"))
+    const installedPkg = await installedPkgJson.json().catch(() => ({}))
+    const entryPoint = installedPkg.main || "index.js"
+    const entryPath = path.join(mod, entryPoint)
+
+    log.info("bundling plugin for compiled binary compatibility", {
+      pkg,
+      entryPath,
+      bundledFile,
+    })
+
+    try {
+      const result = await Bun.build({
+        entrypoints: [entryPath],
+        outdir: bundledDir,
+        naming: `${pkg.replace(/\//g, "-")}.js`,
+        target: "bun",
+        format: "esm",
+        // Bundle all dependencies to avoid subpath export resolution issues
+        packages: "bundle",
+      })
+
+      if (!result.success) {
+        log.error("failed to bundle plugin", {
+          pkg,
+          logs: result.logs,
+        })
+        // Fall back to unbundled module
+        return mod
+      }
+
+      // Copy non-JS assets (HTML, CSS, etc.) that plugins may need at runtime
+      // Some bundled code uses __dirname + ".." to find assets, so copy to both
+      // the bundled dir and the parent cache dir for compatibility
+      await copyPluginAssets(mod, bundledDir)
+      await copyPluginAssets(mod, Global.Path.cache)
+    } catch (e) {
+      log.error("failed to bundle plugin", {
+        pkg,
+        error: (e as Error).message,
+      })
+      // Fall back to unbundled module
+      return mod
+    }
+
     parsed.dependencies[pkg] = resolvedVersion
+    if (!parsed.bundled) parsed.bundled = {}
+    parsed.bundled[pkg] = bundledFile
     await Bun.write(pkgjson.name!, JSON.stringify(parsed, null, 2))
-    return mod
+    return bundledFile
+  }
+
+  async function copyPluginAssets(pluginDir: string, targetDir: string) {
+    // Find and copy non-JS/TS assets that plugins might need at runtime
+    const assetExtensions = [".html", ".css", ".json", ".txt", ".svg", ".png", ".jpg", ".gif"]
+
+    async function copyAssetsRecursive(srcDir: string, destDir: string) {
+      const entries = await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: srcDir, dot: false }))
+
+      for (const entry of entries) {
+        const ext = path.extname(entry).toLowerCase()
+        if (assetExtensions.includes(ext)) {
+          const srcPath = path.join(srcDir, entry)
+          const destPath = path.join(destDir, path.basename(entry))
+
+          try {
+            const content = await Bun.file(srcPath).arrayBuffer()
+            await Bun.write(destPath, content)
+            log.info("copied plugin asset", { src: entry, dest: destPath })
+          } catch (e) {
+            log.error("failed to copy plugin asset", {
+              src: srcPath,
+              dest: destPath,
+              error: (e as Error).message,
+            })
+          }
+        }
+      }
+    }
+
+    await copyAssetsRecursive(pluginDir, targetDir)
   }
 }
