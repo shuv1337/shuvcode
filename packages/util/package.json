@@ -1,6 +1,6 @@
 {
   "name": "@opencode-ai/util",
-  "version": "1.0.184-2",
+  "version": "1.0.184-3",
   "private": true,
   "type": "module",
   "exports": {
