@@ -873,12 +873,12 @@ export type Event =
   | EventTuiQuestionRequest
   | EventTuiQuestionResponse
   | EventFileEdited
+  | EventIdeInstalled
+  | EventIdeSelectionUpdated
   | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
-  | EventIdeInstalled
-  | EventIdeSelectionUpdated
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -989,14 +989,6 @@ export type KeybindsConfig = {
    * Show session timeline
    */
   session_timeline?: string
-  /**
-   * Fork session from message
-   */
-  session_fork?: string
-  /**
-   * Rename session
-   */
-  session_rename?: string
   /**
    * Share current session
    */
@@ -1273,10 +1265,6 @@ export type KeybindsConfig = {
    * Suspend terminal
    */
   terminal_suspend?: string
-  /**
-   * Toggle terminal title
-   */
-  terminal_title_toggle?: string
 }
 
 export type AgentConfig = {
@@ -1597,9 +1585,6 @@ export type Config = {
     build?: AgentConfig
     general?: AgentConfig
     explore?: AgentConfig
-    title?: AgentConfig
-    summary?: AgentConfig
-    compaction?: AgentConfig
     [key: string]: AgentConfig | undefined
   }
   /**
