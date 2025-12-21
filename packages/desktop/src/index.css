@@ -62,18 +62,23 @@
   }
 }
 
+/* Ensure proper background and sizing */
+html,
+body {
+  background-color: var(--background-base);
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+}
+
 /* PWA standalone mode specific styles */
 @media (display-mode: standalone) {
   :root {
     /* When running as PWA, ensure we account for device UI */
     --pwa-top-offset: var(--safe-area-inset-top);
     --pwa-bottom-offset: var(--safe-area-inset-bottom);
-  }
-
-  /* Ensure proper background behind dynamic island/notch */
-  html,
-  body {
-    background-color: var(--background-base);
   }
 
   /* Ensure the app fills the screen properly in PWA mode */

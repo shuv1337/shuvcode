@@ -663,7 +663,10 @@ export default function Page() {
               </Match>
             </Switch>
           </div>
-          <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50">
+          <div
+            class="absolute inset-x-0 flex flex-col justify-center items-center z-50"
+            style={{ bottom: "calc(2rem + var(--safe-area-inset-bottom))" }}
+          >
             <div
               classList={{
                 "w-full px-6": true,
