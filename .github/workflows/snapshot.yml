@@ -31,8 +31,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
-          # Use the SHA from the triggering workflow when using workflow_run
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Checkout the branch by name so git branch --show-current works
+          # For workflow_run, use head_branch; for workflow_dispatch, use ref
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
 
       - run: git fetch --force --tags
 
