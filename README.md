@@ -43,11 +43,25 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme        |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
-_Last updated: 2025-12-20_
+_Last updated: 2025-12-21_
 
 ---
 
 ## Feature Highlights
+
+### Desktop PWA Mobile Support
+
+The desktop web app now fully supports mobile devices as a Progressive Web App (PWA):
+
+- **Dynamic island handling**: Proper background color fills the notch/dynamic island area on newer iPhones
+- **Mobile menu**: Full-screen navigation overlay accessible via hamburger button
+- **Review overlay**: Access session changes and file viewer on mobile via the "Review" button in the header
+- **Split/inline diff toggle**: Switch between side-by-side and inline diff views in the review panel
+- **Responsive layout**: Timeline rail hidden on mobile, session pane takes full width
+
+Install as PWA on iOS: Open in Safari → Share → Add to Home Screen
+
+---
 
 ### IDE Integration (Cursor/VSCode)
 

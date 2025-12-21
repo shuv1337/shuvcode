@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-20",
+  "lastUpdated": "2025-12-21",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -883,6 +883,71 @@
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
           "description": "Spinner interval initialization from KV on session load",
           "markers": ["kv.get(\"spinner_interval\"", "setSpinnerInterval"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop PWA mobile support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Full PWA support for mobile devices with dynamic island handling, mobile menu, review overlay with FAB button in header, and responsive layout. Includes split/inline diff toggle.",
+      "files": [
+        "packages/desktop/index.html",
+        "packages/desktop/src/index.css",
+        "packages/desktop/src/context/layout.tsx",
+        "packages/desktop/src/pages/layout.tsx",
+        "packages/desktop/src/pages/session.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/index.html",
+          "description": "iOS PWA meta tags and viewport-fit=cover",
+          "markers": ["apple-mobile-web-app-capable", "apple-mobile-web-app-status-bar-style", "viewport-fit=cover"]
+        },
+        {
+          "file": "packages/desktop/src/index.css",
+          "description": "Safe area insets and PWA standalone mode styles",
+          "markers": [
+            "--safe-area-inset-top",
+            "@media (display-mode: standalone)",
+            "background-color: var(--background-base)"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/context/layout.tsx",
+          "description": "Mobile review state for cross-component communication",
+          "markers": ["mobileReview:", "register(filesCount", "unregister()"]
+        },
+        {
+          "file": "packages/desktop/src/pages/layout.tsx",
+          "description": "Mobile menu overlay, review button in header, safe area padding",
+          "markers": [
+            "mobileMenuOpen",
+            "layout.mobileReview.visible()",
+            "padding-top: var(--safe-area-inset-top)",
+            "sm:hidden"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Mobile tabs overlay with Portal, split/inline diff toggle, timeline rail hidden on mobile",
+          "markers": ["<Portal>", "mobileTabsOpen", "diffSplit", "hidden sm:flex", "max-sm:!w-full"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop file viewer scrolling fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix scrolling in desktop file viewer tabs by adding proper flex and overflow constraints",
+      "files": ["packages/desktop/src/pages/session.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src/pages/session.tsx",
+          "description": "Scrollable wrapper for code component with flex constraints",
+          "markers": ["flex-1 min-h-0 overflow-auto", "overflow=\"scroll\""]
         }
       ]
     },
