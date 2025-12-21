@@ -10,6 +10,7 @@ import type {
   Permission,
   LspStatus,
   McpStatus,
+  IdeStatus,
   FormatterStatus,
   SessionStatus,
   ProviderListResponse,
@@ -62,6 +63,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       mcp: {
         [key: string]: McpStatus
       }
+      ide: { [key: string]: IdeStatus }
       formatter: FormatterStatus[]
       vcs: VcsInfo | undefined
       path: Path
@@ -87,6 +89,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       part: {},
       lsp: [],
       mcp: {},
+      ide: {},
       formatter: [],
       vcs: undefined,
       path: { state: "", config: "", worktree: "", directory: "" },
@@ -292,6 +295,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.command.list().then((x) => setStore("command", x.data ?? [])),
             sdk.client.lsp.status().then((x) => setStore("lsp", x.data!)),
             sdk.client.mcp.status().then((x) => setStore("mcp", x.data!)),
+            sdk.client.ide.status().then((x) => setStore("ide", x.data!)),
             sdk.client.formatter.status().then((x) => setStore("formatter", x.data!)),
             sdk.client.session.status().then((x) => setStore("session_status", x.data!)),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", x.data ?? {})),

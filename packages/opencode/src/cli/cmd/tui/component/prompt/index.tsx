@@ -20,6 +20,7 @@ import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
+import { Ide } from "@/ide"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { createColors, createFrames } from "../../ui/spinner.ts"
@@ -315,6 +316,10 @@ export function Prompt(props: PromptProps) {
     input.insertText(evt.properties.text)
   })
 
+  sdk.event.on(Ide.Event.SelectionChanged.type, (evt) => {
+    updateIdeSelection(evt.properties.selection)
+  })
+
   createEffect(() => {
     if (props.disabled) input.cursorColor = theme.backgroundElement
     if (!props.disabled) input.cursorColor = theme.text
@@ -344,6 +349,95 @@ export function Prompt(props: PromptProps) {
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
   })
+
+  // Track IDE selection extmark so we can update/remove it
+  let ideSelectionExtmarkId: number | null = null
+
+  function removeExtmark(extmarkId: number) {
+    const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
+    const extmark = allExtmarks.find((e) => e.id === extmarkId)
+    const partIndex = store.extmarkToPartIndex.get(extmarkId)
+
+    if (partIndex !== undefined) {
+      setStore(
+        produce((draft) => {
+          draft.prompt.parts.splice(partIndex, 1)
+          draft.extmarkToPartIndex.delete(extmarkId)
+          const newMap = new Map<number, number>()
+          for (const [id, idx] of draft.extmarkToPartIndex) {
+            newMap.set(id, idx > partIndex ? idx - 1 : idx)
+          }
+          draft.extmarkToPartIndex = newMap
+        }),
+      )
+    }
+
+    if (extmark) {
+      const savedOffset = input.cursorOffset
+      input.cursorOffset = extmark.start
+      const start = { ...input.logicalCursor }
+      input.cursorOffset = extmark.end + 1
+      input.deleteRange(start.row, start.col, input.logicalCursor.row, input.logicalCursor.col)
+      input.cursorOffset =
+        savedOffset > extmark.start
+          ? Math.max(extmark.start, savedOffset - (extmark.end + 1 - extmark.start))
+          : savedOffset
+    }
+
+    input.extmarks.delete(extmarkId)
+  }
+
+  function updateIdeSelection(selection: Ide.Selection | null) {
+    if (!input || promptPartTypeId === undefined) return
+
+    if (ideSelectionExtmarkId !== null) {
+      removeExtmark(ideSelectionExtmarkId)
+      ideSelectionExtmarkId = null
+    }
+
+    // Ignore empty selections (just a cursor position)
+    if (!selection || !selection.text) return
+
+    const { filePath, text } = selection
+    const filename = filePath.split("/").pop() || filePath
+    const start = selection.selection.start.line + 1
+    const end = selection.selection.end.line + 1
+    const lines = text.split("\n").length
+
+    const previewText = `[${filename}:${start}-${end} ~${lines} lines]`
+    const contextText = `\`\`\`\n# ${filePath}:${start}-${end}\n${text}\n\`\`\`\n\n`
+
+    const extmarkStart = input.visualCursor.offset
+    const extmarkEnd = extmarkStart + previewText.length
+
+    input.insertText(previewText + " ")
+
+    ideSelectionExtmarkId = input.extmarks.create({
+      start: extmarkStart,
+      end: extmarkEnd,
+      virtual: true,
+      styleId: pasteStyleId,
+      typeId: promptPartTypeId,
+    })
+
+    setStore(
+      produce((draft) => {
+        const partIndex = draft.prompt.parts.length
+        draft.prompt.parts.push({
+          type: "text" as const,
+          text: contextText,
+          source: {
+            text: {
+              start: extmarkStart,
+              end: extmarkEnd,
+              value: previewText,
+            },
+          },
+        })
+        draft.extmarkToPartIndex.set(ideSelectionExtmarkId!, partIndex)
+      }),
+    )
+  }
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
@@ -560,6 +654,7 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    ideSelectionExtmarkId = null
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent

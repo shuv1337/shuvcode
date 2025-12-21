@@ -331,6 +331,11 @@ export function Autocomplete(props: {
         onSelect: () => command.trigger("mcp.list"),
       },
       {
+        display: "/ide",
+        description: "toggle IDEs",
+        onSelect: () => command.trigger("ide.list"),
+      },
+      {
         display: "/theme",
         description: "toggle theme",
         onSelect: () => command.trigger("theme.switch"),

@@ -39,6 +39,7 @@ import { lazy } from "../util/lazy"
 import { Todo } from "../session/todo"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { MCP } from "../mcp"
+import { Ide } from "../ide"
 import { Storage } from "../storage/storage"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { TuiEvent } from "@/cli/cmd/tui/event"
@@ -2177,6 +2178,72 @@ export namespace Server {
         async (c) => {
           const { name } = c.req.valid("param")
           await MCP.disconnect(name)
+          return c.json(true)
+        },
+      )
+      .get(
+        "/ide",
+        describeRoute({
+          summary: "Get IDE status",
+          description: "Get the status of all IDE instances.",
+          operationId: "ide.status",
+          responses: {
+            200: {
+              description: "IDE instance status",
+              content: {
+                "application/json": {
+                  schema: resolver(z.record(z.string(), Ide.Status)),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          return c.json(await Ide.status())
+        },
+      )
+      .post(
+        "/ide/:name/connect",
+        describeRoute({
+          description: "Connect to an IDE instance",
+          operationId: "ide.connect",
+          responses: {
+            200: {
+              description: "IDE connected successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+          },
+        }),
+        validator("param", z.object({ name: z.string() })),
+        async (c) => {
+          const { name } = c.req.valid("param")
+          await Ide.connect(name)
+          return c.json(true)
+        },
+      )
+      .post(
+        "/ide/:name/disconnect",
+        describeRoute({
+          description: "Disconnect from an IDE instance",
+          operationId: "ide.disconnect",
+          responses: {
+            200: {
+              description: "IDE disconnected successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+          },
+        }),
+        validator("param", z.object({ name: z.string() })),
+        async (c) => {
+          await Ide.disconnect()
           return c.json(true)
         },
       )
