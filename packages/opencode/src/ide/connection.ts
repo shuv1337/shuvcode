@@ -23,9 +23,16 @@ const LockFile = {
     const port = parseInt(path.basename(file, ".lock"))
     const url = new URL(`${WS_PREFIX}:${port}`)
     const content = await Bun.file(file).text()
-    const parsed = this.schema.safeParse({ port, url, ...JSON.parse(content) })
+    let data: unknown
+    try {
+      data = JSON.parse(content)
+    } catch (error) {
+      log.warn("invalid lock file JSON", { file, error })
+      return undefined
+    }
+    const parsed = this.schema.safeParse({ port, url, ...(data as object) })
     if (!parsed.success) {
-      log.warn("invalid lock file", { file, error: parsed.error })
+      log.warn("invalid lock file schema", { file, error: parsed.error })
       return undefined
     }
     return parsed.data

@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
 import { batch, createEffect, createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
@@ -12,6 +12,7 @@ import { Provider } from "@/provider/provider"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
+import { Ide } from "@/ide"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
@@ -52,11 +53,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     })
 
     const agent = iife(() => {
-      const agents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent" && !x.hidden))
+      const agents = createMemo(() => sync.data.agent.filter((x) => x.mode !== "subagent"))
       const [agentStore, setAgentStore] = createStore<{
         current: string
       }>({
-        current: agents().find((x) => x.default)?.name ?? agents()[0].name,
+        current: agents()[0].name,
       })
       const { theme } = useTheme()
       const colors = createMemo(() => [
@@ -349,15 +350,40 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           await sdk.client.ide.connect({ name })
         }
         const status = await sdk.client.ide.status()
-        if (status.data) sync.set("ide", status.data)
+        if (status.data) sync.set("ide", reconcile(status.data))
       },
     }
+
+    const selection = iife(() => {
+      const [selStore, setSelStore] = createStore<{
+        current: Ide.Selection | null
+      }>({ current: null })
+
+      sdk.event.on(Ide.Event.SelectionChanged.type, async (evt) => {
+        setSelStore("current", evt.properties.selection)
+        // Refresh IDE status when we receive a selection
+        const status = await sdk.client.ide.status()
+        if (status.data) sync.set("ide", reconcile(status.data))
+      })
+
+      return {
+        current: () => selStore.current,
+        clear: () => setSelStore("current", null),
+        formatted: () => {
+          const sel = selStore.current
+          if (!sel || !sel.text) return null
+          const lines = sel.text.split("\n").length
+          return `${lines} lines`
+        },
+      }
+    })
 
     const result = {
       model,
       agent,
       mcp,
       ide,
+      selection,
     }
     return result
   },

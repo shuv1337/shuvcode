@@ -5,6 +5,7 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { useLocal } from "../../context/local"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -20,6 +21,7 @@ export function Footer() {
   })
   const directory = useDirectory()
   const connected = useConnected()
+  const local = useLocal()
 
   const [store, setStore] = createStore({
     welcome: false,
@@ -84,6 +86,12 @@ export function Footer() {
               <text fg={theme.text}>
                 <span style={{ fg: theme.success }}>◆ </span>
                 {ide()!.name}
+              </text>
+            </Show>
+            <Show when={local.selection.formatted()}>
+              <text fg={theme.text}>
+                <span style={{ fg: theme.accent }}>[] </span>
+                {local.selection.formatted()}
               </text>
             </Show>
             <text fg={theme.textMuted}>/status</text>
