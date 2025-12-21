@@ -16,10 +16,6 @@ process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
 process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
 process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 
-// Disable default plugins (opencode-anthropic-auth, opencode-copilot-auth) during tests
-// These plugins have dependencies that can fail to bundle in CI environments
-process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
-
 // Pre-fetch models.json so tests don't need the macro fallback
 // Also write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
