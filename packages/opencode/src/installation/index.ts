@@ -1,6 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import path from "path"
+import fs from "fs"
 import { $ } from "bun"
 import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
@@ -60,6 +61,11 @@ export namespace Installation {
 
   export function isLocal() {
     return CHANNEL === "local"
+  }
+
+  export function isBundled() {
+    const staticPath = path.join(path.dirname(process.execPath), "static")
+    return fs.existsSync(staticPath)
   }
 
   export async function method() {
