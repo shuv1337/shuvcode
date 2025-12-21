@@ -338,19 +338,6 @@ export default function Layout(props: ParentProps) {
     document.documentElement.style.setProperty("--dialog-left-margin", `${sidebarWidth}px`)
   })
 
-  // Mobile responsiveness: auto-collapse sidebar/terminal/review on small screens
-  onMount(() => {
-    const mediaQuery = window.matchMedia("(max-width: 40rem)")
-    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
-      if (event.matches) layout.sidebar.close()
-      if (event.matches) layout.terminal.close()
-      if (event.matches) layout.review.tab()
-    }
-    handleChange(mediaQuery)
-    mediaQuery.addEventListener("change", handleChange)
-    onCleanup(() => mediaQuery.removeEventListener("change", handleChange))
-  })
-
   function getDraggableId(event: unknown): string | undefined {
     if (typeof event !== "object" || event === null) return undefined
     if (!("draggable" in event)) return undefined
@@ -697,7 +684,7 @@ export default function Layout(props: ParentProps) {
 
   return (
     <div
-      class="relative flex-1 min-h-0 flex flex-col"
+      class="relative flex-1 min-h-0 flex flex-col bg-background-base"
       style={{ "padding-top": "var(--safe-area-inset-top)", "padding-bottom": "var(--safe-area-inset-bottom)" }}
     >
       <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
@@ -895,8 +882,8 @@ export default function Layout(props: ParentProps) {
             "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
             "flex-col gap-5.5 items-start self-stretch justify-between": true,
             "border-r border-border-weak-base contain-strict": true,
-            "hidden sm:flex": !layout.sidebar.opened(),
-            flex: layout.sidebar.opened(),
+            "hidden sm:flex": true,
+            "sm:!flex": layout.sidebar.opened(),
           }}
           style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
         >

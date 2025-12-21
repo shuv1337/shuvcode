@@ -56,18 +56,6 @@
     }
   }
 
-  /* Adjust sidebar behavior - always collapsed on mobile */
-  [data-component="sidebar"] {
-    position: fixed;
-    z-index: 40;
-    transform: translateX(-100%);
-    transition: transform 0.2s ease-out;
-
-    &[data-open="true"] {
-      transform: translateX(0);
-    }
-  }
-
   /* Mobile header adjustments */
   header[data-tauri-drag-region] {
     padding-top: var(--safe-area-inset-top);
