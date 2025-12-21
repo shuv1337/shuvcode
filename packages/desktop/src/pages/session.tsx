@@ -126,6 +126,7 @@ export default function Page() {
     activeTerminalDraggable: undefined as string | undefined,
     userInteracted: false,
     stepsExpanded: true,
+    mobileTabsOpen: false,
   })
   let inputRef!: HTMLDivElement
 
@@ -574,9 +575,9 @@ export default function Page() {
   return (
     <div class="relative bg-background-base size-full overflow-x-hidden flex flex-col">
       <div class="min-h-0 grow w-full flex">
-        {/* Session pane - always visible */}
+        {/* Session pane - always visible, full width on mobile */}
         <div
-          class="@container relative shrink-0 py-3 flex flex-col gap-6 min-h-0 h-full bg-background-stronger"
+          class="@container relative shrink-0 py-3 flex flex-col gap-6 min-h-0 h-full bg-background-stronger max-sm:!w-full"
           style={{ width: showTabs() ? `${layout.session.width()}px` : "100%" }}
         >
           <div class="flex-1 min-h-0 overflow-hidden">
@@ -584,6 +585,7 @@ export default function Page() {
               <Match when={params.id}>
                 <div class="flex items-start justify-start h-full min-h-0">
                   <SessionMessageRail
+                    class="hidden sm:flex"
                     messages={visibleUserMessages()}
                     current={activeMessage()}
                     onMessageSelect={setActiveMessage}
@@ -604,7 +606,7 @@ export default function Page() {
                           (!showTabs()
                             ? "max-w-200 mx-auto px-6"
                             : visibleUserMessages().length > 1
-                              ? "pr-6 pl-18"
+                              ? "pr-6 pl-6 sm:pl-2"
                               : "px-6"),
                       }}
                     />
@@ -656,16 +658,16 @@ export default function Page() {
             <ResizeHandle
               direction="horizontal"
               size={layout.session.width()}
-              min={450}
-              max={window.innerWidth * 0.45}
+              min={320}
+              max={window.innerWidth * 0.7}
               onResize={layout.session.resize}
             />
           </Show>
         </div>
 
-        {/* Tabs pane - visible when there are diffs or file tabs */}
+        {/* Tabs pane - visible when there are diffs or file tabs, hidden on mobile */}
         <Show when={showTabs()}>
-          <div class="relative flex-1 min-w-0 h-full border-l border-border-weak-base">
+          <div class="relative flex-1 min-w-0 h-full border-l border-border-weak-base hidden sm:block">
             <DragDropProvider
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
@@ -862,6 +864,166 @@ export default function Page() {
               </Show>
             </DragOverlay>
           </DragDropProvider>
+        </div>
+      </Show>
+
+      {/* Mobile tabs floating action button - visible on mobile when there are tabs */}
+      <Show when={showTabs()}>
+        <button
+          class="fixed bottom-20 right-4 z-40 sm:hidden flex items-center justify-center w-14 h-14 rounded-full bg-surface-invert shadow-lg"
+          style={{ "margin-bottom": "var(--safe-area-inset-bottom)" }}
+          onClick={() => setStore("mobileTabsOpen", true)}
+          aria-label="View changes"
+        >
+          <div class="relative">
+            <Icon name="checklist" size="normal" class="text-text-invert" />
+            <Show when={diffs().length > 0}>
+              <div class="absolute -top-1 -right-1 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-accent-strong text-11-medium text-text-invert">
+                {info()?.summary?.files ?? diffs().length}
+              </div>
+            </Show>
+          </div>
+        </button>
+      </Show>
+
+      {/* Mobile tabs fullscreen overlay */}
+      <Show when={store.mobileTabsOpen}>
+        <div
+          class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
+          style={{
+            "padding-top": "var(--safe-area-inset-top)",
+            "padding-bottom": "var(--safe-area-inset-bottom)",
+            "padding-left": "var(--safe-area-inset-left)",
+            "padding-right": "var(--safe-area-inset-right)",
+          }}
+        >
+          {/* Mobile tabs header */}
+          <div class="h-12 shrink-0 border-b border-border-weak-base flex items-center justify-between px-4">
+            <div class="flex items-center gap-3">
+              <Show when={diffs().length > 0}>
+                <DiffChanges changes={diffs()} variant="bars" />
+              </Show>
+              <span class="text-14-medium text-text-strong">{diffs().length > 0 ? "Review Changes" : "Files"}</span>
+              <Show when={info()?.summary?.files}>
+                <div class="text-12-medium text-text-strong h-5 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                  {info()?.summary?.files ?? 0}
+                </div>
+              </Show>
+            </div>
+            <IconButton
+              icon="close"
+              variant="ghost"
+              onClick={() => setStore("mobileTabsOpen", false)}
+              aria-label="Close"
+            />
+          </div>
+
+          {/* Mobile tabs content */}
+          <div class="flex-1 min-h-0 overflow-hidden">
+            <Tabs value={tabs().active() ?? "review"} onChange={tabs().open}>
+              <div class="shrink-0 flex border-b border-border-weak-base overflow-x-auto">
+                <Tabs.List>
+                  <Show when={diffs().length}>
+                    <Tabs.Trigger value="review">
+                      <div class="flex items-center gap-2">
+                        <div>Review</div>
+                        <Show when={info()?.summary?.files}>
+                          <div class="text-12-medium text-text-strong h-4 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                            {info()?.summary?.files ?? 0}
+                          </div>
+                        </Show>
+                      </div>
+                    </Tabs.Trigger>
+                  </Show>
+                  <For each={tabs().all() ?? []}>
+                    {(tab) => {
+                      const fileName = () => {
+                        if (tab.startsWith("file://")) {
+                          return getFilename(tab.replace("file://", ""))
+                        }
+                        return tab
+                      }
+                      return (
+                        <Tabs.Trigger value={tab} class="max-w-40 truncate">
+                          <div class="flex items-center gap-2">
+                            <FileIcon node={{ path: tab, type: "file" }} />
+                            <span class="truncate">{fileName()}</span>
+                          </div>
+                        </Tabs.Trigger>
+                      )
+                    }}
+                  </For>
+                </Tabs.List>
+              </div>
+              <Show when={diffs().length}>
+                <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden">
+                  <div class="relative flex-1 min-h-0 overflow-auto">
+                    <SessionReview
+                      classes={{
+                        root: "pb-20 pt-3",
+                        header: "px-4",
+                        container: "px-4",
+                      }}
+                      diffs={diffs()}
+                    />
+                  </div>
+                </Tabs.Content>
+              </Show>
+              <For each={tabs().all()}>
+                {(tab) => {
+                  const [file] = createResource(
+                    () => tab,
+                    async (tab) => {
+                      if (tab.startsWith("file://")) {
+                        return local.file.node(tab.replace("file://", ""))
+                      }
+                      return undefined
+                    },
+                  )
+                  return (
+                    <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden">
+                      <Show when={file()?.content} keyed>
+                        {(content) => {
+                          const f = file()!
+                          const isPreviewableImage =
+                            content.encoding === "base64" &&
+                            content.mimeType?.startsWith("image/") &&
+                            content.mimeType !== "image/svg+xml"
+                          return (
+                            <Switch>
+                              <Match when={isPreviewableImage}>
+                                <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-20">
+                                  <img
+                                    src={`data:${content.mimeType};base64,${content.content}`}
+                                    alt={f.path}
+                                    class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
+                                  />
+                                </div>
+                              </Match>
+                              <Match when={true}>
+                                <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
+                                  <Dynamic
+                                    component={codeComponent}
+                                    file={{
+                                      name: f.path,
+                                      contents: content.content ?? "",
+                                      cacheKey: checksum(content.content ?? ""),
+                                    }}
+                                    overflow="scroll"
+                                    class="pb-20"
+                                  />
+                                </div>
+                              </Match>
+                            </Switch>
+                          )
+                        }}
+                      </Show>
+                    </Tabs.Content>
+                  )
+                }}
+              </For>
+            </Tabs>
+          </div>
         </div>
       </Show>
     </div>
