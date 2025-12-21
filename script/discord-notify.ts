@@ -36,15 +36,21 @@ async function postToDiscord(threadId: string, token: string, content: string): 
   console.log("Successfully posted release notes to Discord")
 }
 
-function truncateChangelog(changelog: string, maxLength: number): string {
-  if (changelog.length <= maxLength) return changelog
+function extractContributorSection(changelog: string): string | null {
+  // Look for the contributor thank you section
+  const thankYouMatch = changelog.match(/\*\*Thank you to \d+ community contributors?:\*\*[\s\S]*$/)
+  return thankYouMatch ? thankYouMatch[0].trim() : null
+}
+
+function truncateContent(content: string, maxLength: number): string {
+  if (content.length <= maxLength) return content
 
   // Find a good breaking point (end of a line)
-  const truncated = changelog.slice(0, maxLength - 50)
+  const truncated = content.slice(0, maxLength - 50)
   const lastNewline = truncated.lastIndexOf("\n")
   const cutoff = lastNewline > 0 ? lastNewline : maxLength - 50
 
-  return changelog.slice(0, cutoff) + "\n\n*...and more changes. See GitHub for full changelog.*"
+  return content.slice(0, cutoff) + "\n\n*...see GitHub for full details.*"
 }
 
 async function main(): Promise<void> {
@@ -75,14 +81,18 @@ async function main(): Promise<void> {
   // Build plain markdown content
   let content = `**shuvcode ${cleanVersion}** has been released!\n\n`
 
+  // Only include contributor thank yous section, not the full changelog
   if (changelog?.trim()) {
-    content += changelog.trim() + "\n\n"
+    const contributorSection = extractContributorSection(changelog)
+    if (contributorSection) {
+      content += contributorSection + "\n\n"
+    }
   }
 
   content += `[GitHub Release](<${releaseUrl}>) | [npm](<${npmUrl}>)`
 
   // Truncate if too long for Discord
-  content = truncateChangelog(content, MAX_CONTENT_LENGTH)
+  content = truncateContent(content, MAX_CONTENT_LENGTH)
 
   console.log(`Posting release notes for ${cleanVersion} to Discord...`)
   console.log(`Content length: ${content.length} characters`)
