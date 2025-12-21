@@ -43,11 +43,35 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme        |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access  |
 
-_Last updated: 2025-12-19_
+_Last updated: 2025-12-20_
 
 ---
 
 ## Feature Highlights
+
+### IDE Integration (Cursor/VSCode)
+
+Connect to Cursor, VSCode, or other supported IDEs for enhanced workflow:
+
+- **Live text selection** from your editor is displayed in the TUI footer
+- **Selection context** is automatically included in prompts (invisible to you, but sent to the model)
+- **IDE status** shown on the home screen footer
+- **Diff view** support for file edits (open diffs directly in your IDE)
+
+Configure in `opencode.json`:
+
+```jsonc
+{
+  "ide": {
+    "lockfile_dir": "~/.cursor/opencode/",
+    "auth_header_name": "x-opencode-auth",
+  },
+}
+```
+
+Supported IDEs: Cursor, VSCode, VSCode Insiders, VSCodium, Windsurf
+
+---
 
 ### Add Existing Project Dialog
 
@@ -71,6 +95,8 @@ The desktop file viewer now displays actual image previews for PNG, JPG, GIF, an
 Choose from 60+ animated spinner styles for tool execution indicators. Access via the command palette with `Change spinner style`. Your selection is persisted across sessions.
 
 Available styles include braille patterns, block animations, geometric shapes, and creative concepts like moon phases, clock sweeps, and bouncing balls.
+
+You can also adjust the animation speed via `Change spinner speed` in the command palette. Options range from 20ms (fastest) to 500ms (slowest), with 60ms as the default.
 
 ---
 

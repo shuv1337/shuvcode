@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-19",
+  "lastUpdated": "2025-12-20",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -841,6 +841,103 @@
           "file": "packages/opencode/src/cli/cmd/tui/component/dialog-command.tsx",
           "description": "Filter undefined command options to prevent errors",
           "markers": [".filter((x) => !!x)"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Configurable spinner animation speed",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Adjust spinner animation speed via command palette (20ms-500ms range). Selection persisted to KV store alongside spinner style.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+        "packages/opencode/src/cli/cmd/tui/app.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+          "description": "Spinner interval constants and interval management functions",
+          "markers": [
+            "DEFAULT_SPINNER_INTERVAL_MS",
+            "MIN_SPINNER_INTERVAL_MS",
+            "MAX_SPINNER_INTERVAL_MS",
+            "SPINNER_INTERVAL_PRESETS",
+            "setSpinnerInterval",
+            "getSpinnerInterval"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+          "description": "DialogSpinnerInterval component for speed selection",
+          "markers": ["export function DialogSpinnerInterval", "kv.set(\"spinner_interval\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
+          "description": "Global command palette action for spinner speed selection",
+          "markers": ["Change spinner speed", "spinner.interval", "DialogSpinnerInterval"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Spinner interval initialization from KV on session load",
+          "markers": ["kv.get(\"spinner_interval\"", "setSpinnerInterval"]
+        }
+      ]
+    },
+    {
+      "pr": 5447,
+      "title": "IDE integration (Cursor/VSCode)",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "WebSocket-based IDE connection for Cursor, VSCode, and other supported IDEs. Live text selection from editor displayed in footer and included as context in prompts. Diff view support for file edits.",
+      "files": [
+        "packages/opencode/src/ide/index.ts",
+        "packages/opencode/src/ide/connection.ts",
+        "packages/opencode/src/mcp/ws.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/cli/cmd/tui/context/local.tsx",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/footer.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/ide/index.ts",
+          "description": "IDE namespace with install, connect, status, openDiff, and selection handling",
+          "markers": [
+            "export namespace Ide",
+            "SUPPORTED_IDES",
+            "Event.SelectionChanged",
+            "async function connect",
+            "async function openDiff"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/ide/connection.ts",
+          "description": "WebSocket connection management and lock file discovery",
+          "markers": ["export class Connection", "export async function discoverLockFiles", "WebSocketClientTransport"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "IDE configuration schema with lockfile_dir and auth_header_name",
+          "markers": ["ide:", "lockfile_dir:", "auth_header_name:"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/local.tsx",
+          "description": "IDE selection state and subscription in local context",
+          "markers": ["ideSelection", "setIdeSelection", "Ide.Event.SelectionChanged"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "IDE selection displayed in footer and included as synthetic part",
+          "markers": ["local.ideSelection", "synthetic", "IDE Selection"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
+          "description": "IDE status display in home screen footer",
+          "markers": ["ideStatus", "Ide.status()"]
         }
       ]
     }

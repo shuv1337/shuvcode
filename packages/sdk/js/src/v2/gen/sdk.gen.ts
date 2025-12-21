@@ -32,6 +32,9 @@ import type {
   FormatterStatusResponses,
   GlobalDisposeResponses,
   GlobalEventResponses,
+  IdeConnectResponses,
+  IdeDisconnectResponses,
+  IdeStatusResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -2351,6 +2354,83 @@ export class Mcp extends HeyApiClient {
   auth = new Auth({ client: this.client })
 }
 
+export class Ide extends HeyApiClient {
+  /**
+   * Get IDE status
+   *
+   * Get the status of all IDE instances.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<IdeStatusResponses, unknown, ThrowOnError>({
+      url: "/ide",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Connect to an IDE instance
+   */
+  public connect<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<IdeConnectResponses, unknown, ThrowOnError>({
+      url: "/ide/{name}/connect",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Disconnect from an IDE instance
+   */
+  public disconnect<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<IdeDisconnectResponses, unknown, ThrowOnError>({
+      url: "/ide/{name}/disconnect",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -2760,6 +2840,8 @@ export class OpencodeClient extends HeyApiClient {
   app = new App({ client: this.client })
 
   mcp = new Mcp({ client: this.client })
+
+  ide = new Ide({ client: this.client })
 
   lsp = new Lsp({ client: this.client })
 

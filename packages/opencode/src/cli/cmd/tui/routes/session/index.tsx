@@ -82,7 +82,13 @@ import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import { useLayoutDensity } from "../../util/layout-density"
-import { getSpinnerFrame as _getSpinnerFrame, setSpinnerStyle, DEFAULT_SPINNER_KEY } from "../../util/spinners"
+import {
+  getSpinnerFrame as _getSpinnerFrame,
+  setSpinnerStyle,
+  setSpinnerInterval,
+  DEFAULT_SPINNER_KEY,
+  DEFAULT_SPINNER_INTERVAL_MS,
+} from "../../util/spinners"
 
 // Re-export for backward compatibility
 export { getSpinnerFrame } from "../../util/spinners"
@@ -233,10 +239,14 @@ export function Session() {
   const [userMessageMarkdown, setUserMessageMarkdown] = createSignal(kv.get("user_message_markdown", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 
-  // Initialize spinner style from KV store
+  // Initialize spinner style and interval from KV store
   const savedSpinnerStyle = kv.get("spinner_style", DEFAULT_SPINNER_KEY)
   if (savedSpinnerStyle) {
     setSpinnerStyle(savedSpinnerStyle)
+  }
+  const savedSpinnerInterval = kv.get("spinner_interval", DEFAULT_SPINNER_INTERVAL_MS)
+  if (savedSpinnerInterval) {
+    setSpinnerInterval(savedSpinnerInterval)
   }
 
   // Search state

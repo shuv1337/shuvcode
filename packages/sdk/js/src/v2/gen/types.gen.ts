@@ -615,6 +615,37 @@ export type EventFileEdited = {
   }
 }
 
+export type EventIdeInstalled = {
+  type: "ide.installed"
+  properties: {
+    ide: string
+  }
+}
+
+export type IdeSelection = {
+  text: string
+  filePath: string
+  fileUrl: string
+  selection: {
+    start: {
+      line: number
+      character: number
+    }
+    end: {
+      line: number
+      character: number
+    }
+    isEmpty: boolean
+  }
+}
+
+export type EventIdeSelectionUpdated = {
+  type: "ide.selection.updated"
+  properties: {
+    selection: IdeSelection
+  }
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -846,6 +877,8 @@ export type Event =
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
+  | EventIdeInstalled
+  | EventIdeSelectionUpdated
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -1541,6 +1574,10 @@ export type Config = {
    */
   small_model?: string
   /**
+   * Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.
+   */
+  default_agent?: string
+  /**
    * Custom username to display in conversations instead of system username
    */
   username?: string
@@ -1640,6 +1677,19 @@ export type Config = {
      * Enterprise URL
      */
     url?: string
+  }
+  /**
+   * IDE integration settings
+   */
+  ide?: {
+    /**
+     * Directory containing IDE lock files for WebSocket connections
+     */
+    lockfile_dir?: string
+    /**
+     * HTTP header name for IDE WebSocket authentication
+     */
+    auth_header_name?: string
   }
   experimental?: {
     hook?: {
@@ -1901,6 +1951,7 @@ export type Agent = {
   mode: "subagent" | "primary" | "all"
   native?: boolean
   hidden?: boolean
+  default?: boolean
   topP?: number
   temperature?: number
   color?: string
@@ -1961,6 +2012,13 @@ export type McpStatus =
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
+
+export type IdeStatus = {
+  status: "connected" | "disconnected" | "failed"
+  name: string
+  workspaceFolders?: Array<string>
+  error?: string
+}
 
 export type LspStatus = {
   id: string
@@ -4077,6 +4135,66 @@ export type McpDisconnectResponses = {
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
+
+export type IdeStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/ide"
+}
+
+export type IdeStatusResponses = {
+  /**
+   * IDE instance status
+   */
+  200: {
+    [key: string]: IdeStatus
+  }
+}
+
+export type IdeStatusResponse = IdeStatusResponses[keyof IdeStatusResponses]
+
+export type IdeConnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/ide/{name}/connect"
+}
+
+export type IdeConnectResponses = {
+  /**
+   * IDE connected successfully
+   */
+  200: boolean
+}
+
+export type IdeConnectResponse = IdeConnectResponses[keyof IdeConnectResponses]
+
+export type IdeDisconnectData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/ide/{name}/disconnect"
+}
+
+export type IdeDisconnectResponses = {
+  /**
+   * IDE disconnected successfully
+   */
+  200: boolean
+}
+
+export type IdeDisconnectResponse = IdeDisconnectResponses[keyof IdeDisconnectResponses]
 
 export type LspStatusData = {
   body?: never

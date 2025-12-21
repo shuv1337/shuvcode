@@ -5,7 +5,7 @@ import os from "os"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import { ModelsDev } from "../provider/models"
-import { mergeDeep, pipe, unique } from "remeda"
+import { mergeDeep, pipe } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
@@ -76,13 +76,6 @@ export namespace Config {
           stop: Instance.worktree,
         }),
       )),
-      ...(await Array.fromAsync(
-        Filesystem.up({
-          targets: [".opencode"],
-          start: Global.Path.home,
-          stop: Global.Path.home,
-        }),
-      )),
     ]
 
     if (Flag.OPENCODE_CONFIG_DIR) {
@@ -91,7 +84,7 @@ export namespace Config {
     }
 
     const promises: Promise<void>[] = []
-    for (const dir of unique(directories)) {
+    for (const dir of directories) {
       await assertValid(dir)
 
       if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
@@ -219,7 +212,7 @@ export namespace Config {
         result[config.name] = parsed.data
         continue
       }
-      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+      throw new InvalidError({ path: item }, { cause: parsed.error })
     }
     return result
   }
@@ -262,7 +255,7 @@ export namespace Config {
         result[config.name] = parsed.data
         continue
       }
-      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+      throw new InvalidError({ path: item }, { cause: parsed.error })
     }
     return result
   }
@@ -443,8 +436,6 @@ export namespace Config {
       session_new: z.string().optional().default("<leader>n").describe("Create a new session"),
       session_list: z.string().optional().default("<leader>l").describe("List all sessions"),
       session_timeline: z.string().optional().default("<leader>g").describe("Show session timeline"),
-      session_fork: z.string().optional().default("none").describe("Fork session from message"),
-      session_rename: z.string().optional().default("none").describe("Rename session"),
       session_share: z.string().optional().default("none").describe("Share current session"),
       session_unshare: z.string().optional().default("none").describe("Unshare current session"),
       session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
@@ -566,7 +557,6 @@ export namespace Config {
       session_child_cycle_reverse: z.string().optional().default("<leader>left").describe("Previous child session"),
       session_parent: z.string().optional().default("<leader>up").describe("Go to parent session"),
       terminal_suspend: z.string().optional().default("ctrl+z").describe("Suspend terminal"),
-      terminal_title_toggle: z.string().optional().default("none").describe("Toggle terminal title"),
     })
     .strict()
     .meta({
@@ -678,6 +668,12 @@ export namespace Config {
         .string()
         .describe("Small model to use for tasks like title generation in the format of provider/model")
         .optional(),
+      default_agent: z
+        .string()
+        .optional()
+        .describe(
+          "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
+        ),
       username: z
         .string()
         .optional()
@@ -692,16 +688,10 @@ export namespace Config {
         .describe("@deprecated Use `agent` field instead."),
       agent: z
         .object({
-          // primary
           plan: Agent.optional(),
           build: Agent.optional(),
-          // subagent
           general: Agent.optional(),
           explore: Agent.optional(),
-          // specialized
-          title: Agent.optional(),
-          summary: Agent.optional(),
-          compaction: Agent.optional(),
         })
         .catchall(Agent)
         .optional()
@@ -778,6 +768,13 @@ export namespace Config {
           url: z.string().optional().describe("Enterprise URL"),
         })
         .optional(),
+      ide: z
+        .object({
+          lockfile_dir: z.string().optional().describe("Directory containing IDE lock files for WebSocket connections"),
+          auth_header_name: z.string().optional().describe("HTTP header name for IDE WebSocket authentication"),
+        })
+        .optional()
+        .describe("IDE integration settings"),
       experimental: z
         .object({
           hook: z

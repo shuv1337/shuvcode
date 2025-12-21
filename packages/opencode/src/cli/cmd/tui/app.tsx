@@ -12,9 +12,10 @@ import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
 import { DialogModel, useConnected } from "@tui/component/dialog-model"
 import { DialogMcp } from "@tui/component/dialog-mcp"
+import { DialogIde } from "@tui/component/dialog-ide"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
-import { DialogSpinnerList } from "@tui/component/dialog-spinner"
+import { DialogSpinnerList, DialogSpinnerInterval } from "@tui/component/dialog-spinner"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
@@ -233,7 +234,8 @@ function App() {
 
   let continued = false
   createEffect(() => {
-    if (continued || sync.status !== "complete" || !args.continue) return
+    // When using -c, session list is loaded in blocking phase, so we can navigate at "partial"
+    if (continued || sync.status === "loading" || !args.continue) return
     const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id
@@ -359,6 +361,14 @@ function App() {
       },
     },
     {
+      title: "Toggle IDEs",
+      value: "ide.list",
+      category: "Agent",
+      onSelect: () => {
+        dialog.replace(() => <DialogIde />)
+      },
+    },
+    {
       title: "Agent cycle",
       value: "agent.cycle",
       keybind: "agent_cycle",
@@ -428,6 +438,14 @@ function App() {
       category: "System",
       onSelect: () => {
         dialog.replace(() => <DialogSpinnerList />)
+      },
+    },
+    {
+      title: "Change spinner interval",
+      value: "spinner.interval",
+      category: "System",
+      onSelect: () => {
+        dialog.replace(() => <DialogSpinnerInterval />)
       },
     },
     {
