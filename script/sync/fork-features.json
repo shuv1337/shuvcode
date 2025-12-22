@@ -34,6 +34,43 @@
   ],
   "features": [
     {
+      "pr": 5917,
+      "title": "Draggable sidebar resize",
+      "author": "agustif",
+      "status": "open",
+      "description": "Click and drag the sidebar border to resize width, persisted to KV store",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Drag state signals and mouse event handlers for sidebar resize",
+          "markers": [
+            "drag",
+            "setDrag",
+            "down(x: number)",
+            "move(x: number)",
+            "up()",
+            "onMouseDrag",
+            "onMouseUp",
+            "onMouseDragEnd"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Sidebar border with hover highlight and mouse down handler",
+          "markers": ["setHov", "onMouseDown", "onMouseOver", "onMouseOut", "borderColor={drag()"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+          "description": "Dynamic width from props instead of fixed 42",
+          "markers": ["width={props.width}"]
+        }
+      ]
+    },
+    {
       "pr": 4898,
       "title": "Search in messages",
       "author": "OpeOginni",
