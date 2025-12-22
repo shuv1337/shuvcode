@@ -21,3 +21,4 @@ opencode.json
 a.out
 target
 .scripts
+docker/workspace

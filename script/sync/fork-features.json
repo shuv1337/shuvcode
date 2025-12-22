@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-21",
+  "note": "Updated to include Docker self-hosted deployment and PWA service worker features",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -1003,6 +1004,108 @@
           "file": "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
           "description": "IDE status display in home screen footer",
           "markers": ["ideStatus", "Ide.status()"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Docker self-hosted deployment",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Multi-stage Dockerfile that builds shuvcode from source with ARM64/AMD64 support. Includes docker-compose.yml for easy deployment with workspace volume mounting, API key injection, and git user configuration. Static desktop UI bundled into container for web access.",
+      "files": ["packages/opencode/Dockerfile", "docker/docker-compose.yml"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Multi-stage build with builder and runtime stages",
+          "markers": ["FROM oven/bun:1 AS builder", "FROM alpine", "ENTRYPOINT [\"shuvcode\"]"]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Desktop UI copied to static directory for web serving",
+          "markers": [
+            "cp -r packages/desktop/dist packages/opencode/static",
+            "COPY --from=builder /app/packages/opencode/static"
+          ]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Multi-arch binary selection (ARM64/AMD64)",
+          "markers": ["TARGETARCH=amd64", "shuvcode-linux-x64-baseline-musl", "shuvcode-linux-arm64-musl"]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Git installed and configured in runtime image",
+          "markers": ["apk add --no-cache libgcc libstdc++ ripgrep git", "git config --global init.defaultBranch main"]
+        },
+        {
+          "file": "docker/docker-compose.yml",
+          "description": "Workspace volume mounting and API key environment variables",
+          "markers": ["./workspace:/workspace", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIT_AUTHOR_NAME"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop PWA service worker",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Progressive Web App support via vite-plugin-pwa with offline caching, auto-update, and runtime caching for Google Fonts and jsDelivr CDN. Enables installable web app experience with proper manifest and iOS meta tags.",
+      "files": [
+        "packages/desktop/vite.config.ts",
+        "packages/desktop/index.html",
+        "packages/desktop/src/index.css",
+        "packages/desktop/public/site.webmanifest"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/vite.config.ts",
+          "description": "VitePWA plugin configuration with workbox caching",
+          "markers": [
+            "import { VitePWA }",
+            "VitePWA({",
+            "registerType: \"autoUpdate\"",
+            "workbox:",
+            "maximumFileSizeToCacheInBytes: 5 * 1024 * 1024",
+            "runtimeCaching:"
+          ]
+        },
+        {
+          "file": "packages/desktop/vite.config.ts",
+          "description": "API route denylist to prevent caching backend calls",
+          "markers": ["navigateFallbackDenylist: apiRoutes.map"]
+        },
+        {
+          "file": "packages/desktop/index.html",
+          "description": "iOS PWA meta tags and viewport-fit=cover for safe areas",
+          "markers": [
+            "viewport-fit=cover",
+            "apple-mobile-web-app-capable",
+            "apple-mobile-web-app-status-bar-style",
+            "apple-mobile-web-app-title"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/index.css",
+          "description": "Safe area CSS variables for notch/home indicator",
+          "markers": [
+            "--safe-area-inset-top: env(safe-area-inset-top",
+            "--safe-area-inset-bottom: env(safe-area-inset-bottom"
+          ]
+        },
+        {
+          "file": "packages/desktop/src/index.css",
+          "description": "PWA standalone mode styles for proper viewport sizing",
+          "markers": ["@media (display-mode: standalone)", "--pwa-top-offset", "min-height: 100dvh"]
+        },
+        {
+          "file": "packages/desktop/public/site.webmanifest",
+          "description": "Web app manifest with shuvcode branding and standalone display",
+          "markers": [
+            "\"name\": \"shuvcode\"",
+            "\"display\": \"standalone\"",
+            "\"display_override\": [\"standalone\", \"fullscreen\"]"
+          ]
         }
       ]
     }

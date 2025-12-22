@@ -1,0 +1,39 @@
+# Git
+.git
+
+# IDE
+.idea
+.vscode
+*.swp
+*~
+
+# Build artifacts (we build fresh in Docker)
+node_modules
+dist
+ts-dist
+.turbo
+target
+
+# Development files
+.DS_Store
+.opencode
+.worktrees
+.sst
+.env
+playground
+tmp
+.serena
+refs
+Session.vim
+opencode.json
+a.out
+.scripts
+
+# Documentation (not needed for build)
+docs/
+CONTEXT/
+specs/
+logs/
+
+# Tauri (native desktop app - not needed for Docker)
+packages/tauri/src-tauri/target
