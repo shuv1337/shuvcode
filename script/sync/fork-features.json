@@ -3,6 +3,25 @@
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-22",
   "note": "Updated to include VS Code extension rebrand and file line range reference features",
+  "forkDependencies": {
+    "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
+    "packages/opencode/package.json": [
+      {
+        "name": "ghostty-opentui",
+        "version": "1.3.7",
+        "reason": "Required for PR 4791 - Bash output with ANSI terminal emulation",
+        "usedBy": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/tool/bash.ts"]
+      }
+    ],
+    "packages/desktop/package.json": [
+      {
+        "name": "vite-plugin-pwa",
+        "version": "1.2.0",
+        "reason": "Required for Desktop PWA service worker and offline support",
+        "usedBy": ["packages/desktop/vite.config.ts"]
+      }
+    ]
+  },
   "removedFeatures": [
     {
       "pr": 5568,
@@ -94,6 +113,14 @@
         "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
         "packages/opencode/src/tool/bash.ts",
         "packages/opencode/script/build.ts"
+      ],
+      "requiredDependencies": [
+        {
+          "package": "packages/opencode/package.json",
+          "dependency": "ghostty-opentui",
+          "version": "1.3.7",
+          "note": "CRITICAL: This dep is frequently lost during merges. Always verify it exists after accepting upstream package.json changes."
+        }
       ],
       "criticalCode": [
         {
@@ -1104,6 +1131,14 @@
         "packages/desktop/index.html",
         "packages/desktop/src/index.css",
         "packages/desktop/public/site.webmanifest"
+      ],
+      "requiredDependencies": [
+        {
+          "package": "packages/desktop/package.json",
+          "dependency": "vite-plugin-pwa",
+          "version": "1.2.0",
+          "note": "CRITICAL: This dep is frequently lost during merges. Always verify it exists after accepting upstream package.json changes."
+        }
       ],
       "criticalCode": [
         {
