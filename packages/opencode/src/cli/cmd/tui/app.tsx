@@ -173,7 +173,7 @@ function App() {
   const local = useLocal()
   const kv = useKV()
   const command = useCommandDialog()
-  const { event, client: sdkClient } = useSDK()
+  const sdk = useSDK()
   const toast = useToast()
   const { theme, mode, setMode, transparent, setTransparent } = useTheme()
   const sync = useSync()
@@ -466,6 +466,15 @@ function App() {
       category: "System",
     },
     {
+      title: "Open WebUI",
+      value: "webui.open",
+      onSelect: () => {
+        open(sdk.url).catch(() => {})
+        dialog.clear()
+      },
+      category: "System",
+    },
+    {
       title: "Exit the app",
       value: "app.exit",
       onSelect: () => exit(),
@@ -535,11 +544,11 @@ function App() {
     }
   })
 
-  event.on(TuiEvent.CommandExecute.type, (evt) => {
+  sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
     command.trigger(evt.properties.command)
   })
 
-  event.on(TuiEvent.ToastShow.type, (evt) => {
+  sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
     toast.show({
       title: evt.properties.title,
       message: evt.properties.message,
@@ -549,14 +558,14 @@ function App() {
   })
 
   // Handle question requests from the Ask tool
-  event.on(TuiEvent.QuestionRequest.type as any, (evt: any) => {
+  sdk.event.on(TuiEvent.QuestionRequest.type as any, (evt: any) => {
     const request = evt.properties as Question.Request
     dialog.replace(
       () => (
         <DialogQuestion
           request={request}
           onSubmit={(answers) => {
-            sdkClient.tui.publish({
+            sdk.client.tui.publish({
               body: {
                 type: TuiEvent.QuestionResponse.type,
                 properties: {
@@ -568,7 +577,7 @@ function App() {
             } as any)
           }}
           onCancel={() => {
-            sdkClient.tui.publish({
+            sdk.client.tui.publish({
               body: {
                 type: TuiEvent.QuestionResponse.type,
                 properties: {
@@ -583,7 +592,7 @@ function App() {
       ),
       () => {
         // On escape/close, send cancel response
-        sdkClient.tui.publish({
+        sdk.client.tui.publish({
           body: {
             type: TuiEvent.QuestionResponse.type,
             properties: {
@@ -597,7 +606,7 @@ function App() {
     )
   })
 
-  event.on(SessionApi.Event.Deleted.type, (evt) => {
+  sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
     if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id) {
       route.navigate({ type: "home" })
       toast.show({
@@ -607,7 +616,7 @@ function App() {
     }
   })
 
-  event.on(SessionApi.Event.Error.type, (evt) => {
+  sdk.event.on(SessionApi.Event.Error.type, (evt) => {
     const error = evt.properties.error
     const message = (() => {
       if (!error) return "An error occured"
@@ -628,7 +637,7 @@ function App() {
     })
   })
 
-  event.on(Installation.Event.Updated.type, (evt) => {
+  sdk.event.on(Installation.Event.Updated.type, (evt) => {
     toast.show({
       variant: "success",
       title: "Update Complete",
@@ -637,7 +646,7 @@ function App() {
     })
   })
 
-  event.on(Installation.Event.UpdateAvailable.type, (evt) => {
+  sdk.event.on(Installation.Event.UpdateAvailable.type, (evt) => {
     toast.show({
       variant: "info",
       title: "Update Available",
