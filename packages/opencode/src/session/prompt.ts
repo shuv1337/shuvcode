@@ -614,38 +614,34 @@ export namespace SessionPrompt {
             extra: { model: input.model },
             agent: input.agent.name,
             metadata: async (val) => {
-              // Wait for the part to be in "running" state with retries
-              // This handles the race condition where execute() is called before
-              // the tool-call event has been processed
-              let match = input.processor.partFromToolCall(options.toolCallId)
-              let retries = 0
-              const maxRetries = 20 // 20 * 50ms = 1 second max wait
-              
-              while ((!match || match.state.status !== "running") && retries < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 50))
-                match = input.processor.partFromToolCall(options.toolCallId)
-                retries++
+              const findPart = async (retries: number): Promise<MessageV2.ToolPart | undefined> => {
+                const match = input.processor.partFromToolCall(options.toolCallId)
+                if (match?.state.status === "running") return match as MessageV2.ToolPart
+                if (retries >= 20) return undefined
+                await new Promise((resolve) => setTimeout(resolve, 50))
+                return findPart(retries + 1)
               }
-              
-              if (match && match.state.status === "running") {
-                await Session.updatePart({
-                  ...match,
-                  state: {
-                    title: val.title,
-                    metadata: val.metadata,
-                    status: "running",
-                    input: args,
-                    time: {
-                      start: Date.now(),
-                    },
-                  },
-                })
-              } else {
+
+              const match = await findPart(0)
+              if (!match) {
                 log.warn("metadata: part not found or not running after waiting", {
                   toolCallId: options.toolCallId,
-                  retries,
                 })
+                return
               }
+
+              await Session.updatePart({
+                ...match,
+                state: {
+                  title: val.title,
+                  metadata: val.metadata,
+                  status: "running",
+                  input: args,
+                  time: {
+                    start: Date.now(),
+                  },
+                },
+              })
             },
           })
           await Plugin.trigger(

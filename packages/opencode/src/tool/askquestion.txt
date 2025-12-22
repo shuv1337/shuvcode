@@ -8,11 +8,11 @@ Use this tool during planning to ask the user multiple clarifying questions in a
 
 ## Parameters
 
-- **questions**: An array of 1-6 questions, each with:
+- **questions**: An array of 1-8 questions, each with:
   - **id**: Unique identifier for the question
   - **label**: Short tab label (2-3 words), e.g. "UI Framework", "Database", "Auth Strategy"
   - **question**: The full question text to display
-  - **options**: 2-5 answer options, each with value, label, and optional description
+  - **options**: 2-8 answer options, each with value, label, and optional description
   - **multiSelect**: (optional) Set to true to allow multiple selections
 
 ## Guidelines
@@ -21,7 +21,7 @@ Use this tool during planning to ask the user multiple clarifying questions in a
 - Provide 2-8 distinct, actionable answer options per question
 - Users can always type a custom response for any question
 - Order questions logically (broad decisions before specific ones)
-- Keep questions focused - don't ask too many at once (max 6)
+- Keep questions focused - don't ask too many at once (max 8)
 
 ## Example
 

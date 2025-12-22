@@ -65,7 +65,9 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
       if (evt.name === "escape") {
         setStore("isTypingCustom", false)
         setStore("customInputValue", "")
-      } else if (evt.name === "return") {
+        return
+      }
+      if (evt.name === "return") {
         const value = store.customInputValue.trim()
         if (value) {
           setStore(
@@ -80,6 +82,10 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
         // Auto-advance to next question or submit
         if (store.activeTab < props.questions.length - 1) {
           setStore("activeTab", store.activeTab + 1)
+          return
+        }
+        if (allAnswered()) {
+          handleSubmit()
         }
       }
       return
@@ -89,22 +95,28 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
     if (evt.name === "tab" || evt.name === "right") {
       if (store.activeTab < props.questions.length - 1) {
         setStore("activeTab", store.activeTab + 1)
-      } else if (allAnswered()) {
-        // Submit when on last tab and all answered
+        return
+      }
+      if (allAnswered()) {
         handleSubmit()
       }
-    } else if (evt.shift && evt.name === "tab") {
+      return
+    }
+    if (evt.shift && evt.name === "tab") {
       if (store.activeTab > 0) {
         setStore("activeTab", store.activeTab - 1)
       }
-    } else if (evt.name === "left") {
+      return
+    }
+    if (evt.name === "left") {
       if (store.activeTab > 0) {
         setStore("activeTab", store.activeTab - 1)
       }
+      return
     }
 
     // Up/down navigation within options
-    else if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
+    if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
       const current = currentState().selectedOption
       const max = optionsWithCustom().length - 1
       setStore(
@@ -112,7 +124,9 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
           s.questionStates[s.activeTab].selectedOption = current > 0 ? current - 1 : max
         }),
       )
-    } else if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
+      return
+    }
+    if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
       const current = currentState().selectedOption
       const max = optionsWithCustom().length - 1
       setStore(
@@ -120,10 +134,11 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
           s.questionStates[s.activeTab].selectedOption = current < max ? current + 1 : 0
         }),
       )
+      return
     }
 
     // Space to toggle selection (especially useful for multi-select)
-    else if (evt.name === "space") {
+    if (evt.name === "space") {
       const selectedIdx = currentState().selectedOption
       const option = optionsWithCustom()[selectedIdx]
 
@@ -131,43 +146,45 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
         // Open custom input
         setStore("isTypingCustom", true)
         setTimeout(() => inputRef?.focus(), 10)
-      } else {
-        const question = currentQuestion()
-        setStore(
-          produce((s) => {
-            const state = s.questionStates[s.activeTab]
-            state.customText = undefined
-
-            if (question.multiSelect) {
-              // Toggle for multi-select
-              const idx = state.selectedValues.indexOf(option.value)
-              if (idx >= 0) {
-                state.selectedValues.splice(idx, 1)
-              } else {
-                state.selectedValues.push(option.value)
-              }
-            } else {
-              // Select for single-select (same as Enter)
-              state.selectedValues = [option.value]
-              if (s.activeTab < props.questions.length - 1) {
-                s.activeTab++
-              }
-            }
-          }),
-        )
-        // Auto-submit if single-select on last question
-        if (!currentQuestion().multiSelect) {
-          setTimeout(() => {
-            if (allAnswered()) {
-              handleSubmit()
-            }
-          }, 50)
-        }
+        return
       }
+
+      const question = currentQuestion()
+      setStore(
+        produce((s) => {
+          const state = s.questionStates[s.activeTab]
+          state.customText = undefined
+
+          if (question.multiSelect) {
+            // Toggle for multi-select
+            const idx = state.selectedValues.indexOf(option.value)
+            if (idx >= 0) {
+              state.selectedValues.splice(idx, 1)
+            } else {
+              state.selectedValues.push(option.value)
+            }
+          } else {
+            // Select for single-select (same as Enter)
+            state.selectedValues = [option.value]
+            if (s.activeTab < props.questions.length - 1) {
+              s.activeTab++
+            }
+          }
+        }),
+      )
+      // Auto-submit if single-select on last question
+      if (!currentQuestion().multiSelect) {
+        setTimeout(() => {
+          if (allAnswered()) {
+            handleSubmit()
+          }
+        }, 50)
+      }
+      return
     }
 
     // Enter to select option (single-select) or confirm and advance (multi-select)
-    else if (evt.name === "return") {
+    if (evt.name === "return") {
       const selectedIdx = currentState().selectedOption
       const option = optionsWithCustom()[selectedIdx]
       const question = currentQuestion()
@@ -176,47 +193,54 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
         // Open custom input
         setStore("isTypingCustom", true)
         setTimeout(() => inputRef?.focus(), 10)
-      } else if (question.multiSelect) {
+        return
+      }
+
+      if (question.multiSelect) {
         // For multi-select: Enter confirms current selections and advances
         if (currentAnswered()) {
           if (store.activeTab < props.questions.length - 1) {
             setStore("activeTab", store.activeTab + 1)
-          } else if (allAnswered()) {
+            return
+          }
+          if (allAnswered()) {
             handleSubmit()
           }
-        } else {
-          // If nothing selected yet, toggle the current option
-          setStore(
-            produce((s) => {
-              const state = s.questionStates[s.activeTab]
-              state.customText = undefined
-              state.selectedValues.push(option.value)
-            }),
-          )
+          return
         }
-      } else {
-        // Single-select: select and advance
+        // If nothing selected yet, toggle the current option
         setStore(
           produce((s) => {
             const state = s.questionStates[s.activeTab]
             state.customText = undefined
-            state.selectedValues = [option.value]
-            if (s.activeTab < props.questions.length - 1) {
-              s.activeTab++
-            }
+            state.selectedValues.push(option.value)
           }),
         )
-        // Auto-submit if this was the last question
-        setTimeout(() => {
-          if (allAnswered()) {
-            handleSubmit()
-          }
-        }, 50)
+        return
       }
+
+      // Single-select: select and advance
+      setStore(
+        produce((s) => {
+          const state = s.questionStates[s.activeTab]
+          state.customText = undefined
+          state.selectedValues = [option.value]
+          if (s.activeTab < props.questions.length - 1) {
+            s.activeTab++
+          }
+        }),
+      )
+      // Auto-submit if this was the last question
+      setTimeout(() => {
+        if (allAnswered()) {
+          handleSubmit()
+        }
+      }, 50)
+      return
     }
 
-    // Number keys for quick selection (1-5)
-    else if (evt.name >= "1" && evt.name <= "5") {
+    // Number keys for quick selection (1-8)
+    if (evt.name >= "1" && evt.name <= "8") {
       const idx = parseInt(evt.name) - 1
       if (idx < currentQuestion().options.length) {
         const option = currentQuestion().options[idx]
@@ -240,18 +264,21 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
           }),
         )
       }
+      return
     }
 
     // Escape to cancel
-    else if (evt.name === "escape") {
+    if (evt.name === "escape") {
       props.onCancel()
+      return
     }
 
     // Ctrl+Enter to submit
-    else if (evt.ctrl && evt.name === "return") {
+    if (evt.ctrl && evt.name === "return") {
       if (allAnswered()) {
         handleSubmit()
       }
+      return
     }
   })
 
@@ -282,15 +309,8 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
               return state.selectedValues.length > 0 || state.customText
             })
             return (
-              <box
-                flexDirection="row"
-                gap={1}
-                paddingRight={1}
-                onMouseUp={() => setStore("activeTab", index())}
-              >
-                <text fg={isAnswered() ? theme.success : theme.textMuted}>
-                  {isAnswered() ? "●" : "○"}
-                </text>
+              <box flexDirection="row" gap={1} paddingRight={1} onMouseUp={() => setStore("activeTab", index())}>
+                <text fg={isAnswered() ? theme.success : theme.textMuted}>{isAnswered() ? "●" : "○"}</text>
                 <text
                   fg={isActive() ? theme.text : theme.textMuted}
                   attributes={isActive() ? TextAttributes.BOLD : undefined}
@@ -304,11 +324,7 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
         <Show when={allAnswered()}>
           <box flexDirection="row" gap={1}>
             <text fg={theme.success}>✓</text>
-            <text
-              fg={theme.success}
-              attributes={TextAttributes.BOLD}
-              onMouseUp={handleSubmit}
-            >
+            <text fg={theme.success} attributes={TextAttributes.BOLD} onMouseUp={handleSubmit}>
               Submit
             </text>
           </box>
@@ -361,12 +377,15 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
               >
                 {/* Use different icons for single vs multi select */}
                 <text fg={isSelected() ? fg : theme.textMuted} flexShrink={0}>
-                  {option.value === "__custom__" 
-                    ? "›" 
+                  {option.value === "__custom__"
+                    ? "›"
                     : currentQuestion().multiSelect
-                      ? (isChosen() ? "[✓]" : "[ ]")
-                      : (isChosen() ? "●" : "○")
-                  }
+                      ? isChosen()
+                        ? "[✓]"
+                        : "[ ]"
+                      : isChosen()
+                        ? "●"
+                        : "○"}
                 </text>
                 <text
                   fg={isSelected() ? fg : isChosen() ? theme.success : theme.text}
@@ -375,9 +394,7 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
                   {option.label}
                 </text>
                 <Show when={option.description && option.value !== "__custom__"}>
-                  <text fg={isSelected() ? fg : theme.textMuted}>
-                    {option.description}
-                  </text>
+                  <text fg={isSelected() ? fg : theme.textMuted}>{option.description}</text>
                 </Show>
               </box>
             )
@@ -402,10 +419,9 @@ export function DialogAskQuestion(props: DialogAskQuestionProps) {
       {/* Instructions */}
       <box paddingLeft={2} paddingRight={2} paddingTop={1}>
         <text fg={theme.textMuted}>
-          {currentQuestion().multiSelect 
+          {currentQuestion().multiSelect
             ? "Space to toggle · Enter to confirm · ↑↓ to navigate · Esc to cancel"
-            : "Enter/Space to select · ↑↓ to navigate · Esc to cancel"
-          }
+            : "Enter/Space to select · ↑↓ to navigate · Esc to cancel"}
         </text>
       </box>
     </box>

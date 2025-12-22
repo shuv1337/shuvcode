@@ -204,20 +204,19 @@ export function Session() {
   const pendingAskQuestionFromSync = createMemo(() => {
     const sessionMessages = sync.data.message[route.sessionID] ?? []
 
-    for (const message of sessionMessages) {
+    // Search backwards for the most recent pending question
+    for (const message of [...sessionMessages].reverse()) {
       const parts = sync.data.part[message.id] ?? []
 
-      for (const part of parts) {
+      for (const part of [...parts].reverse()) {
         if (part.type !== "tool") continue
         const toolPart = part as ToolPart
 
         if (toolPart.tool !== "askquestion") continue
         if (toolPart.state.status !== "running") continue
 
-        const metadata = toolPart.state.metadata as
-          | { status?: string; questions?: AskQuestion.Question[] }
-          | undefined
-        
+        const metadata = toolPart.state.metadata as { status?: string; questions?: AskQuestion.Question[] } | undefined
+
         if (metadata?.status !== "waiting") continue
 
         return {
