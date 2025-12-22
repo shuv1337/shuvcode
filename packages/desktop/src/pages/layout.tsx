@@ -723,7 +723,7 @@ export default function Layout(props: ParentProps) {
               }
             >
               <div class="flex items-center gap-3 min-w-0 grow flex-nowrap">
-                <div class="flex items-center gap-2 min-w-0">
+                <div class="hidden sm:flex items-center gap-2 min-w-0">
                   <Select
                     options={layout.projects.list().map((project) => project.worktree)}
                     current={currentDirectory()}
@@ -742,7 +742,7 @@ export default function Layout(props: ParentProps) {
                       </div>
                     )}
                   </Select>
-                  <div class="text-text-weaker hidden sm:block">/</div>
+                  <div class="text-text-weaker">/</div>
                 </div>
                 <div class="flex items-center min-w-0 sm:hidden">
                   <DropdownMenu>
@@ -857,7 +857,44 @@ export default function Layout(props: ParentProps) {
                 <FontPicker />
                 <ThemePicker />
               </div>
-              <div class="hidden sm:flex items-center gap-4">
+              <div class="flex items-center gap-2">
+                {/* Mobile message navigation */}
+                <Show when={layout.mobileMessageNav.visible()}>
+                  <div class="sm:hidden">
+                    <DropdownMenu>
+                      <DropdownMenu.Trigger
+                        as={Button}
+                        variant="ghost"
+                        size="small"
+                        class="gap-1 px-2"
+                      >
+                        <span class="text-12-medium">
+                          {layout.mobileMessageNav.currentIndex() + 1}/{layout.mobileMessageNav.messages().length}
+                        </span>
+                        <Icon name="chevron-down" size="small" />
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content class="max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto">
+                          <For each={layout.mobileMessageNav.messages()}>
+                            {(msg, index) => (
+                              <DropdownMenu.Item onSelect={() => layout.mobileMessageNav.onSelect()?.(index())}>
+                                <DropdownMenu.ItemLabel class="flex items-center gap-3">
+                                  <span class="text-text-weak shrink-0">{index() + 1}</span>
+                                  <span class="truncate">{msg.title || "Message"}</span>
+                                </DropdownMenu.ItemLabel>
+                                <Show when={index() === layout.mobileMessageNav.currentIndex()}>
+                                  <DropdownMenu.ItemIndicator>
+                                    <Icon name="check-small" size="small" />
+                                  </DropdownMenu.ItemIndicator>
+                                </Show>
+                              </DropdownMenu.Item>
+                            )}
+                          </For>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu>
+                  </div>
+                </Show>
                 <Tooltip
                   class="shrink-0"
                   value={

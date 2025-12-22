@@ -128,6 +128,7 @@ export default function Page() {
     userInteracted: false,
     stepsExpanded: true,
     mobileTabsOpen: false,
+    mobileTerminalFullscreen: false,
     diffSplit: false,
   })
   let inputRef!: HTMLDivElement
@@ -150,6 +151,25 @@ export default function Page() {
 
   onCleanup(() => {
     layout.mobileReview.unregister()
+  })
+
+  // Register mobile message navigation in header when there are multiple messages
+  createEffect(() => {
+    const messages = visibleUserMessages()
+    if (messages.length > 1) {
+      const currentIndex = messages.findIndex((m) => m.id === activeMessage()?.id)
+      layout.mobileMessageNav.register(
+        messages.map((m) => ({ id: m.id, title: m.summary?.title })),
+        currentIndex >= 0 ? currentIndex : 0,
+        (index) => setActiveMessage(messages[index])
+      )
+    } else {
+      layout.mobileMessageNav.unregister()
+    }
+  })
+
+  onCleanup(() => {
+    layout.mobileMessageNav.unregister()
   })
 
   createEffect(() => {
@@ -872,24 +892,36 @@ export default function Page() {
             <DragDropSensors />
             <ConstrainDragYAxis />
             <Tabs variant="alt" value={terminal.active()} onChange={terminal.open}>
-              <Tabs.List class="h-10">
-                <SortableProvider ids={terminal.all().map((t: LocalPTY) => t.id)}>
-                  <For each={terminal.all()}>{(pty) => <SortableTerminalTab terminal={pty} />}</For>
-                </SortableProvider>
-                <div class="h-full flex items-center justify-center">
-                  <Tooltip
-                    value={
-                      <div class="flex items-center gap-2">
-                        <span>New terminal</span>
-                        <span class="text-icon-base text-12-medium">{command.keybind("terminal.new")}</span>
-                      </div>
-                    }
-                    class="flex items-center"
-                  >
-                    <IconButton icon="plus-small" variant="ghost" iconSize="large" onClick={terminal.new} />
+              <div class="flex h-10">
+                <Tabs.List class="h-10 flex-1 min-w-0 overflow-x-auto">
+                  <SortableProvider ids={terminal.all().map((t: LocalPTY) => t.id)}>
+                    <For each={terminal.all()}>{(pty) => <SortableTerminalTab terminal={pty} />}</For>
+                  </SortableProvider>
+                  <div class="h-full flex items-center justify-center">
+                    <Tooltip
+                      value={
+                        <div class="flex items-center gap-2">
+                          <span>New terminal</span>
+                          <span class="text-icon-base text-12-medium">{command.keybind("terminal.new")}</span>
+                        </div>
+                      }
+                      class="flex items-center"
+                    >
+                      <IconButton icon="plus-small" variant="ghost" iconSize="large" onClick={terminal.new} />
+                    </Tooltip>
+                  </div>
+                </Tabs.List>
+                <div class="sm:hidden h-full flex items-center justify-center shrink-0 px-2 border-l border-border-weak-base">
+                  <Tooltip value="Fullscreen terminal" class="flex items-center">
+                    <IconButton
+                      icon="expand"
+                      variant="ghost"
+                      iconSize="small"
+                      onClick={() => setStore("mobileTerminalFullscreen", true)}
+                    />
                   </Tooltip>
                 </div>
-              </Tabs.List>
+              </div>
               <For each={terminal.all()}>
                 {(pty) => (
                   <Tabs.Content value={pty.id}>
@@ -1078,6 +1110,62 @@ export default function Page() {
                       </Tabs.Content>
                     )
                   }}
+                </For>
+              </Tabs>
+            </div>
+          </div>
+        </Show>
+
+        {/* Mobile terminal fullscreen overlay */}
+        <Show when={store.mobileTerminalFullscreen}>
+          <div
+            class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
+            style={{
+              "padding-top": "var(--safe-area-inset-top)",
+              "padding-bottom": "var(--safe-area-inset-bottom)",
+              "padding-left": "var(--safe-area-inset-left)",
+              "padding-right": "var(--safe-area-inset-right)",
+            }}
+          >
+            <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <Tabs variant="alt" value={terminal.active()} onChange={terminal.open} class="flex flex-col h-full">
+                <div class="shrink-0 flex h-10">
+                  <Tabs.List class="flex-1 min-w-0 overflow-x-auto">
+                    <For each={terminal.all()}>
+                      {(pty) => (
+                        <Tabs.Trigger value={pty.id} class="max-w-40 truncate">
+                          {pty.title}
+                        </Tabs.Trigger>
+                      )}
+                    </For>
+                    <div class="h-full flex items-center justify-center">
+                      <IconButton
+                        icon="plus-small"
+                        variant="ghost"
+                        iconSize="large"
+                        onClick={terminal.new}
+                        aria-label="New terminal"
+                      />
+                    </div>
+                  </Tabs.List>
+                  <div class="h-full flex items-center justify-center shrink-0 px-2 border-l border-border-weak-base">
+                    <Tooltip value="Exit fullscreen" class="flex items-center">
+                      <IconButton
+                        icon="collapse"
+                        variant="ghost"
+                        iconSize="small"
+                        onClick={() => setStore("mobileTerminalFullscreen", false)}
+                        aria-label="Exit fullscreen"
+                      />
+                    </Tooltip>
+                  </div>
+                </div>
+                <For each={terminal.all()}>
+                  {(pty) => (
+                    <Tabs.Content value={pty.id} class="flex-1 min-h-0">
+                      <Terminal pty={pty} onCleanup={terminal.update} onConnectError={() => terminal.clone(pty.id)} />
+                    </Tabs.Content>
+                  )}
                 </For>
               </Tabs>
             </div>
