@@ -944,23 +944,13 @@ export default function Page() {
                   </div>
                 </Show>
               </div>
-              <div class="flex items-center gap-1">
-                <IconButton
-                  icon="plus-small"
-                  variant="ghost"
-                  onClick={() => {
-                    setStore("mobileTabsOpen", false)
-                    dialog.show(() => <DialogSelectFile />)
-                  }}
-                  aria-label="Open file"
-                />
-                <IconButton
-                  icon="close"
-                  variant="ghost"
-                  onClick={() => setStore("mobileTabsOpen", false)}
-                  aria-label="Close"
-                />
-              </div>
+              <IconButton
+                icon="close"
+                variant="ghost"
+                iconSize="large"
+                onClick={() => setStore("mobileTabsOpen", false)}
+                aria-label="Close"
+              />
             </div>
 
             {/* Mobile tabs content */}
@@ -999,6 +989,18 @@ export default function Page() {
                       }}
                     </For>
                   </Tabs.List>
+                  <div class="flex items-center justify-center px-2">
+                    <IconButton
+                      icon="plus-small"
+                      variant="ghost"
+                      iconSize="large"
+                      onClick={() => {
+                        setStore("mobileTabsOpen", false)
+                        dialog.show(() => <DialogSelectFile />)
+                      }}
+                      aria-label="Open file"
+                    />
+                  </div>
                 </div>
                 <Show when={diffs().length}>
                   <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden">
