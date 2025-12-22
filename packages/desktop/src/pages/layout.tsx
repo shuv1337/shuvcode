@@ -690,7 +690,7 @@ export default function Layout(props: ParentProps) {
         <div class="flex h-12">
           {/* Mobile hamburger menu button */}
           <button
-            class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch border-r border-border-weak-base"
+            class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch"
             onClick={() => setStore("mobileMenuOpen", true)}
             aria-label="Open menu"
           >
