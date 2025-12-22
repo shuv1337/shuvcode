@@ -46,6 +46,7 @@ import { useLayout } from "@/context/layout"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { Terminal } from "@/components/terminal"
 import { checksum } from "@opencode-ai/util/encode"
+import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import { DialogSelectModel } from "@/components/dialog-select-model"
@@ -69,6 +70,9 @@ export default function Page() {
   const navigate = useNavigate()
   const sdk = useSDK()
   const prompt = usePrompt()
+
+  // Initialize keyboard visibility tracking for mobile terminal support
+  useKeyboardVisibility()
 
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey()))
@@ -161,7 +165,7 @@ export default function Page() {
       layout.mobileMessageNav.register(
         messages.map((m) => ({ id: m.id, title: m.summary?.title })),
         currentIndex >= 0 ? currentIndex : 0,
-        (index) => setActiveMessage(messages[index])
+        (index) => setActiveMessage(messages[index]),
       )
     } else {
       layout.mobileMessageNav.unregister()
@@ -642,7 +646,7 @@ export default function Page() {
                       onStepsExpandedToggle={() => setStore("stepsExpanded", (x) => !x)}
                       onUserInteracted={() => setStore("userInteracted", true)}
                       classes={{
-                        root: "pb-20 flex-1 min-w-0",
+                        root: "pb-20 flex-1 min-w-0 h-full overflow-hidden",
                         content: "pb-20",
                         container:
                           "w-full " +
@@ -1119,10 +1123,11 @@ export default function Page() {
         {/* Mobile terminal fullscreen overlay */}
         <Show when={store.mobileTerminalFullscreen}>
           <div
+            data-component="mobile-terminal-fullscreen"
             class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
             style={{
               "padding-top": "var(--safe-area-inset-top)",
-              "padding-bottom": "var(--safe-area-inset-bottom)",
+              "padding-bottom": "calc(var(--safe-area-inset-bottom) + var(--keyboard-offset, 0px))",
               "padding-left": "var(--safe-area-inset-left)",
               "padding-right": "var(--safe-area-inset-right)",
             }}

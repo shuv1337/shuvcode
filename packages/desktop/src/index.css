@@ -10,9 +10,23 @@
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
 
-  a {
-    cursor: default;
-  }
+  /* Keyboard offset for mobile terminal */
+  --keyboard-offset: 0px;
+}
+
+/* When keyboard is visible, adjust the main app container to shrink and stay above keyboard */
+[data-keyboard-visible="true"] #root {
+  height: calc(100% - var(--keyboard-offset));
+  overflow: hidden;
+}
+
+/* For fullscreen mobile terminal overlay, adjust bottom position when keyboard is visible */
+[data-component="mobile-terminal-fullscreen"][data-keyboard-visible="true"] {
+  bottom: var(--keyboard-offset);
+}
+
+a {
+  cursor: default;
 }
 
 /* Mobile breakpoint: 40rem = 640px */
