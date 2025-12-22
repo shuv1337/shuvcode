@@ -48,6 +48,7 @@ import { showToast, Toast } from "@opencode-ai/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useNotification } from "@/context/notification"
 import { Binary } from "@opencode-ai/util/binary"
+import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
@@ -1071,7 +1072,13 @@ export default function Layout(props: ParentProps) {
             <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__}</div>
           </Show>
         </div>
-        <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">{props.children}</main>
+        <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
+          {/* Desktop: direct children, Mobile: wrap in PullToRefresh for swipe-to-refresh */}
+          <div class="hidden sm:contents">{props.children}</div>
+          <div class="contents sm:hidden">
+            <PullToRefresh>{props.children}</PullToRefresh>
+          </div>
+        </main>
       </div>
 
       {/* Mobile fullscreen menu overlay */}
