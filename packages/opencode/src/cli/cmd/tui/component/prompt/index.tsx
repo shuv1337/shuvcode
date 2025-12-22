@@ -30,6 +30,10 @@ import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useLayoutDensity } from "../../util/layout-density"
 
+// Regex to match optional whitespace followed by #L<start>[-<end>] line range syntax after a file reference
+// Only matches when followed by a space (confirming the line range is complete)
+const LINE_RANGE_SUFFIX_REGEX = /^(\s*)#L(\d+)(?:-(\d+))?\s/
+
 export type PromptProps = {
   sessionID?: string
   disabled?: boolean
@@ -401,6 +405,20 @@ export function Prompt(props: PromptProps) {
 
   function syncExtmarksWithPromptParts() {
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
+    const text = input.plainText
+
+    // Track extmarks that need to be recreated with new bounds (for line range absorption)
+    const extmarksToRecreate: Array<{
+      oldId: number
+      start: number
+      end: number
+      deleteFrom: number
+      deleteTo: number
+      newVirtualText: string
+      styleId: number
+      partIndex: number
+    }> = []
+
     setStore(
       produce((draft) => {
         const newMap = new Map<number, number>()
@@ -417,6 +435,50 @@ export function Prompt(props: PromptProps) {
               } else if (part.type === "file" && part.source?.text) {
                 part.source.text.start = extmark.start
                 part.source.text.end = extmark.end
+
+                // Check for #L line range suffix after the extmark (with optional whitespace)
+                const textAfterExtmark = text.slice(extmark.end)
+                const lineRangeMatch = textAfterExtmark.match(LINE_RANGE_SUFFIX_REGEX)
+
+                if (lineRangeMatch) {
+                  const whitespace = lineRangeMatch[1]
+                  const startLine = lineRangeMatch[2]
+                  const endLine = lineRangeMatch[3]
+                  const fullMatchLength = lineRangeMatch[0].length
+                  const lineRangeSuffix = endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
+
+                  // Update the URL with line range query params
+                  const baseUrl = part.url.split("?")[0]
+                  const params = new URLSearchParams()
+                  params.set("start", startLine)
+                  if (endLine) {
+                    params.set("end", endLine)
+                  }
+                  part.url = `${baseUrl}?${params.toString()}`
+
+                  // Update the filename to include the line range
+                  if (part.filename) {
+                    const baseFilename = part.filename.replace(/#L\d+(-\d+)?$/, "")
+                    part.filename = baseFilename + lineRangeSuffix
+                  }
+
+                  // Update the virtual text value to include the line range
+                  const baseVirtualText = part.source.text.value.replace(/#L\d+(-\d+)?$/, "")
+                  part.source.text.value = baseVirtualText + lineRangeSuffix
+
+                  // Mark for text deletion and extmark recreation
+                  // We'll delete the whitespace+#L... text and extend the extmark
+                  extmarksToRecreate.push({
+                    oldId: extmark.id,
+                    start: extmark.start,
+                    end: extmark.end + fullMatchLength,
+                    deleteFrom: extmark.end,
+                    deleteTo: extmark.end + fullMatchLength,
+                    newVirtualText: part.source.text.value,
+                    styleId: fileStyleId,
+                    partIndex: newParts.length,
+                  })
+                }
               } else if (part.type === "text" && part.source?.text) {
                 part.source.text.start = extmark.start
                 part.source.text.end = extmark.end
@@ -431,6 +493,72 @@ export function Prompt(props: PromptProps) {
         draft.prompt.parts = newParts
       }),
     )
+
+    // Recreate extmarks that absorbed line range suffixes
+    // Process in reverse order to maintain correct offsets when deleting text
+    for (const item of extmarksToRecreate.reverse()) {
+      // Save cursor position
+      const savedCursor = input.cursorOffset
+
+      // Delete the old extmark
+      input.extmarks.delete(item.oldId)
+
+      // Delete the entire range from extmark start to end of line range (including trailing space)
+      // Then insert the new combined text with line range
+      input.cursorOffset = item.start
+      const startCursor = input.logicalCursor
+      input.cursorOffset = item.deleteTo
+      const endCursor = input.logicalCursor
+      input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
+
+      // Insert the new text: "@file.ts#L10-20 " (with trailing space)
+      const newText = item.newVirtualText + " "
+      input.cursorOffset = item.start
+      input.insertText(newText)
+
+      // Create extmark over the new text (without the trailing space)
+      const newExtmarkEnd = item.start + Bun.stringWidth(item.newVirtualText)
+      const newExtmarkId = input.extmarks.create({
+        start: item.start,
+        end: newExtmarkEnd,
+        virtual: true,
+        styleId: item.styleId,
+        typeId: promptPartTypeId,
+      })
+
+      // Update the part's source text bounds
+      setStore(
+        produce((draft) => {
+          const part = draft.prompt.parts[item.partIndex]
+          if (part?.type === "file" && part.source?.text) {
+            part.source.text.start = item.start
+            part.source.text.end = newExtmarkEnd
+            part.source.text.value = item.newVirtualText
+          }
+        }),
+      )
+
+      setStore("extmarkToPartIndex", (map: Map<number, number>) => {
+        const newMap = new Map(map)
+        newMap.delete(item.oldId)
+        newMap.set(newExtmarkId, item.partIndex)
+        return newMap
+      })
+
+      // Calculate how much the text length changed and restore cursor position
+      const oldLength = item.deleteTo - item.start
+      const newLength = newText.length
+      const lengthDiff = newLength - oldLength
+
+      if (savedCursor > item.deleteTo) {
+        input.cursorOffset = savedCursor + lengthDiff
+      } else if (savedCursor > item.start) {
+        // Cursor was in the middle of the changed region, put it after the new text
+        input.cursorOffset = item.start + newLength
+      } else {
+        input.cursorOffset = savedCursor
+      }
+    }
   }
 
   props.ref?.({
