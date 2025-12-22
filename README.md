@@ -1,4 +1,5 @@
-<h1 align="center">shuvcode</h1>
+<h1 align="center"><img width="619" height="151" alt="shuvcode" src="https://github.com/user-attachments/assets/d0144ff2-e906-4a39-a0ed-19d44e78bd94" />
+</h1>
 <p align="center">A fork of <a href="https://github.com/sst/opencode">opencode</a> - The AI coding agent built for the terminal.</p>
 <p align="center">
   <a href="https://www.npmjs.com/package/shuvcode"><img alt="npm" src="https://img.shields.io/npm/v/shuvcode?style=flat-square" /></a>
