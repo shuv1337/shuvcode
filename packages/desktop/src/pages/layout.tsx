@@ -712,7 +712,7 @@ export default function Layout(props: ParentProps) {
               <AsciiLogo scale={0.55} />
             </Show>
           </A>
-          <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
+          <div class="pl-2 pr-2 sm:pl-4 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
             <Show
               when={params.dir && layout.projects.list().length > 0}
               fallback={
@@ -722,7 +722,7 @@ export default function Layout(props: ParentProps) {
                 </div>
               }
             >
-              <div class="flex items-center gap-3 min-w-0 grow flex-nowrap">
+              <div class="flex items-center gap-1 sm:gap-3 min-w-0 grow flex-nowrap">
                 <div class="hidden sm:flex items-center gap-2 min-w-0">
                   <Select
                     options={layout.projects.list().map((project) => project.worktree)}
@@ -813,11 +813,11 @@ export default function Layout(props: ParentProps) {
                 {/* Mobile review button - shows file count when there are changes */}
                 <Show when={layout.mobileReview.visible()}>
                   <button
-                    class="sm:hidden flex items-center gap-2 px-3 h-full text-14-medium text-text-strong"
+                    class="sm:hidden flex items-center gap-1.5 px-2 h-full text-14-medium text-text-strong"
                     onClick={() => layout.mobileReview.onOpen()?.()}
                   >
                     <Show when={layout.mobileReview.filesCount() > 0}>
-                      <span class="text-12-medium h-5 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                      <span class="text-12-medium h-5 px-1.5 flex items-center justify-center rounded-full bg-surface-base">
                         {layout.mobileReview.filesCount()}
                       </span>
                     </Show>
