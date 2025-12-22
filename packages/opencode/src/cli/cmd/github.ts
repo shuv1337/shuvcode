@@ -1034,7 +1034,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         // GitHub App bots don't return proper permissions via the collaborator API
         // even when they have write access. Allow trusted bots that are installed on the repo.
         const trustedBots = ["opencode-agent[bot]", "coderabbitai[bot]"]
-        if (trustedBots.includes(actor)) {
+        if (trustedBots.includes(actor!)) {
           console.log(`  ${actor} is a trusted bot, skipping permission check`)
           return
         }
