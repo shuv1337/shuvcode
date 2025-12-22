@@ -614,7 +614,19 @@ export namespace SessionPrompt {
             extra: { model: input.model },
             agent: input.agent.name,
             metadata: async (val) => {
-              const match = input.processor.partFromToolCall(options.toolCallId)
+              // Wait for the part to be in "running" state with retries
+              // This handles the race condition where execute() is called before
+              // the tool-call event has been processed
+              let match = input.processor.partFromToolCall(options.toolCallId)
+              let retries = 0
+              const maxRetries = 20 // 20 * 50ms = 1 second max wait
+              
+              while ((!match || match.state.status !== "running") && retries < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 50))
+                match = input.processor.partFromToolCall(options.toolCallId)
+                retries++
+              }
+              
               if (match && match.state.status === "running") {
                 await Session.updatePart({
                   ...match,
@@ -627,6 +639,11 @@ export namespace SessionPrompt {
                       start: Date.now(),
                     },
                   },
+                })
+              } else {
+                log.warn("metadata: part not found or not running after waiting", {
+                  toolCallId: options.toolCallId,
+                  retries,
                 })
               }
             },

@@ -67,6 +67,8 @@ import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
+import { DialogAskQuestion } from "../../ui/dialog-askquestion.tsx"
+import type { AskQuestion } from "@/askquestion"
 
 addDefaultParsers(parsers.parsers)
 
@@ -195,6 +197,38 @@ export function Session() {
         sessionID: targetID,
       })
     }
+  })
+
+  // Detect pending askquestion tools from synced message parts
+  // Access via session.messages -> parts for proper Solid.js reactivity
+  const pendingAskQuestionFromSync = createMemo(() => {
+    const sessionMessages = sync.data.message[route.sessionID] ?? []
+
+    for (const message of sessionMessages) {
+      const parts = sync.data.part[message.id] ?? []
+
+      for (const part of parts) {
+        if (part.type !== "tool") continue
+        const toolPart = part as ToolPart
+
+        if (toolPart.tool !== "askquestion") continue
+        if (toolPart.state.status !== "running") continue
+
+        const metadata = toolPart.state.metadata as
+          | { status?: string; questions?: AskQuestion.Question[] }
+          | undefined
+        
+        if (metadata?.status !== "waiting") continue
+
+        return {
+          callID: toolPart.callID,
+          messageId: toolPart.messageID,
+          questions: (metadata.questions ?? []) as AskQuestion.Question[],
+        }
+      }
+    }
+
+    return null
   })
 
   let scroll: ScrollBoxRenderable
@@ -1000,17 +1034,59 @@ export function Session() {
               </For>
             </scrollbox>
             <box flexShrink={0}>
-              <Prompt
-                ref={(r) => {
-                  prompt = r
-                  promptRef.set(r)
-                }}
-                disabled={permissions().length > 0}
-                onSubmit={() => {
-                  toBottom()
-                }}
-                sessionID={route.sessionID}
-              />
+              <Switch>
+                <Match when={pendingAskQuestionFromSync()}>
+                  {(pending) => (
+                    <DialogAskQuestion
+                      questions={pending().questions}
+                      onSubmit={async (answers) => {
+                        await fetch(`${sdk.url}/askquestion/respond`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            callID: pending().callID,
+                            sessionID: route.sessionID,
+                            answers,
+                          }),
+                        }).catch(() => {
+                          toast.show({
+                            message: "Failed to submit answers",
+                            variant: "error",
+                          })
+                        })
+                      }}
+                      onCancel={async () => {
+                        await fetch(`${sdk.url}/askquestion/cancel`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            callID: pending().callID,
+                            sessionID: route.sessionID,
+                          }),
+                        }).catch(() => {
+                          toast.show({
+                            message: "Failed to cancel",
+                            variant: "error",
+                          })
+                        })
+                      }}
+                    />
+                  )}
+                </Match>
+                <Match when={!pendingAskQuestionFromSync()}>
+                  <Prompt
+                    ref={(r) => {
+                      prompt = r
+                      promptRef.set(r)
+                    }}
+                    disabled={permissions().length > 0}
+                    onSubmit={() => {
+                      toBottom()
+                    }}
+                    sessionID={route.sessionID}
+                  />
+                </Match>
+              </Switch>
             </box>
             <Show when={!sidebarVisible()}>
               <Footer />
