@@ -3,6 +3,17 @@
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-22",
   "note": "Updated to include VS Code extension rebrand and file line range reference features",
+  "removedFeatures": [
+    {
+      "pr": 5568,
+      "title": "Sessions sidebar view",
+      "author": "hashcacher",
+      "removedDate": "2025-12-22",
+      "reason": "Buggy implementation - removed from fork",
+      "filesRemoved": ["packages/opencode/src/cli/cmd/tui/routes/session/sidebar-sessions.tsx"],
+      "configRemoved": ["sessions_sidebar_toggle keybind"]
+    }
+  ],
   "apiDependencies": [
     {
       "api": "useDialog",

@@ -2,7 +2,7 @@ import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentu
 import { Clipboard } from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, on, Show } from "solid-js"
+import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, on } from "solid-js"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -24,7 +24,7 @@ import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
-import { SessionsSidebar } from "@tui/routes/session/sidebar-sessions"
+
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { DialogAlert } from "./ui/dialog-alert"
 import { ToastProvider, useToast } from "./ui/toast"
@@ -181,7 +181,6 @@ function App() {
   const promptRef = usePromptRef()
 
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
-  const [sessionsSidebarVisible, setSessionsSidebarVisible] = createSignal(false)
 
   createEffect(() => {
     console.log(JSON.stringify(route.data))
@@ -285,16 +284,7 @@ function App() {
         dialog.clear()
       },
     },
-    {
-      title: sessionsSidebarVisible() ? "Hide sessions" : "Show sessions",
-      value: "session.sessions_sidebar.toggle",
-      keybind: "sessions_sidebar_toggle",
-      category: "Session",
-      onSelect: (dialog) => {
-        setSessionsSidebarVisible((prev) => !prev)
-        dialog.clear()
-      },
-    },
+
     {
       title: "Switch model",
       value: "model.list",
@@ -679,21 +669,14 @@ function App() {
         }
       }}
     >
-      <box flexDirection="row" flexGrow={1}>
-        <Show when={sessionsSidebarVisible()}>
-          <SessionsSidebar onClose={() => setSessionsSidebarVisible(false)} />
-        </Show>
-        <box flexGrow={1}>
-          <Switch>
-            <Match when={route.data.type === "home"}>
-              <Home />
-            </Match>
-            <Match when={route.data.type === "session"}>
-              <Session />
-            </Match>
-          </Switch>
-        </box>
-      </box>
+      <Switch>
+        <Match when={route.data.type === "home"}>
+          <Home />
+        </Match>
+        <Match when={route.data.type === "session"}>
+          <Session />
+        </Match>
+      </Switch>
     </box>
   )
 }
