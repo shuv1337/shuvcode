@@ -128,6 +128,7 @@ export default function Page() {
     userInteracted: false,
     stepsExpanded: true,
     mobileTabsOpen: false,
+    mobileTerminalFullscreen: false,
     diffSplit: false,
   })
   let inputRef!: HTMLDivElement
@@ -890,6 +891,17 @@ export default function Page() {
                   </Tooltip>
                 </div>
               </Tabs.List>
+              {/* Mobile fullscreen button - positioned absolutely */}
+              <div class="sm:hidden absolute top-1 right-2 z-10">
+                <Tooltip value="Fullscreen" class="flex items-center">
+                  <IconButton
+                    icon="expand"
+                    variant="ghost"
+                    iconSize="small"
+                    onClick={() => setStore("mobileTerminalFullscreen", true)}
+                  />
+                </Tooltip>
+              </div>
               <For each={terminal.all()}>
                 {(pty) => (
                   <Tabs.Content value={pty.id}>
@@ -1078,6 +1090,67 @@ export default function Page() {
                       </Tabs.Content>
                     )
                   }}
+                </For>
+              </Tabs>
+            </div>
+          </div>
+        </Show>
+
+        {/* Mobile terminal fullscreen overlay */}
+        <Show when={store.mobileTerminalFullscreen}>
+          <div
+            class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
+            style={{
+              "padding-top": "var(--safe-area-inset-top)",
+              "padding-bottom": "var(--safe-area-inset-bottom)",
+              "padding-left": "var(--safe-area-inset-left)",
+              "padding-right": "var(--safe-area-inset-right)",
+            }}
+          >
+            {/* Mobile terminal header */}
+            <div class="h-12 shrink-0 border-b border-border-weak-base flex items-center justify-between px-4">
+              <div class="flex items-center gap-3">
+                <Icon name="layout-bottom" size="small" />
+                <span class="text-14-medium text-text-strong">Terminal</span>
+              </div>
+              <IconButton
+                icon="close"
+                variant="ghost"
+                iconSize="large"
+                onClick={() => setStore("mobileTerminalFullscreen", false)}
+                aria-label="Close"
+              />
+            </div>
+
+            {/* Mobile terminal content */}
+            <div class="flex-1 min-h-0 overflow-hidden">
+              <Tabs variant="alt" value={terminal.active()} onChange={terminal.open}>
+                <div class="shrink-0 flex border-b border-border-weak-base overflow-x-auto">
+                  <Tabs.List>
+                    <For each={terminal.all()}>
+                      {(pty) => (
+                        <Tabs.Trigger value={pty.id} class="max-w-40 truncate">
+                          {pty.title}
+                        </Tabs.Trigger>
+                      )}
+                    </For>
+                  </Tabs.List>
+                  <div class="flex items-center justify-center px-2">
+                    <IconButton
+                      icon="plus-small"
+                      variant="ghost"
+                      iconSize="large"
+                      onClick={terminal.new}
+                      aria-label="New terminal"
+                    />
+                  </div>
+                </div>
+                <For each={terminal.all()}>
+                  {(pty) => (
+                    <Tabs.Content value={pty.id} class="h-full">
+                      <Terminal pty={pty} onCleanup={terminal.update} onConnectError={() => terminal.clone(pty.id)} />
+                    </Tabs.Content>
+                  )}
                 </For>
               </Tabs>
             </div>
