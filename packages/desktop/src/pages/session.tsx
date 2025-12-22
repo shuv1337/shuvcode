@@ -153,6 +153,25 @@ export default function Page() {
     layout.mobileReview.unregister()
   })
 
+  // Register mobile message navigation in header when there are multiple messages
+  createEffect(() => {
+    const messages = visibleUserMessages()
+    if (messages.length > 1) {
+      const currentIndex = messages.findIndex((m) => m.id === activeMessage()?.id)
+      layout.mobileMessageNav.register(
+        messages.map((m) => ({ id: m.id, title: m.summary?.title })),
+        currentIndex >= 0 ? currentIndex : 0,
+        (index) => setActiveMessage(messages[index])
+      )
+    } else {
+      layout.mobileMessageNav.unregister()
+    }
+  })
+
+  onCleanup(() => {
+    layout.mobileMessageNav.unregister()
+  })
+
   createEffect(() => {
     if (layout.terminal.opened()) {
       if (terminal.all().length === 0) {

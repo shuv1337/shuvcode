@@ -77,10 +77,17 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         filesCount?: number
         onOpen?: () => void
       }
+      mobileMessageNav: {
+        visible?: boolean
+        messages?: { id: string; title?: string }[]
+        currentIndex?: number
+        onSelect?: (index: number) => void
+      }
     }>({
       connect: {},
       dialog: {},
       mobileReview: {},
+      mobileMessageNav: {},
     })
     const usedColors = new Set<AvatarColorKey>()
 
@@ -278,6 +285,21 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         unregister() {
           setEphemeral("mobileReview", { visible: false, filesCount: 0, onOpen: undefined })
+        },
+      },
+      mobileMessageNav: {
+        visible: createMemo(() => ephemeral.mobileMessageNav?.visible ?? false),
+        messages: createMemo(() => ephemeral.mobileMessageNav?.messages ?? []),
+        currentIndex: createMemo(() => ephemeral.mobileMessageNav?.currentIndex ?? 0),
+        onSelect: createMemo(() => ephemeral.mobileMessageNav?.onSelect),
+        register(messages: { id: string; title?: string }[], currentIndex: number, onSelect: (index: number) => void) {
+          setEphemeral("mobileMessageNav", { visible: true, messages, currentIndex, onSelect })
+        },
+        update(currentIndex: number) {
+          setEphemeral("mobileMessageNav", "currentIndex", currentIndex)
+        },
+        unregister() {
+          setEphemeral("mobileMessageNav", { visible: false, messages: [], currentIndex: 0, onSelect: undefined })
         },
       },
       theme: {
