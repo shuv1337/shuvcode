@@ -164,8 +164,14 @@ export namespace SessionPrompt {
     await Promise.all(
       files.map(async (match) => {
         const name = match[1]
-        if (seen.has(name)) return
-        seen.add(name)
+        const startLine = match[2] // Captured from #L<start>
+        const endLine = match[3] // Captured from #L<start>-<end>
+
+        // Use full match key for deduplication (includes line range)
+        const matchKey = match[0]
+        if (seen.has(matchKey)) return
+        seen.add(matchKey)
+
         const filepath = name.startsWith("~/")
           ? path.join(os.homedir(), name.slice(2))
           : path.resolve(Instance.worktree, name)
@@ -182,6 +188,23 @@ export namespace SessionPrompt {
           return
         }
 
+        // Build URL with optional line range query params
+        let url = `file://${filepath}`
+        if (startLine) {
+          const params = new URLSearchParams()
+          params.set("start", startLine)
+          if (endLine) {
+            params.set("end", endLine)
+          }
+          url += `?${params.toString()}`
+        }
+
+        // Build filename with line range for display
+        let filename = name
+        if (startLine) {
+          filename += endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
+        }
+
         if (stats.isDirectory()) {
           parts.push({
             type: "file",
@@ -194,8 +217,8 @@ export namespace SessionPrompt {
 
         parts.push({
           type: "file",
-          url: `file://${filepath}`,
-          filename: name,
+          url,
+          filename,
           mime: "text/plain",
         })
       }),

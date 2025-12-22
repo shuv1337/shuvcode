@@ -87,3 +87,57 @@ test("should not match email addresses", () => {
   const emailMatches = ConfigMarkdown.files(emailTest)
   expect(emailMatches.length).toBe(0)
 })
+
+// Line range tests (#L syntax)
+test("should extract file with single line reference", () => {
+  const lineTest = "Look at @src/index.ts#L42 for details"
+  const lineMatches = ConfigMarkdown.files(lineTest)
+  expect(lineMatches.length).toBe(1)
+  expect(lineMatches[0][1]).toBe("src/index.ts")
+  expect(lineMatches[0][2]).toBe("42")
+  expect(lineMatches[0][3]).toBeUndefined()
+})
+
+test("should extract file with line range reference", () => {
+  const rangeTest = "Check @src/components/app.tsx#L10-25 for the component"
+  const rangeMatches = ConfigMarkdown.files(rangeTest)
+  expect(rangeMatches.length).toBe(1)
+  expect(rangeMatches[0][1]).toBe("src/components/app.tsx")
+  expect(rangeMatches[0][2]).toBe("10")
+  expect(rangeMatches[0][3]).toBe("25")
+})
+
+test("should extract multiple files with and without line ranges", () => {
+  const mixedTest = "Compare @file1.ts#L1-10 with @file2.ts and @file3.ts#L5"
+  const mixedMatches = ConfigMarkdown.files(mixedTest)
+  expect(mixedMatches.length).toBe(3)
+  // First: file with range
+  expect(mixedMatches[0][1]).toBe("file1.ts")
+  expect(mixedMatches[0][2]).toBe("1")
+  expect(mixedMatches[0][3]).toBe("10")
+  // Second: file without range
+  expect(mixedMatches[1][1]).toBe("file2.ts")
+  expect(mixedMatches[1][2]).toBeUndefined()
+  // Third: file with single line
+  expect(mixedMatches[2][1]).toBe("file3.ts")
+  expect(mixedMatches[2][2]).toBe("5")
+  expect(mixedMatches[2][3]).toBeUndefined()
+})
+
+test("should handle nested paths with line ranges", () => {
+  const nestedTest = "@packages/opencode/src/session/prompt.ts#L155-204"
+  const nestedMatches = ConfigMarkdown.files(nestedTest)
+  expect(nestedMatches.length).toBe(1)
+  expect(nestedMatches[0][1]).toBe("packages/opencode/src/session/prompt.ts")
+  expect(nestedMatches[0][2]).toBe("155")
+  expect(nestedMatches[0][3]).toBe("204")
+})
+
+test("should handle home directory paths with line ranges", () => {
+  const homeTest = "@~/config/settings.json#L1-5"
+  const homeMatches = ConfigMarkdown.files(homeTest)
+  expect(homeMatches.length).toBe(1)
+  expect(homeMatches[0][1]).toBe("~/config/settings.json")
+  expect(homeMatches[0][2]).toBe("1")
+  expect(homeMatches[0][3]).toBe("5")
+})
