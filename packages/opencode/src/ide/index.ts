@@ -3,11 +3,16 @@ import { Bus } from "@/bus"
 import { spawn } from "bun"
 import z from "zod"
 import path from "path"
+import os from "os"
+import fs from "fs/promises"
 import { NamedError } from "@opencode-ai/util/error"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { Connection, discoverLockFiles } from "./connection"
 import { Permission } from "../permission"
+
+const GITHUB_REPO = "Latitudes-Dev/shuvcode"
+const EXTENSION_ID = "latitudes-dev.shuvcode"
 
 const SUPPORTED_IDES = [
   { name: "Windsurf" as const, cmd: "windsurf" },
@@ -79,20 +84,99 @@ export namespace Ide {
   }
 
   export function alreadyInstalled() {
-    return process.env["OPENCODE_CALLER"] === "vscode" || process.env["OPENCODE_CALLER"] === "vscode-insiders"
+    return process.env["SHUVCODE_CALLER"] === "vscode" || process.env["SHUVCODE_CALLER"] === "vscode-insiders"
   }
 
   export async function install(ide: (typeof SUPPORTED_IDES)[number]["name"]) {
     const cmd = SUPPORTED_IDES.find((i) => i.name === ide)?.cmd
     if (!cmd) throw new Error(`Unknown IDE: ${ide}`)
 
-    const p = spawn([cmd, "--install-extension", "sst-dev.opencode"], {
+    // First check if the extension is already installed
+    const checkInstalled = spawn([cmd, "--list-extensions"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    await checkInstalled.exited
+    const installedExtensions = await new Response(checkInstalled.stdout).text()
+    if (installedExtensions.toLowerCase().includes(EXTENSION_ID.toLowerCase())) {
+      throw new AlreadyInstalledError({})
+    }
+
+    // Download and install VSIX from GitHub Releases
+    log.info("fetching latest release from GitHub", { repo: GITHUB_REPO })
+
+    // Get the latest vscode-v* release
+    const releasesUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases`
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "shuvcode-cli",
+    }
+    if (process.env["GH_TOKEN"]) {
+      headers["Authorization"] = `token ${process.env["GH_TOKEN"]}`
+    }
+
+    const releasesResponse = await fetch(releasesUrl, { headers })
+    if (!releasesResponse.ok) {
+      throw new InstallFailedError({
+        stderr: `Failed to fetch releases from GitHub: ${releasesResponse.status} ${releasesResponse.statusText}`,
+      })
+    }
+
+    const releases = (await releasesResponse.json()) as Array<{
+      tag_name: string
+      assets: Array<{ name: string; browser_download_url: string }>
+    }>
+
+    // Find the latest vscode-v* release
+    const vscodeRelease = releases.find((r) => r.tag_name.startsWith("vscode-v"))
+    if (!vscodeRelease) {
+      throw new InstallFailedError({
+        stderr: "No vscode-v* release found in GitHub Releases",
+      })
+    }
+
+    // Find the VSIX asset
+    const vsixAsset = vscodeRelease.assets.find((a) => a.name.endsWith(".vsix"))
+    if (!vsixAsset) {
+      throw new InstallFailedError({
+        stderr: `No .vsix asset found in release ${vscodeRelease.tag_name}`,
+      })
+    }
+
+    log.info("downloading VSIX", { url: vsixAsset.browser_download_url, tag: vscodeRelease.tag_name })
+
+    // Download the VSIX to a temp directory
+    const tmpDir = path.join(os.tmpdir(), "shuvcode-install")
+    await fs.mkdir(tmpDir, { recursive: true })
+    const vsixPath = path.join(tmpDir, vsixAsset.name)
+
+    const vsixResponse = await fetch(vsixAsset.browser_download_url, { headers })
+    if (!vsixResponse.ok) {
+      throw new InstallFailedError({
+        stderr: `Failed to download VSIX: ${vsixResponse.status} ${vsixResponse.statusText}`,
+      })
+    }
+
+    const vsixBuffer = await vsixResponse.arrayBuffer()
+    await fs.writeFile(vsixPath, Buffer.from(vsixBuffer))
+
+    log.info("installing VSIX", { path: vsixPath })
+
+    // Install the VSIX
+    const p = spawn([cmd, "--install-extension", vsixPath], {
       stdout: "pipe",
       stderr: "pipe",
     })
     await p.exited
     const stdout = await new Response(p.stdout).text()
     const stderr = await new Response(p.stderr).text()
+
+    // Clean up
+    try {
+      await fs.unlink(vsixPath)
+    } catch {
+      // Ignore cleanup errors
+    }
 
     log.info("installed", {
       ide,
@@ -103,9 +187,6 @@ export namespace Ide {
     if (p.exitCode !== 0) {
       throw new InstallFailedError({ stderr })
     }
-    if (stdout.includes("already installed")) {
-      throw new AlreadyInstalledError({})
-    }
   }
 
   // Connection
@@ -115,7 +196,7 @@ export namespace Ide {
     // TODO this is used for a string match in claudecode.nvim that we could
     // change if we incorporate a dedicated plugin
     // (must start with ✻ and end with ⧉))
-    return `✻ [opencode] Edit: ${path.basename(filePath)} ⧉`
+    return `✻ [shuvcode] Edit: ${path.basename(filePath)} ⧉`
   }
 
   export async function status(): Promise<Record<string, Status>> {
