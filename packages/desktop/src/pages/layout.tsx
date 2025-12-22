@@ -862,12 +862,7 @@ export default function Layout(props: ParentProps) {
                 <Show when={layout.mobileMessageNav.visible()}>
                   <div class="sm:hidden">
                     <DropdownMenu>
-                      <DropdownMenu.Trigger
-                        as={Button}
-                        variant="ghost"
-                        size="small"
-                        class="gap-1 px-2"
-                      >
+                      <DropdownMenu.Trigger as={Button} variant="ghost" size="small" class="gap-1 px-2">
                         <span class="text-12-medium">
                           {layout.mobileMessageNav.currentIndex() + 1}/{layout.mobileMessageNav.messages().length}
                         </span>
@@ -1106,7 +1101,9 @@ export default function Layout(props: ParentProps) {
             </Tooltip>
           </div>
           <Show when={layout.sidebar.opened()}>
-            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
+            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">
+              v{__APP_VERSION__} ({__COMMIT_HASH__})
+            </div>
           </Show>
         </div>
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
@@ -1144,10 +1141,24 @@ export default function Layout(props: ParentProps) {
 
           {/* Mobile menu content */}
           <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            {/* Home/Recent Projects link */}
+            <Button
+              variant="ghost"
+              size="large"
+              class="w-full justify-start gap-3 px-2"
+              icon="arrow-left"
+              onClick={() => {
+                navigate("/")
+                setStore("mobileMenuOpen", false)
+              }}
+            >
+              <span class="text-14-medium text-text-strong">Recent Projects</span>
+            </Button>
+
             {/* Projects section */}
             <Show when={layout.projects.list().length > 0}>
               <div class="flex flex-col gap-2">
-                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Projects</div>
+                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Open Projects</div>
                 <For each={layout.projects.list()}>
                   {(project) => {
                     const name = () => getFilename(project.worktree)
@@ -1235,7 +1246,9 @@ export default function Layout(props: ParentProps) {
 
           {/* Mobile menu footer */}
           <div class="shrink-0 border-t border-border-weak-base p-4">
-            <div class="text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
+            <div class="text-11-regular text-text-weaker">
+              v{__APP_VERSION__} ({__COMMIT_HASH__})
+            </div>
           </div>
         </div>
       </Show>
