@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-21",
-  "note": "Updated to include Docker self-hosted deployment and PWA service worker features",
+  "lastUpdated": "2025-12-22",
+  "note": "Updated to include VS Code extension rebrand and file line range reference features",
   "apiDependencies": [
     {
       "api": "useDialog",
@@ -1106,6 +1106,108 @@
             "\"display\": \"standalone\"",
             "\"display_override\": [\"standalone\", \"fullscreen\"]"
           ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "VS Code extension rebrand to shuvcode",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand VS Code extension from opencode to shuvcode. Extension ID changed, commands renamed, env vars updated, and GitHub Releases workflow added for VSIX distribution.",
+      "files": [
+        "sdks/vscode/package.json",
+        "sdks/vscode/src/extension.ts",
+        "sdks/vscode/README.md",
+        "sdks/vscode/script/publish",
+        ".github/workflows/release-vscode-extension.yml"
+      ],
+      "criticalCode": [
+        {
+          "file": "sdks/vscode/package.json",
+          "description": "Extension ID and command namespace changed to shuvcode",
+          "markers": [
+            "\"name\": \"shuvcode\"",
+            "\"publisher\": \"latitudes-dev\"",
+            "shuvcode.start",
+            "shuvcode.openNewTerminal"
+          ]
+        },
+        {
+          "file": "sdks/vscode/src/extension.ts",
+          "description": "SHUVCODE_CALLER env var and shuvcode CLI invocation",
+          "markers": ["SHUVCODE_CALLER", "shuvcode.start", "shuvcode.openNewTerminal"]
+        },
+        {
+          "file": ".github/workflows/release-vscode-extension.yml",
+          "description": "GitHub Releases workflow for VSIX distribution on vscode-v* tags",
+          "markers": ["vscode-v*", "bun run script/publish", "gh release create"]
+        },
+        {
+          "file": "sdks/vscode/script/publish",
+          "description": "Package VSIX only, no Marketplace publish",
+          "markers": ["vsce package", "--no-dependencies"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "IDE integration for shuvcode extension",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "CLI-side IDE integration updates to support shuvcode extension. Uses SHUVCODE_CALLER env var, installs from GitHub Releases VSIX, and uses [shuvcode] diff tab branding.",
+      "files": ["packages/opencode/src/ide/index.ts", "packages/opencode/test/ide/ide.test.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/ide/index.ts",
+          "description": "SHUVCODE_CALLER env var for extension detection",
+          "markers": ["SHUVCODE_CALLER", "process.env.SHUVCODE_CALLER"]
+        },
+        {
+          "file": "packages/opencode/src/ide/index.ts",
+          "description": "Install extension from GitHub Releases VSIX",
+          "markers": ["github.com/Latitudes-Dev/shuvcode/releases", "GH_TOKEN", "--force"]
+        },
+        {
+          "file": "packages/opencode/src/ide/index.ts",
+          "description": "Diff tab uses [shuvcode] branding",
+          "markers": ["[shuvcode]", "openDiff"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "File line range syntax support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Support #L<n> and #L<n>-<m> syntax for file references to include specific line ranges. Works in markdown parsing and TUI autocomplete with line range absorption.",
+      "files": [
+        "packages/opencode/src/config/markdown.ts",
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/test/config/markdown.test.ts",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/config/markdown.ts",
+          "description": "URL regex updated to capture #L line range suffixes",
+          "markers": ["#L\\d+(?:-\\d+)?"]
+        },
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "parseLineRange function and line range extraction in URL processing",
+          "markers": ["parseLineRange", "startLine", "endLine", "#L"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx",
+          "description": "Parse #L syntax in autocomplete queries",
+          "markers": ["lineRangeMatch", "#L(\\d+)(?:-(\\d+))?"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Absorb #L suffixes into file extmarks and update URLs",
+          "markers": ["absorbLineRange", "lineRangeRegex", "updateFileUrl"]
         }
       ]
     }
