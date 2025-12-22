@@ -3,7 +3,6 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
-import { glob } from "fs/promises"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -46,20 +45,6 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     2,
   ),
 )
-// Upload artifacts if running in GitHub Actions
-if (Bun.env.ACTIONS_RUNTIME_TOKEN) {
-  const { DefaultArtifactClient } = await import("@actions/artifact")
-
-  const artifactClient = new DefaultArtifactClient()
-
-  for await (const folder of $`ls ./dist`.lines()) {
-    if (!folder.startsWith("shuvcode-")) continue
-
-    const files = await Array.fromAsync(glob(`./dist/${folder}/bin/*`))
-    await artifactClient.uploadArtifact(folder, files, process.cwd())
-  }
-}
-
 // Use npm publish with OIDC trusted publishing
 // For integration channel, tag as "latest" so users get updates by default
 await $`cd ./dist/${pkg.name} && npm publish --access public --tag ${publishTag}`
