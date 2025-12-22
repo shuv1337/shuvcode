@@ -857,7 +857,7 @@ export default function Layout(props: ParentProps) {
                 <FontPicker />
                 <ThemePicker />
               </div>
-              <div class="hidden sm:flex items-center gap-4">
+              <div class="flex items-center gap-4">
                 <Tooltip
                   class="shrink-0"
                   value={
