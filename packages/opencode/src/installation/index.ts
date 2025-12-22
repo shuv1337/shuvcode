@@ -1,5 +1,4 @@
 import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
 import path from "path"
 import fs from "fs"
 import { $ } from "bun"
@@ -79,15 +78,15 @@ export namespace Installation {
       },
       {
         name: "npm" as const,
-        command: () => $`npm list -g --depth=0`.throws(false).text(),
+        command: () => $`npm list -g --depth=0`.throws(false).quiet().text(),
       },
       {
         name: "yarn" as const,
-        command: () => $`yarn global list`.throws(false).text(),
+        command: () => $`yarn global list`.throws(false).quiet().text(),
       },
       {
         name: "pnpm" as const,
-        command: () => $`pnpm list -g --depth=0`.throws(false).text(),
+        command: () => $`pnpm list -g --depth=0`.throws(false).quiet().text(),
       },
     ]
 
