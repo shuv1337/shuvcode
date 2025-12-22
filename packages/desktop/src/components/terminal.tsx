@@ -241,7 +241,7 @@ export const Terminal = (props: TerminalProps) => {
       data-prevent-autofocus
       classList={{
         ...(local.classList ?? {}),
-        "size-full px-6 py-3 font-mono": true,
+        "size-full px-3 sm:px-6 py-3 font-mono": true,
         [local.class ?? ""]: !!local.class,
       }}
       {...others}

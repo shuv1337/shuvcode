@@ -873,34 +873,35 @@ export default function Page() {
             <DragDropSensors />
             <ConstrainDragYAxis />
             <Tabs variant="alt" value={terminal.active()} onChange={terminal.open}>
-              <Tabs.List class="h-10">
-                <SortableProvider ids={terminal.all().map((t: LocalPTY) => t.id)}>
-                  <For each={terminal.all()}>{(pty) => <SortableTerminalTab terminal={pty} />}</For>
-                </SortableProvider>
-                <div class="h-full flex items-center justify-center">
-                  <Tooltip
-                    value={
-                      <div class="flex items-center gap-2">
-                        <span>New terminal</span>
-                        <span class="text-icon-base text-12-medium">{command.keybind("terminal.new")}</span>
-                      </div>
-                    }
-                    class="flex items-center"
-                  >
-                    <IconButton icon="plus-small" variant="ghost" iconSize="large" onClick={terminal.new} />
+              <div class="flex h-10">
+                <Tabs.List class="h-10 flex-1 min-w-0 overflow-x-auto">
+                  <SortableProvider ids={terminal.all().map((t: LocalPTY) => t.id)}>
+                    <For each={terminal.all()}>{(pty) => <SortableTerminalTab terminal={pty} />}</For>
+                  </SortableProvider>
+                  <div class="h-full flex items-center justify-center">
+                    <Tooltip
+                      value={
+                        <div class="flex items-center gap-2">
+                          <span>New terminal</span>
+                          <span class="text-icon-base text-12-medium">{command.keybind("terminal.new")}</span>
+                        </div>
+                      }
+                      class="flex items-center"
+                    >
+                      <IconButton icon="plus-small" variant="ghost" iconSize="large" onClick={terminal.new} />
+                    </Tooltip>
+                  </div>
+                </Tabs.List>
+                <div class="sm:hidden h-full flex items-center justify-center shrink-0 px-2 border-l border-border-weak-base">
+                  <Tooltip value="Fullscreen terminal" class="flex items-center">
+                    <IconButton
+                      icon="expand"
+                      variant="ghost"
+                      iconSize="small"
+                      onClick={() => setStore("mobileTerminalFullscreen", true)}
+                    />
                   </Tooltip>
                 </div>
-              </Tabs.List>
-              {/* Mobile fullscreen button - positioned absolutely */}
-              <div class="sm:hidden absolute top-1 right-2 z-10">
-                <Tooltip value="Fullscreen" class="flex items-center">
-                  <IconButton
-                    icon="expand"
-                    variant="ghost"
-                    iconSize="small"
-                    onClick={() => setStore("mobileTerminalFullscreen", true)}
-                  />
-                </Tooltip>
               </div>
               <For each={terminal.all()}>
                 {(pty) => (
@@ -1107,26 +1108,10 @@ export default function Page() {
               "padding-right": "var(--safe-area-inset-right)",
             }}
           >
-            {/* Mobile terminal header */}
-            <div class="h-12 shrink-0 border-b border-border-weak-base flex items-center justify-between px-4">
-              <div class="flex items-center gap-3">
-                <Icon name="layout-bottom" size="small" />
-                <span class="text-14-medium text-text-strong">Terminal</span>
-              </div>
-              <IconButton
-                icon="close"
-                variant="ghost"
-                iconSize="large"
-                onClick={() => setStore("mobileTerminalFullscreen", false)}
-                aria-label="Close"
-              />
-            </div>
-
-            {/* Mobile terminal content */}
-            <div class="flex-1 min-h-0 overflow-hidden">
-              <Tabs variant="alt" value={terminal.active()} onChange={terminal.open}>
-                <div class="shrink-0 flex border-b border-border-weak-base overflow-x-auto">
-                  <Tabs.List>
+            <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <Tabs variant="alt" value={terminal.active()} onChange={terminal.open} class="flex flex-col h-full">
+                <div class="shrink-0 flex h-10">
+                  <Tabs.List class="flex-1 min-w-0 overflow-x-auto">
                     <For each={terminal.all()}>
                       {(pty) => (
                         <Tabs.Trigger value={pty.id} class="max-w-40 truncate">
@@ -1134,20 +1119,31 @@ export default function Page() {
                         </Tabs.Trigger>
                       )}
                     </For>
+                    <div class="h-full flex items-center justify-center">
+                      <IconButton
+                        icon="plus-small"
+                        variant="ghost"
+                        iconSize="large"
+                        onClick={terminal.new}
+                        aria-label="New terminal"
+                      />
+                    </div>
                   </Tabs.List>
-                  <div class="flex items-center justify-center px-2">
-                    <IconButton
-                      icon="plus-small"
-                      variant="ghost"
-                      iconSize="large"
-                      onClick={terminal.new}
-                      aria-label="New terminal"
-                    />
+                  <div class="h-full flex items-center justify-center shrink-0 px-2 border-l border-border-weak-base">
+                    <Tooltip value="Exit fullscreen" class="flex items-center">
+                      <IconButton
+                        icon="collapse"
+                        variant="ghost"
+                        iconSize="small"
+                        onClick={() => setStore("mobileTerminalFullscreen", false)}
+                        aria-label="Exit fullscreen"
+                      />
+                    </Tooltip>
                   </div>
                 </div>
                 <For each={terminal.all()}>
                   {(pty) => (
-                    <Tabs.Content value={pty.id} class="h-full">
+                    <Tabs.Content value={pty.id} class="flex-1 min-h-0">
                       <Terminal pty={pty} onCleanup={terminal.update} onConnectError={() => terminal.clone(pty.id)} />
                     </Tabs.Content>
                   )}
