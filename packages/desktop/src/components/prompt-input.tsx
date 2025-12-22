@@ -769,6 +769,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     setStore("imageAttachments", [])
     setStore("mode", "normal")
 
+    // Blur the editor to dismiss mobile keyboard after submission
+    editorRef.blur()
+
     const model = {
       modelID: local.model.current()!.id,
       providerID: local.model.current()!.provider.id,
