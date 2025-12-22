@@ -1,0 +1,91 @@
+name: release-vscode-extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      minor:
+        description: "Bump minor version (resets patch to 0)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: github.repository == 'Latitudes-Dev/shuvcode'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - run: git fetch --force --tags
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.email "shuvcode@latitudes.dev"
+          git config --global user.name "shuvcode"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+      - name: Create Release Tag
+        id: release
+        working-directory: sdks/vscode
+        run: |
+          if [ "${{ inputs.minor }}" = "true" ]; then
+            ./script/release --minor
+          else
+            ./script/release
+          fi
+          
+          # Get the new tag
+          latest_tag=$(git tag --sort=committerdate | grep -E '^vscode-v[0-9]+\.[0-9]+\.[0-9]+$' | tail -1)
+          echo "tag=$latest_tag" >> $GITHUB_OUTPUT
+          version=$(echo "$latest_tag" | sed 's/^vscode-v//')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Install VS Code Extension Dependencies
+        working-directory: sdks/vscode
+        run: bun install
+
+      - name: Build Extension
+        working-directory: sdks/vscode
+        run: bun run package
+
+      - name: Package VSIX
+        working-directory: sdks/vscode
+        run: |
+          mkdir -p dist
+          npx @vscode/vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o "dist/shuvcode-${{ steps.release.outputs.version }}.vsix" "${{ steps.release.outputs.version }}"
+
+      - name: Create GitHub Release
+        run: |
+          # Create release if it doesn't exist
+          if ! gh release view ${{ steps.release.outputs.tag }} --repo ${{ github.repository }} > /dev/null 2>&1; then
+            gh release create ${{ steps.release.outputs.tag }} \
+              --repo ${{ github.repository }} \
+              --title "VS Code Extension ${{ steps.release.outputs.version }}" \
+              --notes "shuvcode VS Code Extension v${{ steps.release.outputs.version }}"
+          fi
+          
+          # Upload VSIX asset
+          gh release upload ${{ steps.release.outputs.tag }} \
+            sdks/vscode/dist/shuvcode-${{ steps.release.outputs.version }}.vsix \
+            --repo ${{ github.repository }} \
+            --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Summary
+        run: |
+          echo "## VS Code Extension Released" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Download:** https://github.com/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
