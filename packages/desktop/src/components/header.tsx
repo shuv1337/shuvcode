@@ -32,7 +32,7 @@ export function Header(props: {
     <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
       <button
         type="button"
-        class="xl:hidden w-12 shrink-0 flex items-center justify-center border-r border-border-weak-base hover:bg-surface-raised-base-hover active:bg-surface-raised-base-active transition-colors"
+        class="xl:hidden w-12 shrink-0 flex items-center justify-center hover:bg-surface-raised-base-hover active:bg-surface-raised-base-active transition-colors"
         onClick={props.onMobileMenuToggle}
       >
         <Icon name="menu" size="small" />
