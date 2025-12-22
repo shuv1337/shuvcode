@@ -638,21 +638,34 @@ export namespace SessionPrompt {
             extra: { model: input.model },
             agent: input.agent.name,
             metadata: async (val) => {
-              const match = input.processor.partFromToolCall(options.toolCallId)
-              if (match && match.state.status === "running") {
-                await Session.updatePart({
-                  ...match,
-                  state: {
-                    title: val.title,
-                    metadata: val.metadata,
-                    status: "running",
-                    input: args,
-                    time: {
-                      start: Date.now(),
-                    },
-                  },
-                })
+              const findPart = async (retries: number): Promise<MessageV2.ToolPart | undefined> => {
+                const match = input.processor.partFromToolCall(options.toolCallId)
+                if (match?.state.status === "running") return match as MessageV2.ToolPart
+                if (retries >= 20) return undefined
+                await new Promise((resolve) => setTimeout(resolve, 50))
+                return findPart(retries + 1)
               }
+
+              const match = await findPart(0)
+              if (!match) {
+                log.warn("metadata: part not found or not running after waiting", {
+                  toolCallId: options.toolCallId,
+                })
+                return
+              }
+
+              await Session.updatePart({
+                ...match,
+                state: {
+                  title: val.title,
+                  metadata: val.metadata,
+                  status: "running",
+                  input: args,
+                  time: {
+                    start: Date.now(),
+                  },
+                },
+              })
             },
           })
           await Plugin.trigger(

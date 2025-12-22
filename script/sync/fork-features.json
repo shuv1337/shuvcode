@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-22",
-  "note": "Updated to include VS Code extension rebrand and file line range reference features",
+  "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -52,6 +52,49 @@
     }
   ],
   "features": [
+    {
+      "pr": 5958,
+      "title": "AskQuestion tool for user input",
+      "author": "iljod",
+      "status": "open",
+      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563.",
+      "files": [
+        "packages/opencode/src/askquestion/index.ts",
+        "packages/opencode/src/tool/askquestion.ts",
+        "packages/opencode/src/tool/askquestion.txt",
+        "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/server/server.ts",
+        "packages/opencode/src/session/prompt.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/askquestion/index.ts",
+          "description": "AskQuestion namespace with pending question registry and answer handling",
+          "markers": ["export namespace AskQuestion", "pendingQuestions", "respond", "cancel"]
+        },
+        {
+          "file": "packages/opencode/src/tool/askquestion.ts",
+          "description": "Tool definition with Zod schema for 1-6 questions",
+          "markers": ["AskQuestionTool", "questions.min(1).max(6)"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
+          "description": "TUI dialog component for answering questions with keyboard navigation",
+          "markers": ["DialogAskQuestion", "onSubmit", "onCancel"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Detection of pending askquestion tools and rendering of dialog",
+          "markers": ["pendingAskQuestionFromSync", "DialogAskQuestion"]
+        },
+        {
+          "file": "packages/opencode/src/server/server.ts",
+          "description": "API endpoints for askquestion respond and cancel",
+          "markers": ["/askquestion/respond", "/askquestion/cancel", "AskQuestion.respond", "AskQuestion.cancel"]
+        }
+      ]
+    },
     {
       "pr": 5917,
       "title": "Draggable sidebar resize",

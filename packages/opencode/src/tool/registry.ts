@@ -11,6 +11,7 @@ import { TodoWriteTool, TodoReadTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
+import { AskQuestionTool } from "./askquestion"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance } from "../project/instance"
@@ -105,6 +106,7 @@ export namespace ToolRegistry {
       TodoReadTool,
       WebSearchTool,
       CodeSearchTool,
+      AskQuestionTool,
       ...(Flag.OPENCODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
