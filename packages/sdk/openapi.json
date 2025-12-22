@@ -1930,6 +1930,10 @@
                   },
                   "modelID": {
                     "type": "string"
+                  },
+                  "auto": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
