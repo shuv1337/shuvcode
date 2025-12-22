@@ -723,7 +723,7 @@ export default function Layout(props: ParentProps) {
               }
             >
               <div class="flex items-center gap-3 min-w-0 grow flex-nowrap">
-                <div class="flex items-center gap-2 min-w-0">
+                <div class="hidden sm:flex items-center gap-2 min-w-0">
                   <Select
                     options={layout.projects.list().map((project) => project.worktree)}
                     current={currentDirectory()}
@@ -742,7 +742,7 @@ export default function Layout(props: ParentProps) {
                       </div>
                     )}
                   </Select>
-                  <div class="text-text-weaker hidden sm:block">/</div>
+                  <div class="text-text-weaker">/</div>
                 </div>
                 <div class="flex items-center min-w-0 sm:hidden">
                   <DropdownMenu>
