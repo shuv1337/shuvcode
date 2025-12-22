@@ -29,12 +29,13 @@ declare global {
 }
 
 const host = import.meta.env.VITE_OPENCODE_SERVER_HOST || location.hostname || "127.0.0.1"
-const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
+const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? location.port ?? "4096"
 
 // Check if we should use same-origin requests (relative "/" URL)
 // This is needed when:
 // - Running behind a reverse proxy (HTTPS) that proxies API requests
 // - Running on known production hosts
+// - Running the web command (API and frontend served from same server)
 // In local dev mode with HTTP, we can hit the API server directly
 const isSecure = location.protocol === "https:"
 const isKnownHost =
@@ -42,18 +43,22 @@ const isKnownHost =
   location.hostname.includes("shuv.ai") ||
   location.hostname.endsWith(".local")
 const isLoopback = ["localhost", "127.0.0.1", "0.0.0.0"].includes(location.hostname)
+// When accessed via non-loopback IP (e.g., LAN IP), we're still on the same server
+// so we should use same-origin mode. Dev mode with Vite needs explicit host:port.
+const isWebCommand = !import.meta.env.DEV
 
 // Use same-origin when:
 // - On HTTPS (must use same-origin to avoid mixed content)
 // - On known production hosts
 // - On loopback in non-dev mode (production build)
-const useSameOrigin = isSecure || isKnownHost || (isLoopback && !import.meta.env.DEV)
+// - On any host in non-dev mode (web command serves API and frontend together)
+const useSameOrigin = isSecure || isKnownHost || (isLoopback && !import.meta.env.DEV) || isWebCommand
 
 // URL priority:
 // 1. ?url= query parameter (explicit override)
 // 2. Tauri injected port (desktop app with local server)
 // 3. Same-origin mode uses relative "/" to hit the proxy
-// 4. Other cases fall back to explicit host:port
+// 4. Other cases fall back to explicit host:port (dev mode)
 const url =
   new URLSearchParams(document.location.search).get("url") ||
   (window.__OPENCODE__?.port
