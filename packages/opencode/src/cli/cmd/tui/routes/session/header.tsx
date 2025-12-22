@@ -31,7 +31,7 @@ const ContextInfo = (props: { context: Accessor<string | undefined>; cost: Acces
 export function Header() {
   const route = useRouteData("session")
   const sync = useSync()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
+  const session = createMemo(() => sync.session.get(route.sessionID))
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const shareEnabled = createMemo(() => sync.data.config.share !== "disabled")
 
@@ -63,63 +63,67 @@ export function Header() {
   const keybind = useKeybind()
 
   return (
-    <box flexShrink={0}>
-      <box
-        paddingTop={1}
-        paddingBottom={1}
-        paddingLeft={2}
-        paddingRight={1}
-        {...SplitBorder}
-        border={["left"]}
-        borderColor={theme.border}
-        flexShrink={0}
-        backgroundColor={theme.backgroundPanel}
-      >
-        <Switch>
-          <Match when={session()?.parentID}>
-            <box flexDirection="row" gap={2}>
-              <text fg={theme.text}>
-                <b>Subagent session</b>
-              </text>
-              <text fg={theme.text}>
-                Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
-              </text>
-              <text fg={theme.text}>
-                Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
-              </text>
-              <text fg={theme.text}>
-                Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
-              </text>
-              <box flexGrow={1} flexShrink={1} />
-              <ContextInfo context={context} cost={cost} />
-            </box>
-          </Match>
-          <Match when={true}>
-            <box flexDirection="row" justifyContent="space-between" gap={1}>
-              <Title session={session} />
-              <ContextInfo context={context} cost={cost} />
-            </box>
-            <Show when={shareEnabled()}>
-              <box flexDirection="row" justifyContent="space-between" gap={1}>
-                <box flexGrow={1} flexShrink={1}>
-                  <Switch>
-                    <Match when={session().share?.url}>
-                      <text fg={theme.textMuted} wrapMode="word">
-                        {session().share!.url}
-                      </text>
-                    </Match>
-                    <Match when={true}>
-                      <text fg={theme.text} wrapMode="word">
-                        /share <span style={{ fg: theme.textMuted }}>copy link</span>
-                      </text>
-                    </Match>
-                  </Switch>
+    <Show when={session()}>
+      {(s) => (
+        <box flexShrink={0}>
+          <box
+            paddingTop={1}
+            paddingBottom={1}
+            paddingLeft={2}
+            paddingRight={1}
+            {...SplitBorder}
+            border={["left"]}
+            borderColor={theme.border}
+            flexShrink={0}
+            backgroundColor={theme.backgroundPanel}
+          >
+            <Switch>
+              <Match when={s().parentID}>
+                <box flexDirection="row" gap={2}>
+                  <text fg={theme.text}>
+                    <b>Subagent session</b>
+                  </text>
+                  <text fg={theme.text}>
+                    Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
+                  </text>
+                  <text fg={theme.text}>
+                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
+                  </text>
+                  <text fg={theme.text}>
+                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
+                  </text>
+                  <box flexGrow={1} flexShrink={1} />
+                  <ContextInfo context={context} cost={cost} />
                 </box>
-              </box>
-            </Show>
-          </Match>
-        </Switch>
-      </box>
-    </box>
+              </Match>
+              <Match when={true}>
+                <box flexDirection="row" justifyContent="space-between" gap={1}>
+                  <Title session={s} />
+                  <ContextInfo context={context} cost={cost} />
+                </box>
+                <Show when={shareEnabled()}>
+                  <box flexDirection="row" justifyContent="space-between" gap={1}>
+                    <box flexGrow={1} flexShrink={1}>
+                      <Switch>
+                        <Match when={s().share?.url}>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {s().share?.url}
+                          </text>
+                        </Match>
+                        <Match when={true}>
+                          <text fg={theme.text} wrapMode="word">
+                            /share <span style={{ fg: theme.textMuted }}>copy link</span>
+                          </text>
+                        </Match>
+                      </Switch>
+                    </box>
+                  </box>
+                </Show>
+              </Match>
+            </Switch>
+          </box>
+        </box>
+      )}
+    </Show>
   )
 }

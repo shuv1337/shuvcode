@@ -216,7 +216,7 @@ export function Session() {
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
+  const session = createMemo(() => sync.session.get(route.sessionID))
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const permissions = createMemo(() => sync.data.permission[route.sessionID] ?? [])
 
@@ -695,7 +695,7 @@ export function Session() {
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
-        const revert = session().revert?.messageID
+        const revert = session()?.revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
         sdk.client.session
@@ -730,7 +730,7 @@ export function Session() {
       category: "Session",
       onSelect: (dialog) => {
         dialog.clear()
-        const messageID = session().revert?.messageID
+        const messageID = session()?.revert?.messageID
         if (!messageID) return
         const message = messages().find((x) => x.role === "user" && x.id > messageID)
         if (!message) {
@@ -1059,6 +1059,7 @@ export function Session() {
         try {
           // Format session transcript as markdown
           const sessionData = session()
+          if (!sessionData) return
           const sessionMessages = messages()
 
           let transcript = `# ${sessionData.title}\n\n`
@@ -1101,6 +1102,7 @@ export function Session() {
         try {
           // Format session transcript as markdown
           const sessionData = session()
+          if (!sessionData) return
           const sessionMessages = messages()
 
           let transcript = `# ${sessionData.title}\n\n`
@@ -1291,7 +1293,14 @@ export function Session() {
           paddingRight={2}
           gap={density.tokens().gap}
         >
-          <Show when={session()}>
+          <Show
+            when={session()}
+            fallback={
+              <box flexGrow={1} justifyContent="center" alignItems="center" paddingTop={2} paddingLeft={2}>
+                <text fg={theme.textMuted}>{getSpinnerFrame()} Loading session...</text>
+              </box>
+            }
+          >
             <Show when={!sidebarVisible() && headerVisible()}>
               <Header />
             </Show>
