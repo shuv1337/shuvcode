@@ -316,7 +316,79 @@ export function Prompt(props: PromptProps) {
   })
 
   sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
-    input.insertText(evt.properties.text)
+    const text = evt.properties.text
+
+    // Check if this is a file reference with optional line range (e.g., "@file.ts#L10-20")
+    const fileRefMatch = text.match(/^@(.+?)(?:#L(\d+)(?:-(\d+))?)?$/)
+
+    if (fileRefMatch) {
+      const filename = fileRefMatch[1]
+      const startLine = fileRefMatch[2]
+      const endLine = fileRefMatch[3]
+
+      // Build the display text (includes line range)
+      const displayText = text // e.g., "@file.ts#L10-20"
+
+      // Build the URL with line range query params
+      let url = `file://${process.cwd()}/${filename}`
+      if (startLine) {
+        const params = new URLSearchParams()
+        params.set("start", startLine)
+        if (endLine) {
+          params.set("end", endLine)
+        }
+        url += `?${params.toString()}`
+      }
+
+      // Build filename for the part (includes line range)
+      let partFilename = filename
+      if (startLine) {
+        partFilename += endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
+      }
+
+      // Insert the text with trailing space
+      const currentOffset = input.cursorOffset
+      const insertText = displayText + " "
+      input.insertText(insertText)
+
+      // Create extmark over the file reference (without trailing space)
+      const extmarkStart = currentOffset
+      const extmarkEnd = currentOffset + Bun.stringWidth(displayText)
+
+      const extmarkId = input.extmarks.create({
+        start: extmarkStart,
+        end: extmarkEnd,
+        virtual: true,
+        styleId: fileStyleId,
+        typeId: promptPartTypeId,
+      })
+
+      // Add the file part to the prompt
+      setStore(
+        produce((draft) => {
+          const partIndex = draft.prompt.parts.length
+          draft.prompt.parts.push({
+            type: "file",
+            mime: "text/plain",
+            filename: partFilename,
+            url,
+            source: {
+              type: "file",
+              text: {
+                start: extmarkStart,
+                end: extmarkEnd,
+                value: displayText,
+              },
+              path: filename,
+            },
+          })
+          draft.extmarkToPartIndex.set(extmarkId, partIndex)
+        }),
+      )
+    } else {
+      // Not a file reference, just insert as plain text
+      input.insertText(text)
+    }
   })
 
   sdk.event.on(Ide.Event.SelectionChanged.type, (evt) => {
