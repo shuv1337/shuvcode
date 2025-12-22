@@ -15,7 +15,6 @@ export const DialogSelectProvider: Component = () => {
   return (
     <Dialog title="Connect provider">
       <List
-        class="px-2.5"
         search={{ placeholder: "Search providers", autofocus: true }}
         activeIcon="plus-small"
         key={(x) => x?.id}
@@ -38,17 +37,8 @@ export const DialogSelectProvider: Component = () => {
         }}
       >
         {(i) => (
-          <div class="px-1.25 w-full min-w-0 flex items-center gap-x-4">
-            <ProviderIcon
-              data-slot="list-item-extra-icon"
-              id={i.id as IconName}
-              // TODO: clean this up after we update icon in models.dev
-              classList={{
-                "text-icon-weak-base": true,
-                "size-4 mx-0.5": i.id === "opencode",
-                "size-5": i.id !== "opencode",
-              }}
-            />
+          <div class="px-1.25 w-full min-w-0 flex items-center gap-x-3">
+            <ProviderIcon data-slot="list-item-extra-icon" id={i.id as IconName} />
             <span class="shrink-0">{i.name}</span>
             <Show when={i.id === "opencode"}>
               <Tag>Recommended</Tag>
