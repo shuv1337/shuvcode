@@ -1,16 +1,4 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  onMount,
-  ParentProps,
-  Show,
-  Switch,
-  type JSX,
-} from "solid-js"
+import { createEffect, createMemo, For, Match, onMount, ParentProps, Show, Switch, type JSX } from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"

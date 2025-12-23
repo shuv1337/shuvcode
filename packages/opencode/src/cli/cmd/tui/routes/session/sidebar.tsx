@@ -10,14 +10,12 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
-import { useLayoutDensity } from "../../util/layout-density"
 import { useToast } from "../../ui/toast"
 
 export function Sidebar(props: { sessionID: string; width: number }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
-  const density = useLayoutDensity()
   const toast = useToast()
   const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
@@ -57,6 +55,16 @@ export function Sidebar(props: { sessionID: string; width: number }) {
     return Array.from(groups.entries())
   })
 
+  // Count connected and error MCP servers for collapsed header display
+  const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
+  const errorMcpCount = createMemo(
+    () =>
+      mcpEntries().filter(
+        ([_, item]) =>
+          item.status === "failed" || item.status === "needs_auth" || item.status === "needs_client_registration",
+      ).length,
+  )
+
   const cost = createMemo(() => {
     const total = messages().reduce((sum, x) => sum + (x.role === "assistant" ? x.cost : 0), 0)
     return new Intl.NumberFormat("en-US", {
@@ -90,8 +98,9 @@ export function Sidebar(props: { sessionID: string; width: number }) {
       <box
         backgroundColor={theme.backgroundPanel}
         width={props.width}
-        paddingTop={density.tokens().sidebarPaddingY}
-        paddingBottom={density.tokens().sidebarPaddingY}
+        height="100%"
+        paddingTop={1}
+        paddingBottom={1}
         paddingLeft={2}
         paddingRight={2}
       >
@@ -125,6 +134,13 @@ export function Sidebar(props: { sessionID: string; width: number }) {
                   </Show>
                   <text fg={theme.text}>
                     <b>MCP</b>
+                    <Show when={!expanded.mcp}>
+                      <span style={{ fg: theme.textMuted }}>
+                        {" "}
+                        ({connectedMcpCount()} active
+                        {errorMcpCount() > 0 ? `, ${errorMcpCount()} error${errorMcpCount() > 1 ? "s" : ""}` : ""})
+                      </span>
+                    </Show>
                   </text>
                 </box>
                 <Show when={mcpEntries().length <= 2 || expanded.mcp}>

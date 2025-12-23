@@ -36,4 +36,4 @@ specs/
 logs/
 
 # Tauri (native desktop app - not needed for Docker)
-packages/tauri/src-tauri/target
+packages/desktop/src-tauri/target

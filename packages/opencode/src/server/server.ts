@@ -104,6 +104,27 @@ export namespace Server {
       })
       .use(cors())
       .get(
+        "/global/health",
+        describeRoute({
+          summary: "Get health",
+          description: "Get health information about the OpenCode server.",
+          operationId: "global.health",
+          responses: {
+            200: {
+              description: "Health information",
+              content: {
+                "application/json": {
+                  schema: resolver(z.object({ healthy: z.literal(true), version: z.string() })),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          return c.json({ healthy: true, version: Installation.VERSION })
+        },
+      )
+      .get(
         "/global/event",
         describeRoute({
           summary: "Get global events",

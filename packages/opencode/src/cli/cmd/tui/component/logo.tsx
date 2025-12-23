@@ -1,13 +1,13 @@
 import { TextAttributes } from "@opentui/core"
 import { For } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { Installation } from "@/installation"
 
 // "shuv"
 const LOGO_LEFT = [`     ▄             `, `█▀▀▀ █▀▀█ █  █ █  █`, `▀▀▀█ █░░█ █░░█ █░░█`, `▀▀▀▀ ▀  ▀ ▀▀▀▀  ▀▀ `]
 
 // "code"
 const LOGO_RIGHT = [`             ▄     `, `█▀▀▀ █▀▀█ █▀▀█ █▀▀█`, `█░░░ █░░█ █░░█ █▀▀▀`, `▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀`]
+
 export function Logo() {
   const { theme } = useTheme()
   return (
@@ -24,9 +24,6 @@ export function Logo() {
           </box>
         )}
       </For>
-      <box flexDirection="row" justifyContent="flex-end">
-        <text fg={theme.textMuted}>{Installation.displayVersion()}</text>
-      </box>
     </box>
   )
 }
