@@ -661,7 +661,7 @@ export default function Page() {
                       onUserInteracted={() => setStore("userInteracted", true)}
                       classes={{
                         root: "pb-20 flex-1 min-w-0 h-full overflow-hidden",
-                        content: "pb-20",
+                        content: "pb-20 select-text",
                         container:
                           "w-full " +
                           (!showTabs()
