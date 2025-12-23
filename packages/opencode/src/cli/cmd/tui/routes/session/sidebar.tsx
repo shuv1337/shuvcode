@@ -10,14 +10,12 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
-import { useLayoutDensity } from "../../util/layout-density"
 import { useToast } from "../../ui/toast"
 
 export function Sidebar(props: { sessionID: string; width: number }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
-  const density = useLayoutDensity()
   const toast = useToast()
   const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
@@ -101,8 +99,8 @@ export function Sidebar(props: { sessionID: string; width: number }) {
         backgroundColor={theme.backgroundPanel}
         width={props.width}
         height="100%"
-        paddingTop={density.tokens().sidebarPaddingY}
-        paddingBottom={density.tokens().sidebarPaddingY}
+        paddingTop={1}
+        paddingBottom={1}
         paddingLeft={2}
         paddingRight={2}
       >

@@ -82,7 +82,6 @@ import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
-import { useLayoutDensity } from "../../util/layout-density"
 import {
   getSpinnerFrame as _getSpinnerFrame,
   setSpinnerStyle,
@@ -322,6 +321,7 @@ export function Session() {
     return matches
   })
 
+  const tall = createMemo(() => dimensions().height > 40)
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
     if (session()?.parentID) return false
@@ -430,7 +430,6 @@ export function Session() {
   let prompt: PromptRef
   let searchRef: SearchInputRef
   const keybind = useKeybind()
-  const density = useLayoutDensity()
 
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
@@ -746,24 +745,6 @@ export function Session() {
           sessionID: route.sessionID,
           messageID: message.id,
         })
-      },
-    },
-    {
-      title: density.isCompact() ? "Use comfortable spacing" : "Use compact spacing",
-      value: "session.toggle.density",
-      category: "Session",
-      onSelect: (dialog) => {
-        density.toggle()
-        dialog.clear()
-      },
-    },
-    {
-      title: "Reset spacing to auto",
-      value: "session.reset.density",
-      category: "Session",
-      onSelect: (dialog) => {
-        density.reset()
-        dialog.clear()
       },
     },
     {
@@ -1287,14 +1268,7 @@ export function Session() {
           up()
         }}
       >
-        <box
-          flexGrow={1}
-          paddingBottom={density.tokens().paddingY}
-          paddingTop={density.tokens().paddingY}
-          paddingLeft={2}
-          paddingRight={2}
-          gap={density.tokens().gap}
-        >
+        <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show
             when={session()}
             fallback={
@@ -1303,26 +1277,26 @@ export function Session() {
               </box>
             }
           >
-            <Show when={!sidebarVisible() || sidebarOverlay()}>
+            <Show when={headerVisible() && (!sidebarVisible() || sidebarOverlay())}>
               <Header />
             </Show>
             <Switch>
               <Match when={bashOutput()}>
                 {(view) => (
                   <box flexGrow={1} flexDirection="column">
-                    <box paddingLeft={1} paddingBottom={density.isCompact() ? 0 : 1} flexShrink={0}>
+                    <box paddingLeft={1} paddingBottom={1} flexShrink={0}>
                       <text fg={theme.textMuted}>$ {view().command}</text>
                     </box>
                     <scrollbox
                       ref={(r) => (bashScroll = r)}
                       flexGrow={1}
                       paddingLeft={1}
-                      paddingBottom={density.isCompact() ? 0 : 1}
+                      paddingBottom={1}
                       scrollAcceleration={scrollAcceleration()}
                     >
                       <ghostty-terminal ansi={view().output()} cols={contentWidth()} />
                     </scrollbox>
-                    <Show when={density.tokens().showSecondaryHints}>
+                    <Show when={tall()}>
                       <box flexShrink={0} paddingLeft={1}>
                         <text fg={theme.textMuted}>
                           ESC to close | ↑/↓ scroll | PgUp/PgDn page | Home/End top/bottom
@@ -1525,10 +1499,8 @@ export function Session() {
                       </Match>
                     </Switch>
                   </box>
-                  <Show when={density.tokens().showFooter}>
-                    <Show when={!sidebarVisible()}>
-                      <Footer />
-                    </Show>
+                  <Show when={(!sidebarVisible() || sidebarOverlay()) && tall()}>
+                    <Footer />
                   </Show>
                 </>
               </Match>

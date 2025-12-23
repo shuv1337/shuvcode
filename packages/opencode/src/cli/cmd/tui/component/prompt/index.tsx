@@ -28,7 +28,6 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
-import { useLayoutDensity } from "../../util/layout-density"
 
 // Regex to match optional whitespace followed by #L<start>[-<end>] line range syntax after a file reference
 // Only matches when followed by a space (confirming the line range is complete)
@@ -130,7 +129,6 @@ export function Prompt(props: PromptProps) {
   const tall = createMemo(() => dimensions().height > 40)
   const wide = createMemo(() => dimensions().width > 120)
   const { theme, syntax } = useTheme()
-  const density = useLayoutDensity()
 
   function promptModelWarning() {
     toast.show({
@@ -1118,7 +1116,7 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <Show when={tall()}>
-              <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+              <box flexDirection="row" flexShrink={0} gap={1}>
                 <text fg={highlight()}>
                   {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
                 </text>
@@ -1140,8 +1138,7 @@ export function Prompt(props: PromptProps) {
           borderColor={highlight()}
           customBorderChars={{
             ...EmptyBorder,
-            // when the background is transparent, don't draw the vertical line
-            vertical: theme.background.a != 0 ? "╹" : " ",
+            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
           }}
         >
           <box
@@ -1149,7 +1146,7 @@ export function Prompt(props: PromptProps) {
             border={["bottom"]}
             borderColor={theme.backgroundElement}
             customBorderChars={
-              theme.background.a != 0
+              theme.backgroundElement.a !== 0
                 ? {
                     ...EmptyBorder,
                     horizontal: "▀",
