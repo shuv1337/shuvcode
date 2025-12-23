@@ -18,7 +18,7 @@ export default $config({
 
     new sst.cloudflare.StaticSite("Desktop", {
       domain: "desktop." + domain,
-      path: "packages/desktop",
+      path: "packages/app",
       build: {
         command: "bun turbo build",
         output: "./dist",
