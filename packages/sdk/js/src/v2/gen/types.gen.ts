@@ -673,6 +673,80 @@ export type EventTodoUpdated = {
   }
 }
 
+export type EventAskquestionRequested = {
+  type: "askquestion.requested"
+  properties: {
+    sessionID: string
+    messageID: string
+    callID: string
+    questions: Array<{
+      /**
+       * Unique identifier for the question
+       */
+      id: string
+      /**
+       * Short tab label, e.g. 'UI Framework'
+       */
+      label: string
+      /**
+       * The full question to ask the user
+       */
+      question: string
+      /**
+       * 2-8 suggested answer options
+       */
+      options: Array<{
+        /**
+         * Short identifier for the option
+         */
+        value: string
+        /**
+         * Display label for the option
+         */
+        label: string
+        /**
+         * Additional context for the option
+         */
+        description?: string
+      }>
+      /**
+       * Allow selecting multiple options
+       */
+      multiSelect?: boolean
+    }>
+  }
+}
+
+export type EventAskquestionAnswered = {
+  type: "askquestion.answered"
+  properties: {
+    sessionID: string
+    callID: string
+    answers: Array<{
+      /**
+       * ID of the question being answered
+       */
+      questionId: string
+      /**
+       * Selected option value(s)
+       */
+      values: Array<string>
+      /**
+       * Custom text if user typed their own response
+       */
+      customText?: string
+    }>
+  }
+}
+
+export type EventAskquestionCancelled = {
+  type: "askquestion.cancelled"
+  properties: {
+    sessionID: string
+    callID: string
+  }
+}
+
 export type SessionStatus =
   | {
       type: "idle"
@@ -876,6 +950,9 @@ export type Event =
   | EventIdeInstalled
   | EventIdeSelectionUpdated
   | EventTodoUpdated
+  | EventAskquestionRequested
+  | EventAskquestionAnswered
+  | EventAskquestionCancelled
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
@@ -3520,6 +3597,88 @@ export type PermissionRespondResponses = {
 }
 
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
+
+export type AskquestionRespondData = {
+  body?: {
+    sessionID: string
+    callID: string
+    answers: Array<{
+      /**
+       * ID of the question being answered
+       */
+      questionId: string
+      /**
+       * Selected option value(s)
+       */
+      values: Array<string>
+      /**
+       * Custom text if user typed their own response
+       */
+      customText?: string
+    }>
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/askquestion/respond"
+}
+
+export type AskquestionRespondErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type AskquestionRespondError = AskquestionRespondErrors[keyof AskquestionRespondErrors]
+
+export type AskquestionRespondResponses = {
+  /**
+   * Response submitted successfully
+   */
+  200: boolean
+}
+
+export type AskquestionRespondResponse = AskquestionRespondResponses[keyof AskquestionRespondResponses]
+
+export type AskquestionCancelData = {
+  body?: {
+    sessionID: string
+    callID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/askquestion/cancel"
+}
+
+export type AskquestionCancelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type AskquestionCancelError = AskquestionCancelErrors[keyof AskquestionCancelErrors]
+
+export type AskquestionCancelResponses = {
+  /**
+   * Cancelled successfully
+   */
+  200: boolean
+}
+
+export type AskquestionCancelResponse = AskquestionCancelResponses[keyof AskquestionCancelResponses]
 
 export type CommandListData = {
   body?: never

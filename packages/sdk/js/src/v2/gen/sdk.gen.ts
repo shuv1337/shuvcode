@@ -7,6 +7,10 @@ import type {
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
+  AskquestionCancelErrors,
+  AskquestionCancelResponses,
+  AskquestionRespondErrors,
+  AskquestionRespondResponses,
   Auth as Auth2,
   AuthSetErrors,
   AuthSetResponses,
@@ -1688,6 +1692,97 @@ export class Permission extends HeyApiClient {
   }
 }
 
+export class Askquestion extends HeyApiClient {
+  /**
+   * Respond to askquestion
+   *
+   * Submit answers to a pending askquestion tool call.
+   */
+  public respond<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+      callID?: string
+      answers?: Array<{
+        /**
+         * ID of the question being answered
+         */
+        questionId: string
+        /**
+         * Selected option value(s)
+         */
+        values: Array<string>
+        /**
+         * Custom text if user typed their own response
+         */
+        customText?: string
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "callID" },
+            { in: "body", key: "answers" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AskquestionRespondResponses, AskquestionRespondErrors, ThrowOnError>({
+      url: "/askquestion/respond",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel askquestion
+   *
+   * Cancel a pending askquestion tool call.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+      callID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "callID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AskquestionCancelResponses, AskquestionCancelErrors, ThrowOnError>({
+      url: "/askquestion/cancel",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Command extends HeyApiClient {
   /**
    * List commands
@@ -2834,6 +2929,8 @@ export class OpencodeClient extends HeyApiClient {
   part = new Part({ client: this.client })
 
   permission = new Permission({ client: this.client })
+
+  askquestion = new Askquestion({ client: this.client })
 
   command = new Command({ client: this.client })
 
