@@ -1,28 +1,46 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenCode</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>shuvcode</title>
     <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#F8F7F7" />
-    <meta name="theme-color" content="#131010" media="(prefers-color-scheme: dark)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/meslo@1.0.0/meslo.css" />
+    <meta name="theme-color" content="#011627" />
+    <meta name="theme-color" content="#011627" media="(prefers-color-scheme: dark)" />
+    <!-- iOS PWA meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="shuvcode" />
     <meta property="og:image" content="/social-share.png" />
     <meta property="twitter:image" content="/social-share.png" />
   </head>
-  <body class="antialiased overscroll-none select-none text-12-regular overflow-hidden">
+  <body class="antialiased overscroll-none select-none text-12-regular overflow-hidden h-full">
     <script>
       ;(function () {
-        const savedTheme = localStorage.getItem("theme") || "oc-1"
-        document.documentElement.setAttribute("data-theme", savedTheme)
+        let savedTheme = localStorage.getItem("theme") || "nightowl"
+        // Migrate legacy theme ID
+        if (savedTheme === "oc-1") {
+          savedTheme = "default"
+          localStorage.setItem("theme", savedTheme)
+        }
+        // "default" uses :root styles (no data-theme attribute)
+        if (savedTheme !== "default") {
+          document.documentElement.setAttribute("data-theme", savedTheme)
+        }
       })()
     </script>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root" class="flex flex-col h-screen"></div>
+    <div id="root" class="flex flex-col h-full bg-background-base"></div>
     <script src="/src/entry.tsx" type="module"></script>
   </body>
 </html>

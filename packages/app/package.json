@@ -26,6 +26,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-icons-spritesheet": "3.0.1",
+    "vite-plugin-pwa": "1.2.0",
     "vite-plugin-solid": "catalog:"
   },
   "dependencies": {
