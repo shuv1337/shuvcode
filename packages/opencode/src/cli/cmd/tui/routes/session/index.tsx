@@ -534,7 +534,14 @@ export function Session() {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
+        const message = messages().findLast((x) => {
+          if (x.role !== "user") return false
+          if (revert && x.id >= revert) return false
+          // Skip messages where all text parts are ignored
+          const parts = sync.data.part[x.id]
+          const hasNonIgnoredText = parts?.some((p) => p.type === "text" && !p.ignored)
+          return hasNonIgnoredText
+        })
         if (!message) return
         sdk.client.session
           .revert({
