@@ -14,7 +14,7 @@ import { Keybind } from "@/util/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useRenderer } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
@@ -126,6 +126,9 @@ export function Prompt(props: PromptProps) {
   const history = usePromptHistory()
   const command = useCommandDialog()
   const renderer = useRenderer()
+  const dimensions = useTerminalDimensions()
+  const tall = createMemo(() => dimensions().height > 40)
+  const wide = createMemo(() => dimensions().width > 120)
   const { theme, syntax } = useTheme()
   const density = useLayoutDensity()
 
@@ -1114,19 +1117,21 @@ export function Prompt(props: PromptProps) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-              </text>
-              <Show when={store.mode === "normal"}>
-                <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={theme.text}>
-                    {local.model.parsed().model}
-                  </text>
-                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
-                </box>
-              </Show>
-            </box>
+            <Show when={tall()}>
+              <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+                <text fg={highlight()}>
+                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
+                </text>
+                <Show when={store.mode === "normal"}>
+                  <box flexDirection="row" gap={1}>
+                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                      {local.model.parsed().model}
+                    </text>
+                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  </box>
+                </Show>
+              </box>
+            </Show>
           </box>
         </box>
         <box
@@ -1156,9 +1161,9 @@ export function Prompt(props: PromptProps) {
             }
           />
         </box>
-        <Show when={status().type !== "idle" || density.tokens().showSecondaryHints}>
-          <box flexDirection="row" justifyContent="space-between">
-            <Show when={status().type !== "idle"} fallback={<text />}>
+        <box flexDirection="row" justifyContent="space-between">
+          <Switch>
+            <Match when={status().type !== "idle"}>
               <box
                 flexDirection="row"
                 gap={1}
@@ -1233,28 +1238,48 @@ export function Prompt(props: PromptProps) {
                   </span>
                 </text>
               </box>
-            </Show>
-            <Show when={status().type !== "retry" && density.tokens().showSecondaryHints}>
-              <box gap={2} flexDirection="row">
-                <Switch>
-                  <Match when={store.mode === "normal"}>
-                    <text fg={theme.text}>
-                      {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>switch agent</span>
+            </Match>
+            <Match when={!tall()}>
+              <box flexDirection="row" gap={1}>
+                <text fg={highlight()}>
+                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
+                </text>
+                <Show when={store.mode === "normal"}>
+                  <box flexDirection="row" gap={1}>
+                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                      {local.model.parsed().model}
                     </text>
-                    <text fg={theme.text}>
-                      {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                    </text>
-                  </Match>
-                  <Match when={store.mode === "shell"}>
-                    <text fg={theme.text}>
-                      esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                    </text>
-                  </Match>
-                </Switch>
+                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  </box>
+                </Show>
               </box>
-            </Show>
+            </Match>
+          </Switch>
+          <box gap={2} flexDirection="row" marginLeft="auto">
+            <Switch>
+              <Match when={store.mode === "normal"}>
+                <Show when={wide()}>
+                  <text fg={theme.text}>
+                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>switch agent</span>
+                  </text>
+                </Show>
+                <Show when={!wide()}>
+                  <text fg={theme.text}>
+                    {keybind.print("sidebar_toggle")} <span style={{ fg: theme.textMuted }}>sidebar</span>
+                  </text>
+                </Show>
+                <text fg={theme.text}>
+                  {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
+                </text>
+              </Match>
+              <Match when={store.mode === "shell"}>
+                <text fg={theme.text}>
+                  esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
+                </text>
+              </Match>
+            </Switch>
           </box>
-        </Show>
+        </box>
       </box>
     </>
   )

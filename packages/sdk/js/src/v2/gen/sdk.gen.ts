@@ -7,10 +7,6 @@ import type {
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
-  AskquestionCancelErrors,
-  AskquestionCancelResponses,
-  AskquestionRespondErrors,
-  AskquestionRespondResponses,
   Auth as Auth2,
   AuthSetErrors,
   AuthSetResponses,
@@ -23,8 +19,6 @@ import type {
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
-  EventTuiQuestionRequest,
-  EventTuiQuestionResponse,
   EventTuiToastShow,
   FileListResponses,
   FilePartInput,
@@ -36,9 +30,7 @@ import type {
   FormatterStatusResponses,
   GlobalDisposeResponses,
   GlobalEventResponses,
-  IdeConnectResponses,
-  IdeDisconnectResponses,
-  IdeStatusResponses,
+  GlobalHealthResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -64,9 +56,6 @@ import type {
   PathGetResponses,
   PermissionRespondErrors,
   PermissionRespondResponses,
-  ProjectBrowseResponses,
-  ProjectCreateErrors,
-  ProjectCreateResponses,
   ProjectCurrentResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
@@ -201,6 +190,18 @@ class HeyApiRegistry<T> {
 
 export class Global extends HeyApiClient {
   /**
+   * Get health
+   *
+   * Get health information about the OpenCode server.
+   */
+  public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
+      url: "/global/health",
+      ...options,
+    })
+  }
+
+  /**
    * Get global events
    *
    * Subscribe to global events from the OpenCode system using server-sent events.
@@ -242,47 +243,6 @@ export class Project extends HeyApiClient {
       url: "/project",
       ...options,
       ...params,
-    })
-  }
-
-  /**
-   * Create project
-   *
-   * Create a new project directory and initialize it as a git repository, or add an existing directory as a project.
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      path?: string
-      name?: string
-      repo?: string
-      degit?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "path" },
-            { in: "body", key: "name" },
-            { in: "body", key: "repo" },
-            { in: "body", key: "degit" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ProjectCreateResponses, ProjectCreateErrors, ThrowOnError>({
-      url: "/project",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
@@ -344,38 +304,6 @@ export class Project extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
-    })
-  }
-
-  /**
-   * Browse directories
-   *
-   * Browse directories from the user's home directory to find potential projects. Supports fuzzy search filtering.
-   */
-  public browse<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      query?: string
-      limit?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "query" },
-            { in: "query", key: "limit" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ProjectBrowseResponses, unknown, ThrowOnError>({
-      url: "/project/browse",
-      ...options,
-      ...params,
     })
   }
 }
@@ -1692,97 +1620,6 @@ export class Permission extends HeyApiClient {
   }
 }
 
-export class Askquestion extends HeyApiClient {
-  /**
-   * Respond to askquestion
-   *
-   * Submit answers to a pending askquestion tool call.
-   */
-  public respond<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      sessionID?: string
-      callID?: string
-      answers?: Array<{
-        /**
-         * ID of the question being answered
-         */
-        questionId: string
-        /**
-         * Selected option value(s)
-         */
-        values: Array<string>
-        /**
-         * Custom text if user typed their own response
-         */
-        customText?: string
-      }>
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "callID" },
-            { in: "body", key: "answers" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<AskquestionRespondResponses, AskquestionRespondErrors, ThrowOnError>({
-      url: "/askquestion/respond",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Cancel askquestion
-   *
-   * Cancel a pending askquestion tool call.
-   */
-  public cancel<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      sessionID?: string
-      callID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "callID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<AskquestionCancelResponses, AskquestionCancelErrors, ThrowOnError>({
-      url: "/askquestion/cancel",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class Command extends HeyApiClient {
   /**
    * List commands
@@ -2455,83 +2292,6 @@ export class Mcp extends HeyApiClient {
   auth = new Auth({ client: this.client })
 }
 
-export class Ide extends HeyApiClient {
-  /**
-   * Get IDE status
-   *
-   * Get the status of all IDE instances.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<IdeStatusResponses, unknown, ThrowOnError>({
-      url: "/ide",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Connect to an IDE instance
-   */
-  public connect<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<IdeConnectResponses, unknown, ThrowOnError>({
-      url: "/ide/{name}/connect",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Disconnect from an IDE instance
-   */
-  public disconnect<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<IdeDisconnectResponses, unknown, ThrowOnError>({
-      url: "/ide/{name}/disconnect",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -2854,12 +2614,7 @@ export class Tui extends HeyApiClient {
   public publish<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      body?:
-        | EventTuiPromptAppend
-        | EventTuiCommandExecute
-        | EventTuiToastShow
-        | EventTuiQuestionRequest
-        | EventTuiQuestionResponse
+      body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2930,8 +2685,6 @@ export class OpencodeClient extends HeyApiClient {
 
   permission = new Permission({ client: this.client })
 
-  askquestion = new Askquestion({ client: this.client })
-
   command = new Command({ client: this.client })
 
   provider = new Provider({ client: this.client })
@@ -2943,8 +2696,6 @@ export class OpencodeClient extends HeyApiClient {
   app = new App({ client: this.client })
 
   mcp = new Mcp({ client: this.client })
-
-  ide = new Ide({ client: this.client })
 
   lsp = new Lsp({ client: this.client })
 

@@ -22,6 +22,7 @@ import {
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
+  RGBA,
   type ScrollAcceleration,
   type ColorInput,
 } from "@opentui/core"
@@ -328,7 +329,8 @@ export function Session() {
     if (sidebar() === "auto" && wide()) return true
     return false
   })
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? w() + hw : 0) - 4)
+  const sidebarOverlay = createMemo(() => sidebarVisible() && !wide())
+  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() && !sidebarOverlay() ? w() + hw : 0) - 4)
 
   createEffect(() => !sidebarVisible() && setDrag(false))
 
@@ -1301,7 +1303,7 @@ export function Session() {
               </box>
             }
           >
-            <Show when={!sidebarVisible() && headerVisible()}>
+            <Show when={!sidebarVisible() || sidebarOverlay()}>
               <Header />
             </Show>
             <Switch>
@@ -1534,7 +1536,7 @@ export function Session() {
           </Show>
           <Toast />
         </box>
-        <Show when={sidebarVisible()}>
+        <Show when={sidebarVisible() && !sidebarOverlay()}>
           <>
             <box
               width={hw}
@@ -1554,6 +1556,24 @@ export function Session() {
             />
             <Sidebar sessionID={route.sessionID} width={w()} />
           </>
+        </Show>
+        <Show when={sidebarOverlay()}>
+          <box
+            position="absolute"
+            left={0}
+            top={0}
+            width={dimensions().width}
+            height={dimensions().height}
+            backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
+            zIndex={100}
+            flexDirection="row"
+            justifyContent="flex-end"
+            onMouseUp={() => setSidebar("hide")}
+          >
+            <box onMouseUp={(e) => e.stopPropagation()}>
+              <Sidebar sessionID={route.sessionID} width={w()} />
+            </box>
+          </box>
         </Show>
       </box>
     </context.Provider>
