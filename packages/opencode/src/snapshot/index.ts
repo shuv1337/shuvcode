@@ -26,6 +26,8 @@ export namespace Snapshot {
         .nothrow()
       // Configure git to not convert line endings on Windows
       await $`git --git-dir ${git} config core.autocrlf false`.quiet().nothrow()
+      // Task 3.1: Disable fsmonitor to prevent hangs when worktree is a linked git worktree
+      await $`git --git-dir ${git} config core.fsmonitor false`.quiet().nothrow()
       log.info("initialized")
     }
     await $`git --git-dir ${git} --work-tree ${Instance.worktree} add .`.quiet().cwd(Instance.directory).nothrow()
@@ -192,6 +194,10 @@ export namespace Snapshot {
 
   function gitdir() {
     const project = Instance.project
+    // Task 3.2: Snapshot data is stored under {dataDir}/snapshot/{projectID}
+    // When project ID changes for linked worktrees (due to worktree differentiation fix),
+    // old snapshot data is orphaned. This is intentional - snapshots are temporary/disposable
+    // and not worth migrating.
     return path.join(Global.Path.data, "snapshot", project.id)
   }
 }
