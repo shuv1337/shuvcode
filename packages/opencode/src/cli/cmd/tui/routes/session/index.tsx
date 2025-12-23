@@ -59,6 +59,7 @@ import { useKeybind } from "@tui/context/keybind"
 import { Header } from "./header"
 import { parsePatch } from "diff"
 import { useDialog } from "../../ui/dialog"
+import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
 import { iife } from "@/util/iife"
@@ -2551,11 +2552,7 @@ ToolRegistry.register<typeof TodoWriteTool>({
         <Show when={props.metadata.todos?.length}>
           <box>
             <For each={props.input.todos ?? []}>
-              {(todo) => (
-                <text style={{ fg: todo.status === "in_progress" ? theme.success : theme.textMuted }}>
-                  [{todo.status === "completed" ? "✓" : " "}] {todo.content}
-                </text>
-              )}
+              {(todo) => <TodoItem status={todo.status} content={todo.content} />}
             </For>
           </box>
         </Show>
