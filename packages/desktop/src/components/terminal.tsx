@@ -1,8 +1,9 @@
 import { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
-import { ComponentProps, onCleanup, onMount, splitProps } from "solid-js"
+import { ComponentProps, onCleanup, onMount, splitProps, Show, createSignal } from "solid-js"
 import { useSDK } from "@/context/sdk"
 import { SerializeAddon } from "@/addons/serialize"
 import { LocalPTY } from "@/context/terminal"
+import { MobileTerminalInput } from "./mobile-terminal-input"
 
 function getWebSocketUrl(baseUrl: string, path: string): string {
   if (baseUrl === "/" || baseUrl === "") {
@@ -67,7 +68,13 @@ export interface TerminalProps extends ComponentProps<"div"> {
 export const Terminal = (props: TerminalProps) => {
   const sdk = useSDK()
   let container!: HTMLDivElement
+  let mobileInputRef: HTMLInputElement | undefined
   const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnectError"])
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches
+  const isTouchDevice = "ontouchstart" in window
+  const isMobileInputEnabled = isCoarsePointer || isTouchDevice
+  const [socket, setSocket] = createSignal<WebSocket | undefined>()
+  let isMounted = true
   let ws: WebSocket
   let term: Term
   let ghostty: Ghostty
@@ -80,14 +87,17 @@ export const Terminal = (props: TerminalProps) => {
 
   onMount(async () => {
     ghostty = await Ghostty.load()
+    if (!isMounted) return
 
     const wsUrl = getWebSocketUrl(
       sdk.url,
       `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`,
     )
     ws = new WebSocket(wsUrl)
+    setSocket(ws)
 
     const buildTerminal = (snapshot?: TerminalSnapshot) => {
+      if (!isMounted) return
       term = new Term({
         cursorBlink: true,
         fontSize: 14,
@@ -128,6 +138,7 @@ export const Terminal = (props: TerminalProps) => {
       fitAddon.fit()
 
       term.onResize(async (size) => {
+        if (!isMounted) return
         if (ws && ws.readyState === WebSocket.OPEN) {
           await sdk.client.pty.update({
             ptyID: local.pty.id,
@@ -139,11 +150,13 @@ export const Terminal = (props: TerminalProps) => {
         }
       })
       term.onData((data) => {
+        if (!isMounted) return
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(data)
         }
       })
       term.onKey((key) => {
+        if (!isMounted) return
         if (key.key == "Enter") {
           props.onSubmit?.()
         }
@@ -188,6 +201,7 @@ export const Terminal = (props: TerminalProps) => {
     themeObserver.observe(document.documentElement, { attributes: true })
     document.documentElement.addEventListener("terminal-theme-changed", onTerminalThemeChange)
     ws.addEventListener("open", () => {
+      if (!isMounted) return
       console.log("WebSocket connected")
       sdk.client.pty.update({
         ptyID: local.pty.id,
@@ -198,18 +212,22 @@ export const Terminal = (props: TerminalProps) => {
       })
     })
     ws.addEventListener("message", (event) => {
+      if (!isMounted) return
       term.write(event.data)
     })
     ws.addEventListener("error", (error) => {
+      if (!isMounted) return
       console.error("WebSocket error:", error)
       props.onConnectError?.(error)
     })
     ws.addEventListener("close", () => {
+      if (!isMounted) return
       console.log("WebSocket disconnected")
     })
   })
 
   onCleanup(() => {
+    isMounted = false
     if (pendingThemeRefresh) {
       cancelAnimationFrame(pendingThemeRefresh)
     }
@@ -220,19 +238,30 @@ export const Terminal = (props: TerminalProps) => {
       document.documentElement.removeEventListener("terminal-theme-changed", onTerminalThemeChange)
     }
     themeObserver?.disconnect()
-    if (serializeAddon && props.onCleanup) {
-      const buffer = serializeAddon.serialize()
+    const savedSnapshot =
+      serializeAddon && term
+        ? {
+            buffer: serializeAddon.serialize(),
+            rows: term.rows,
+            cols: term.cols,
+            scrollY: term.getViewportY(),
+          }
+        : undefined
+    if (savedSnapshot && props.onCleanup) {
       props.onCleanup({
         ...local.pty,
-        buffer,
-        rows: term.rows,
-        cols: term.cols,
-        scrollY: term.getViewportY(),
+        ...savedSnapshot,
       })
     }
     ws?.close()
     term?.dispose()
   })
+
+  const handleContainerClick = () => {
+    if (isMobileInputEnabled && mobileInputRef) {
+      mobileInputRef.focus()
+    }
+  }
 
   return (
     <div
@@ -241,10 +270,15 @@ export const Terminal = (props: TerminalProps) => {
       data-prevent-autofocus
       classList={{
         ...(local.classList ?? {}),
-        "size-full px-6 py-3 font-mono": true,
+        "size-full px-3 sm:px-6 py-3 font-mono relative": true,
         [local.class ?? ""]: !!local.class,
       }}
+      onClick={handleContainerClick}
       {...others}
-    />
+    >
+      <Show when={isMobileInputEnabled}>
+        <MobileTerminalInput ref={(el) => (mobileInputRef = el)} socket={socket()} enabled={isMounted} />
+      </Show>
+    </div>
   )
 }

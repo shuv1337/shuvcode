@@ -74,7 +74,7 @@ export namespace Installation {
     const checks = [
       {
         name: "bun" as const,
-        command: () => $`bun pm ls -g`.throws(false).text(),
+        command: () => $`bun pm ls -g`.throws(false).quiet().text(),
       },
       {
         name: "npm" as const,

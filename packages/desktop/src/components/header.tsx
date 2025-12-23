@@ -32,7 +32,7 @@ export function Header(props: {
     <header class="h-12 shrink-0 bg-background-base border-b border-border-weak-base flex" data-tauri-drag-region>
       <button
         type="button"
-        class="xl:hidden w-12 shrink-0 flex items-center justify-center border-r border-border-weak-base hover:bg-surface-raised-base-hover active:bg-surface-raised-base-active transition-colors"
+        class="xl:hidden w-12 shrink-0 flex items-center justify-center hover:bg-surface-raised-base-hover active:bg-surface-raised-base-active transition-colors"
         onClick={props.onMobileMenuToggle}
       >
         <Icon name="menu" size="small" />
@@ -111,6 +111,35 @@ export function Header(props: {
                   </Show>
                 </div>
                 <div class="flex items-center gap-4">
+                  <Tooltip
+                    class="hidden md:block shrink-0"
+                    value={
+                      <div class="flex items-center gap-2">
+                        <span>Toggle review</span>
+                        <span class="text-icon-base text-12-medium">{command.keybind("review.toggle")}</span>
+                      </div>
+                    }
+                  >
+                    <Button variant="ghost" class="group/review-toggle size-6 p-0" onClick={layout.review.toggle}>
+                      <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
+                        <Icon
+                          size="small"
+                          name={layout.review.opened() ? "layout-right-full" : "layout-right"}
+                          class="group-hover/review-toggle:hidden"
+                        />
+                        <Icon
+                          size="small"
+                          name="layout-right-partial"
+                          class="hidden group-hover/review-toggle:inline-block"
+                        />
+                        <Icon
+                          size="small"
+                          name={layout.review.opened() ? "layout-right" : "layout-right-full"}
+                          class="hidden group-active/review-toggle:inline-block"
+                        />
+                      </div>
+                    </Button>
+                  </Tooltip>
                   <Tooltip
                     class="hidden md:block shrink-0"
                     value={

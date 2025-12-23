@@ -22,6 +22,7 @@ import { useProviders } from "@/hooks/use-providers"
 import { useCommand } from "@/context/command"
 import { persisted } from "@/utils/persist"
 import { Identifier } from "@/utils/id"
+import { SessionContextUsage } from "@/components/session-context-usage"
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const ACCEPTED_FILE_TYPES = [...ACCEPTED_IMAGE_TYPES, "application/pdf"]
@@ -316,7 +317,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       type: "custom" as const,
     }))
 
-    return [...custom, ...builtin]
+    const all = [...custom, ...builtin]
+    const seen = new Set<string>()
+    return all.filter((cmd) => {
+      if (seen.has(cmd.trigger)) return false
+      seen.add(cmd.trigger)
+      return true
+    })
   })
 
   const handleSlashSelect = (cmd: SlashCommand | undefined) => {
@@ -342,7 +349,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     editorRef.innerHTML = ""
     prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-    command.trigger(cmd.id, "slash")
+    try {
+      command.trigger(cmd.id, "slash")
+    } catch (error) {
+      // Defensive: handle stale command handlers gracefully
+      console.error("Failed to execute slash command:", cmd.id, error)
+    }
   }
 
   const {
@@ -769,6 +781,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     setStore("imageAttachments", [])
     setStore("mode", "normal")
 
+    // Blur the editor to dismiss mobile keyboard after submission
+    editorRef.blur()
+
     const model = {
       modelID: local.model.current()!.id,
       providerID: local.model.current()!.provider.id,
@@ -1040,6 +1055,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 </Tooltip>
               </Match>
             </Switch>
+            <SessionContextUsage />
           </div>
           <div class="flex items-center gap-1 absolute right-2 bottom-2">
             <input

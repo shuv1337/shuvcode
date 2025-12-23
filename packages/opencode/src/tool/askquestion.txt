@@ -1,0 +1,32 @@
+# AskUserQuestion
+
+Use this tool during planning to ask the user multiple clarifying questions in a wizard-style flow. This enables you to:
+1. Gather user preferences on multiple dimensions at once
+2. Clarify ambiguous requirements before planning
+3. Get decisions on implementation choices (framework, deployment, etc.)
+4. Present tradeoffs and let the user decide
+
+## Parameters
+
+- **questions**: An array of 1-8 questions, each with:
+  - **id**: Unique identifier for the question
+  - **label**: Short tab label (2-3 words), e.g. "UI Framework", "Database", "Auth Strategy"
+  - **question**: The full question text to display
+  - **options**: 2-8 answer options, each with value, label, and optional description
+  - **multiSelect**: (optional) Set to true to allow multiple selections
+
+## Guidelines
+
+- Generate descriptive tab labels that clearly indicate what each question is about
+- Provide 2-8 distinct, actionable answer options per question
+- Users can always type a custom response for any question
+- Order questions logically (broad decisions before specific ones)
+- Keep questions focused - don't ask too many at once (max 8)
+
+## Example
+
+When user says "Build a new web app", you might ask:
+- "UI Framework" → React, Vue, Svelte, Vanilla JS
+- "Styling" → Tailwind CSS, CSS Modules, Styled Components
+- "Backend" → Node.js, Python, Go, Serverless
+- "Database" → PostgreSQL, MongoDB, SQLite, None

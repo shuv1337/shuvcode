@@ -11,13 +11,15 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
 import { useLayoutDensity } from "../../util/layout-density"
+import { useToast } from "../../ui/toast"
 
 export function Sidebar(props: { sessionID: string; width: number }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
   const density = useLayoutDensity()
-  const session = createMemo(() => sync.session.get(props.sessionID)!)
+  const toast = useToast()
+  const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
@@ -97,10 +99,10 @@ export function Sidebar(props: { sessionID: string; width: number }) {
           <box flexShrink={0} gap={1} paddingRight={1}>
             <box>
               <text fg={theme.text}>
-                <b>{session().title}</b>
+                <b>{session()?.title}</b>
               </text>
-              <Show when={session().share?.url}>
-                <text fg={theme.textMuted}>{session().share!.url}</text>
+              <Show when={session()?.share?.url}>
+                <text fg={theme.textMuted}>{session()?.share?.url}</text>
               </Show>
             </box>
             <box>
@@ -256,9 +258,18 @@ export function Sidebar(props: { sessionID: string; width: number }) {
                                   flexDirection="row"
                                   gap={1}
                                   paddingLeft={2}
-                                  onMouseDown={() => {
+                                  onMouseDown={async () => {
                                     if (subagentSessionId) {
-                                      route.navigate({ type: "session", sessionID: subagentSessionId })
+                                      try {
+                                        await sync.session.sync(subagentSessionId)
+                                        route.navigate({ type: "session", sessionID: subagentSessionId })
+                                      } catch (e) {
+                                        console.error("Failed to sync subagent session:", e)
+                                        toast.show({
+                                          message: `Session not found`,
+                                          variant: "error",
+                                        })
+                                      }
                                     }
                                   }}
                                 >
@@ -394,8 +405,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             <span style={{ fg: theme.text }}>
               <b>code</b>
             </span>{" "}
-            <span>{Installation.VERSION}</span>{" "}
-            <span>({Installation.COMMIT_HASH})</span>
+            <span>{Installation.VERSION}</span> <span>({Installation.COMMIT_HASH})</span>
           </text>
         </box>
       </box>

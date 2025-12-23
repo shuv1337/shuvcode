@@ -89,6 +89,8 @@ import {
   DEFAULT_SPINNER_KEY,
   DEFAULT_SPINNER_INTERVAL_MS,
 } from "../../util/spinners"
+import { DialogAskQuestion } from "../../ui/dialog-askquestion.tsx"
+import type { AskQuestion } from "@/askquestion"
 
 // Re-export for backward compatibility
 export { getSpinnerFrame } from "../../util/spinners"
@@ -214,7 +216,7 @@ export function Session() {
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
+  const session = createMemo(() => sync.session.get(route.sessionID))
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const permissions = createMemo(() => sync.data.permission[route.sessionID] ?? [])
 
@@ -388,6 +390,37 @@ export function Session() {
         sessionID: targetID,
       })
     }
+  })
+
+  // Detect pending askquestion tools from synced message parts
+  // Access via session.messages -> parts for proper Solid.js reactivity
+  const pendingAskQuestionFromSync = createMemo(() => {
+    const sessionMessages = sync.data.message[route.sessionID] ?? []
+
+    // Search backwards for the most recent pending question
+    for (const message of [...sessionMessages].reverse()) {
+      const parts = sync.data.part[message.id] ?? []
+
+      for (const part of [...parts].reverse()) {
+        if (part.type !== "tool") continue
+        const toolPart = part as ToolPart
+
+        if (toolPart.tool !== "askquestion") continue
+        if (toolPart.state.status !== "running") continue
+
+        const metadata = toolPart.state.metadata as { status?: string; questions?: AskQuestion.Question[] } | undefined
+
+        if (metadata?.status !== "waiting") continue
+
+        return {
+          callID: toolPart.callID,
+          messageId: toolPart.messageID,
+          questions: (metadata.questions ?? []) as AskQuestion.Question[],
+        }
+      }
+    }
+
+    return null
   })
 
   let scroll: ScrollBoxRenderable
@@ -662,7 +695,7 @@ export function Session() {
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
-        const revert = session().revert?.messageID
+        const revert = session()?.revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
         sdk.client.session
@@ -697,7 +730,7 @@ export function Session() {
       category: "Session",
       onSelect: (dialog) => {
         dialog.clear()
-        const messageID = session().revert?.messageID
+        const messageID = session()?.revert?.messageID
         if (!messageID) return
         const message = messages().find((x) => x.role === "user" && x.id > messageID)
         if (!message) {
@@ -1026,6 +1059,7 @@ export function Session() {
         try {
           // Format session transcript as markdown
           const sessionData = session()
+          if (!sessionData) return
           const sessionMessages = messages()
 
           let transcript = `# ${sessionData.title}\n\n`
@@ -1068,6 +1102,7 @@ export function Session() {
         try {
           // Format session transcript as markdown
           const sessionData = session()
+          if (!sessionData) return
           const sessionMessages = messages()
 
           let transcript = `# ${sessionData.title}\n\n`
@@ -1258,7 +1293,14 @@ export function Session() {
           paddingRight={2}
           gap={density.tokens().gap}
         >
-          <Show when={session()}>
+          <Show
+            when={session()}
+            fallback={
+              <box flexGrow={1} justifyContent="center" alignItems="center" paddingTop={2} paddingLeft={2}>
+                <text fg={theme.textMuted}>{getSpinnerFrame()} Loading session...</text>
+              </box>
+            }
+          >
             <Show when={!sidebarVisible() && headerVisible()}>
               <Header />
             </Show>
@@ -1404,9 +1446,66 @@ export function Session() {
                     </For>
                   </scrollbox>
                   <box flexShrink={0}>
-                    <Show
-                      when={searchMode()}
-                      fallback={
+                    <Switch>
+                      <Match when={pendingAskQuestionFromSync()}>
+                        {(pending) => (
+                          <DialogAskQuestion
+                            questions={pending().questions}
+                            onSubmit={async (answers) => {
+                              await fetch(`${sdk.url}/askquestion/respond`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  callID: pending().callID,
+                                  sessionID: route.sessionID,
+                                  answers,
+                                }),
+                              }).catch(() => {
+                                toast.show({
+                                  message: "Failed to submit answers",
+                                  variant: "error",
+                                })
+                              })
+                            }}
+                            onCancel={async () => {
+                              await fetch(`${sdk.url}/askquestion/cancel`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  callID: pending().callID,
+                                  sessionID: route.sessionID,
+                                }),
+                              }).catch(() => {
+                                toast.show({
+                                  message: "Failed to cancel",
+                                  variant: "error",
+                                })
+                              })
+                            }}
+                          />
+                        )}
+                      </Match>
+                      <Match when={searchMode()}>
+                        <SearchInput
+                          ref={(r) => (searchRef = r)}
+                          sessionID={route.sessionID}
+                          onInput={(query) => {
+                            setSearchQuery(query)
+                            setCurrentMatchIndex(0)
+                            if (query && searchMatches().length > 0) {
+                              scrollToMatch(0)
+                            }
+                          }}
+                          onNext={nextMatch}
+                          onPrevious={previousMatch}
+                          onExit={exitSearch}
+                          matchInfo={{
+                            current: currentMatchIndex(),
+                            total: searchMatches().length,
+                          }}
+                        />
+                      </Match>
+                      <Match when={!pendingAskQuestionFromSync() && !searchMode()}>
                         <Prompt
                           ref={(r) => {
                             prompt = r
@@ -1421,27 +1520,8 @@ export function Session() {
                           }}
                           sessionID={route.sessionID}
                         />
-                      }
-                    >
-                      <SearchInput
-                        ref={(r) => (searchRef = r)}
-                        sessionID={route.sessionID}
-                        onInput={(query) => {
-                          setSearchQuery(query)
-                          setCurrentMatchIndex(0)
-                          if (query && searchMatches().length > 0) {
-                            scrollToMatch(0)
-                          }
-                        }}
-                        onNext={nextMatch}
-                        onPrevious={previousMatch}
-                        onExit={exitSearch}
-                        matchInfo={{
-                          current: currentMatchIndex(),
-                          total: searchMatches().length,
-                        }}
-                      />
-                    </Show>
+                      </Match>
+                    </Switch>
                   </box>
                   <Show when={density.tokens().showFooter}>
                     <Show when={!sidebarVisible()}>

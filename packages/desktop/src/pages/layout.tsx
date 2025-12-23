@@ -52,6 +52,7 @@ import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
+import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
 import { useCommand } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 
@@ -519,6 +520,13 @@ export default function Layout(props: ParentProps) {
             </A>
           </Tooltip>
           <div class="hidden group-hover/session:flex group-active/session:flex group-focus-within/session:flex text-text-base gap-1 items-center absolute top-1 right-1">
+            <Tooltip placement="right" value="Rename session">
+              <IconButton
+                icon="pencil-line"
+                variant="ghost"
+                onClick={() => dialog.show(() => <DialogSessionRenameGlobal session={props.session} />)}
+              />
+            </Tooltip>
             <Tooltip placement="right" value="Archive session">
               <IconButton icon="archive" variant="ghost" onClick={() => archiveSession(props.session)} />
             </Tooltip>
@@ -690,7 +698,7 @@ export default function Layout(props: ParentProps) {
         <div class="flex h-12">
           {/* Mobile hamburger menu button */}
           <button
-            class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch border-r border-border-weak-base"
+            class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch"
             onClick={() => setStore("mobileMenuOpen", true)}
             aria-label="Open menu"
           >
@@ -712,7 +720,7 @@ export default function Layout(props: ParentProps) {
               <AsciiLogo scale={0.55} />
             </Show>
           </A>
-          <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
+          <div class="pl-2 pr-2 sm:pl-4 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
             <Show
               when={params.dir && layout.projects.list().length > 0}
               fallback={
@@ -722,8 +730,8 @@ export default function Layout(props: ParentProps) {
                 </div>
               }
             >
-              <div class="flex items-center gap-3 min-w-0 grow flex-nowrap">
-                <div class="flex items-center gap-2 min-w-0">
+              <div class="flex items-center gap-1 sm:gap-3 min-w-0 grow flex-nowrap">
+                <div class="hidden sm:flex items-center gap-2 min-w-0">
                   <Select
                     options={layout.projects.list().map((project) => project.worktree)}
                     current={currentDirectory()}
@@ -742,7 +750,7 @@ export default function Layout(props: ParentProps) {
                       </div>
                     )}
                   </Select>
-                  <div class="text-text-weaker hidden sm:block">/</div>
+                  <div class="text-text-weaker">/</div>
                 </div>
                 <div class="flex items-center min-w-0 sm:hidden">
                   <DropdownMenu>
@@ -813,11 +821,11 @@ export default function Layout(props: ParentProps) {
                 {/* Mobile review button - shows file count when there are changes */}
                 <Show when={layout.mobileReview.visible()}>
                   <button
-                    class="sm:hidden flex items-center gap-2 px-3 h-full text-14-medium text-text-strong"
+                    class="sm:hidden flex items-center gap-1.5 px-2 h-full text-14-medium text-text-strong"
                     onClick={() => layout.mobileReview.onOpen()?.()}
                   >
                     <Show when={layout.mobileReview.filesCount() > 0}>
-                      <span class="text-12-medium h-5 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                      <span class="text-12-medium h-5 px-1.5 flex items-center justify-center rounded-full bg-surface-base">
                         {layout.mobileReview.filesCount()}
                       </span>
                     </Show>
@@ -857,7 +865,39 @@ export default function Layout(props: ParentProps) {
                 <FontPicker />
                 <ThemePicker />
               </div>
-              <div class="hidden sm:flex items-center gap-4">
+              <div class="flex items-center gap-2">
+                {/* Mobile message navigation */}
+                <Show when={layout.mobileMessageNav.visible()}>
+                  <div class="sm:hidden">
+                    <DropdownMenu>
+                      <DropdownMenu.Trigger as={Button} variant="ghost" size="small" class="gap-1 px-2">
+                        <span class="text-12-medium">
+                          {layout.mobileMessageNav.currentIndex() + 1}/{layout.mobileMessageNav.messages().length}
+                        </span>
+                        <Icon name="chevron-down" size="small" />
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content class="max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto">
+                          <For each={layout.mobileMessageNav.messages()}>
+                            {(msg, index) => (
+                              <DropdownMenu.Item onSelect={() => layout.mobileMessageNav.onSelect()?.(index())}>
+                                <DropdownMenu.ItemLabel class="flex items-center gap-3">
+                                  <span class="text-text-weak shrink-0">{index() + 1}</span>
+                                  <span class="truncate">{msg.title || "Message"}</span>
+                                </DropdownMenu.ItemLabel>
+                                <Show when={index() === layout.mobileMessageNav.currentIndex()}>
+                                  <DropdownMenu.ItemIndicator>
+                                    <Icon name="check-small" size="small" />
+                                  </DropdownMenu.ItemIndicator>
+                                </Show>
+                              </DropdownMenu.Item>
+                            )}
+                          </For>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu>
+                  </div>
+                </Show>
                 <Tooltip
                   class="shrink-0"
                   value={
@@ -1069,7 +1109,9 @@ export default function Layout(props: ParentProps) {
             </Tooltip>
           </div>
           <Show when={layout.sidebar.opened()}>
-            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
+            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">
+              v{__APP_VERSION__} ({__COMMIT_HASH__})
+            </div>
           </Show>
         </div>
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
@@ -1107,10 +1149,24 @@ export default function Layout(props: ParentProps) {
 
           {/* Mobile menu content */}
           <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            {/* Home/Recent Projects link */}
+            <Button
+              variant="ghost"
+              size="large"
+              class="w-full justify-start gap-3 px-2"
+              icon="arrow-left"
+              onClick={() => {
+                navigate("/")
+                setStore("mobileMenuOpen", false)
+              }}
+            >
+              <span class="text-14-medium text-text-strong">Recent Projects</span>
+            </Button>
+
             {/* Projects section */}
             <Show when={layout.projects.list().length > 0}>
               <div class="flex flex-col gap-2">
-                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Projects</div>
+                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Open Projects</div>
                 <For each={layout.projects.list()}>
                   {(project) => {
                     const name = () => getFilename(project.worktree)
@@ -1198,7 +1254,9 @@ export default function Layout(props: ParentProps) {
 
           {/* Mobile menu footer */}
           <div class="shrink-0 border-t border-border-weak-base p-4">
-            <div class="text-11-regular text-text-weaker">v{__APP_VERSION__} ({__COMMIT_HASH__})</div>
+            <div class="text-11-regular text-text-weaker">
+              v{__APP_VERSION__} ({__COMMIT_HASH__})
+            </div>
           </div>
         </div>
       </Show>
