@@ -51,12 +51,13 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
           height: 280,
         },
-        session: {
-          width: 600,
-        },
         review: {
+          opened: true,
           state: "pane" as "pane" | "tab",
           width: 450,
+        },
+        session: {
+          width: 600,
         },
         theme: DEFAULT_THEME_ID,
         font: FONTS[0].id,
@@ -203,19 +204,19 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("terminal", "height", height)
         },
       },
-      session: {
-        width: createMemo(() => store.session?.width ?? 600),
-        resize(width: number) {
-          if (!store.session) {
-            setStore("session", { width })
-          } else {
-            setStore("session", "width", width)
-          }
-        },
-      },
       review: {
+        opened: createMemo(() => store.review?.opened ?? true),
         state: createMemo(() => store.review?.state ?? "pane"),
         width: createMemo(() => store.review?.width ?? 450),
+        open() {
+          setStore("review", "opened", true)
+        },
+        close() {
+          setStore("review", "opened", false)
+        },
+        toggle() {
+          setStore("review", "opened", (x) => !x)
+        },
         pane() {
           setStore("review", "state", "pane")
         },
@@ -224,6 +225,16 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         resize(width: number) {
           setStore("review", "width", width)
+        },
+      },
+      session: {
+        width: createMemo(() => store.session?.width ?? 600),
+        resize(width: number) {
+          if (!store.session) {
+            setStore("session", { width })
+          } else {
+            setStore("session", "width", width)
+          }
         },
       },
       dialog: {
