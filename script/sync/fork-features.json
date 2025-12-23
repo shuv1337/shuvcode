@@ -13,12 +13,12 @@
         "usedBy": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/tool/bash.ts"]
       }
     ],
-    "packages/desktop/package.json": [
+    "packages/app/package.json": [
       {
         "name": "vite-plugin-pwa",
         "version": "1.2.0",
         "reason": "Required for Desktop PWA service worker and offline support",
-        "usedBy": ["packages/desktop/vite.config.ts"]
+        "usedBy": ["packages/app/vite.config.ts"]
       }
     ]
   },
@@ -39,10 +39,7 @@
       "location": "packages/ui/src/context/dialog.tsx",
       "description": "Dialog context API used by fork-specific components",
       "currentSignature": "{ show(element, onClose?), close(), active }",
-      "affectedFiles": [
-        "packages/desktop/src/components/font-picker.tsx",
-        "packages/desktop/src/components/theme-picker.tsx"
-      ],
+      "affectedFiles": ["packages/app/src/components/font-picker.tsx", "packages/app/src/components/theme-picker.tsx"],
       "migrationHistory": [
         {
           "version": "v1.0.162",
@@ -320,35 +317,35 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Desktop app support for slash commands with autocomplete (type / to see commands), shell input mode (type ! to enter shell mode), and /undo /redo commands for session history navigation",
-      "files": ["packages/desktop/src/components/prompt-input.tsx"],
+      "files": ["packages/app/src/components/prompt-input.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "UICommand type and UI_COMMANDS array for /undo and /redo",
           "markers": ["type UICommand =", "const UI_COMMANDS: UICommand[]"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Input mode state for shell command entry",
           "markers": ["inputMode: \"normal\" | \"shell\"", "popoverMode: \"file\" | \"command\""]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Command autocomplete with useFilteredList",
           "markers": ["const commandList = useFilteredList<AnyCommand>", "type AnyCommand = Command | UICommand"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Undo/redo handler functions using session.revert",
           "markers": ["const handleUndo = async", "const handleRedo = async"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Shell mode detection (! prefix) in handleKeyDown",
           "markers": ["store.inputMode === \"shell\"", "setStore(\"inputMode\", \"shell\")"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "SDK command execution",
           "markers": ["sdk.client.session.command({", "matchedCommand = sync.data.command?.find"]
         }
@@ -360,7 +357,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Night Owl theme for desktop app with custom CSS variables, plus renamed upstream Default theme to OpenCode",
-      "files": ["packages/ui/src/styles/theme.css", "packages/desktop/src/theme/apply-theme.ts"],
+      "files": ["packages/ui/src/styles/theme.css", "packages/app/src/theme/apply-theme.ts"],
       "criticalCode": [
         {
           "file": "packages/ui/src/styles/theme.css",
@@ -368,7 +365,7 @@
           "markers": ["[data-theme=\"nightowl\"]"]
         },
         {
-          "file": "packages/desktop/src/theme/apply-theme.ts",
+          "file": "packages/app/src/theme/apply-theme.ts",
           "description": "BASE_THEMES including OpenCode theme",
           "markers": ["{ id: \"opencode\", name: \"OpenCode\" }"]
         }
@@ -381,15 +378,15 @@
       "status": "fork-only",
       "description": "Inline header in layout.tsx with shuvcode ASCII branding (AsciiLogo when expanded, AsciiMark when collapsed), theme/font picker buttons, mobile session dropdown, and responsive layout. Upstream refactored header into separate component which lost these customizations.",
       "files": [
-        "packages/desktop/src/pages/layout.tsx",
-        "packages/desktop/src/components/font-picker.tsx",
-        "packages/desktop/src/components/theme-picker.tsx",
+        "packages/app/src/pages/layout.tsx",
+        "packages/app/src/components/font-picker.tsx",
+        "packages/app/src/components/theme-picker.tsx",
         "packages/ui/src/components/logo.tsx"
       ],
       "apiDependency": "useDialog",
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Inline header with shuvcode branding, theme/font pickers, mobile dropdown",
           "markers": [
             "import { AsciiLogo, AsciiMark }",
@@ -406,17 +403,17 @@
           ]
         },
         {
-          "file": "packages/desktop/src/components/font-picker.tsx",
+          "file": "packages/app/src/components/font-picker.tsx",
           "description": "Font picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
           "markers": ["dialog.show(", "dialog.close()"]
         },
         {
-          "file": "packages/desktop/src/components/theme-picker.tsx",
+          "file": "packages/app/src/components/theme-picker.tsx",
           "description": "Theme picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
           "markers": ["dialog.show(", "dialog.close()"]
         },
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Mobile media query for auto-collapse sidebar/terminal/review",
           "markers": [
             "onMount(() =>",
@@ -444,15 +441,15 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Consistent font sizes for project/session selects in header (size=large), and mobile session dropdown constrained to viewport width with proper truncation",
-      "files": ["packages/desktop/src/pages/layout.tsx"],
+      "files": ["packages/app/src/pages/layout.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Project and session Select components use size=large for consistent 14px font",
           "markers": ["size=\"large\""]
         },
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Mobile session dropdown constrained to viewport and labels allow truncation",
           "markers": ["max-w-[calc(100vw-2rem)]", "DropdownMenu.ItemLabel class=\"min-w-0\""]
         }
@@ -545,29 +542,29 @@
       "status": "fork-only",
       "description": "Auto-switch review panel to tab mode on mobile breakpoint, fix API URL resolution for localhost/HTTPS, add Vite proxy for API routes, and defensive array handling in global-sync",
       "files": [
-        "packages/desktop/src/pages/layout.tsx",
-        "packages/desktop/src/app.tsx",
-        "packages/desktop/src/context/global-sync.tsx",
-        "packages/desktop/vite.config.ts"
+        "packages/app/src/pages/layout.tsx",
+        "packages/app/src/app.tsx",
+        "packages/app/src/context/global-sync.tsx",
+        "packages/app/vite.config.ts"
       ],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Auto-switch review panel to tab mode on mobile breakpoint (40rem)",
           "markers": ["if (event.matches) layout.review.tab()"]
         },
         {
-          "file": "packages/desktop/src/app.tsx",
+          "file": "packages/app/src/app.tsx",
           "description": "Smart API URL resolution based on protocol and environment",
           "markers": ["const isSecure = location.protocol === \"https:\"", "const useSameOrigin ="]
         },
         {
-          "file": "packages/desktop/src/context/global-sync.tsx",
+          "file": "packages/app/src/context/global-sync.tsx",
           "description": "Defensive array check for session list API response",
           "markers": ["const data = Array.isArray(x.data) ? x.data : []"]
         },
         {
-          "file": "packages/desktop/vite.config.ts",
+          "file": "packages/app/vite.config.ts",
           "description": "Vite dev server proxy configuration for API routes",
           "markers": ["const apiRoutes = [", "proxy: Object.fromEntries"]
         }
@@ -579,30 +576,30 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Fix horizontal overflow on mobile devices when viewing chat sessions. Content, text entry box, and submit button no longer spill outside viewport requiring horizontal scrolling.",
-      "files": ["packages/desktop/src/pages/session.tsx", "packages/desktop/src/components/prompt-input.tsx"],
+      "files": ["packages/app/src/pages/session.tsx", "packages/app/src/components/prompt-input.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Tabs.Content overflow-hidden and flex containers with min-w-0",
           "markers": ["overflow-hidden", "min-w-0 min-h-0"]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "PromptInput containers with max-w-full for mobile and overflow-hidden",
           "markers": ["max-w-full sm:max-w-146", "overflow-hidden"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Root container max-w-full constraint",
           "markers": ["max-w-full _max-h-[320px]"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Bottom bar with min-w-0 overflow-hidden for proper flex shrinking",
           "markers": ["min-w-0 overflow-hidden", "flex items-center justify-between min-w-0"]
         },
         {
-          "file": "packages/desktop/src/components/prompt-input.tsx",
+          "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Model button with truncation and responsive provider name visibility",
           "markers": ["class=\"truncate\"", "hidden sm:inline", "min-w-0 max-w-full"]
         }
@@ -615,24 +612,24 @@
       "status": "fork-only",
       "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing. Includes UI package enhancement for reverse prop on ResizeHandle.",
       "files": [
-        "packages/desktop/src/context/layout.tsx",
-        "packages/desktop/src/pages/session.tsx",
+        "packages/app/src/context/layout.tsx",
+        "packages/app/src/pages/session.tsx",
         "packages/ui/src/components/resize-handle.tsx",
         "packages/ui/src/components/resize-handle.css"
       ],
       "criticalCode": [
         {
-          "file": "packages/desktop/vite.config.ts",
+          "file": "packages/app/vite.config.ts",
           "description": "Define __APP_VERSION__ from package.json at build time",
           "markers": ["__APP_VERSION__", "pkg.version"]
         },
         {
-          "file": "packages/desktop/src/env.d.ts",
+          "file": "packages/app/src/env.d.ts",
           "description": "TypeScript declaration for __APP_VERSION__ global",
           "markers": ["declare const __APP_VERSION__"]
         },
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Version display in sidebar bottom",
           "markers": ["v{__APP_VERSION__}", "text-11-regular text-text-weaker"]
         }
@@ -644,15 +641,15 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing",
-      "files": ["packages/desktop/src/context/layout.tsx", "packages/desktop/src/pages/session.tsx"],
+      "files": ["packages/app/src/context/layout.tsx", "packages/app/src/pages/session.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/context/layout.tsx",
+          "file": "packages/app/src/context/layout.tsx",
           "description": "Review pane width state and resize method in layout context",
           "markers": ["review:", "width: 450", "resize(width: number)"]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "ResizeHandle for review pane with horizontal reverse direction",
           "markers": [
             "<ResizeHandle",
@@ -663,17 +660,17 @@
           ]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Left padding fix for side-by-side mode (px-4 instead of pr-4)",
           "markers": ["px-4 sm:px-6"]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "/share slash command for session sharing",
           "markers": ["id: \"session.share\"", "slash: \"share\"", "sdk.client.session.share"]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "/unshare slash command to remove shareable link",
           "markers": ["id: \"session.unshare\"", "slash: \"unshare\"", "sdk.client.session.unshare"]
         },
@@ -720,10 +717,10 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Display actual image previews for PNG, JPG, GIF, WEBP files in file viewer tabs. Images are centered and scaled to fit with scroll support for large images. SVG renders as syntax-highlighted code.",
-      "files": ["packages/desktop/src/pages/session.tsx"],
+      "files": ["packages/app/src/pages/session.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Image preview detection logic excluding SVG",
           "markers": [
             "content.encoding === \"base64\"",
@@ -732,7 +729,7 @@
           ]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Image rendering with data URL and centered container",
           "markers": [
             "src={`data:${content.mimeType};base64,${content.content}`}",
@@ -740,7 +737,7 @@
           ]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Wait for file content to load before rendering to prevent blank pages",
           "markers": ["<Show when={file()?.content} keyed>"]
         }
@@ -817,10 +814,10 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Guard against calling globalSync.child() with empty directory when on home page",
-      "files": ["packages/desktop/src/pages/layout.tsx"],
+      "files": ["packages/app/src/pages/layout.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Guard sessions memo to return empty array when no directory",
           "markers": ["const dir = currentDirectory()", "if (!dir) return []"]
         }
@@ -832,10 +829,10 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Redesigned create project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input. Uses List component for keyboard navigation and shows git/added badges.",
-      "files": ["packages/desktop/src/components/dialog-create-project.tsx"],
+      "files": ["packages/app/src/components/dialog-create-project.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Tab state and switcher buttons",
           "markers": [
             "const [activeTab, setActiveTab] = createSignal<\"create\" | \"existing\">(\"existing\")",
@@ -843,7 +840,7 @@
           ]
         },
         {
-          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Fetch directories function for List component",
           "markers": [
             "async function fetchDirectories(query: string): Promise<DirectoryInfo[]>",
@@ -851,17 +848,17 @@
           ]
         },
         {
-          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "List component with folder browser",
           "markers": ["<List<DirectoryInfo>", "items={fetchDirectories}", "filterKeys={[\"name\", \"path\"]}"]
         },
         {
-          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Directory item rendering with git/added badges",
           "markers": ["dir.isGitRepo ? \"github\" : \"folder\"", "dir.isExistingProject"]
         },
         {
-          "file": "packages/desktop/src/components/dialog-create-project.tsx",
+          "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Dialog uses lg size for more folder visibility",
           "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
         }
@@ -909,59 +906,15 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Responsive TUI layout that reduces vertical whitespace on small terminals. Includes tui.density config option (auto/comfortable/compact) and command palette toggles.",
-      "files": [
-        "packages/opencode/src/config/config.ts",
-        "packages/opencode/src/cli/cmd/tui/util/layout-density.ts",
-        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
-        "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
-        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
-        "packages/opencode/src/cli/cmd/tui/component/dialog-command.tsx"
-      ],
+      "files": ["packages/opencode/src/config/config.ts"],
       "criticalCode": [
         {
           "file": "packages/opencode/src/config/config.ts",
           "description": "tui.density config option schema",
           "markers": ["density: z", ".enum([\"auto\", \"comfortable\", \"compact\"])"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/util/layout-density.ts",
-          "description": "useLayoutDensity hook with auto-detection and toggle functions",
-          "markers": ["export function useLayoutDensity()", "COMPACT_HEIGHT_THRESHOLD", "tokens", "toggle", "reset"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Density applied to session layout padding and command palette items",
-          "markers": [
-            "const density = useLayoutDensity()",
-            "density.tokens().paddingY",
-            "density.tokens().gap",
-            "density.tokens().showFooter",
-            "session.toggle.density",
-            "session.reset.density"
-          ]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
-          "description": "Density applied to sidebar padding",
-          "markers": ["density.tokens().sidebarPaddingY"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/routes/home.tsx",
-          "description": "Density applied to home page bottom bar padding",
-          "markers": ["density.tokens().homePaddingY"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
-          "description": "Density controls secondary hints visibility",
-          "markers": ["density.tokens().showSecondaryHints"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-command.tsx",
-          "description": "Filter undefined command options to prevent errors",
-          "markers": [".filter((x) => !!x)"]
         }
-      ]
+      ],
+      "note": "Most of the layout-density feature was refactored or simplified. Only the config schema remains."
     },
     {
       "pr": 0,
@@ -1013,10 +966,10 @@
       "description": "Full PWA support for mobile devices with dynamic island handling, mobile menu, review overlay with FAB button in header, and responsive layout. Includes split/inline diff toggle.",
       "files": [
         "packages/desktop/index.html",
-        "packages/desktop/src/index.css",
-        "packages/desktop/src/context/layout.tsx",
-        "packages/desktop/src/pages/layout.tsx",
-        "packages/desktop/src/pages/session.tsx"
+        "packages/app/src/index.css",
+        "packages/app/src/context/layout.tsx",
+        "packages/app/src/pages/layout.tsx",
+        "packages/app/src/pages/session.tsx"
       ],
       "criticalCode": [
         {
@@ -1025,7 +978,7 @@
           "markers": ["apple-mobile-web-app-capable", "apple-mobile-web-app-status-bar-style", "viewport-fit=cover"]
         },
         {
-          "file": "packages/desktop/src/index.css",
+          "file": "packages/app/src/index.css",
           "description": "Safe area insets and PWA standalone mode styles",
           "markers": [
             "--safe-area-inset-top",
@@ -1034,12 +987,12 @@
           ]
         },
         {
-          "file": "packages/desktop/src/context/layout.tsx",
+          "file": "packages/app/src/context/layout.tsx",
           "description": "Mobile review state for cross-component communication",
           "markers": ["mobileReview:", "register(filesCount", "unregister()"]
         },
         {
-          "file": "packages/desktop/src/pages/layout.tsx",
+          "file": "packages/app/src/pages/layout.tsx",
           "description": "Mobile menu overlay, review button in header, safe area padding",
           "markers": [
             "mobileMenuOpen",
@@ -1049,7 +1002,7 @@
           ]
         },
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Mobile tabs overlay with Portal, split/inline diff toggle, timeline rail hidden on mobile",
           "markers": ["<Portal>", "mobileTabsOpen", "diffSplit", "hidden sm:flex", "max-sm:!w-full"]
         }
@@ -1061,10 +1014,10 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Fix scrolling in desktop file viewer tabs by adding proper flex and overflow constraints",
-      "files": ["packages/desktop/src/pages/session.tsx"],
+      "files": ["packages/app/src/pages/session.tsx"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session.tsx",
           "description": "Scrollable wrapper for code component with flex constraints",
           "markers": ["flex-1 min-h-0 overflow-auto", "overflow=\"scroll\""]
         }
@@ -1170,14 +1123,14 @@
       "status": "fork-only",
       "description": "Progressive Web App support via vite-plugin-pwa with offline caching, auto-update, and runtime caching for Google Fonts and jsDelivr CDN. Enables installable web app experience with proper manifest and iOS meta tags.",
       "files": [
-        "packages/desktop/vite.config.ts",
+        "packages/app/vite.config.ts",
         "packages/desktop/index.html",
-        "packages/desktop/src/index.css",
-        "packages/desktop/public/site.webmanifest"
+        "packages/app/src/index.css",
+        "packages/app/public/site.webmanifest"
       ],
       "requiredDependencies": [
         {
-          "package": "packages/desktop/package.json",
+          "package": "packages/app/package.json",
           "dependency": "vite-plugin-pwa",
           "version": "1.2.0",
           "note": "CRITICAL: This dep is frequently lost during merges. Always verify it exists after accepting upstream package.json changes."
@@ -1185,7 +1138,7 @@
       ],
       "criticalCode": [
         {
-          "file": "packages/desktop/vite.config.ts",
+          "file": "packages/app/vite.config.ts",
           "description": "VitePWA plugin configuration with workbox caching",
           "markers": [
             "import { VitePWA }",
@@ -1197,7 +1150,7 @@
           ]
         },
         {
-          "file": "packages/desktop/vite.config.ts",
+          "file": "packages/app/vite.config.ts",
           "description": "API route denylist to prevent caching backend calls",
           "markers": ["navigateFallbackDenylist: apiRoutes.map"]
         },
@@ -1212,7 +1165,7 @@
           ]
         },
         {
-          "file": "packages/desktop/src/index.css",
+          "file": "packages/app/src/index.css",
           "description": "Safe area CSS variables for notch/home indicator",
           "markers": [
             "--safe-area-inset-top: env(safe-area-inset-top",
@@ -1220,12 +1173,12 @@
           ]
         },
         {
-          "file": "packages/desktop/src/index.css",
+          "file": "packages/app/src/index.css",
           "description": "PWA standalone mode styles for proper viewport sizing",
           "markers": ["@media (display-mode: standalone)", "--pwa-top-offset", "min-height: 100dvh"]
         },
         {
-          "file": "packages/desktop/public/site.webmanifest",
+          "file": "packages/app/public/site.webmanifest",
           "description": "Web app manifest with shuvcode branding and standalone display",
           "markers": [
             "\"name\": \"shuvcode\"",
