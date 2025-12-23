@@ -52,6 +52,7 @@ import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
+import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
 import { useCommand } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 
@@ -519,6 +520,13 @@ export default function Layout(props: ParentProps) {
             </A>
           </Tooltip>
           <div class="hidden group-hover/session:flex group-active/session:flex group-focus-within/session:flex text-text-base gap-1 items-center absolute top-1 right-1">
+            <Tooltip placement="right" value="Rename session">
+              <IconButton
+                icon="pencil-line"
+                variant="ghost"
+                onClick={() => dialog.show(() => <DialogSessionRenameGlobal session={props.session} />)}
+              />
+            </Tooltip>
             <Tooltip placement="right" value="Archive session">
               <IconButton icon="archive" variant="ghost" onClick={() => archiveSession(props.session)} />
             </Tooltip>

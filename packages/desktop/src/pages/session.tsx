@@ -50,6 +50,7 @@ import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import { DialogSelectModel } from "@/components/dialog-select-model"
+import { DialogSessionRename } from "@/components/dialog-session-rename"
 import { useCommand } from "@/context/command"
 import { useNavigate, useParams } from "@solidjs/router"
 import { UserMessage } from "@opencode-ai/sdk/v2"
@@ -417,6 +418,19 @@ export default function Page() {
         } catch {
           showToast({ title: "Failed to unshare session", variant: "error" })
         }
+      },
+    },
+    {
+      id: "session.rename",
+      title: "Rename session",
+      description: "Rename the current session",
+      category: "Session",
+      keybind: "mod+shift+r",
+      slash: "rename",
+      disabled: !params.id,
+      onSelect: () => {
+        if (!params.id) return
+        dialog.show(() => <DialogSessionRename sessionID={params.id!} />)
       },
     },
   ])
