@@ -159,14 +159,20 @@ export const { use: useCommand, provider: CommandProvider } = createSimpleContex
 
     const options = createMemo(() => {
       const all = registrations().flatMap((x) => x())
-      const suggested = all.filter((x) => x.suggested && !x.disabled)
+      const seen = new Set<string>()
+      const unique = all.filter((option) => {
+        if (seen.has(option.id)) return false
+        seen.add(option.id)
+        return true
+      })
+      const suggested = unique.filter((x) => x.suggested && !x.disabled)
       return [
         ...suggested.map((x) => ({
           ...x,
           id: "suggested." + x.id,
           category: "Suggested",
         })),
-        ...all,
+        ...unique,
       ]
     })
 
