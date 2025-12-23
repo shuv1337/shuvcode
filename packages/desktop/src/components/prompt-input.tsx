@@ -316,7 +316,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       type: "custom" as const,
     }))
 
-    return [...custom, ...builtin]
+    const all = [...custom, ...builtin]
+    const seen = new Set<string>()
+    return all.filter((cmd) => {
+      if (seen.has(cmd.trigger)) return false
+      seen.add(cmd.trigger)
+      return true
+    })
   })
 
   const handleSlashSelect = (cmd: SlashCommand | undefined) => {
@@ -342,7 +348,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     editorRef.innerHTML = ""
     prompt.set([{ type: "text", content: "", start: 0, end: 0 }], 0)
-    command.trigger(cmd.id, "slash")
+    try {
+      command.trigger(cmd.id, "slash")
+    } catch (error) {
+      // Defensive: handle stale command handlers gracefully
+      console.error("Failed to execute slash command:", cmd.id, error)
+    }
   }
 
   const {
