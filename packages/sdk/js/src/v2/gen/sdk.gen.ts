@@ -23,8 +23,6 @@ import type {
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
-  EventTuiQuestionRequest,
-  EventTuiQuestionResponse,
   EventTuiToastShow,
   FileListResponses,
   FilePartInput,
@@ -137,7 +135,6 @@ import type {
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
-  ToolListErrors,
   ToolListResponses,
   TuiAppendPromptErrors,
   TuiAppendPromptResponses,
@@ -668,6 +665,25 @@ export class Config extends HeyApiClient {
 
 export class Tool extends HeyApiClient {
   /**
+   * List tools
+   *
+   * Get a list of all available tools with their enabled status.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ToolListResponses, unknown, ThrowOnError>({
+      url: "/tool/list",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * List tool IDs
    *
    * Get a list of all available tool IDs, including both built-in tools and dynamically registered tools.
@@ -681,38 +697,6 @@ export class Tool extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ToolIdsResponses, ToolIdsErrors, ThrowOnError>({
       url: "/experimental/tool/ids",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List tools
-   *
-   * Get a list of available tools with their JSON schema parameters for a specific provider and model combination.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory?: string
-      provider: string
-      model: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "provider" },
-            { in: "query", key: "model" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ToolListResponses, ToolListErrors, ThrowOnError>({
-      url: "/experimental/tool",
       ...options,
       ...params,
     })
@@ -2867,12 +2851,7 @@ export class Tui extends HeyApiClient {
   public publish<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      body?:
-        | EventTuiPromptAppend
-        | EventTuiCommandExecute
-        | EventTuiToastShow
-        | EventTuiQuestionRequest
-        | EventTuiQuestionResponse
+      body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow
     },
     options?: Options<never, ThrowOnError>,
   ) {
