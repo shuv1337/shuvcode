@@ -39,7 +39,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#4865](https://github.com/sst/opencode/pull/4865)                            | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind      |
 | [#4515](https://github.com/sst/opencode/pull/4515)                            | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Merged | Display configured plugins in /status dialog alongside MCP/LSP servers   |
 | [#4411](https://github.com/sst/opencode/pull/4411)                            | Plugin Commands                             | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Register custom `/commands` from plugins with aliases and sessionOnly    |
-| [#5958](https://github.com/sst/opencode/pull/5958)                            | AskQuestion Tool                            | [@iljod](https://github.com/iljod)                           | Open   | Interactive tool for AI to collect user input via TUI wizard dialogs     |
+| [#5958](https://github.com/sst/opencode/pull/5958)                            | AskQuestion Tool                            | [@iljod](https://github.com/iljod)                           | Open   | Interactive tool for AI to collect user input via TUI/web wizard dialogs |
 | [#5508](https://github.com/sst/opencode/pull/5508)                            | Cache management command                    | [@JosXa](https://github.com/JosXa)                           | Open   | `opencode cache info` and `opencode cache clean` for plugin cache mgmt   |
 | [#5873](https://github.com/sst/opencode/pull/5873)                            | IDE integration UX improvements             | [@tofunori](https://github.com/tofunori)                     | Open   | Selection in footer, synthetic context, home screen IDE status           |
 | [#5917](https://github.com/sst/opencode/pull/5917)                            | Draggable sidebar resize                    | [@agustif](https://github.com/agustif)                       | Open   | Click and drag the sidebar border to resize, width persisted to KV store |
@@ -158,6 +158,28 @@ Restrict which files an agent can edit using glob patterns:
 ```
 
 Precedence rules: exact match > more path segments > longer pattern > `*` fallback
+
+---
+
+### AskQuestion Tool (Experimental)
+
+Enable the AI to pause and ask structured questions via a wizard UI. Available in both TUI and web app.
+
+Enable in `opencode.json`:
+
+```jsonc
+{
+  "experimental": {
+    "askquestion_tool": true,
+  },
+}
+```
+
+Features:
+- Wizard-style multi-question dialogs with single/multi-select options
+- Custom text input for freeform responses
+- Keyboard navigation (1-8 quick select, Tab between questions, Enter to confirm)
+- Works across TUI and web app with session resume support
 
 ---
 

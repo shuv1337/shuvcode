@@ -54,7 +54,8 @@
       "title": "AskQuestion tool for user input",
       "author": "iljod",
       "status": "open",
-      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563.",
+      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI/web wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563. Disabled by default - enable with experimental.askquestion_tool config.",
+      "experimentalConfig": "askquestion_tool",
       "files": [
         "packages/opencode/src/askquestion/index.ts",
         "packages/opencode/src/tool/askquestion.ts",
@@ -62,7 +63,11 @@
         "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
         "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
         "packages/opencode/src/server/server.ts",
-        "packages/opencode/src/session/prompt.ts"
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/tool/registry.ts",
+        "packages/app/src/components/askquestion-wizard.tsx",
+        "packages/app/src/pages/session.tsx"
       ],
       "criticalCode": [
         {
@@ -89,6 +94,26 @@
           "file": "packages/opencode/src/server/server.ts",
           "description": "API endpoints for askquestion respond and cancel",
           "markers": ["/askquestion/respond", "/askquestion/cancel", "AskQuestion.respond", "AskQuestion.cancel"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "Experimental config flag to enable askquestion tool",
+          "markers": ["askquestion_tool: z.boolean().optional()"]
+        },
+        {
+          "file": "packages/opencode/src/tool/registry.ts",
+          "description": "Conditional tool registration based on experimental config",
+          "markers": ["config.experimental?.askquestion_tool === true ? [AskQuestionTool]"]
+        },
+        {
+          "file": "packages/app/src/components/askquestion-wizard.tsx",
+          "description": "Web app wizard component with keyboard navigation and mobile support",
+          "markers": ["AskQuestionWizard", "AskQuestionQuestion", "handleKeyDown", "handleSubmit"]
+        },
+        {
+          "file": "packages/app/src/pages/session.tsx",
+          "description": "Web app detection of pending askquestion and wizard rendering",
+          "markers": ["pendingAskQuestion", "AskQuestionWizard", "handleAskQuestionSubmit", "handleAskQuestionCancel"]
         }
       ]
     },
