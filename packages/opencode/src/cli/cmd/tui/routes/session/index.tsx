@@ -1512,9 +1512,6 @@ export function Session() {
           <>
             <box
               width={hw}
-              border={["left", "right"]}
-              customBorderChars={SplitBorder.customBorderChars}
-              borderColor={drag() ? theme.borderActive : hov() ? theme.primary : theme.border}
               onMouseOver={() => {
                 setHov(true)
               }}
