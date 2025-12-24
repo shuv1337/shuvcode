@@ -1,4 +1,3 @@
-import { AskTool } from "./ask"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -93,7 +92,6 @@ export namespace ToolRegistry {
 
     return [
       InvalidTool,
-      AskTool,
       BashTool,
       ReadTool,
       GlobTool,
