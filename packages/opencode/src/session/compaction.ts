@@ -126,10 +126,6 @@ export namespace SessionCompaction {
       time: {
         created: Date.now(),
       },
-      outputEstimate: lastFinished?.outputEstimate,
-      reasoningEstimate: lastFinished?.reasoningEstimate,
-      contextEstimate: lastFinished?.contextEstimate,
-      sentEstimate: lastFinished?.sentEstimate,
     })) as MessageV2.Assistant
     const processor = SessionProcessor.create({
       assistantMessage: msg,

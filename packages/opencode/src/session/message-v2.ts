@@ -306,8 +306,6 @@ export namespace MessageV2 {
     }),
     system: z.string().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
-    sentEstimate: z.number().optional(),
-    contextEstimate: z.number().optional(),
   }).meta({
     ref: "UserMessage",
   })
@@ -371,10 +369,6 @@ export namespace MessageV2 {
         write: z.number(),
       }),
     }),
-    outputEstimate: z.number().optional(),
-    reasoningEstimate: z.number().optional(),
-    contextEstimate: z.number().optional(),
-    sentEstimate: z.number().optional(),
     finish: z.string().optional(),
   }).meta({
     ref: "AssistantMessage",

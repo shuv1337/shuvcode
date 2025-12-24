@@ -11,7 +11,6 @@ import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
-import { Token } from "@/util/token"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
 
@@ -47,8 +46,6 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
-            let reasoningTotal = 0
-            let textTotal = 0
             const stream = await LLM.stream(streamInput)
 
             for await (const value of stream.fullStream) {
@@ -81,9 +78,6 @@ export namespace SessionProcessor {
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     if (part.text) await Session.updatePart({ part, delta: value.text })
-                    // Track reasoning tokens for live display
-                    reasoningTotal += value.text.length
-                    input.assistantMessage.reasoningEstimate = Token.toTokenEstimate(reasoningTotal)
                   }
                   break
 
@@ -256,8 +250,6 @@ export namespace SessionProcessor {
                   input.assistantMessage.finish = value.finishReason
                   input.assistantMessage.cost += usage.cost
                   input.assistantMessage.tokens = usage.tokens
-                  // Set contextEstimate from actual usage
-                  input.assistantMessage.contextEstimate = usage.tokens.input + usage.tokens.cache.read
                   await Session.updatePart({
                     id: Identifier.ascending("part"),
                     reason: value.finishReason,
@@ -269,9 +261,6 @@ export namespace SessionProcessor {
                     cost: usage.cost,
                   })
                   await Session.updateMessage(input.assistantMessage)
-                  // Clear streaming estimates now that real tokens are available
-                  input.assistantMessage.outputEstimate = undefined
-                  input.assistantMessage.reasoningEstimate = undefined
                   if (snapshot) {
                     const patch = await Snapshot.patch(snapshot)
                     if (patch.files.length) {
@@ -315,9 +304,6 @@ export namespace SessionProcessor {
                         part: currentText,
                         delta: value.text,
                       })
-                    // Track output tokens for live display
-                    textTotal += value.text.length
-                    input.assistantMessage.outputEstimate = Token.toTokenEstimate(textTotal)
                   }
                   break
 
