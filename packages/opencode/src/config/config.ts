@@ -808,6 +808,7 @@ export namespace Config {
           chatMaxRetries: z.number().optional().describe("Number of retries for chat completions on failure"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+          askquestion_tool: z.boolean().optional().describe("Enable the askquestion tool for wizard-style user prompts"),
           openTelemetry: z
             .boolean()
             .optional()
