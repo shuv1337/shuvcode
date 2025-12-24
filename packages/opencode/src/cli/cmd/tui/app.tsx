@@ -31,8 +31,6 @@ import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
-import { DialogQuestion } from "@tui/component/dialog-question"
-import type { Question } from "@/question"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
@@ -545,55 +543,6 @@ function App() {
       variant: evt.properties.variant,
       duration: evt.properties.duration,
     })
-  })
-
-  // Handle question requests from the Ask tool
-  sdk.event.on(TuiEvent.QuestionRequest.type as any, (evt: any) => {
-    const request = evt.properties as Question.Request
-    dialog.replace(
-      () => (
-        <DialogQuestion
-          request={request}
-          onSubmit={(answers) => {
-            sdk.client.tui.publish({
-              body: {
-                type: TuiEvent.QuestionResponse.type,
-                properties: {
-                  questionID: request.questionID,
-                  status: "ok",
-                  answers,
-                },
-              },
-            } as any)
-          }}
-          onCancel={() => {
-            sdk.client.tui.publish({
-              body: {
-                type: TuiEvent.QuestionResponse.type,
-                properties: {
-                  questionID: request.questionID,
-                  status: "cancel",
-                  answers: [],
-                },
-              },
-            } as any)
-          }}
-        />
-      ),
-      () => {
-        // On escape/close, send cancel response
-        sdk.client.tui.publish({
-          body: {
-            type: TuiEvent.QuestionResponse.type,
-            properties: {
-              questionID: request.questionID,
-              status: "cancel",
-              answers: [],
-            },
-          },
-        } as any)
-      },
-    )
   })
 
   sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
