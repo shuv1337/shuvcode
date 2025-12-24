@@ -53,11 +53,12 @@ import { DialogSelectModel } from "@/components/dialog-select-model"
 import { DialogSessionRename } from "@/components/dialog-session-rename"
 import { useCommand } from "@/context/command"
 import { useNavigate, useParams } from "@solidjs/router"
-import { UserMessage } from "@opencode-ai/sdk/v2"
+import { UserMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
+import { AskQuestionWizard, type AskQuestionQuestion, type AskQuestionAnswer } from "@/components/askquestion-wizard"
 
 export default function Page() {
   const layout = useLayout()
@@ -125,6 +126,46 @@ export default function Page() {
   }
 
   const diffs = createMemo(() => (params.id ? (sync.data.session_diff[params.id] ?? []) : []))
+
+  // Detect pending askquestion tools from synced message parts
+  // Matches TUI detection logic at packages/opencode/src/cli/cmd/tui/routes/session/index.tsx:398-427
+  const pendingAskQuestion = createMemo(() => {
+    const sessionID = params.id
+    if (!sessionID) return null
+
+    const sessionMessages = sync.data.message[sessionID] ?? []
+
+    // Search backwards for the most recent pending question
+    for (const message of [...sessionMessages].reverse()) {
+      const parts = sync.data.part[message.id] ?? []
+
+      for (const part of [...parts].reverse()) {
+        if (part.type !== "tool") continue
+        const toolPart = part as ToolPart
+
+        if (toolPart.tool !== "askquestion") continue
+        if (toolPart.state.status !== "running") continue
+
+        const metadata = toolPart.state.metadata as
+          | { status?: string; questions?: AskQuestionQuestion[] }
+          | undefined
+
+        if (metadata?.status !== "waiting") continue
+
+        // Ensure questions array exists and is not empty
+        const questions = (metadata.questions ?? []) as AskQuestionQuestion[]
+        if (questions.length === 0) continue
+
+        return {
+          callID: toolPart.callID,
+          messageID: toolPart.messageID,
+          questions,
+        }
+      }
+    }
+
+    return null
+  })
 
   const [store, setStore] = createStore({
     clickTimer: undefined as number | undefined,
@@ -462,6 +503,44 @@ export default function Page() {
     document.removeEventListener("keydown", handleKeyDown)
   })
 
+  // AskQuestion handlers
+  const handleAskQuestionSubmit = async (answers: AskQuestionAnswer[]) => {
+    const pending = pendingAskQuestion()
+    if (!pending || !params.id) return
+
+    try {
+      await fetch(`${sdk.url}/askquestion/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callID: pending.callID,
+          sessionID: params.id,
+          answers,
+        }),
+      })
+    } catch {
+      showToast({ title: "Failed to submit answers", variant: "error" })
+    }
+  }
+
+  const handleAskQuestionCancel = async () => {
+    const pending = pendingAskQuestion()
+    if (!pending || !params.id) return
+
+    try {
+      await fetch(`${sdk.url}/askquestion/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callID: pending.callID,
+          sessionID: params.id,
+        }),
+      })
+    } catch {
+      showToast({ title: "Failed to cancel", variant: "error" })
+    }
+  }
+
   const resetClickTimer = () => {
     if (!store.clickTimer) return
     clearTimeout(store.clickTimer)
@@ -711,11 +790,24 @@ export default function Page() {
                 "max-w-200": !showTabs(),
               }}
             >
-              <PromptInput
-                ref={(el) => {
-                  inputRef = el
-                }}
-              />
+              <Switch>
+                <Match when={pendingAskQuestion()}>
+                  {(pending) => (
+                    <AskQuestionWizard
+                      questions={pending().questions}
+                      onSubmit={handleAskQuestionSubmit}
+                      onCancel={handleAskQuestionCancel}
+                    />
+                  )}
+                </Match>
+                <Match when={true}>
+                  <PromptInput
+                    ref={(el) => {
+                      inputRef = el
+                    }}
+                  />
+                </Match>
+              </Switch>
             </div>
           </div>
           <Show when={showTabs()}>
