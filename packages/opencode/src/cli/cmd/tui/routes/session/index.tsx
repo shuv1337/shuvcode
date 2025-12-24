@@ -39,7 +39,6 @@ import type {
 } from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
-import { Token } from "@/util/token"
 import type { Tool } from "@/tool/tool"
 import type { ReadTool } from "@/tool/read"
 import type { WriteTool } from "@/tool/write"
@@ -1580,13 +1579,6 @@ function UserMessage(props: {
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
 
-  const individualTokens = createMemo(() => {
-    return props.parts.reduce((sum, part) => {
-      if (part.type === "text") return sum + Token.estimate(part.text)
-      return sum
-    }, 0)
-  })
-
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
   return (
@@ -1670,9 +1662,6 @@ function UserMessage(props: {
                 <span> </span>
                 <span style={{ bg: theme.accent, fg: theme.backgroundPanel, bold: true }}> QUEUED </span>
               </Show>
-              <Show when={ctx.showTokens() && !queued() && individualTokens() > 0}>
-                <span style={{ fg: theme.textMuted }}> ⬝~{individualTokens().toLocaleString()} tok</span>
-              </Show>
             </text>
           </box>
         </box>
@@ -1705,13 +1694,24 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     if (!final()) return 0
     if (!props.message.time.completed) return 0
     const user = messages().find((x) => x.role === "user" && x.id === props.message.parentID)
-    if (!user || !user.time) return 0
-    return props.message.time.completed - user.time.created
+    // Fall back to assistant message creation time for shell commands (where user message is synthetic)
+    const startTime = user?.time?.created ?? props.message.time.created
+    return props.message.time.completed - startTime
   })
 
   // Context usage - total tokens used in the context window
+  // For shell commands (which have 0 tokens), use the last assistant message with actual token usage
   const contextTokens = createMemo(() => {
-    return props.message.tokens.input + props.message.tokens.cache.read + props.message.tokens.cache.write
+    const tokens = props.message.tokens.input + props.message.tokens.cache.read + props.message.tokens.cache.write
+    if (tokens > 0) return tokens
+    // Fall back to last assistant message with actual tokens (for shell commands)
+    const lastWithTokens = messages().findLast(
+      (x) => x.role === "assistant" && x.tokens.input + x.tokens.cache.read + x.tokens.cache.write > 0,
+    )
+    if (lastWithTokens && lastWithTokens.role === "assistant") {
+      return lastWithTokens.tokens.input + lastWithTokens.tokens.cache.read + lastWithTokens.tokens.cache.write
+    }
+    return 0
   })
 
   const percentage = createMemo(() => {

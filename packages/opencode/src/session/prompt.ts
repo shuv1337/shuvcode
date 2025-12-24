@@ -1279,6 +1279,7 @@ export namespace SessionPrompt {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
     }
     msg.time.completed = Date.now()
+    msg.finish = "stop"
     await Session.updateMessage(msg)
     if (part.state.status === "running") {
       part.state = {
