@@ -1709,61 +1709,15 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return props.message.time.completed - user.time.created
   })
 
-  // OUT tokens (sent TO API) - includes user text + tool results from previous assistant
-  const outEstimate = createMemo(() => props.message.sentEstimate)
-
-  // IN tokens (from API TO computer)
-  const inTokens = createMemo(() => props.message.tokens.output)
-  const inEstimate = createMemo(() => props.message.outputEstimate)
-
-  // Reasoning tokens (must be defined BEFORE inDisplay)
-  const reasoningTokens = createMemo(() => props.message.tokens.reasoning)
-  const reasoningEstimate = createMemo(() => props.message.reasoningEstimate)
-
-  const outDisplay = createMemo(() => {
-    const estimate = outEstimate()
-    if (estimate !== undefined) return "~" + estimate.toLocaleString()
-    const tokens = props.message.tokens.input
-    if (tokens > 0) return tokens.toLocaleString()
-    return "0"
-  })
-
-  const inDisplay = createMemo(() => {
-    const estimate = inEstimate()
-    if (estimate !== undefined) return "~" + estimate.toLocaleString()
-    const tokens = inTokens()
-    if (tokens > 0) return tokens.toLocaleString()
-    // Show ~0 during streaming when we have reasoning but no output yet
-    if (reasoningEstimate() !== undefined || reasoningTokens() > 0) return "~0"
-    return undefined
-  })
-
-  const tokensDisplay = createMemo(() => {
-    const inVal = inDisplay()
-    if (!inVal) return undefined
-    return `${inVal}↓/${outDisplay()}↑`
-  })
-
-  const reasoningDisplay = createMemo(() => {
-    const estimate = reasoningEstimate()
-    if (estimate !== undefined) return "~" + estimate.toLocaleString()
-    const tokens = reasoningTokens()
-    if (tokens > 0) return tokens.toLocaleString()
-    return undefined
-  })
-
-  const contextEstimate = createMemo(() => props.message.contextEstimate)
-
-  const cumulativeTokens = createMemo(() => {
-    const estimate = contextEstimate()
-    if (estimate !== undefined) return estimate
+  // Context usage - total tokens used in the context window
+  const contextTokens = createMemo(() => {
     return props.message.tokens.input + props.message.tokens.cache.read + props.message.tokens.cache.write
   })
 
   const percentage = createMemo(() => {
     const limit = ctx.contextLimit()
     if (!limit) return 0
-    return Math.round((cumulativeTokens() / limit) * 100)
+    return Math.round((contextTokens() / limit) * 100)
   })
 
   return (
@@ -1807,20 +1761,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
               </Show>
-              <Show when={ctx.showTokens() && (tokensDisplay() || reasoningDisplay())}>
+              <Show when={ctx.showTokens() && contextTokens() > 0}>
                 <span style={{ fg: theme.textMuted }}>
                   {" "}
-                  ⬝ {tokensDisplay()} tok
-                  <Show when={reasoningDisplay()}>
-                    {" · "}
-                    {reasoningDisplay()} think
-                  </Show>
-                  <Show
-                    when={cumulativeTokens() > 0 || inEstimate() !== undefined || reasoningEstimate() !== undefined}
-                  >
-                    {" · "}
-                    {cumulativeTokens().toLocaleString()} context ({percentage()}%)
-                  </Show>
+                  · {contextTokens().toLocaleString()} ({percentage()}%)
                 </span>
               </Show>
             </text>
