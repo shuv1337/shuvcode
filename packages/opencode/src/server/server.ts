@@ -10,7 +10,7 @@ import { proxy } from "hono/proxy"
 import { Session } from "../session"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { filter, mapValues, sortBy, pipe } from "remeda"
+import { filter, mapValues, sortBy, pipe, mergeDeep } from "remeda"
 import { NamedError } from "@opencode-ai/util/error"
 import { ModelsDev } from "../provider/models"
 import { Ripgrep } from "../file/ripgrep"
@@ -43,6 +43,7 @@ import { Ide } from "../ide"
 import { Storage } from "../storage/storage"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { TuiEvent } from "@/cli/cmd/tui/event"
+import { Wildcard } from "@/util/wildcard"
 import { Snapshot } from "@/snapshot"
 import { SessionSummary } from "@/session/summary"
 import { SessionStatus } from "@/session/status"
@@ -451,6 +452,52 @@ export namespace Server {
           const config = c.req.valid("json")
           await Config.update(config)
           return c.json(config)
+        },
+      )
+      .get(
+        "/tool/list",
+        describeRoute({
+          summary: "List tools",
+          description: "Get a list of all available tools with their enabled status.",
+          operationId: "tool.list",
+          responses: {
+            200: {
+              description: "Tool list",
+              content: {
+                "application/json": {
+                  schema: resolver(
+                    z.array(
+                      z.object({
+                        id: z.string(),
+                        enabled: z.boolean(),
+                      }),
+                    ),
+                  ),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const builtinIds = await ToolRegistry.ids()
+          const mcpTools = await MCP.tools()
+          const mcpIds = Object.keys(mcpTools)
+          // Combine and filter out 'invalid' tool
+          const allIds = [...builtinIds.filter((id) => id !== "invalid"), ...mcpIds]
+
+          // Get enabled status based on agent tools config
+          const defaultAgentName = await Agent.defaultAgent()
+          const agent = await Agent.get(defaultAgentName)
+          const enabledTools = agent
+            ? mergeDeep(agent.tools, await ToolRegistry.enabled(agent))
+            : ({} as Record<string, boolean>)
+
+          return c.json(
+            allIds.map((id) => ({
+              id,
+              enabled: Wildcard.all(id, enabledTools) !== false,
+            })),
+          )
         },
       )
       .get(
