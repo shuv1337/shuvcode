@@ -90,8 +90,6 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
-  sentEstimate?: number
-  contextEstimate?: number
 }
 
 export type ProviderAuthError = {
@@ -165,10 +163,6 @@ export type AssistantMessage = {
       write: number
     }
   }
-  outputEstimate?: number
-  reasoningEstimate?: number
-  contextEstimate?: number
-  sentEstimate?: number
   finish?: string
 }
 
@@ -483,131 +477,6 @@ export type EventPermissionReplied = {
   }
 }
 
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiQuestionRequest = {
-  type: "tui.question.request"
-  properties: {
-    questionID: string
-    sessionID: string
-    messageID: string
-    callID: string
-    questions: Array<
-      | {
-          type: "select"
-          id: string
-          message: string
-          options: Array<{
-            value: string
-            label: string
-            hint?: string
-          }>
-          defaultValue?: string
-        }
-      | {
-          type: "multi-select"
-          id: string
-          message: string
-          options: Array<{
-            value: string
-            label: string
-            hint?: string
-          }>
-          defaultValue?: Array<string>
-          min?: number
-          max?: number
-        }
-      | {
-          type: "confirm"
-          id: string
-          message: string
-          defaultValue?: boolean
-        }
-      | {
-          type: "text"
-          id: string
-          message: string
-          placeholder?: string
-          defaultValue?: string
-          validate?: string
-        }
-    >
-    title?: string
-    timeout?: number
-  }
-}
-
-export type EventTuiQuestionResponse = {
-  type: "tui.question.response"
-  properties: {
-    questionID: string
-    status: "ok" | "cancel" | "timeout"
-    answers?: Array<
-      | {
-          type: "select"
-          id: string
-          value: string
-        }
-      | {
-          type: "multi-select"
-          id: string
-          values: Array<string>
-        }
-      | {
-          type: "confirm"
-          id: string
-          value: boolean
-        }
-      | {
-          type: "text"
-          id: string
-          value: string
-        }
-    >
-    comment?: string
-  }
-}
-
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -783,6 +652,48 @@ export type EventSessionCompacted = {
   }
 }
 
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -941,11 +852,6 @@ export type Event =
   | EventMessagePartRemoved
   | EventPermissionUpdated
   | EventPermissionReplied
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiQuestionRequest
-  | EventTuiQuestionResponse
   | EventFileEdited
   | EventIdeInstalled
   | EventIdeSelectionUpdated
@@ -956,6 +862,9 @@ export type Event =
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -1817,6 +1726,10 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
+     * Enable the askquestion tool for wizard-style user prompts
+     */
+    askquestion_tool?: boolean
+    /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */
     openTelemetry?: boolean
@@ -2554,6 +2467,27 @@ export type ConfigUpdateResponses = {
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
+export type ToolListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tool/list"
+}
+
+export type ToolListResponses = {
+  /**
+   * Tool list
+   */
+  200: Array<{
+    id: string
+    enabled: boolean
+  }>
+}
+
+export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -2581,7 +2515,7 @@ export type ToolIdsResponses = {
 
 export type ToolIdsResponse = ToolIdsResponses[keyof ToolIdsResponses]
 
-export type ToolListData = {
+export type ToolList2Data = {
   body?: never
   path?: never
   query: {
@@ -2592,23 +2526,23 @@ export type ToolListData = {
   url: "/experimental/tool"
 }
 
-export type ToolListErrors = {
+export type ToolList2Errors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type ToolListError = ToolListErrors[keyof ToolListErrors]
+export type ToolList2Error = ToolList2Errors[keyof ToolList2Errors]
 
-export type ToolListResponses = {
+export type ToolList2Responses = {
   /**
    * Tools
    */
   200: ToolList
 }
 
-export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
+export type ToolList2Response = ToolList2Responses[keyof ToolList2Responses]
 
 export type InstanceDisposeData = {
   body?: never
@@ -4631,12 +4565,7 @@ export type TuiShowToastResponses = {
 export type TuiShowToastResponse = TuiShowToastResponses[keyof TuiShowToastResponses]
 
 export type TuiPublishData = {
-  body?:
-    | EventTuiPromptAppend
-    | EventTuiCommandExecute
-    | EventTuiToastShow
-    | EventTuiQuestionRequest
-    | EventTuiQuestionResponse
+  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow
   path?: never
   query?: {
     directory?: string
