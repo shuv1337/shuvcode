@@ -20,7 +20,7 @@ export default createHandler(() => (
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/meslo@1.0.0/meslo.css" />
           {assets}
         </head>
-        <body class="antialiased overscroll-none select-none text-12-regular">
+        <body class="antialiased overscroll-none text-12-regular">
           <div id="app">{children}</div>
           {scripts}
         </body>

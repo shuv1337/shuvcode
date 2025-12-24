@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-22",
+  "lastUpdated": "2025-12-24",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -54,7 +54,8 @@
       "title": "AskQuestion tool for user input",
       "author": "iljod",
       "status": "open",
-      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563.",
+      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI/web wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563. Disabled by default - enable with experimental.askquestion_tool config.",
+      "experimentalConfig": "askquestion_tool",
       "files": [
         "packages/opencode/src/askquestion/index.ts",
         "packages/opencode/src/tool/askquestion.ts",
@@ -62,7 +63,11 @@
         "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
         "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
         "packages/opencode/src/server/server.ts",
-        "packages/opencode/src/session/prompt.ts"
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/tool/registry.ts",
+        "packages/app/src/components/askquestion-wizard.tsx",
+        "packages/app/src/pages/session.tsx"
       ],
       "criticalCode": [
         {
@@ -89,6 +94,26 @@
           "file": "packages/opencode/src/server/server.ts",
           "description": "API endpoints for askquestion respond and cancel",
           "markers": ["/askquestion/respond", "/askquestion/cancel", "AskQuestion.respond", "AskQuestion.cancel"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "Experimental config flag to enable askquestion tool",
+          "markers": ["askquestion_tool: z.boolean().optional()"]
+        },
+        {
+          "file": "packages/opencode/src/tool/registry.ts",
+          "description": "Conditional tool registration based on experimental config",
+          "markers": ["config.experimental?.askquestion_tool === true ? [AskQuestionTool]"]
+        },
+        {
+          "file": "packages/app/src/components/askquestion-wizard.tsx",
+          "description": "Web app wizard component with keyboard navigation and mobile support",
+          "markers": ["AskQuestionWizard", "AskQuestionQuestion", "handleKeyDown", "handleSubmit"]
+        },
+        {
+          "file": "packages/app/src/pages/session.tsx",
+          "description": "Web app detection of pending askquestion and wizard rendering",
+          "markers": ["pendingAskQuestion", "AskQuestionWizard", "handleAskQuestionSubmit", "handleAskQuestionCancel"]
         }
       ]
     },
@@ -126,6 +151,42 @@
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
           "description": "Dynamic width from props instead of fixed 42",
           "markers": ["width={props.width}"]
+        }
+      ]
+    },
+    {
+      "pr": 5968,
+      "title": "Better styling for small screens",
+      "author": "rekram1-node",
+      "status": "reverted-upstream",
+      "description": "Responsive TUI layout that conditionally hides elements on short (<40 rows) or narrow (<120 cols) terminals. Uses useTerminalDimensions hook for reactive sizing. Upstream reverted this in 99633cb but we preserve it for better small screen UX.",
+      "upstreamRevertCommit": "99633cb2996e7b99c4e3a9bfa3f95cbd97f9f8c5",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Terminal dimension hooks and tall/wide memos for responsive layout",
+          "markers": ["useTerminalDimensions", "tall()", "wide()", "dimensions().height > 40", "dimensions().width > 120"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Conditional rendering of model info and footer based on terminal height",
+          "markers": ["<Show when={tall()}>", "<Show when={wide()}>"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+          "description": "Responsive header layout hiding elements on narrow screens",
+          "markers": ["wide()", "useTerminalDimensions"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Layout adjustments for small terminals",
+          "markers": ["tall()", "wide()"]
         }
       ]
     },

@@ -562,6 +562,7 @@ export namespace Config {
       session_parent: z.string().optional().default("<leader>up").describe("Go to parent session"),
       terminal_suspend: z.string().optional().default("ctrl+z").describe("Suspend terminal"),
       terminal_title_toggle: z.string().optional().default("none").describe("Toggle terminal title"),
+      tips_toggle: z.string().optional().default("<leader>h").describe("Toggle tips on home screen"),
     })
     .strict()
     .meta({
@@ -808,6 +809,7 @@ export namespace Config {
           chatMaxRetries: z.number().optional().describe("Number of retries for chat completions on failure"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+          askquestion_tool: z.boolean().optional().describe("Enable the askquestion tool for wizard-style user prompts"),
           openTelemetry: z
             .boolean()
             .optional()

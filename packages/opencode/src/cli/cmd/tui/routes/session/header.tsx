@@ -1,9 +1,10 @@
 import { type Accessor, createMemo, Match, Show, Switch } from "solid-js"
 import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
+import { pipe, sumBy } from "remeda"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
-import type { Session } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, Session } from "@opencode-ai/sdk/v2"
 import { useKeybind } from "../../context/keybind"
 import { useTerminalDimensions } from "@opentui/solid"
 
@@ -16,12 +17,46 @@ const Title = (props: { session: Accessor<Session>; truncate?: boolean }) => {
   )
 }
 
+const ContextInfo = (props: { context: Accessor<string | undefined>; cost: Accessor<string> }) => {
+  const { theme } = useTheme()
+  return (
+    <Show when={props.context()}>
+      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
+        {props.context()} ({props.cost()})
+      </text>
+    </Show>
+  )
+}
+
 export function Header() {
   const route = useRouteData("session")
   const sync = useSync()
   const session = createMemo(() => sync.session.get(route.sessionID)!)
-  const shareEnabled = createMemo(() => sync.data.config.share !== "disabled")
-  const showShare = createMemo(() => shareEnabled() && !session()?.share?.url)
+  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+
+  const cost = createMemo(() => {
+    const total = pipe(
+      messages(),
+      sumBy((x) => (x.role === "assistant" ? x.cost : 0)),
+    )
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(total)
+  })
+
+  const context = createMemo(() => {
+    const last = messages().findLast((x) => x.role === "assistant" && x.tokens.output > 0) as AssistantMessage
+    if (!last) return
+    const total =
+      last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
+    const model = sync.data.provider.find((x) => x.id === last.providerID)?.models[last.modelID]
+    let result = total.toLocaleString()
+    if (model?.limit.context) {
+      result += "  " + Math.round((total / model.limit.context) * 100) + "%"
+    }
+    return result
+  })
 
   const { theme } = useTheme()
   const keybind = useKeybind()
@@ -90,21 +125,13 @@ export function Header() {
                   Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
                 </text>
                 <box flexGrow={1} flexShrink={1} />
-                <Show when={showShare()}>
-                  <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
-                    /share{" "}
-                  </text>
-                </Show>
+                <ContextInfo context={context} cost={cost} />
               </box>
             </Match>
             <Match when={true}>
               <box flexDirection="row" justifyContent="space-between" gap={1}>
                 <Title session={session} truncate={!tall()} />
-                <Show when={showShare()}>
-                  <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>
-                    /share{" "}
-                  </text>
-                </Show>
+                <ContextInfo context={context} cost={cost} />
               </box>
             </Match>
           </Switch>

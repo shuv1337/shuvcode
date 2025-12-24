@@ -90,8 +90,6 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
-  sentEstimate?: number
-  contextEstimate?: number
 }
 
 export type ProviderAuthError = {
@@ -133,6 +131,9 @@ export type ApiError = {
       [key: string]: string
     }
     responseBody?: string
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -165,10 +166,6 @@ export type AssistantMessage = {
       write: number
     }
   }
-  outputEstimate?: number
-  reasoningEstimate?: number
-  contextEstimate?: number
-  sentEstimate?: number
   finish?: string
 }
 
@@ -700,6 +697,13 @@ export type EventTuiToastShow = {
   }
 }
 
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -871,6 +875,7 @@ export type Event =
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
+  | EventMcpToolsChanged
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -1273,6 +1278,10 @@ export type KeybindsConfig = {
    * Toggle terminal title
    */
   terminal_title_toggle?: string
+  /**
+   * Toggle tips on home screen
+   */
+  tips_toggle?: string
 }
 
 export type AgentConfig = {
@@ -1731,6 +1740,10 @@ export type Config = {
      * Enable the batch tool
      */
     batch_tool?: boolean
+    /**
+     * Enable the askquestion tool for wizard-style user prompts
+     */
+    askquestion_tool?: boolean
     /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */
