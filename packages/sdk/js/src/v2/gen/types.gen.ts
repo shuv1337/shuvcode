@@ -131,6 +131,9 @@ export type ApiError = {
       [key: string]: string
     }
     responseBody?: string
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -694,6 +697,13 @@ export type EventTuiToastShow = {
   }
 }
 
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -865,6 +875,7 @@ export type Event =
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
+  | EventMcpToolsChanged
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -1267,6 +1278,10 @@ export type KeybindsConfig = {
    * Toggle terminal title
    */
   terminal_title_toggle?: string
+  /**
+   * Toggle tips on home screen
+   */
+  tips_toggle?: string
 }
 
 export type AgentConfig = {

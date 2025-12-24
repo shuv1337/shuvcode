@@ -313,6 +313,14 @@ export default function Page() {
       onSelect: () => terminal.new(),
     },
     {
+      id: "review.toggle",
+      title: "Toggle review",
+      description: "Show or hide the review panel",
+      category: "View",
+      keybind: "mod+shift+r",
+      onSelect: () => layout.review.toggle(),
+    },
+    {
       id: "steps.toggle",
       title: "Toggle steps",
       description: "Show or hide the steps",
