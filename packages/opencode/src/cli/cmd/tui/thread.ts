@@ -99,6 +99,7 @@ export const TuiThreadCommand = cmd({
 
     const tuiPromise = tui({
       url: server.url,
+      directory: cwd,
       args: {
         continue: args.continue,
         sessionID: args.session,
