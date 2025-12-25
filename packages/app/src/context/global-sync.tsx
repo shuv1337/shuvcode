@@ -7,6 +7,8 @@ import {
   type Path,
   type Project,
   type FileDiff,
+  type File,
+  type FileNode,
   type Todo,
   type SessionStatus,
   type ProviderListResponse,
@@ -41,6 +43,8 @@ type State = {
   todo: {
     [sessionID: string]: Todo[]
   }
+  changes: File[]
+  node: FileNode[]
   limit: number
   message: {
     [sessionID: string]: Message[]
@@ -85,6 +89,8 @@ function createGlobalSync() {
         session_status: {},
         session_diff: {},
         todo: {},
+        changes: [],
+        node: [],
         limit: 10,
         message: {},
         part: {},
