@@ -1315,6 +1315,9 @@ export namespace SessionPrompt {
         const pluginCommand = pluginCommands?.[command.name]
         if (!pluginCommand) continue
 
+        const messagesBefore = await Session.messages({ sessionID: input.sessionID, limit: 1 })
+        const lastMessageIDBefore = messagesBefore[0]?.info.id
+
         try {
           const client = await Plugin.client()
           await pluginCommand.execute({
@@ -1334,16 +1337,16 @@ export namespace SessionPrompt {
           throw error
         }
 
-        // Emit event if plugin created a message
-        const last = await Session.messages({ sessionID: input.sessionID, limit: 1 })
-        if (last.length > 0) {
+        // Emit event if plugin created a new message
+        const messagesAfter = await Session.messages({ sessionID: input.sessionID, limit: 1 })
+        if (messagesAfter.length > 0 && messagesAfter[0].info.id !== lastMessageIDBefore) {
           Bus.publish(Command.Event.Executed, {
             name: command.name,
             sessionID: input.sessionID,
             arguments: input.arguments,
-            messageID: last[0].info.id,
+            messageID: messagesAfter[0].info.id,
           })
-          return last[0]
+          return messagesAfter[0]
         }
         return
       }
