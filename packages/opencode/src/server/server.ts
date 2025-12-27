@@ -2837,7 +2837,8 @@ export namespace Server {
   )
 
   export async function openapi() {
-    const result = await generateSpecs(App(), {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await generateSpecs(App() as any, {
       documentation: {
         info: {
           title: "opencode",
