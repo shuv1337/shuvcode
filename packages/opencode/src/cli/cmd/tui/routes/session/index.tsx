@@ -250,6 +250,7 @@ export function Session() {
   const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [userMessageMarkdown, setUserMessageMarkdown] = createSignal(kv.get("user_message_markdown", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
+  const [animationsEnabled, setAnimationsEnabled] = createSignal(kv.get("animations_enabled", true))
 
   // Initialize spinner style and interval from KV store
   const savedSpinnerStyle = kv.get("spinner_style", DEFAULT_SPINNER_KEY)
@@ -883,6 +884,19 @@ export function Session() {
         setUserMessageMarkdown((prev) => {
           const next = !prev
           kv.set("user_message_markdown", next)
+          return next
+        })
+        dialog.clear()
+      },
+    },
+    {
+      title: animationsEnabled() ? "Disable animations" : "Enable animations",
+      value: "session.toggle.animations",
+      category: "Session",
+      onSelect: (dialog) => {
+        setAnimationsEnabled((prev) => {
+          const next = !prev
+          kv.set("animations_enabled", next)
           return next
         })
         dialog.clear()

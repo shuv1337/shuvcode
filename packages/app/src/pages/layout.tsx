@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, Match, onMount, ParentProps, Show, Switch, untrack, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Match, onCleanup, onMount, ParentProps, Show, Switch, untrack, type JSX } from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"
@@ -102,6 +102,39 @@ export default function Layout(props: ParentProps) {
   const currentSessionId = createMemo(() => currentSession()?.id)
   const otherSessions = createMemo(() => sessions().filter((s) => s.id !== currentSessionId()))
 
+  onMount(() => {
+    const unsub = globalSync.permission.onUpdated(({ directory, permission }) => {
+      const currentDir = params.dir ? base64Decode(params.dir) : undefined
+      const currentSession = params.id
+      if (directory === currentDir && permission.sessionID === currentSession) return
+      const [store] = globalSync.child(directory)
+      const session = store.session.find((s) => s.id === permission.sessionID)
+      if (directory === currentDir && session?.parentID === currentSession) return
+      const sessionTitle = session?.title ?? "New session"
+      const projectName = getFilename(directory)
+      showToast({
+        persistent: true,
+        icon: "checklist",
+        title: "Permission required",
+        description: `${sessionTitle} in ${projectName} needs permission`,
+        actions: [
+          {
+            label: "Go to session",
+            onClick: () => {
+              navigate(`/${base64Encode(directory)}/session/${permission.sessionID}`)
+            },
+            dismissAfter: true,
+          },
+          {
+            label: "Dismiss",
+            onClick: "dismiss",
+          },
+        ],
+      })
+    })
+    onCleanup(unsub)
+  })
+
   function flattenSessions(sessions: Session[]): Session[] {
     const childrenMap = new Map<string, Session[]>()
     for (const session of sessions) {
@@ -122,6 +155,19 @@ export default function Layout(props: ParentProps) {
       if (!session.parentID) visit(session)
     }
     return result
+  }
+
+  function sortSessions(a: Session, b: Session) {
+    const now = Date.now()
+    const oneMinuteAgo = now - 60 * 1000
+    const aUpdated = a.time.updated ?? a.time.created
+    const bUpdated = b.time.updated ?? b.time.created
+    const aRecent = aUpdated > oneMinuteAgo
+    const bRecent = bUpdated > oneMinuteAgo
+    if (aRecent && bRecent) return a.id.localeCompare(b.id)
+    if (aRecent && !bRecent) return -1
+    if (!aRecent && bRecent) return 1
+    return bUpdated - aUpdated
   }
 
   function scrollToSession(sessionId: string) {
@@ -451,8 +497,20 @@ export default function Layout(props: ParentProps) {
     const updated = createMemo(() => DateTime.fromMillis(props.session.time.updated))
     const notifications = createMemo(() => notification.session.unseen(props.session.id))
     const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
+    const hasPermissions = createMemo(() => {
+      const store = globalSync.child(props.project.worktree)[0]
+      const permissions = store.permission?.[props.session.id] ?? []
+      if (permissions.length > 0) return true
+      const childSessions = store.session.filter((s) => s.parentID === props.session.id)
+      for (const child of childSessions) {
+        const childPermissions = store.permission?.[child.id] ?? []
+        if (childPermissions.length > 0) return true
+      }
+      return false
+    })
     const isWorking = createMemo(() => {
       if (props.session.id === params.id) return false
+      if (hasPermissions()) return false
       const status = globalSync.child(props.project.worktree)[0].session_status[props.session.id]
       return status?.type === "busy" || status?.type === "retry"
     })
@@ -482,6 +540,9 @@ export default function Layout(props: ParentProps) {
                   <Switch>
                     <Match when={isWorking()}>
                       <Spinner class="size-2.5 mr-0.5" />
+                    </Match>
+                    <Match when={hasPermissions()}>
+                      <div class="size-1.5 mr-1.5 rounded-full bg-surface-warning-strong" />
                     </Match>
                     <Match when={hasError()}>
                       <div class="size-1.5 mr-1.5 rounded-full bg-text-diff-delete-base" />
@@ -611,7 +672,7 @@ export default function Layout(props: ParentProps) {
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content>
                         <DropdownMenu.Item onSelect={() => closeProject(props.project.worktree)}>
-                          <DropdownMenu.ItemLabel>Close Project</DropdownMenu.ItemLabel>
+                          <DropdownMenu.ItemLabel>Close project</DropdownMenu.ItemLabel>
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>

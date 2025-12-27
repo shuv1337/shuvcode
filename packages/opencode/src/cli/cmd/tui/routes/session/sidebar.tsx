@@ -11,7 +11,6 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
 import { useToast } from "../../ui/toast"
-import { TodoItem } from "../../component/todo-item"
 
 export function Sidebar(props: { sessionID: string; width: number }) {
   const sync = useSync()
@@ -20,13 +19,13 @@ export function Sidebar(props: { sessionID: string; width: number }) {
   const toast = useToast()
   const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
-  const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
+
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
 
   const [expanded, setExpanded] = createStore({
+    context: true,
     mcp: true,
     diff: true,
-    todo: true,
     lsp: true,
     subagents: true,
   })
@@ -115,133 +114,37 @@ export function Sidebar(props: { sessionID: string; width: number }) {
                 <text fg={theme.textMuted}>{session()?.share?.url}</text>
               </Show>
             </box>
+{/* Context Section */}
             <box>
-              <text fg={theme.text}>
-                <b>Context</b>
-              </text>
-              <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
-              <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
-              <text fg={theme.textMuted}>{cost()} spent</text>
-            </box>
-            <Show when={mcpEntries().length > 0}>
-              <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => mcpEntries().length > 2 && setExpanded("mcp", !expanded.mcp)}
-                >
-                  <Show when={mcpEntries().length > 2}>
-                    <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("context", !expanded.context)}>
+                <text fg={theme.text}>{expanded.context ? "▼" : "▶"}</text>
+                <text fg={theme.text}>
+                  <b>Context</b>
+                  <Show when={!expanded.context}>
+                    <span style={{ fg: theme.textMuted }}> ({context()?.tokens ?? 0} tokens)</span>
                   </Show>
+                </text>
+              </box>
+              <Show when={expanded.context}>
+                <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
+                <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
+                <text fg={theme.textMuted}>{cost()} spent</text>
+              </Show>
+            </box>
+
+            {/* Subagents Section */}
+            <Show when={subagentGroups().length > 0}>
+              <box>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("subagents", !expanded.subagents)}>
+                  <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
-                    <b>MCP</b>
-                    <Show when={!expanded.mcp}>
-                      <span style={{ fg: theme.textMuted }}>
-                        {" "}
-                        ({connectedMcpCount()} active
-                        {errorMcpCount() > 0 ? `, ${errorMcpCount()} error${errorMcpCount() > 1 ? "s" : ""}` : ""})
-                      </span>
+                    <b>Subagents</b>
+                    <Show when={!expanded.subagents}>
+                      <span style={{ fg: theme.textMuted }}> ({subagentGroups().length} types)</span>
                     </Show>
                   </text>
                 </box>
-                <Show when={mcpEntries().length <= 2 || expanded.mcp}>
-                  <For each={mcpEntries()}>
-                    {([key, item]) => (
-                      <box flexDirection="row" gap={1}>
-                        <text
-                          flexShrink={0}
-                          style={{
-                            fg: (
-                              {
-                                connected: theme.success,
-                                failed: theme.error,
-                                disabled: theme.textMuted,
-                                needs_auth: theme.warning,
-                                needs_client_registration: theme.error,
-                              } as Record<string, typeof theme.success>
-                            )[item.status],
-                          }}
-                        >
-                          •
-                        </text>
-                        <text fg={theme.text} wrapMode="word">
-                          {key}{" "}
-                          <span style={{ fg: theme.textMuted }}>
-                            <Switch fallback={item.status}>
-                              <Match when={item.status === "connected"}>Connected</Match>
-                              <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
-                              <Match when={item.status === "disabled"}>Disabled</Match>
-                              <Match when={(item.status as string) === "needs_auth"}>Needs auth</Match>
-                              <Match when={(item.status as string) === "needs_client_registration"}>
-                                Needs client ID
-                              </Match>
-                            </Switch>
-                          </span>
-                        </text>
-                      </box>
-                    )}
-                  </For>
-                </Show>
-              </box>
-            </Show>
-            <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
-              >
-                <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
-                </Show>
-                <text fg={theme.text}>
-                  <b>LSP</b>
-                </text>
-              </box>
-              <Show when={sync.data.lsp.length <= 2 || expanded.lsp}>
-                <Show when={sync.data.lsp.length === 0}>
-                  <text fg={theme.textMuted}>
-                    {sync.data.config.lsp === false
-                      ? "LSPs have been disabled in settings"
-                      : "LSPs will activate as files are read"}
-                  </text>
-                </Show>
-                <For each={sync.data.lsp}>
-                  {(item) => (
-                    <box flexDirection="row" gap={1}>
-                      <text
-                        flexShrink={0}
-                        style={{
-                          fg: {
-                            connected: theme.success,
-                            error: theme.error,
-                          }[item.status],
-                        }}
-                      >
-                        •
-                      </text>
-                      <text fg={theme.textMuted}>
-                        {item.id} {item.root}
-                      </text>
-                    </box>
-                  )}
-                </For>
-              </Show>
-            </box>
-            <Show when={subagentGroups().length > 0}>
-              <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => subagentGroups().length > 2 && setExpanded("subagents", !expanded.subagents)}
-                >
-                  <Show when={subagentGroups().length > 2}>
-                    <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
-                  </Show>
-                  <text fg={theme.text}>
-                    <b>Subagents</b>
-                  </text>
-                </box>
-                <Show when={subagentGroups().length <= 2 || expanded.subagents}>
+                <Show when={expanded.subagents}>
                   <For each={subagentGroups()}>
                     {([agentName, parts]) => {
                       const hasActive = () =>
@@ -307,40 +210,119 @@ export function Sidebar(props: { sessionID: string; width: number }) {
                 </Show>
               </box>
             </Show>
-            <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
+
+            {/* MCP Section */}
+            <Show when={mcpEntries().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
-                >
-                  <Show when={todo().length > 2}>
-                    <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
-                  </Show>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("mcp", !expanded.mcp)}>
+                  <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
-                    <b>Todo</b>
+                    <b>MCP</b>
+                    <Show when={!expanded.mcp}>
+                      <span style={{ fg: theme.textMuted }}>
+                        {" "}
+                        ({connectedMcpCount()} active
+                        {errorMcpCount() > 0 ? `, ${errorMcpCount()} error${errorMcpCount() > 1 ? "s" : ""}` : ""})
+                      </span>
+                    </Show>
                   </text>
                 </box>
-                <Show when={todo().length <= 2 || expanded.todo}>
-                  <For each={todo()}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
+                <Show when={expanded.mcp}>
+                  <For each={mcpEntries()}>
+                    {([key, item]) => (
+                      <box flexDirection="row" gap={1}>
+                        <text
+                          flexShrink={0}
+                          style={{
+                            fg: (
+                              {
+                                connected: theme.success,
+                                failed: theme.error,
+                                disabled: theme.textMuted,
+                                needs_auth: theme.warning,
+                                needs_client_registration: theme.error,
+                              } as Record<string, typeof theme.success>
+                            )[item.status],
+                          }}
+                        >
+                          •
+                        </text>
+                        <text fg={theme.text} wrapMode="word">
+                          {key}{" "}
+                          <span style={{ fg: theme.textMuted }}>
+                            <Switch fallback={item.status}>
+                              <Match when={item.status === "connected"}>Connected</Match>
+                              <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
+                              <Match when={item.status === "disabled"}>Disabled</Match>
+                              <Match when={(item.status as string) === "needs_auth"}>Needs auth</Match>
+                              <Match when={(item.status as string) === "needs_client_registration"}>
+                                Needs client ID
+                              </Match>
+                            </Switch>
+                          </span>
+                        </text>
+                      </box>
+                    )}
+                  </For>
                 </Show>
               </box>
             </Show>
+
+            {/* LSP Section */}
+            <box>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("lsp", !expanded.lsp)}>
+                <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
+                <text fg={theme.text}>
+                  <b>LSP</b>
+                  <Show when={!expanded.lsp}>
+                    <span style={{ fg: theme.textMuted }}> ({sync.data.lsp.length} active)</span>
+                  </Show>
+                </text>
+              </box>
+              <Show when={expanded.lsp}>
+                <Show when={sync.data.lsp.length === 0}>
+                  <text fg={theme.textMuted}>
+                    {sync.data.config.lsp === false
+                      ? "LSPs have been disabled in settings"
+                      : "LSPs will activate as files are read"}
+                  </text>
+                </Show>
+                <For each={sync.data.lsp}>
+                  {(item) => (
+                    <box flexDirection="row" gap={1}>
+                      <text
+                        flexShrink={0}
+                        style={{
+                          fg: {
+                            connected: theme.success,
+                            error: theme.error,
+                          }[item.status],
+                        }}
+                      >
+                        •
+                      </text>
+                      <text fg={theme.textMuted}>
+                        {item.id} {item.root}
+                      </text>
+                    </box>
+                  )}
+                </For>
+              </Show>
+            </box>
+
+            {/* Changed Files Section */}
             <Show when={diff().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => diff().length > 2 && setExpanded("diff", !expanded.diff)}
-                >
-                  <Show when={diff().length > 2}>
-                    <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
-                  </Show>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("diff", !expanded.diff)}>
+                  <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
-                    <b>Modified Files</b>
+                    <b>Changed Files</b>
+                    <Show when={!expanded.diff}>
+                      <span style={{ fg: theme.textMuted }}> ({diff().length} files)</span>
+                    </Show>
                   </text>
                 </box>
-                <Show when={diff().length <= 2 || expanded.diff}>
+                <Show when={expanded.diff}>
                   <For each={diff() || []}>
                     {(item) => {
                       const file = createMemo(() => {
