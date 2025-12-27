@@ -203,13 +203,15 @@ export const Terminal = (props: TerminalProps) => {
     ws.addEventListener("open", () => {
       if (!isMounted) return
       console.log("WebSocket connected")
-      sdk.client.pty.update({
-        ptyID: local.pty.id,
-        size: {
-          cols: term.cols,
-          rows: term.rows,
-        },
-      })
+      sdk.client.pty
+        .update({
+          ptyID: local.pty.id,
+          size: {
+            cols: term.cols,
+            rows: term.rows,
+          },
+        })
+        .catch(() => {})
     })
     ws.addEventListener("message", (event) => {
       if (!isMounted) return

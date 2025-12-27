@@ -385,4 +385,12 @@
   [data-slot="session-turn-markdown"] td:first-child {
     font-family: monospace;
   }
+
+  [data-slot="session-turn-permission-parts"] {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 }
