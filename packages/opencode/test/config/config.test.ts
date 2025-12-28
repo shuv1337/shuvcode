@@ -692,3 +692,67 @@ test("compaction config can disable both auto and prune", async () => {
     },
   })
 })
+
+// Issue 210: Test that .opencode directories are processed for dependencies
+test("processes .opencode directory without errors in local dev mode", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      // Create a .opencode directory with a tool
+      const opencodeDir = path.join(dir, ".opencode")
+      await fs.mkdir(opencodeDir, { recursive: true })
+      const toolDir = path.join(opencodeDir, "tool")
+      await fs.mkdir(toolDir, { recursive: true })
+
+      // Create a basic tool file (won't actually load without deps, but tests config processing)
+      await Bun.write(
+        path.join(toolDir, "test.ts"),
+        `export const tool = { name: "test", description: "test tool" }`
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Config loading should not throw even when processing .opencode directories
+      const config = await Config.get()
+      expect(config).toBeDefined()
+      
+      // Verify the .opencode directory is in the list of processed directories
+      const dirs = await Config.directories()
+      expect(dirs.some((d: string) => d.endsWith(".opencode"))).toBe(true)
+    },
+  })
+})
+
+test(".opencode directory gets package.json and gitignore created", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const opencodeDir = path.join(dir, ".opencode")
+      await fs.mkdir(opencodeDir, { recursive: true })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.get()
+      
+      const opencodeDir = path.join(tmp.path, ".opencode")
+      
+      // Verify package.json was created
+      const pkgPath = path.join(opencodeDir, "package.json")
+      const pkgExists = await Bun.file(pkgPath).exists()
+      expect(pkgExists).toBe(true)
+      
+      // Verify .gitignore was created
+      const gitignorePath = path.join(opencodeDir, ".gitignore")
+      const gitignoreExists = await Bun.file(gitignorePath).exists()
+      expect(gitignoreExists).toBe(true)
+      
+      // Verify .gitignore contains necessary entries
+      const gitignoreContent = await Bun.file(gitignorePath).text()
+      expect(gitignoreContent).toContain("node_modules")
+      expect(gitignoreContent).toContain("package.json")
+      expect(gitignoreContent).toContain("bun.lock")
+    },
+  })
+})
