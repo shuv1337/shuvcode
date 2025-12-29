@@ -396,7 +396,7 @@ export const DialogCreateProject: Component = () => {
 
             {/* Directory list with search */}
             <List<DirectoryInfo>
-              class="flex-1 min-h-0 [&_[data-slot=list-item]]:h-auto [&_[data-slot=list-item]]:py-2"
+              class="flex-1 min-h-0 [&_[data-slot=list-item]]:h-auto [&_[data-slot=list-item]]:py-1"
               items={fetchDirectories}
               key={(dir) => dir.path}
               filterKeys={["name", "path"]}
@@ -406,21 +406,14 @@ export const DialogCreateProject: Component = () => {
               emptyMessage="No folders found"
             >
               {(dir) => (
-                <div class="flex items-center gap-3 w-full">
-                  <span class="text-text-weak shrink-0">
-                    <Icon name={dir.isGitRepo ? "github" : "folder"} />
-                  </span>
-                  <div class="flex-1 min-w-0 flex flex-col">
-                    <div class="text-14-medium text-text-strong truncate">{dir.name}</div>
-                    <div class="text-12-regular text-text-weak truncate">{dir.path.replace(homedir(), "~")}</div>
-                  </div>
+                <div class="flex items-center gap-2 w-full">
+                  <Icon name={dir.isGitRepo ? "github" : "folder"} class="text-text-weak shrink-0" size="small" />
+                  <span class="text-12-regular text-text-base truncate flex-1">{dir.path.replace(homedir(), "~")}</span>
                   <Show when={dir.isGitRepo && !dir.isExistingProject}>
-                    <span class="shrink-0 text-12-regular text-text-weak bg-surface-base px-2 py-0.5 rounded">git</span>
+                    <span class="shrink-0 text-12-regular text-text-weak bg-surface-base px-1.5 rounded">git</span>
                   </Show>
                   <Show when={dir.isExistingProject}>
-                    <span class="shrink-0 text-12-regular text-text-weak bg-surface-base px-2 py-0.5 rounded">
-                      open
-                    </span>
+                    <span class="shrink-0 text-12-regular text-text-weak bg-surface-base px-1.5 rounded">open</span>
                   </Show>
                 </div>
               )}
@@ -428,8 +421,8 @@ export const DialogCreateProject: Component = () => {
 
             {/* Browse button */}
             <Show when={platform.openDirectoryPickerDialog}>
-              <Button variant="ghost" onClick={handleBrowseExisting} class="justify-start">
-                <Icon name="folder" />
+              <Button variant="ghost" size="small" onClick={handleBrowseExisting} class="justify-start">
+                <Icon name="folder" size="small" />
                 Browse filesystem...
               </Button>
             </Show>
@@ -448,31 +441,56 @@ export const DialogCreateProject: Component = () => {
 
         {/* Create New tab content */}
         <Show when={activeTab() === "create"}>
-          <form onSubmit={handleCreateSubmit} class="flex flex-col gap-4">
+          <form onSubmit={handleCreateSubmit} class="flex flex-col gap-4 flex-1 min-h-0">
             <div class="text-14-regular text-text-base">
               Select a parent directory and enter a name for your new project. A new folder will be created and
               initialized as a git repository.
             </div>
 
-            {/* Parent directory picker */}
-            <div class="flex flex-col gap-2">
+            {/* Parent directory browser */}
+            <div class="flex flex-col gap-2 flex-1 min-h-0">
               <label class="text-14-medium text-text-strong">Parent directory</label>
-              <div class="flex gap-2">
-                <TextField
-                  class="flex-1"
-                  type="text"
-                  placeholder="~/projects"
-                  name="createParentDir"
-                  value={store.createParentDir}
-                  onChange={(value) => setStore("createParentDir", value)}
-                />
+              <Show when={store.createParentDir}>
+                <div class="flex items-center gap-2 bg-surface-base px-3 py-2 rounded">
+                  <Icon name="folder" class="text-text-weak shrink-0" />
+                  <span class="text-14-regular text-text-base truncate flex-1">
+                    {store.createParentDir.replace(homedir(), "~")}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    onClick={() => setStore("createParentDir", "")}
+                    class="shrink-0"
+                  >
+                    <Icon name="close" />
+                  </Button>
+                </div>
+              </Show>
+              <Show when={!store.createParentDir}>
+                <List<DirectoryInfo>
+                  class="flex-1 min-h-0 max-h-40 [&_[data-slot=list-item]]:h-auto [&_[data-slot=list-item]]:py-1"
+                  items={fetchDirectories}
+                  key={(dir) => dir.path}
+                  filterKeys={["name", "path"]}
+                  onSelect={(dir) => dir && setStore("createParentDir", dir.path)}
+                  search={{ placeholder: "Search folders...", autofocus: activeTab() === "create" }}
+                  emptyMessage="No folders found"
+                >
+                  {(dir) => (
+                    <div class="flex items-center gap-2 w-full">
+                      <Icon name="folder" class="text-text-weak shrink-0" size="small" />
+                      <span class="text-12-regular text-text-base truncate">{dir.path.replace(homedir(), "~")}</span>
+                    </div>
+                  )}
+                </List>
                 <Show when={platform.openDirectoryPickerDialog}>
-                  <Button type="button" variant="secondary" onClick={handleBrowseCreateParent}>
-                    <Icon name="folder" />
-                    Browse
+                  <Button type="button" variant="ghost" size="small" onClick={handleBrowseCreateParent} class="justify-start">
+                    <Icon name="folder" size="small" />
+                    Browse filesystem...
                   </Button>
                 </Show>
-              </div>
+              </Show>
             </div>
 
             {/* Project name */}
@@ -525,7 +543,7 @@ export const DialogCreateProject: Component = () => {
 
         {/* Git Clone tab content */}
         <Show when={activeTab() === "clone"}>
-          <form onSubmit={handleCloneSubmit} class="flex flex-col gap-4">
+          <form onSubmit={handleCloneSubmit} class="flex flex-col gap-4 flex-1 min-h-0">
             <div class="text-14-regular text-text-base">
               Clone a git repository into a new project folder.
             </div>
@@ -541,25 +559,50 @@ export const DialogCreateProject: Component = () => {
               onChange={(value) => setStore("cloneRepoUrl", value)}
             />
 
-            {/* Parent directory picker */}
-            <div class="flex flex-col gap-2">
+            {/* Parent directory browser */}
+            <div class="flex flex-col gap-2 flex-1 min-h-0">
               <label class="text-14-medium text-text-strong">Parent directory</label>
-              <div class="flex gap-2">
-                <TextField
-                  class="flex-1"
-                  type="text"
-                  placeholder="~/projects"
-                  name="cloneParentDir"
-                  value={store.cloneParentDir}
-                  onChange={(value) => setStore("cloneParentDir", value)}
-                />
+              <Show when={store.cloneParentDir}>
+                <div class="flex items-center gap-2 bg-surface-base px-3 py-2 rounded">
+                  <Icon name="folder" class="text-text-weak shrink-0" />
+                  <span class="text-14-regular text-text-base truncate flex-1">
+                    {store.cloneParentDir.replace(homedir(), "~")}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    onClick={() => setStore("cloneParentDir", "")}
+                    class="shrink-0"
+                  >
+                    <Icon name="close" />
+                  </Button>
+                </div>
+              </Show>
+              <Show when={!store.cloneParentDir}>
+                <List<DirectoryInfo>
+                  class="flex-1 min-h-0 max-h-40 [&_[data-slot=list-item]]:h-auto [&_[data-slot=list-item]]:py-1"
+                  items={fetchDirectories}
+                  key={(dir) => dir.path}
+                  filterKeys={["name", "path"]}
+                  onSelect={(dir) => dir && setStore("cloneParentDir", dir.path)}
+                  search={{ placeholder: "Search folders..." }}
+                  emptyMessage="No folders found"
+                >
+                  {(dir) => (
+                    <div class="flex items-center gap-2 w-full">
+                      <Icon name="folder" class="text-text-weak shrink-0" size="small" />
+                      <span class="text-12-regular text-text-base truncate">{dir.path.replace(homedir(), "~")}</span>
+                    </div>
+                  )}
+                </List>
                 <Show when={platform.openDirectoryPickerDialog}>
-                  <Button type="button" variant="secondary" onClick={handleBrowseCloneParent}>
-                    <Icon name="folder" />
-                    Browse
+                  <Button type="button" variant="ghost" size="small" onClick={handleBrowseCloneParent} class="justify-start">
+                    <Icon name="folder" size="small" />
+                    Browse filesystem...
                   </Button>
                 </Show>
-              </div>
+              </Show>
             </div>
 
             {/* Project name (optional, derived from repo) */}
