@@ -596,17 +596,24 @@ export default function Layout(props: ParentProps) {
     slug: string
     project: LocalProject
     mobile?: boolean
+    depth?: number
+    allSessions: Session[]
   }): JSX.Element => {
     const notification = useNotification()
+    const depth = () => props.depth ?? 0
     const updated = createMemo(() => DateTime.fromMillis(props.session.time.updated))
     const notifications = createMemo(() => notification.session.unseen(props.session.id))
     const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
+    const childSessions = createMemo(() =>
+      props.allSessions.filter((s) => s.parentID === props.session.id).toSorted(sortSessions),
+    )
+    const hasChildren = createMemo(() => childSessions().length > 0)
+    const isExpanded = createMemo(() => layout.sessions.isExpanded(props.session.id))
     const hasPermissions = createMemo(() => {
       const store = globalSync.child(props.project.worktree)[0]
       const permissions = store.permission?.[props.session.id] ?? []
       if (permissions.length > 0) return true
-      const childSessions = store.session.filter((s) => s.parentID === props.session.id)
-      for (const child of childSessions) {
+      for (const child of childSessions()) {
         const childPermissions = store.permission?.[child.id] ?? []
         if (childPermissions.length > 0) return true
       }
@@ -618,20 +625,30 @@ export default function Layout(props: ParentProps) {
       const status = globalSync.child(props.project.worktree)[0].session_status[props.session.id]
       return status?.type === "busy" || status?.type === "retry"
     })
-    return (
-      <>
-        <div
-          data-session-id={props.session.id}
-          class="group/session relative w-full pr-2 py-1 rounded-md cursor-default transition-colors
-                 hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
-          style={{ "padding-left": "16px" }}
-        >
-          <Tooltip placement={props.mobile ? "bottom" : "right"} value={props.session.title} gutter={10}>
-            <A
-              href={`${props.slug}/session/${props.session.id}`}
-              class="flex flex-col min-w-0 text-left w-full focus:outline-none"
-            >
-              <div class="flex items-center self-stretch gap-6 justify-between transition-[padding] group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7">
+
+    const SessionRow = () => (
+      <div
+        data-session-id={props.session.id}
+        class="group/session relative w-full pr-2 py-1 rounded-md cursor-default transition-colors
+               hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
+        style={{ "padding-left": `${8 + depth() * 8}px` }}
+        onClick={() => hasChildren() && layout.sessions.toggle(props.session.id)}
+      >
+        <Tooltip placement={props.mobile ? "bottom" : "right"} value={props.session.title} gutter={10}>
+          <A
+            href={`${props.slug}/session/${props.session.id}`}
+            class="flex flex-col min-w-0 text-left w-full focus:outline-none"
+          >
+            <div class="flex items-center self-stretch gap-6 justify-between transition-[padding] group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7">
+              <div class="flex items-center gap-1 min-w-0">
+                <Show when={hasChildren()} fallback={<div class="w-4 shrink-0" />}>
+                  <Icon
+                    name="chevron-down"
+                    size="small"
+                    class="transition-transform text-icon-base -ml-0.5"
+                    classList={{ "-rotate-90": !isExpanded() }}
+                  />
+                </Show>
                 <span
                   classList={{
                     "text-14-regular text-text-strong overflow-hidden text-ellipsis truncate": true,
@@ -640,60 +657,80 @@ export default function Layout(props: ParentProps) {
                 >
                   {props.session.title}
                 </span>
-                <div class="shrink-0 group-hover/session:hidden group-active/session:hidden group-focus-within/session:hidden">
-                  <Switch>
-                    <Match when={isWorking()}>
-                      <Spinner class="size-2.5 mr-0.5" />
-                    </Match>
-                    <Match when={hasPermissions()}>
-                      <div class="size-1.5 mr-1.5 rounded-full bg-surface-warning-strong" />
-                    </Match>
-                    <Match when={hasError()}>
-                      <div class="size-1.5 mr-1.5 rounded-full bg-text-diff-delete-base" />
-                    </Match>
-                    <Match when={notifications().length > 0}>
-                      <div class="size-1.5 mr-1.5 rounded-full bg-text-interactive-base" />
-                    </Match>
-                    <Match when={true}>
-                      <span class="text-12-regular text-text-weak text-right whitespace-nowrap">
-                        {Math.abs(updated().diffNow().as("seconds")) < 60
-                          ? "Now"
-                          : updated()
-                              .toRelative({
-                                style: "short",
-                                unit: ["days", "hours", "minutes"],
-                              })
-                              ?.replace(" ago", "")
-                              ?.replace(/ days?/, "d")
-                              ?.replace(" min.", "m")
-                              ?.replace(" hr.", "h")}
-                      </span>
-                    </Match>
-                  </Switch>
-                </div>
               </div>
-              <Show when={props.session.summary?.files}>
-                <div class="flex justify-between items-center self-stretch">
-                  <span class="text-12-regular text-text-weak">{`${props.session.summary?.files || "No"} file${props.session.summary?.files !== 1 ? "s" : ""} changed`}</span>
-                  <Show when={props.session.summary}>{(summary) => <DiffChanges changes={summary()} />}</Show>
-                </div>
-              </Show>
-            </A>
+              <div class="shrink-0 group-hover/session:hidden group-active/session:hidden group-focus-within/session:hidden">
+                <Switch>
+                  <Match when={isWorking()}>
+                    <Spinner class="size-2.5 mr-0.5" />
+                  </Match>
+                  <Match when={hasPermissions()}>
+                    <div class="size-1.5 mr-1.5 rounded-full bg-surface-warning-strong" />
+                  </Match>
+                  <Match when={hasError()}>
+                    <div class="size-1.5 mr-1.5 rounded-full bg-text-diff-delete-base" />
+                  </Match>
+                  <Match when={notifications().length > 0}>
+                    <div class="size-1.5 mr-1.5 rounded-full bg-text-interactive-base" />
+                  </Match>
+                  <Match when={true}>
+                    <span class="text-12-regular text-text-weak text-right whitespace-nowrap">
+                      {Math.abs(updated().diffNow().as("seconds")) < 60
+                        ? "Now"
+                        : updated()
+                            .toRelative({
+                              style: "short",
+                              unit: ["days", "hours", "minutes"],
+                            })
+                            ?.replace(" ago", "")
+                            ?.replace(/ days?/, "d")
+                            ?.replace(" min.", "m")
+                            ?.replace(" hr.", "h")}
+                    </span>
+                  </Match>
+                </Switch>
+              </div>
+            </div>
+            <Show when={props.session.summary?.files}>
+              <div class="flex justify-between items-center self-stretch pl-5">
+                <span class="text-12-regular text-text-weak">{`${props.session.summary?.files || "No"} file${props.session.summary?.files !== 1 ? "s" : ""} changed`}</span>
+                <Show when={props.session.summary}>{(summary) => <DiffChanges changes={summary()} />}</Show>
+              </div>
+            </Show>
+          </A>
+        </Tooltip>
+        <div class="hidden group-hover/session:flex group-active/session:flex group-focus-within/session:flex text-text-base gap-1 items-center absolute top-1 right-1">
+          <Tooltip
+            placement={props.mobile ? "bottom" : "right"}
+            value={
+              <div class="flex items-center gap-2">
+                <span>Archive session</span>
+                <span class="text-icon-base text-12-medium">{command.keybind("session.archive")}</span>
+              </div>
+            }
+          >
+            <IconButton icon="archive" variant="ghost" onClick={() => archiveSession(props.session)} />
           </Tooltip>
-          <div class="hidden group-hover/session:flex group-active/session:flex group-focus-within/session:flex text-text-base gap-1 items-center absolute top-1 right-1">
-            <Tooltip
-              placement={props.mobile ? "bottom" : "right"}
-              value={
-                <div class="flex items-center gap-2">
-                  <span>Archive session</span>
-                  <span class="text-icon-base text-12-medium">{command.keybind("session.archive")}</span>
-                </div>
-              }
-            >
-              <IconButton icon="archive" variant="ghost" onClick={() => archiveSession(props.session)} />
-            </Tooltip>
-          </div>
         </div>
+      </div>
+    )
+
+    return (
+      <>
+        <SessionRow />
+        <Show when={hasChildren() && isExpanded()}>
+          <For each={childSessions()}>
+            {(child) => (
+              <SessionItem
+                session={child}
+                slug={props.slug}
+                project={props.project}
+                mobile={props.mobile}
+                depth={depth() + 1}
+                allSessions={props.allSessions}
+              />
+            )}
+          </For>
+        </Show>
       </>
     )
   }
@@ -776,7 +813,13 @@ export default function Layout(props: ParentProps) {
                 <nav class="hidden @[4rem]:flex w-full flex-col gap-1.5">
                   <For each={rootSessions()}>
                     {(session) => (
-                      <SessionItem session={session} slug={slug()} project={props.project} mobile={props.mobile} />
+                      <SessionItem
+                        session={session}
+                        slug={slug()}
+                        project={props.project}
+                        mobile={props.mobile}
+                        allSessions={sessions()}
+                      />
                     )}
                   </For>
                   <Show when={rootSessions().length === 0}>
