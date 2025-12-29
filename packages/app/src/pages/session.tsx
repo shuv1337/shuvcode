@@ -63,6 +63,13 @@ import { AskQuestionWizard, type AskQuestionQuestion, type AskQuestionAnswer } f
 import { StatusBar } from "@/components/status-bar"
 import { SessionMcpIndicator } from "@/components/session-mcp-indicator"
 import { SessionLspIndicator } from "@/components/session-lsp-indicator"
+import { usePermission } from "@/context/permission"
+
+function same<T>(a: readonly T[], b: readonly T[]) {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((x, i) => x === b[i])
+}
 
 export default function Page() {
   const layout = useLayout()
@@ -80,20 +87,30 @@ export default function Page() {
   // Initialize keyboard visibility tracking for mobile terminal support
   useKeyboardVisibility()
 
+  const permission = usePermission()
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const tabs = createMemo(() => layout.tabs(sessionKey()))
 
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
   const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
-  const userMessages = createMemo(() => messages().filter((m) => m.role === "user"))
+  const emptyUserMessages: UserMessage[] = []
+  const userMessages = createMemo(
+    () => messages().filter((m) => m.role === "user") as UserMessage[],
+    emptyUserMessages,
+    { equals: same },
+  )
   // Visible user messages excludes reverted messages (those >= revertMessageID)
-  const visibleUserMessages = createMemo(() => {
-    const revert = revertMessageID()
-    if (!revert) return userMessages()
-    return userMessages().filter((m) => m.id < revert)
-  })
-  const lastUserMessage = createMemo(() => visibleUserMessages()?.at(-1))
+  const visibleUserMessages = createMemo(
+    () => {
+      const revert = revertMessageID()
+      if (!revert) return userMessages()
+      return userMessages().filter((m) => m.id < revert)
+    },
+    emptyUserMessages,
+    { equals: same },
+  )
+  const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
 
   createEffect(
     on(
@@ -251,16 +268,37 @@ export default function Page() {
     ),
   )
 
-  createEffect(() => {
-    params.id
-    const status = sync.data.session_status[params.id ?? ""] ?? { type: "idle" }
-    batch(() => {
-      setStore("userInteracted", false)
-      setStore("stepsExpanded", status.type !== "idle")
-    })
-  })
+  const idle = { type: "idle" as const }
 
-  const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? { type: "idle" })
+  createEffect(
+    on(
+      () => params.id,
+      (id) => {
+        const status = sync.data.session_status[id ?? ""] ?? idle
+        batch(() => {
+          setStore("userInteracted", false)
+          setStore("stepsExpanded", status.type !== "idle")
+        })
+      },
+    ),
+  )
+
+  const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? idle)
+
+  createEffect(
+    on(
+      () => status().type,
+      (type) => {
+        if (type !== "idle") return
+        batch(() => {
+          setStore("userInteracted", false)
+          setStore("stepsExpanded", false)
+        })
+      },
+      { defer: true },
+    ),
+  )
+
   const working = createMemo(() => status().type !== "idle" && activeMessage()?.id === lastUserMessage()?.id)
 
   createRenderEffect((prev) => {
@@ -395,6 +433,22 @@ export default function Page() {
       category: "Agent",
       keybind: "shift+mod+.",
       onSelect: () => local.agent.move(-1),
+    },
+    {
+      id: "permissions.autoaccept",
+      title: params.id && permission.isAutoAccepting(params.id) ? "Stop auto-accepting edits" : "Auto-accept edits",
+      category: "Permissions",
+      disabled: !params.id,
+      onSelect: () => {
+        if (!params.id) return
+        permission.toggleAutoAccept(params.id)
+        showToast({
+          title: permission.isAutoAccepting(params.id) ? "Auto-accepting edits" : "Stopped auto-accepting edits",
+          description: permission.isAutoAccepting(params.id)
+            ? "Edit and write permissions will be automatically approved"
+            : "Edit and write permissions will require approval",
+        })
+      },
     },
     {
       id: "session.undo",
