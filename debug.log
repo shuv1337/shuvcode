@@ -1,4 +1,0 @@
-13:43:21.363 [1;38;5;63mDEBU[m [2m<enhance/root.go:56>[m Logging to debug.log
-13:43:21.364 [1;38;5;63mDEBU[m [2m<enhance/root.go:128>[m using origin remote [2mrepo[m[2m=[mLatitudes-Dev/shuvcode
-13:43:21.364 [1;38;5;63mDEBU[m [2m<enhance/root.go:139>[m final repo [2mrepo[m[2m=[mLatitudes-Dev/shuvcode
-13:43:21.365 [1;38;5;204mERRO[m [2m<enhance/root.go:143>[m failed starting program [2merr[m[2m=[m"could not open a new TTY: open /dev/tty: no such device or address"
