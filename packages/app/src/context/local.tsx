@@ -72,7 +72,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       return {
         list,
         current() {
-          return list().find((x) => x.name === store.current)!
+          return list().find((x) => x.name === store.current) ?? list()[0]
         },
         set(name: string | undefined) {
           setStore("current", name ?? list()[0].name)
