@@ -41,6 +41,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
 import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
+import { DialogServerSettings } from "@/components/dialog-server-settings"
 import { useCommand } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 
@@ -312,6 +313,12 @@ export default function Layout(props: ParentProps) {
         const session = currentSessions().find((s) => s.id === params.id)
         if (session) archiveSession(session)
       },
+    },
+    {
+      id: "settings.server",
+      title: "Server settings",
+      category: "Settings",
+      onSelect: () => dialog.show(() => <DialogServerSettings />),
     },
   ])
 
@@ -1156,17 +1163,17 @@ export default function Layout(props: ParentProps) {
                 <Show when={layout.sidebar.opened()}>Create project</Show>
               </Button>
             </Tooltip>
-            {/* <Tooltip placement="right" value="Settings" inactive={layout.sidebar.opened()}> */}
-            {/*   <Button */}
-            {/*     disabled */}
-            {/*     class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg px-2" */}
-            {/*     variant="ghost" */}
-            {/*     size="large" */}
-            {/*     icon="settings-gear" */}
-            {/*   > */}
-            {/*     <Show when={layout.sidebar.opened()}>Settings</Show> */}
-            {/*   </Button> */}
-            {/* </Tooltip> */}
+            <Tooltip placement="right" value="Server settings" inactive={layout.sidebar.opened()}>
+              <Button
+                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+                variant="ghost"
+                size="large"
+                icon="settings-gear"
+                onClick={() => dialog.show(() => <DialogServerSettings />)}
+              >
+                <Show when={layout.sidebar.opened()}>Server settings</Show>
+              </Button>
+            </Tooltip>
             <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
               <Button
                 as={"a"}

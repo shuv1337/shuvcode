@@ -1,9 +1,10 @@
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Logo } from "@opencode-ai/ui/logo"
 import { Button } from "@opencode-ai/ui/button"
-import { Component, Show } from "solid-js"
+import { Component, createMemo, Show } from "solid-js"
 import { usePlatform } from "@/context/platform"
 import { Icon } from "@opencode-ai/ui/icon"
+import { getStoredServerUrl, clearStoredServerUrl } from "@/lib/server-url"
 
 export type InitError = {
   name: string
@@ -112,12 +113,32 @@ function formatError(error: unknown): string {
   return formatErrorChain(error, 0)
 }
 
+function isConnectionError(error: unknown): boolean {
+  const message = formatError(error).toLowerCase()
+  return (
+    message.includes("could not connect") ||
+    message.includes("econnrefused") ||
+    message.includes("fetch failed") ||
+    message.includes("network error") ||
+    message.includes("failed to fetch")
+  )
+}
+
 interface ErrorPageProps {
   error: unknown
 }
 
 export const ErrorPage: Component<ErrorPageProps> = (props) => {
   const platform = usePlatform()
+
+  const hasServerOverride = createMemo(() => !!getStoredServerUrl())
+  const showResetButton = createMemo(() => isConnectionError(props.error) && hasServerOverride())
+
+  function resetServerUrl() {
+    clearStoredServerUrl()
+    platform.restart?.() ?? window.location.reload()
+  }
+
   return (
     <div class="relative flex-1 h-screen w-screen min-h-0 flex flex-col items-center justify-center bg-background-base font-sans">
       <div class="w-2/3 max-w-3xl flex flex-col items-center justify-center gap-8">
@@ -135,9 +156,19 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
           label="Error Details"
           hideLabel
         />
-        <Button size="large" onClick={platform.restart}>
-          Restart
-        </Button>
+        <div class="flex flex-col items-center gap-3">
+          <Button size="large" onClick={platform.restart}>
+            Restart
+          </Button>
+          <Show when={showResetButton()}>
+            <Button size="large" variant="ghost" onClick={resetServerUrl}>
+              Reset server URL
+            </Button>
+            <p class="text-xs text-text-weak">
+              Using custom server URL. Reset to use default.
+            </p>
+          </Show>
+        </div>
         <div class="flex flex-col items-center gap-2">
           <div class="flex items-center justify-center gap-1">
             Please report this error to the OpenCode team
