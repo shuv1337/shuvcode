@@ -91,7 +91,7 @@ export namespace Config {
         for (const file of ["opencode.jsonc", "opencode.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigWithPlugins(result, await loadFile(path.join(dir, file)))
-          // to satisy the type checker
+          // to satisfy the type checker
           result.agent ??= {}
           result.mode ??= {}
           result.plugin ??= []
@@ -148,7 +148,7 @@ export namespace Config {
     }
   })
 
-  const INVALID_DIRS = new Bun.Glob(`{${["agents", "commands", "plugins", "tools"].join(",")}}/`)
+  const INVALID_DIRS = new Bun.Glob(`{${["agents", "commands", "plugins", "tools", "skills"].join(",")}}/`)
   async function assertValid(dir: string) {
     const invalid = await Array.fromAsync(
       INVALID_DIRS.scan({
@@ -165,26 +165,81 @@ export namespace Config {
     }
   }
 
+  // Per-directory install locks to serialize concurrent installs
+  const installLocks = new Map<string, Promise<void>>()
+
+  // Marker file schema for tracking installed dependencies
+  const DepsInstalledMarker = z.object({
+    version: z.string(),
+    timestamp: z.number(),
+  })
+
   async function installDependencies(dir: string) {
-    if (Installation.isLocal()) return
-
-    const pkg = path.join(dir, "package.json")
-
-    if (!(await Bun.file(pkg).exists())) {
-      await Bun.write(pkg, "{}")
+    // Wait for any ongoing install in this directory to complete
+    const existingLock = installLocks.get(dir)
+    if (existingLock) {
+      await existingLock
+      return
     }
 
-    const gitignore = path.join(dir, ".gitignore")
-    const hasGitIgnore = await Bun.file(gitignore).exists()
-    if (!hasGitIgnore) await Bun.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
+    // Create a new lock for this directory
+    let resolveLock: () => void
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve
+    })
+    installLocks.set(dir, lockPromise)
 
-    // Use BASE_VERSION for @opencode-ai/plugin since it's published by upstream without our -N suffix
-    await BunProc.run(
-      ["add", "@opencode-ai/plugin@" + (Installation.isLocal() ? "latest" : Installation.BASE_VERSION), "--exact"],
-      {
+    try {
+      const markerPath = path.join(dir, ".deps-installed.json")
+      const targetVersion = Installation.isLocal() ? "latest" : Installation.BASE_VERSION
+
+      // Check if dependencies are already installed with correct version
+      try {
+        const markerContent = await Bun.file(markerPath).text()
+        const marker = DepsInstalledMarker.parse(JSON.parse(markerContent))
+        if (marker.version === targetVersion) {
+          log.debug("dependencies already installed", { dir, version: marker.version })
+          return
+        }
+      } catch {
+        // Marker doesn't exist or is invalid, proceed with install
+      }
+
+      const pkg = path.join(dir, "package.json")
+
+      if (!(await Bun.file(pkg).exists())) {
+        await Bun.write(pkg, "{}")
+      }
+
+      const gitignore = path.join(dir, ".gitignore")
+      const hasGitIgnore = await Bun.file(gitignore).exists()
+      if (!hasGitIgnore) {
+        await Bun.write(
+          gitignore,
+          ["node_modules", "package.json", "bun.lock", ".gitignore", ".deps-installed.json"].join("\n"),
+        )
+      }
+
+      // Use BASE_VERSION for @opencode-ai/plugin since it's published by upstream without our -N suffix
+      await BunProc.run(["add", "@opencode-ai/plugin@" + targetVersion, "--exact"], {
         cwd: dir,
-      },
-    ).catch(() => {})
+      })
+
+      // Write marker file after successful install
+      await Bun.write(
+        markerPath,
+        JSON.stringify({
+          version: targetVersion,
+          timestamp: Date.now(),
+        }),
+      )
+      log.info("dependencies installed", { dir, version: targetVersion })
+    } catch (err) {
+      log.error("failed to install dependencies", { dir, error: err })
+    } finally {
+      installLocks.delete(dir)
+      resolveLock!()
+    }
   }
 
   const COMMAND_GLOB = new Bun.Glob("command/**/*.md")

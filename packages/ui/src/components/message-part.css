@@ -137,6 +137,9 @@
 
   [data-slot="message-part-tool-error-message"] {
     color: var(--text-on-critical-weak);
+    max-height: 240px;
+    overflow-y: auto;
+    word-break: break-word;
   }
 }
 
@@ -387,12 +390,12 @@
         conic-gradient(
             from var(--border-angle),
             transparent 0deg,
-            transparent 270deg,
+            transparent 0deg,
             var(--border-warning-strong, var(--border-warning-selected)) 300deg,
             var(--border-warning-base) 360deg
           )
           border-box;
-      animation: chase-border 1.5s linear infinite;
+      animation: chase-border 2.5s linear infinite;
       pointer-events: none;
       z-index: -1;
     }

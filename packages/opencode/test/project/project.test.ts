@@ -257,6 +257,112 @@ describe("Project.fromDirectory", () => {
   })
 })
 
+describe("Project.create", () => {
+  test("should create project at specified path", async () => {
+    await using tmp = await tmpdir()
+    const projectPath = path.join(tmp.path, "new-project")
+
+    const result = await Project.create({ path: projectPath })
+
+    expect(result.project).toBeDefined()
+    expect(result.created).toBe(true)
+    expect(result.project.worktree).toBe(projectPath)
+
+    // Verify directory was created
+    const stats = await fs.stat(projectPath)
+    expect(stats.isDirectory()).toBe(true)
+
+    // Verify git repo was initialized
+    const gitDir = path.join(projectPath, ".git")
+    const gitExists = await fs.access(gitDir).then(() => true).catch(() => false)
+    expect(gitExists).toBe(true)
+  })
+
+  test("should reject relative paths", async () => {
+    await expect(Project.create({ path: "relative/path" })).rejects.toThrow()
+  })
+
+  test("should expand tilde paths", async () => {
+    // Skip if home directory is not accessible
+    const home = process.env.HOME
+    if (!home) return
+
+    await using tmp = await tmpdir()
+    // Use a temp dir under home for this test
+    const projectName = `opencode-test-${Date.now()}`
+    const projectPath = path.join(home, projectName)
+
+    try {
+      const result = await Project.create({ path: `~/${projectName}` })
+
+      expect(result.project).toBeDefined()
+      expect(result.created).toBe(true)
+      expect(result.project.worktree).toBe(projectPath)
+    } finally {
+      // Cleanup
+      await fs.rm(projectPath, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
+  test("should clone repository when repo URL provided", async () => {
+    // Create a source repo to clone from
+    await using sourceRepo = await tmpdir({ git: true })
+    await using tmp = await tmpdir()
+    const projectPath = path.join(tmp.path, "cloned-repo")
+
+    const result = await Project.create({
+      path: projectPath,
+      repo: sourceRepo.path, // Use local git repo as source
+    })
+
+    expect(result.project).toBeDefined()
+    expect(result.created).toBe(true)
+  })
+
+  test("should set custom name when provided", async () => {
+    await using tmp = await tmpdir()
+    const projectPath = path.join(tmp.path, "named-project")
+    const customName = "My Custom Project"
+
+    const result = await Project.create({
+      path: projectPath,
+      name: customName,
+    })
+
+    expect(result.project).toBeDefined()
+    expect(result.project.name).toBe(customName)
+  })
+
+  test("should handle existing directory without git", async () => {
+    await using tmp = await tmpdir()
+    const projectPath = path.join(tmp.path, "existing-dir")
+
+    // Create directory with a file
+    await fs.mkdir(projectPath, { recursive: true })
+    await fs.writeFile(path.join(projectPath, "README.md"), "# Test")
+
+    const result = await Project.create({ path: projectPath })
+
+    expect(result.project).toBeDefined()
+    expect(result.created).toBe(true)
+
+    // Verify git was initialized
+    const gitDir = path.join(projectPath, ".git")
+    const gitExists = await fs.access(gitDir).then(() => true).catch(() => false)
+    expect(gitExists).toBe(true)
+  })
+
+  test("should add existing git repository without creating", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const result = await Project.create({ path: tmp.path })
+
+    expect(result.project).toBeDefined()
+    expect(result.created).toBe(false) // Existing repo, not newly created
+    expect(result.project.worktree).toBe(tmp.path)
+  })
+})
+
 describe("Project.discover", () => {
   test("should discover favicon.png in root", async () => {
     await using tmp = await tmpdir({ git: true })

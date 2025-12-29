@@ -679,8 +679,7 @@ export namespace Server {
           },
         }),
         async (c) => {
-          const sessions = await Array.fromAsync(Session.list())
-          pipe(
+          const sessions = pipe(
             await Array.fromAsync(Session.list()),
             filter((s) => !s.time.archived),
             sortBy((s) => s.time.updated),

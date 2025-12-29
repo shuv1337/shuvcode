@@ -24,6 +24,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         sdk.client.session.list().then((x) => {
           const sessions = (x.data ?? [])
             .slice()
+            .filter((s) => !s.time.archived)
             .sort((a, b) => a.id.localeCompare(b.id))
             .slice(0, store.limit)
           setStore("session", sessions)
@@ -113,6 +114,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           await sdk.client.session.list().then((x) => {
             const sessions = (x.data ?? [])
               .slice()
+              .filter((s) => !s.time.archived)
               .sort((a, b) => a.id.localeCompare(b.id))
               .slice(0, store.limit)
             setStore("session", sessions)

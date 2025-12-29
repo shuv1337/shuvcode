@@ -74,6 +74,7 @@ export const Terminal = (props: TerminalProps) => {
   const isTouchDevice = "ontouchstart" in window
   const isMobileInputEnabled = isCoarsePointer || isTouchDevice
   const [socket, setSocket] = createSignal<WebSocket | undefined>()
+  const [terminalColors, setTerminalColors] = createSignal(getTerminalTheme())
   let isMounted = true
   let ws: WebSocket
   let term: Term
@@ -84,6 +85,36 @@ export const Terminal = (props: TerminalProps) => {
   let themeObserver: MutationObserver
   let onTerminalThemeChange: () => void
   let pendingThemeRefresh: number | undefined
+
+  const focusTerminal = () => term?.focus()
+  const copySelection = () => {
+    if (!term || !term.hasSelection()) return false
+    const selection = term.getSelection()
+    if (!selection) return false
+    const clipboard = navigator.clipboard
+    if (clipboard?.writeText) {
+      clipboard.writeText(selection).catch(() => {})
+      return true
+    }
+    if (!document.body) return false
+    const textarea = document.createElement("textarea")
+    textarea.value = selection
+    textarea.setAttribute("readonly", "")
+    textarea.style.position = "fixed"
+    textarea.style.opacity = "0"
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand("copy")
+    document.body.removeChild(textarea)
+    return copied
+  }
+  const handlePointerDown = () => {
+    const activeElement = document.activeElement
+    if (activeElement instanceof HTMLElement && activeElement !== container) {
+      activeElement.blur()
+    }
+    focusTerminal()
+  }
 
   onMount(async () => {
     ghostty = await Ghostty.load()
@@ -98,17 +129,28 @@ export const Terminal = (props: TerminalProps) => {
 
     const buildTerminal = (snapshot?: TerminalSnapshot) => {
       if (!isMounted) return
+      const theme = getTerminalTheme()
+      setTerminalColors(theme)
       term = new Term({
         cursorBlink: true,
         fontSize: 14,
         fontFamily: "meslo, Menlo, Monaco, Courier New, monospace",
         allowTransparency: true,
-        theme: getTerminalTheme(),
+        theme,
         scrollback: 10_000,
         ghostty,
       })
       term.attachCustomKeyEventHandler((event) => {
-        if (event.ctrlKey && event.key.toLowerCase() === "`") {
+        const key = event.key.toLowerCase()
+        if (key === "c") {
+          const macCopy = event.metaKey && !event.ctrlKey && !event.altKey
+          const linuxCopy = event.ctrlKey && event.shiftKey && !event.metaKey
+          if ((macCopy || linuxCopy) && copySelection()) {
+            event.preventDefault()
+            return true
+          }
+        }
+        if (event.ctrlKey && key === "`") {
           event.preventDefault()
           return true
         }
@@ -121,6 +163,8 @@ export const Terminal = (props: TerminalProps) => {
       term.loadAddon(fitAddon)
 
       term.open(container)
+      container.addEventListener("pointerdown", handlePointerDown)
+      focusTerminal()
 
       if (snapshot?.cols && snapshot?.rows) {
         term.resize(snapshot.cols, snapshot.rows)
@@ -236,6 +280,7 @@ export const Terminal = (props: TerminalProps) => {
     if (handleResize) {
       window.removeEventListener("resize", handleResize)
     }
+    container.removeEventListener("pointerdown", handlePointerDown)
     if (onTerminalThemeChange) {
       document.documentElement.removeEventListener("terminal-theme-changed", onTerminalThemeChange)
     }
@@ -270,6 +315,7 @@ export const Terminal = (props: TerminalProps) => {
       ref={container}
       data-component="terminal"
       data-prevent-autofocus
+      style={{ "background-color": terminalColors().background }}
       classList={{
         ...(local.classList ?? {}),
         "size-full px-3 sm:px-6 py-3 font-mono relative": true,

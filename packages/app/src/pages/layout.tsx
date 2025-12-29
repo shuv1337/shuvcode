@@ -32,16 +32,20 @@ import {
 } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { useProviders } from "@/hooks/use-providers"
-import { showToast, Toast } from "@opencode-ai/ui/toast"
+import { showToast, Toast, toaster } from "@opencode-ai/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useNotification } from "@/context/notification"
 import { Binary } from "@opencode-ai/util/binary"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
 import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
-import { useCommand } from "@/context/command"
+import { DialogServerSettings } from "@/components/dialog-server-settings"
+import { DialogSelectTheme } from "@/components/theme-picker"
+import { applyTheme } from "@/theme/apply-theme"
+import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 
 export default function Layout(props: ParentProps) {
@@ -63,6 +67,41 @@ export default function Layout(props: ParentProps) {
   const providers = useProviders()
   const dialog = useDialog()
   const command = useCommand()
+  const theme = useTheme()
+  const availableThemeEntries = createMemo(() => Object.entries(theme.themes()))
+  const colorSchemeOrder: ColorScheme[] = ["system", "light", "dark"]
+  const colorSchemeLabel: Record<ColorScheme, string> = {
+    system: "System",
+    light: "Light",
+    dark: "Dark",
+  }
+
+  function cycleTheme(direction = 1) {
+    const ids = availableThemeEntries().map(([id]) => id)
+    if (ids.length === 0) return
+    const currentIndex = ids.indexOf(theme.themeId())
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + ids.length) % ids.length
+    const nextThemeId = ids[nextIndex]
+    theme.setTheme(nextThemeId)
+    const nextTheme = theme.themes()[nextThemeId]
+    showToast({
+      title: "Theme switched",
+      description: nextTheme?.name ?? nextThemeId,
+    })
+  }
+
+  function cycleColorScheme(direction = 1) {
+    const current = theme.colorScheme()
+    const currentIndex = colorSchemeOrder.indexOf(current)
+    const nextIndex =
+      currentIndex === -1 ? 0 : (currentIndex + direction + colorSchemeOrder.length) % colorSchemeOrder.length
+    const next = colorSchemeOrder[nextIndex]
+    theme.setColorScheme(next)
+    showToast({
+      title: "Color scheme",
+      description: colorSchemeLabel[next],
+    })
+  }
 
   onMount(async () => {
     if (platform.checkUpdate && platform.update && platform.restart) {
@@ -103,7 +142,15 @@ export default function Layout(props: ParentProps) {
   const otherSessions = createMemo(() => sessions().filter((s) => s.id !== currentSessionId()))
 
   onMount(() => {
-    const unsub = globalSync.permission.onUpdated(({ directory, permission }) => {
+    const seenSessions = new Set<string>()
+    const toastBySession = new Map<string, number>()
+    const unsub = globalSDK.event.listen((e) => {
+      if (e.details?.type !== "permission.updated") return
+      const directory = e.name
+      const permission = e.details.properties
+      const sessionKey = `${directory}:${permission.sessionID}`
+      if (seenSessions.has(sessionKey)) return
+      seenSessions.add(sessionKey)
       const currentDir = params.dir ? base64Decode(params.dir) : undefined
       const currentSession = params.id
       if (directory === currentDir && permission.sessionID === currentSession) return
@@ -112,7 +159,7 @@ export default function Layout(props: ParentProps) {
       if (directory === currentDir && session?.parentID === currentSession) return
       const sessionTitle = session?.title ?? "New session"
       const projectName = getFilename(directory)
-      showToast({
+      const toastId = showToast({
         persistent: true,
         icon: "checklist",
         title: "Permission required",
@@ -123,7 +170,6 @@ export default function Layout(props: ParentProps) {
             onClick: () => {
               navigate(`/${base64Encode(directory)}/session/${permission.sessionID}`)
             },
-            dismissAfter: true,
           },
           {
             label: "Dismiss",
@@ -131,8 +177,33 @@ export default function Layout(props: ParentProps) {
           },
         ],
       })
+      toastBySession.set(sessionKey, toastId)
     })
     onCleanup(unsub)
+
+    createEffect(() => {
+      const currentDir = params.dir ? base64Decode(params.dir) : undefined
+      const currentSession = params.id
+      if (!currentDir || !currentSession) return
+      const sessionKey = `${currentDir}:${currentSession}`
+      const toastId = toastBySession.get(sessionKey)
+      if (toastId !== undefined) {
+        toaster.dismiss(toastId)
+        toastBySession.delete(sessionKey)
+        seenSessions.delete(sessionKey)
+      }
+      const [store] = globalSync.child(currentDir)
+      const childSessions = store.session.filter((s) => s.parentID === currentSession)
+      for (const child of childSessions) {
+        const childKey = `${currentDir}:${child.id}`
+        const childToastId = toastBySession.get(childKey)
+        if (childToastId !== undefined) {
+          toaster.dismiss(childToastId)
+          toastBySession.delete(childKey)
+          seenSessions.delete(childKey)
+        }
+      }
+    })
   })
 
   function flattenSessions(sessions: Session[]): Session[] {
@@ -263,57 +334,90 @@ export default function Layout(props: ParentProps) {
     }
   }
 
-  command.register(() => [
-    {
-      id: "sidebar.toggle",
-      title: "Toggle sidebar",
-      category: "View",
-      keybind: "mod+b",
-      onSelect: () => layout.sidebar.toggle(),
-    },
-    ...(platform.openDirectoryPickerDialog
-      ? [
-          {
-            id: "project.open",
-            title: "Open project",
-            category: "Project",
-            keybind: "mod+o",
-            onSelect: () => chooseProject(),
-          },
-        ]
-      : []),
-    {
-      id: "provider.connect",
-      title: "Connect provider",
-      category: "Provider",
-      onSelect: () => connectProvider(),
-    },
-    {
-      id: "session.previous",
-      title: "Previous session",
-      category: "Session",
-      keybind: "alt+arrowup",
-      onSelect: () => navigateSessionByOffset(-1),
-    },
-    {
-      id: "session.next",
-      title: "Next session",
-      category: "Session",
-      keybind: "alt+arrowdown",
-      onSelect: () => navigateSessionByOffset(1),
-    },
-    {
-      id: "session.archive",
-      title: "Archive session",
-      category: "Session",
-      keybind: "mod+shift+backspace",
-      disabled: !params.dir || !params.id,
-      onSelect: () => {
-        const session = currentSessions().find((s) => s.id === params.id)
-        if (session) archiveSession(session)
+  command.register(() => {
+    const commands: CommandOption[] = [
+      {
+        id: "sidebar.toggle",
+        title: "Toggle sidebar",
+        category: "View",
+        keybind: "mod+b",
+        onSelect: () => layout.sidebar.toggle(),
       },
-    },
-  ])
+      {
+        id: "settings.server",
+        title: "Server settings",
+        category: "Settings",
+        onSelect: () => dialog.show(() => <DialogServerSettings />),
+      },
+      ...(platform.openDirectoryPickerDialog
+        ? [
+            {
+              id: "project.open",
+              title: "Open project",
+              category: "Project",
+              keybind: "mod+o",
+              onSelect: () => chooseProject(),
+            },
+          ]
+        : []),
+      {
+        id: "provider.connect",
+        title: "Connect provider",
+        category: "Provider",
+        onSelect: () => connectProvider(),
+      },
+      {
+        id: "session.previous",
+        title: "Previous session",
+        category: "Session",
+        keybind: "alt+arrowup",
+        onSelect: () => navigateSessionByOffset(-1),
+      },
+      {
+        id: "session.next",
+        title: "Next session",
+        category: "Session",
+        keybind: "alt+arrowdown",
+        onSelect: () => navigateSessionByOffset(1),
+      },
+      {
+        id: "session.archive",
+        title: "Archive session",
+        category: "Session",
+        keybind: "mod+shift+backspace",
+        disabled: !params.dir || !params.id,
+        onSelect: () => {
+          const session = currentSessions().find((s) => s.id === params.id)
+          if (session) archiveSession(session)
+        },
+      },
+      {
+        id: "theme.picker",
+        title: "Theme picker",
+        category: "Theme",
+        onSelect: () => {
+          const originalTheme = layout.theme.current()
+          dialog.show(() => <DialogSelectTheme originalTheme={originalTheme} />, () => applyTheme(layout.theme.current()))
+        },
+      },
+      {
+        id: "theme.cycle",
+        title: "Cycle theme",
+        category: "Theme",
+        keybind: "mod+shift+t",
+        onSelect: () => cycleTheme(1),
+      },
+      {
+        id: "theme.scheme.cycle",
+        title: "Cycle color scheme",
+        category: "Theme",
+        keybind: "mod+shift+s",
+        onSelect: () => cycleColorScheme(1),
+      },
+    ]
+
+    return commands
+  })
 
   function connectProvider() {
     dialog.show(() => <DialogSelectProvider />)
@@ -1156,17 +1260,17 @@ export default function Layout(props: ParentProps) {
                 <Show when={layout.sidebar.opened()}>Create project</Show>
               </Button>
             </Tooltip>
-            {/* <Tooltip placement="right" value="Settings" inactive={layout.sidebar.opened()}> */}
-            {/*   <Button */}
-            {/*     disabled */}
-            {/*     class="flex w-full text-left justify-start text-12-medium text-text-base stroke-[1.5px] rounded-lg px-2" */}
-            {/*     variant="ghost" */}
-            {/*     size="large" */}
-            {/*     icon="settings-gear" */}
-            {/*   > */}
-            {/*     <Show when={layout.sidebar.opened()}>Settings</Show> */}
-            {/*   </Button> */}
-            {/* </Tooltip> */}
+            <Tooltip placement="right" value="Server settings" inactive={layout.sidebar.opened()}>
+              <Button
+                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+                variant="ghost"
+                size="large"
+                icon="settings-gear"
+                onClick={() => dialog.show(() => <DialogServerSettings />)}
+              >
+                <Show when={layout.sidebar.opened()}>Server settings</Show>
+              </Button>
+            </Tooltip>
             <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
               <Button
                 as={"a"}
