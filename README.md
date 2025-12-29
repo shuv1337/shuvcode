@@ -47,11 +47,48 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme       |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access |
 
-_Last updated: 2025-12-22_
+_Last updated: 2025-12-29_
 
 ---
 
 ## Feature Highlights
+
+### Custom Server URL Settings
+
+Configure a custom API server URL for the desktop app:
+
+- **Settings dialog**: Access via command palette (Cmd/Ctrl+K → Settings)
+- **URL validation**: Real-time validation with connection testing
+- **Persistence**: Saved to localStorage, survives browser refresh
+- **Error recovery**: Configure server URL directly from connection error pages
+
+Useful for self-hosted deployments or development environments.
+
+---
+
+### GitHub App Integration
+
+The fork includes a dedicated GitHub App (`shuvcode-agent`) for GitHub Actions automation:
+
+- **Automatic PR reviews**: Trigger with `/shuvcode` or `/shuv` comments
+- **Token exchange**: Secure OIDC-based authentication for CI workflows
+- **Installation**: Run `shuvcode github install` to add the app to your repos
+
+The API is deployed to `api.shuv.ai` with Cloudflare Durable Objects for session sync.
+
+---
+
+### Enhanced Create Project Dialog
+
+The "Add Project" dialog now has three tabs:
+
+- **Add Existing**: Browse and search folders from $HOME with fuzzy search
+- **Create New**: Directory picker + project name field with path validation
+- **Git Clone**: Clone from URL (coming soon)
+
+Features git repo detection, existing project badges, and keyboard navigation.
+
+---
 
 ### Desktop PWA Mobile Support
 
