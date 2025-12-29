@@ -37,8 +37,26 @@ export function getThemeById(id: string): Theme {
   return THEMES.find((t) => t.id === normalized) ?? BASE_THEMES[0]
 }
 
+const OPENCODE_THEME_STORAGE_KEYS = [
+  "opencode-theme-id",
+  "opencode-color-scheme",
+  "opencode-theme-css-light",
+  "opencode-theme-css-dark",
+]
+
+function clearOpencodeTheme() {
+  if (typeof document === "undefined") return
+  for (const key of OPENCODE_THEME_STORAGE_KEYS) {
+    localStorage.removeItem(key)
+  }
+  document.getElementById("oc-theme")?.remove()
+  document.getElementById("oc-theme-preload")?.remove()
+  document.documentElement.removeAttribute("data-color-scheme")
+}
+
 export function applyTheme(themeId: string) {
   const theme = getThemeById(themeId)
+  clearOpencodeTheme()
 
   // "opencode" theme uses the default :root styles (no data-theme attribute)
   if (theme.id === "opencode") {
