@@ -91,7 +91,7 @@ export namespace Config {
         for (const file of ["opencode.jsonc", "opencode.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigWithPlugins(result, await loadFile(path.join(dir, file)))
-          // to satisy the type checker
+          // to satisfy the type checker
           result.agent ??= {}
           result.mode ??= {}
           result.plugin ??= []
@@ -148,7 +148,7 @@ export namespace Config {
     }
   })
 
-  const INVALID_DIRS = new Bun.Glob(`{${["agents", "commands", "plugins", "tools"].join(",")}}/`)
+  const INVALID_DIRS = new Bun.Glob(`{${["agents", "commands", "plugins", "tools", "skills"].join(",")}}/`)
   async function assertValid(dir: string) {
     const invalid = await Array.fromAsync(
       INVALID_DIRS.scan({

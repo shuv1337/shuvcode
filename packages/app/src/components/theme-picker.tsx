@@ -8,7 +8,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
 import { THEMES, getThemeById, applyTheme, type Theme } from "@/theme/apply-theme"
 
-function DialogSelectTheme(props: { originalTheme: string }) {
+export function DialogSelectTheme(props: { originalTheme: string }) {
   const layout = useLayout()
   const dialog = useDialog()
   const [previewTheme, setPreviewTheme] = createSignal(props.originalTheme)

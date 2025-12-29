@@ -86,7 +86,6 @@ function createGlobalSync() {
   })
 
   const children: Record<string, ReturnType<typeof createStore<State>>> = {}
-  const permissionListeners: Set<(info: { directory: string; permission: Permission }) => void> = new Set()
   function child(directory: string) {
     if (!directory) console.error("No directory provided")
     if (!children[directory]) {
@@ -336,7 +335,6 @@ function createGlobalSync() {
       }
       case "permission.updated": {
         const permissions = store.permission[event.properties.sessionID]
-        const isNew = !permissions || !permissions.find((p) => p.id === event.properties.id)
         if (!permissions) {
           setStore("permission", event.properties.sessionID, [event.properties])
         } else {
@@ -353,11 +351,6 @@ function createGlobalSync() {
             }),
           )
         }
-        if (isNew) {
-          for (const listener of permissionListeners) {
-            listener({ directory, permission: event.properties })
-          }
-        }
         break
       }
       case "permission.replied": {
@@ -372,6 +365,15 @@ function createGlobalSync() {
             draft.splice(result.index, 1)
           }),
         )
+        break
+      }
+      case "lsp.updated": {
+        const sdk = createOpencodeClient({
+          baseUrl: globalSDK.url,
+          directory,
+          throwOnError: true,
+        })
+        sdk.lsp.status().then((x) => setStore("lsp", x.data ?? []))
         break
       }
     }
@@ -445,12 +447,6 @@ function createGlobalSync() {
     bootstrap,
     project: {
       loadSessions,
-    },
-    permission: {
-      onUpdated(listener: (info: { directory: string; permission: Permission }) => void) {
-        permissionListeners.add(listener)
-        return () => permissionListeners.delete(listener)
-      },
     },
   }
 }

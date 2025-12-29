@@ -13,8 +13,37 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 
-// Regex to parse line range from file reference (e.g., "file.ts#L10-20")
-const LINE_RANGE_REGEX = /^(.+?)(?:#L(\d+)(?:-(\d+))?)?$/
+function removeLineRange(input: string) {
+  const hashIndex = input.lastIndexOf("#")
+  return hashIndex !== -1 ? input.substring(0, hashIndex) : input
+}
+
+function extractLineRange(input: string) {
+  const hashIndex = input.lastIndexOf("#")
+  if (hashIndex === -1) {
+    return { baseQuery: input }
+  }
+
+  const baseName = input.substring(0, hashIndex)
+  const linePart = input.substring(hashIndex + 1)
+  const lineMatch = linePart.match(/^(\d+)(?:-(\d*))?$/)
+
+  if (!lineMatch) {
+    return { baseQuery: baseName }
+  }
+
+  const startLine = Number(lineMatch[1])
+  const endLine = lineMatch[2] && startLine < Number(lineMatch[2]) ? Number(lineMatch[2]) : undefined
+
+  return {
+    lineRange: {
+      baseName,
+      startLine,
+      endLine,
+    },
+    baseQuery: baseName,
+  }
+}
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
@@ -147,15 +176,11 @@ export function Autocomplete(props: {
     async (query) => {
       if (!store.visible || store.visible === "/") return []
 
-      // Parse line range from query (e.g., "file.ts#L10-20" -> { file: "file.ts", start: 10, end: 20 })
-      const lineRangeMatch = (query ?? "").match(LINE_RANGE_REGEX)
-      const searchQuery = lineRangeMatch?.[1] ?? query ?? ""
-      const startLine = lineRangeMatch?.[2]
-      const endLine = lineRangeMatch?.[3]
+      const { lineRange, baseQuery } = extractLineRange(query ?? "")
 
       // Get files from SDK
       const result = await sdk.client.find.files({
-        query: searchQuery,
+        query: baseQuery,
       })
 
       const options: AutocompleteOption[] = []
@@ -165,30 +190,25 @@ export function Autocomplete(props: {
         const width = props.anchor().width - 4
         options.push(
           ...result.data.map((item): AutocompleteOption => {
-            // Build URL with optional line range query params
             let url = `file://${process.cwd()}/${item}`
-            if (startLine) {
-              const params = new URLSearchParams()
-              params.set("start", startLine)
-              if (endLine) {
-                params.set("end", endLine)
+            let filename = item
+            if (lineRange && !item.endsWith("/")) {
+              filename = `${item}#${lineRange.startLine}${lineRange.endLine ? `-${lineRange.endLine}` : ""}`
+              const urlObj = new URL(url)
+              urlObj.searchParams.set("start", String(lineRange.startLine))
+              if (lineRange.endLine !== undefined) {
+                urlObj.searchParams.set("end", String(lineRange.endLine))
               }
-              url += `?${params.toString()}`
-            }
-
-            // Build display name with line range suffix
-            let displayName = item
-            if (startLine) {
-              displayName += endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
+              url = urlObj.toString()
             }
 
             return {
-              display: Locale.truncateMiddle(displayName, width),
+              display: Locale.truncateMiddle(filename, width),
               onSelect: () => {
-                insertPart(displayName, {
+                insertPart(filename, {
                   type: "file",
                   mime: "text/plain",
-                  filename: displayName,
+                  filename,
                   url,
                   source: {
                     type: "file",
@@ -425,8 +445,8 @@ export function Autocomplete(props: {
       return prev
     }
 
-    const result = fuzzysort.go(currentFilter, mixed, {
-      keys: [(obj) => obj.display.trimEnd(), "description", (obj) => obj.aliases?.join(" ") ?? ""],
+    const result = fuzzysort.go(removeLineRange(currentFilter), mixed, {
+      keys: [(obj) => removeLineRange(obj.display.trimEnd()), "description", (obj) => obj.aliases?.join(" ") ?? ""],
       limit: 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]
