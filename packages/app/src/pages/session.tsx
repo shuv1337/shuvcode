@@ -86,11 +86,7 @@ export default function Page() {
   const info = createMemo(() => (params.id ? sync.session.get(params.id) : undefined))
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
   const messages = createMemo(() => (params.id ? (sync.data.message[params.id] ?? []) : []))
-  const userMessages = createMemo(() =>
-    messages()
-      .filter((m) => m.role === "user")
-      .sort((a, b) => a.id.localeCompare(b.id)),
-  )
+  const userMessages = createMemo(() => messages().filter((m) => m.role === "user"))
   // Visible user messages excludes reverted messages (those >= revertMessageID)
   const visibleUserMessages = createMemo(() => {
     const revert = revertMessageID()
@@ -99,7 +95,20 @@ export default function Page() {
   })
   const lastUserMessage = createMemo(() => visibleUserMessages()?.at(-1))
 
+  createEffect(
+    on(
+      () => lastUserMessage()?.id,
+      () => {
+        const msg = lastUserMessage()
+        if (!msg) return
+        if (msg.agent) local.agent.set(msg.agent)
+        if (msg.model) local.model.set(msg.model)
+      },
+    ),
+  )
+
   const [messageStore, setMessageStore] = createStore<{ messageId?: string }>({})
+
   const activeMessage = createMemo(() => {
     if (!messageStore.messageId) return lastUserMessage()
     // If the stored message is no longer visible (e.g., was reverted), fall back to last visible

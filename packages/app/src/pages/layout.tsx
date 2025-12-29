@@ -44,6 +44,7 @@ import { DialogCreateProject } from "@/components/dialog-create-project"
 import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
 import { DialogServerSettings } from "@/components/dialog-server-settings"
 import { DialogSelectTheme } from "@/components/theme-picker"
+import { DialogEditProject } from "@/components/dialog-edit-project"
 import { applyTheme } from "@/theme/apply-theme"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
@@ -520,7 +521,7 @@ export default function Layout(props: ParentProps) {
     const notification = useNotification()
     const notifications = createMemo(() => notification.project.unseen(props.project.worktree))
     const hasError = createMemo(() => notifications().some((n) => n.type === "error"))
-    const name = createMemo(() => getFilename(props.project.worktree))
+    const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
     const mask = "radial-gradient(circle 5px at calc(100% - 2px) 2px, transparent 5px, black 5.5px)"
     const opencode = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
@@ -556,7 +557,7 @@ export default function Layout(props: ParentProps) {
   }
 
   const ProjectVisual = (props: { project: LocalProject; class?: string }): JSX.Element => {
-    const name = createMemo(() => getFilename(props.project.worktree))
+    const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
     const current = createMemo(() => base64Decode(params.dir ?? ""))
     return (
       <Switch>
@@ -719,7 +720,7 @@ export default function Layout(props: ParentProps) {
   const SortableProject = (props: { project: LocalProject }): JSX.Element => {
     const sortable = createSortable(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
-    const name = createMemo(() => getFilename(props.project.worktree))
+    const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
     const [store, setProjectStore] = globalSync.child(props.project.worktree)
     const sessions = createMemo(() =>
       store.session.toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created)),
@@ -775,6 +776,11 @@ export default function Layout(props: ParentProps) {
                     <DropdownMenu.Trigger as={IconButton} icon="dot-grid" variant="ghost" />
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content>
+                        <DropdownMenu.Item
+                          onSelect={() => dialog.show(() => <DialogEditProject project={props.project} />)}
+                        >
+                          <DropdownMenu.ItemLabel>Edit project</DropdownMenu.ItemLabel>
+                        </DropdownMenu.Item>
                         <DropdownMenu.Item onSelect={() => closeProject(props.project.worktree)}>
                           <DropdownMenu.ItemLabel>Close project</DropdownMenu.ItemLabel>
                         </DropdownMenu.Item>
