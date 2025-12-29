@@ -37,6 +37,22 @@ declare global {
 // 3. Tauri injected port (desktop app with local server)
 // 4. Same-origin mode uses relative "/" to hit the proxy
 // 5. Other cases fall back to explicit host:port (dev mode)
+const OPENCODE_THEME_STORAGE_KEYS = [
+  "opencode-theme-id",
+  "opencode-color-scheme",
+  "opencode-theme-css-light",
+  "opencode-theme-css-dark",
+]
+
+if (typeof window !== "undefined") {
+  for (const key of OPENCODE_THEME_STORAGE_KEYS) {
+    localStorage.removeItem(key)
+  }
+  document.getElementById("oc-theme")?.remove()
+  document.getElementById("oc-theme-preload")?.remove()
+  document.documentElement.removeAttribute("data-color-scheme")
+}
+
 const url = iife(() => {
   // 1. Query parameter (highest priority) - persist if valid
   const queryUrl = new URLSearchParams(document.location.search).get("url")
@@ -95,7 +111,7 @@ export function App() {
   return (
     <MetaProvider>
       <Font />
-      <ThemeProvider>
+      <ThemeProvider defaultTheme="nightowl">
         <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
           <DialogProvider>
             <MarkedProvider>
