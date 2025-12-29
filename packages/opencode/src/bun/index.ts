@@ -105,13 +105,38 @@ export namespace BunProc {
 
     // Resolve actual version from installed package when using "latest"
     // This ensures subsequent starts use the cached version until explicitly updated
+    const installedPkgJson = Bun.file(path.join(mod, "package.json"))
+    const installedPkg = await installedPkgJson.json().catch(() => null)
     let resolvedVersion = version
-    if (version === "latest") {
-      const installedPkgJson = Bun.file(path.join(mod, "package.json"))
-      const installedPkg = await installedPkgJson.json().catch(() => null)
-      if (installedPkg?.version) {
-        resolvedVersion = installedPkg.version
-      }
+    if (version === "latest" && installedPkg?.version) {
+      resolvedVersion = installedPkg.version
+    }
+
+    const tslibPath = path.join(Global.Path.cache, "node_modules", "tslib", "package.json")
+    const tslibExists = await Bun.file(tslibPath).exists()
+    if (!tslibExists) {
+      const resolvedTslibVersion = "latest"
+      log.info("installing tslib dependency for runtime compatibility", {
+        pkg,
+        tslib: resolvedTslibVersion,
+      })
+      await BunProc.run([
+        "add",
+        "--force",
+        "--exact",
+        "--cwd",
+        Global.Path.cache,
+        `tslib@${resolvedTslibVersion}`,
+      ], {
+        cwd: Global.Path.cache,
+      }).catch((e) => {
+        throw new InstallFailedError(
+          { pkg: "tslib", version: resolvedTslibVersion },
+          {
+            cause: e,
+          },
+        )
+      })
     }
 
     // Bundle the plugin with all dependencies for compiled binary compatibility
@@ -123,9 +148,7 @@ export namespace BunProc {
       })
 
     // Find the entry point from package.json
-    const installedPkgJson = Bun.file(path.join(mod, "package.json"))
-    const installedPkg = await installedPkgJson.json().catch(() => ({}))
-    const entryPoint = installedPkg.main || "index.js"
+    const entryPoint = (installedPkg ?? {}).main || "index.js"
     const entryPath = path.join(mod, entryPoint)
 
     log.info("bundling plugin for compiled binary compatibility", {

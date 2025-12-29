@@ -184,12 +184,31 @@ export namespace Provider {
 
       const defaultRegion = awsRegion ?? "us-east-1"
 
-      const { fromNodeProviderChain } = await import(await BunProc.install("@aws-sdk/credential-providers"))
+      const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
+      const loadCredentialProvider = async () => {
+        const awsSdkModule = await import(awsSdkPath)
+        // Handle both bundled (default export) and unbundled (named export) versions
+        const fromNodeProviderChain = awsSdkModule.fromNodeProviderChain ?? awsSdkModule.default?.fromNodeProviderChain
+        if (!fromNodeProviderChain) {
+          throw new Error("AWS SDK credentials provider is missing fromNodeProviderChain export")
+        }
+        return fromNodeProviderChain()
+      }
+
+      let credentialProvider
+      try {
+        credentialProvider = await loadCredentialProvider()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!message.includes("tslib")) throw err
+        await BunProc.install("tslib")
+        credentialProvider = await loadCredentialProvider()
+      }
       return {
         autoload: true,
         options: {
           region: defaultRegion,
-          credentialProvider: fromNodeProviderChain(),
+          credentialProvider,
         },
         async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
           // Skip region prefixing if model already has global prefix
