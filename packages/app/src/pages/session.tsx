@@ -725,13 +725,8 @@ export default function Page() {
     )
   }
 
-  const showTabs = createMemo(() => diffs().length > 0 || (info()?.summary?.files ?? 0) > 0 || tabs().all().length > 0)
-  const tabsValue = createMemo(() => {
-    const active = tabs().active()
-    if (active) return active
-    if (diffs().length > 0) return "review"
-    return tabs().all()[0] ?? "review"
-  })
+  const showTabs = createMemo(() => layout.review.opened() && (diffs().length > 0 || tabs().all().length > 0))
+  const tabsValue = createMemo(() => tabs().active() ?? "review")
 
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
