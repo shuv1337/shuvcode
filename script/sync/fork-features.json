@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-24",
+  "lastUpdated": "2025-12-29",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -1312,6 +1312,123 @@
           "file": "packages/opencode/src/ide/index.ts",
           "description": "Diff tab uses [shuvcode] branding",
           "markers": ["[shuvcode]", "openDiff"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Custom server URL settings",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Desktop app settings dialog for configuring custom API server URL. Includes URL validation, persistence to localStorage, and server URL configuration on error pages for recovery from connection failures.",
+      "files": [
+        "packages/app/src/components/dialog-server-settings.tsx",
+        "packages/app/src/lib/server-url.ts",
+        "packages/app/src/pages/error.tsx",
+        "packages/app/src/app.tsx",
+        "packages/app/src/context/command.tsx",
+        "packages/app/src/pages/layout.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/lib/server-url.ts",
+          "description": "Server URL management with localStorage persistence and validation",
+          "markers": ["STORAGE_KEY", "getServerUrl", "setServerUrl", "validateServerUrl"]
+        },
+        {
+          "file": "packages/app/src/components/dialog-server-settings.tsx",
+          "description": "Settings dialog with URL input, validation feedback, and reset option",
+          "markers": ["DialogServerSettings", "validateUrl", "handleSave", "handleReset"]
+        },
+        {
+          "file": "packages/app/src/pages/error.tsx",
+          "description": "Server URL configuration on error page for connection failure recovery",
+          "markers": ["serverUrl", "setServerUrl", "Try Again"]
+        },
+        {
+          "file": "packages/app/src/context/command.tsx",
+          "description": "Settings command in command palette to open server settings dialog",
+          "markers": ["id: \"settings\"", "Settings", "DialogServerSettings"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Create project dialog with Git Clone tab",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Redesigned Create Project dialog with three tabs: Add Existing (folder browser), Create New (directory picker + project name), and Git Clone (URL input). Includes path validation and directory picker integration.",
+      "files": [
+        "packages/app/src/components/dialog-create-project.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Three-tab interface for different project creation modes",
+          "markers": ["activeTab() === \"existing\"", "activeTab() === \"create\"", "activeTab() === \"clone\""]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Directory picker for Create New tab with parent path selection",
+          "markers": ["parentPath", "projectName", "handleCreateNew"]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Git clone functionality with URL input",
+          "markers": ["cloneUrl", "handleClone"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "shuvcode GitHub App integration",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "GitHub App integration (shuvcode-agent, App ID 2556448) for GitHub Actions workflow automation. Includes CLI commands for installation, API endpoints for token exchange, and workflow configuration.",
+      "files": [
+        "packages/opencode/src/cli/cmd/github.ts",
+        "packages/function/src/api.ts",
+        "github/index.ts",
+        "sst.api.config.ts",
+        ".github/workflows/opencode.yml"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/github.ts",
+          "description": "GitHub install command with shuvcode-agent app installation flow",
+          "markers": ["SHUVCODE_GITHUB_APP_ID", "api.shuv.ai", "shuvcode-agent"]
+        },
+        {
+          "file": "packages/function/src/api.ts",
+          "description": "Token exchange endpoints for GitHub Actions OIDC and PAT authentication",
+          "markers": ["/exchange_github_app_token", "shuvcode-github-action", "GITHUB_APP_ID"]
+        },
+        {
+          "file": "github/index.ts",
+          "description": "GitHub Action entrypoint with shuvcode bot detection",
+          "markers": ["shuvcode-agent[bot]", "api.shuv.ai"]
+        },
+        {
+          "file": "sst.api.config.ts",
+          "description": "SST deployment config for shuv-api with Durable Objects migration",
+          "markers": ["name: \"shuv-api\"", "SyncServer", "newSqliteClasses"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Session list archived filter",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Filter archived sessions from the session list in the desktop app sync context to prevent showing deleted/archived sessions.",
+      "files": [
+        "packages/app/src/context/global-sync.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/context/global-sync.tsx",
+          "description": "Filter out archived sessions from session list",
+          "markers": ["!s.share?.archivedAt", "filter"]
         }
       ]
     },

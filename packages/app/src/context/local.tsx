@@ -344,9 +344,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const fetch = async (path: string) => {
         const relativePath = relative(path)
         const parent = relativePath.split("/").slice(0, -1).join("/")
-        if (parent) {
-          await list(parent)
-        }
+        // Always list the parent directory, including root ("") for top-level files
+        await list(parent)
       }
 
       const init = async (path: string) => {

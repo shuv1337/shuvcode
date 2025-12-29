@@ -8,7 +8,9 @@ jobs:
   check-guidelines:
     if: |
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/review') &&
+      (startsWith(github.event.comment.body, '/review') ||
+       startsWith(github.event.comment.body, '/shuv') ||
+       startsWith(github.event.comment.body, '/shuvcode')) &&
       contains(fromJson('["OWNER","MEMBER"]'), github.event.comment.author_association)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
@@ -31,8 +33,10 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Install opencode
-        run: curl -fsSL https://opencode.ai/install | bash
+      - name: Install shuvcode
+        run: |
+          # Install shuvcode from fork releases
+          curl -fsSL https://raw.githubusercontent.com/Latitudes-Dev/shuvcode/integration/install | bash
 
       - name: Get PR details
         id: pr-details
@@ -51,7 +55,7 @@ jobs:
           PR_TITLE: ${{ steps.pr-details.outputs.title }}
         run: |
           PR_BODY=$(jq -r .body pr_data.json)
-          opencode run -m anthropic/claude-opus-4-5 "A new pull request has been created: '${PR_TITLE}'
+          shuvcode run -m anthropic/claude-opus-4-5 "A new pull request has been created: '${PR_TITLE}'
 
           <pr-number>
           ${{ steps.pr-number.outputs.number }}

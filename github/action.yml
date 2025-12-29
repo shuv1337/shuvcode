@@ -1,5 +1,5 @@
-name: "opencode GitHub Action"
-description: "Run opencode in GitHub Actions workflows"
+name: "shuvcode GitHub Action"
+description: "Run shuvcode in GitHub Actions workflows"
 branding:
   icon: "code"
   color: "orange"
@@ -27,7 +27,7 @@ inputs:
     default: "false"
 
   mentions:
-    description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/opencode,/oc'"
+    description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/shuvcode,/shuv,/opencode,/oc'"
     required: false
 
   oidc_base_url:
@@ -37,33 +37,33 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Get opencode version
+    - name: Get shuvcode version
       id: version
       shell: bash
       run: |
-        VERSION=$(curl -sf https://api.github.com/repos/sst/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+        VERSION=$(curl -sf https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
         echo "version=${VERSION:-latest}" >> $GITHUB_OUTPUT
 
-    - name: Cache opencode
+    - name: Cache shuvcode
       id: cache
       uses: actions/cache@v4
       with:
-        path: ~/.opencode/bin
-        key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+        path: ~/.shuvcode/bin
+        key: shuvcode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
 
-    - name: Install opencode
+    - name: Install shuvcode
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      run: curl -fsSL https://opencode.ai/install | bash
+      run: curl -fsSL https://raw.githubusercontent.com/Latitudes-Dev/shuvcode/integration/install | bash
 
-    - name: Add opencode to PATH
+    - name: Add shuvcode to PATH
       shell: bash
-      run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+      run: echo "$HOME/.shuvcode/bin" >> $GITHUB_PATH
 
-    - name: Run opencode
+    - name: Run shuvcode
       shell: bash
-      id: run_opencode
-      run: opencode github run
+      id: run_shuvcode
+      run: shuvcode github run
       env:
         MODEL: ${{ inputs.model }}
         AGENT: ${{ inputs.agent }}

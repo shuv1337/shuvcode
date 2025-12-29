@@ -131,9 +131,9 @@ type IssueQueryResponse = {
   }
 }
 
-const AGENT_USERNAME = "opencode-agent[bot]"
+const AGENT_USERNAME = "shuvcode-agent[bot]"
 const AGENT_REACTION = "eyes"
-const WORKFLOW_FILE = ".github/workflows/opencode.yml"
+const WORKFLOW_FILE = ".github/workflows/shuvcode.yml"
 
 // Event categories for routing
 // USER_EVENTS: triggered by user actions, have actor/issueId, support reactions/comments
@@ -234,9 +234,9 @@ export const GithubInstallCommand = cmd({
                 `    1. Commit the \`${WORKFLOW_FILE}\` file and push`,
                 step2,
                 "",
-                "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
+                "    3. Go to a GitHub issue and comment `/shuv summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://opencode.ai/docs/github/#usage-examples",
+                "   Learn more about the GitHub agent - https://github.com/Latitudes-Dev/shuvcode",
               ].join("\n"),
             )
           }
@@ -318,7 +318,7 @@ export const GithubInstallCommand = cmd({
             if (installation) return s.stop("GitHub app already installed")
 
             // Open browser
-            const url = "https://github.com/apps/opencode-agent"
+            const url = "https://github.com/apps/shuvcode-agent"
             const command =
               process.platform === "darwin"
                 ? `open "${url}"`
@@ -355,7 +355,7 @@ export const GithubInstallCommand = cmd({
 
             async function getInstallation() {
               return await fetch(
-                `https://api.opencode.ai/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
+                `https://api.shuv.ai/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
               )
                 .then((res) => res.json())
                 .then((data) => data.installation)
@@ -370,7 +370,7 @@ export const GithubInstallCommand = cmd({
 
             await Bun.write(
               path.join(app.root, WORKFLOW_FILE),
-              `name: opencode
+              `name: shuvcode
 
 on:
   issue_comment:
@@ -379,12 +379,12 @@ on:
     types: [created]
 
 jobs:
-  opencode:
+  shuvcode:
     if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      contains(github.event.comment.body, ' /shuv') ||
+      startsWith(github.event.comment.body, '/shuv') ||
+      contains(github.event.comment.body, ' /shuvcode') ||
+      startsWith(github.event.comment.body, '/shuvcode')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -395,8 +395,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run opencode
-        uses: sst/opencode/github@latest${envStr}
+      - name: Run shuvcode
+        uses: Latitudes-Dev/shuvcode/github@integration${envStr}
         with:
           model: ${provider}/${model}`,
             )
@@ -673,7 +673,7 @@ export const GithubRunCommand = cmd({
 
       function normalizeOidcBaseUrl(): string {
         const value = process.env["OIDC_BASE_URL"]
-        if (!value) return "https://api.opencode.ai"
+        if (!value) return "https://api.shuv.ai"
         return value.replace(/\/+$/, "")
       }
 
@@ -722,7 +722,7 @@ export const GithubRunCommand = cmd({
         }
 
         const reviewContext = getReviewCommentContext()
-        const mentions = (process.env["MENTIONS"] || "/opencode,/oc")
+        const mentions = (process.env["MENTIONS"] || "/shuvcode,/shuv,/opencode,/oc")
           .split(",")
           .map((m) => m.trim().toLowerCase())
           .filter(Boolean)
@@ -1137,7 +1137,7 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
 
         // GitHub App bots don't return proper permissions via the collaborator API
         // even when they have write access. Allow trusted bots that are installed on the repo.
-        const trustedBots = ["opencode-agent[bot]", "coderabbitai[bot]"]
+        const trustedBots = ["shuvcode-agent[bot]", "opencode-agent[bot]", "coderabbitai[bot]"]
         if (trustedBots.includes(actor!)) {
           console.log(`  ${actor} is a trusted bot, skipping permission check`)
           return
