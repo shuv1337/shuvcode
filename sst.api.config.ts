@@ -7,6 +7,9 @@ export default $config({
       removal: input?.stage === "production" ? "retain" : "remove",
       protect: ["production"].includes(input?.stage),
       home: "cloudflare",
+      providers: {
+        cloudflare: "6.12.0",
+      },
     }
   },
   async run() {
@@ -40,9 +43,11 @@ export default $config({
               className: "SyncServer",
             },
           ])
+          // For fresh deployment, use newSqliteClasses with v1 tag
+          // After first successful deployment, change to oldTag: "v1", newTag: "v1"
           args.migrations = {
-            oldTag: "",
-            newTag: "",
+            newTag: "v1",
+            newSqliteClasses: ["SyncServer"],
           }
         },
       },
