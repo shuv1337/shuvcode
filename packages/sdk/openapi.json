@@ -2872,7 +2872,16 @@
                 "properties": {
                   "response": {
                     "type": "string",
-                    "enum": ["once", "always", "reject"]
+                    "enum": ["once", "always", "reject", "modify"]
+                  },
+                  "modifyData": {
+                    "type": "object",
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["content"]
                   }
                 },
                 "required": ["response"]
@@ -7416,6 +7425,11 @@
           "session_interrupt": {
             "description": "Interrupt current session",
             "default": "escape",
+            "type": "string"
+          },
+          "permission_edit": {
+            "description": "Edit suggested changes before applying",
+            "default": "e",
             "type": "string"
           },
           "session_compact": {

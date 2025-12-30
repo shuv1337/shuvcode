@@ -25,7 +25,15 @@ import {
   type ScrollAcceleration,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
+import type {
+  AssistantMessage,
+  Part,
+  Permission,
+  ToolPart,
+  UserMessage,
+  TextPart,
+  ReasoningPart,
+} from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import type { Tool } from "@/tool/tool"
@@ -62,6 +70,7 @@ import { Clipboard } from "../../util/clipboard"
 import { Toast, useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv.tsx"
 import { Editor } from "../../util/editor"
+import { PermissionEditor } from "@/permission/editor"
 import stripAnsi from "strip-ansi"
 import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
@@ -248,19 +257,76 @@ export function Session() {
     dialog.clear()
   }
 
+  const renderer = useRenderer()
+
+  async function handleEditPermission(permission: Permission) {
+    if (!PermissionEditor.canEdit(permission)) {
+      toast.show({ message: "This permission cannot be edited", variant: "error" })
+      return
+    }
+
+    const content = PermissionEditor.getContent(permission)
+    const ext = PermissionEditor.getExtension(permission)
+    const line = PermissionEditor.getStartLine(
+      permission.metadata.originalContent as string,
+      permission.metadata.suggestedContent as string,
+    )
+
+    const result = await Editor.open({ value: content, renderer, extension: ext, line })
+
+    if (!result.ok) {
+      const message =
+        result.reason === "no-editor"
+          ? "No editor configured (set EDITOR or VISUAL env var)"
+          : "Editor closed without saving"
+      toast.show({ message, variant: result.reason === "no-editor" ? "error" : "warning" })
+      return
+    }
+
+    const edited = result.content
+
+    // Check if user actually made changes
+    if (!PermissionEditor.hasChanges(content, edited)) {
+      // No changes - treat as normal accept
+      sdk.client.permission.respond({
+        permissionID: permission.id,
+        sessionID: route.sessionID,
+        response: "once",
+      })
+      return
+    }
+
+    // Build the modify response
+    const modifyData: PermissionEditor.SingleFileModifyData = {
+      content: edited,
+    }
+    sdk.client.permission.respond({
+      permissionID: permission.id,
+      sessionID: route.sessionID,
+      response: "modify",
+      modifyData,
+    })
+  }
+
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
 
     const first = permissions()[0]
     if (first) {
+      const editKeybind = sync.data.config.keybinds?.permission_edit ?? "e"
       const response = iife(() => {
         if (evt.ctrl || evt.meta) return
         if (evt.name === "return") return "once"
         if (evt.name === "a") return "always"
         if (evt.name === "d") return "reject"
         if (evt.name === "escape") return "reject"
+        if (evt.name === editKeybind && PermissionEditor.isEditable(first)) return "edit"
         return
       })
+      if (response === "edit") {
+        handleEditPermission(first)
+        return
+      }
       if (response) {
         sdk.client.permission.respond({
           permissionID: first.id,
@@ -878,9 +944,9 @@ export function Session() {
 
           // Open with EDITOR if available
           const result = await Editor.open({ value: transcript, renderer })
-          if (result !== undefined) {
+          if (result.ok) {
             // User edited the file, save the changes
-            await Bun.write(filepath, result)
+            await Bun.write(filepath, result.content)
           }
 
           toast.show({ message: `Session exported to ${filename}`, variant: "success" })
@@ -979,7 +1045,6 @@ export function Session() {
   })
 
   const dialog = useDialog()
-  const renderer = useRenderer()
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
@@ -1495,6 +1560,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
                 <b>d</b>
                 <span style={{ fg: theme.textMuted }}> deny</span>
               </text>
+              {PermissionEditor.isEditable(permission) && (
+                <text fg={theme.text}>
+                  <b>{sync.data.config.keybinds?.permission_edit ?? "e"}</b>
+                  <span style={{ fg: theme.textMuted }}> edit</span>
+                </text>
+              )}
             </box>
           </box>
         )}
@@ -1780,7 +1851,16 @@ ToolRegistry.register<typeof EditTool>({
 
     const ft = createMemo(() => filetype(props.input.filePath))
 
-    const diffContent = createMemo(() => props.metadata.diff ?? props.permission["diff"])
+    const diffContent = createMemo(() => {
+      // First check completed metadata
+      if (props.metadata.diff) return props.metadata.diff
+      // Then check pending permission metadata - compute diff from suggestedContent
+      const m = props.permission
+      if (m?.originalContent !== undefined && m?.suggestedContent !== undefined && m?.filePath) {
+        return PermissionEditor.computeDiff(m.filePath, m.originalContent, m.suggestedContent)
+      }
+      return undefined
+    })
 
     const diagnostics = createMemo(() => {
       const filePath = Filesystem.normalizePath(props.input.filePath ?? "")

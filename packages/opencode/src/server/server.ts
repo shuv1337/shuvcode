@@ -1541,15 +1541,18 @@ export namespace Server {
             permissionID: z.string(),
           }),
         ),
-        validator("json", z.object({ response: Permission.Response })),
+        validator(
+          "json",
+          z.object({ response: Permission.Response, modifyData: z.object({ content: z.string() }).optional() }),
+        ),
         async (c) => {
           const params = c.req.valid("param")
-          const sessionID = params.sessionID
-          const permissionID = params.permissionID
+          const body = c.req.valid("json")
           Permission.respond({
-            sessionID,
-            permissionID,
-            response: c.req.valid("json").response,
+            sessionID: params.sessionID,
+            permissionID: params.permissionID,
+            response: body.response,
+            modifyData: body.modifyData,
           })
           return c.json(true)
         },

@@ -33,6 +33,7 @@ export namespace Tool {
         metadata: M
         output: string
         attachments?: MessageV2.FilePart[]
+        modifiedInput?: z.infer<Parameters>
       }>
       formatValidationError?(error: z.ZodError): string
     }>
