@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, Match, onCleanup, onMount, ParentProps, Show, Switch, untrack, type JSX } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, ParentProps, Show, Switch, untrack, type JSX } from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"
@@ -46,17 +46,39 @@ import { DialogServerSettings } from "@/components/dialog-server-settings"
 import { DialogSelectTheme } from "@/components/theme-picker"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { applyTheme } from "@/theme/apply-theme"
+import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
+import { DialogSelectDirectory } from "@/components/dialog-select-directory"
+import { Header } from "@/components/header"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
     lastSession: {} as { [directory: string]: string },
     activeDraggable: undefined as string | undefined,
-    mobileMenuOpen: false,
+    mobileSidebarOpen: false,
+    mobileProjectsExpanded: {} as Record<string, boolean>,
   })
 
+  const mobileSidebar = {
+    open: () => store.mobileSidebarOpen,
+    show: () => setStore("mobileSidebarOpen", true),
+    hide: () => setStore("mobileSidebarOpen", false),
+    toggle: () => setStore("mobileSidebarOpen", (x) => !x),
+  }
+
+  const mobileProjects = {
+    expanded: (directory: string) => store.mobileProjectsExpanded[directory] ?? true,
+    expand: (directory: string) => setStore("mobileProjectsExpanded", directory, true),
+    collapse: (directory: string) => setStore("mobileProjectsExpanded", directory, false),
+  }
+
   let scrollContainerRef: HTMLDivElement | undefined
+  const xlQuery = window.matchMedia("(min-width: 1280px)")
+  const [isLargeViewport, setIsLargeViewport] = createSignal(xlQuery.matches)
+  const handleViewportChange = (e: MediaQueryListEvent) => setIsLargeViewport(e.matches)
+  xlQuery.addEventListener("change", handleViewportChange)
+  onCleanup(() => xlQuery.removeEventListener("change", handleViewportChange))
 
   const params = useParams()
   const globalSDK = useGlobalSDK()
@@ -131,7 +153,6 @@ export default function Layout(props: ParentProps) {
     }
   })
 
-  // Header helpers
   const currentDirectory = createMemo(() => base64Decode(params.dir ?? ""))
   const sessions = createMemo(() => {
     const dir = currentDirectory()
@@ -149,27 +170,33 @@ export default function Layout(props: ParentProps) {
       if (e.details?.type !== "permission.updated") return
       const directory = e.name
       const permission = e.details.properties
+      const currentDir = params.dir ? base64Decode(params.dir) : undefined
+      const currentSession = params.id
+      const [store] = globalSync.child(directory)
+      const session = store.session.find((s) => s.id === permission.sessionID)
+      const sessionTitle = session?.title ?? "New session"
+      const projectName = getFilename(directory)
+      const description = `${sessionTitle} in ${projectName} needs permission`
+      const href = `/${base64Encode(directory)}/session/${permission.sessionID}`
+      void platform.notify("Permission required", description, href)
+
+      if (directory === currentDir && permission.sessionID === currentSession) return
+      if (directory === currentDir && session?.parentID === currentSession) return
+
       const sessionKey = `${directory}:${permission.sessionID}`
       if (seenSessions.has(sessionKey)) return
       seenSessions.add(sessionKey)
-      const currentDir = params.dir ? base64Decode(params.dir) : undefined
-      const currentSession = params.id
-      if (directory === currentDir && permission.sessionID === currentSession) return
-      const [store] = globalSync.child(directory)
-      const session = store.session.find((s) => s.id === permission.sessionID)
-      if (directory === currentDir && session?.parentID === currentSession) return
-      const sessionTitle = session?.title ?? "New session"
-      const projectName = getFilename(directory)
+
       const toastId = showToast({
         persistent: true,
         icon: "checklist",
         title: "Permission required",
-        description: `${sessionTitle} in ${projectName} needs permission`,
+        description,
         actions: [
           {
             label: "Go to session",
             onClick: () => {
-              navigate(`/${base64Encode(directory)}/session/${permission.sessionID}`)
+              navigate(href)
             },
           },
           {
@@ -350,22 +377,24 @@ export default function Layout(props: ParentProps) {
         category: "Settings",
         onSelect: () => dialog.show(() => <DialogServerSettings />),
       },
-      ...(platform.openDirectoryPickerDialog
-        ? [
-            {
-              id: "project.open",
-              title: "Open project",
-              category: "Project",
-              keybind: "mod+o",
-              onSelect: () => chooseProject(),
-            },
-          ]
-        : []),
+      {
+        id: "project.open",
+        title: "Open project",
+        category: "Project",
+        keybind: "mod+o",
+        onSelect: () => chooseProject(),
+      },
       {
         id: "provider.connect",
         title: "Connect provider",
         category: "Provider",
         onSelect: () => connectProvider(),
+      },
+      {
+        id: "server.switch",
+        title: "Switch server",
+        category: "Server",
+        onSelect: () => openServer(),
       },
       {
         id: "session.previous",
@@ -424,6 +453,10 @@ export default function Layout(props: ParentProps) {
     dialog.show(() => <DialogSelectProvider />)
   }
 
+  function openServer() {
+    dialog.show(() => <DialogSelectServer />)
+  }
+
   function createProject() {
     dialog.show(() => <DialogCreateProject />)
   }
@@ -453,17 +486,28 @@ export default function Layout(props: ParentProps) {
   }
 
   async function chooseProject() {
-    const result = await platform.openDirectoryPickerDialog?.({
-      title: "Open project",
-      multiple: true,
-    })
-    if (Array.isArray(result)) {
-      for (const directory of result) {
-        openProject(directory, false)
+    function resolve(result: string | string[] | null) {
+      if (Array.isArray(result)) {
+        for (const directory of result) {
+          openProject(directory, false)
+        }
+        navigateToProject(result[0])
+      } else if (result) {
+        openProject(result)
       }
-      navigateToProject(result[0])
-    } else if (result) {
-      openProject(result)
+    }
+
+    if (platform.openDirectoryPickerDialog) {
+      const result = await platform.openDirectoryPickerDialog?.({
+        title: "Open project",
+        multiple: true,
+      })
+      resolve(result)
+    } else {
+      dialog.show(
+        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
+        () => resolve(null),
+      )
     }
   }
 
@@ -740,7 +784,7 @@ export default function Layout(props: ParentProps) {
     )
   }
 
-  const SortableProject = (props: { project: LocalProject }): JSX.Element => {
+  const SortableProject = (props: { project: LocalProject; mobile?: boolean }): JSX.Element => {
     const sortable = createSortable(props.project.worktree)
     const slug = createMemo(() => base64Encode(props.project.worktree))
     const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
@@ -758,11 +802,13 @@ export default function Layout(props: ParentProps) {
       if (open) layout.projects.expand(props.project.worktree)
       else layout.projects.collapse(props.project.worktree)
     }
+    const expanded = () => props.mobile || layout.sidebar.opened()
+
     return (
       // @ts-ignore
       <div use:sortable classList={{ "opacity-30": sortable.isActiveDraggable }}>
         <Switch>
-          <Match when={layout.sidebar.opened()}>
+          <Match when={expanded()}>
             <Collapsible
               variant="ghost"
               open={props.project.expanded}
@@ -813,13 +859,14 @@ export default function Layout(props: ParentProps) {
                 </div>
               </Button>
               <Collapsible.Content>
-                <nav class="hidden @[4rem]:flex w-full flex-col gap-1.5">
+                <nav class="flex w-full flex-col gap-1.5">
                   <For each={rootSessions()}>
                     {(session) => (
                       <SessionItem
                         session={session}
                         slug={slug()}
                         project={props.project}
+                        mobile={props.mobile}
                         allSessions={sessions()}
                       />
                     )}
@@ -831,7 +878,7 @@ export default function Layout(props: ParentProps) {
                     >
                       <div class="flex items-center self-stretch w-full">
                         <div class="flex-1 min-w-0">
-                          <Tooltip placement="right" value="New session">
+                          <Tooltip placement="right" value="New session" inactive={props.mobile}>
                             <A
                               href={`${slug()}/session`}
                               class="flex flex-col gap-1 min-w-0 text-left w-full focus:outline-none"
@@ -886,301 +933,12 @@ export default function Layout(props: ParentProps) {
     )
   }
 
-  return (
-    <div class="relative flex-1 min-h-0 flex flex-col bg-background-base">
-      <header class="flex flex-col shrink-0 bg-background-base border-b border-border-weak-base" data-tauri-drag-region>
-        <div class="pt-safe-top" />
-        <div class="flex h-12">
-          {/* Mobile hamburger menu button */}
-          <button
-            class="w-12 shrink-0 flex sm:hidden items-center justify-center self-stretch"
-            onClick={() => setStore("mobileMenuOpen", true)}
-            aria-label="Open menu"
-          >
-            <Icon name="menu" size="normal" />
-          </button>
-          <A
-            href="/"
-            classList={{
-              "w-12 shrink-0": true,
-              "items-center justify-center self-stretch overflow-hidden": true,
-              "border-r border-border-weak-base": true,
-              "hidden sm:flex": !layout.sidebar.opened(),
-              flex: layout.sidebar.opened(),
-            }}
-            style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
-            data-tauri-drag-region
-          >
-            <Show when={layout.sidebar.opened()} fallback={<AsciiMark scale={0.45} />}>
-              <AsciiLogo scale={0.55} />
-            </Show>
-          </A>
-          <div class="pl-2 pr-2 sm:pl-4 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
-            <Show
-              when={params.dir && layout.projects.list().length > 0}
-              fallback={
-                <div class="hidden sm:flex items-center gap-2 ml-auto">
-                  <FontPicker />
-                  <ThemePicker />
-                </div>
-              }
-            >
-              <div class="flex items-center gap-1 sm:gap-3 min-w-0 grow flex-nowrap">
-                <div class="hidden sm:flex items-center gap-2 min-w-0">
-                  <Select
-                    options={layout.projects.list().map((project) => project.worktree)}
-                    current={currentDirectory()}
-                    label={(x) => getFilename(x)}
-                    onSelect={(x) => (x ? navigateToProject(x) : undefined)}
-                    class="text-14-regular text-text-base"
-                    rootClass="min-w-0 shrink"
-                    variant="ghost"
-                    size="large"
-                  >
-                    {/* @ts-ignore */}
-                    {(i) => (
-                      <div class="flex items-center gap-2 min-w-0">
-                        <Icon name="folder" size="small" class="shrink-0" />
-                        <div class="text-text-strong truncate">{getFilename(i)}</div>
-                      </div>
-                    )}
-                  </Select>
-                  <div class="text-text-weaker">/</div>
-                </div>
-                <div class="flex items-center min-w-0 sm:hidden">
-                  <DropdownMenu>
-                    <DropdownMenu.Trigger
-                      as={Button}
-                      variant="ghost"
-                      size="large"
-                      class="flex-1 justify-between gap-3 min-w-0 text-14-regular text-text-base"
-                    >
-                      <span class="truncate text-text-base lowercase">session</span>
-                      <Icon name="chevron-down" size="small" class="shrink-0 text-icon-base" />
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content class="max-w-[calc(100vw-2rem)]">
-                        <div class="flex flex-col gap-1 py-1">
-                          <DropdownMenu.Item onSelect={() => navigate(`/${params.dir}/session`)}>
-                            <DropdownMenu.ItemLabel>
-                              <div class="flex items-center gap-2 min-w-0">
-                                <Icon name="plus-small" size="small" class="shrink-0 text-icon-base" />
-                                <span class="truncate">New session</span>
-                              </div>
-                            </DropdownMenu.ItemLabel>
-                            <Show when={!currentSessionId()}>
-                              <DropdownMenu.ItemIndicator>
-                                <Icon name="check-small" size="small" />
-                              </DropdownMenu.ItemIndicator>
-                            </Show>
-                          </DropdownMenu.Item>
-                          <Show when={currentSession()}>
-                            {(session) => (
-                              <DropdownMenu.Item onSelect={() => navigateToSession(session())}>
-                                <DropdownMenu.ItemLabel class="min-w-0">
-                                  <div class="flex items-center gap-2 min-w-0">
-                                    <Icon name="dot-grid" size="small" class="shrink-0 text-icon-base" />
-                                    <div class="flex flex-col min-w-0">
-                                      <span class="truncate">{session().title}</span>
-                                      <span class="text-12-regular text-text-weak">Current session</span>
-                                    </div>
-                                  </div>
-                                </DropdownMenu.ItemLabel>
-                                <DropdownMenu.ItemIndicator>
-                                  <Icon name="check-small" size="small" />
-                                </DropdownMenu.ItemIndicator>
-                              </DropdownMenu.Item>
-                            )}
-                          </Show>
-                        </div>
-                        <Show when={otherSessions().length}>
-                          <DropdownMenu.Separator />
-                          <div class="flex flex-col gap-1 max-h-60 overflow-y-auto pr-1">
-                            <For each={otherSessions()}>
-                              {(session) => (
-                                <DropdownMenu.Item onSelect={() => navigateToSession(session)}>
-                                  <DropdownMenu.ItemLabel class="min-w-0">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                      <span class="truncate">{session.title}</span>
-                                    </div>
-                                  </DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
-                              )}
-                            </For>
-                          </div>
-                        </Show>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu>
-                </div>
-                {/* Mobile review button - shows file count when there are changes */}
-                <Show when={layout.mobileReview.visible()}>
-                  <button
-                    class="sm:hidden flex items-center gap-1.5 px-2 h-full text-14-medium text-text-strong"
-                    onClick={() => layout.mobileReview.onOpen()?.()}
-                  >
-                    <Show when={layout.mobileReview.filesCount() > 0}>
-                      <span class="text-12-medium h-5 px-1.5 flex items-center justify-center rounded-full bg-surface-base">
-                        {layout.mobileReview.filesCount()}
-                      </span>
-                    </Show>
-                    <span>Review</span>
-                    <Icon name="chevron-right" size="small" class="text-icon-base" />
-                  </button>
-                </Show>
-                <Show when={currentSession()}>
-                  <Button
-                    as={A}
-                    href={`/${params.dir}/session`}
-                    icon="plus-small"
-                    class="hidden sm:inline-flex shrink-0 whitespace-nowrap order-2 sm:order-none"
-                  >
-                    New session
-                  </Button>
-                </Show>
-                <div class="hidden sm:flex items-center gap-2 min-w-0 sm:max-w-md sm:flex-1">
-                  <Select
-                    options={sessions()}
-                    current={currentSession()}
-                    placeholder="New session"
-                    label={(x) => x.title}
-                    value={(x) => x.id}
-                    onSelect={navigateToSession}
-                    class="text-14-regular text-text-base"
-                    rootClass="min-w-0 grow basis-full sm:basis-auto sm:max-w-md"
-                    variant="ghost"
-                    size="large"
-                  >
-                    {/* @ts-ignore */}
-                    {(session) => <div class="min-w-0 truncate">{session ? session.title : "New session"}</div>}
-                  </Select>
-                </div>
-              </div>
-              <div class="hidden sm:flex items-center gap-2 ml-auto">
-                <FontPicker />
-                <ThemePicker />
-              </div>
-              <div class="flex items-center gap-2">
-                {/* Mobile message navigation */}
-                <Show when={layout.mobileMessageNav.visible()}>
-                  <div class="sm:hidden">
-                    <DropdownMenu>
-                      <DropdownMenu.Trigger as={Button} variant="ghost" size="small" class="gap-1 px-2">
-                        <span class="text-12-medium">
-                          {layout.mobileMessageNav.currentIndex() + 1}/{layout.mobileMessageNav.messages().length}
-                        </span>
-                        <Icon name="chevron-down" size="small" />
-                      </DropdownMenu.Trigger>
-                      <DropdownMenu.Portal>
-                        <DropdownMenu.Content class="max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto">
-                          <For each={layout.mobileMessageNav.messages()}>
-                            {(msg, index) => (
-                              <DropdownMenu.Item onSelect={() => layout.mobileMessageNav.onSelect()?.(index())}>
-                                <DropdownMenu.ItemLabel class="flex items-center gap-3">
-                                  <span class="text-text-weak shrink-0">{index() + 1}</span>
-                                  <span class="truncate">{msg.title || "Message"}</span>
-                                </DropdownMenu.ItemLabel>
-                                <Show when={index() === layout.mobileMessageNav.currentIndex()}>
-                                  <DropdownMenu.ItemIndicator>
-                                    <Icon name="check-small" size="small" />
-                                  </DropdownMenu.ItemIndicator>
-                                </Show>
-                              </DropdownMenu.Item>
-                            )}
-                          </For>
-                        </DropdownMenu.Content>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu>
-                  </div>
-                </Show>
-                <Show when={currentSession()?.summary?.files}>
-                  <Tooltip
-                    class="shrink-0"
-                    value={
-                      <div class="flex items-center gap-2">
-                        <span>Toggle review</span>
-                        <span class="text-icon-base text-12-medium">Cmd Shift R</span>
-                      </div>
-                    }
-                  >
-                    <Button variant="ghost" class="group/review-toggle size-6 p-0" onClick={layout.review.toggle}>
-                      <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
-                        <Icon
-                          name={layout.review.opened() ? "layout-right" : "layout-left"}
-                          size="small"
-                          class="group-hover/review-toggle:hidden"
-                        />
-                        <Icon
-                          name={layout.review.opened() ? "layout-right-partial" : "layout-left-partial"}
-                          size="small"
-                          class="hidden group-hover/review-toggle:inline-block"
-                        />
-                        <Icon
-                          name={layout.review.opened() ? "layout-right-full" : "layout-left-full"}
-                          size="small"
-                          class="hidden group-active/review-toggle:inline-block"
-                        />
-                      </div>
-                    </Button>
-                  </Tooltip>
-                </Show>
-                <Tooltip
-                  class="shrink-0"
-                  value={
-                    <div class="flex items-center gap-2">
-                      <span>Toggle terminal</span>
-                      <span class="text-icon-base text-12-medium">Ctrl `</span>
-                    </div>
-                  }
-                >
-                  <Button variant="ghost" class="group/terminal-toggle size-6 p-0" onClick={layout.terminal.toggle}>
-                    <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
-                      <Icon
-                        size="small"
-                        name={layout.terminal.opened() ? "layout-bottom-full" : "layout-bottom"}
-                        class="group-hover/terminal-toggle:hidden"
-                      />
-                      <Icon
-                        size="small"
-                        name="layout-bottom-partial"
-                        class="hidden group-hover/terminal-toggle:inline-block"
-                      />
-                      <Icon
-                        size="small"
-                        name={layout.terminal.opened() ? "layout-bottom" : "layout-bottom-full"}
-                        class="hidden group-active/terminal-toggle:inline-block"
-                      />
-                    </div>
-                  </Button>
-                </Tooltip>
-              </div>
-            </Show>
-          </div>
-        </div>
-      </header>
-      <div class="flex-1 min-h-0 flex pl-safe-left pr-safe-right">
-        <div
-          classList={{
-            "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
-            "flex-col gap-5.5 items-start self-stretch justify-between": true,
-            "border-r border-border-weak-base contain-strict": true,
-            "hidden sm:flex": true,
-            "sm:!flex": layout.sidebar.opened(),
-          }}
-          style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
-        >
-          <Show when={layout.sidebar.opened()}>
-            <ResizeHandle
-              direction="horizontal"
-              size={layout.sidebar.width()}
-              min={150}
-              max={window.innerWidth * 0.3}
-              collapseThreshold={80}
-              onResize={layout.sidebar.resize}
-              onCollapse={layout.sidebar.close}
-            />
-          </Show>
-          <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
+  const SidebarContent = (sidebarProps: { mobile?: boolean }) => {
+    const expanded = () => sidebarProps.mobile || layout.sidebar.opened()
+    return (
+      <>
+        <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
+          <Show when={!sidebarProps.mobile}>
             <Tooltip
               class="shrink-0"
               placement="right"
@@ -1190,7 +948,7 @@ export default function Layout(props: ParentProps) {
                   <span class="text-icon-base text-12-medium">{command.keybind("sidebar.toggle")}</span>
                 </div>
               }
-              inactive={layout.sidebar.opened()}
+              inactive={expanded()}
             >
               <Button
                 variant="ghost"
@@ -1216,277 +974,198 @@ export default function Layout(props: ParentProps) {
                   />
                 </div>
                 <Show when={layout.sidebar.opened()}>
-                  <div class="text-text-strong">Toggle sidebar</div>
+                  <div class="text-text-strong ml-3">Toggle sidebar</div>
                 </Show>
               </Button>
             </Tooltip>
-            <DragDropProvider
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              collisionDetector={closestCenter}
+          </Show>
+          <DragDropProvider
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
+            collisionDetector={closestCenter}
+          >
+            <DragDropSensors />
+            <ConstrainDragXAxis />
+            <div
+              ref={(el) => {
+                if (!sidebarProps.mobile) scrollContainerRef = el
+              }}
+              class="w-full min-w-8 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar"
             >
-              <DragDropSensors />
-              <ConstrainDragXAxis />
-              <div
-                ref={scrollContainerRef}
-                class="w-full min-w-8 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar"
-              >
-                <SortableProvider ids={layout.projects.list().map((p) => p.worktree)}>
-                  <For each={layout.projects.list()}>{(project) => <SortableProject project={project} />}</For>
-                </SortableProvider>
-              </div>
-              <DragOverlay>
-                <ProjectDragOverlay />
-              </DragOverlay>
-            </DragDropProvider>
-          </div>
-          <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0 px-2 py-3">
-            <Switch>
-              <Match when={providers.all().length > 0 && !providers.paid().length && layout.sidebar.opened()}>
-                <div class="rounded-md bg-background-stronger shadow-xs-border-base">
-                  <div class="p-3 flex flex-col gap-2">
-                    <div class="text-12-medium text-text-strong">Getting started</div>
-                    <div class="text-text-base">OpenCode includes free models so you can start immediately.</div>
-                    <div class="text-text-base">Connect any provider to use models, inc. Claude, GPT, Gemini etc.</div>
-                  </div>
-                  <Tooltip placement="right" value="Connect provider" inactive={layout.sidebar.opened()}>
-                    <Button
-                      class="flex w-full text-left justify-start text-12-medium text-text-strong stroke-[1.5px] rounded-lg rounded-t-none shadow-none border-t border-border-weak-base pl-2.25 pb-px"
-                      size="large"
-                      icon="plus"
-                      onClick={connectProvider}
-                    >
-                      <Show when={layout.sidebar.opened()}>Connect provider</Show>
-                    </Button>
-                  </Tooltip>
+              <SortableProvider ids={layout.projects.list().map((p) => p.worktree)}>
+                <For each={layout.projects.list()}>
+                  {(project) => <SortableProject project={project} mobile={sidebarProps.mobile} />}
+                </For>
+              </SortableProvider>
+            </div>
+            <DragOverlay>
+              <ProjectDragOverlay />
+            </DragOverlay>
+          </DragDropProvider>
+        </div>
+        <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0 px-2 py-3">
+          <Switch>
+            <Match when={providers.all().length > 0 && !providers.paid().length && expanded()}>
+              <div class="rounded-md bg-background-stronger shadow-xs-border-base">
+                <div class="p-3 flex flex-col gap-2">
+                  <div class="text-12-medium text-text-strong">Getting started</div>
+                  <div class="text-text-base">OpenCode includes free models so you can start immediately.</div>
+                  <div class="text-text-base">Connect any provider to use models, inc. Claude, GPT, Gemini etc.</div>
                 </div>
-              </Match>
-              <Match when={providers.all().length > 0}>
-                <Tooltip placement="right" value="Connect provider" inactive={layout.sidebar.opened()}>
+                <Tooltip placement="right" value="Connect provider" inactive={expanded()}>
                   <Button
-                    class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
-                    variant="ghost"
+                    class="flex w-full text-left justify-start text-12-medium text-text-strong stroke-[1.5px] rounded-lg rounded-t-none shadow-none border-t border-border-weak-base pl-2.25 pb-px"
                     size="large"
                     icon="plus"
                     onClick={connectProvider}
                   >
-                    <Show when={layout.sidebar.opened()}>Connect provider</Show>
+                    Connect provider
                   </Button>
                 </Tooltip>
-              </Match>
-            </Switch>
-            <Show when={platform.openDirectoryPickerDialog}>
-              <Tooltip
-                placement="right"
-                value={
-                  <div class="flex items-center gap-2">
-                    <span>Open project</span>
-                    <span class="text-icon-base text-12-medium">{command.keybind("project.open")}</span>
-                  </div>
-                }
-                inactive={layout.sidebar.opened()}
-              >
+              </div>
+            </Match>
+            <Match when={providers.all().length > 0}>
+              <Tooltip placement="right" value="Connect provider" inactive={expanded()}>
                 <Button
                   class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
                   variant="ghost"
                   size="large"
-                  icon="folder-add-left"
-                  onClick={chooseProject}
+                  icon="plus"
+                  onClick={connectProvider}
                 >
-                  <Show when={layout.sidebar.opened()}>Open project</Show>
+                  <Show when={expanded()}>Connect provider</Show>
                 </Button>
               </Tooltip>
-            </Show>
-            <Tooltip placement="right" value="Create project" inactive={layout.sidebar.opened()}>
-              <Button
-                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
-                variant="ghost"
-                size="large"
-                icon="folder-add-left"
-                onClick={createProject}
-              >
-                <Show when={layout.sidebar.opened()}>Create project</Show>
-              </Button>
-            </Tooltip>
-            <Tooltip placement="right" value="Server settings" inactive={layout.sidebar.opened()}>
-              <Button
-                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
-                variant="ghost"
-                size="large"
-                icon="settings-gear"
-                onClick={() => dialog.show(() => <DialogServerSettings />)}
-              >
-                <Show when={layout.sidebar.opened()}>Server settings</Show>
-              </Button>
-            </Tooltip>
-            <Tooltip placement="right" value="Share feedback" inactive={layout.sidebar.opened()}>
-              <Button
-                as={"a"}
-                href="https://opencode.ai/desktop-feedback"
-                target="_blank"
-                class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
-                variant="ghost"
-                size="large"
-                icon="bubble-5"
-              >
-                <Show when={layout.sidebar.opened()}>Share feedback</Show>
-              </Button>
-            </Tooltip>
-          </div>
-          <Show when={layout.sidebar.opened()}>
-            <div class="absolute bottom-1 left-2 text-11-regular text-text-weaker">
+            </Match>
+          </Switch>
+          <Tooltip
+            placement="right"
+            value={
+              <div class="flex items-center gap-2">
+                <span>Open project</span>
+                <Show when={!sidebarProps.mobile}>
+                  <span class="text-icon-base text-12-medium">{command.keybind("project.open")}</span>
+                </Show>
+              </div>
+            }
+            inactive={expanded()}
+          >
+            <Button
+              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              variant="ghost"
+              size="large"
+              icon="folder-add-left"
+              onClick={chooseProject}
+            >
+              <Show when={expanded()}>Open project</Show>
+            </Button>
+          </Tooltip>
+          <Tooltip placement="right" value="Create project" inactive={expanded()}>
+            <Button
+              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              variant="ghost"
+              size="large"
+              icon="folder-add-left"
+              onClick={createProject}
+            >
+              <Show when={expanded()}>Create project</Show>
+            </Button>
+          </Tooltip>
+          <Tooltip placement="right" value="Server settings" inactive={expanded()}>
+            <Button
+              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              variant="ghost"
+              size="large"
+              icon="settings-gear"
+              onClick={() => dialog.show(() => <DialogServerSettings />)}
+            >
+              <Show when={expanded()}>Server settings</Show>
+            </Button>
+          </Tooltip>
+          <Tooltip placement="right" value="Share feedback" inactive={expanded()}>
+            <Button
+              as={"a"}
+              href="https://opencode.ai/desktop-feedback"
+              target="_blank"
+              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              variant="ghost"
+              size="large"
+              icon="bubble-5"
+            >
+              <Show when={expanded()}>Share feedback</Show>
+            </Button>
+          </Tooltip>
+          <Show when={expanded()}>
+            <div class="mt-2 px-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
             </div>
           </Show>
         </div>
+      </>
+    )
+  }
+
+  return (
+    <div class="relative flex-1 min-h-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+      <Header
+        navigateToProject={navigateToProject}
+        navigateToSession={navigateToSession}
+        onMobileMenuToggle={mobileSidebar.toggle}
+      />
+      <div class="flex-1 min-h-0 flex">
+        <div
+          classList={{
+            "hidden xl:flex": true,
+            "relative @container w-12 pb-5 shrink-0 bg-background-base": true,
+            "flex-col gap-5.5 items-start self-stretch justify-between": true,
+            "border-r border-border-weak-base contain-strict": true,
+          }}
+          style={{ width: layout.sidebar.opened() ? `${layout.sidebar.width()}px` : undefined }}
+        >
+          <Show when={layout.sidebar.opened()}>
+            <ResizeHandle
+              direction="horizontal"
+              size={layout.sidebar.width()}
+              min={150}
+              max={window.innerWidth * 0.3}
+              collapseThreshold={80}
+              onResize={layout.sidebar.resize}
+              onCollapse={layout.sidebar.close}
+            />
+          </Show>
+          <SidebarContent />
+        </div>
+        <div class="xl:hidden">
+          <div
+            classList={{
+              "fixed inset-0 bg-black/50 z-40 transition-opacity duration-200": true,
+              "opacity-100 pointer-events-auto": mobileSidebar.open(),
+              "opacity-0 pointer-events-none": !mobileSidebar.open(),
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) mobileSidebar.hide()
+            }}
+          />
+          <div
+            classList={{
+              "@container fixed inset-y-0 left-0 z-50 w-72 bg-background-base border-r border-border-weak-base flex flex-col gap-5.5 items-start self-stretch justify-between pt-12 pb-5 transition-transform duration-200 ease-out": true,
+              "translate-x-0": mobileSidebar.open(),
+              "-translate-x-full": !mobileSidebar.open(),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SidebarContent mobile />
+          </div>
+        </div>
+
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
-          {/* Desktop: direct children, Mobile: wrap in PullToRefresh for swipe-to-refresh */}
           <div class="hidden sm:contents">{props.children}</div>
           <div class="contents sm:hidden">
             <PullToRefresh>{props.children}</PullToRefresh>
           </div>
         </main>
       </div>
-
-      {/* Mobile fullscreen menu overlay */}
-      <Show when={store.mobileMenuOpen}>
-        <div
-          class="fixed inset-0 z-50 sm:hidden flex flex-col bg-background-base"
-          style={{
-            "padding-top": "var(--safe-area-inset-top)",
-            "padding-bottom": "var(--safe-area-inset-bottom)",
-            "padding-left": "var(--safe-area-inset-left)",
-            "padding-right": "var(--safe-area-inset-right)",
-          }}
-        >
-          {/* Mobile menu header */}
-          <div class="h-12 shrink-0 border-b border-border-weak-base flex items-center justify-between px-4">
-            <A href="/" class="flex items-center" onClick={() => setStore("mobileMenuOpen", false)}>
-              <AsciiLogo scale={0.55} />
-            </A>
-            <IconButton
-              icon="close"
-              variant="ghost"
-              onClick={() => setStore("mobileMenuOpen", false)}
-              aria-label="Close menu"
-            />
-          </div>
-
-          {/* Mobile menu content */}
-          <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-            {/* Home/Recent Projects link */}
-            <Button
-              variant="ghost"
-              size="large"
-              class="w-full justify-start gap-3 px-2"
-              icon="arrow-left"
-              onClick={() => {
-                navigate("/")
-                setStore("mobileMenuOpen", false)
-              }}
-            >
-              <span class="text-14-medium text-text-strong">Recent Projects</span>
-            </Button>
-
-            {/* Projects section */}
-            <Show when={layout.projects.list().length > 0}>
-              <div class="flex flex-col gap-2">
-                <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Open Projects</div>
-                <For each={layout.projects.list()}>
-                  {(project) => {
-                    const name = () => getFilename(project.worktree)
-                    return (
-                      <Button
-                        variant="ghost"
-                        size="large"
-                        class="w-full justify-start gap-3 px-2"
-                        onClick={() => {
-                          navigateToProject(project.worktree)
-                          setStore("mobileMenuOpen", false)
-                        }}
-                      >
-                        <ProjectAvatar project={project} notify />
-                        <span class="truncate text-14-medium text-text-strong">{name()}</span>
-                      </Button>
-                    )
-                  }}
-                </For>
-              </div>
-            </Show>
-
-            {/* Actions section */}
-            <div class="flex flex-col gap-2">
-              <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Actions</div>
-              <Button
-                variant="ghost"
-                size="large"
-                class="w-full justify-start gap-3 px-2"
-                icon="plus"
-                onClick={() => {
-                  setStore("mobileMenuOpen", false)
-                  connectProvider()
-                }}
-              >
-                <span class="text-14-medium text-text-strong">Connect provider</span>
-              </Button>
-              <Show when={platform.openDirectoryPickerDialog}>
-                <Button
-                  variant="ghost"
-                  size="large"
-                  class="w-full justify-start gap-3 px-2"
-                  icon="folder-add-left"
-                  onClick={() => {
-                    setStore("mobileMenuOpen", false)
-                    chooseProject()
-                  }}
-                >
-                  <span class="text-14-medium text-text-strong">Open project</span>
-                </Button>
-              </Show>
-              <Button
-                variant="ghost"
-                size="large"
-                class="w-full justify-start gap-3 px-2"
-                icon="folder-add-left"
-                onClick={() => {
-                  setStore("mobileMenuOpen", false)
-                  createProject()
-                }}
-              >
-                <span class="text-14-medium text-text-strong">Create project</span>
-              </Button>
-              <Button
-                as="a"
-                href="https://opencode.ai/desktop-feedback"
-                target="_blank"
-                variant="ghost"
-                size="large"
-                class="w-full justify-start gap-3 px-2"
-                icon="bubble-5"
-                onClick={() => setStore("mobileMenuOpen", false)}
-              >
-                <span class="text-14-medium text-text-strong">Share feedback</span>
-              </Button>
-            </div>
-
-            {/* Settings section */}
-            <div class="flex flex-col gap-2">
-              <div class="text-12-medium text-text-weak uppercase tracking-wide px-2">Settings</div>
-              <FontPicker mobile />
-              <ThemePicker mobile />
-            </div>
-          </div>
-
-          {/* Mobile menu footer */}
-          <div class="shrink-0 border-t border-border-weak-base p-4">
-            <div class="text-11-regular text-text-weaker">
-              v{__APP_VERSION__} ({__COMMIT_HASH__})
-            </div>
-          </div>
-        </div>
-      </Show>
-
       <Toast.Region />
     </div>
   )

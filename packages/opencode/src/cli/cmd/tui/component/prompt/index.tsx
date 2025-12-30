@@ -1,5 +1,5 @@
 import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg, type KeyBinding } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show, Switch, Match } from "solid-js"
+import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show, Switch, Match, batch } from "solid-js"
 import "opentui-spinner/solid"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -158,6 +158,49 @@ export function Prompt(props: PromptProps) {
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId: number
 
+  const lastUserMessage = createMemo(() => {
+    if (!props.sessionID) return undefined
+    const messages = sync.data.message[props.sessionID]
+    if (!messages) return undefined
+    return messages.findLast((m) => m.role === "user")
+  })
+
+  const [store, setStore] = createStore<{
+    prompt: PromptInfo
+    mode: "normal" | "shell"
+    extmarkToPartIndex: Map<number, number>
+    interrupt: number
+    placeholder: number
+  }>({
+    placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
+    prompt: {
+      input: "",
+      parts: [],
+    },
+    mode: "normal",
+    extmarkToPartIndex: new Map(),
+    interrupt: 0,
+  })
+
+  // Initialize agent/model/variant from last user message when session changes
+  let syncedSessionID: string | undefined
+  createEffect(() => {
+    const sessionID = props.sessionID
+    const msg = lastUserMessage()
+
+    if (sessionID !== syncedSessionID) {
+      if (!sessionID || !msg) return
+
+      syncedSessionID = sessionID
+
+      batch(() => {
+        if (msg.agent) local.agent.set(msg.agent)
+        if (msg.model) local.model.set(msg.model)
+        if (msg.variant) local.model.variant.set(msg.variant)
+      })
+    }
+  })
+
   command.register(() => {
     return [
       {
@@ -286,6 +329,7 @@ export function Prompt(props: PromptProps) {
                       start: newStart,
                       end: newEnd,
                     },
+                    path: part.source.path,
                   },
                 }
               }
@@ -303,7 +347,7 @@ export function Prompt(props: PromptProps) {
 
               return part
             })
-            .filter((part) => part !== null)
+            .filter((part): part is Exclude<typeof part, null> => part !== null)
 
           setStore("prompt", {
             input: content,
@@ -392,6 +436,11 @@ export function Prompt(props: PromptProps) {
       // Not a file reference, just insert as plain text
       input.insertText(text)
     }
+    setTimeout(() => {
+      input.getLayoutNode().markDirty()
+      input.gotoBufferEnd()
+      renderer.requestRender()
+    }, 0)
   })
 
   sdk.event.on(Ide.Event.SelectionChanged.type, (evt) => {
@@ -401,23 +450,6 @@ export function Prompt(props: PromptProps) {
   createEffect(() => {
     if (props.disabled) input.cursorColor = theme.backgroundElement
     if (!props.disabled) input.cursorColor = theme.text
-  })
-
-  const [store, setStore] = createStore<{
-    prompt: PromptInfo
-    mode: "normal" | "shell"
-    extmarkToPartIndex: Map<number, number>
-    interrupt: number
-    placeholder: number
-  }>({
-    placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
-    prompt: {
-      input: "",
-      parts: [],
-    },
-    mode: "normal",
-    extmarkToPartIndex: new Map(),
-    interrupt: 0,
   })
 
   createEffect(() => {
@@ -710,6 +742,8 @@ export function Prompt(props: PromptProps) {
     // Filter out text parts (pasted content) since they're now expanded inline
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
 
+    const variant = local.model.variant.current()
+
     if (store.mode === "shell") {
       sdk.client.session.shell({
         sessionID,
@@ -738,6 +772,7 @@ export function Prompt(props: PromptProps) {
         agent: local.agent.current().name,
         model: `${selectedModel.providerID}/${selectedModel.modelID}`,
         messageID,
+        variant,
       })
     } else {
       sdk.client.session.prompt({
@@ -746,6 +781,7 @@ export function Prompt(props: PromptProps) {
         messageID,
         agent: local.agent.current().name,
         model: selectedModel,
+        variant,
         parts: [
           {
             id: Identifier.ascending("part"),
@@ -894,6 +930,13 @@ export function Prompt(props: PromptProps) {
     return local.agent.color(local.agent.current().name)
   })
 
+  const showVariant = createMemo(() => {
+    const variants = local.model.variant.list()
+    if (variants.length === 0) return false
+    const current = local.model.variant.current()
+    return !!current
+  })
+
   const spinnerDef = createMemo(() => {
     const color = local.agent.color(local.agent.current().name)
     return {
@@ -1020,6 +1063,12 @@ export function Prompt(props: PromptProps) {
                     return
                   }
                 }
+                if (keybind.match("variant_cycle", e)) {
+                  e.preventDefault()
+                  if (local.model.variant.list().length === 0) return
+                  local.model.variant.cycle()
+                  return
+                }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
                 if (!autocomplete.visible) {
                   if (
@@ -1118,7 +1167,7 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <Show when={tall()}>
-              <box flexDirection="row" flexShrink={0} gap={1} marginTop={1}>
+              <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
                 <text fg={highlight()}>
                   {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
                 </text>
@@ -1128,6 +1177,12 @@ export function Prompt(props: PromptProps) {
                       {local.model.parsed().model}
                     </text>
                     <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                    <Show when={showVariant()}>
+                      <text fg={theme.textMuted}>·</text>
+                      <text>
+                        <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                      </text>
+                    </Show>
                   </box>
                 </Show>
               </box>
@@ -1252,6 +1307,12 @@ export function Prompt(props: PromptProps) {
                       {local.model.parsed().model}
                     </text>
                     <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                    <Show when={showVariant()}>
+                      <text fg={theme.textMuted}>·</text>
+                      <text>
+                        <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                      </text>
+                    </Show>
                   </box>
                 </Show>
               </box>

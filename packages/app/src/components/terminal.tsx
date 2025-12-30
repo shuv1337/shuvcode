@@ -318,6 +318,7 @@ export const Terminal = (props: TerminalProps) => {
       style={{ "background-color": terminalColors().background }}
       classList={{
         ...(local.classList ?? {}),
+        "select-text": true,
         "size-full px-3 sm:px-6 py-3 font-mono relative": true,
         [local.class ?? ""]: !!local.class,
       }}

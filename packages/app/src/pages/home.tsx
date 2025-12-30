@@ -10,13 +10,17 @@ import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogCreateProject } from "@/components/dialog-create-project"
+import { DialogSelectDirectory } from "@/components/dialog-select-directory"
+import { DialogSelectServer } from "@/components/dialog-select-server"
+import { useServer } from "@/context/server"
 
 export default function Home() {
   const sync = useGlobalSync()
   const layout = useLayout()
   const platform = usePlatform()
-  const navigate = useNavigate()
   const dialog = useDialog()
+  const navigate = useNavigate()
+  const server = useServer()
   const homedir = createMemo(() => sync.data.path.home)
 
   function openProject(directory: string) {
@@ -25,25 +29,52 @@ export default function Home() {
   }
 
   async function chooseProject() {
-    const result = await platform.openDirectoryPickerDialog?.({
-      title: "Open project",
-      multiple: true,
-    })
-    if (Array.isArray(result)) {
-      for (const directory of result) {
-        openProject(directory)
+    function resolve(result: string | string[] | null) {
+      if (Array.isArray(result)) {
+        for (const directory of result) {
+          openProject(directory)
+        }
+      } else if (result) {
+        openProject(result)
       }
-    } else if (result) {
-      openProject(result)
+    }
+
+    if (platform.openDirectoryPickerDialog) {
+      const result = await platform.openDirectoryPickerDialog?.({
+        title: "Open project",
+        multiple: true,
+      })
+      resolve(result)
+    } else {
+      dialog.show(
+        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
+        () => resolve(null),
+      )
     }
   }
 
   return (
-    <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom">
+    <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom overflow-y-auto no-scrollbar">
       <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-75 max-[40rem]:origin-center" />
+      <Button
+        size="small"
+        variant="ghost"
+        class="mt-4 mx-auto text-14-regular text-text-weak"
+        onClick={() => dialog.show(() => <DialogSelectServer />)}
+      >
+        <div
+          classList={{
+            "size-2 rounded-full": true,
+            "bg-icon-success-base": server.healthy() === true,
+            "bg-icon-critical-base": server.healthy() === false,
+            "bg-border-weak-base": server.healthy() === undefined,
+          }}
+        />
+        {server.name}
+      </Button>
       <Switch>
         <Match when={sync.data.project.length > 0}>
-          <div class="mt-10 sm:mt-20 w-full max-w-xl flex flex-col gap-4 px-4 sm:px-3">
+          <div class="mt-10 sm:mt-20 w-full max-w-xl flex flex-col gap-4 px-4 sm:px-3 pb-10">
             <div class="flex gap-2 items-center justify-between flex-wrap">
               <div class="text-14-medium text-text-strong">Recent projects</div>
               <div class="flex gap-2">
@@ -56,12 +87,10 @@ export default function Home() {
                   <span class="hidden sm:inline">Create project</span>
                   <span class="sm:hidden">Create</span>
                 </Button>
-                <Show when={platform.openDirectoryPickerDialog}>
-                  <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                    <span class="hidden sm:inline">Open project</span>
-                    <span class="sm:hidden">Open</span>
-                  </Button>
-                </Show>
+                <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
+                  <span class="hidden sm:inline">Open project</span>
+                  <span class="sm:hidden">Open</span>
+                </Button>
               </div>
             </div>
             <ul class="flex flex-col gap-2">
@@ -77,7 +106,7 @@ export default function Home() {
                     class="text-14-mono text-left justify-between px-3 gap-3"
                     onClick={() => openProject(project.worktree)}
                   >
-                    <span class="truncate min-w-0">{project.worktree.replace(homedir(), "~")}</span>
+                    <span class="truncate min-w-0">{project.worktree.replace(homedir() || "", "~")}</span>
                     <span class="text-14-regular text-text-weak shrink-0">
                       {DateTime.fromMillis(project.time.updated ?? project.time.created).toRelative()}
                     </span>
@@ -99,11 +128,9 @@ export default function Home() {
               <Button class="px-3" onClick={() => dialog.show(() => <DialogCreateProject />)}>
                 Create project
               </Button>
-              <Show when={platform.openDirectoryPickerDialog}>
-                <Button class="px-3" variant="ghost" onClick={chooseProject}>
-                  Open project
-                </Button>
-              </Show>
+              <Button class="px-3" variant="ghost" onClick={chooseProject}>
+                Open project
+              </Button>
             </div>
           </div>
         </Match>
