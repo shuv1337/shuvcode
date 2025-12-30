@@ -24,7 +24,6 @@ import DirectoryLayout from "@/pages/directory-layout"
 import Session from "@/pages/session"
 import { ErrorPage } from "./pages/error"
 import { iife } from "@opencode-ai/util/iife"
-import { getStoredServerUrl, setStoredServerUrl, isValidServerUrl, addToServerUrlHistory } from "@/lib/server-url"
 
 declare global {
   interface Window {
@@ -33,85 +32,25 @@ declare global {
   }
 }
 
-// URL priority:
-// 1. ?url= query parameter (explicit override) - persist if valid
-// 2. Stored URL override from localStorage
-// 3. Tauri injected port (desktop app with local server)
-// 4. Same-origin mode uses relative "/" to hit the proxy
-// 5. Other cases fall back to explicit host:port (dev mode)
-const OPENCODE_THEME_STORAGE_KEYS = [
-  "opencode-theme-id",
-  "opencode-color-scheme",
-  "opencode-theme-css-light",
-  "opencode-theme-css-dark",
-]
-
-if (typeof window !== "undefined") {
-  for (const key of OPENCODE_THEME_STORAGE_KEYS) {
-    localStorage.removeItem(key)
-  }
-  document.getElementById("oc-theme")?.remove()
-  document.getElementById("oc-theme-preload")?.remove()
-  document.documentElement.removeAttribute("data-color-scheme")
-}
-
 const defaultServerUrl = iife(() => {
-  // 1. Query parameter (highest priority) - persist if valid
-  const queryUrl = new URLSearchParams(document.location.search).get("url")
-  if (queryUrl && isValidServerUrl(queryUrl)) {
-    setStoredServerUrl(queryUrl)
-    addToServerUrlHistory(queryUrl)
-    return queryUrl
-  }
+  // 1. Query parameter (highest priority)
+  const param = new URLSearchParams(document.location.search).get("url")
+  if (param) return param
 
-  // 2. Stored URL override
-  const storedUrl = getStoredServerUrl()
-  if (storedUrl) return storedUrl
+  // 2. Known production hosts -> localhost (same as upstream + shuv.ai)
+  if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai"))
+    return "http://localhost:4096"
 
-  // 3-5. Existing logic (preserved exactly)
-  const host = import.meta.env.VITE_OPENCODE_SERVER_HOST || location.hostname || "127.0.0.1"
-  const port =
-    window.__SHUVCODE__?.port ??
-    window.__OPENCODE__?.port ??
-    import.meta.env.VITE_OPENCODE_SERVER_PORT ??
-    location.port ??
-    "4096"
+  // 3. Desktop app (Tauri) with injected port
+  if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
+  if (window.__OPENCODE__?.port) return `http://127.0.0.1:${window.__OPENCODE__.port}`
 
-  // Check if we should use same-origin requests (relative "/" URL)
-  // This is needed when:
-  // - Running behind a reverse proxy (HTTPS) that proxies API requests
-  // - Running on known production hosts
-  // - Running the web command (API and frontend served from same server)
-  // In local dev mode with HTTP, we can hit the API server directly
-  const isSecure = location.protocol === "https:"
-  const isKnownHost =
-    location.hostname.includes("opencode.ai") ||
-    location.hostname.includes("shuv.ai") ||
-    location.hostname.endsWith(".local")
-  const isLoopback = ["localhost", "127.0.0.1", "0.0.0.0"].includes(location.hostname)
-  // When accessed via non-loopback IP (e.g., LAN IP), we're still on the same server
-  // so we should use same-origin mode. Dev mode with Vite needs explicit host:port.
-  const isWebCommand = !import.meta.env.DEV
+  // 4. Dev mode -> explicit host:port from env
+  if (import.meta.env.DEV)
+    return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
 
-  // Use same-origin when:
-  // - On HTTPS (must use same-origin to avoid mixed content)
-  // - On known production hosts
-  // - On loopback in non-dev mode (production build)
-  // - On any host in non-dev mode (web command serves API and frontend together)
-  const useSameOrigin = isSecure || isKnownHost || (isLoopback && !import.meta.env.DEV) || isWebCommand
-
-  // 3. Tauri desktop
-  if (window.__SHUVCODE__?.port ?? window.__OPENCODE__?.port) {
-    return `http://${host}:${port}`
-  }
-
-  // 4. Same-origin mode
-  if (useSameOrigin) {
-    return "/"
-  }
-
-  // 5. Explicit host:port (dev mode)
-  return `http://${host}:${port}`
+  // 5. Default -> same origin (production web command)
+  return window.location.origin
 })
 
 function ServerKey(props: ParentProps) {

@@ -1,17 +1,9 @@
+import { TextField } from "@opencode-ai/ui/text-field"
 import { AsciiLogo } from "@opencode-ai/ui/logo"
 import { Button } from "@opencode-ai/ui/button"
-import { TextField } from "@opencode-ai/ui/text-field"
-import { Component, createMemo, createSignal, Show } from "solid-js"
+import { Component, Show } from "solid-js"
 import { usePlatform } from "@/context/platform"
 import { Icon } from "@opencode-ai/ui/icon"
-import {
-  addToServerUrlHistory,
-  clearStoredServerUrl,
-  getStoredServerUrl,
-  hasMixedContentRisk,
-  isValidServerUrl,
-  setStoredServerUrl,
-} from "@/lib/server-url"
 
 export type InitError = {
   name: string
@@ -183,55 +175,12 @@ function formatError(error: unknown): string {
   return formatErrorChain(error, 0)
 }
 
-function isConnectionError(error: unknown): boolean {
-  const message = formatError(error).toLowerCase()
-  return (
-    message.includes("could not connect") ||
-    message.includes("econnrefused") ||
-    message.includes("fetch failed") ||
-    message.includes("network error") ||
-    message.includes("failed to fetch")
-  )
-}
-
 interface ErrorPageProps {
   error: unknown
 }
 
 export const ErrorPage: Component<ErrorPageProps> = (props) => {
   const platform = usePlatform()
-
-  const hasServerOverride = createMemo(() => !!getStoredServerUrl())
-  const showResetButton = createMemo(() => isConnectionError(props.error) && hasServerOverride())
-  const showServerConfig = createMemo(() => isConnectionError(props.error))
-  const [serverUrl, setServerUrl] = createSignal(getStoredServerUrl() ?? "")
-  const inputValid = createMemo(() => {
-    const url = serverUrl().trim()
-    return url.length > 0 && isValidServerUrl(url)
-  })
-  const showInvalidUrl = createMemo(() => {
-    const url = serverUrl().trim()
-    return url.length > 0 && !isValidServerUrl(url)
-  })
-  const showMixedContentWarning = createMemo(() => {
-    const url = serverUrl().trim()
-    if (!url) return false
-    return hasMixedContentRisk(url)
-  })
-
-  function resetServerUrl() {
-    clearStoredServerUrl()
-    platform.restart?.() ?? window.location.reload()
-  }
-
-  function applyServerUrl() {
-    const url = serverUrl().trim()
-    if (!isValidServerUrl(url)) return
-    setStoredServerUrl(url)
-    addToServerUrlHistory(url)
-    platform.restart?.() ?? window.location.reload()
-  }
-
   return (
     <div class="relative flex-1 h-screen w-screen min-h-0 flex flex-col items-center justify-center bg-background-base font-sans">
       <div class="w-2/3 max-w-3xl flex flex-col items-center justify-center gap-8">
@@ -249,52 +198,9 @@ export const ErrorPage: Component<ErrorPageProps> = (props) => {
           label="Error Details"
           hideLabel
         />
-        <Show when={showServerConfig()}>
-          <div class="flex flex-col gap-3 w-full">
-            <div class="text-xs text-text-weak uppercase tracking-wide text-left">Server</div>
-            <div class="flex w-full gap-2">
-              <TextField
-                value={serverUrl()}
-                onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) => setServerUrl(e.currentTarget.value)}
-                placeholder="http://localhost:4096"
-                class="flex-1 font-mono"
-                onKeyDown={(e: KeyboardEvent) => {
-                  if (e.key === "Enter" && inputValid()) {
-                    applyServerUrl()
-                  }
-                }}
-              />
-              <Button size="large" onClick={applyServerUrl} disabled={!inputValid()}>
-                Set & Restart
-              </Button>
-            </div>
-            <Show when={showInvalidUrl()}>
-              <p class="text-xs text-text-weak text-left">Enter a valid HTTP or HTTPS URL.</p>
-            </Show>
-            <Show when={showMixedContentWarning()}>
-              <div class="flex items-start gap-2 p-2 rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs">
-                <Icon name="circle-ban-sign" size="small" class="shrink-0 mt-0.5" />
-                <span>
-                  This HTTP URL will be blocked by your browser (mixed content). Use{" "}
-                  <code class="font-mono bg-surface-base px-1 rounded">localhost</code> or an HTTPS URL instead.
-                </span>
-              </div>
-            </Show>
-          </div>
-        </Show>
-        <div class="flex flex-col items-center gap-3">
-          <Button size="large" onClick={platform.restart}>
-            Restart
-          </Button>
-          <Show when={showResetButton()}>
-            <Button size="large" variant="ghost" onClick={resetServerUrl}>
-              Reset server URL
-            </Button>
-            <p class="text-xs text-text-weak">
-              Using custom server URL. Reset to use default.
-            </p>
-          </Show>
-        </div>
+        <Button size="large" onClick={platform.restart}>
+          Restart
+        </Button>
         <div class="flex flex-col items-center gap-2">
           <div class="flex items-center justify-center gap-1">
             Please report this error to the shuvcode team

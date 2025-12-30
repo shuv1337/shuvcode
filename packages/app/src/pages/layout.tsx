@@ -42,7 +42,7 @@ import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogCreateProject } from "@/components/dialog-create-project"
 import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
-import { DialogServerSettings } from "@/components/dialog-server-settings"
+
 import { DialogSelectTheme } from "@/components/theme-picker"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { applyTheme } from "@/theme/apply-theme"
@@ -371,12 +371,7 @@ export default function Layout(props: ParentProps) {
         keybind: "mod+b",
         onSelect: () => layout.sidebar.toggle(),
       },
-      {
-        id: "settings.server",
-        title: "Server settings",
-        category: "Settings",
-        onSelect: () => dialog.show(() => <DialogServerSettings />),
-      },
+
       {
         id: "project.open",
         title: "Open project",
@@ -1072,15 +1067,15 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Create project</Show>
             </Button>
           </Tooltip>
-          <Tooltip placement="right" value="Server settings" inactive={expanded()}>
+          <Tooltip placement="right" value="Switch server" inactive={expanded()}>
             <Button
               class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
               variant="ghost"
               size="large"
               icon="settings-gear"
-              onClick={() => dialog.show(() => <DialogServerSettings />)}
+              onClick={() => dialog.show(() => <DialogSelectServer />)}
             >
-              <Show when={expanded()}>Server settings</Show>
+              <Show when={expanded()}>Switch server</Show>
             </Button>
           </Tooltip>
           <Tooltip placement="right" value="Share feedback" inactive={expanded()}>
