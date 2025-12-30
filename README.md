@@ -28,9 +28,11 @@
 
 <p align="center">
   <img src="shuvcode-mobile-commit-summary.png" alt="Mobile commit summary" width="250" />
+  <img src="shuvcode-mobile-git-clone-dialog.png" alt="Mobile git clone dialog" width="250" />
+  <img src="shuvcode-mobile-theme-selector.png" alt="Mobile theme selector" width="250" />
 </p>
 
-*Mobile PWA: Recent projects, sidebar navigation, AI chat with terminal, and commit summary*
+*Mobile PWA: Recent projects, sidebar menu, AI chat with terminal, commit summary, git clone dialog, and theme selector*
 
 ---
 
