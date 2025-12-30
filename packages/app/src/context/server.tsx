@@ -12,6 +12,9 @@ export function normalizeServerUrl(input: string) {
   if (!trimmed) return
   const withProtocol = /^https?:\/\//.test(trimmed) ? trimmed : `http://${trimmed}`
   const cleaned = withProtocol.replace(/\/+$/, "")
+  if ((cleaned === "http:" || cleaned === "https:") && typeof window !== "undefined") {
+    return window.location.origin
+  }
   return cleaned.replace(/^(https?:\/\/[^/]+).*/, "$1")
 }
 

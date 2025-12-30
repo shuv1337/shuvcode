@@ -45,9 +45,8 @@ const defaultServerUrl = iife(() => {
   if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
   if (window.__OPENCODE__?.port) return `http://127.0.0.1:${window.__OPENCODE__.port}`
 
-  // 4. Dev mode -> explicit host:port from env
-  if (import.meta.env.DEV)
-    return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
+  // 4. Dev mode -> same-origin so Vite proxy handles LAN access + CORS
+  if (import.meta.env.DEV) return window.location.origin
 
   // 5. Default -> same origin (production web command)
   return window.location.origin
