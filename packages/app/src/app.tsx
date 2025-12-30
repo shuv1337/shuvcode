@@ -28,6 +28,7 @@ import { getStoredServerUrl, setStoredServerUrl, isValidServerUrl, addToServerUr
 
 declare global {
   interface Window {
+    __SHUVCODE__?: { updaterEnabled?: boolean; port?: number }
     __OPENCODE__?: { updaterEnabled?: boolean; port?: number }
   }
 }
@@ -69,7 +70,12 @@ const defaultServerUrl = iife(() => {
 
   // 3-5. Existing logic (preserved exactly)
   const host = import.meta.env.VITE_OPENCODE_SERVER_HOST || location.hostname || "127.0.0.1"
-  const port = window.__OPENCODE__?.port ?? import.meta.env.VITE_OPENCODE_SERVER_PORT ?? location.port ?? "4096"
+  const port =
+    window.__SHUVCODE__?.port ??
+    window.__OPENCODE__?.port ??
+    import.meta.env.VITE_OPENCODE_SERVER_PORT ??
+    location.port ??
+    "4096"
 
   // Check if we should use same-origin requests (relative "/" URL)
   // This is needed when:
@@ -95,8 +101,8 @@ const defaultServerUrl = iife(() => {
   const useSameOrigin = isSecure || isKnownHost || (isLoopback && !import.meta.env.DEV) || isWebCommand
 
   // 3. Tauri desktop
-  if (window.__OPENCODE__?.port) {
-    return `http://${host}:${window.__OPENCODE__.port}`
+  if (window.__SHUVCODE__?.port ?? window.__OPENCODE__?.port) {
+    return `http://${host}:${port}`
   }
 
   // 4. Same-origin mode
