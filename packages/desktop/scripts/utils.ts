@@ -23,12 +23,7 @@ export const SIDECAR_BINARIES: Array<{ rustTarget: string; ocBinary: string; ass
   },
   {
     rustTarget: "aarch64-unknown-linux-gnu",
-    ocBinary: "opencode-linux-arm64",
-    assetExt: "tar.gz",
-  },
-  {
-    rustTarget: "aarch64-unknown-linux-gnu",
-    ocBinary: "opencode-linux-arm64",
+    ocBinary: "shuvcode-linux-arm64",
     assetExt: "tar.gz",
   },
 ]
@@ -46,7 +41,7 @@ export function getCurrentSidecar(target = RUST_TARGET) {
 
 export async function copyBinaryToSidecarFolder(source: string, target = RUST_TARGET) {
   await $`mkdir -p src-tauri/sidecars`
-  const dest = `src-tauri/sidecars/opencode-cli-${target}${process.platform === "win32" ? ".exe" : ""}`
+  const dest = `src-tauri/sidecars/shuvcode-cli-${target}${process.platform === "win32" ? ".exe" : ""}`
   await $`cp ${source} ${dest}`
 
   console.log(`Copied ${source} to ${dest}`)
