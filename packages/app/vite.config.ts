@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import { readFileSync } from "fs"
+import { sep } from "path"
 import { VitePWA } from "vite-plugin-pwa"
 import desktopPlugin from "./vite"
 
@@ -17,6 +18,23 @@ const commitHash =
   })()
 const apiPort = process.env.VITE_OPENCODE_SERVER_PORT ?? "4096"
 const apiTarget = `http://127.0.0.1:${apiPort}`
+const repoRoot =
+  process.env.OPENCODE_REPO_ROOT ||
+  (() => {
+    try {
+      return execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim()
+    } catch {
+      return process.cwd()
+    }
+  })()
+const reposRoot = (() => {
+  const parts = repoRoot.split(sep)
+  const reposIndex = parts.lastIndexOf("repos")
+  return reposIndex === -1 ? repoRoot : parts.slice(0, reposIndex + 1).join(sep)
+})()
+const devOrigin = process.env.VITE_DEV_ORIGIN
+const devHmrHost = process.env.VITE_DEV_HMR_HOST
+const devHmrPort = process.env.VITE_DEV_HMR_PORT
 
 // All API route prefixes from the opencode server
 const apiRoutes = [
@@ -114,6 +132,17 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     port: 3000,
+    origin: devOrigin,
+    hmr:
+      devHmrHost || devHmrPort
+        ? {
+            host: devHmrHost,
+            clientPort: devHmrPort ? Number(devHmrPort) : undefined,
+          }
+        : undefined,
+    fs: {
+      allow: [repoRoot, reposRoot],
+    },
     proxy: Object.fromEntries(
       apiRoutes.map((route) => [
         route,
@@ -127,6 +156,6 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
-    sourcemap: true,
+    // sourcemap: true,
   },
 })

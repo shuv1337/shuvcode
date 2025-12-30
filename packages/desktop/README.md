@@ -1,7 +1,21 @@
-# Tauri + Vanilla TS
+# Shuvcode Desktop (Tauri)
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Typescript.
+This package bundles the Shuvcode desktop app and ships the CLI sidecar.
+
+## Development
+
+1. Build the sidecar CLI for your target:
+   `bun run predev`
+2. Start the desktop app:
+   `bun run tauri dev`
+
+## Build
+
+1. Ensure the sidecar is present:
+   `bun run predev`
+2. Build the Tauri bundles:
+   `bun run tauri build`
 
 ## Recommended IDE Setup
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- VS Code + Tauri + rust-analyzer

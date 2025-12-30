@@ -76,8 +76,10 @@ async fn get_logs(app: AppHandle) -> Result<String, String> {
 }
 
 fn get_sidecar_port() -> u32 {
-    option_env!("OPENCODE_PORT")
+    option_env!("SHUVCODE_PORT")
         .map(|s| s.to_string())
+        .or_else(|| option_env!("OPENCODE_PORT").map(|s| s.to_string()))
+        .or_else(|| std::env::var("SHUVCODE_PORT").ok())
         .or_else(|| std::env::var("OPENCODE_PORT").ok())
         .and_then(|port_str| port_str.parse().ok())
         .unwrap_or_else(|| {
@@ -105,14 +107,16 @@ fn spawn_sidecar(app: &AppHandle, port: u32) -> CommandChild {
     #[cfg(target_os = "windows")]
     let (mut rx, child) = app
         .shell()
-        .sidecar("opencode-cli")
+        .sidecar("shuvcode-cli")
         .unwrap()
+        .env("SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
+        .env("SHUVCODE_CLIENT", "desktop")
         .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
         .env("OPENCODE_CLIENT", "desktop")
         .env("XDG_STATE_HOME", &state_dir)
         .args(["serve", &format!("--port={port}")])
         .spawn()
-        .expect("Failed to spawn opencode");
+        .expect("Failed to spawn shuvcode");
 
     #[cfg(not(target_os = "windows"))]
     let (mut rx, child) = {
@@ -120,10 +124,12 @@ fn spawn_sidecar(app: &AppHandle, port: u32) -> CommandChild {
             .expect("Failed to get current exe")
             .parent()
             .expect("Failed to get parent dir")
-            .join("opencode-cli");
+            .join("shuvcode-cli");
         let shell = get_user_shell();
         app.shell()
             .command(&shell)
+            .env("SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
+            .env("SHUVCODE_CLIENT", "desktop")
             .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
             .env("OPENCODE_CLIENT", "desktop")
             .env("XDG_STATE_HOME", &state_dir)
@@ -133,7 +139,7 @@ fn spawn_sidecar(app: &AppHandle, port: u32) -> CommandChild {
                 &format!("{} serve --port={}", sidecar_path.display(), port),
             ])
             .spawn()
-            .expect("Failed to spawn opencode")
+            .expect("Failed to spawn shuvcode")
     };
 
     tauri::async_runtime::spawn(async move {
@@ -198,6 +204,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(PinchZoomDisablePlugin)
         .invoke_handler(tauri::generate_handler![
             kill_sidecar,
@@ -222,7 +229,7 @@ pub fn run() {
                     loop {
                         if timestamp.elapsed() > Duration::from_secs(7) {
                             let res = app.dialog()
-                              .message("Failed to spawn OpenCode Server. Copy logs using the button below and send them to the team for assistance.")
+                              .message("Failed to spawn Shuvcode Server. Copy logs using the button below and send them to the team for assistance.")
                               .title("Startup Failed")
                               .buttons(MessageDialogButtons::OkCancelCustom("Copy Logs And Exit".to_string(), "Exit".to_string()))
                               .blocking_show_with_result();
@@ -263,16 +270,17 @@ pub fn run() {
 
                 let mut window_builder =
                     WebviewWindow::builder(&app, "main", WebviewUrl::App("/".into()))
-                        .title("OpenCode")
+                        .title("Shuvcode")
                         .inner_size(size.width as f64, size.height as f64)
                         .decorations(true)
                         .zoom_hotkeys_enabled(true)
                         .disable_drag_drop_handler()
                         .initialization_script(format!(
                             r#"
-                          window.__OPENCODE__ ??= {{}};
-                          window.__OPENCODE__.updaterEnabled = {updater_enabled};
-                          window.__OPENCODE__.port = {port};
+                          window.__SHUVCODE__ ??= {{}};
+                          window.__SHUVCODE__.updaterEnabled = {updater_enabled};
+                          window.__SHUVCODE__.port = {port};
+                          window.__OPENCODE__ ??= window.__SHUVCODE__;
                         "#
                         ));
 

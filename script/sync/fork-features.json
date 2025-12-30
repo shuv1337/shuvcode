@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-29",
+  "lastUpdated": "2025-12-30",
+  "lastChange": "Removed Open Project (uses native file picker, doesn't work in web). Add Project dialog now the single entry point.",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -31,6 +32,34 @@
       "reason": "Buggy implementation - removed from fork",
       "filesRemoved": ["packages/opencode/src/cli/cmd/tui/routes/session/sidebar-sessions.tsx"],
       "configRemoved": ["sessions_sidebar_toggle keybind"]
+    },
+    {
+      "pr": "upstream",
+      "title": "Custom server URL settings dialog",
+      "author": "fork",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream now provides DialogSelectServer with equivalent functionality. Simplified to align with upstream while maintaining shuv.ai domain support.",
+      "filesRemoved": [
+        "packages/app/src/components/dialog-server-settings.tsx",
+        "packages/app/src/lib/server-url.ts"
+      ],
+      "note": "Server URL handling simplified in app.tsx to match upstream. shuv.ai domains are supported alongside opencode.ai."
+    },
+    {
+      "pr": "upstream",
+      "title": "Open Project button and command",
+      "author": "upstream",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream's Open Project uses native file picker which doesn't work in web browsers. Our Add Project dialog (DialogCreateProject) with folder browser provides better web app experience.",
+      "filesRemoved": [
+        "packages/app/src/components/dialog-select-directory.tsx"
+      ],
+      "codeRemoved": [
+        "chooseProject() function in layout.tsx and home.tsx",
+        "project.open command with mod+o keybind",
+        "Open project sidebar button"
+      ],
+      "note": "Users should use Add Project button which opens DialogCreateProject with folder browser, git clone, and create new project tabs."
     }
   ],
   "apiDependencies": [
@@ -886,11 +915,11 @@
     },
     {
       "pr": 0,
-      "title": "Add existing project dialog with folder browser",
+      "title": "Add project dialog with folder browser (replaces Open Project)",
       "author": "fork",
       "status": "fork-only",
-      "description": "Redesigned create project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input. Uses List component for keyboard navigation and shows git/added badges.",
-      "files": ["packages/app/src/components/dialog-create-project.tsx"],
+      "description": "Redesigned project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input, Git Clone tab for cloning repos. Uses List component for keyboard navigation and shows git/added badges. This replaces upstream's Open Project functionality which uses native file picker (doesn't work in web browsers).",
+      "files": ["packages/app/src/components/dialog-create-project.tsx", "packages/app/src/pages/home.tsx", "packages/app/src/pages/layout.tsx"],
       "criticalCode": [
         {
           "file": "packages/app/src/components/dialog-create-project.tsx",
@@ -922,6 +951,16 @@
           "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Dialog uses lg size for more folder visibility",
           "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
+        },
+        {
+          "file": "packages/app/src/pages/home.tsx",
+          "description": "Single Add project button on home page (replaces Create+Open buttons)",
+          "markers": ["addProject()", "Add project"]
+        },
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Single Add project button in sidebar (replaces Create+Open buttons)",
+          "markers": ["Add project", "createProject"]
         }
       ]
     },
@@ -1315,43 +1354,7 @@
         }
       ]
     },
-    {
-      "pr": 0,
-      "title": "Custom server URL settings",
-      "author": "fork",
-      "status": "fork-only",
-      "description": "Desktop app settings dialog for configuring custom API server URL. Includes URL validation, persistence to localStorage, and server URL configuration on error pages for recovery from connection failures.",
-      "files": [
-        "packages/app/src/components/dialog-server-settings.tsx",
-        "packages/app/src/lib/server-url.ts",
-        "packages/app/src/pages/error.tsx",
-        "packages/app/src/app.tsx",
-        "packages/app/src/context/command.tsx",
-        "packages/app/src/pages/layout.tsx"
-      ],
-      "criticalCode": [
-        {
-          "file": "packages/app/src/lib/server-url.ts",
-          "description": "Server URL management with localStorage persistence and validation",
-          "markers": ["STORAGE_KEY", "getServerUrl", "setServerUrl", "validateServerUrl"]
-        },
-        {
-          "file": "packages/app/src/components/dialog-server-settings.tsx",
-          "description": "Settings dialog with URL input, validation feedback, and reset option",
-          "markers": ["DialogServerSettings", "validateUrl", "handleSave", "handleReset"]
-        },
-        {
-          "file": "packages/app/src/pages/error.tsx",
-          "description": "Server URL configuration on error page for connection failure recovery",
-          "markers": ["serverUrl", "setServerUrl", "Try Again"]
-        },
-        {
-          "file": "packages/app/src/context/command.tsx",
-          "description": "Settings command in command palette to open server settings dialog",
-          "markers": ["id: \"settings\"", "Settings", "DialogServerSettings"]
-        }
-      ]
-    },
+
     {
       "pr": 0,
       "title": "Create project dialog with Git Clone tab",
@@ -1429,6 +1432,64 @@
           "file": "packages/app/src/context/global-sync.tsx",
           "description": "Filter out archived sessions from session list",
           "markers": ["!s.share?.archivedAt", "filter"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop Tauri shuvcode branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand desktop Tauri app to shuvcode. Package renamed to shuvcode-desktop, Rust lib to shuvcode_lib. Window API uses window.__SHUVCODE__ with __OPENCODE__ fallback. Environment variables prioritize SHUVCODE_* prefix (SHUVCODE_PORT, SHUVCODE_ALLOW_WAYLAND, SHUVCODE_CLIENT, SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY) with OPENCODE_* fallback for backwards compatibility.",
+      "files": [
+        "packages/desktop/package.json",
+        "packages/desktop/src-tauri/Cargo.toml",
+        "packages/desktop/src-tauri/Cargo.lock",
+        "packages/desktop/src-tauri/src/lib.rs",
+        "packages/desktop/src-tauri/src/main.rs",
+        "packages/desktop/src/updater.ts",
+        "packages/app/src/app.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src-tauri/Cargo.toml",
+          "description": "Package and lib renamed to shuvcode-desktop and shuvcode_lib",
+          "markers": ["name = \"shuvcode-desktop\"", "name = \"shuvcode_lib\""]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "Window API initialization with __SHUVCODE__ and __OPENCODE__ fallback",
+          "markers": ["window.__SHUVCODE__", "window.__OPENCODE__ ??= window.__SHUVCODE__"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "SHUVCODE_PORT env var with OPENCODE_PORT fallback",
+          "markers": ["option_env!(\"SHUVCODE_PORT\")", "option_env!(\"OPENCODE_PORT\")"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "Sidecar env vars for shuvcode branding with opencode fallback",
+          "markers": ["SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "SHUVCODE_CLIENT"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/main.rs",
+          "description": "SHUVCODE_ALLOW_WAYLAND env var with OC_ALLOW_WAYLAND fallback",
+          "markers": ["SHUVCODE_ALLOW_WAYLAND", "OC_ALLOW_WAYLAND"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Window.__SHUVCODE__ interface with port/updaterEnabled",
+          "markers": ["window.__SHUVCODE__?: { updaterEnabled?: boolean; port?: number }"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Port resolution chain: __SHUVCODE__ -> __OPENCODE__ -> env -> location",
+          "markers": ["window.__SHUVCODE__?.port ??", "window.__OPENCODE__?.port ??"]
+        },
+        {
+          "file": "packages/desktop/src/updater.ts",
+          "description": "Updater enabled flag checks __SHUVCODE__ first",
+          "markers": ["window.__SHUVCODE__?.updaterEnabled ?? window.__OPENCODE__?.updaterEnabled"]
         }
       ]
     },

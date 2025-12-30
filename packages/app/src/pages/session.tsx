@@ -331,21 +331,6 @@ export default function Page() {
       slash: "open",
       onSelect: () => dialog.show(() => <DialogSelectFile />),
     },
-    // {
-    //   id: "theme.toggle",
-    //   title: "Toggle theme",
-    //   description: "Switch between themes",
-    //   category: "View",
-    //   keybind: "ctrl+t",
-    //   slash: "theme",
-    //   onSelect: () => {
-    //     const currentTheme = localStorage.getItem("theme") ?? "oc-1"
-    //     const themes = ["oc-1", "oc-2-paper"]
-    //     const nextTheme = themes[(themes.indexOf(currentTheme) + 1) % themes.length]
-    //     localStorage.setItem("theme", nextTheme)
-    //     document.documentElement.setAttribute("data-theme", nextTheme)
-    //   },
-    // },
     {
       id: "terminal.toggle",
       title: "Toggle terminal",
