@@ -8,6 +8,32 @@
 
 ---
 
+## Screenshots
+
+### Desktop App
+
+<p align="center">
+  <img src="shuvcode-desktop-session-review-diff.png" alt="Desktop session with diff viewer" width="800" />
+</p>
+
+*Desktop session view with AI chat, session sidebar, and real-time code diff review*
+
+### Mobile PWA
+
+<p align="center">
+  <img src="shuvcode-mobile-recent-projects.png" alt="Mobile recent projects" width="250" />
+  <img src="shuvcode-mobile-sidebar-menu.png" alt="Mobile sidebar menu" width="250" />
+  <img src="shuvcode-mobile-ai-terminal-view.jpg" alt="Mobile AI terminal view" width="250" />
+</p>
+
+<p align="center">
+  <img src="shuvcode-mobile-commit-summary.png" alt="Mobile commit summary" width="250" />
+</p>
+
+*Mobile PWA: Recent projects, sidebar navigation, AI chat with terminal, and commit summary*
+
+---
+
 ## Installation
 
 ```bash
