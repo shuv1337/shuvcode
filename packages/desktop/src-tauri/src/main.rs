@@ -25,11 +25,12 @@ fn configure_display_backend() -> Option<String> {
 
     // Allow users to explicitly keep Wayland if they know their setup is stable.
     let allow_wayland = matches!(
-        env::var("OC_ALLOW_WAYLAND"),
+        env::var("SHUVCODE_ALLOW_WAYLAND")
+            .or_else(|_| env::var("OC_ALLOW_WAYLAND")),
         Ok(v) if matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes")
     );
     if allow_wayland {
-        return Some("Wayland session detected; respecting OC_ALLOW_WAYLAND=1".into());
+        return Some("Wayland session detected; respecting SHUVCODE_ALLOW_WAYLAND=1".into());
     }
 
     // Prefer XWayland when available to avoid Wayland protocol errors seen during startup.
@@ -39,7 +40,7 @@ fn configure_display_backend() -> Option<String> {
         set_env_if_absent("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         return Some(
             "Wayland session detected; forcing X11 backend to avoid compositor protocol errors. \
-               Set OC_ALLOW_WAYLAND=1 to keep native Wayland."
+               Set SHUVCODE_ALLOW_WAYLAND=1 to keep native Wayland."
                 .into(),
         );
     }
@@ -59,5 +60,5 @@ fn main() {
         }
     }
 
-    opencode_lib::run()
+    shuvcode_lib::run()
 }

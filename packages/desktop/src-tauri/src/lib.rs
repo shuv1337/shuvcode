@@ -76,8 +76,10 @@ async fn get_logs(app: AppHandle) -> Result<String, String> {
 }
 
 fn get_sidecar_port() -> u32 {
-    option_env!("OPENCODE_PORT")
+    option_env!("SHUVCODE_PORT")
         .map(|s| s.to_string())
+        .or_else(|| option_env!("OPENCODE_PORT").map(|s| s.to_string()))
+        .or_else(|| std::env::var("SHUVCODE_PORT").ok())
         .or_else(|| std::env::var("OPENCODE_PORT").ok())
         .and_then(|port_str| port_str.parse().ok())
         .unwrap_or_else(|| {
@@ -107,6 +109,8 @@ fn spawn_sidecar(app: &AppHandle, port: u32) -> CommandChild {
         .shell()
         .sidecar("shuvcode-cli")
         .unwrap()
+        .env("SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
+        .env("SHUVCODE_CLIENT", "desktop")
         .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
         .env("OPENCODE_CLIENT", "desktop")
         .env("XDG_STATE_HOME", &state_dir)
@@ -124,6 +128,8 @@ fn spawn_sidecar(app: &AppHandle, port: u32) -> CommandChild {
         let shell = get_user_shell();
         app.shell()
             .command(&shell)
+            .env("SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
+            .env("SHUVCODE_CLIENT", "desktop")
             .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
             .env("OPENCODE_CLIENT", "desktop")
             .env("XDG_STATE_HOME", &state_dir)
@@ -271,9 +277,10 @@ pub fn run() {
                         .disable_drag_drop_handler()
                         .initialization_script(format!(
                             r#"
-                          window.__OPENCODE__ ??= {{}};
-                          window.__OPENCODE__.updaterEnabled = {updater_enabled};
-                          window.__OPENCODE__.port = {port};
+                          window.__SHUVCODE__ ??= {{}};
+                          window.__SHUVCODE__.updaterEnabled = {updater_enabled};
+                          window.__SHUVCODE__.port = {port};
+                          window.__OPENCODE__ ??= window.__SHUVCODE__;
                         "#
                         ));
 
