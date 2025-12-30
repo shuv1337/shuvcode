@@ -25,7 +25,7 @@ import { Binary } from "@opencode-ai/util/binary"
 import { retry } from "@opencode-ai/util/retry"
 import { useGlobalSDK } from "./global-sdk"
 import { ErrorPage, type InitError } from "../pages/error"
-import { createContext, useContext, onMount, type ParentProps, Switch, Match } from "solid-js"
+import { batch, createContext, useContext, onMount, type ParentProps, Switch, Match } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 
@@ -75,21 +75,19 @@ function createGlobalSync() {
     project: Project[]
     provider: ProviderListResponse
     provider_auth: ProviderAuthResponse
-    children: Record<string, State>
   }>({
     ready: false,
     path: { state: "", config: "", worktree: "", directory: "", home: "" },
     project: [],
     provider: { all: [], connected: [], default: {} },
     provider_auth: {},
-    children: {},
   })
 
   const children: Record<string, ReturnType<typeof createStore<State>>> = {}
   function child(directory: string) {
     if (!directory) console.error("No directory provided")
     if (!children[directory]) {
-      setGlobalStore("children", directory, {
+      children[directory] = createStore<State>({
         project: "",
         provider: { all: [], connected: [], default: {} },
         config: {},
@@ -111,7 +109,6 @@ function createGlobalSync() {
         message: {},
         part: {},
       })
-      children[directory] = createStore(globalStore.children[directory])
       bootstrapInstance(directory)
     }
     return children[directory]
@@ -123,9 +120,10 @@ function createGlobalSync() {
       .list({ directory })
       .then((x) => {
         const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
-        const nonArchived = (x.data ?? [])
+        const data = Array.isArray(x.data) ? x.data : []
+        const nonArchived = data
           .slice()
-          .filter((s) => !s.time.archived)
+          .filter((s) => s?.id && !s.time?.archived)
           .sort((a, b) => a.id.localeCompare(b.id))
         // Include up to the limit, plus any updated in the last 4 hours
         const sessions = nonArchived.filter((s, i) => {
@@ -133,7 +131,7 @@ function createGlobalSync() {
           const updated = new Date(s.time.updated).getTime()
           return updated > fourHoursAgo
         })
-        setStore("session", sessions)
+        setStore("session", reconcile(sessions, { key: "id" }))
       })
       .catch((err) => {
         console.error("Failed to load sessions", err)
@@ -144,7 +142,7 @@ function createGlobalSync() {
 
   async function bootstrapInstance(directory: string) {
     if (!directory) return
-    const [, setStore] = child(directory)
+    const [store, setStore] = child(directory)
     const sdk = createOpencodeClient({
       baseUrl: globalSDK.url,
       directory,
@@ -176,12 +174,34 @@ function createGlobalSync() {
       vcs: () => sdk.vcs.get().then((x) => setStore("vcs", x.data)),
       permission: () =>
         sdk.permission.list().then((x) => {
-          const grouped: Record<string, typeof x.data> = {}
-          for (const perm of x.data ?? []) {
-            grouped[perm.sessionID] = grouped[perm.sessionID] ?? []
-            grouped[perm.sessionID]!.push(perm)
+          const grouped: Record<string, Permission[]> = {}
+          const data = Array.isArray(x.data) ? x.data : []
+          for (const perm of data) {
+            if (!perm?.id || !perm?.sessionID) continue
+            const existing = grouped[perm.sessionID]
+            if (existing) {
+              existing.push(perm)
+              continue
+            }
+            grouped[perm.sessionID] = [perm]
           }
-          setStore("permission", grouped)
+
+          batch(() => {
+            for (const sessionID of Object.keys(store.permission)) {
+              if (grouped[sessionID]) continue
+              setStore("permission", sessionID, [])
+            }
+            for (const [sessionID, permissions] of Object.entries(grouped)) {
+              setStore(
+                "permission",
+                sessionID,
+                reconcile(
+                  permissions.slice().sort((a, b) => a.id.localeCompare(b.id)),
+                  { key: "id" },
+                ),
+              )
+            }
+          })
         }),
     }
     await Promise.all(Object.values(load).map((p) => retry(p).catch((e) => setGlobalStore("error", e))))
@@ -252,7 +272,7 @@ function createGlobalSync() {
         setStore("session_diff", event.properties.sessionID, reconcile(event.properties.diff, { key: "file" }))
         break
       case "todo.updated":
-        setStore("todo", event.properties.sessionID, reconcile(event.properties.todos))
+        setStore("todo", event.properties.sessionID, reconcile(event.properties.todos, { key: "id" }))
         break
       case "session.status": {
         setStore("session_status", event.properties.sessionID, reconcile(event.properties.status))
@@ -334,23 +354,26 @@ function createGlobalSync() {
         break
       }
       case "permission.updated": {
-        const permissions = store.permission[event.properties.sessionID]
+        const sessionID = event.properties.sessionID
+        const permissions = store.permission[sessionID]
         if (!permissions) {
-          setStore("permission", event.properties.sessionID, [event.properties])
-        } else {
-          const result = Binary.search(permissions, event.properties.id, (p) => p.id)
-          setStore(
-            "permission",
-            event.properties.sessionID,
-            produce((draft) => {
-              if (result.found) {
-                draft[result.index] = event.properties
-                return
-              }
-              draft.push(event.properties)
-            }),
-          )
+          setStore("permission", sessionID, [event.properties])
+          break
         }
+
+        const result = Binary.search(permissions, event.properties.id, (p) => p.id)
+        if (result.found) {
+          setStore("permission", sessionID, result.index, reconcile(event.properties))
+          break
+        }
+
+        setStore(
+          "permission",
+          sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 0, event.properties)
+          }),
+        )
         break
       }
       case "permission.replied": {
@@ -403,7 +426,9 @@ function createGlobalSync() {
           const data = Array.isArray(x.data) ? x.data : []
           setGlobalStore(
             "project",
-            data.filter((p) => !p.worktree.includes("opencode-test")).sort((a, b) => a.id.localeCompare(b.id)),
+            data
+              .filter((p) => p?.id && !p.worktree?.includes("opencode-test"))
+              .sort((a, b) => a.id.localeCompare(b.id)),
           )
         }),
       ),

@@ -225,6 +225,10 @@ export namespace Config {
         cwd: dir,
       })
 
+      // Install any additional dependencies defined in the package.json
+      // This allows local plugins and custom tools to use external packages
+      await BunProc.run(["install"], { cwd: dir }).catch(() => {})
+
       // Write marker file after successful install
       await Bun.write(
         markerPath,

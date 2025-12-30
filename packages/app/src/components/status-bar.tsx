@@ -17,16 +17,22 @@ export function StatusBar(props: ParentProps) {
   })
 
   return (
-    <div class="h-8 w-full shrink-0 flex items-center justify-between px-2 border-t border-border-weak-base bg-background-base">
-      <div class="flex items-center gap-3">
+    <div class="h-8 w-full shrink-0 flex items-center justify-between gap-2 px-2 border-t border-border-weak-base bg-background-base">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
         <Show when={platform.version}>
-          <span class="text-12-regular text-text-weak">v{platform.version}</span>
+          <span class="text-12-regular text-text-weak shrink-0">v{platform.version}</span>
         </Show>
         <Show when={directoryDisplay()}>
-          <span class="text-12-regular text-text-weak">{directoryDisplay()}</span>
+          <span
+            class="text-12-regular text-text-weak truncate min-w-0"
+            style={{ direction: "rtl", "text-align": "left" }}
+            title={directoryDisplay()}
+          >
+            {directoryDisplay()}
+          </span>
         </Show>
       </div>
-      <div class="flex items-center">{props.children}</div>
+      <div class="flex items-center shrink-0">{props.children}</div>
     </div>
   )
 }

@@ -22,3 +22,7 @@ a.out
 target
 .scripts
 docker/workspace
+
+# Local dev files
+opencode-dev
+logs/

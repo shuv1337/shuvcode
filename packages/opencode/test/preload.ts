@@ -59,3 +59,6 @@ Log.init({
   dev: true,
   level: "DEBUG",
 })
+
+const { BunProc } = await import("../src/bun")
+await BunProc.install("tslib")
