@@ -120,9 +120,10 @@ function createGlobalSync() {
       .list({ directory })
       .then((x) => {
         const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
-        const nonArchived = (x.data ?? [])
+        const data = Array.isArray(x.data) ? x.data : []
+        const nonArchived = data
           .slice()
-          .filter((s) => !s.time.archived)
+          .filter((s) => s?.id && !s.time?.archived)
           .sort((a, b) => a.id.localeCompare(b.id))
         // Include up to the limit, plus any updated in the last 4 hours
         const sessions = nonArchived.filter((s, i) => {
@@ -174,7 +175,9 @@ function createGlobalSync() {
       permission: () =>
         sdk.permission.list().then((x) => {
           const grouped: Record<string, Permission[]> = {}
-          for (const perm of x.data ?? []) {
+          const data = Array.isArray(x.data) ? x.data : []
+          for (const perm of data) {
+            if (!perm?.id || !perm?.sessionID) continue
             const existing = grouped[perm.sessionID]
             if (existing) {
               existing.push(perm)
@@ -423,7 +426,9 @@ function createGlobalSync() {
           const data = Array.isArray(x.data) ? x.data : []
           setGlobalStore(
             "project",
-            data.filter((p) => !p.worktree.includes("opencode-test")).sort((a, b) => a.id.localeCompare(b.id)),
+            data
+              .filter((p) => p?.id && !p.worktree?.includes("opencode-test"))
+              .sort((a, b) => a.id.localeCompare(b.id)),
           )
         }),
       ),
