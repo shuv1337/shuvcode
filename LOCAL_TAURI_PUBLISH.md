@@ -62,8 +62,9 @@ You have two viable local publish paths:
 ## 6) Known local issues
 
 - AppImage bundling failed locally with `failed to run linuxdeploy`.
-  - Install `fuse2` or set `APPIMAGE_EXTRACT_AND_RUN=1`.
-  - Re-run `bun run --cwd packages/desktop tauri build`.
+  - linuxdeploy’s embedded `strip` fails on `.relr.dyn` sections; try `NO_STRIP=1` or use a newer linuxdeploy build that understands RELR.
+  - Install `fuse2` (or set `APPIMAGE_EXTRACT_AND_RUN=1`) plus `squashfs-tools` and `patchelf`.
+  - Re-run `bun run --cwd packages/desktop tauri build` after adjusting linuxdeploy/strip.
 
 ## 7) Validation checklist
 
