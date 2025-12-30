@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2025-12-30",
+  "lastChange": "Removed Open Project (uses native file picker, doesn't work in web). Add Project dialog now the single entry point.",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -31,6 +32,34 @@
       "reason": "Buggy implementation - removed from fork",
       "filesRemoved": ["packages/opencode/src/cli/cmd/tui/routes/session/sidebar-sessions.tsx"],
       "configRemoved": ["sessions_sidebar_toggle keybind"]
+    },
+    {
+      "pr": "upstream",
+      "title": "Custom server URL settings dialog",
+      "author": "fork",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream now provides DialogSelectServer with equivalent functionality. Simplified to align with upstream while maintaining shuv.ai domain support.",
+      "filesRemoved": [
+        "packages/app/src/components/dialog-server-settings.tsx",
+        "packages/app/src/lib/server-url.ts"
+      ],
+      "note": "Server URL handling simplified in app.tsx to match upstream. shuv.ai domains are supported alongside opencode.ai."
+    },
+    {
+      "pr": "upstream",
+      "title": "Open Project button and command",
+      "author": "upstream",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream's Open Project uses native file picker which doesn't work in web browsers. Our Add Project dialog (DialogCreateProject) with folder browser provides better web app experience.",
+      "filesRemoved": [
+        "packages/app/src/components/dialog-select-directory.tsx"
+      ],
+      "codeRemoved": [
+        "chooseProject() function in layout.tsx and home.tsx",
+        "project.open command with mod+o keybind",
+        "Open project sidebar button"
+      ],
+      "note": "Users should use Add Project button which opens DialogCreateProject with folder browser, git clone, and create new project tabs."
     }
   ],
   "apiDependencies": [
@@ -886,11 +915,11 @@
     },
     {
       "pr": 0,
-      "title": "Add existing project dialog with folder browser",
+      "title": "Add project dialog with folder browser (replaces Open Project)",
       "author": "fork",
       "status": "fork-only",
-      "description": "Redesigned create project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input. Uses List component for keyboard navigation and shows git/added badges.",
-      "files": ["packages/app/src/components/dialog-create-project.tsx"],
+      "description": "Redesigned project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input, Git Clone tab for cloning repos. Uses List component for keyboard navigation and shows git/added badges. This replaces upstream's Open Project functionality which uses native file picker (doesn't work in web browsers).",
+      "files": ["packages/app/src/components/dialog-create-project.tsx", "packages/app/src/pages/home.tsx", "packages/app/src/pages/layout.tsx"],
       "criticalCode": [
         {
           "file": "packages/app/src/components/dialog-create-project.tsx",
@@ -922,6 +951,16 @@
           "file": "packages/app/src/components/dialog-create-project.tsx",
           "description": "Dialog uses lg size for more folder visibility",
           "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
+        },
+        {
+          "file": "packages/app/src/pages/home.tsx",
+          "description": "Single Add project button on home page (replaces Create+Open buttons)",
+          "markers": ["addProject()", "Add project"]
+        },
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Single Add project button in sidebar (replaces Create+Open buttons)",
+          "markers": ["Add project", "createProject"]
         }
       ]
     },
@@ -1315,43 +1354,7 @@
         }
       ]
     },
-    {
-      "pr": 0,
-      "title": "Custom server URL settings",
-      "author": "fork",
-      "status": "fork-only",
-      "description": "Desktop app settings dialog for configuring custom API server URL. Includes URL validation, persistence to localStorage, and server URL configuration on error pages for recovery from connection failures.",
-      "files": [
-        "packages/app/src/components/dialog-server-settings.tsx",
-        "packages/app/src/lib/server-url.ts",
-        "packages/app/src/pages/error.tsx",
-        "packages/app/src/app.tsx",
-        "packages/app/src/context/command.tsx",
-        "packages/app/src/pages/layout.tsx"
-      ],
-      "criticalCode": [
-        {
-          "file": "packages/app/src/lib/server-url.ts",
-          "description": "Server URL management with localStorage persistence and validation",
-          "markers": ["STORAGE_KEY", "getServerUrl", "setServerUrl", "validateServerUrl"]
-        },
-        {
-          "file": "packages/app/src/components/dialog-server-settings.tsx",
-          "description": "Settings dialog with URL input, validation feedback, and reset option",
-          "markers": ["DialogServerSettings", "validateUrl", "handleSave", "handleReset"]
-        },
-        {
-          "file": "packages/app/src/pages/error.tsx",
-          "description": "Server URL configuration on error page for connection failure recovery",
-          "markers": ["serverUrl", "setServerUrl", "Try Again"]
-        },
-        {
-          "file": "packages/app/src/context/command.tsx",
-          "description": "Settings command in command palette to open server settings dialog",
-          "markers": ["id: \"settings\"", "Settings", "DialogServerSettings"]
-        }
-      ]
-    },
+
     {
       "pr": 0,
       "title": "Create project dialog with Git Clone tab",

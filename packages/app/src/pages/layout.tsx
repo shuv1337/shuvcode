@@ -49,7 +49,6 @@ import { applyTheme } from "@/theme/apply-theme"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
-import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { Header } from "@/components/header"
 
 export default function Layout(props: ParentProps) {
@@ -372,13 +371,7 @@ export default function Layout(props: ParentProps) {
         onSelect: () => layout.sidebar.toggle(),
       },
 
-      {
-        id: "project.open",
-        title: "Open project",
-        category: "Project",
-        keybind: "mod+o",
-        onSelect: () => chooseProject(),
-      },
+
       {
         id: "provider.connect",
         title: "Connect provider",
@@ -480,31 +473,6 @@ export default function Layout(props: ParentProps) {
     else navigate("/")
   }
 
-  async function chooseProject() {
-    function resolve(result: string | string[] | null) {
-      if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(directory, false)
-        }
-        navigateToProject(result[0])
-      } else if (result) {
-        openProject(result)
-      }
-    }
-
-    if (platform.openDirectoryPickerDialog) {
-      const result = await platform.openDirectoryPickerDialog?.({
-        title: "Open project",
-        multiple: true,
-      })
-      resolve(result)
-    } else {
-      dialog.show(
-        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
-        () => resolve(null),
-      )
-    }
-  }
 
   createEffect(() => {
     if (!params.dir || !params.id) return
@@ -1034,29 +1002,8 @@ export default function Layout(props: ParentProps) {
               </Tooltip>
             </Match>
           </Switch>
-          <Tooltip
-            placement="right"
-            value={
-              <div class="flex items-center gap-2">
-                <span>Open project</span>
-                <Show when={!sidebarProps.mobile}>
-                  <span class="text-icon-base text-12-medium">{command.keybind("project.open")}</span>
-                </Show>
-              </div>
-            }
-            inactive={expanded()}
-          >
-            <Button
-              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
-              variant="ghost"
-              size="large"
-              icon="folder-add-left"
-              onClick={chooseProject}
-            >
-              <Show when={expanded()}>Open project</Show>
-            </Button>
-          </Tooltip>
-          <Tooltip placement="right" value="Create project" inactive={expanded()}>
+
+          <Tooltip placement="right" value="Add project" inactive={expanded()}>
             <Button
               class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
               variant="ghost"
@@ -1064,7 +1011,7 @@ export default function Layout(props: ParentProps) {
               icon="folder-add-left"
               onClick={createProject}
             >
-              <Show when={expanded()}>Create project</Show>
+              <Show when={expanded()}>Add project</Show>
             </Button>
           </Tooltip>
           <Tooltip placement="right" value="Switch server" inactive={expanded()}>

@@ -6,18 +6,15 @@ import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
-import { usePlatform } from "@/context/platform"
 import { DateTime } from "luxon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogCreateProject } from "@/components/dialog-create-project"
-import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useServer } from "@/context/server"
 
 export default function Home() {
   const sync = useGlobalSync()
   const layout = useLayout()
-  const platform = usePlatform()
   const dialog = useDialog()
   const navigate = useNavigate()
   const server = useServer()
@@ -28,29 +25,8 @@ export default function Home() {
     navigate(`/${base64Encode(directory)}`)
   }
 
-  async function chooseProject() {
-    function resolve(result: string | string[] | null) {
-      if (Array.isArray(result)) {
-        for (const directory of result) {
-          openProject(directory)
-        }
-      } else if (result) {
-        openProject(result)
-      }
-    }
-
-    if (platform.openDirectoryPickerDialog) {
-      const result = await platform.openDirectoryPickerDialog?.({
-        title: "Open project",
-        multiple: true,
-      })
-      resolve(result)
-    } else {
-      dialog.show(
-        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
-        () => resolve(null),
-      )
-    }
+  function addProject() {
+    dialog.show(() => <DialogCreateProject />)
   }
 
   return (
@@ -77,21 +53,15 @@ export default function Home() {
           <div class="mt-10 sm:mt-20 w-full max-w-xl flex flex-col gap-4 px-4 sm:px-3 pb-10">
             <div class="flex gap-2 items-center justify-between flex-wrap">
               <div class="text-14-medium text-text-strong">Recent projects</div>
-              <div class="flex gap-2">
-                <Button
-                  icon="plus"
-                  size="normal"
-                  class="pl-2 pr-3"
-                  onClick={() => dialog.show(() => <DialogCreateProject />)}
-                >
-                  <span class="hidden sm:inline">Create project</span>
-                  <span class="sm:hidden">Create</span>
-                </Button>
-                <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={chooseProject}>
-                  <span class="hidden sm:inline">Open project</span>
-                  <span class="sm:hidden">Open</span>
-                </Button>
-              </div>
+              <Button
+                icon="folder-add-left"
+                size="normal"
+                class="pl-2 pr-3"
+                onClick={addProject}
+              >
+                <span class="hidden sm:inline">Add project</span>
+                <span class="sm:hidden">Add</span>
+              </Button>
             </div>
             <ul class="flex flex-col gap-2">
               <For
@@ -121,17 +91,12 @@ export default function Home() {
             <Icon name="folder-add-left" size="large" />
             <div class="flex flex-col gap-1 items-center justify-center">
               <div class="text-14-medium text-text-strong">No recent projects</div>
-              <div class="text-12-regular text-text-weak">Get started by creating or opening a project</div>
+              <div class="text-12-regular text-text-weak">Get started by adding a project</div>
             </div>
             <div />
-            <div class="flex gap-3">
-              <Button class="px-3" onClick={() => dialog.show(() => <DialogCreateProject />)}>
-                Create project
-              </Button>
-              <Button class="px-3" variant="ghost" onClick={chooseProject}>
-                Open project
-              </Button>
-            </div>
+            <Button class="px-3" onClick={addProject}>
+              Add project
+            </Button>
           </div>
         </Match>
       </Switch>
