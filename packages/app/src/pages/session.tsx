@@ -793,11 +793,11 @@ export default function Page() {
 
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
-      <div class="min-h-0 grow w-full flex">
+      <div class="min-h-0 grow w-full flex overflow-hidden">
         {/* Session pane - always visible, full width on mobile */}
         <div
-          class="@container relative shrink-0 py-3 flex flex-col gap-6 min-h-0 h-full bg-background-stronger max-sm:!w-full"
-          style={{ width: showTabs() ? `${layout.session.width()}px` : "100%" }}
+          class="@container relative shrink min-w-0 py-3 flex flex-col gap-6 min-h-0 h-full bg-background-stronger max-sm:!w-full"
+          style={{ width: showTabs() ? `min(${layout.session.width()}px, calc(100% - 320px))` : "100%" }}
         >
           <div class="flex-1 min-h-0 overflow-hidden">
             <Switch>
