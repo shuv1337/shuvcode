@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-29",
+  "lastUpdated": "2025-12-30",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -1429,6 +1429,64 @@
           "file": "packages/app/src/context/global-sync.tsx",
           "description": "Filter out archived sessions from session list",
           "markers": ["!s.share?.archivedAt", "filter"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop Tauri shuvcode branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand desktop Tauri app to shuvcode. Package renamed to shuvcode-desktop, Rust lib to shuvcode_lib. Window API uses window.__SHUVCODE__ with __OPENCODE__ fallback. Environment variables prioritize SHUVCODE_* prefix (SHUVCODE_PORT, SHUVCODE_ALLOW_WAYLAND, SHUVCODE_CLIENT, SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY) with OPENCODE_* fallback for backwards compatibility.",
+      "files": [
+        "packages/desktop/package.json",
+        "packages/desktop/src-tauri/Cargo.toml",
+        "packages/desktop/src-tauri/Cargo.lock",
+        "packages/desktop/src-tauri/src/lib.rs",
+        "packages/desktop/src-tauri/src/main.rs",
+        "packages/desktop/src/updater.ts",
+        "packages/app/src/app.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src-tauri/Cargo.toml",
+          "description": "Package and lib renamed to shuvcode-desktop and shuvcode_lib",
+          "markers": ["name = \"shuvcode-desktop\"", "name = \"shuvcode_lib\""]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "Window API initialization with __SHUVCODE__ and __OPENCODE__ fallback",
+          "markers": ["window.__SHUVCODE__", "window.__OPENCODE__ ??= window.__SHUVCODE__"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "SHUVCODE_PORT env var with OPENCODE_PORT fallback",
+          "markers": ["option_env!(\"SHUVCODE_PORT\")", "option_env!(\"OPENCODE_PORT\")"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "Sidecar env vars for shuvcode branding with opencode fallback",
+          "markers": ["SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "SHUVCODE_CLIENT"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/main.rs",
+          "description": "SHUVCODE_ALLOW_WAYLAND env var with OC_ALLOW_WAYLAND fallback",
+          "markers": ["SHUVCODE_ALLOW_WAYLAND", "OC_ALLOW_WAYLAND"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Window.__SHUVCODE__ interface with port/updaterEnabled",
+          "markers": ["window.__SHUVCODE__?: { updaterEnabled?: boolean; port?: number }"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Port resolution chain: __SHUVCODE__ -> __OPENCODE__ -> env -> location",
+          "markers": ["window.__SHUVCODE__?.port ??", "window.__OPENCODE__?.port ??"]
+        },
+        {
+          "file": "packages/desktop/src/updater.ts",
+          "description": "Updater enabled flag checks __SHUVCODE__ first",
+          "markers": ["window.__SHUVCODE__?.updaterEnabled ?? window.__OPENCODE__?.updaterEnabled"]
         }
       ]
     },
