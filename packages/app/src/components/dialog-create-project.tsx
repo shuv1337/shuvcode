@@ -363,27 +363,30 @@ export const DialogCreateProject: Component = () => {
         <div class="flex gap-1 p-1 bg-surface-base rounded-lg">
           <Button
             variant={activeTab() === "existing" ? "secondary" : "ghost"}
-            class="flex-1 justify-center text-12-medium sm:text-14-medium truncate min-w-0 px-2 sm:px-3"
+            class="flex-1 justify-center min-w-0 px-2 sm:px-3"
             onClick={() => setActiveTab("existing")}
           >
             <Icon name="folder-add-left" class="shrink-0" />
-            <span class="truncate">Add Existing</span>
+            <span class="hidden sm:inline">Add Existing</span>
+            <span class="sm:hidden">Existing</span>
           </Button>
           <Button
             variant={activeTab() === "create" ? "secondary" : "ghost"}
-            class="flex-1 justify-center text-12-medium sm:text-14-medium truncate min-w-0 px-2 sm:px-3"
+            class="flex-1 justify-center min-w-0 px-2 sm:px-3"
             onClick={() => setActiveTab("create")}
           >
             <Icon name="plus" class="shrink-0" />
-            <span class="truncate">Create New</span>
+            <span class="hidden sm:inline">Create New</span>
+            <span class="sm:hidden">New</span>
           </Button>
           <Button
             variant={activeTab() === "clone" ? "secondary" : "ghost"}
-            class="flex-1 justify-center text-12-medium sm:text-14-medium truncate min-w-0 px-2 sm:px-3"
+            class="flex-1 justify-center min-w-0 px-2 sm:px-3"
             onClick={() => setActiveTab("clone")}
           >
             <Icon name="github" class="shrink-0" />
-            <span class="truncate">Git Clone</span>
+            <span class="hidden sm:inline">Git Clone</span>
+            <span class="sm:hidden">Clone</span>
           </Button>
         </div>
 
