@@ -424,7 +424,7 @@ export default function Page() {
       disabled: !params.id,
       onSelect: () => {
         if (!params.id) return
-        permission.toggleAutoAccept(params.id)
+permission.toggleAutoAccept(params.id, sdk.directory)
         showToast({
           title: permission.isAutoAccepting(params.id) ? "Auto-accepting edits" : "Stopped auto-accepting edits",
           description: permission.isAutoAccepting(params.id)
