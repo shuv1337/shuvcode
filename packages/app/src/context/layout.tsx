@@ -1,5 +1,5 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onMount } from "solid-js"
+import { batch, createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
@@ -9,6 +9,12 @@ import { persisted } from "@/utils/persist"
 import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
 import { applyFontWithLoad } from "@/fonts/apply-font"
 import { getFontById, FONTS } from "@/fonts/font-definitions"
+
+export const REVIEW_PANE = {
+  DEFAULT_WIDTH: 450,
+  MIN_WIDTH: 200,
+  MAX_WIDTH_RATIO: 0.33,
+} as const
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
 export type AvatarColorKey = (typeof AVATAR_COLOR_KEYS)[number]
@@ -57,7 +63,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         review: {
           opened: false,
           state: "pane" as "pane" | "tab",
-          width: 450,
+          width: REVIEW_PANE.DEFAULT_WIDTH as number,
         },
         session: {
           width: 600,
@@ -127,12 +133,41 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const enriched = createMemo(() => server.projects.list().flatMap(enrich))
     const list = createMemo(() => enriched().flatMap(colorize))
 
+    // Helper function to calculate minimum session width (to enforce max review pane width)
+    const getMinSessionWidth = () => {
+      if (typeof window === "undefined") return 320
+      const maxReviewWidth = window.innerWidth * REVIEW_PANE.MAX_WIDTH_RATIO
+      return Math.max(REVIEW_PANE.MIN_WIDTH, window.innerWidth - maxReviewWidth)
+    }
+
+    // Clamp session width to enforce review pane constraints
+    const clampSessionWidth = () => {
+      const minSessionWidth = getMinSessionWidth()
+      if (store.session?.width && store.session.width < minSessionWidth) {
+        setStore("session", "width", minSessionWidth)
+      }
+    }
+
     onMount(() => {
+      // Load project sessions
       Promise.all(
         server.projects.list().map((project) => {
           return globalSync.project.loadSessions(project.worktree)
         }),
       )
+
+      // Normalize persisted review state (ensure opened defaults to false for old/missing state)
+      if (store.review === undefined || store.review.opened === undefined) {
+        setStore("review", "opened", false)
+      }
+
+      // Clamp session width on initial load
+      clampSessionWidth()
+
+      // Re-clamp on window resize
+      const handleResize = () => clampSessionWidth()
+      window.addEventListener("resize", handleResize)
+      onCleanup(() => window.removeEventListener("resize", handleResize))
     })
 
     createEffect(() => {
@@ -226,10 +261,13 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       session: {
         width: createMemo(() => store.session?.width ?? 600),
         resize(width: number) {
+          // Enforce minimum session width to limit review pane to MAX_WIDTH_RATIO
+          const minSessionWidth = getMinSessionWidth()
+          const clampedWidth = Math.max(minSessionWidth, width)
           if (!store.session) {
-            setStore("session", { width })
+            setStore("session", { width: clampedWidth })
           } else {
-            setStore("session", "width", width)
+            setStore("session", "width", clampedWidth)
           }
         },
       },

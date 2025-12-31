@@ -42,7 +42,7 @@ import type { DragEvent } from "@thisbeyond/solid-dnd"
 import type { JSX } from "solid-js"
 import { useSync } from "@/context/sync"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
-import { useLayout } from "@/context/layout"
+import { useLayout, REVIEW_PANE } from "@/context/layout"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
 import { Terminal } from "@/components/terminal"
 import { checksum } from "@opencode-ai/util/encode"
@@ -773,6 +773,7 @@ export default function Page() {
     )
   }
 
+  const hasReviewContent = createMemo(() => diffs().length > 0 || tabs().all().length > 0)
   const showTabs = createMemo(() => layout.review.opened())
   const tabsValue = createMemo(() => tabs().active() ?? "review")
 
@@ -879,7 +880,7 @@ export default function Page() {
               direction="horizontal"
               size={layout.session.width()}
               min={320}
-              max={window.innerWidth * 0.7}
+              max={window.innerWidth - REVIEW_PANE.MIN_WIDTH}
               onResize={layout.session.resize}
             />
           </Show>
@@ -941,83 +942,96 @@ export default function Page() {
                         </div>
                       </Tabs.List>
                     </div>
-                    <Show when={diffs().length}>
-                      <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden contain-strict">
-                        <div class="relative pt-3 flex-1 min-h-0 overflow-hidden">
-                          <SessionReview
-                            classes={{
-                              root: "pb-40",
-                              header: "px-6",
-                              container: "px-6",
-                            }}
-                            diffs={diffs()}
-                            split={store.diffSplit}
-                            actions={
-                              <Button
-                                size="normal"
-                                icon={store.diffSplit ? "layout-right" : "task"}
-                                onClick={() => setStore("diffSplit", (x) => !x)}
-                              >
-                                {store.diffSplit ? "Inline" : "Split"}
-                              </Button>
-                            }
-                          />
+                    <Show
+                      when={hasReviewContent()}
+                      fallback={
+                        <div class="flex items-center justify-center h-full text-text-weaker text-14-regular">
+                          <div class="text-center p-6">
+                            <Icon name="folder" class="size-8 mb-2 opacity-50 mx-auto" />
+                            <div>No files to review</div>
+                            <div class="text-12-regular mt-1">Changes will appear here</div>
+                          </div>
                         </div>
-                      </Tabs.Content>
-                    </Show>
-                    <For each={tabs().all()}>
-                      {(tab) => {
-                        const [file] = createResource(
-                          () => tab,
-                          async (tab) => {
-                            if (tab.startsWith("file://")) {
-                              return local.file.node(tab.replace("file://", ""))
-                            }
-                            return undefined
-                          },
-                        )
-                        return (
-                          <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden contain-strict">
-                            <Show when={file()?.content} keyed>
-                              {(content) => {
-                                const f = file()!
-                                const isPreviewableImage =
-                                  content.encoding === "base64" &&
-                                  content.mimeType?.startsWith("image/") &&
-                                  content.mimeType !== "image/svg+xml"
-                                return (
-                                  <Switch>
-                                    <Match when={isPreviewableImage}>
-                                      <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-40">
-                                        <img
-                                          src={`data:${content.mimeType};base64,${content.content}`}
-                                          alt={f.path}
-                                          class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
-                                        />
-                                      </div>
-                                    </Match>
-                                    <Match when={true}>
-                                      <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
-                                        <Dynamic
-                                          component={codeComponent}
-                                          file={{
-                                            name: f.path,
-                                            contents: content.content ?? "",
-                                            cacheKey: checksum(content.content ?? ""),
-                                          }}
-                                          overflow="scroll"
-                                          class="pb-40"
-                                        />
-                                      </div>
-                                    </Match>
-                                  </Switch>
-                                )
+                      }
+                    >
+                      <Show when={diffs().length}>
+                        <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden contain-strict">
+                          <div class="relative pt-3 flex-1 min-h-0 overflow-hidden">
+                            <SessionReview
+                              classes={{
+                                root: "pb-40",
+                                header: "px-6",
+                                container: "px-6",
                               }}
-                            </Show>
-                          </Tabs.Content>
-                        )
-                      }}
-                    </For>
+                              diffs={diffs()}
+                              split={store.diffSplit}
+                              actions={
+                                <Button
+                                  size="normal"
+                                  icon={store.diffSplit ? "layout-right" : "task"}
+                                  onClick={() => setStore("diffSplit", (x) => !x)}
+                                >
+                                  {store.diffSplit ? "Inline" : "Split"}
+                                </Button>
+                              }
+                            />
+                          </div>
+                        </Tabs.Content>
+                      </Show>
+                      <For each={tabs().all()}>
+                        {(tab) => {
+                          const [file] = createResource(
+                            () => tab,
+                            async (tab) => {
+                              if (tab.startsWith("file://")) {
+                                return local.file.node(tab.replace("file://", ""))
+                              }
+                              return undefined
+                            },
+                          )
+                          return (
+                            <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden contain-strict">
+                              <Show when={file()?.content} keyed>
+                                {(content) => {
+                                  const f = file()!
+                                  const isPreviewableImage =
+                                    content.encoding === "base64" &&
+                                    content.mimeType?.startsWith("image/") &&
+                                    content.mimeType !== "image/svg+xml"
+                                  return (
+                                    <Switch>
+                                      <Match when={isPreviewableImage}>
+                                        <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-40">
+                                          <img
+                                            src={`data:${content.mimeType};base64,${content.content}`}
+                                            alt={f.path}
+                                            class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
+                                          />
+                                        </div>
+                                      </Match>
+                                      <Match when={true}>
+                                        <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
+                                          <Dynamic
+                                            component={codeComponent}
+                                            file={{
+                                              name: f.path,
+                                              contents: content.content ?? "",
+                                              cacheKey: checksum(content.content ?? ""),
+                                            }}
+                                            overflow="scroll"
+                                            class="pb-40"
+                                          />
+                                        </div>
+                                      </Match>
+                                    </Switch>
+                                  )
+                                }}
+                              </Show>
+                            </Tabs.Content>
+                          )
+                        }}
+                      </For>
+                    </Show>
                   </Tabs>
                   <DragOverlay>
                     <Show when={store.activeDraggable}>
