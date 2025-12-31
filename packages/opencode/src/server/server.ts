@@ -1,3 +1,4 @@
+import { isOriginAllowed } from "./cors"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
@@ -113,19 +114,7 @@ export namespace Server {
       })
       .use(
         cors({
-          origin(input) {
-            if (!input) return
-
-            if (input.startsWith("http://localhost:")) return input
-            if (input.startsWith("http://127.0.0.1:")) return input
-            if (input === "tauri://localhost" || input === "http://tauri.localhost") return input
-
-            // *.opencode.ai (https only, adjust if needed)
-            if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) {
-              return input
-            }
-            return
-          },
+          origin: isOriginAllowed,
         }),
       )
       .get(
