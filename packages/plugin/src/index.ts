@@ -208,14 +208,18 @@ export interface Hooks {
     output: { text: string },
   ) => Promise<void>
   /**
-   * Register custom plugin commands (accessible via /command in TUI)
+   * Register custom slash commands (accessible via /command in TUI/web)
    */
   "plugin.command"?: {
-    [key: string]: {
+    [name: string]: {
       description: string
       aliases?: string[]
       sessionOnly?: boolean
-      execute(input: { sessionID?: string; client: ReturnType<typeof createOpencodeClient> }): Promise<void>
+      execute(input: {
+        sessionID: string
+        arguments: string
+        client: ReturnType<typeof createOpencodeClient>
+      }): Promise<void>
     }
   }
 }

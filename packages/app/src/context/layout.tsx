@@ -55,7 +55,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           height: 280,
         },
         review: {
-          opened: true,
+          opened: false,
           state: "pane" as "pane" | "tab",
           width: 450,
         },
