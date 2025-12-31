@@ -13,7 +13,7 @@ import { getFontById, FONTS } from "@/fonts/font-definitions"
 export const REVIEW_PANE = {
   DEFAULT_WIDTH: 450,
   MIN_WIDTH: 200,
-  MAX_WIDTH_RATIO: 0.33,
+  MAX_WIDTH_RATIO: 0.5,
 } as const
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
