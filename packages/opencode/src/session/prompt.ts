@@ -90,7 +90,6 @@ export namespace SessionPrompt {
     noReply: z.boolean().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     system: z.string().optional(),
-    variant: z.string().optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -164,14 +163,8 @@ export namespace SessionPrompt {
     await Promise.all(
       files.map(async (match) => {
         const name = match[1]
-        const startLine = match[2] // Captured from #L<start>
-        const endLine = match[3] // Captured from #L<start>-<end>
-
-        // Use full match key for deduplication (includes line range)
-        const matchKey = match[0]
-        if (seen.has(matchKey)) return
-        seen.add(matchKey)
-
+        if (seen.has(name)) return
+        seen.add(name)
         const filepath = name.startsWith("~/")
           ? path.join(os.homedir(), name.slice(2))
           : path.resolve(Instance.worktree, name)
@@ -188,23 +181,6 @@ export namespace SessionPrompt {
           return
         }
 
-        // Build URL with optional line range query params
-        let url = `file://${filepath}`
-        if (startLine) {
-          const params = new URLSearchParams()
-          params.set("start", startLine)
-          if (endLine) {
-            params.set("end", endLine)
-          }
-          url += `?${params.toString()}`
-        }
-
-        // Build filename with line range for display
-        let filename = name
-        if (startLine) {
-          filename += endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
-        }
-
         if (stats.isDirectory()) {
           parts.push({
             type: "file",
@@ -217,8 +193,8 @@ export namespace SessionPrompt {
 
         parts.push({
           type: "file",
-          url,
-          filename,
+          url: `file://${filepath}`,
+          filename: name,
           mime: "text/plain",
         })
       }),
@@ -634,34 +610,21 @@ export namespace SessionPrompt {
             extra: { model: input.model },
             agent: input.agent.name,
             metadata: async (val) => {
-              const findPart = async (retries: number): Promise<MessageV2.ToolPart | undefined> => {
-                const match = input.processor.partFromToolCall(options.toolCallId)
-                if (match?.state.status === "running") return match as MessageV2.ToolPart
-                if (retries >= 20) return undefined
-                await new Promise((resolve) => setTimeout(resolve, 50))
-                return findPart(retries + 1)
-              }
-
-              const match = await findPart(0)
-              if (!match) {
-                log.warn("metadata: part not found or not running after waiting", {
-                  toolCallId: options.toolCallId,
-                })
-                return
-              }
-
-              await Session.updatePart({
-                ...match,
-                state: {
-                  title: val.title,
-                  metadata: val.metadata,
-                  status: "running",
-                  input: args,
-                  time: {
-                    start: Date.now(),
+              const match = input.processor.partFromToolCall(options.toolCallId)
+              if (match && match.state.status === "running") {
+                await Session.updatePart({
+                  ...match,
+                  state: {
+                    title: val.title,
+                    metadata: val.metadata,
+                    status: "running",
+                    input: args,
+                    time: {
+                      start: Date.now(),
+                    },
                   },
-                },
-              })
+                })
+              }
             },
           })
           await Plugin.trigger(
@@ -764,7 +727,6 @@ export namespace SessionPrompt {
       agent: agent.name,
       model: input.model ?? agent.model ?? (await lastModel(input.sessionID)),
       system: input.system,
-      variant: input.variant,
     }
 
     const parts = await Promise.all(
@@ -1116,10 +1078,6 @@ export namespace SessionPrompt {
     }
     await Session.updatePart(userPart)
 
-    // Use session.directory as the authoritative source for cwd
-    // This ensures shell commands work correctly even if Instance.directory
-    // hasn't been properly initialized yet (e.g., first message in a new project)
-    const cwd = session.directory
     const msg: MessageV2.Assistant = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
@@ -1128,7 +1086,7 @@ export namespace SessionPrompt {
       agent: input.agent,
       cost: 0,
       path: {
-        cwd,
+        cwd: Instance.directory,
         root: Instance.worktree,
       },
       time: {
@@ -1219,7 +1177,7 @@ export namespace SessionPrompt {
     const args = matchingInvocation?.args
 
     const proc = spawn(shell, args, {
-      cwd,
+      cwd: Instance.directory,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
@@ -1281,7 +1239,6 @@ export namespace SessionPrompt {
       output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
     }
     msg.time.completed = Date.now()
-    msg.finish = "stop"
     await Session.updateMessage(msg)
     if (part.state.status === "running") {
       part.state = {
@@ -1310,7 +1267,6 @@ export namespace SessionPrompt {
     model: z.string().optional(),
     arguments: z.string(),
     command: z.string(),
-    variant: z.string().optional(),
   })
   export type CommandInput = z.infer<typeof CommandInput>
   const bashRegex = /!`([^`]+)`/g
@@ -1326,59 +1282,75 @@ export namespace SessionPrompt {
   export async function command(input: CommandInput) {
     log.info("command", input)
     const command = await Command.get(input.command)
-    const agentName = command?.agent ?? input.agent ?? (await Agent.defaultAgent())
-
-    const plugins = await Plugin.list()
-    for (const plugin of plugins) {
-      const pluginCommands = plugin["plugin.command"]
-      const pluginCommand = pluginCommands?.[input.command]
-      if (!pluginCommand) continue
-
-      const client = await Plugin.client()
-      try {
-        await pluginCommand.execute({ sessionID: input.sessionID, client })
-      } catch (error) {
-        log.error("plugin command failed", {
-          command: input.command,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        return await SessionPrompt.prompt({
-          sessionID: input.sessionID,
-          agent: agentName,
-          parts: [
-            {
-              type: "text",
-              text: `Plugin command "/${input.command}" failed: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-        })
-      }
-      const last = await Session.messages({ sessionID: input.sessionID, limit: 1 })
-      const message = last.at(0)
-      if (message) return message
-      return await SessionPrompt.prompt({
-        sessionID: input.sessionID,
-        agent: agentName,
-        parts: [
-          {
-            type: "text",
-            text: "",
-          },
-        ],
-      })
+    if (!command) {
+      log.warn("command not found", { command: input.command })
+      return
     }
 
-    if (!command)
-      return await SessionPrompt.prompt({
-        sessionID: input.sessionID,
-        agent: agentName,
-        parts: [
-          {
-            type: "text",
-            text: "",
-          },
-        ],
-      })
+    if (command.sessionOnly) {
+      try {
+        await Session.get(input.sessionID)
+      } catch (error) {
+        const message = `/${command.name} requires an existing session`
+        log.warn("session-only command blocked", {
+          command: command.name,
+          sessionID: input.sessionID,
+          error,
+        })
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error: new NamedError.Unknown({
+            message,
+          }).toObject(),
+        })
+        throw new Error(message)
+      }
+    }
+
+    // Plugin commands execute directly via hook
+    if (command.type === "plugin") {
+      const plugins = await Plugin.list()
+      for (const plugin of plugins) {
+        const pluginCommands = plugin["plugin.command"]
+        const pluginCommand = pluginCommands?.[command.name]
+        if (!pluginCommand) continue
+
+        try {
+          const client = await Plugin.client()
+          await pluginCommand.execute({
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            client,
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          log.error("plugin command failed", { command: command.name, error: message })
+          Bus.publish(Session.Event.Error, {
+            sessionID: input.sessionID,
+            error: new NamedError.Unknown({
+              message: `/${command.name} failed: ${message}`,
+            }).toObject(),
+          })
+          throw error
+        }
+
+        // Emit event if plugin created a message
+        const last = await Session.messages({ sessionID: input.sessionID, limit: 1 })
+        if (last.length > 0) {
+          Bus.publish(Command.Event.Executed, {
+            name: command.name,
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            messageID: last[0].info.id,
+          })
+          return last[0]
+        }
+        return
+      }
+      return
+    }
+
+    const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
     const raw = input.arguments.match(argsRegex) ?? []
     const args = raw.map((arg) => arg.replace(quoteTrimRegex, ""))
@@ -1465,7 +1437,6 @@ export namespace SessionPrompt {
       model,
       agent: agentName,
       parts,
-      variant: input.variant,
     })) as MessageV2.WithParts
 
     Bus.publish(Command.Event.Executed, {

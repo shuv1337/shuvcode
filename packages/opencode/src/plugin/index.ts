@@ -120,6 +120,7 @@ export namespace Plugin {
         // pathToFileURL ensures proper URL encoding regardless of import.meta.url context
         const mod = await import(pluginUrl)
         for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+          if (typeof fn !== "function") continue
           const init = await fn(input)
           hooks.push(init)
         }
