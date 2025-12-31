@@ -1,6 +1,6 @@
 import { Global } from "@/global"
 import { createSignal, type Setter } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, unwrap } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import path from "path"
 
@@ -40,8 +40,12 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
         return kvStore[key] ?? defaultValue
       },
       set(key: string, value: any) {
+        if (!ready()) {
+          console.warn("KV store not ready, write deferred")
+          return
+        }
         setKvStore(key, value)
-        Bun.write(file, JSON.stringify(kvStore, null, 2))
+        Bun.write(file, JSON.stringify(unwrap(kvStore), null, 2))
       },
     }
     return result
