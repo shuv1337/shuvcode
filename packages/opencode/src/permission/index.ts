@@ -50,13 +50,21 @@ export namespace Permission {
     ),
   }
 
+  /**
+   * Result returned from Permission.ask() when user responds.
+   * Contains optional modified data when user edits before accepting.
+   */
+  export interface AskResult<T = unknown> {
+    modified?: T
+  }
+
   const state = Instance.state(
     () => {
       const pending: {
         [sessionID: string]: {
           [permissionID: string]: {
             info: Info
-            resolve: () => void
+            resolve: (result?: AskResult) => void
             reject: (e: any) => void
             onRespond?: (response: Response) => void
           }
@@ -98,7 +106,7 @@ export namespace Permission {
     return result.sort((a, b) => a.id.localeCompare(b.id))
   }
 
-  export async function ask(input: {
+  export async function ask<T = unknown>(input: {
     type: Info["type"]
     title: Info["title"]
     pattern?: Info["pattern"]
@@ -108,7 +116,7 @@ export namespace Permission {
     metadata: Info["metadata"]
     onSetup?: (info: Info) => void
     onRespond?: (response: Response) => void
-  }) {
+  }): Promise<AskResult<T> | undefined> {
     const { pending, approved } = state()
     log.info("asking", {
       sessionID: input.sessionID,
@@ -145,10 +153,10 @@ export namespace Permission {
     }
 
     pending[input.sessionID] = pending[input.sessionID] || {}
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<AskResult<T> | undefined>((resolve, reject) => {
       pending[input.sessionID][info.id] = {
         info,
-        resolve,
+        resolve: resolve as (result?: AskResult) => void,
         reject,
         onRespond: input.onRespond,
       }
@@ -157,10 +165,15 @@ export namespace Permission {
     })
   }
 
-  export const Response = z.enum(["once", "always", "reject"])
+  export const Response = z.enum(["once", "always", "reject", "modify"])
   export type Response = z.infer<typeof Response>
 
-  export function respond(input: { sessionID: Info["sessionID"]; permissionID: Info["id"]; response: Response }) {
+  export function respond(input: {
+    sessionID: Info["sessionID"]
+    permissionID: Info["id"]
+    response: Response
+    modifyData?: unknown
+  }) {
     log.info("response", input)
     const { pending, approved } = state()
     const match = pending[input.sessionID]?.[input.permissionID]
@@ -174,6 +187,10 @@ export namespace Permission {
     match.onRespond?.(input.response)
     if (input.response === "reject") {
       match.reject(new RejectedError(input.sessionID, input.permissionID, match.info.callID, match.info.metadata))
+      return
+    }
+    if (input.response === "modify") {
+      match.resolve({ modified: input.modifyData })
       return
     }
     match.resolve()

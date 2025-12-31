@@ -508,6 +508,7 @@ export namespace Config {
       session_share: z.string().optional().default("none").describe("Share current session"),
       session_unshare: z.string().optional().default("none").describe("Unshare current session"),
       session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
+      permission_edit: z.string().optional().default("e").describe("Edit suggested changes before applying"),
       session_compact: z.string().optional().default("<leader>c").describe("Compact the session"),
       session_search: z.string().optional().default("ctrl+/").describe("Search in session messages"),
       messages_page_up: z.string().optional().default("pageup").describe("Scroll messages up by one page"),

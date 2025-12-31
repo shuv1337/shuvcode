@@ -9,6 +9,7 @@ import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { Permission } from "../permission"
+import type { PermissionEditor } from "../permission/editor"
 import DESCRIPTION from "./edit.txt"
 import { File } from "../file"
 import { Bus } from "../bus"
@@ -18,12 +19,9 @@ import { Instance } from "../project/instance"
 import { Agent } from "../agent/agent"
 import { Snapshot } from "@/snapshot"
 import { Ide } from "../ide"
+import { Text } from "../util/text"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
-
-function normalizeLineEndings(text: string): string {
-  return text.replaceAll("\r\n", "\n")
-}
 
 export const EditTool = Tool.define("edit", {
   description: DESCRIPTION,
@@ -77,7 +75,9 @@ export const EditTool = Tool.define("edit", {
     let diff = ""
     let contentOld = ""
     let contentNew = ""
-    // Resolve permission for this specific file
+    let userModified = false
+
+    // Resolve permission for this specific file (supports glob patterns)
     const resolvedPermission = Agent.resolveFilePermission({
       permission: agent.permission.edit,
       filePath,
@@ -98,15 +98,18 @@ export const EditTool = Tool.define("edit", {
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         contentNew = params.newString
-        diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         if (resolvedPermission === "ask") {
-          await Permission.ask({
+          const result = await Permission.ask<PermissionEditor.SingleFileModifyData>({
             type: "edit",
             sessionID: ctx.sessionID,
             messageID: ctx.messageID,
             callID: ctx.callID,
             title: "Edit this file: " + filePath,
-            metadata: { filePath, diff },
+            metadata: {
+              filePath,
+              originalContent: contentOld,
+              suggestedContent: contentNew,
+            },
             onSetup: (info) => {
               if (Ide.active()) {
                 Ide.openDiff(filePath, contentNew).then((response) => {
@@ -124,8 +127,13 @@ export const EditTool = Tool.define("edit", {
               }
             },
           })
+          if (result?.modified?.content !== undefined) {
+            contentNew = result.modified.content
+            userModified = true
+          }
         }
-        await Bun.write(filePath, params.newString)
+        diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
+        await Bun.write(filePath, contentNew)
         await Bus.publish(File.Event.Edited, {
           file: filePath,
         })
@@ -141,17 +149,18 @@ export const EditTool = Tool.define("edit", {
       contentOld = await file.text()
       contentNew = replace(contentOld, params.oldString, params.newString, params.replaceAll)
 
-      diff = trimDiff(
-        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
-      )
       if (resolvedPermission === "ask") {
-        await Permission.ask({
+        const result = await Permission.ask<PermissionEditor.SingleFileModifyData>({
           type: "edit",
           sessionID: ctx.sessionID,
           messageID: ctx.messageID,
           callID: ctx.callID,
           title: "Edit this file: " + filePath,
-          metadata: { filePath, diff },
+          metadata: {
+            filePath,
+            originalContent: contentOld,
+            suggestedContent: contentNew,
+          },
           onSetup: (info) => {
             if (Ide.active()) {
               Ide.openDiff(filePath, contentNew).then((response) => {
@@ -169,6 +178,10 @@ export const EditTool = Tool.define("edit", {
             }
           },
         })
+        if (result?.modified?.content !== undefined) {
+          contentNew = result.modified.content
+          userModified = true
+        }
       }
 
       await file.write(contentNew)
@@ -177,12 +190,21 @@ export const EditTool = Tool.define("edit", {
       })
       contentNew = await file.text()
       diff = trimDiff(
-        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
+        createTwoFilesPatch(
+          filePath,
+          filePath,
+          Text.normalizeLineEndings(contentOld),
+          Text.normalizeLineEndings(contentNew),
+        ),
       )
       FileTime.read(ctx.sessionID, filePath)
     })
 
     let output = ""
+    if (userModified) {
+      output +=
+        "Note: The user modified this edit before accepting. The file now contains the user's version, not your original suggestion. Do not attempt to change it back to your original suggestion.\n"
+    }
     await LSP.touchFile(filePath, true)
     const diagnostics = await LSP.diagnostics()
     const normalizedFilePath = Filesystem.normalizePath(filePath)
@@ -215,6 +237,7 @@ export const EditTool = Tool.define("edit", {
       },
       title: `${path.relative(Instance.worktree, filePath)}`,
       output,
+      modifiedInput: userModified ? { ...params, newString: contentNew } : undefined,
     }
   },
 })

@@ -1013,6 +1013,10 @@ export type KeybindsConfig = {
    */
   session_interrupt?: string
   /**
+   * Edit suggested changes before applying
+   */
+  permission_edit?: string
+  /**
    * Compact the session
    */
   session_compact?: string
@@ -3626,7 +3630,10 @@ export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnre
 
 export type PermissionRespondData = {
   body?: {
-    response: "once" | "always" | "reject"
+    response: "once" | "always" | "reject" | "modify"
+    modifyData?: {
+      content: string
+    }
   }
   path: {
     sessionID: string
