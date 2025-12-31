@@ -205,7 +205,6 @@ export default function Page() {
     stepsExpanded: true,
     mobileTabsOpen: false,
     mobileTerminalFullscreen: false,
-    diffSplit: false,
   })
   let inputRef!: HTMLDivElement
 
@@ -964,16 +963,8 @@ export default function Page() {
                                 container: "px-6",
                               }}
                               diffs={diffs()}
-                              split={store.diffSplit}
-                              actions={
-                                <Button
-                                  size="normal"
-                                  icon={store.diffSplit ? "layout-right" : "task"}
-                                  onClick={() => setStore("diffSplit", (x) => !x)}
-                                >
-                                  {store.diffSplit ? "Inline" : "Split"}
-                                </Button>
-                              }
+                              diffStyle={layout.review.diffStyle()}
+                              onDiffStyleChange={layout.review.setDiffStyle}
                             />
                           </div>
                         </Tabs.Content>
@@ -1234,16 +1225,8 @@ export default function Page() {
                               container: "px-4",
                             }}
                             diffs={diffs()}
-                            split={store.diffSplit}
-                            actions={
-                              <Button
-                                size="normal"
-                                icon={store.diffSplit ? "layout-right" : "task"}
-                                onClick={() => setStore("diffSplit", (x) => !x)}
-                              >
-                                {store.diffSplit ? "Inline" : "Split"}
-                              </Button>
-                            }
+                            diffStyle={layout.review.diffStyle()}
+                            onDiffStyleChange={layout.review.setDiffStyle}
                           />
                         </div>
                       </Tabs.Content>
