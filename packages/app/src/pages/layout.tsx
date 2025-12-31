@@ -1039,6 +1039,8 @@ export default function Layout(props: ParentProps) {
             </Button>
           </Tooltip>
           <Show when={expanded()}>
+            <FontPicker mobile />
+            <ThemePicker mobile />
             <div class="mt-2 px-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
             </div>
