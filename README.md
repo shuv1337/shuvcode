@@ -60,6 +60,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 
 | PR                                                                            | Title                                       | Author                                                       | Status | Description                                                              |
 | ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ------------------------------------------------------------------------ |
+| [#6507](https://github.com/sst/opencode/pull/6507)                            | Optimize Ripgrep.tree() (109x faster)       | [@Karavil](https://github.com/Karavil)                       | Open   | 109x performance improvement for large repos by streaming ripgrep output |
 | [#6360](https://github.com/sst/opencode/pull/6360)                            | Desktop: Edit Project                       | [@dbpolito](https://github.com/dbpolito)                     | Merged | Edit project name, icon color, and custom icon image in desktop sidebar  |
 | [#6368](https://github.com/sst/opencode/pull/6368)                            | Desktop: Sidebar subsessions support        | [@dbpolito](https://github.com/dbpolito)                     | Open   | Expand/collapse subsessions in sidebar with chevron indicators           |
 | [#6372](https://github.com/sst/opencode/pull/6372)                            | Desktop: Image Preview and Dedupe           | [@dbpolito](https://github.com/dbpolito)                     | Merged | Click user attachments to preview images, dedupe file uploads            |
@@ -78,7 +79,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme       |
 | [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access |
 
-_Last updated: 2025-12-29_
+_Last updated: 2025-12-31_
 
 ---
 

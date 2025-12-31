@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-30",
-  "lastChange": "Removed Open Project (uses native file picker, doesn't work in web). Add Project dialog now the single entry point.",
+  "lastUpdated": "2025-12-31",
+  "lastChange": "Added PR #6507 - optimize Ripgrep.tree() for large repositories (109x faster)",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -78,6 +78,17 @@
     }
   ],
   "features": [
+    {
+      "pr": 6507,
+      "title": "Optimize Ripgrep.tree() for large repositories",
+      "author": "Karavil",
+      "status": "open",
+      "description": "109x performance improvement for Ripgrep.tree() in large repositories by processing ripgrep output line-by-line instead of accumulating in memory",
+      "files": [
+        "packages/opencode/src/file/ripgrep.ts",
+        "packages/opencode/test/file/ripgrep.test.ts"
+      ]
+    },
     {
       "pr": 5958,
       "title": "AskQuestion tool for user input",
