@@ -18,6 +18,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
+import { parseUriList } from "../../util/uri"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
 import { Ide } from "@/ide"
@@ -1112,6 +1113,39 @@ export function Prompt(props: PromptProps) {
                 if (!pastedContent) {
                   command.trigger("prompt.paste")
                   return
+                }
+
+                // Handle file:// URIs or text/uri-list (common for drag-and-drop on Linux)
+                if (pastedContent.includes("file://")) {
+                  const paths = parseUriList(pastedContent)
+                  if (paths.length > 0) {
+                    let handled = false
+                    for (const path of paths) {
+                      try {
+                        const file = Bun.file(path)
+                        if (file.type.startsWith("image/")) {
+                          const content = await file
+                            .arrayBuffer()
+                            .then((buffer) => Buffer.from(buffer).toString("base64"))
+                            .catch(() => {})
+                          if (content) {
+                            await pasteImage({
+                              filename: file.name,
+                              mime: file.type,
+                              content,
+                            })
+                            handled = true
+                            continue
+                          }
+                        }
+                      } catch {}
+                    }
+
+                    if (handled) {
+                      event.preventDefault()
+                      return
+                    }
+                  }
                 }
 
                 // trim ' from the beginning and end of the pasted content. just
