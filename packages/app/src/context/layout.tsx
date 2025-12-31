@@ -135,21 +135,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const enriched = createMemo(() => server.projects.list().flatMap(enrich))
     const list = createMemo(() => enriched().flatMap(colorize))
 
-    // Helper function to calculate minimum session width (to enforce max review pane width)
-    const getMinSessionWidth = () => {
-      if (typeof window === "undefined") return 320
-      const maxReviewWidth = window.innerWidth * REVIEW_PANE.MAX_WIDTH_RATIO
-      return Math.max(REVIEW_PANE.MIN_WIDTH, window.innerWidth - maxReviewWidth)
-    }
-
-    // Clamp session width to enforce review pane constraints
-    const clampSessionWidth = () => {
-      const minSessionWidth = getMinSessionWidth()
-      if (store.session?.width && store.session.width < minSessionWidth) {
-        setStore("session", "width", minSessionWidth)
-      }
-    }
-
     onMount(() => {
       // Load project sessions
       Promise.all(
@@ -162,14 +147,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       if (store.review === undefined || store.review.opened === undefined) {
         setStore("review", "opened", false)
       }
-
-      // Clamp session width on initial load
-      clampSessionWidth()
-
-      // Re-clamp on window resize
-      const handleResize = () => clampSessionWidth()
-      window.addEventListener("resize", handleResize)
-      onCleanup(() => window.removeEventListener("resize", handleResize))
     })
 
     createEffect(() => {
@@ -271,13 +248,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       session: {
         width: createMemo(() => store.session?.width ?? 600),
         resize(width: number) {
-          // Enforce minimum session width to limit review pane to MAX_WIDTH_RATIO
-          const minSessionWidth = getMinSessionWidth()
-          const clampedWidth = Math.max(minSessionWidth, width)
+          // ResizeHandle already enforces min/max constraints
           if (!store.session) {
-            setStore("session", { width: clampedWidth })
+            setStore("session", { width })
           } else {
-            setStore("session", "width", clampedWidth)
+            setStore("session", "width", width)
           }
         },
       },
