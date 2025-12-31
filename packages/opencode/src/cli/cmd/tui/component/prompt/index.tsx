@@ -1064,6 +1064,15 @@ export function Prompt(props: PromptProps) {
                   }
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
+                // Handle variant cycle before autocomplete visible check
+                // This must be at element level because global useKeyboard doesn't receive
+                // events properly when textarea is focused (see issue #222)
+                if (keybind.match("variant_cycle", e)) {
+                  e.preventDefault()
+                  if (local.model.variant.list().length === 0) return
+                  local.model.variant.cycle()
+                  return
+                }
                 if (!autocomplete.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
