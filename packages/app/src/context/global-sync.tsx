@@ -130,15 +130,16 @@ function createGlobalSync() {
       .list({ directory })
       .then((x) => {
         const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
-        const data = Array.isArray(x.data) ? x.data : []
+const data = Array.isArray(x.data) ? x.data : []
         const nonArchived = data
+          .filter((s) => !!s?.id)
+          .filter((s) => !s.time?.archived)
           .slice()
-          .filter((s) => s?.id && !s.time?.archived)
           .sort((a, b) => a.id.localeCompare(b.id))
         // Include up to the limit, plus any updated in the last 4 hours
         const sessions = nonArchived.filter((s, i) => {
           if (i < store.limit) return true
-          const updated = new Date(s.time.updated).getTime()
+          const updated = new Date(s.time?.updated ?? s.time?.created).getTime()
           return updated > fourHoursAgo
         })
         setStore("session", reconcile(sessions, { key: "id" }))
@@ -185,9 +186,9 @@ function createGlobalSync() {
       permission: () =>
         sdk.permission.list().then((x) => {
           const grouped: Record<string, Permission[]> = {}
-          const data = Array.isArray(x.data) ? x.data : []
+const data = Array.isArray(x.data) ? x.data : []
           for (const perm of data) {
-            if (!perm?.id || !perm?.sessionID) continue
+            if (!perm?.id || !perm.sessionID) continue
             const existing = grouped[perm.sessionID]
             if (existing) {
               existing.push(perm)
@@ -206,7 +207,10 @@ function createGlobalSync() {
                 "permission",
                 sessionID,
                 reconcile(
-                  permissions.slice().sort((a, b) => a.id.localeCompare(b.id)),
+                  permissions
+                    .filter((p) => !!p?.id)
+                    .slice()
+                    .sort((a, b) => a.id.localeCompare(b.id)),
                   { key: "id" },
                 ),
               )
@@ -463,13 +467,13 @@ function createGlobalSync() {
       ),
       retry(() =>
         globalSDK.client.project.list().then(async (x) => {
-          const data = Array.isArray(x.data) ? x.data : []
-          setGlobalStore(
-            "project",
-            data
-              .filter((p) => p?.id && !p.worktree?.includes("opencode-test"))
-              .sort((a, b) => a.id.localeCompare(b.id)),
-          )
+const data = Array.isArray(x.data) ? x.data : []
+          const projects = data
+            .filter((p) => !!p?.id)
+            .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
+            .slice()
+            .sort((a, b) => a.id.localeCompare(b.id))
+          setGlobalStore("project", projects)
         }),
       ),
       retry(() =>

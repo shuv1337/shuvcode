@@ -13,7 +13,7 @@ import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Tooltip } from "@opencode-ai/ui/tooltip"
+import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
@@ -36,6 +36,7 @@ import { useProviders } from "@/hooks/use-providers"
 import { showToast, Toast, toaster } from "@opencode-ai/ui/toast"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useNotification } from "@/context/notification"
+import { usePermission } from "@/context/permission"
 import { Binary } from "@opencode-ai/util/binary"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 
@@ -89,6 +90,7 @@ export default function Layout(props: ParentProps) {
   const platform = usePlatform()
   const server = useServer()
   const notification = useNotification()
+  const permission = usePermission()
   const navigate = useNavigate()
   const providers = useProviders()
   const dialog = useDialog()
@@ -167,28 +169,41 @@ export default function Layout(props: ParentProps) {
   const otherSessions = createMemo(() => sessions().filter((s) => s.id !== currentSessionId()))
 
   onMount(() => {
-    const seenSessions = new Set<string>()
     const toastBySession = new Map<string, number>()
+    const alertedAtBySession = new Map<string, number>()
+    const permissionAlertCooldownMs = 5000
+
     const unsub = globalSDK.event.listen((e) => {
       if (e.details?.type !== "permission.updated") return
       const directory = e.name
-      const permission = e.details.properties
-      const currentDir = params.dir ? base64Decode(params.dir) : undefined
-      const currentSession = params.id
+      const perm = e.details.properties
+      if (permission.autoResponds(perm)) return
+
+      const sessionKey = `${directory}:${perm.sessionID}`
       const [store] = globalSync.child(directory)
-      const session = store.session.find((s) => s.id === permission.sessionID)
+      const session = store.session.find((s) => s.id === perm.sessionID)
+
       const sessionTitle = session?.title ?? "New session"
       const projectName = getFilename(directory)
       const description = `${sessionTitle} in ${projectName} needs permission`
-      const href = `/${base64Encode(directory)}/session/${permission.sessionID}`
+      const href = `/${base64Encode(directory)}/session/${perm.sessionID}`
+
+      const now = Date.now()
+      const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
+      if (now - lastAlerted < permissionAlertCooldownMs) return
+      alertedAtBySession.set(sessionKey, now)
+
       void platform.notify("Permission required", description, href)
 
-      if (directory === currentDir && permission.sessionID === currentSession) return
+      const currentDir = params.dir ? base64Decode(params.dir) : undefined
+      const currentSession = params.id
+      if (directory === currentDir && perm.sessionID === currentSession) return
       if (directory === currentDir && session?.parentID === currentSession) return
 
-      const sessionKey = `${directory}:${permission.sessionID}`
-      if (seenSessions.has(sessionKey)) return
-      seenSessions.add(sessionKey)
+      const existingToastId = toastBySession.get(sessionKey)
+      if (existingToastId !== undefined) {
+        toaster.dismiss(existingToastId)
+      }
 
       const toastId = showToast({
         persistent: true,
@@ -221,7 +236,7 @@ export default function Layout(props: ParentProps) {
       if (toastId !== undefined) {
         toaster.dismiss(toastId)
         toastBySession.delete(sessionKey)
-        seenSessions.delete(sessionKey)
+        alertedAtBySession.delete(sessionKey)
       }
       const [store] = globalSync.child(currentDir)
       const childSessions = store.session.filter((s) => s.parentID === currentSession)
@@ -231,7 +246,7 @@ export default function Layout(props: ParentProps) {
         if (childToastId !== undefined) {
           toaster.dismiss(childToastId)
           toastBySession.delete(childKey)
-          seenSessions.delete(childKey)
+          alertedAtBySession.delete(childKey)
         }
       }
     })
@@ -725,6 +740,7 @@ export default function Layout(props: ParentProps) {
           >
             <IconButton icon="archive" variant="ghost" onClick={() => archiveSession(props.session)} />
           </Tooltip>
+
         </div>
       </div>
     )
@@ -811,17 +827,9 @@ export default function Layout(props: ParentProps) {
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                   </DropdownMenu>
-                  <Tooltip
-                    placement="top"
-                    value={
-                      <div class="flex items-center gap-2">
-                        <span>New session</span>
-                        <span class="text-icon-base text-12-medium">{command.keybind("session.new")}</span>
-                      </div>
-                    }
-                  >
+                  <TooltipKeybind placement="top" title="New session" keybind={command.keybind("session.new")}>
                     <IconButton as={A} href={`${slug()}/session`} icon="plus-small" variant="ghost" />
-                  </Tooltip>
+                  </TooltipKeybind>
                 </div>
               </Button>
               <Collapsible.Content>
@@ -905,15 +913,16 @@ export default function Layout(props: ParentProps) {
       <>
         <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
           <Show when={!sidebarProps.mobile}>
-            <Tooltip
+            <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2" data-tauri-drag-region>
+              <Mark class="shrink-0" />
+            </A>
+          </Show>
+          <Show when={!sidebarProps.mobile}>
+            <TooltipKeybind
               class="shrink-0"
               placement="right"
-              value={
-                <div class="flex items-center gap-2">
-                  <span>Toggle sidebar</span>
-                  <span class="text-icon-base text-12-medium">{command.keybind("sidebar.toggle")}</span>
-                </div>
-              }
+              title="Toggle sidebar"
+              keybind={command.keybind("sidebar.toggle")}
               inactive={expanded()}
             >
               <Button
@@ -943,7 +952,7 @@ export default function Layout(props: ParentProps) {
                   <div class="text-text-strong ml-3">Toggle sidebar</div>
                 </Show>
               </Button>
-            </Tooltip>
+            </TooltipKeybind>
           </Show>
           <DragDropProvider
             onDragStart={handleDragStart}

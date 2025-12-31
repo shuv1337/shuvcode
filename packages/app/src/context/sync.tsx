@@ -81,7 +81,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
                 const result = Binary.search(messages, input.messageID, (m) => m.id)
                 messages.splice(result.index, 0, message)
               }
-              draft.part[input.messageID] = input.parts.slice().sort((a, b) => a.id.localeCompare(b.id))
+              draft.part[input.messageID] = input.parts
+                .filter((p) => !!p?.id)
+                .slice()
+                .sort((a, b) => a.id.localeCompare(b.id))
             }),
           )
         },
@@ -113,6 +116,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               reconcile(
                 (messages.data ?? [])
                   .map((x) => x.info)
+                  .filter((m) => !!m?.id)
                   .slice()
                   .sort((a, b) => a.id.localeCompare(b.id)),
                 { key: "id" },
@@ -120,11 +124,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             )
 
             for (const message of messages.data ?? []) {
+              if (!message?.info?.id) continue
               setStore(
                 "part",
                 message.info.id,
                 reconcile(
-                  message.parts.slice().sort((a, b) => a.id.localeCompare(b.id)),
+                  message.parts
+                    .filter((p) => !!p?.id)
+                    .slice()
+                    .sort((a, b) => a.id.localeCompare(b.id)),
                   { key: "id" },
                 ),
               )
@@ -137,6 +145,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           setStore("limit", (x) => x + count)
           await sdk.client.session.list().then((x) => {
             const sessions = (x.data ?? [])
+              .filter((s) => !!s?.id)
               .slice()
               .filter((s) => !s.time.archived)
               .sort((a, b) => a.id.localeCompare(b.id))
