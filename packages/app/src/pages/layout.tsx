@@ -52,6 +52,7 @@ import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { useServer } from "@/context/server"
+import { Header } from "@/components/header"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
@@ -1045,9 +1046,11 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Share feedback</Show>
             </Button>
           </Tooltip>
-          <Show when={expanded()}>
+          <Show when={sidebarProps.mobile}>
             <FontPicker mobile />
             <ThemePicker mobile />
+          </Show>
+          <Show when={expanded()}>
             <div class="mt-2 px-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
             </div>
@@ -1059,6 +1062,11 @@ export default function Layout(props: ParentProps) {
 
   return (
     <div class="relative flex-1 min-h-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+      <Header
+        navigateToProject={navigateToProject}
+        navigateToSession={navigateToSession}
+        onMobileMenuToggle={mobileSidebar.toggle}
+      />
       <div class="flex-1 min-h-0 flex">
         <div
           classList={{
