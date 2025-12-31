@@ -111,7 +111,7 @@ export function Header(props: {
                   </Show>
                 </div>
                 <div class="flex items-center gap-4">
-                  <Show when={currentSession()?.summary?.files}>
+                  <Show when={currentSession()}>
                     <Tooltip
                       class="hidden md:block shrink-0"
                       value={

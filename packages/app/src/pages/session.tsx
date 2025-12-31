@@ -214,11 +214,11 @@ export default function Page() {
     sync.session.sync(params.id)
   })
 
-  // Register mobile review button in header when there are tabs/diffs
+  // Register mobile review button in header when a session exists
+  // This allows users to access file browser even when no changes exist yet
   createEffect(() => {
-    const hasTabs = showTabs()
     const filesCount = info()?.summary?.files ?? diffs().length
-    if (hasTabs) {
+    if (params.id) {
       layout.mobileReview.register(filesCount, () => setStore("mobileTabsOpen", true))
     } else {
       layout.mobileReview.unregister()
@@ -773,7 +773,7 @@ export default function Page() {
     )
   }
 
-  const showTabs = createMemo(() => layout.review.opened() && (diffs().length > 0 || tabs().all().length > 0))
+  const showTabs = createMemo(() => layout.review.opened())
   const tabsValue = createMemo(() => tabs().active() ?? "review")
 
   return (
@@ -885,160 +885,160 @@ export default function Page() {
           </Show>
         </div>
 
-        {/* Tabs pane - visible when there are diffs or file tabs, hidden on mobile */}
+        {/* Tabs pane - visible when review is opened, hidden on mobile */}
         <Show when={showTabs()}>
           <div class="relative flex-1 min-w-0 h-full border-l border-border-weak-base hidden sm:block">
             <DragDropProvider
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              collisionDetector={closestCenter}
-            >
-              <DragDropSensors />
-              <ConstrainDragYAxis />
-              <Tabs value={tabsValue()} onChange={tabs().open}>
-                <div class="sticky top-0 shrink-0 flex">
-                  <Tabs.List>
-                    <Show when={diffs().length}>
-                      <Tabs.Trigger value="review">
-                        <div class="flex items-center gap-3">
-                          <Show when={diffs()}>
-                            <DiffChanges changes={diffs()} variant="bars" />
-                          </Show>
-                          <div class="flex items-center gap-1.5">
-                            <div>Review</div>
-                            <Show when={info()?.summary?.files}>
-                              <div class="text-12-medium text-text-strong h-4 px-2 flex flex-col items-center justify-center rounded-full bg-surface-base">
-                                {info()?.summary?.files ?? 0}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                  collisionDetector={closestCenter}
+                >
+                  <DragDropSensors />
+                  <ConstrainDragYAxis />
+                  <Tabs value={tabsValue()} onChange={tabs().open}>
+                    <div class="sticky top-0 shrink-0 flex">
+                      <Tabs.List>
+                        <Show when={diffs().length}>
+                          <Tabs.Trigger value="review">
+                            <div class="flex items-center gap-3">
+                              <Show when={diffs()}>
+                                <DiffChanges changes={diffs()} variant="bars" />
+                              </Show>
+                              <div class="flex items-center gap-1.5">
+                                <div>Review</div>
+                                <Show when={info()?.summary?.files}>
+                                  <div class="text-12-medium text-text-strong h-4 px-2 flex flex-col items-center justify-center rounded-full bg-surface-base">
+                                    {info()?.summary?.files ?? 0}
+                                  </div>
+                                </Show>
                               </div>
-                            </Show>
-                          </div>
-                        </div>
-                      </Tabs.Trigger>
-                    </Show>
-                    <SortableProvider ids={tabs().all() ?? []}>
-                      <For each={tabs().all() ?? []}>
-                        {(tab) => <SortableTab tab={tab} onTabClick={handleTabClick} onTabClose={tabs().close} />}
-                      </For>
-                    </SortableProvider>
-                    <div class="bg-background-base h-full flex items-center justify-center border-b border-border-weak-base px-3">
-                      <Tooltip
-                        value={
-                          <div class="flex items-center gap-2">
-                            <span>Open file</span>
-                            <span class="text-icon-base text-12-medium">{command.keybind("file.open")}</span>
-                          </div>
-                        }
-                        class="flex items-center"
-                      >
-                        <IconButton
-                          icon="plus-small"
-                          variant="ghost"
-                          iconSize="large"
-                          onClick={() => dialog.show(() => <DialogSelectFile />)}
-                        />
-                      </Tooltip>
-                    </div>
-                  </Tabs.List>
-                </div>
-                <Show when={diffs().length}>
-                  <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden contain-strict">
-                    <div class="relative pt-3 flex-1 min-h-0 overflow-hidden">
-                      <SessionReview
-                        classes={{
-                          root: "pb-40",
-                          header: "px-6",
-                          container: "px-6",
-                        }}
-                        diffs={diffs()}
-                        split={store.diffSplit}
-                        actions={
-                          <Button
-                            size="normal"
-                            icon={store.diffSplit ? "layout-right" : "task"}
-                            onClick={() => setStore("diffSplit", (x) => !x)}
-                          >
-                            {store.diffSplit ? "Inline" : "Split"}
-                          </Button>
-                        }
-                      />
-                    </div>
-                  </Tabs.Content>
-                </Show>
-                <For each={tabs().all()}>
-                  {(tab) => {
-                    const [file] = createResource(
-                      () => tab,
-                      async (tab) => {
-                        if (tab.startsWith("file://")) {
-                          return local.file.node(tab.replace("file://", ""))
-                        }
-                        return undefined
-                      },
-                    )
-                    return (
-                      <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden contain-strict">
-                        <Show when={file()?.content} keyed>
-                          {(content) => {
-                            const f = file()!
-                            const isPreviewableImage =
-                              content.encoding === "base64" &&
-                              content.mimeType?.startsWith("image/") &&
-                              content.mimeType !== "image/svg+xml"
-                            return (
-                              <Switch>
-                                <Match when={isPreviewableImage}>
-                                  <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-40">
-                                    <img
-                                      src={`data:${content.mimeType};base64,${content.content}`}
-                                      alt={f.path}
-                                      class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
-                                    />
-                                  </div>
-                                </Match>
-                                <Match when={true}>
-                                  <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
-                                    <Dynamic
-                                      component={codeComponent}
-                                      file={{
-                                        name: f.path,
-                                        contents: content.content ?? "",
-                                        cacheKey: checksum(content.content ?? ""),
-                                      }}
-                                      overflow="scroll"
-                                      class="pb-40"
-                                    />
-                                  </div>
-                                </Match>
-                              </Switch>
-                            )
-                          }}
+                            </div>
+                          </Tabs.Trigger>
                         </Show>
+                        <SortableProvider ids={tabs().all() ?? []}>
+                          <For each={tabs().all() ?? []}>
+                            {(tab) => <SortableTab tab={tab} onTabClick={handleTabClick} onTabClose={tabs().close} />}
+                          </For>
+                        </SortableProvider>
+                        <div class="bg-background-base h-full flex items-center justify-center border-b border-border-weak-base px-3">
+                          <Tooltip
+                            value={
+                              <div class="flex items-center gap-2">
+                                <span>Open file</span>
+                                <span class="text-icon-base text-12-medium">{command.keybind("file.open")}</span>
+                              </div>
+                            }
+                            class="flex items-center"
+                          >
+                            <IconButton
+                              icon="plus-small"
+                              variant="ghost"
+                              iconSize="large"
+                              onClick={() => dialog.show(() => <DialogSelectFile />)}
+                            />
+                          </Tooltip>
+                        </div>
+                      </Tabs.List>
+                    </div>
+                    <Show when={diffs().length}>
+                      <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden contain-strict">
+                        <div class="relative pt-3 flex-1 min-h-0 overflow-hidden">
+                          <SessionReview
+                            classes={{
+                              root: "pb-40",
+                              header: "px-6",
+                              container: "px-6",
+                            }}
+                            diffs={diffs()}
+                            split={store.diffSplit}
+                            actions={
+                              <Button
+                                size="normal"
+                                icon={store.diffSplit ? "layout-right" : "task"}
+                                onClick={() => setStore("diffSplit", (x) => !x)}
+                              >
+                                {store.diffSplit ? "Inline" : "Split"}
+                              </Button>
+                            }
+                          />
+                        </div>
                       </Tabs.Content>
-                    )
-                  }}
-                </For>
-              </Tabs>
-              <DragOverlay>
-                <Show when={store.activeDraggable}>
-                  {(draggedFile) => {
-                    const [file] = createResource(
-                      () => draggedFile(),
-                      async (tab) => {
-                        if (tab.startsWith("file://")) {
-                          return local.file.node(tab.replace("file://", ""))
-                        }
-                        return undefined
-                      },
-                    )
-                    return (
-                      <div class="relative px-6 h-12 flex items-center bg-background-stronger border-x border-border-weak-base border-b border-b-transparent">
-                        <Show when={file()}>{(f) => <FileVisual active file={f()} />}</Show>
-                      </div>
-                    )
-                  }}
-                </Show>
-              </DragOverlay>
+                    </Show>
+                    <For each={tabs().all()}>
+                      {(tab) => {
+                        const [file] = createResource(
+                          () => tab,
+                          async (tab) => {
+                            if (tab.startsWith("file://")) {
+                              return local.file.node(tab.replace("file://", ""))
+                            }
+                            return undefined
+                          },
+                        )
+                        return (
+                          <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden contain-strict">
+                            <Show when={file()?.content} keyed>
+                              {(content) => {
+                                const f = file()!
+                                const isPreviewableImage =
+                                  content.encoding === "base64" &&
+                                  content.mimeType?.startsWith("image/") &&
+                                  content.mimeType !== "image/svg+xml"
+                                return (
+                                  <Switch>
+                                    <Match when={isPreviewableImage}>
+                                      <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-40">
+                                        <img
+                                          src={`data:${content.mimeType};base64,${content.content}`}
+                                          alt={f.path}
+                                          class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
+                                        />
+                                      </div>
+                                    </Match>
+                                    <Match when={true}>
+                                      <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
+                                        <Dynamic
+                                          component={codeComponent}
+                                          file={{
+                                            name: f.path,
+                                            contents: content.content ?? "",
+                                            cacheKey: checksum(content.content ?? ""),
+                                          }}
+                                          overflow="scroll"
+                                          class="pb-40"
+                                        />
+                                      </div>
+                                    </Match>
+                                  </Switch>
+                                )
+                              }}
+                            </Show>
+                          </Tabs.Content>
+                        )
+                      }}
+                    </For>
+                  </Tabs>
+                  <DragOverlay>
+                    <Show when={store.activeDraggable}>
+                      {(draggedFile) => {
+                        const [file] = createResource(
+                          () => draggedFile(),
+                          async (tab) => {
+                            if (tab.startsWith("file://")) {
+                              return local.file.node(tab.replace("file://", ""))
+                            }
+                            return undefined
+                          },
+                        )
+                        return (
+                          <div class="relative px-6 h-12 flex items-center bg-background-stronger border-x border-border-weak-base border-b border-b-transparent">
+                            <Show when={file()}>{(f) => <FileVisual active file={f()} />}</Show>
+                          </div>
+                        )
+                      }}
+                    </Show>
+                  </DragOverlay>
             </DragDropProvider>
           </div>
         </Show>
@@ -1143,7 +1143,9 @@ export default function Page() {
                 <Show when={diffs().length > 0}>
                   <DiffChanges changes={diffs()} variant="bars" />
                 </Show>
-                <span class="text-14-medium text-text-strong">{diffs().length > 0 ? "Review Changes" : "Files"}</span>
+                <span class="text-14-medium text-text-strong">
+                  {diffs().length > 0 ? "Review Changes" : "Browse Files"}
+                </span>
                 <Show when={info()?.summary?.files}>
                   <div class="text-12-medium text-text-strong h-5 px-2 flex items-center justify-center rounded-full bg-surface-base">
                     {info()?.summary?.files ?? 0}
@@ -1162,129 +1164,129 @@ export default function Page() {
             {/* Mobile tabs content */}
             <div class="flex-1 min-h-0 overflow-hidden">
               <Tabs value={tabsValue()} onChange={tabs().open}>
-                <div class="shrink-0 flex border-b border-border-weak-base overflow-x-auto">
-                  <Tabs.List>
-                    <Show when={diffs().length}>
-                      <Tabs.Trigger value="review">
-                        <div class="flex items-center gap-2">
-                          <div>Review</div>
-                          <Show when={info()?.summary?.files}>
-                            <div class="text-12-medium text-text-strong h-4 px-2 flex items-center justify-center rounded-full bg-surface-base">
-                              {info()?.summary?.files ?? 0}
-                            </div>
-                          </Show>
-                        </div>
-                      </Tabs.Trigger>
-                    </Show>
-                    <For each={tabs().all() ?? []}>
-                      {(tab) => {
-                        const fileName = () => {
-                          if (tab.startsWith("file://")) {
-                            return getFilename(tab.replace("file://", ""))
-                          }
-                          return tab
-                        }
-                        return (
-                          <Tabs.Trigger value={tab} class="max-w-40 truncate">
+                    <div class="shrink-0 flex border-b border-border-weak-base overflow-x-auto">
+                      <Tabs.List>
+                        <Show when={diffs().length}>
+                          <Tabs.Trigger value="review">
                             <div class="flex items-center gap-2">
-                              <FileIcon node={{ path: tab, type: "file" }} />
-                              <span class="truncate">{fileName()}</span>
+                              <div>Review</div>
+                              <Show when={info()?.summary?.files}>
+                                <div class="text-12-medium text-text-strong h-4 px-2 flex items-center justify-center rounded-full bg-surface-base">
+                                  {info()?.summary?.files ?? 0}
+                                </div>
+                              </Show>
                             </div>
                           </Tabs.Trigger>
+                        </Show>
+                        <For each={tabs().all() ?? []}>
+                          {(tab) => {
+                            const fileName = () => {
+                              if (tab.startsWith("file://")) {
+                                return getFilename(tab.replace("file://", ""))
+                              }
+                              return tab
+                            }
+                            return (
+                              <Tabs.Trigger value={tab} class="max-w-40 truncate">
+                                <div class="flex items-center gap-2">
+                                  <FileIcon node={{ path: tab, type: "file" }} />
+                                  <span class="truncate">{fileName()}</span>
+                                </div>
+                              </Tabs.Trigger>
+                            )
+                          }}
+                        </For>
+                      </Tabs.List>
+                      <div class="flex items-center justify-center px-2">
+                        <IconButton
+                          icon="plus-small"
+                          variant="ghost"
+                          iconSize="large"
+                          onClick={() => {
+                            setStore("mobileTabsOpen", false)
+                            dialog.show(() => <DialogSelectFile />)
+                          }}
+                          aria-label="Open file"
+                        />
+                      </div>
+                    </div>
+                    <Show when={diffs().length}>
+                      <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden">
+                        <div class="relative flex-1 min-h-0 overflow-auto">
+                          <SessionReview
+                            classes={{
+                              root: "pb-20 pt-3",
+                              header: "px-4",
+                              container: "px-4",
+                            }}
+                            diffs={diffs()}
+                            split={store.diffSplit}
+                            actions={
+                              <Button
+                                size="normal"
+                                icon={store.diffSplit ? "layout-right" : "task"}
+                                onClick={() => setStore("diffSplit", (x) => !x)}
+                              >
+                                {store.diffSplit ? "Inline" : "Split"}
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </Tabs.Content>
+                    </Show>
+                    <For each={tabs().all()}>
+                      {(tab) => {
+                        const [file] = createResource(
+                          () => tab,
+                          async (tab) => {
+                            if (tab.startsWith("file://")) {
+                              return local.file.node(tab.replace("file://", ""))
+                            }
+                            return undefined
+                          },
+                        )
+                        return (
+                          <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden">
+                            <Show when={file()?.content} keyed>
+                              {(content) => {
+                                const f = file()!
+                                const isPreviewableImage =
+                                  content.encoding === "base64" &&
+                                  content.mimeType?.startsWith("image/") &&
+                                  content.mimeType !== "image/svg+xml"
+                                return (
+                                  <Switch>
+                                    <Match when={isPreviewableImage}>
+                                      <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-20">
+                                        <img
+                                          src={`data:${content.mimeType};base64,${content.content}`}
+                                          alt={f.path}
+                                          class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
+                                        />
+                                      </div>
+                                    </Match>
+                                    <Match when={true}>
+                                      <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
+                                        <Dynamic
+                                          component={codeComponent}
+                                          file={{
+                                            name: f.path,
+                                            contents: content.content ?? "",
+                                            cacheKey: checksum(content.content ?? ""),
+                                          }}
+                                          overflow="scroll"
+                                          class="pb-20"
+                                        />
+                                      </div>
+                                    </Match>
+                                  </Switch>
+                                )
+                              }}
+                            </Show>
+                          </Tabs.Content>
                         )
                       }}
                     </For>
-                  </Tabs.List>
-                  <div class="flex items-center justify-center px-2">
-                    <IconButton
-                      icon="plus-small"
-                      variant="ghost"
-                      iconSize="large"
-                      onClick={() => {
-                        setStore("mobileTabsOpen", false)
-                        dialog.show(() => <DialogSelectFile />)
-                      }}
-                      aria-label="Open file"
-                    />
-                  </div>
-                </div>
-                <Show when={diffs().length}>
-                  <Tabs.Content value="review" class="select-text flex flex-col h-full overflow-hidden">
-                    <div class="relative flex-1 min-h-0 overflow-auto">
-                      <SessionReview
-                        classes={{
-                          root: "pb-20 pt-3",
-                          header: "px-4",
-                          container: "px-4",
-                        }}
-                        diffs={diffs()}
-                        split={store.diffSplit}
-                        actions={
-                          <Button
-                            size="normal"
-                            icon={store.diffSplit ? "layout-right" : "task"}
-                            onClick={() => setStore("diffSplit", (x) => !x)}
-                          >
-                            {store.diffSplit ? "Inline" : "Split"}
-                          </Button>
-                        }
-                      />
-                    </div>
-                  </Tabs.Content>
-                </Show>
-                <For each={tabs().all()}>
-                  {(tab) => {
-                    const [file] = createResource(
-                      () => tab,
-                      async (tab) => {
-                        if (tab.startsWith("file://")) {
-                          return local.file.node(tab.replace("file://", ""))
-                        }
-                        return undefined
-                      },
-                    )
-                    return (
-                      <Tabs.Content value={tab} class="select-text flex flex-col h-full overflow-hidden">
-                        <Show when={file()?.content} keyed>
-                          {(content) => {
-                            const f = file()!
-                            const isPreviewableImage =
-                              content.encoding === "base64" &&
-                              content.mimeType?.startsWith("image/") &&
-                              content.mimeType !== "image/svg+xml"
-                            return (
-                              <Switch>
-                                <Match when={isPreviewableImage}>
-                                  <div class="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4 pb-20">
-                                    <img
-                                      src={`data:${content.mimeType};base64,${content.content}`}
-                                      alt={f.path}
-                                      class="max-w-full max-h-full object-contain shadow-lg rounded-sm"
-                                    />
-                                  </div>
-                                </Match>
-                                <Match when={true}>
-                                  <div class="relative pt-3 flex-1 min-h-0 overflow-auto">
-                                    <Dynamic
-                                      component={codeComponent}
-                                      file={{
-                                        name: f.path,
-                                        contents: content.content ?? "",
-                                        cacheKey: checksum(content.content ?? ""),
-                                      }}
-                                      overflow="scroll"
-                                      class="pb-20"
-                                    />
-                                  </div>
-                                </Match>
-                              </Switch>
-                            )
-                          }}
-                        </Show>
-                      </Tabs.Content>
-                    )
-                  }}
-                </For>
               </Tabs>
             </div>
           </div>
