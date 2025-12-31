@@ -161,6 +161,19 @@ export namespace MessageV2 {
     description: z.string(),
     agent: z.string(),
     command: z.string().optional(),
+    model: z
+      .object({
+        providerID: z.string(),
+        modelID: z.string(),
+      })
+      .optional(),
+    parentAgent: z.string().optional(),
+    parentModel: z
+      .object({
+        providerID: z.string(),
+        modelID: z.string(),
+      })
+      .optional(),
   })
   export type SubtaskPart = z.infer<typeof SubtaskPart>
 

@@ -39,10 +39,11 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
     const platform = usePlatform()
 
     const [store, setStore, _, ready] = persisted(
-      "server.v3",
+      "server.v4",
       createStore({
         list: [] as string[],
         projects: {} as Record<string, StoredProject[]>,
+        active: "" as string, // Persist the last active server
       }),
     )
 
@@ -51,7 +52,10 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
     function setActive(input: string) {
       const url = normalizeServerUrl(input)
       if (!url) return
-      setActiveRaw(url)
+      batch(() => {
+        setActiveRaw(url)
+        setStore("active", url) // Persist active server
+      })
     }
 
     function add(input: string) {
@@ -60,7 +64,10 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
 
       const fallback = normalizeServerUrl(props.defaultUrl)
       if (fallback && url === fallback) {
-        setActiveRaw(url)
+        batch(() => {
+          setActiveRaw(url)
+          setStore("active", url)
+        })
         return
       }
 
@@ -69,6 +76,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           setStore("list", store.list.length, url)
         }
         setActiveRaw(url)
+        setStore("active", url)
       })
     }
 
@@ -82,13 +90,17 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       batch(() => {
         setStore("list", list)
         setActiveRaw(next)
+        setStore("active", next)
       })
     }
 
+    // Initialize active server from persisted state or default
     createEffect(() => {
       if (!ready()) return
       if (active()) return
-      const url = normalizeServerUrl(props.defaultUrl)
+      // Priority: persisted active > default URL
+      const persistedActive = store.active ? normalizeServerUrl(store.active) : undefined
+      const url = persistedActive || normalizeServerUrl(props.defaultUrl)
       if (!url) return
       setActiveRaw(url)
     })

@@ -10,6 +10,7 @@ import { SessionPrompt } from "../session/prompt"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
+import { Provider } from "../provider/provider"
 
 export { DESCRIPTION as TASK_DESCRIPTION }
 
@@ -78,10 +79,11 @@ export const TaskTool = Tool.define("task", async () => {
         })
       })
 
-      const model = agent.model ?? {
-        modelID: msg.info.modelID,
-        providerID: msg.info.providerID,
-      }
+      const defaultModel = await Provider.defaultModel()
+      const extraModel = ctx.extra?.model?.modelID ? ctx.extra.model : undefined
+      const agentModel = agent.model?.modelID ? agent.model : undefined
+      const msgModel = msg.info.modelID ? { modelID: msg.info.modelID, providerID: msg.info.providerID } : undefined
+      const model = extraModel ?? agentModel ?? msgModel ?? defaultModel
 
       function cancel() {
         SessionPrompt.cancel(session.id)

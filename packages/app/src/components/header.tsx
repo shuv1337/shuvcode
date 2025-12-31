@@ -59,8 +59,8 @@ export function Header(props: {
           when={layout.projects.list().length > 0 && params.dir}
           fallback={
             <div class="hidden md:flex items-center gap-2 ml-auto">
-              <FontPicker />
               <ThemePicker />
+              <FontPicker />
             </div>
           }
         >
@@ -121,6 +121,12 @@ export function Header(props: {
                   </Show>
                 </div>
                 <div class="flex items-center gap-4">
+                  {/* Theme and Font first - desktop only */}
+                  <div class="hidden md:flex items-center gap-2">
+                    <ThemePicker />
+                    <FontPicker />
+                  </div>
+                  {/* Review toggle - requires session */}
                   <Show when={currentSession()}>
                     <Tooltip
                       class="hidden md:block shrink-0"
@@ -152,6 +158,7 @@ export function Header(props: {
                       </Button>
                     </Tooltip>
                   </Show>
+                  {/* Terminal toggle - always visible on desktop */}
                   <Tooltip
                     class="hidden md:block shrink-0"
                     value={
@@ -181,6 +188,7 @@ export function Header(props: {
                       </div>
                     </Button>
                   </Tooltip>
+                  {/* Share - requires session and share enabled */}
                   <Show when={shareEnabled() && currentSession()}>
                     <Popover
                       title="Share session"
@@ -216,10 +224,6 @@ export function Header(props: {
                       })}
                     </Popover>
                   </Show>
-                  <div class="hidden md:flex items-center gap-2">
-                    <FontPicker />
-                    <ThemePicker />
-                  </div>
                 </div>
               </>
             )
