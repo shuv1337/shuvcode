@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, For, Show, Switch, Match, createEffect } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { useRoute } from "../../context/route"
@@ -30,8 +30,28 @@ export function Sidebar(props: { sessionID: string; width: number }) {
     subagents: true,
   })
 
-  // Sort MCP servers alphabetically for consistent display order
-  const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+  const setExpandedWithPersist = (key: keyof typeof expanded, value: boolean) => {
+    setExpanded(key, value)
+    kv.set(`sidebar_expanded_${key}`, value)
+  }
+
+  createEffect(() => {
+    if (!kv.ready) return
+    setExpanded({
+      context: kv.get("sidebar_expanded_context", true),
+      mcp: kv.get("sidebar_expanded_mcp", true),
+      diff: kv.get("sidebar_expanded_diff", true),
+      lsp: kv.get("sidebar_expanded_lsp", true),
+      subagents: kv.get("sidebar_expanded_subagents", true),
+    })
+  })
+
+  // Sort MCP servers alphabetically for consistent display order, filtering out disabled servers
+  const mcpEntries = createMemo(() =>
+    Object.entries(sync.data.mcp)
+      .filter(([_, item]) => item.status !== "disabled")
+      .sort(([a], [b]) => a.localeCompare(b))
+  )
 
   const taskToolParts = createMemo(() => {
     const parts: ToolPart[] = []
@@ -116,7 +136,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             </box>
 {/* Context Section */}
             <box>
-              <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("context", !expanded.context)}>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("context", !expanded.context)}>
                 <text fg={theme.text}>{expanded.context ? "▼" : "▶"}</text>
                 <text fg={theme.text}>
                   <b>Context</b>
@@ -135,7 +155,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             {/* Subagents Section */}
             <Show when={subagentGroups().length > 0}>
               <box>
-                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("subagents", !expanded.subagents)}>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("subagents", !expanded.subagents)}>
                   <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>Subagents</b>
@@ -214,7 +234,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             {/* MCP Section */}
             <Show when={mcpEntries().length > 0}>
               <box>
-                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("mcp", !expanded.mcp)}>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("mcp", !expanded.mcp)}>
                   <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>MCP</b>
@@ -270,7 +290,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
 
             {/* LSP Section */}
             <box>
-              <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("lsp", !expanded.lsp)}>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("lsp", !expanded.lsp)}>
                 <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
                 <text fg={theme.text}>
                   <b>LSP</b>
@@ -313,7 +333,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
             {/* Changed Files Section */}
             <Show when={diff().length > 0}>
               <box>
-                <box flexDirection="row" gap={1} onMouseDown={() => setExpanded("diff", !expanded.diff)}>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("diff", !expanded.diff)}>
                   <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>Changed Files</b>
