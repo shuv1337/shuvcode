@@ -1297,6 +1297,7 @@ export class Session extends HeyApiClient {
         [key: string]: boolean
       }
       system?: string
+      variant?: string
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -1314,6 +1315,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "system" },
+            { in: "body", key: "variant" },
             { in: "body", key: "parts" },
           ],
         },
@@ -1383,6 +1385,7 @@ export class Session extends HeyApiClient {
         [key: string]: boolean
       }
       system?: string
+      variant?: string
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -1400,6 +1403,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "system" },
+            { in: "body", key: "variant" },
             { in: "body", key: "parts" },
           ],
         },
@@ -1431,6 +1435,7 @@ export class Session extends HeyApiClient {
       model?: string
       arguments?: string
       command?: string
+      variant?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1446,6 +1451,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "model" },
             { in: "body", key: "arguments" },
             { in: "body", key: "command" },
+            { in: "body", key: "variant" },
           ],
         },
       ],
@@ -1660,7 +1666,10 @@ export class Permission extends HeyApiClient {
       sessionID: string
       permissionID: string
       directory?: string
-      response?: "once" | "always" | "reject"
+      response?: "once" | "always" | "reject" | "modify"
+      modifyData?: {
+        content: string
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1673,6 +1682,7 @@ export class Permission extends HeyApiClient {
             { in: "path", key: "permissionID" },
             { in: "query", key: "directory" },
             { in: "body", key: "response" },
+            { in: "body", key: "modifyData" },
           ],
         },
       ],

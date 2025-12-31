@@ -1,5 +1,5 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { batch, createEffect, createMemo, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
@@ -13,7 +13,7 @@ import { getFontById, FONTS } from "@/fonts/font-definitions"
 export const REVIEW_PANE = {
   DEFAULT_WIDTH: 450,
   MIN_WIDTH: 200,
-  MAX_WIDTH_RATIO: 0.33,
+  MAX_WIDTH_RATIO: 0.5,
 } as const
 
 const AVATAR_COLOR_KEYS = ["pink", "mint", "orange", "purple", "cyan", "lime"] as const
@@ -42,6 +42,7 @@ type Dialog = "provider" | "model" | "connect"
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
 
 export type ExpandedSessions = Record<string, boolean>
+export type ReviewDiffStyle = "unified" | "split"
 
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
@@ -64,6 +65,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
           state: "pane" as "pane" | "tab",
           width: REVIEW_PANE.DEFAULT_WIDTH as number,
+          diffStyle: "split" as ReviewDiffStyle,
         },
         session: {
           width: 600,
@@ -133,21 +135,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const enriched = createMemo(() => server.projects.list().flatMap(enrich))
     const list = createMemo(() => enriched().flatMap(colorize))
 
-    // Helper function to calculate minimum session width (to enforce max review pane width)
-    const getMinSessionWidth = () => {
-      if (typeof window === "undefined") return 320
-      const maxReviewWidth = window.innerWidth * REVIEW_PANE.MAX_WIDTH_RATIO
-      return Math.max(REVIEW_PANE.MIN_WIDTH, window.innerWidth - maxReviewWidth)
-    }
-
-    // Clamp session width to enforce review pane constraints
-    const clampSessionWidth = () => {
-      const minSessionWidth = getMinSessionWidth()
-      if (store.session?.width && store.session.width < minSessionWidth) {
-        setStore("session", "width", minSessionWidth)
-      }
-    }
-
     onMount(() => {
       // Load project sessions
       Promise.all(
@@ -160,14 +147,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       if (store.review === undefined || store.review.opened === undefined) {
         setStore("review", "opened", false)
       }
-
-      // Clamp session width on initial load
-      clampSessionWidth()
-
-      // Re-clamp on window resize
-      const handleResize = () => clampSessionWidth()
-      window.addEventListener("resize", handleResize)
-      onCleanup(() => window.removeEventListener("resize", handleResize))
     })
 
     createEffect(() => {
@@ -239,6 +218,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         opened: createMemo(() => store.review?.opened ?? true),
         state: createMemo(() => store.review?.state ?? "pane"),
         width: createMemo(() => store.review?.width ?? 450),
+        diffStyle: createMemo(() => store.review?.diffStyle ?? "split"),
+        setDiffStyle(diffStyle: ReviewDiffStyle) {
+          if (!store.review) {
+            setStore("review", { opened: true, diffStyle })
+            return
+          }
+          setStore("review", "diffStyle", diffStyle)
+        },
         open() {
           setStore("review", "opened", true)
         },
@@ -261,13 +248,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       session: {
         width: createMemo(() => store.session?.width ?? 600),
         resize(width: number) {
-          // Enforce minimum session width to limit review pane to MAX_WIDTH_RATIO
-          const minSessionWidth = getMinSessionWidth()
-          const clampedWidth = Math.max(minSessionWidth, width)
+          // ResizeHandle already enforces min/max constraints
           if (!store.session) {
-            setStore("session", { width: clampedWidth })
+            setStore("session", { width })
           } else {
-            setStore("session", "width", clampedWidth)
+            setStore("session", "width", width)
           }
         },
       },

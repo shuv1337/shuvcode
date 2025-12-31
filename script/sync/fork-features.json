@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-30",
-  "lastChange": "Removed Open Project (uses native file picker, doesn't work in web). Add Project dialog now the single entry point.",
+  "lastUpdated": "2025-12-31",
+  "lastChange": "Added PR #6476 - allow users to edit suggested changes before applying",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -78,6 +78,44 @@
     }
   ],
   "features": [
+    {
+      "pr": 6476,
+      "title": "Allow users to edit suggested changes before applying",
+      "author": "dmmulroy",
+      "status": "open",
+      "description": "When permission is set to ask, users can press 'e' to open their editor and modify the suggested changes before accepting. Changes are tracked and the model is informed that user modified the edit.",
+      "files": [
+        "packages/opencode/src/permission/editor.ts",
+        "packages/opencode/src/permission/index.ts",
+        "packages/opencode/src/tool/edit.ts",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/util/text.ts",
+        "packages/opencode/src/config/config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/permission/editor.ts",
+          "description": "PermissionEditor namespace with canEdit, getContent, getExtension, getStartLine, hasChanges, computeDiff",
+          "markers": ["export namespace PermissionEditor", "SingleFileMetadata", "SingleFileModifyData"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "handleEditPermission function and permission_edit keybind handler",
+          "markers": ["handleEditPermission", "permission_edit", "PermissionEditor.canEdit"]
+        }
+      ]
+    },
+    {
+      "pr": 6507,
+      "title": "Optimize Ripgrep.tree() for large repositories",
+      "author": "Karavil",
+      "status": "open",
+      "description": "109x performance improvement for Ripgrep.tree() in large repositories by processing ripgrep output line-by-line instead of accumulating in memory",
+      "files": [
+        "packages/opencode/src/file/ripgrep.ts",
+        "packages/opencode/test/file/ripgrep.test.ts"
+      ]
+    },
     {
       "pr": 5958,
       "title": "AskQuestion tool for user input",

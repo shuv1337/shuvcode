@@ -65,6 +65,7 @@ export namespace Server {
   const log = Log.create({ service: "server" })
 
   let _url: URL | undefined
+  let _corsWhitelist: string[] = []
 
   export function url(): URL {
     return _url ?? new URL("http://localhost:4096")
@@ -1582,15 +1583,18 @@ export namespace Server {
             permissionID: z.string(),
           }),
         ),
-        validator("json", z.object({ response: Permission.Response })),
+        validator(
+          "json",
+          z.object({ response: Permission.Response, modifyData: z.object({ content: z.string() }).optional() }),
+        ),
         async (c) => {
           const params = c.req.valid("param")
-          const sessionID = params.sessionID
-          const permissionID = params.permissionID
+          const body = c.req.valid("json")
           Permission.respond({
-            sessionID,
-            permissionID,
-            response: c.req.valid("json").response,
+            sessionID: params.sessionID,
+            permissionID: params.permissionID,
+            response: body.response,
+            modifyData: body.modifyData,
           })
           return c.json(true)
         },
@@ -2866,7 +2870,9 @@ export namespace Server {
     return result
   }
 
-  export function listen(opts: { port: number; hostname: string; mdns?: boolean }) {
+  export function listen(opts: { port: number; hostname: string; mdns?: boolean; cors?: string[] }) {
+    _corsWhitelist = opts.cors ?? []
+
     const args = {
       hostname: opts.hostname,
       idleTimeout: 0,
@@ -2892,7 +2898,7 @@ export namespace Server {
       opts.hostname !== "localhost" &&
       opts.hostname !== "::1"
     if (shouldPublishMDNS) {
-      MDNS.publish(server.port!)
+      MDNS.publish(server.port!, `opencode-${server.port!}`)
     } else if (opts.mdns) {
       log.warn("mDNS enabled but hostname is loopback; skipping mDNS publish")
     }

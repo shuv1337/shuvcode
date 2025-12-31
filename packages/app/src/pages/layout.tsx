@@ -17,6 +17,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { Mark } from "@opencode-ai/ui/logo"
 import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
@@ -37,6 +38,7 @@ import { useGlobalSDK } from "@/context/global-sdk"
 import { useNotification } from "@/context/notification"
 import { Binary } from "@opencode-ai/util/binary"
 import { PullToRefresh } from "@/components/pull-to-refresh"
+
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
@@ -49,6 +51,7 @@ import { applyTheme } from "@/theme/apply-theme"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
+import { useServer } from "@/context/server"
 import { Header } from "@/components/header"
 
 export default function Layout(props: ParentProps) {
@@ -84,6 +87,7 @@ export default function Layout(props: ParentProps) {
   const globalSync = useGlobalSync()
   const layout = useLayout()
   const platform = usePlatform()
+  const server = useServer()
   const notification = useNotification()
   const navigate = useNavigate()
   const providers = useProviders()
@@ -472,7 +476,6 @@ export default function Layout(props: ParentProps) {
     if (next) navigateToProject(next.worktree)
     else navigate("/")
   }
-
 
   createEffect(() => {
     if (!params.dir || !params.id) return
@@ -1038,9 +1041,11 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Share feedback</Show>
             </Button>
           </Tooltip>
-          <Show when={expanded()}>
+          <Show when={sidebarProps.mobile}>
             <FontPicker mobile />
             <ThemePicker mobile />
+          </Show>
+          <Show when={expanded()}>
             <div class="mt-2 px-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
             </div>

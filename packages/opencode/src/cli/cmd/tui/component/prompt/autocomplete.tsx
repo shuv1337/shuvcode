@@ -264,7 +264,7 @@ export function Autocomplete(props: {
       if (command.sessionOnly && !s) continue
 
       results.push({
-        display: "/" + command.name,
+        display: "/" + command.name + (command.mcp ? " (MCP)" : ""),
         description: command.description,
         aliases: command.aliases?.map((a) => "/" + a),
         onSelect: () => {

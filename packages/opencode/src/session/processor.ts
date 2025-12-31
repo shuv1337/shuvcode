@@ -186,7 +186,7 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "completed",
-                        input: value.input,
+                        input: value.output.modifiedInput ?? value.input,
                         output: value.output.output,
                         metadata: value.output.metadata,
                         title: value.output.title,

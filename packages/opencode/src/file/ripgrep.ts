@@ -265,106 +265,205 @@ export namespace Ripgrep {
     }
   }
 
+  /**
+   * Generates an indented tree view of files in a directory.
+   *
+   * Directories are listed before files at each level, both sorted alphabetically.
+   * Uses BFS traversal to ensure breadth-first coverage when truncating.
+   *
+   * @example
+   * ```
+   * src/
+   *     components/
+   *         Button.tsx
+   *         Input.tsx
+   *         [3 truncated]
+   *     index.ts
+   * package.json
+   * ```
+   *
+   * @param input.cwd - The directory to scan
+   * @param input.limit - Max entries to include (default: 50). When exceeded,
+   *   remaining siblings are collapsed into `[N truncated]` markers.
+   * @returns Newline-separated tree with tab indentation per depth level
+   */
   export async function tree(input: { cwd: string; limit?: number }) {
     log.info("tree", input)
-    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd }))
-    interface Node {
-      path: string[]
-      children: Node[]
-    }
-
-    function getPath(node: Node, parts: string[], create: boolean) {
-      if (parts.length === 0) return node
-      let current = node
-      for (const part of parts) {
-        let existing = current.children.find((x) => x.path.at(-1) === part)
-        if (!existing) {
-          if (!create) return
-          existing = {
-            path: current.path.concat(part),
-            children: [],
-          }
-          current.children.push(existing)
-        }
-        current = existing
-      }
-      return current
-    }
-
-    const root: Node = {
-      path: [],
-      children: [],
-    }
-    for (const file of files) {
-      if (file.includes(".opencode")) continue
-      const parts = file.split(path.sep)
-      getPath(root, parts, true)
-    }
-
-    function sort(node: Node) {
-      node.children.sort((a, b) => {
-        if (!a.children.length && b.children.length) return 1
-        if (!b.children.length && a.children.length) return -1
-        return a.path.at(-1)!.localeCompare(b.path.at(-1)!)
-      })
-      for (const child of node.children) {
-        sort(child)
-      }
-    }
-    sort(root)
-
-    let current = [root]
-    const result: Node = {
-      path: [],
-      children: [],
-    }
-
-    let processed = 0
     const limit = input.limit ?? 50
-    while (current.length > 0) {
-      const next = []
-      for (const node of current) {
-        if (node.children.length) next.push(...node.children)
+    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd }))
+
+    /**
+     * Tree node with parent reference for ancestor traversal.
+     *
+     * Each node represents a file or directory. Directories have children,
+     * files don't. Uses Map for O(1) child lookup during tree construction
+     * (critical for repos with 40k+ files).
+     *
+     * The parent reference enables bottom-up selection: when we select a deep
+     * file, we automatically select all its ancestors so the path renders.
+     */
+    class FileNode {
+      readonly children: FileNode[] = []
+      private readonly lookup = new Map<string, FileNode>()
+      private sorted = false
+      selected = false
+
+      constructor(
+        readonly name: string = "",
+        readonly parent: FileNode | null = null,
+      ) {}
+
+      /**
+       * Gets an existing child by name, or creates it if it doesn't exist.
+       *
+       * Uses Map lookup for O(1) access. When creating, establishes the
+       * parent link so the child can propagate selection upward.
+       *
+       * @param name - The directory or file name (not a path)
+       * @returns The existing or newly created child node
+       */
+      child(name: string): FileNode {
+        let node = this.lookup.get(name)
+        if (!node) {
+          node = new FileNode(name, this)
+          this.children.push(node)
+          this.lookup.set(name, node)
+        }
+        return node
       }
-      const max = Math.max(...current.map((x) => x.children.length))
-      for (let i = 0; i < max && processed < limit; i++) {
-        for (const node of current) {
-          const child = node.children[i]
+
+      /**
+       * Inserts a file path into the tree, creating intermediate directories.
+       *
+       * @example
+       * root.insert(["src", "utils", "format.ts"])
+       * // Creates: root -> src/ -> utils/ -> format.ts
+       *
+       * @param parts - Path segments from root to file
+       */
+      insert(parts: string[]): void {
+        let node: FileNode = this
+        for (const part of parts) node = node.child(part)
+      }
+
+      /**
+       * Sorts children: directories first, then alphabetically.
+       *
+       * Lazy - only sorts once per node. Called during BFS traversal,
+       * so we only sort nodes we actually visit. For a 40k file repo
+       * with limit=200, this saves sorting thousands of unvisited nodes.
+       */
+      sort(): void {
+        if (this.sorted) return
+        this.children.sort((a, b) => {
+          if (a.isDir !== b.isDir) return b.isDir ? 1 : -1
+          return a.name.localeCompare(b.name)
+        })
+        this.sorted = true
+      }
+
+      /** A node is a directory if it has children (files are leaves). */
+      get isDir(): boolean {
+        return this.children.length > 0
+      }
+
+      /**
+       * Marks this node for rendering, propagating up to ancestors.
+       *
+       * Called during BFS when this node is chosen within the limit.
+       * Recursively selects the parent chain so the full path renders.
+       *
+       * @example
+       * // Selecting "format.ts" also selects "utils/" and "src/"
+       * formatNode.select()
+       * // Now: root.selected=true, src.selected=true,
+       * //      utils.selected=true, format.selected=true
+       */
+      select(): void {
+        this.selected = true
+        this.parent?.select()
+      }
+
+      /**
+       * Renders this subtree as an indented string.
+       *
+       * Only renders selected nodes. Appends "/" to directories.
+       * Shows "[N truncated]" for directories with unselected children,
+       * so users know there's more content they're not seeing.
+       *
+       * @param indentLevel - Current indentation level (0 for root's children)
+       * @returns Newline-separated tree with tab indentation
+       */
+      render(indentLevel = 0): string {
+        if (!this.selected) return ""
+
+        const outputLines: string[] = []
+        // Root node has no name, so children stay at same indent level
+        const childIndentLevel = this.name ? indentLevel + 1 : indentLevel
+
+        if (this.name) {
+          outputLines.push("\t".repeat(indentLevel) + this.name + (this.isDir ? "/" : ""))
+        }
+
+        for (const child of this.children) {
+          const renderedChild = child.render(childIndentLevel)
+          if (renderedChild) outputLines.push(renderedChild)
+        }
+
+        const unselectedChildCount = this.children.filter((c) => !c.selected).length
+        if (unselectedChildCount > 0) {
+          outputLines.push("\t".repeat(childIndentLevel) + `[${unselectedChildCount} truncated]`)
+        }
+
+        return outputLines.join("\n")
+      }
+    }
+
+    // Build complete tree from file list
+    const root = new FileNode()
+    for (const file of files) {
+      if (!file.includes(".opencode")) {
+        root.insert(file.split(path.sep))
+      }
+    }
+
+    // Select up to `limit` entries using BFS with round-robin.
+    //
+    // Why BFS? Ensures we show top-level structure before diving deep.
+    // A repo with src/, docs/, tests/ should show all three before
+    // showing src/components/Button/styles/...
+    //
+    // Why round-robin? Distributes selection evenly across siblings.
+    // Instead of showing all of src/'s children before any of docs/,
+    // we alternate: src/index.ts, docs/README.md, src/utils.ts, docs/api.md...
+    // This gives a balanced view of the entire repo structure.
+    let selectedCount = 0
+    let nodesAtCurrentDepth: FileNode[] = [root]
+
+    while (nodesAtCurrentDepth.length > 0 && selectedCount < limit) {
+      // Collect all children for the next BFS depth level
+      const nodesAtNextDepth: FileNode[] = []
+      for (const parent of nodesAtCurrentDepth) {
+        parent.sort()
+        nodesAtNextDepth.push(...parent.children)
+      }
+
+      // Round-robin: take 1st child from each parent, then 2nd from each, etc.
+      // This ensures fair distribution across all branches at this depth.
+      const mostChildrenAnyParentHas = Math.max(0, ...nodesAtCurrentDepth.map((n) => n.children.length))
+      roundRobin: for (let childIndex = 0; childIndex < mostChildrenAnyParentHas; childIndex++) {
+        for (const parent of nodesAtCurrentDepth) {
+          const child = parent.children[childIndex]
           if (!child) continue
-          getPath(result, child.path, true)
-          processed++
-          if (processed >= limit) break
+          child.select() // Also selects ancestors via parent chain
+          if (++selectedCount >= limit) break roundRobin
         }
       }
-      if (processed >= limit) {
-        for (const node of [...current, ...next]) {
-          const compare = getPath(result, node.path, false)
-          if (!compare) continue
-          if (compare?.children.length !== node.children.length) {
-            const diff = node.children.length - compare.children.length
-            compare.children.push({
-              path: compare.path.concat(`[${diff} truncated]`),
-              children: [],
-            })
-          }
-        }
-        break
-      }
-      current = next
+
+      nodesAtCurrentDepth = nodesAtNextDepth
     }
 
-    const lines: string[] = []
-
-    function render(node: Node, depth: number) {
-      const indent = "\t".repeat(depth)
-      lines.push(indent + node.path.at(-1) + (node.children.length ? "/" : ""))
-      for (const child of node.children) {
-        render(child, depth + 1)
-      }
-    }
-    result.children.map((x) => render(x, 0))
-
-    return lines.join("\n")
+    return root.render()
   }
 
   export async function search(input: { cwd: string; pattern: string; glob?: string[]; limit?: number }) {
