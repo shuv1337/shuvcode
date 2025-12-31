@@ -1495,7 +1495,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                 disabled={!prompt.dirty() && store.imageAttachments.length === 0 && !working()}
                 icon={working() ? "stop" : "arrow-up"}
                 variant="primary"
-class="size-8 rounded-md"
+                class="size-8 rounded-md"
               />
             </Tooltip>
           </div>
