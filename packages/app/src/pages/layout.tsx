@@ -905,11 +905,6 @@ export default function Layout(props: ParentProps) {
       <>
         <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
           <Show when={!sidebarProps.mobile}>
-            <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2" data-tauri-drag-region>
-              <Mark class="shrink-0" />
-            </A>
-          </Show>
-          <Show when={!sidebarProps.mobile}>
             <Tooltip
               class="shrink-0"
               placement="right"
