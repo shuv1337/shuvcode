@@ -17,6 +17,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { Mark } from "@opencode-ai/ui/logo"
 import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
@@ -37,6 +38,7 @@ import { useGlobalSDK } from "@/context/global-sdk"
 import { useNotification } from "@/context/notification"
 import { Binary } from "@opencode-ai/util/binary"
 import { PullToRefresh } from "@/components/pull-to-refresh"
+
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
@@ -49,7 +51,7 @@ import { applyTheme } from "@/theme/apply-theme"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
-import { Header } from "@/components/header"
+import { useServer } from "@/context/server"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
@@ -84,6 +86,7 @@ export default function Layout(props: ParentProps) {
   const globalSync = useGlobalSync()
   const layout = useLayout()
   const platform = usePlatform()
+  const server = useServer()
   const notification = useNotification()
   const navigate = useNavigate()
   const providers = useProviders()
@@ -472,7 +475,6 @@ export default function Layout(props: ParentProps) {
     if (next) navigateToProject(next.worktree)
     else navigate("/")
   }
-
 
   createEffect(() => {
     if (!params.dir || !params.id) return
@@ -902,6 +904,11 @@ export default function Layout(props: ParentProps) {
       <>
         <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
           <Show when={!sidebarProps.mobile}>
+            <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2" data-tauri-drag-region>
+              <Mark class="shrink-0" />
+            </A>
+          </Show>
+          <Show when={!sidebarProps.mobile}>
             <Tooltip
               class="shrink-0"
               placement="right"
@@ -1052,11 +1059,6 @@ export default function Layout(props: ParentProps) {
 
   return (
     <div class="relative flex-1 min-h-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
-      <Header
-        navigateToProject={navigateToProject}
-        navigateToSession={navigateToSession}
-        onMobileMenuToggle={mobileSidebar.toggle}
-      />
       <div class="flex-1 min-h-0 flex">
         <div
           classList={{

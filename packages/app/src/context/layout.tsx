@@ -42,6 +42,7 @@ type Dialog = "provider" | "model" | "connect"
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
 
 export type ExpandedSessions = Record<string, boolean>
+export type ReviewDiffStyle = "unified" | "split"
 
 export const { use: useLayout, provider: LayoutProvider } = createSimpleContext({
   name: "Layout",
@@ -64,6 +65,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           opened: false,
           state: "pane" as "pane" | "tab",
           width: REVIEW_PANE.DEFAULT_WIDTH as number,
+          diffStyle: "split" as ReviewDiffStyle,
         },
         session: {
           width: 600,
@@ -239,6 +241,14 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         opened: createMemo(() => store.review?.opened ?? true),
         state: createMemo(() => store.review?.state ?? "pane"),
         width: createMemo(() => store.review?.width ?? 450),
+        diffStyle: createMemo(() => store.review?.diffStyle ?? "split"),
+        setDiffStyle(diffStyle: ReviewDiffStyle) {
+          if (!store.review) {
+            setStore("review", { opened: true, diffStyle })
+            return
+          }
+          setStore("review", "diffStyle", diffStyle)
+        },
         open() {
           setStore("review", "opened", true)
         },

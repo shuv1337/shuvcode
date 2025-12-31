@@ -132,10 +132,12 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
 
     const origin = createMemo(() => projectsKey(active()))
     const projectsList = createMemo(() => store.projects[origin()] ?? [])
+    const isLocal = createMemo(() => origin() === "local")
 
     return {
       ready: isReady,
       healthy,
+      isLocal,
       get url() {
         return active()
       },
