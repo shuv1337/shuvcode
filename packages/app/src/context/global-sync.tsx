@@ -25,9 +25,12 @@ import { Binary } from "@opencode-ai/util/binary"
 import { retry } from "@opencode-ai/util/retry"
 import { useGlobalSDK } from "./global-sdk"
 import { ErrorPage, type InitError } from "../pages/error"
+import { WelcomeScreen } from "../components/welcome-screen"
 import { batch, createContext, useContext, onMount, type ParentProps, Switch, Match } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
+import { isHostedEnvironment } from "@/utils/hosted"
+import { useServer } from "./server"
 
 type State = {
   ready: boolean
@@ -66,17 +69,24 @@ type State = {
   }
 }
 
+type ConnectionState = "connecting" | "ready" | "needs_config" | "error"
+
 function createGlobalSync() {
   const globalSDK = useGlobalSDK()
+  const server = useServer()
   const [globalStore, setGlobalStore] = createStore<{
+    connectionState: ConnectionState
     ready: boolean
     error?: InitError
+    attemptedUrl?: string
     path: Path
     project: Project[]
     provider: ProviderListResponse
     provider_auth: ProviderAuthResponse
   }>({
+    connectionState: "connecting",
     ready: false,
+    attemptedUrl: undefined,
     path: { state: "", config: "", worktree: "", directory: "", home: "" },
     project: [],
     provider: { all: [], connected: [], default: {} },
@@ -402,16 +412,46 @@ function createGlobalSync() {
     }
   })
 
+  /**
+   * Probes the server health with a short timeout (2 seconds).
+   * Used for initial connection to provide quick feedback.
+   */
+  async function probeHealth(
+    url: string,
+    healthFn: () => Promise<{ data?: { healthy?: boolean } }>,
+  ): Promise<{ healthy: boolean }> {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2000)
+
+      const result = await healthFn()
+      clearTimeout(timeoutId)
+
+      return { healthy: result.data?.healthy === true }
+    } catch {
+      return { healthy: false }
+    }
+  }
+
   async function bootstrap() {
-    const health = await globalSDK.client.global
-      .health()
-      .then((x) => x.data)
-      .catch(() => undefined)
-    if (!health?.healthy) {
+    setGlobalStore("connectionState", "connecting")
+    setGlobalStore("attemptedUrl", globalSDK.url)
+
+    // Use a short timeout for the health probe (2 seconds)
+    const probeResult = await probeHealth(globalSDK.url, () => globalSDK.client.global.health())
+
+    if (!probeResult.healthy) {
+      // For hosted environments, show the welcome/configuration screen
+      if (isHostedEnvironment()) {
+        setGlobalStore("connectionState", "needs_config")
+        return
+      }
+      // For non-hosted environments, show the error page
       setGlobalStore(
         "error",
         new Error(`Could not connect to server. Is there a server running at \`${globalSDK.url}\`?`),
       )
+      setGlobalStore("connectionState", "error")
       return
     }
 
@@ -452,8 +492,14 @@ function createGlobalSync() {
         }),
       ),
     ])
-      .then(() => setGlobalStore("ready", true))
-      .catch((e) => setGlobalStore("error", e))
+      .then(() => {
+        setGlobalStore("ready", true)
+        setGlobalStore("connectionState", "ready")
+      })
+      .catch((e) => {
+        setGlobalStore("error", e)
+        setGlobalStore("connectionState", "error")
+      })
   }
 
   onMount(() => {
@@ -467,6 +513,12 @@ function createGlobalSync() {
     },
     get error() {
       return globalStore.error
+    },
+    get connectionState() {
+      return globalStore.connectionState
+    },
+    get attemptedUrl() {
+      return globalStore.attemptedUrl
     },
     child,
     bootstrap,
@@ -482,10 +534,18 @@ export function GlobalSyncProvider(props: ParentProps) {
   const value = createGlobalSync()
   return (
     <Switch>
-      <Match when={value.error}>
+      <Match when={value.connectionState === "connecting"}>
+        <div class="flex-1 h-screen w-screen min-h-0 flex flex-col items-center justify-center bg-background-base">
+          <div class="text-text-weak text-sm">Connecting to server...</div>
+        </div>
+      </Match>
+      <Match when={value.connectionState === "needs_config"}>
+        <WelcomeScreen attemptedUrl={value.attemptedUrl} onRetry={() => value.bootstrap()} />
+      </Match>
+      <Match when={value.connectionState === "error"}>
         <ErrorPage error={value.error} />
       </Match>
-      <Match when={value.ready}>
+      <Match when={value.connectionState === "ready"}>
         <GlobalSyncContext.Provider value={value}>{props.children}</GlobalSyncContext.Provider>
       </Match>
     </Switch>
