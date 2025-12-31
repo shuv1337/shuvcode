@@ -1871,7 +1871,7 @@ export type Command = {
   agent?: string
   model?: string
   template: string
-  type: "template" | "plugin"
+  type?: "template" | "plugin"
   subtask?: boolean
   sessionOnly?: boolean
   aliases?: Array<string>
@@ -3203,7 +3203,6 @@ export type SessionPromptData = {
       [key: string]: boolean
     }
     system?: string
-    variant?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -3387,7 +3386,6 @@ export type SessionPromptAsyncData = {
       [key: string]: boolean
     }
     system?: string
-    variant?: string
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -3431,7 +3429,6 @@ export type SessionCommandData = {
     model?: string
     arguments: string
     command: string
-    variant?: string
   }
   path: {
     /**
