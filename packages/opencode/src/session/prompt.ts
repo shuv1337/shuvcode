@@ -1078,6 +1078,10 @@ export namespace SessionPrompt {
     }
     await Session.updatePart(userPart)
 
+    // Use session.directory as the authoritative source for cwd
+    // This ensures shell commands work correctly even if Instance.directory
+    // hasn't been properly initialized yet (e.g., first message in a new project)
+    const cwd = session.directory
     const msg: MessageV2.Assistant = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,
@@ -1086,7 +1090,7 @@ export namespace SessionPrompt {
       agent: input.agent,
       cost: 0,
       path: {
-        cwd: Instance.directory,
+        cwd,
         root: Instance.worktree,
       },
       time: {
@@ -1177,7 +1181,7 @@ export namespace SessionPrompt {
     const args = matchingInvocation?.args
 
     const proc = spawn(shell, args, {
-      cwd: Instance.directory,
+      cwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
