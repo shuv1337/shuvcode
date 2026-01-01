@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2025-12-31",
-  "lastChange": "Added PR #6476 - allow users to edit suggested changes before applying",
+  "lastUpdated": "2026-01-01",
+  "lastChange": "Documented removal of OpenCode Mark logo from sidebar (Issue #234)",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -60,6 +60,19 @@
         "Open project sidebar button"
       ],
       "note": "Users should use Add Project button which opens DialogCreateProject with folder browser, git clone, and create new project tabs."
+    },
+    {
+      "pr": 234,
+      "title": "Remove OpenCode Mark logo from sidebar",
+      "author": "fork",
+      "removedDate": "2026-01-01",
+      "reason": "Sidebar uses shuvcode branding only. The OpenCode 'O' Mark logo is removed from the sidebar header area.",
+      "filesModified": ["packages/app/src/pages/layout.tsx"],
+      "codeRemoved": [
+        "Mark import from @opencode-ai/ui/logo",
+        "<Mark class=\"shrink-0\" /> in SidebarContent"
+      ],
+      "note": "Issue #234 - Fork-specific branding change to prevent OpenCode logo appearing in shuvcode sidebar."
     }
   ],
   "apiDependencies": [

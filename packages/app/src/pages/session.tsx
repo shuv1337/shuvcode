@@ -57,7 +57,7 @@ import { DialogSelectModel } from "@/components/dialog-select-model"
 import { DialogSelectMcp } from "@/components/dialog-select-mcp"
 import { useCommand } from "@/context/command"
 import { A, useNavigate, useParams } from "@solidjs/router"
-import { UserMessage } from "@opencode-ai/sdk/v2"
+import { UserMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { extractPromptFromParts } from "@/utils/prompt"
@@ -316,6 +316,57 @@ export default function Page() {
     { equals: same },
   )
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
+
+  // Detect pending askquestion tools from synced message parts (mirrors TUI logic)
+  const pendingAskQuestion = createMemo(() => {
+    if (!params.id) return null
+    const sessionMessages = sync.data.message[params.id] ?? []
+
+    // Search backwards for the most recent pending question
+    for (const message of [...sessionMessages].reverse()) {
+      const parts = sync.data.part[message.id] ?? []
+
+      for (const part of [...parts].reverse()) {
+        if (part.type !== "tool") continue
+        const toolPart = part as ToolPart
+
+        if (toolPart.tool !== "askquestion") continue
+        if (toolPart.state.status !== "running") continue
+
+        const metadata = toolPart.state.metadata as { status?: string; questions?: AskQuestionQuestion[] } | undefined
+
+        if (metadata?.status !== "waiting") continue
+
+        return {
+          callID: toolPart.callID,
+          messageID: toolPart.messageID,
+          questions: (metadata.questions ?? []) as AskQuestionQuestion[],
+        }
+      }
+    }
+
+    return null
+  })
+
+  // Handlers for AskQuestion wizard
+  const handleAskQuestionSubmit = async (answers: AskQuestionAnswer[]) => {
+    const pending = pendingAskQuestion()
+    if (!pending || !params.id) return
+    await sdk.client.askquestion.respond({
+      callID: pending.callID,
+      sessionID: params.id,
+      answers,
+    })
+  }
+
+  const handleAskQuestionCancel = async () => {
+    const pending = pendingAskQuestion()
+    if (!pending || !params.id) return
+    await sdk.client.askquestion.cancel({
+      callID: pending.callID,
+      sessionID: params.id,
+    })
+  }
 
   createEffect(
     on(
@@ -1335,11 +1386,22 @@ export default function Page() {
         </Switch>
         <div class="absolute inset-x-0 bottom-4 flex flex-col justify-center items-center z-50 px-4">
           <div class="w-full">
-            <PromptInput
-              ref={(el) => {
-                inputRef = el
-              }}
-            />
+            <Show when={pendingAskQuestion()}>
+              {(pending) => (
+                <AskQuestionWizard
+                  questions={pending().questions}
+                  onSubmit={handleAskQuestionSubmit}
+                  onCancel={handleAskQuestionCancel}
+                />
+              )}
+            </Show>
+            <Show when={!pendingAskQuestion()}>
+              <PromptInput
+                ref={(el) => {
+                  inputRef = el
+                }}
+              />
+            </Show>
           </div>
         </div>
       </div>
@@ -1359,11 +1421,22 @@ export default function Page() {
                 "max-w-200": !showTabs(),
               }}
             >
-              <PromptInput
-                ref={(el) => {
-                  inputRef = el
-                }}
-              />
+              <Show when={pendingAskQuestion()}>
+                {(pending) => (
+                  <AskQuestionWizard
+                    questions={pending().questions}
+                    onSubmit={handleAskQuestionSubmit}
+                    onCancel={handleAskQuestionCancel}
+                  />
+                )}
+              </Show>
+              <Show when={!pendingAskQuestion()}>
+                <PromptInput
+                  ref={(el) => {
+                    inputRef = el
+                  }}
+                />
+              </Show>
             </div>
           </div>
           <Show when={showTabs()}>
