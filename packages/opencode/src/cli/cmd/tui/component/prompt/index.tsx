@@ -1,5 +1,5 @@
 import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, t, dim, fg, type KeyBinding } from "@opentui/core"
-import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show, Switch, Match, batch } from "solid-js"
+import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -12,16 +12,16 @@ import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { Keybind } from "@/util/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
+import { usePromptStash } from "./stash"
+import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import { parseUriList } from "../../util/uri"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
-import { Ide } from "@/ide"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
 import { createColors, createFrames } from "../../ui/spinner.ts"
@@ -31,15 +31,10 @@ import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 
-// Regex to match optional whitespace followed by #L<start>[-<end>] line range syntax after a file reference
-// Only matches when followed by a space (confirming the line range is complete)
-const LINE_RANGE_SUFFIX_REGEX = /^(\s*)#L(\d+)(?:-(\d+))?\s/
-
 export type PromptProps = {
   sessionID?: string
   disabled?: boolean
   onSubmit?: () => void
-  onSearchToggle?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
@@ -52,6 +47,7 @@ export type PromptRef = {
   reset(): void
   blur(): void
   focus(): void
+  submit(): void
 }
 
 const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
@@ -123,13 +119,11 @@ export function Prompt(props: PromptProps) {
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
-  const status = createMemo(() => sync.data.session_status[props.sessionID ?? ""] ?? { type: "idle" })
+  const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
   const history = usePromptHistory()
+  const stash = usePromptStash()
   const command = useCommandDialog()
   const renderer = useRenderer()
-  const dimensions = useTerminalDimensions()
-  const tall = createMemo(() => dimensions().height > 40)
-  const wide = createMemo(() => dimensions().width > 120)
   const { theme, syntax } = useTheme()
   const kv = useKV()
 
@@ -158,6 +152,20 @@ export function Prompt(props: PromptProps) {
   const agentStyleId = syntax().getStyleId("extmark.agent")!
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId: number
+
+  sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
+    input.insertText(evt.properties.text)
+    setTimeout(() => {
+      input.getLayoutNode().markDirty()
+      input.gotoBufferEnd()
+      renderer.requestRender()
+    }, 0)
+  })
+
+  createEffect(() => {
+    if (props.disabled) input.cursorColor = theme.backgroundElement
+    if (!props.disabled) input.cursorColor = theme.text
+  })
 
   const lastUserMessage = createMemo(() => {
     if (!props.sessionID) return undefined
@@ -194,11 +202,13 @@ export function Prompt(props: PromptProps) {
 
       syncedSessionID = sessionID
 
-      batch(() => {
-        if (msg.agent) local.agent.set(msg.agent)
-        if (msg.model) local.model.set(msg.model)
-        if (msg.variant) local.model.variant.set(msg.variant)
-      })
+      // Only set agent if it's a primary agent (not a subagent)
+      const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
+      if (msg.agent && isPrimaryAgent) {
+        local.agent.set(msg.agent)
+      }
+      if (msg.model) local.model.set(msg.model)
+      if (msg.variant) local.model.variant.set(msg.variant)
     }
   })
 
@@ -294,10 +304,9 @@ export function Prompt(props: PromptProps) {
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
           const value = trigger === "prompt" ? "" : text
-          const result = await Editor.open({ value, renderer })
-          if (!result.ok) return
+          const content = await Editor.open({ value, renderer })
+          if (!content) return
 
-          const content = result.content
           input.setText(content)
 
           // Update positions for nonTextParts based on their location in new content
@@ -331,7 +340,6 @@ export function Prompt(props: PromptProps) {
                       start: newStart,
                       end: newEnd,
                     },
-                    path: part.source.path,
                   },
                 }
               }
@@ -349,7 +357,7 @@ export function Prompt(props: PromptProps) {
 
               return part
             })
-            .filter((part): part is Exclude<typeof part, null> => part !== null)
+            .filter((part) => part !== null)
 
           setStore("prompt", {
             input: content,
@@ -364,96 +372,6 @@ export function Prompt(props: PromptProps) {
     ]
   })
 
-  sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
-    const text = evt.properties.text
-
-    // Check if this is a file reference with optional line range (e.g., "@file.ts#L10-20")
-    const fileRefMatch = text.match(/^@(.+?)(?:#L(\d+)(?:-(\d+))?)?$/)
-
-    if (fileRefMatch) {
-      const filename = fileRefMatch[1]
-      const startLine = fileRefMatch[2]
-      const endLine = fileRefMatch[3]
-
-      // Build the display text (includes line range)
-      const displayText = text // e.g., "@file.ts#L10-20"
-
-      // Build the URL with line range query params
-      let url = `file://${process.cwd()}/${filename}`
-      if (startLine) {
-        const params = new URLSearchParams()
-        params.set("start", startLine)
-        if (endLine) {
-          params.set("end", endLine)
-        }
-        url += `?${params.toString()}`
-      }
-
-      // Build filename for the part (includes line range)
-      let partFilename = filename
-      if (startLine) {
-        partFilename += endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
-      }
-
-      // Insert the text with trailing space
-      const currentOffset = input.cursorOffset
-      const insertText = displayText + " "
-      input.insertText(insertText)
-
-      // Create extmark over the file reference (without trailing space)
-      const extmarkStart = currentOffset
-      const extmarkEnd = currentOffset + Bun.stringWidth(displayText)
-
-      const extmarkId = input.extmarks.create({
-        start: extmarkStart,
-        end: extmarkEnd,
-        virtual: true,
-        styleId: fileStyleId,
-        typeId: promptPartTypeId,
-      })
-
-      // Add the file part to the prompt
-      setStore(
-        produce((draft) => {
-          const partIndex = draft.prompt.parts.length
-          draft.prompt.parts.push({
-            type: "file",
-            mime: "text/plain",
-            filename: partFilename,
-            url,
-            source: {
-              type: "file",
-              text: {
-                start: extmarkStart,
-                end: extmarkEnd,
-                value: displayText,
-              },
-              path: filename,
-            },
-          })
-          draft.extmarkToPartIndex.set(extmarkId, partIndex)
-        }),
-      )
-    } else {
-      // Not a file reference, just insert as plain text
-      input.insertText(text)
-    }
-    setTimeout(() => {
-      input.getLayoutNode().markDirty()
-      input.gotoBufferEnd()
-      renderer.requestRender()
-    }, 0)
-  })
-
-  sdk.event.on(Ide.Event.SelectionChanged.type, (evt) => {
-    updateIdeSelection(evt.properties.selection)
-  })
-
-  createEffect(() => {
-    if (props.disabled) input.cursorColor = theme.backgroundElement
-    if (!props.disabled) input.cursorColor = theme.text
-  })
-
   createEffect(() => {
     input.focus()
   })
@@ -461,12 +379,6 @@ export function Prompt(props: PromptProps) {
   onMount(() => {
     promptPartTypeId = input.extmarks.registerType("prompt-part")
   })
-
-  function updateIdeSelection(_selection: Ide.Selection | null) {
-    // Selection is now displayed in footer via local.selection
-    // No visual insertion in the input needed
-    // Content will be included at submit time from local.selection
-  }
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
@@ -514,20 +426,6 @@ export function Prompt(props: PromptProps) {
 
   function syncExtmarksWithPromptParts() {
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
-    const text = input.plainText
-
-    // Track extmarks that need to be recreated with new bounds (for line range absorption)
-    const extmarksToRecreate: Array<{
-      oldId: number
-      start: number
-      end: number
-      deleteFrom: number
-      deleteTo: number
-      newVirtualText: string
-      styleId: number
-      partIndex: number
-    }> = []
-
     setStore(
       produce((draft) => {
         const newMap = new Map<number, number>()
@@ -544,50 +442,6 @@ export function Prompt(props: PromptProps) {
               } else if (part.type === "file" && part.source?.text) {
                 part.source.text.start = extmark.start
                 part.source.text.end = extmark.end
-
-                // Check for #L line range suffix after the extmark (with optional whitespace)
-                const textAfterExtmark = text.slice(extmark.end)
-                const lineRangeMatch = textAfterExtmark.match(LINE_RANGE_SUFFIX_REGEX)
-
-                if (lineRangeMatch) {
-                  const whitespace = lineRangeMatch[1]
-                  const startLine = lineRangeMatch[2]
-                  const endLine = lineRangeMatch[3]
-                  const fullMatchLength = lineRangeMatch[0].length
-                  const lineRangeSuffix = endLine ? `#L${startLine}-${endLine}` : `#L${startLine}`
-
-                  // Update the URL with line range query params
-                  const baseUrl = part.url.split("?")[0]
-                  const params = new URLSearchParams()
-                  params.set("start", startLine)
-                  if (endLine) {
-                    params.set("end", endLine)
-                  }
-                  part.url = `${baseUrl}?${params.toString()}`
-
-                  // Update the filename to include the line range
-                  if (part.filename) {
-                    const baseFilename = part.filename.replace(/#L\d+(-\d+)?$/, "")
-                    part.filename = baseFilename + lineRangeSuffix
-                  }
-
-                  // Update the virtual text value to include the line range
-                  const baseVirtualText = part.source.text.value.replace(/#L\d+(-\d+)?$/, "")
-                  part.source.text.value = baseVirtualText + lineRangeSuffix
-
-                  // Mark for text deletion and extmark recreation
-                  // We'll delete the whitespace+#L... text and extend the extmark
-                  extmarksToRecreate.push({
-                    oldId: extmark.id,
-                    start: extmark.start,
-                    end: extmark.end + fullMatchLength,
-                    deleteFrom: extmark.end,
-                    deleteTo: extmark.end + fullMatchLength,
-                    newVirtualText: part.source.text.value,
-                    styleId: fileStyleId,
-                    partIndex: newParts.length,
-                  })
-                }
               } else if (part.type === "text" && part.source?.text) {
                 part.source.text.start = extmark.start
                 part.source.text.end = extmark.end
@@ -602,73 +456,62 @@ export function Prompt(props: PromptProps) {
         draft.prompt.parts = newParts
       }),
     )
-
-    // Recreate extmarks that absorbed line range suffixes
-    // Process in reverse order to maintain correct offsets when deleting text
-    for (const item of extmarksToRecreate.reverse()) {
-      // Save cursor position
-      const savedCursor = input.cursorOffset
-
-      // Delete the old extmark
-      input.extmarks.delete(item.oldId)
-
-      // Delete the entire range from extmark start to end of line range (including trailing space)
-      // Then insert the new combined text with line range
-      input.cursorOffset = item.start
-      const startCursor = input.logicalCursor
-      input.cursorOffset = item.deleteTo
-      const endCursor = input.logicalCursor
-      input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
-
-      // Insert the new text: "@file.ts#L10-20 " (with trailing space)
-      const newText = item.newVirtualText + " "
-      input.cursorOffset = item.start
-      input.insertText(newText)
-
-      // Create extmark over the new text (without the trailing space)
-      const newExtmarkEnd = item.start + Bun.stringWidth(item.newVirtualText)
-      const newExtmarkId = input.extmarks.create({
-        start: item.start,
-        end: newExtmarkEnd,
-        virtual: true,
-        styleId: item.styleId,
-        typeId: promptPartTypeId,
-      })
-
-      // Update the part's source text bounds
-      setStore(
-        produce((draft) => {
-          const part = draft.prompt.parts[item.partIndex]
-          if (part?.type === "file" && part.source?.text) {
-            part.source.text.start = item.start
-            part.source.text.end = newExtmarkEnd
-            part.source.text.value = item.newVirtualText
-          }
-        }),
-      )
-
-      setStore("extmarkToPartIndex", (map: Map<number, number>) => {
-        const newMap = new Map(map)
-        newMap.delete(item.oldId)
-        newMap.set(newExtmarkId, item.partIndex)
-        return newMap
-      })
-
-      // Calculate how much the text length changed and restore cursor position
-      const oldLength = item.deleteTo - item.start
-      const newLength = newText.length
-      const lengthDiff = newLength - oldLength
-
-      if (savedCursor > item.deleteTo) {
-        input.cursorOffset = savedCursor + lengthDiff
-      } else if (savedCursor > item.start) {
-        // Cursor was in the middle of the changed region, put it after the new text
-        input.cursorOffset = item.start + newLength
-      } else {
-        input.cursorOffset = savedCursor
-      }
-    }
   }
+
+  command.register(() => [
+    {
+      title: "Stash prompt",
+      value: "prompt.stash",
+      category: "Prompt",
+      disabled: !store.prompt.input,
+      onSelect: (dialog) => {
+        if (!store.prompt.input) return
+        stash.push({
+          input: store.prompt.input,
+          parts: store.prompt.parts,
+        })
+        input.extmarks.clear()
+        input.clear()
+        setStore("prompt", { input: "", parts: [] })
+        setStore("extmarkToPartIndex", new Map())
+        dialog.clear()
+      },
+    },
+    {
+      title: "Stash pop",
+      value: "prompt.stash.pop",
+      category: "Prompt",
+      disabled: stash.list().length === 0,
+      onSelect: (dialog) => {
+        const entry = stash.pop()
+        if (entry) {
+          input.setText(entry.input)
+          setStore("prompt", { input: entry.input, parts: entry.parts })
+          restoreExtmarksFromParts(entry.parts)
+          input.gotoBufferEnd()
+        }
+        dialog.clear()
+      },
+    },
+    {
+      title: "Stash list",
+      value: "prompt.stash.list",
+      category: "Prompt",
+      disabled: stash.list().length === 0,
+      onSelect: (dialog) => {
+        dialog.replace(() => (
+          <DialogStash
+            onSelect={(entry) => {
+              input.setText(entry.input)
+              setStore("prompt", { input: entry.input, parts: entry.parts })
+              restoreExtmarksFromParts(entry.parts)
+              input.gotoBufferEnd()
+            }}
+          />
+        ))
+      },
+    },
+  ])
 
   props.ref?.({
     get focused() {
@@ -698,11 +541,14 @@ export function Prompt(props: PromptProps) {
       })
       setStore("extmarkToPartIndex", new Map())
     },
+    submit() {
+      submit()
+    },
   })
 
   async function submit() {
     if (props.disabled) return
-    if (autocomplete.visible) return
+    if (autocomplete?.visible) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
@@ -723,8 +569,6 @@ export function Prompt(props: PromptProps) {
     const messageID = Identifier.ascending("message")
     let inputText = store.prompt.input
 
-    // IDE selection is displayed in footer only - not injected into message
-
     // Expand pasted text inline before submitting
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
     const sortedExtmarks = allExtmarks.sort((a: { start: number }, b: { start: number }) => b.start - a.start)
@@ -744,6 +588,8 @@ export function Prompt(props: PromptProps) {
     // Filter out text parts (pasted content) since they're now expanded inline
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
 
+    // Capture mode before it gets reset
+    const currentMode = store.mode
     const variant = local.model.variant.current()
 
     if (store.mode === "shell") {
@@ -761,15 +607,14 @@ export function Prompt(props: PromptProps) {
       inputText.startsWith("/") &&
       iife(() => {
         const command = inputText.split(" ")[0].slice(1)
-        return sync.data.command.some((x) => x.name === command || x.aliases?.includes(command))
+        console.log(command)
+        return sync.data.command.some((x) => x.name === command)
       })
     ) {
       let [command, ...args] = inputText.split(" ")
-      const commandName = command.slice(1)
-      const resolved = sync.data.command.find((x) => x.name === commandName || x.aliases?.includes(commandName))
       sdk.client.session.command({
         sessionID,
-        command: resolved?.name ?? commandName,
+        command: command.slice(1),
         arguments: args.join(" "),
         agent: local.agent.current().name,
         model: `${selectedModel.providerID}/${selectedModel.modelID}`,
@@ -790,21 +635,6 @@ export function Prompt(props: PromptProps) {
             type: "text",
             text: inputText,
           },
-          ...(local.selection.current()?.text
-            ? [
-                {
-                  id: Identifier.ascending("part"),
-                  type: "text" as const,
-                  text: `\n\n[IDE Selection: ${
-                    local.selection
-                      .current()!
-                      .filePath.split(/[\/\\]/)
-                      .pop() || local.selection.current()!.filePath
-                  }:${local.selection.current()!.selection.start.line + 1}-${local.selection.current()!.selection.end.line + 1}]\n\`\`\`\n${local.selection.current()!.text}\n\`\`\``,
-                  synthetic: true,
-                },
-              ]
-            : []),
           ...nonTextParts.map((x) => ({
             id: Identifier.ascending("part"),
             ...x,
@@ -812,7 +642,10 @@ export function Prompt(props: PromptProps) {
         ],
       })
     }
-    history.append(store.prompt)
+    history.append({
+      ...store.prompt,
+      mode: currentMode,
+    })
     input.extmarks.clear()
     setStore("prompt", {
       input: "",
@@ -832,22 +665,6 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
-
-  let lastExitAttempt = 0
-
-  async function tryExit() {
-    const now = Date.now()
-    if (now - lastExitAttempt < 2000) {
-      await exit()
-      return
-    }
-    lastExitAttempt = now
-    toast.show({
-      variant: "warning",
-      message: "Press again to exit",
-      duration: 2000,
-    })
-  }
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
@@ -1001,8 +818,8 @@ export function Prompt(props: PromptProps) {
           >
             <textarea
               placeholder={props.sessionID ? undefined : `Ask anything... "${PLACEHOLDERS[store.placeholder]}"`}
-              textColor={theme.text}
-              focusedTextColor={theme.text}
+              textColor={keybind.leader ? theme.textMuted : theme.text}
+              focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
@@ -1045,13 +862,12 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 if (keybind.match("app_exit", e)) {
-                  await tryExit()
-                  return
-                }
-                if (keybind.match("session_search", e)) {
-                  props.onSearchToggle?.()
-                  e.preventDefault()
-                  return
+                  if (store.prompt.input === "") {
+                    await exit()
+                    // Don't preventDefault - let textarea potentially handle the event
+                    e.preventDefault()
+                    return
+                  }
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
                   setStore("mode", "shell")
@@ -1066,15 +882,6 @@ export function Prompt(props: PromptProps) {
                   }
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
-                // Handle variant cycle before autocomplete visible check
-                // This must be at element level because global useKeyboard doesn't receive
-                // events properly when textarea is focused (see issue #222)
-                if (keybind.match("variant_cycle", e)) {
-                  e.preventDefault()
-                  if (local.model.variant.list().length === 0) return
-                  local.model.variant.cycle()
-                  return
-                }
                 if (!autocomplete.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
@@ -1086,6 +893,7 @@ export function Prompt(props: PromptProps) {
                     if (item) {
                       input.setText(item.input)
                       setStore("prompt", item)
+                      setStore("mode", item.mode ?? "normal")
                       restoreExtmarksFromParts(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
@@ -1114,39 +922,6 @@ export function Prompt(props: PromptProps) {
                 if (!pastedContent) {
                   command.trigger("prompt.paste")
                   return
-                }
-
-                // Handle file:// URIs or text/uri-list (common for drag-and-drop on Linux)
-                if (pastedContent.includes("file://")) {
-                  const paths = parseUriList(pastedContent)
-                  if (paths.length > 0) {
-                    let handled = false
-                    for (const path of paths) {
-                      try {
-                        const file = Bun.file(path)
-                        if (file.type.startsWith("image/")) {
-                          const content = await file
-                            .arrayBuffer()
-                            .then((buffer) => Buffer.from(buffer).toString("base64"))
-                            .catch(() => {})
-                          if (content) {
-                            await pasteImage({
-                              filename: file.name,
-                              mime: file.type,
-                              content,
-                            })
-                            handled = true
-                            continue
-                          }
-                        }
-                      } catch {}
-                    }
-
-                    if (handled) {
-                      event.preventDefault()
-                      return
-                    }
-                  }
                 }
 
                 // trim ' from the beginning and end of the pasted content. just
@@ -1192,6 +967,13 @@ export function Prompt(props: PromptProps) {
                   pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
                   return
                 }
+
+                // Force layout update and render for the pasted content
+                setTimeout(() => {
+                  input.getLayoutNode().markDirty()
+                  input.gotoBufferEnd()
+                  renderer.requestRender()
+                }, 0)
               }}
               ref={(r: TextareaRenderable) => {
                 input = r
@@ -1204,27 +986,25 @@ export function Prompt(props: PromptProps) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <Show when={tall()}>
-              <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-                <text fg={highlight()}>
-                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-                </text>
-                <Show when={store.mode === "normal"}>
-                  <box flexDirection="row" gap={1}>
-                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                      {local.model.parsed().model}
+            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+              <text fg={highlight()}>
+                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
+              </text>
+              <Show when={store.mode === "normal"}>
+                <box flexDirection="row" gap={1}>
+                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                    {local.model.parsed().model}
+                  </text>
+                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  <Show when={showVariant()}>
+                    <text fg={theme.textMuted}>·</text>
+                    <text>
+                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
                     </text>
-                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
-                    <Show when={showVariant()}>
-                      <text fg={theme.textMuted}>·</text>
-                      <text>
-                        <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
-                      </text>
-                    </Show>
-                  </box>
-                </Show>
-              </box>
-            </Show>
+                  </Show>
+                </box>
+              </Show>
+            </box>
           </box>
         </box>
         <box
@@ -1254,132 +1034,104 @@ export function Prompt(props: PromptProps) {
           />
         </box>
         <box flexDirection="row" justifyContent="space-between">
-          <Switch>
-            <Match when={status().type !== "idle"}>
-              <box
-                flexDirection="row"
-                gap={1}
-                flexGrow={1}
-                justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-              >
-                <box flexShrink={0} flexDirection="row" gap={1}>
-                  <box marginLeft={1}>
-                    <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-                      <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                    </Show>
-                  </box>
-                  <box flexDirection="row" gap={1} flexShrink={0}>
-                    {(() => {
-                      const retry = createMemo(() => {
-                        const s = status()
-                        if (s.type !== "retry") return
-                        return s
-                      })
-                      const message = createMemo(() => {
-                        const r = retry()
-                        if (!r) return
-                        if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                          return "gemini is way too hot right now"
-                        if (r.message.length > 80) return r.message.slice(0, 80) + "..."
-                        return r.message
-                      })
-                      const isTruncated = createMemo(() => {
-                        const r = retry()
-                        if (!r) return false
-                        return r.message.length > 120
-                      })
-                      const [seconds, setSeconds] = createSignal(0)
-                      onMount(() => {
-                        const timer = setInterval(() => {
-                          const next = retry()?.next
-                          if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                        }, 1000)
-
-                        onCleanup(() => {
-                          clearInterval(timer)
-                        })
-                      })
-                      const handleMessageClick = () => {
-                        const r = retry()
-                        if (!r) return
-                        if (isTruncated()) {
-                          DialogAlert.show(dialog, "Retry Error", r.message)
-                        }
-                      }
-
-                      const retryText = () => {
-                        const r = retry()
-                        if (!r) return ""
-                        const baseMessage = message()
-                        const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                        const retryInfo = ` [retrying ${seconds() > 0 ? `in ${seconds()}s ` : ""}attempt #${r.attempt}]`
-                        return baseMessage + truncatedHint + retryInfo
-                      }
-
-                      return (
-                        <Show when={retry()}>
-                          <box onMouseUp={handleMessageClick}>
-                            <text fg={theme.error}>{retryText()}</text>
-                          </box>
-                        </Show>
-                      )
-                    })()}
-                  </box>
+          <Show when={status().type !== "idle"} fallback={<text />}>
+            <box
+              flexDirection="row"
+              gap={1}
+              flexGrow={1}
+              justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
+            >
+              <box flexShrink={0} flexDirection="row" gap={1}>
+                <box marginLeft={1}>
+                  <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
+                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                  </Show>
                 </box>
-                <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                  esc{" "}
-                  <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                    {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                  </span>
-                </text>
+                <box flexDirection="row" gap={1} flexShrink={0}>
+                  {(() => {
+                    const retry = createMemo(() => {
+                      const s = status()
+                      if (s.type !== "retry") return
+                      return s
+                    })
+                    const message = createMemo(() => {
+                      const r = retry()
+                      if (!r) return
+                      if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
+                        return "gemini is way too hot right now"
+                      if (r.message.length > 80) return r.message.slice(0, 80) + "..."
+                      return r.message
+                    })
+                    const isTruncated = createMemo(() => {
+                      const r = retry()
+                      if (!r) return false
+                      return r.message.length > 120
+                    })
+                    const [seconds, setSeconds] = createSignal(0)
+                    onMount(() => {
+                      const timer = setInterval(() => {
+                        const next = retry()?.next
+                        if (next) setSeconds(Math.round((next - Date.now()) / 1000))
+                      }, 1000)
+
+                      onCleanup(() => {
+                        clearInterval(timer)
+                      })
+                    })
+                    const handleMessageClick = () => {
+                      const r = retry()
+                      if (!r) return
+                      if (isTruncated()) {
+                        DialogAlert.show(dialog, "Retry Error", r.message)
+                      }
+                    }
+
+                    const retryText = () => {
+                      const r = retry()
+                      if (!r) return ""
+                      const baseMessage = message()
+                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
+                      const retryInfo = ` [retrying ${seconds() > 0 ? `in ${seconds()}s ` : ""}attempt #${r.attempt}]`
+                      return baseMessage + truncatedHint + retryInfo
+                    }
+
+                    return (
+                      <Show when={retry()}>
+                        <box onMouseUp={handleMessageClick}>
+                          <text fg={theme.error}>{retryText()}</text>
+                        </box>
+                      </Show>
+                    )
+                  })()}
+                </box>
               </box>
-            </Match>
-            <Match when={!tall()}>
-              <box flexDirection="row" gap={1}>
-                <text fg={highlight()}>
-                  {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-                </text>
-                <Show when={store.mode === "normal"}>
-                  <box flexDirection="row" gap={1}>
-                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                      {local.model.parsed().model}
-                    </text>
-                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
-                    <Show when={showVariant()}>
-                      <text fg={theme.textMuted}>·</text>
-                      <text>
-                        <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
-                      </text>
-                    </Show>
-                  </box>
-                </Show>
-              </box>
-            </Match>
-          </Switch>
-          <box gap={2} flexDirection="row" marginLeft="auto">
-            <Switch>
-              <Match when={store.mode === "normal"}>
-                <Show when={wide()}>
+              <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
+                esc{" "}
+                <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
+                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+                </span>
+              </text>
+            </box>
+          </Show>
+          <Show when={status().type !== "retry"}>
+            <box gap={2} flexDirection="row">
+              <Switch>
+                <Match when={store.mode === "normal"}>
                   <text fg={theme.text}>
                     {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>switch agent</span>
                   </text>
-                </Show>
-                <Show when={!wide()}>
                   <text fg={theme.text}>
-                    {keybind.print("sidebar_toggle")} <span style={{ fg: theme.textMuted }}>sidebar</span>
+                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
                   </text>
-                </Show>
-                <text fg={theme.text}>
-                  {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
-                </text>
-              </Match>
-              <Match when={store.mode === "shell"}>
-                <text fg={theme.text}>
-                  esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                </text>
-              </Match>
-            </Switch>
-          </box>
+                </Match>
+                <Match when={store.mode === "shell"}>
+                  <text fg={theme.text}>
+                    esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
+                  </text>
+                </Match>
+              </Switch>
+            </box>
+          </Show>
         </box>
       </box>
     </>
