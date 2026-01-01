@@ -1346,10 +1346,13 @@ permission.toggleAutoAccept(params.id, sdk.directory)
           </div>
         </Show>
       </Portal>
-      <StatusBar>
-        <SessionLspIndicator />
-        <SessionMcpIndicator />
-      </StatusBar>
+      {/* Hide status bar on mobile to prevent safe area issues with iPhone dynamic island */}
+      <div class="hidden sm:block">
+        <StatusBar>
+          <SessionLspIndicator />
+          <SessionMcpIndicator />
+        </StatusBar>
+      </div>
     </div>
   )
 }
