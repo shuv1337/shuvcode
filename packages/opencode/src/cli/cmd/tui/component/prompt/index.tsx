@@ -35,6 +35,7 @@ export type PromptProps = {
   sessionID?: string
   disabled?: boolean
   onSubmit?: () => void
+  onSearchToggle?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
@@ -304,9 +305,10 @@ export function Prompt(props: PromptProps) {
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
           const value = trigger === "prompt" ? "" : text
-          const content = await Editor.open({ value, renderer })
-          if (!content) return
+          const result = await Editor.open({ value, renderer })
+          if (!result.ok) return
 
+          const content = result.content
           input.setText(content)
 
           // Update positions for nonTextParts based on their location in new content
