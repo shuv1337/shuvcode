@@ -131,11 +131,15 @@ export default function Layout(props: ParentProps) {
     })
   }
 
-  onMount(async () => {
-    if (platform.checkUpdate && platform.update && platform.restart) {
-      const { updateAvailable, version } = await platform.checkUpdate()
-      if (updateAvailable) {
-        showToast({
+  onMount(() => {
+    if (!platform.checkUpdate || !platform.update || !platform.restart) return
+
+    let toastId: number | undefined
+
+    async function pollUpdate() {
+      const { updateAvailable, version } = await platform.checkUpdate!()
+      if (updateAvailable && toastId === undefined) {
+        toastId = showToast({
           persistent: true,
           icon: "download",
           title: "Update available",
@@ -156,6 +160,10 @@ export default function Layout(props: ParentProps) {
         })
       }
     }
+
+    pollUpdate()
+    const interval = setInterval(pollUpdate, 10 * 60 * 1000)
+    onCleanup(() => clearInterval(interval))
   })
 
   const currentDirectory = createMemo(() => base64Decode(params.dir ?? ""))

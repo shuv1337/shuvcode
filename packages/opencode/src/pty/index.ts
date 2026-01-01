@@ -7,10 +7,9 @@ import { Log } from "../util/log"
 import type { WSContext } from "hono/ws"
 import { Instance } from "../project/instance"
 import { lazy } from "@opencode-ai/util/lazy"
-import {} from "process"
-import { Installation } from "@/installation"
 import { Shell } from "@/shell/shell"
 import { NamedError } from "@opencode-ai/util/error"
+import { Installation } from "@/installation"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
@@ -163,6 +162,7 @@ export namespace Pty {
       cwd,
       env,
     })
+
     const info = {
       id,
       title: input.title || `Terminal ${id.slice(-4)}`,
