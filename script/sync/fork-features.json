@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2026-01-01",
-  "lastChange": "Documented removal of OpenCode Mark logo from sidebar (Issue #234)",
+  "lastChange": "Removed OpenCode Mark logo component, removed duplicate Header from session.tsx, added PWA StatusBar hiding (Issue #234)",
   "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -63,16 +63,37 @@
     },
     {
       "pr": 234,
-      "title": "Remove OpenCode Mark logo from sidebar",
+      "title": "Remove OpenCode Mark logo component entirely",
       "author": "fork",
       "removedDate": "2026-01-01",
-      "reason": "Sidebar uses shuvcode branding only. The OpenCode 'O' Mark logo is removed from the sidebar header area.",
-      "filesModified": ["packages/app/src/pages/layout.tsx"],
-      "codeRemoved": [
-        "Mark import from @opencode-ai/ui/logo",
-        "<Mark class=\"shrink-0\" /> in SidebarContent"
+      "reason": "The OpenCode 'O' Mark SVG logo component is removed from the UI package. Fork uses shuvcode ASCII branding (AsciiLogo/AsciiMark) instead.",
+      "filesModified": [
+        "packages/ui/src/components/logo.tsx",
+        "packages/ui/src/components/logo.css",
+        "packages/app/src/pages/session.tsx"
       ],
-      "note": "Issue #234 - Fork-specific branding change to prevent OpenCode logo appearing in shuvcode sidebar."
+      "codeRemoved": [
+        "Mark component export from logo.tsx",
+        "[data-component=\"logo-mark\"] CSS styles",
+        "Duplicate Header function in session.tsx (upstream moved status bar to header, we keep StatusBar)"
+      ],
+      "note": "Issue #234 - Fork removes upstream's OpenCode Mark logo. Uses AsciiLogo/AsciiMark for shuvcode branding. Also removed duplicate Header from session.tsx to rely on layout.tsx header."
+    },
+    {
+      "pr": 0,
+      "title": "Hide StatusBar in PWA mode",
+      "author": "fork",
+      "removedDate": "2026-01-01",
+      "reason": "StatusBar at bottom conflicts with iPhone dynamic island and home indicator in PWA standalone mode. Hidden in PWA while kept for browser use.",
+      "filesModified": [
+        "packages/app/src/context/platform.tsx",
+        "packages/app/src/pages/session.tsx"
+      ],
+      "codeAdded": [
+        "isPWA() function in platform.tsx for PWA detection",
+        "Show when={!isPWA()} wrapper around StatusBar"
+      ],
+      "note": "PWA users get clean full-screen experience without StatusBar. Browser users still see StatusBar with server status, path, LSP/MCP indicators."
     }
   ],
   "apiDependencies": [
