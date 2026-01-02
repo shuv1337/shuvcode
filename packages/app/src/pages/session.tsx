@@ -1187,7 +1187,10 @@ export default function Page() {
             </div>
           </Match>
         </Switch>
-        <div class="absolute inset-x-0 bottom-4 flex flex-col justify-center items-center z-50 px-4">
+        <div 
+          class="absolute inset-x-0 bottom-4 flex flex-col justify-center items-center z-50 px-4"
+          style={{ "padding-bottom": "env(safe-area-inset-bottom, 0px)" }}
+        >
           <div class="w-full">
             <Show when={pendingAskQuestion()}>
               {(pending) => (
@@ -1217,7 +1220,10 @@ export default function Page() {
           <div class="flex-1 min-h-0 overflow-hidden">
             <DesktopSessionContent />
           </div>
-          <div class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50">
+          <div 
+            class="absolute inset-x-0 bottom-8 flex flex-col justify-center items-center z-50"
+            style={{ "padding-bottom": "env(safe-area-inset-bottom, 0px)" }}
+          >
             <div
               classList={{
                 "w-full px-6": true,
