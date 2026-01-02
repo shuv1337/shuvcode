@@ -17,7 +17,7 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Spinner } from "@opencode-ai/ui/spinner"
-import { Mark } from "@opencode-ai/ui/logo"
+
 import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
@@ -920,11 +920,6 @@ export default function Layout(props: ParentProps) {
     return (
       <>
         <div class="flex flex-col items-start self-stretch gap-4 p-2 min-h-0 overflow-hidden">
-          <Show when={!sidebarProps.mobile}>
-            <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2" data-tauri-drag-region>
-              <Mark class="shrink-0" />
-            </A>
-          </Show>
           <Show when={!sidebarProps.mobile}>
             <TooltipKeybind
               class="shrink-0"

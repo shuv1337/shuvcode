@@ -1,6 +1,16 @@
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { AsyncStorage, SyncStorage } from "@solid-primitives/storage"
 
+/** Check if running as installed PWA (standalone mode) */
+export function isPWA(): boolean {
+  if (typeof window === "undefined") return false
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    // @ts-ignore - iOS Safari specific
+    window.navigator.standalone === true
+  )
+}
+
 export type Platform = {
   /** Platform discriminator */
   platform: "web" | "tauri"

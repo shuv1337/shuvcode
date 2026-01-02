@@ -9,7 +9,7 @@ import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { useKV } from "../context/kv"
-import "opentui-spinner/solid"
+import { getSpinnerFrame } from "../util/spinners"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -24,8 +24,6 @@ export function DialogSessionList() {
   const deleteKeybind = "ctrl+d"
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
-
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
   const options = createMemo(() => {
     const today = new Date().toDateString()
@@ -49,7 +47,7 @@ export function DialogSessionList() {
           footer: Locale.time(x.time.updated),
           gutter: isWorking ? (
             <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-              <spinner frames={spinnerFrames} interval={80} color={theme.primary} />
+              <text fg={theme.primary}>{getSpinnerFrame()}</text>
             </Show>
           ) : undefined,
         }
