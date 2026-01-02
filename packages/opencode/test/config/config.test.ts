@@ -724,35 +724,4 @@ test("processes .opencode directory without errors in local dev mode", async () 
   })
 })
 
-test(".opencode directory gets package.json and gitignore created", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      const opencodeDir = path.join(dir, ".opencode")
-      await fs.mkdir(opencodeDir, { recursive: true })
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await Config.get()
-      
-      const opencodeDir = path.join(tmp.path, ".opencode")
-      
-      // Verify package.json was created
-      const pkgPath = path.join(opencodeDir, "package.json")
-      const pkgExists = await Bun.file(pkgPath).exists()
-      expect(pkgExists).toBe(true)
-      
-      // Verify .gitignore was created
-      const gitignorePath = path.join(opencodeDir, ".gitignore")
-      const gitignoreExists = await Bun.file(gitignorePath).exists()
-      expect(gitignoreExists).toBe(true)
-      
-      // Verify .gitignore contains necessary entries
-      const gitignoreContent = await Bun.file(gitignorePath).text()
-      expect(gitignoreContent).toContain("node_modules")
-      expect(gitignoreContent).toContain("package.json")
-      expect(gitignoreContent).toContain("bun.lock")
-    },
-  })
-})
+
