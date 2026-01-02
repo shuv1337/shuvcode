@@ -49,22 +49,40 @@ function detectPlatformAndArch() {
 
 function findBinary() {
   const { platform, arch } = detectPlatformAndArch()
-  const packageName = `shuvcode-${platform}-${arch}`
+  const basePackageName = `shuvcode-${platform}-${arch}`
   const binaryName = platform === "windows" ? "shuvcode.exe" : "shuvcode"
 
   try {
-    // Use require.resolve to find the package
-    const packageJsonPath = require.resolve(`${packageName}/package.json`)
-    const packageDir = path.dirname(packageJsonPath)
-    const binaryPath = path.join(packageDir, "bin", binaryName)
+    // Try exact package name first
+    try {
+      const packageJsonPath = require.resolve(`${basePackageName}/package.json`)
+      const packageDir = path.dirname(packageJsonPath)
+      const binaryPath = path.join(packageDir, "bin", binaryName)
 
-    if (!fs.existsSync(binaryPath)) {
-      throw new Error(`Binary not found at ${binaryPath}`)
+      if (fs.existsSync(binaryPath)) {
+        return { binaryPath, binaryName }
+      }
+    } catch (error) {
+      // Exact match failed, try baseline variant
     }
 
-    return { binaryPath, binaryName }
+    // Fallback: search for baseline variants (e.g., shuvcode-linux-x64-baseline)
+    const nodeModulesPath = path.join(__dirname, "..")
+    if (fs.existsSync(nodeModulesPath)) {
+      const entries = fs.readdirSync(nodeModulesPath)
+      for (const entry of entries) {
+        if (entry.startsWith(basePackageName)) {
+          const binaryPath = path.join(nodeModulesPath, entry, "bin", binaryName)
+          if (fs.existsSync(binaryPath)) {
+            return { binaryPath, binaryName }
+          }
+        }
+      }
+    }
+
+    throw new Error(`No binary package found for ${basePackageName}`)
   } catch (error) {
-    throw new Error(`Could not find package ${packageName}: ${error.message}`)
+    throw new Error(`Could not find package ${basePackageName}: ${error.message}`)
   }
 }
 
