@@ -1921,11 +1921,6 @@ export type Command = {
   hints: Array<string>
 }
 
-export type Variant = {
-  disabled: boolean
-  [key: string]: unknown | boolean
-}
-
 export type Model = {
   id: string
   providerID: string
