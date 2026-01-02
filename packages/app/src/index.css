@@ -103,6 +103,23 @@ body {
   }
 }
 
+/* PWA standalone mode - safe area handling for iOS */
+@media (display-mode: standalone) {
+  /* Header should clear the Dynamic Island */
+  header[data-tauri-drag-region] {
+    padding-top: var(--safe-area-inset-top);
+    min-height: calc(3rem + var(--safe-area-inset-top));
+  }
+}
+
+/* Mobile PWA prompt container bottom padding */
+@media (display-mode: standalone) and (max-width: 40rem) {
+  /* Adjust bottom positioning for mobile prompt input */
+  .absolute.inset-x-0.bottom-4 {
+    bottom: max(1rem, var(--safe-area-inset-bottom));
+  }
+}
+
 /* Touch-friendly improvements */
 @media (pointer: coarse) {
   /* Larger touch targets */
