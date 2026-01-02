@@ -1,7 +1,7 @@
 {
   "name": "@shuvcode/desktop",
   "private": true,
-  "version": "1.0.223-2",
+  "version": "1.0.223-3",
   "type": "module",
   "scripts": {
     "typecheck": "tsgo -b",
