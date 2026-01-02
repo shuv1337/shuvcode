@@ -180,7 +180,7 @@ export namespace Config {
 
     // Use BASE_VERSION for @opencode-ai/plugin since it's published by upstream without our -N suffix
     await BunProc.run(
-      ["add", "@opencode-ai/plugin@" + (Installation.isLocal() ? "latest" : Installation.BASE_VERSION), "--exact"],
+      ["add", "@opencode-ai/plugin@" + Installation.BASE_VERSION, "--exact"],
       {
         cwd: dir,
       },
