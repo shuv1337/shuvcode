@@ -134,6 +134,9 @@ for (const item of targets) {
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,
+      //@ts-ignore (bun types aren't up to date)
+      autoloadTsconfig: true,
+      autoloadPackageJson: true,
       target: bunTarget as any,
       outfile: `dist/${name}/bin/shuvcode`,
       execArgv: [`--user-agent=shuvcode/${Script.version}`, "--"],
