@@ -1600,6 +1600,35 @@
           "markers": ["absorbLineRange", "lineRangeRegex", "updateFileUrl"]
         }
       ]
+    },
+    {
+      "pr": 230,
+      "title": "Linux/Ghostty drag-and-drop and clipboard image paste support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Handle file:// URIs and text/uri-list format for Linux drag-and-drop. Added ctrl+shift+v keybind for Linux paste. Supports both Wayland and X11 display servers. Fixes image paste in terminal emulators like Ghostty.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/uri.ts",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/config/config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/uri.ts",
+          "description": "parseUriList() helper to parse file:// URIs and text/uri-list format",
+          "markers": ["export function parseUriList", "file://", "decodeURIComponent"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Import parseUriList and handle file:// URIs in onPaste handler",
+          "markers": ["import { parseUriList }", "pastedContent.includes(\"file://\")", "parseUriList(pastedContent)"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "input_paste keybind includes ctrl+shift+v for Linux",
+          "markers": ["input_paste:", "ctrl+v,ctrl+shift+v"]
+        }
+      ]
     }
   ]
 }
