@@ -1034,6 +1034,10 @@ export type KeybindsConfig = {
    */
   session_unshare?: string
   /**
+   * Search in session messages
+   */
+  session_search?: string
+  /**
    * Interrupt current session
    */
   session_interrupt?: string
