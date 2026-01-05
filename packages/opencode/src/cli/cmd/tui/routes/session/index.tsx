@@ -79,6 +79,7 @@ import { GhosttyTerminalRenderable } from "ghostty-opentui/opentui"
 import { ptyToText } from "ghostty-opentui"
 import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
+import { useExit } from "../../context/exit"
 import { Filesystem } from "@/util/filesystem"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import {
@@ -218,7 +219,7 @@ export function Session() {
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
-  const session = createMemo(() => sync.session.get(route.sessionID)!)
+  const session = createMemo(() => sync.session.get(route.sessionID))
   const children = createMemo(() => {
     const parentID = session()?.parentID ?? session()?.id
     return sync.data.session
@@ -227,7 +228,7 @@ export function Session() {
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const permissions = createMemo(() => {
-    if (session().parentID) return sync.data.permission[route.sessionID] ?? []
+    if (session()?.parentID) return sync.data.permission[route.sessionID] ?? []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
   })
 
@@ -421,6 +422,15 @@ export function Session() {
   let prompt: PromptRef
   let searchRef: SearchInputRef
   const keybind = useKeybind()
+
+  // Allow exit when in child session (prompt is hidden)
+  const exit = useExit()
+  useKeyboard((evt) => {
+    if (!session()?.parentID) return
+    if (keybind.match("app_exit", evt)) {
+      exit()
+    }
+  })
 
   // Helper: Find next visible message boundary in direction
   const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
