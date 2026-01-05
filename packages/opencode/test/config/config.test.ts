@@ -905,7 +905,7 @@ test("processes .opencode directory without errors in local dev mode", async () 
       // Create a basic tool file (won't actually load without deps, but tests config processing)
       await Bun.write(
         path.join(toolDir, "test.ts"),
-        `export const tool = { name: "test", description: "test tool" }`
+        `export const tool = { name: "test", description: "test tool" }`,
       )
     },
   })
@@ -915,7 +915,7 @@ test("processes .opencode directory without errors in local dev mode", async () 
       // Config loading should not throw even when processing .opencode directories
       const config = await Config.get()
       expect(config).toBeDefined()
-      
+
       // Verify the .opencode directory is in the list of processed directories
       const dirs = await Config.directories()
       expect(dirs.some((d: string) => d.endsWith(".opencode"))).toBe(true)
@@ -923,4 +923,47 @@ test("processes .opencode directory without errors in local dev mode", async () 
   })
 })
 
-
+test("permission config preserves key order", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          permission: {
+            "*": "deny",
+            edit: "ask",
+            write: "ask",
+            external_directory: "ask",
+            read: "allow",
+            todowrite: "allow",
+            todoread: "allow",
+            "thoughts_*": "allow",
+            "reasoning_model_*": "allow",
+            "tools_*": "allow",
+            "pr_comments_*": "allow",
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(Object.keys(config.permission!)).toEqual([
+        "*",
+        "edit",
+        "write",
+        "external_directory",
+        "read",
+        "todowrite",
+        "todoread",
+        "thoughts_*",
+        "reasoning_model_*",
+        "tools_*",
+        "pr_comments_*",
+      ])
+    },
+  })
+})

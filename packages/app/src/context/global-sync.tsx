@@ -26,7 +26,7 @@ import { retry } from "@opencode-ai/util/retry"
 import { useGlobalSDK } from "./global-sdk"
 import { ErrorPage, type InitError } from "../pages/error"
 import { WelcomeScreen } from "../components/welcome-screen"
-import { batch, createContext, useContext, onMount, type ParentProps, Switch, Match } from "solid-js"
+import { batch, createContext, useContext, onCleanup, onMount, type ParentProps, Switch, Match } from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import { isHostedEnvironment } from "@/utils/hosted"
@@ -229,7 +229,7 @@ const data = Array.isArray(x.data) ? x.data : []
       .catch((e) => setGlobalStore("error", e))
   }
 
-  globalSDK.event.listen((e) => {
+  const unsub = globalSDK.event.listen((e) => {
     const directory = e.name
     const event = e.details
 
@@ -421,6 +421,7 @@ const data = Array.isArray(x.data) ? x.data : []
       }
     }
   })
+  onCleanup(unsub)
 
   /**
    * Probes the server health with a short timeout (2 seconds).

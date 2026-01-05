@@ -1,107 +1,99 @@
 import { createOpencodeClient, type Event } from "@opencode-ai/sdk/v2/client"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
-import { onCleanup } from "solid-js"
+import { batch, onCleanup } from "solid-js"
 import { usePlatform } from "./platform"
 import { useServer } from "./server"
 
 export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleContext({
   name: "GlobalSDK",
   init: () => {
-    const platform = usePlatform()
     const server = useServer()
     const abort = new AbortController()
 
+    const eventSdk = createOpencodeClient({
+      baseUrl: server.url,
+      signal: abort.signal,
+    })
     const emitter = createGlobalEmitter<{
       [key: string]: Event
     }>()
 
-    let currentStreamAbort: AbortController | null = null
-    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
-    let lastEventAt = Date.now()
-    let connectionState: "connecting" | "open" | "retrying" | "closed" = "connecting"
-    const heartbeatIntervalMs = 30_000
-    const isStale = () => Date.now() - lastEventAt > heartbeatIntervalMs * 2
+    type Queued = { directory: string; payload: Event }
 
-    async function connectEventStream() {
-      // Clear any pending reconnection timeout to prevent race condition
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-        reconnectTimeout = null
+    let queue: Array<Queued | undefined> = []
+    const coalesced = new Map<string, number>()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let last = 0
+
+    const key = (directory: string, payload: Event) => {
+      if (payload.type === "session.status") return `session.status:${directory}:${payload.properties.sessionID}`
+      if (payload.type === "lsp.updated") return `lsp.updated:${directory}`
+      if (payload.type === "message.part.updated") {
+        const part = payload.properties.part
+        return `message.part.updated:${directory}:${part.messageID}:${part.id}`
       }
+    }
 
-      connectionState = "connecting"
-      lastEventAt = Date.now()
+    const flush = () => {
+      if (timer) clearTimeout(timer)
+      timer = undefined
 
-      // Abort any existing stream
-      if (currentStreamAbort) {
-        currentStreamAbort.abort()
-      }
+      const events = queue
+      queue = []
+      coalesced.clear()
+      if (events.length === 0) return
 
-      currentStreamAbort = new AbortController()
-      const streamAbort = currentStreamAbort
-
-      const eventSdk = createOpencodeClient({
-        baseUrl: server.url,
-        signal: streamAbort.signal,
-        fetch: platform.fetch,
-      })
-
-      try {
-        const events = await eventSdk.global.event()
-        connectionState = "open"
-        for await (const event of events.stream) {
-          if (streamAbort.signal.aborted) break
-          lastEventAt = Date.now()
-          emitter.emit(event.directory ?? "global", event.payload)
+      last = Date.now()
+      batch(() => {
+        for (const event of events) {
+          if (!event) continue
+          emitter.emit(event.directory, event.payload)
         }
-      } catch (error: any) {
-        if (error.name === "AbortError" || streamAbort.signal.aborted) return
-        console.error("Event stream error:", error)
-      }
+      })
+    }
 
-      // Schedule reconnection if not aborted
-      if (!abort.signal.aborted && !streamAbort.signal.aborted) {
-        connectionState = "retrying"
-        reconnectTimeout = setTimeout(() => {
-          reconnectTimeout = null
-          if (!abort.signal.aborted) {
-            connectEventStream()
+    const schedule = () => {
+      if (timer) return
+      const elapsed = Date.now() - last
+      timer = setTimeout(flush, Math.max(0, 16 - elapsed))
+    }
+
+    const stop = () => {
+      flush()
+    }
+
+    void (async () => {
+      const events = await eventSdk.global.event()
+      let yielded = Date.now()
+      for await (const event of events.stream) {
+        const directory = event.directory ?? "global"
+        const payload = event.payload
+        const k = key(directory, payload)
+        if (k) {
+          const i = coalesced.get(k)
+          if (i !== undefined) {
+            queue[i] = undefined
           }
-        }, 1000)
-      } else {
-        connectionState = "closed"
+          coalesced.set(k, queue.length)
+        }
+        queue.push({ directory, payload })
+        schedule()
+
+        if (Date.now() - yielded < 8) continue
+        yielded = Date.now()
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
       }
-    }
-
-    connectEventStream()
-
-    // Reconnect when tab regains visibility if the stream is stale
-    function handleVisibilityChange() {
-      if (document.visibilityState !== "visible" || abort.signal.aborted) return
-      if (isStale() || connectionState === "retrying" || connectionState === "closed") {
-        connectEventStream()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
+    })()
+      .finally(stop)
+      .catch(() => undefined)
 
     onCleanup(() => {
-      // Clear pending reconnection timeout
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-      }
-      connectionState = "closed"
-      // Abort main controller
       abort.abort()
-      // Abort current stream
-      if (currentStreamAbort) {
-        currentStreamAbort.abort()
-      }
-      // Remove event listener
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      stop()
     })
 
+    const platform = usePlatform()
     const sdk = createOpencodeClient({
       baseUrl: server.url,
       fetch: platform.fetch,

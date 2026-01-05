@@ -393,7 +393,7 @@ jobs:
       issues: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run shuvcode
         uses: Latitudes-Dev/shuvcode/github@integration${envStr}
