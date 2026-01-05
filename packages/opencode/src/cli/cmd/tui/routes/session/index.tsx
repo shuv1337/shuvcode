@@ -1775,6 +1775,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
               </Show>
+              <Show when={ctx.showTimestamps()}>
+                <span style={{ fg: theme.textMuted }}> · {Locale.todayTimeOrDateTime(props.message.time.created)}</span>
+              </Show>
               <Show when={ctx.showTokens() && contextTokens() > 0}>
                 <span style={{ fg: theme.textMuted }}>
                   {" "}

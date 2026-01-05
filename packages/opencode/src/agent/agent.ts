@@ -21,6 +21,7 @@ export namespace Agent {
       mode: z.enum(["subagent", "primary", "all"]),
       native: z.boolean().optional(),
       hidden: z.boolean().optional(),
+      default: z.boolean().optional(),
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
@@ -193,6 +194,17 @@ export namespace Agent {
       item.options = mergeDeep(item.options, value.options ?? {})
       item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
     }
+
+    // Mark the default agent
+    const defaultName = cfg.default_agent ?? "build"
+    const defaultCandidate = result[defaultName]
+    if (defaultCandidate && defaultCandidate.mode !== "subagent") {
+      defaultCandidate.default = true
+    } else if (result["build"]) {
+      // Fall back to "build" if configured default is invalid
+      result["build"].default = true
+    }
+
     return result
   })
 
@@ -209,8 +221,10 @@ export namespace Agent {
     )
   }
 
-  export async function defaultAgent() {
-    return state().then((x) => Object.keys(x)[0])
+  export async function defaultAgent(): Promise<string> {
+    const agents = await state()
+    const defaultCandidate = Object.values(agents).find((a) => a.default)
+    return defaultCandidate?.name ?? "build"
   }
 
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
