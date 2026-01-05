@@ -78,7 +78,12 @@ export function FontPicker(props: { class?: string; mobile?: boolean }) {
       when={props.mobile}
       fallback={
         <Tooltip class={`shrink-0 ${props.class ?? ""}`} value="Font">
-          <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
+          <Button
+            variant="ghost"
+            size="large"
+            class="size-8 p-0 flex items-center justify-center rounded-lg"
+            onClick={openDialog}
+          >
             <Icon name="code-lines" size="small" />
           </Button>
         </Tooltip>
@@ -87,7 +92,7 @@ export function FontPicker(props: { class?: string; mobile?: boolean }) {
       <Button
         variant="ghost"
         size="large"
-        class="w-full justify-start gap-3 px-2"
+        class="w-full justify-start gap-3 px-2 rounded-lg"
         icon="code-lines"
         onClick={openDialog}
       >

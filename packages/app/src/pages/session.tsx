@@ -48,7 +48,6 @@ import {
   NewSessionView,
 } from "@/components/session"
 import { usePlatform, isPWA } from "@/context/platform"
-import { StatusBar } from "@/components/status-bar"
 import { SessionLspIndicator } from "@/components/session-lsp-indicator"
 import { SessionMcpIndicator } from "@/components/session-mcp-indicator"
 import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility"
@@ -1328,15 +1327,6 @@ export default function Page() {
               </Show>
             </DragOverlay>
           </DragDropProvider>
-        </div>
-      </Show>
-      {/* Hide status bar on mobile and in PWA mode to prevent safe area issues with iPhone dynamic island */}
-      <Show when={!isPWA()}>
-        <div class="hidden sm:block">
-          <StatusBar>
-            <SessionLspIndicator />
-            <SessionMcpIndicator />
-          </StatusBar>
         </div>
       </Show>
     </div>

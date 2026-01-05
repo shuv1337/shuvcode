@@ -948,10 +948,16 @@ export default function Layout(props: ParentProps) {
                 <Button
                   variant="ghost"
                   size="large"
-                  class="group/sidebar-toggle shrink-0 w-full text-left justify-start rounded-lg px-2"
+                  class="group/sidebar-toggle shrink-0 w-full rounded-lg"
+                  classList={{ "justify-start px-2": expanded(), "justify-center px-0": !expanded() }}
                   onClick={layout.sidebar.toggle}
                 >
-                  <div class="relative -ml-px flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
+                  <div
+                    classList={{
+                      "relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0": true,
+                      "-ml-px": expanded(),
+                    }}
+                  >
                     <Icon
                       name={layout.sidebar.opened() ? "layout-left" : "layout-right"}
                       size="small"
@@ -1026,7 +1032,8 @@ export default function Layout(props: ParentProps) {
             <Match when={providers.all().length > 0}>
               <Tooltip placement="right" value="Connect provider" inactive={expanded()}>
                 <Button
-                  class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+                  class="flex w-full text-text-base stroke-[1.5px] rounded-lg"
+                  classList={{ "justify-start px-2": expanded(), "justify-center px-0": !expanded() }}
                   variant="ghost"
                   size="large"
                   icon="plus"
@@ -1040,7 +1047,8 @@ export default function Layout(props: ParentProps) {
 
           <Tooltip placement="right" value="Add project" inactive={expanded()}>
             <Button
-              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              class="flex w-full text-text-base stroke-[1.5px] rounded-lg"
+              classList={{ "justify-start px-2": expanded(), "justify-center px-0": !expanded() }}
               variant="ghost"
               size="large"
               icon="folder-add-left"
@@ -1051,7 +1059,8 @@ export default function Layout(props: ParentProps) {
           </Tooltip>
           <Tooltip placement="right" value="Switch server" inactive={expanded()}>
             <Button
-              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              class="flex w-full text-text-base stroke-[1.5px] rounded-lg"
+              classList={{ "justify-start px-2": expanded(), "justify-center px-0": !expanded() }}
               variant="ghost"
               size="large"
               icon="settings-gear"
@@ -1065,7 +1074,8 @@ export default function Layout(props: ParentProps) {
               as={"a"}
               href="https://opencode.ai/desktop-feedback"
               target="_blank"
-              class="flex w-full text-left justify-start text-text-base stroke-[1.5px] rounded-lg px-2"
+              class="flex w-full text-text-base stroke-[1.5px] rounded-lg"
+              classList={{ "justify-start px-2": expanded(), "justify-center px-0": !expanded() }}
               variant="ghost"
               size="large"
               icon="bubble-5"
@@ -1073,7 +1083,7 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Share feedback</Show>
             </Button>
           </Tooltip>
-          <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0 px-2">
+          <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0">
             <FontPicker mobile={expanded()} />
             <ThemePicker mobile={expanded()} />
           </div>

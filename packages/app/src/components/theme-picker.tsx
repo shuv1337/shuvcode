@@ -69,13 +69,18 @@ export function ThemePicker(props: { class?: string; mobile?: boolean }) {
       when={props.mobile}
       fallback={
         <Tooltip class={`shrink-0 ${props.class ?? ""}`} value="Theme">
-          <Button variant="ghost" class="size-6 p-0" onClick={openDialog}>
+          <Button
+            variant="ghost"
+            size="large"
+            class="size-8 p-0 flex items-center justify-center rounded-lg"
+            onClick={openDialog}
+          >
             <Icon name="glasses" size="small" />
           </Button>
         </Tooltip>
       }
     >
-      <Button variant="ghost" size="large" class="w-full justify-start gap-3 px-2" icon="glasses" onClick={openDialog}>
+      <Button variant="ghost" size="large" class="w-full justify-start gap-3 px-2 rounded-lg" icon="glasses" onClick={openDialog}>
         <span class="text-14-medium text-text-strong">Theme</span>
       </Button>
     </Show>
