@@ -281,6 +281,18 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("session", "width", width)
         },
       },
+      theme: {
+        current: createMemo(() => store.theme),
+        set(theme: string) {
+          setStore("theme", theme)
+        },
+      },
+      font: {
+        current: createMemo(() => store.font),
+        set(font: string) {
+          setStore("font", font)
+        },
+      },
       mobileSidebar: {
         opened: createMemo(() => store.mobileSidebar?.opened ?? false),
         show() {
