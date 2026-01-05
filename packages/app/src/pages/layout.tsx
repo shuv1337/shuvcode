@@ -925,11 +925,11 @@ export default function Layout(props: ParentProps) {
           <Show when={!sidebarProps.mobile}>
             <div
               classList={{
-                "border-b border-border-weak-base w-full h-12 ml-px flex items-center pl-1.75 shrink-0": true,
-                "justify-start": expanded(),
+                "border-b border-border-weak-base w-full h-12 ml-px flex items-center shrink-0": true,
+                "justify-center": true,
               }}
             >
-              <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2 w-full" data-tauri-drag-region>
+              <A href="/" class="shrink-0 h-8 flex items-center justify-center w-full" data-tauri-drag-region>
                 <Show when={expanded()} fallback={<AsciiMark scale={0.45} class="shrink-0" />}>
                   <AsciiLogo scale={0.55} class="shrink-0" />
                 </Show>
@@ -1083,10 +1083,12 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Share feedback</Show>
             </Button>
           </Tooltip>
-          <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0">
-            <FontPicker mobile={expanded()} />
-            <ThemePicker mobile={expanded()} />
-          </div>
+          <Show when={expanded()}>
+            <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0">
+              <FontPicker mobile={expanded()} />
+              <ThemePicker mobile={expanded()} />
+            </div>
+          </Show>
           <Show when={expanded()}>
             <div class="mt-2 px-3 pb-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
