@@ -4,10 +4,12 @@
 
 [data-slot="session-message-rail-compact"],
 [data-slot="session-message-rail-full"] {
-  flex-shrink: 0;
-  padding-top: 0.625rem;
-  padding-left: 0.5rem;
-  padding-right: 0.25rem;
+  position: absolute;
+  left: 1.5rem;
+  margin-top: 0.625rem;
+  top: 0;
+  bottom: 8rem;
+  overflow-y: auto;
 }
 
 /* Always show compact rail only, hide full */
