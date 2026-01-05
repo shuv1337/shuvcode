@@ -1,6 +1,7 @@
 import { useGlobalSync } from "@/context/global-sync"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { AsciiLogo } from "@opencode-ai/ui/logo"
 import { useLayout } from "@/context/layout"
 import { useNavigate } from "@solidjs/router"
@@ -31,6 +32,13 @@ export default function Home() {
 
   return (
     <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom overflow-y-auto no-scrollbar">
+      <div class="xl:hidden absolute top-0 left-0 p-2">
+        <IconButton
+          icon="menu"
+          variant="ghost"
+          onClick={layout.mobileSidebar.toggle}
+        />
+      </div>
       <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-75 max-[40rem]:origin-center" />
       <Button
         size="small"

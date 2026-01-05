@@ -35,7 +35,6 @@ export const { use: useGlobalSDK, provider: GlobalSDKProvider } = createSimpleCo
 
     const sdk = createOpencodeClient({
       baseUrl: server.url,
-      signal: AbortSignal.timeout(1000 * 60 * 10),
       fetch: platform.fetch,
       throwOnError: true,
     })

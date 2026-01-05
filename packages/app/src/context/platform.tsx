@@ -13,7 +13,7 @@ export function isPWA(): boolean {
 
 export type Platform = {
   /** Platform discriminator */
-  platform: "web" | "tauri"
+  platform: "web" | "desktop"
 
   /** App version */
   version?: string

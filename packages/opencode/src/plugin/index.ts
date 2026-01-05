@@ -15,6 +15,8 @@ import * as crypto from "node:crypto"
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
+  const BUILTIN = ["opencode-copilot-auth@0.0.9", "opencode-anthropic-auth@0.0.5"]
+
   /**
    * Bundle a local plugin file with its dependencies.
    * This ensures that local plugins can use npm dependencies that are installed
@@ -94,8 +96,7 @@ export namespace Plugin {
     }
     const plugins = [...(config.plugin ?? [])]
     if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
-      plugins.push("opencode-copilot-auth@0.0.9")
-      plugins.push("opencode-anthropic-auth@0.0.5")
+      plugins.push(...BUILTIN)
     }
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
@@ -104,8 +105,13 @@ export namespace Plugin {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
-        // BunProc.install now returns the bundled file path directly
-        const pluginPath = await BunProc.install(pkg, version)
+        // Gracefully handle built-in plugin failures
+        const builtin = BUILTIN.some((x) => x.startsWith(pkg + "@"))
+        const pluginPath = await BunProc.install(pkg, version).catch((err) => {
+          if (builtin) return ""
+          throw err
+        })
+        if (!pluginPath) continue
         pluginUrl = pathToFileURL(pluginPath).href
       } else {
         // Resolve relative file:// paths against the working directory
@@ -119,7 +125,13 @@ export namespace Plugin {
         // Use dynamic import() with absolute file:// URLs for ES module compatibility
         // pathToFileURL ensures proper URL encoding regardless of import.meta.url context
         const mod = await import(pluginUrl)
+        // Prevent duplicate initialization when plugins export the same function
+        // as both a named export and default export (e.g., `export const X` and `export default X`).
+        // Object.entries(mod) would return both entries pointing to the same function reference.
+        const seen = new Set<PluginInstance>()
         for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+          if (seen.has(fn)) continue
+          seen.add(fn)
           if (typeof fn !== "function") continue
           const init = await fn(input)
           hooks.push(init)
@@ -178,7 +190,8 @@ export namespace Plugin {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
     for (const hook of hooks) {
-      await hook.config?.(config as any)
+      // @ts-expect-error this is because we haven't moved plugin to sdk v2
+      await hook.config?.(config)
     }
     Bus.subscribeAll(async (input) => {
       const hooks = await state().then((x) => x.hooks)

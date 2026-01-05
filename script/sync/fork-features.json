@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-01",
-  "lastChange": "Removed OpenCode Mark logo component, removed duplicate Header from session.tsx, added PWA StatusBar hiding (Issue #234)",
-  "note": "Replaced PR 5563 (Ask Tool) with PR 5958 (askquestion tool) which fixes race conditions and improves UX",
+  "lastUpdated": "2026-01-04",
+  "lastChange": "v1.1.1 merge: Abandoned glob-permissions (ariane-emory) in favor of upstream PermissionNext. Abandoned fork worktree ID support for upstream sandboxes. Kept AskQuestion tool.",
+  "note": "v1.1.1 introduces upstream worktree/sandbox support and PermissionNext with Wildcard pattern matching",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -94,6 +94,43 @@
         "Show when={!isPWA()} wrapper around StatusBar"
       ],
       "note": "PWA users get clean full-screen experience without StatusBar. Browser users still see StatusBar with server status, path, LSP/MCP indicators."
+    },
+    {
+      "pr": "ariane-emory/glob-permissions",
+      "title": "Granular File Permissions with glob patterns",
+      "author": "ariane-emory",
+      "removedDate": "2026-01-04",
+      "reason": "Upstream v1.1.1 introduced PermissionNext with Wildcard pattern matching which provides similar functionality. Abandoned our minimatch-based resolveFilePermission() in favor of upstream's implementation.",
+      "filesModified": [
+        "packages/opencode/src/agent/agent.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/tool/edit.ts",
+        "packages/opencode/src/tool/write.ts",
+        "packages/opencode/src/tool/patch.ts"
+      ],
+      "codeRemoved": [
+        "resolveFilePermission() function in agent.ts",
+        "minimatch import and glob pattern matching logic",
+        "Agent.resolveFilePermission calls in edit/write/patch tools"
+      ],
+      "note": "Upstream's PermissionNext uses Wildcard.match for pattern matching. Config format remains compatible."
+    },
+    {
+      "pr": 0,
+      "title": "Fork worktree ID differentiation",
+      "author": "fork",
+      "removedDate": "2026-01-04",
+      "reason": "Upstream v1.1.1 introduced proper sandbox/worktree support with Instance.worktree and Project.sandboxes. Our linked worktree ID scheme ({rootCommit}-{hash}) replaced by upstream's simpler approach.",
+      "filesModified": [
+        "packages/opencode/src/project/project.ts",
+        "packages/opencode/test/project/project.test.ts"
+      ],
+      "codeRemoved": [
+        "Linked worktree ID generation with separator",
+        "opencode-worktree hash file creation",
+        "Session migration for linked worktrees"
+      ],
+      "note": "Upstream uses Project.sandboxes array to track worktrees. Main worktree is always Project.worktree."
     }
   ],
   "apiDependencies": [
@@ -401,48 +438,6 @@
         "packages/opencode/src/cli/cmd/uninstall.ts",
         "packages/opencode/src/cli/util.ts",
         "packages/opencode/src/index.ts"
-      ]
-    },
-    {
-      "pr": "ariane-emory/glob-permissions",
-      "title": "Granular File Permissions",
-      "author": "ariane-emory",
-      "status": "branch",
-      "description": "Glob pattern support for permission.edit to restrict agent file access with precedence rules",
-      "files": [
-        "packages/opencode/src/agent/agent.ts",
-        "packages/opencode/src/config/config.ts",
-        "packages/opencode/src/tool/edit.ts",
-        "packages/opencode/src/tool/write.ts",
-        "packages/opencode/src/tool/patch.ts",
-        "packages/opencode/src/tool/registry.ts"
-      ],
-      "criticalCode": [
-        {
-          "file": "packages/opencode/src/agent/agent.ts",
-          "description": "resolveFilePermission() function and glob pattern matching logic",
-          "markers": ["export function resolveFilePermission", "minimatch", "sortedPatterns"]
-        },
-        {
-          "file": "packages/opencode/src/config/config.ts",
-          "description": "permission.edit union type schema (string or record)",
-          "markers": ["z.union([Config.Permission, z.record(z.string(), Config.Permission)])"]
-        },
-        {
-          "file": "packages/opencode/src/tool/edit.ts",
-          "description": "File permission resolution before edit operations",
-          "markers": ["Agent.resolveFilePermission"]
-        },
-        {
-          "file": "packages/opencode/src/tool/write.ts",
-          "description": "File permission resolution before write operations",
-          "markers": ["Agent.resolveFilePermission"]
-        },
-        {
-          "file": "packages/opencode/src/tool/patch.ts",
-          "description": "File permission resolution for all files in a patch",
-          "markers": ["Agent.resolveFilePermission"]
-        }
       ]
     },
     {

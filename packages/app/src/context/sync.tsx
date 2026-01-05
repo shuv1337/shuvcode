@@ -36,15 +36,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       command: () => sdk.client.command.list().then((x) => setStore("command", x.data ?? [])),
     }
 
-    Promise.all(Object.values(load).map((p) => p())).then(() => setStore("ready", true))
+    Promise.all(Object.values(load).map((p) => p())).then(() => setStore("status", "complete"))
 
     const absolute = (path: string) => (store.path.directory + "/" + path).replace("//", "/")
 
     return {
       data: store,
       set: setStore,
+      get status() {
+        return store.status
+      },
       get ready() {
-        return store.ready
+        return store.status !== "loading"
       },
       get project() {
         const match = Binary.search(globalSync.data.project, store.project, (p) => p.id)

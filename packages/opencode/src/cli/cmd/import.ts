@@ -31,18 +31,18 @@ export const ImportCommand = cmd({
       const isUrl = args.file.startsWith("http://") || args.file.startsWith("https://")
 
       if (isUrl) {
-        // Match both legacy (opencode.ai/s/) and enterprise (shuv.ai/share/ or shuv.ai/s/) URLs
-        const legacyMatch = args.file.match(/https?:\/\/opencode\.ai\/s\/([a-zA-Z0-9_-]+)/)
+        // Match upstream (opncd.ai) and enterprise (shuv.ai) URLs
+        const upstreamMatch = args.file.match(/https?:\/\/opncd\.ai\/share\/([a-zA-Z0-9_-]+)/)
         const enterpriseMatch = args.file.match(/https?:\/\/(?:share\.)?shuv\.ai\/(?:share|s)\/([a-zA-Z0-9_-]+)/)
 
-        const isLegacy = !!legacyMatch
+        const isUpstream = !!upstreamMatch
         const isShuv = !!enterpriseMatch
-        const slug = legacyMatch?.[1] ?? enterpriseMatch?.[1]
+        const slug = upstreamMatch?.[1] ?? enterpriseMatch?.[1]
 
         if (!slug) {
           process.stdout.write(`Invalid URL format. Expected:`)
           process.stdout.write(EOL)
-          process.stdout.write(`  - https://opencode.ai/s/<slug>`)
+          process.stdout.write(`  - https://opncd.ai/share/<slug>`)
           process.stdout.write(EOL)
           process.stdout.write(`  - https://share.shuv.ai/share/<slug>`)
           process.stdout.write(EOL)
@@ -63,7 +63,7 @@ export const ImportCommand = cmd({
             data: any
           }>
 
-          // Transform enterprise format to legacy format
+          // Transform enterprise format to standard format
           let info: Session.Info | undefined
           const messagesMap: Record<string, { info: any; parts: any[] }> = {}
 
@@ -92,8 +92,8 @@ export const ImportCommand = cmd({
             messages: Object.values(messagesMap),
           }
         } else {
-          // Legacy API format
-          const response = await fetch(`https://api.opencode.ai/share_data?id=${slug}`)
+          // Upstream API format (opncd.ai)
+          const response = await fetch(`https://opncd.ai/api/share/${slug}`)
           if (!response.ok) {
             process.stdout.write(`Failed to fetch share data: ${response.statusText}`)
             process.stdout.write(EOL)

@@ -170,7 +170,7 @@ export function SearchInput(props: SearchInputProps) {
                 }
 
                 // Exit on escape or the same keybind used to enter search mode (ctrl+/)
-                if (e.name === "escape" || keybind.match("session_search", e)) {
+                if (e.name === "escape" || keybind.match("session_list" as keyof import("@opencode-ai/sdk/v2").KeybindsConfig, e)) {
                   props.onExit?.()
                   e.preventDefault()
                   return

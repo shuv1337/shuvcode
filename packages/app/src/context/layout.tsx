@@ -37,7 +37,24 @@ export function getAvatarColors(key?: string) {
   }
 }
 
+function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
+  if (a === b) return true
+  if (!a || !b) return false
+  if (a.length !== b.length) return false
+  return a.every((x, i) => x === b[i])
+}
+
 type Dialog = "provider" | "model" | "connect"
+
+type SessionScroll = {
+  x: number
+  y: number
+}
+
+type SessionView = {
+  scroll: Record<string, SessionScroll>
+  reviewOpen?: string[]
+}
 
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
 
@@ -51,7 +68,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     const globalSync = useGlobalSync()
     const server = useServer()
     const [store, setStore, _, ready] = persisted(
-      "layout.v4",
+      "layout.v6",
       createStore({
         sidebar: {
           opened: false,
@@ -72,7 +89,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         theme: DEFAULT_THEME_ID,
         font: FONTS[0].id,
+        mobileSidebar: {
+          opened: false,
+        },
         sessionTabs: {} as Record<string, SessionTabs>,
+        sessionView: {} as Record<string, SessionView>,
         expandedSessions: {} as ExpandedSessions,
       }),
     )
@@ -111,7 +132,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     }
 
     function enrich(project: { worktree: string; expanded: boolean }) {
-      const metadata = globalSync.data.project.find((x) => x.worktree === project.worktree)
+      const [childStore] = globalSync.child(project.worktree)
+      const projectID = childStore.project
+      const metadata = projectID
+        ? globalSync.data.project.find((x) => x.id === projectID)
+        : globalSync.data.project.find((x) => x.worktree === project.worktree)
       return [
         {
           ...project,
@@ -251,128 +276,68 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           // ResizeHandle already enforces min/max constraints
           if (!store.session) {
             setStore("session", { width })
-          } else {
-            setStore("session", "width", width)
+            return
           }
-        },
-      },
-      sessions: {
-        expanded: createMemo(() => store.expandedSessions ?? {}),
-        isExpanded(sessionID: string) {
-          return store.expandedSessions?.[sessionID] ?? false
-        },
-        expand(sessionID: string) {
-          if (!store.expandedSessions) {
-            setStore("expandedSessions", { [sessionID]: true })
-          } else {
-            setStore("expandedSessions", sessionID, true)
-          }
-        },
-        collapse(sessionID: string) {
-          if (!store.expandedSessions) {
-            setStore("expandedSessions", { [sessionID]: false })
-          } else {
-            setStore("expandedSessions", sessionID, false)
-          }
-        },
-        toggle(sessionID: string) {
-          if (!store.expandedSessions) {
-            setStore("expandedSessions", { [sessionID]: true })
-          } else {
-            setStore("expandedSessions", sessionID, !store.expandedSessions[sessionID])
-          }
-        },
-      },
-      dialog: {
-        opened: createMemo(() => ephemeral.dialog?.open),
-        open(dialog: Dialog) {
-          batch(() => {
-            if (dialog !== "connect") {
-              setEphemeral("connect", {})
-            }
-            setEphemeral("dialog", "open", dialog)
-          })
-        },
-        close(dialog: Dialog) {
-          if (ephemeral.dialog.open === dialog) {
-            setEphemeral(
-              produce((state) => {
-                state.dialog.open = undefined
-                state.connect = {}
-              }),
-            )
-          }
-        },
-        connect(provider: string) {
-          setEphemeral(
-            produce((state) => {
-              state.dialog.open = "connect"
-              state.connect = { provider, state: "pending" }
-            }),
-          )
-        },
-      },
-      connect: {
-        provider: createMemo(() => ephemeral.connect.provider),
-        state: createMemo(() => ephemeral.connect.state),
-        complete() {
-          setEphemeral(
-            produce((state) => {
-              state.dialog.open = "model"
-              state.connect.state = "complete"
-            }),
-          )
-        },
-        error(message: string) {
-          setEphemeral(
-            produce((state) => {
-              state.connect.state = "error"
-              state.connect.error = message
-            }),
-          )
-        },
-        clear() {
-          setEphemeral("connect", {})
-        },
-      },
-      mobileReview: {
-        visible: createMemo(() => ephemeral.mobileReview?.visible ?? false),
-        filesCount: createMemo(() => ephemeral.mobileReview?.filesCount ?? 0),
-        onOpen: createMemo(() => ephemeral.mobileReview?.onOpen),
-        register(filesCount: number, onOpen: () => void) {
-          setEphemeral("mobileReview", { visible: true, filesCount, onOpen })
-        },
-        unregister() {
-          setEphemeral("mobileReview", { visible: false, filesCount: 0, onOpen: undefined })
-        },
-      },
-      mobileMessageNav: {
-        visible: createMemo(() => ephemeral.mobileMessageNav?.visible ?? false),
-        messages: createMemo(() => ephemeral.mobileMessageNav?.messages ?? []),
-        currentIndex: createMemo(() => ephemeral.mobileMessageNav?.currentIndex ?? 0),
-        onSelect: createMemo(() => ephemeral.mobileMessageNav?.onSelect),
-        register(messages: { id: string; title?: string }[], currentIndex: number, onSelect: (index: number) => void) {
-          setEphemeral("mobileMessageNav", { visible: true, messages, currentIndex, onSelect })
-        },
-        update(currentIndex: number) {
-          setEphemeral("mobileMessageNav", "currentIndex", currentIndex)
-        },
-        unregister() {
-          setEphemeral("mobileMessageNav", { visible: false, messages: [], currentIndex: 0, onSelect: undefined })
+          setStore("session", "width", width)
         },
       },
       theme: {
         current: createMemo(() => store.theme),
-        set(themeId: string) {
-          setStore("theme", themeId)
+        set(theme: string) {
+          setStore("theme", theme)
         },
       },
       font: {
         current: createMemo(() => store.font),
-        set(fontId: string) {
-          setStore("font", fontId)
+        set(font: string) {
+          setStore("font", font)
         },
       },
+      mobileSidebar: {
+        opened: createMemo(() => store.mobileSidebar?.opened ?? false),
+        show() {
+          setStore("mobileSidebar", "opened", true)
+        },
+        hide() {
+          setStore("mobileSidebar", "opened", false)
+        },
+        toggle() {
+          setStore("mobileSidebar", "opened", (x) => !x)
+        },
+      },
+      view(sessionKey: string) {
+        const s = createMemo(() => store.sessionView[sessionKey] ?? { scroll: {} })
+        return {
+          scroll(tab: string) {
+            return s().scroll?.[tab]
+          },
+          setScroll(tab: string, pos: SessionScroll) {
+            const current = store.sessionView[sessionKey]
+            if (!current) {
+              setStore("sessionView", sessionKey, { scroll: { [tab]: pos } })
+              return
+            }
+
+            const prev = current.scroll?.[tab]
+            if (prev?.x === pos.x && prev?.y === pos.y) return
+            setStore("sessionView", sessionKey, "scroll", tab, pos)
+          },
+          review: {
+            open: createMemo(() => s().reviewOpen),
+            setOpen(open: string[]) {
+              const current = store.sessionView[sessionKey]
+              if (!current) {
+                setStore("sessionView", sessionKey, { scroll: {}, reviewOpen: open })
+                return
+              }
+
+              if (same(current.reviewOpen, open)) return
+              setStore("sessionView", sessionKey, "reviewOpen", open)
+            },
+          },
+        }
+      },
+
       tabs(sessionKey: string) {
         const tabs = createMemo(() => store.sessionTabs[sessionKey] ?? { all: [] })
         return {
@@ -442,11 +407,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
               if (current.active !== tab) return
 
               const index = current.all.findIndex((f) => f === tab)
-              if (index <= 0) {
-                setStore("sessionTabs", sessionKey, "active", undefined)
-                return
-              }
-              setStore("sessionTabs", sessionKey, "active", current.all[index - 1])
+              const next = all[index - 1] ?? all[0]
+              setStore("sessionTabs", sessionKey, "active", next)
             })
           },
           move(tab: string, to: number) {

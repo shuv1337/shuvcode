@@ -144,6 +144,7 @@ export namespace Installation {
       throw new UpgradeFailedError({
         stderr: result.stderr.toString("utf8"),
       })
+    await $`${process.execPath} --version`.nothrow().quiet().text()
   }
 
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"

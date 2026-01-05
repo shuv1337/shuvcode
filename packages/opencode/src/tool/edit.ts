@@ -8,20 +8,19 @@ import * as path from "path"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
-import { Permission } from "../permission"
-import type { PermissionEditor } from "../permission/editor"
 import DESCRIPTION from "./edit.txt"
 import { File } from "../file"
 import { Bus } from "../bus"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
-import { Agent } from "../agent/agent"
 import { Snapshot } from "@/snapshot"
-import { Ide } from "../ide"
-import { Text } from "../util/text"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
+
+function normalizeLineEndings(text: string): string {
+  return text.replaceAll("\r\n", "\n")
+}
 
 export const EditTool = Tool.define("edit", {
   description: DESCRIPTION,
@@ -40,100 +39,37 @@ export const EditTool = Tool.define("edit", {
       throw new Error("oldString and newString must be different")
     }
 
-    const agent = await Agent.get(ctx.agent)
-
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     if (!Filesystem.contains(Instance.directory, filePath)) {
       const parentDir = path.dirname(filePath)
-      if (agent.permission.external_directory === "ask") {
-        await Permission.ask({
-          type: "external_directory",
-          pattern: [parentDir, path.join(parentDir, "*")],
-          sessionID: ctx.sessionID,
-          messageID: ctx.messageID,
-          callID: ctx.callID,
-          title: `Edit file outside working directory: ${filePath}`,
-          metadata: {
-            filepath: filePath,
-            parentDir,
-          },
-        })
-      } else if (agent.permission.external_directory === "deny") {
-        throw new Permission.RejectedError(
-          ctx.sessionID,
-          "external_directory",
-          ctx.callID,
-          {
-            filepath: filePath,
-            parentDir,
-          },
-          `File ${filePath} is not in the current working directory`,
-        )
-      }
+      await ctx.ask({
+        permission: "external_directory",
+        patterns: [parentDir, path.join(parentDir, "*")],
+        always: [parentDir + "/*"],
+        metadata: {
+          filepath: filePath,
+          parentDir,
+        },
+      })
     }
 
     let diff = ""
     let contentOld = ""
     let contentNew = ""
-    let userModified = false
-
-    // Resolve permission for this specific file (supports glob patterns)
-    const resolvedPermission = Agent.resolveFilePermission({
-      permission: agent.permission.edit,
-      filePath,
-      baseDir: Instance.directory,
-    })
-
-    // Check for deny first
-    if (resolvedPermission === "deny") {
-      throw new Permission.RejectedError(
-        ctx.sessionID,
-        "edit",
-        ctx.callID,
-        { filepath: filePath },
-        `Editing file ${filePath} is denied by permission configuration`,
-      )
-    }
-
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         contentNew = params.newString
-        if (resolvedPermission === "ask") {
-          const result = await Permission.ask<PermissionEditor.SingleFileModifyData>({
-            type: "edit",
-            sessionID: ctx.sessionID,
-            messageID: ctx.messageID,
-            callID: ctx.callID,
-            title: "Edit this file: " + filePath,
-            metadata: {
-              filePath,
-              originalContent: contentOld,
-              suggestedContent: contentNew,
-            },
-            onSetup: (info) => {
-              if (Ide.active()) {
-                Ide.openDiff(filePath, contentNew).then((response) => {
-                  Permission.respond({
-                    sessionID: info.sessionID,
-                    permissionID: info.id,
-                    response,
-                  })
-                })
-              }
-            },
-            onRespond: () => {
-              if (Ide.active()) {
-                Ide.closeDiff(filePath).catch(() => {})
-              }
-            },
-          })
-          if (result?.modified?.content !== undefined) {
-            contentNew = result.modified.content
-            userModified = true
-          }
-        }
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
-        await Bun.write(filePath, contentNew)
+        await ctx.ask({
+          permission: "edit",
+          patterns: [path.relative(Instance.worktree, filePath)],
+          always: ["*"],
+          metadata: {
+            filepath: filePath,
+            diff,
+          },
+        })
+        await Bun.write(filePath, params.newString)
         await Bus.publish(File.Event.Edited, {
           file: filePath,
         })
@@ -149,40 +85,18 @@ export const EditTool = Tool.define("edit", {
       contentOld = await file.text()
       contentNew = replace(contentOld, params.oldString, params.newString, params.replaceAll)
 
-      if (resolvedPermission === "ask") {
-        const result = await Permission.ask<PermissionEditor.SingleFileModifyData>({
-          type: "edit",
-          sessionID: ctx.sessionID,
-          messageID: ctx.messageID,
-          callID: ctx.callID,
-          title: "Edit this file: " + filePath,
-          metadata: {
-            filePath,
-            originalContent: contentOld,
-            suggestedContent: contentNew,
-          },
-          onSetup: (info) => {
-            if (Ide.active()) {
-              Ide.openDiff(filePath, contentNew).then((response) => {
-                Permission.respond({
-                  sessionID: info.sessionID,
-                  permissionID: info.id,
-                  response,
-                })
-              })
-            }
-          },
-          onRespond: () => {
-            if (Ide.active()) {
-              Ide.closeDiff(filePath).catch(() => {})
-            }
-          },
-        })
-        if (result?.modified?.content !== undefined) {
-          contentNew = result.modified.content
-          userModified = true
-        }
-      }
+      diff = trimDiff(
+        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
+      )
+      await ctx.ask({
+        permission: "edit",
+        patterns: [path.relative(Instance.worktree, filePath)],
+        always: ["*"],
+        metadata: {
+          filepath: filePath,
+          diff,
+        },
+      })
 
       await file.write(contentNew)
       await Bus.publish(File.Event.Edited, {
@@ -190,32 +104,10 @@ export const EditTool = Tool.define("edit", {
       })
       contentNew = await file.text()
       diff = trimDiff(
-        createTwoFilesPatch(
-          filePath,
-          filePath,
-          Text.normalizeLineEndings(contentOld),
-          Text.normalizeLineEndings(contentNew),
-        ),
+        createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
       )
       FileTime.read(ctx.sessionID, filePath)
     })
-
-    let output = ""
-    if (userModified) {
-      output +=
-        "Note: The user modified this edit before accepting. The file now contains the user's version, not your original suggestion. Do not attempt to change it back to your original suggestion.\n"
-    }
-    await LSP.touchFile(filePath, true)
-    const diagnostics = await LSP.diagnostics()
-    const normalizedFilePath = Filesystem.normalizePath(filePath)
-    const issues = diagnostics[normalizedFilePath] ?? []
-    const errors = issues.filter((item) => item.severity === 1)
-    if (errors.length > 0) {
-      const limited = errors.slice(0, MAX_DIAGNOSTICS_PER_FILE)
-      const suffix =
-        errors.length > MAX_DIAGNOSTICS_PER_FILE ? `\n... and ${errors.length - MAX_DIAGNOSTICS_PER_FILE} more` : ""
-      output += `\nThis file has errors, please fix\n<file_diagnostics>\n${limited.map(LSP.Diagnostic.pretty).join("\n")}${suffix}\n</file_diagnostics>\n`
-    }
 
     const filediff: Snapshot.FileDiff = {
       file: filePath,
@@ -229,6 +121,27 @@ export const EditTool = Tool.define("edit", {
       if (change.removed) filediff.deletions += change.count || 0
     }
 
+    ctx.metadata({
+      metadata: {
+        diff,
+        filediff,
+        diagnostics: {},
+      },
+    })
+
+    let output = ""
+    await LSP.touchFile(filePath, true)
+    const diagnostics = await LSP.diagnostics()
+    const normalizedFilePath = Filesystem.normalizePath(filePath)
+    const issues = diagnostics[normalizedFilePath] ?? []
+    const errors = issues.filter((item) => item.severity === 1)
+    if (errors.length > 0) {
+      const limited = errors.slice(0, MAX_DIAGNOSTICS_PER_FILE)
+      const suffix =
+        errors.length > MAX_DIAGNOSTICS_PER_FILE ? `\n... and ${errors.length - MAX_DIAGNOSTICS_PER_FILE} more` : ""
+      output += `\nThis file has errors, please fix\n<file_diagnostics>\n${limited.map(LSP.Diagnostic.pretty).join("\n")}${suffix}\n</file_diagnostics>\n`
+    }
+
     return {
       metadata: {
         diagnostics,
@@ -237,7 +150,6 @@ export const EditTool = Tool.define("edit", {
       },
       title: `${path.relative(Instance.worktree, filePath)}`,
       output,
-      modifiedInput: userModified ? { ...params, newString: contentNew } : undefined,
     }
   },
 })

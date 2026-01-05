@@ -3,11 +3,9 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { FileTime } from "../file/time"
-import { Permission } from "../permission"
 import { Bus } from "../bus"
 import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
-import { Agent } from "../agent/agent"
 import { Patch } from "../patch"
 import { Filesystem } from "../util/filesystem"
 import { createTwoFilesPatch } from "diff"
@@ -39,7 +37,6 @@ export const PatchTool = Tool.define("patch", {
     }
 
     // Validate file paths and check permissions
-    const agent = await Agent.get(ctx.agent)
     const fileChanges: Array<{
       filePath: string
       oldContent: string
@@ -55,31 +52,15 @@ export const PatchTool = Tool.define("patch", {
 
       if (!Filesystem.contains(Instance.directory, filePath)) {
         const parentDir = path.dirname(filePath)
-        if (agent.permission.external_directory === "ask") {
-          await Permission.ask({
-            type: "external_directory",
-            pattern: [parentDir, path.join(parentDir, "*")],
-            sessionID: ctx.sessionID,
-            messageID: ctx.messageID,
-            callID: ctx.callID,
-            title: `Patch file outside working directory: ${filePath}`,
-            metadata: {
-              filepath: filePath,
-              parentDir,
-            },
-          })
-        } else if (agent.permission.external_directory === "deny") {
-          throw new Permission.RejectedError(
-            ctx.sessionID,
-            "external_directory",
-            ctx.callID,
-            {
-              filepath: filePath,
-              parentDir,
-            },
-            `File ${filePath} is not in the current working directory`,
-          )
-        }
+        await ctx.ask({
+          permission: "external_directory",
+          patterns: [parentDir, path.join(parentDir, "*")],
+          always: [parentDir + "/*"],
+          metadata: {
+            filepath: filePath,
+            parentDir,
+          },
+        })
       }
 
       switch (hunk.type) {
@@ -151,63 +132,15 @@ export const PatchTool = Tool.define("patch", {
       }
     }
 
-    // Check permissions for all files
-    const deniedFiles: string[] = []
-    const askFiles: string[] = []
-
-    for (const change of fileChanges) {
-      const resolvedPermission = Agent.resolveFilePermission({
-        permission: agent.permission.edit,
-        filePath: change.filePath,
-        baseDir: Instance.directory,
-      })
-
-      if (resolvedPermission === "deny") {
-        deniedFiles.push(change.filePath)
-      } else if (resolvedPermission === "ask") {
-        askFiles.push(change.filePath)
-      }
-
-      // Also check move destination if applicable
-      if (change.movePath) {
-        const movePermission = Agent.resolveFilePermission({
-          permission: agent.permission.edit,
-          filePath: change.movePath,
-          baseDir: Instance.directory,
-        })
-        if (movePermission === "deny") {
-          deniedFiles.push(change.movePath)
-        } else if (movePermission === "ask") {
-          askFiles.push(change.movePath)
-        }
-      }
-    }
-
-    // If any file is denied, reject the entire patch
-    if (deniedFiles.length > 0) {
-      throw new Permission.RejectedError(
-        ctx.sessionID,
-        "edit",
-        ctx.callID,
-        { files: deniedFiles },
-        `Patch denied: editing these files is not permitted: ${deniedFiles.join(", ")}`,
-      )
-    }
-
-    // If any file requires ask, prompt once for all
-    if (askFiles.length > 0) {
-      await Permission.ask({
-        type: "edit",
-        sessionID: ctx.sessionID,
-        messageID: ctx.messageID,
-        callID: ctx.callID,
-        title: `Apply patch to ${fileChanges.length} files`,
-        metadata: {
-          diff: totalDiff,
-          askFiles,
-        },
-      })
-    }
+    // Check permissions if needed
+    await ctx.ask({
+      permission: "edit",
+      patterns: fileChanges.map((c) => path.relative(Instance.worktree, c.filePath)),
+      always: ["*"],
+      metadata: {
+        diff: totalDiff,
+      },
+    })
 
     // Apply the changes
     const changedFiles: string[] = []

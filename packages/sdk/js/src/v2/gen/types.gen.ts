@@ -32,6 +32,7 @@ export type Project = {
     updated: number
     initialized?: number
   }
+  sandboxes: Array<string>
 }
 
 export type EventProjectUpdated = {
@@ -251,7 +252,14 @@ export type SymbolSource = {
   kind: number
 }
 
-export type FilePartSource = FileSource | SymbolSource
+export type ResourceSource = {
+  text: FilePartSourceText
+  type: "resource"
+  clientName: string
+  uri: string
+}
+
+export type FilePartSource = FileSource | SymbolSource | ResourceSource
 
 export type FilePart = {
   id: string
@@ -460,33 +468,68 @@ export type EventMessagePartRemoved = {
   }
 }
 
-export type Permission = {
+export type PermissionRequest = {
   id: string
-  type: string
-  pattern?: string | Array<string>
   sessionID: string
-  messageID: string
-  callID?: string
-  title: string
+  permission: string
+  patterns: Array<string>
   metadata: {
     [key: string]: unknown
   }
-  time: {
-    created: number
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
   }
 }
 
-export type EventPermissionUpdated = {
-  type: "permission.updated"
-  properties: Permission
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
 }
 
 export type EventPermissionReplied = {
   type: "permission.replied"
   properties: {
     sessionID: string
-    permissionID: string
-    response: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+  }
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -494,37 +537,6 @@ export type EventFileEdited = {
   type: "file.edited"
   properties: {
     file: string
-  }
-}
-
-export type EventIdeInstalled = {
-  type: "ide.installed"
-  properties: {
-    ide: string
-  }
-}
-
-export type IdeSelection = {
-  text: string
-  filePath: string
-  fileUrl: string
-  selection: {
-    start: {
-      line: number
-      character: number
-    }
-    end: {
-      line: number
-      character: number
-    }
-    isEmpty: boolean
-  }
-}
-
-export type EventIdeSelectionUpdated = {
-  type: "ide.selection.updated"
-  properties: {
-    selection: IdeSelection
   }
 }
 
@@ -629,42 +641,6 @@ export type EventAskquestionCancelled = {
   }
 }
 
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -707,6 +683,16 @@ export type EventTuiToastShow = {
   }
 }
 
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -723,6 +709,16 @@ export type EventCommandExecuted = {
     messageID: string
   }
 }
+
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionRule = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+}
+
+export type PermissionRuleset = Array<PermissionRule>
 
 export type Session = {
   id: string
@@ -746,6 +742,7 @@ export type Session = {
     compacting?: number
     archived?: number
   }
+  permission?: PermissionRuleset
   revert?: {
     messageID: string
     partID?: string
@@ -803,6 +800,37 @@ export type EventVcsBranchUpdated = {
   type: "vcs.branch.updated"
   properties: {
     branch?: string
+  }
+}
+
+export type EventIdeInstalled = {
+  type: "ide.installed"
+  properties: {
+    ide: string
+  }
+}
+
+export type IdeSelection = {
+  text: string
+  filePath: string
+  fileUrl: string
+  selection: {
+    start: {
+      line: number
+      character: number
+    }
+    end: {
+      line: number
+      character: number
+    }
+    isEmpty: boolean
+  }
+}
+
+export type EventIdeSelectionUpdated = {
+  type: "ide.selection.updated"
+  properties: {
+    selection: IdeSelection
   }
 }
 
@@ -870,21 +898,20 @@ export type Event =
   | EventMessageRemoved
   | EventMessagePartUpdated
   | EventMessagePartRemoved
-  | EventPermissionUpdated
+  | EventPermissionAsked
   | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventSessionCompacted
   | EventFileEdited
-  | EventIdeInstalled
-  | EventIdeSelectionUpdated
   | EventTodoUpdated
   | EventAskquestionRequested
   | EventAskquestionAnswered
   | EventAskquestionCancelled
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventSessionCompacted
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
+  | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventCommandExecuted
   | EventSessionCreated
@@ -894,6 +921,8 @@ export type Event =
   | EventSessionError
   | EventFileWatcherUpdated
   | EventVcsBranchUpdated
+  | EventIdeInstalled
+  | EventIdeSelectionUpdated
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
@@ -965,10 +994,6 @@ export type KeybindsConfig = {
    */
   scrollbar_toggle?: string
   /**
-   * Toggle session header visibility
-   */
-  header_toggle?: string
-  /**
    * Toggle username visibility
    */
   username_toggle?: string
@@ -1013,17 +1038,9 @@ export type KeybindsConfig = {
    */
   session_interrupt?: string
   /**
-   * Edit suggested changes before applying
-   */
-  permission_edit?: string
-  /**
    * Compact the session
    */
   session_compact?: string
-  /**
-   * Search in session messages
-   */
-  session_search?: string
   /**
    * Scroll messages up by one page
    */
@@ -1329,11 +1346,57 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
+/**
+ * IDE integration configuration for lockfile discovery and authentication
+ */
+export type IdeConfig = {
+  /**
+   * Directory to scan for IDE lockfiles
+   */
+  lockfile_dir?: string
+  /**
+   * HTTP header name for IDE authentication
+   */
+  auth_header_name?: string
+}
+
+export type PermissionActionConfig = "ask" | "allow" | "deny"
+
+export type PermissionObjectConfig = {
+  [key: string]: PermissionActionConfig
+}
+
+export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
+
+export type PermissionConfig =
+  | {
+      read?: PermissionRuleConfig
+      edit?: PermissionRuleConfig
+      glob?: PermissionRuleConfig
+      grep?: PermissionRuleConfig
+      list?: PermissionRuleConfig
+      bash?: PermissionRuleConfig
+      task?: PermissionRuleConfig
+      external_directory?: PermissionRuleConfig
+      todowrite?: PermissionActionConfig
+      todoread?: PermissionActionConfig
+      webfetch?: PermissionActionConfig
+      websearch?: PermissionActionConfig
+      codesearch?: PermissionActionConfig
+      lsp?: PermissionRuleConfig
+      doom_loop?: PermissionActionConfig
+      [key: string]: PermissionRuleConfig | PermissionActionConfig | undefined
+    }
+  | PermissionActionConfig
+
 export type AgentConfig = {
   model?: string
   temperature?: number
   top_p?: number
   prompt?: string
+  /**
+   * @deprecated Use 'permission' field instead
+   */
   tools?: {
     [key: string]: boolean
   }
@@ -1343,6 +1406,9 @@ export type AgentConfig = {
    */
   description?: string
   mode?: "subagent" | "primary" | "all"
+  options?: {
+    [key: string]: unknown
+  }
   /**
    * Hex color code for the agent (e.g., #FF5733)
    */
@@ -1350,27 +1416,12 @@ export type AgentConfig = {
   /**
    * Maximum number of agentic iterations before forcing text-only response
    */
+  steps?: number
+  /**
+   * @deprecated Use 'steps' field instead.
+   */
   maxSteps?: number
-  permission?: {
-    edit?: "ask" | "allow" | "deny"
-    bash?:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    skill?:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    webfetch?: "ask" | "allow" | "deny"
-    doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
-  }
+  permission?: PermissionConfig
   [key: string]:
     | unknown
     | string
@@ -1382,28 +1433,12 @@ export type AgentConfig = {
     | "subagent"
     | "primary"
     | "all"
+    | {
+        [key: string]: unknown
+      }
     | string
     | number
-    | {
-        edit?: "ask" | "allow" | "deny"
-        bash?:
-          | "ask"
-          | "allow"
-          | "deny"
-          | {
-              [key: string]: "ask" | "allow" | "deny"
-            }
-        skill?:
-          | "ask"
-          | "allow"
-          | "deny"
-          | {
-              [key: string]: "ask" | "allow" | "deny"
-            }
-        webfetch?: "ask" | "allow" | "deny"
-        doom_loop?: "ask" | "allow" | "deny"
-        external_directory?: "ask" | "allow" | "deny"
-      }
+    | PermissionConfig
     | undefined
 }
 
@@ -1606,6 +1641,7 @@ export type Config = {
     density?: "auto" | "comfortable" | "compact"
   }
   server?: ServerConfig
+  ide?: IdeConfig
   /**
    * Command configuration, see https://opencode.ai/docs/commands
    */
@@ -1675,6 +1711,9 @@ export type Config = {
     build?: AgentConfig
     general?: AgentConfig
     explore?: AgentConfig
+    title?: AgentConfig
+    summary?: AgentConfig
+    compaction?: AgentConfig
     [key: string]: AgentConfig | undefined
   }
   /**
@@ -1687,7 +1726,12 @@ export type Config = {
    * MCP (Model Context Protocol) server configurations
    */
   mcp?: {
-    [key: string]: McpLocalConfig | McpRemoteConfig
+    [key: string]:
+      | McpLocalConfig
+      | McpRemoteConfig
+      | {
+          enabled: boolean
+        }
   }
   formatter?:
     | false
@@ -1725,32 +1769,7 @@ export type Config = {
    */
   instructions?: Array<string>
   layout?: LayoutConfig
-  permission?: {
-    edit?:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    bash?:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    skill?:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    webfetch?: "ask" | "allow" | "deny"
-    doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
-  }
+  permission?: PermissionConfig
   tools?: {
     [key: string]: boolean
   }
@@ -1759,19 +1778,6 @@ export type Config = {
      * Enterprise URL
      */
     url?: string
-  }
-  /**
-   * IDE integration settings
-   */
-  ide?: {
-    /**
-     * Directory containing IDE lock files for WebSocket connections
-     */
-    lockfile_dir?: string
-    /**
-     * HTTP header name for IDE WebSocket authentication
-     */
-    auth_header_name?: string
   }
   compaction?: {
     /**
@@ -1810,7 +1816,7 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
-     * Enable the askquestion tool for wizard-style user prompts
+     * Enable the askquestion tool for LLM to ask clarifying questions
      */
     askquestion_tool?: boolean
     /**
@@ -1848,6 +1854,17 @@ export type Path = {
   config: string
   worktree: string
   directory: string
+}
+
+export type Worktree = {
+  name: string
+  branch: string
+  directory: string
+}
+
+export type WorktreeCreateInput = {
+  name?: string
+  startCommand?: string
 }
 
 export type VcsInfo = {
@@ -2072,36 +2089,16 @@ export type Agent = {
   topP?: number
   temperature?: number
   color?: string
-  permission: {
-    edit:
-      | "ask"
-      | "allow"
-      | "deny"
-      | {
-          [key: string]: "ask" | "allow" | "deny"
-        }
-    bash: {
-      [key: string]: "ask" | "allow" | "deny"
-    }
-    skill: {
-      [key: string]: "ask" | "allow" | "deny"
-    }
-    webfetch?: "ask" | "allow" | "deny"
-    doom_loop?: "ask" | "allow" | "deny"
-    external_directory?: "ask" | "allow" | "deny"
-  }
+  permission: PermissionRuleset
   model?: {
     modelID: string
     providerID: string
   }
   prompt?: string
-  tools: {
-    [key: string]: boolean
-  }
   options: {
     [key: string]: unknown
   }
-  maxSteps?: number
+  steps?: number
 }
 
 export type McpStatusConnected = {
@@ -2132,6 +2129,14 @@ export type McpStatus =
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
+
+export type McpResource = {
+  name: string
+  uri: string
+  description?: string
+  mimeType?: string
+  client: string
+}
 
 export type IdeStatus = {
   status: "connected" | "disconnected" | "failed"
@@ -2685,6 +2690,51 @@ export type PathGetResponses = {
 
 export type PathGetResponse = PathGetResponses[keyof PathGetResponses]
 
+export type WorktreeListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/worktree"
+}
+
+export type WorktreeListResponses = {
+  /**
+   * List of worktree directories
+   */
+  200: Array<string>
+}
+
+export type WorktreeListResponse = WorktreeListResponses[keyof WorktreeListResponses]
+
+export type WorktreeCreateData = {
+  body?: WorktreeCreateInput
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/worktree"
+}
+
+export type WorktreeCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type WorktreeCreateError = WorktreeCreateErrors[keyof WorktreeCreateErrors]
+
+export type WorktreeCreateResponses = {
+  /**
+   * Worktree created
+   */
+  200: Worktree
+}
+
+export type WorktreeCreateResponse = WorktreeCreateResponses[keyof WorktreeCreateResponses]
+
 export type VcsGetData = {
   body?: never
   path?: never
@@ -2725,6 +2775,7 @@ export type SessionCreateData = {
   body?: {
     parentID?: string
     title?: string
+    permission?: PermissionRuleset
   }
   path?: never
   query?: {
@@ -3240,6 +3291,9 @@ export type SessionPromptData = {
     }
     agent?: string
     noReply?: boolean
+    /**
+     * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
+     */
     tools?: {
       [key: string]: boolean
     }
@@ -3424,6 +3478,9 @@ export type SessionPromptAsyncData = {
     }
     agent?: string
     noReply?: boolean
+    /**
+     * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
+     */
     tools?: {
       [key: string]: boolean
     }
@@ -3625,10 +3682,7 @@ export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnre
 
 export type PermissionRespondData = {
   body?: {
-    response: "once" | "always" | "reject" | "modify"
-    modifyData?: {
-      content: string
-    }
+    response: "once" | "always" | "reject"
   }
   path: {
     sessionID: string
@@ -3661,6 +3715,42 @@ export type PermissionRespondResponses = {
 }
 
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
+
+export type PermissionReplyData = {
+  body?: {
+    reply: "once" | "always" | "reject"
+    message?: string
+  }
+  path: {
+    requestID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/permission/{requestID}/reply"
+}
+
+export type PermissionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type PermissionReplyError = PermissionReplyErrors[keyof PermissionReplyErrors]
+
+export type PermissionReplyResponses = {
+  /**
+   * Permission processed successfully
+   */
+  200: boolean
+}
+
+export type PermissionReplyResponse = PermissionReplyResponses[keyof PermissionReplyResponses]
 
 export type AskquestionRespondData = {
   body?: {
@@ -3757,7 +3847,7 @@ export type PermissionListResponses = {
   /**
    * List of pending permissions
    */
-  200: Array<Permission>
+  200: Array<PermissionRequest>
 }
 
 export type PermissionListResponse = PermissionListResponses[keyof PermissionListResponses]
@@ -4412,6 +4502,27 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
+export type ExperimentalResourceListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/resource"
+}
+
+export type ExperimentalResourceListResponses = {
+  /**
+   * MCP resources
+   */
+  200: {
+    [key: string]: McpResource
+  }
+}
+
+export type ExperimentalResourceListResponse =
+  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+
 export type IdeStatusData = {
   body?: never
   path?: never
@@ -4701,7 +4812,7 @@ export type TuiShowToastResponses = {
 export type TuiShowToastResponse = TuiShowToastResponses[keyof TuiShowToastResponses]
 
 export type TuiPublishData = {
-  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow
+  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiSessionSelect
   path?: never
   query?: {
     directory?: string
@@ -4726,6 +4837,42 @@ export type TuiPublishResponses = {
 }
 
 export type TuiPublishResponse = TuiPublishResponses[keyof TuiPublishResponses]
+
+export type TuiSelectSessionData = {
+  body?: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/select-session"
+}
+
+export type TuiSelectSessionErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TuiSelectSessionError = TuiSelectSessionErrors[keyof TuiSelectSessionErrors]
+
+export type TuiSelectSessionResponses = {
+  /**
+   * Session selected successfully
+   */
+  200: boolean
+}
+
+export type TuiSelectSessionResponse = TuiSelectSessionResponses[keyof TuiSelectSessionResponses]
 
 export type TuiControlNextData = {
   body?: never

@@ -1,8 +1,8 @@
 import z from "zod"
+import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
 import { $ } from "bun"
-import fs from "fs/promises"
 import { Storage } from "../storage/storage"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
@@ -33,6 +33,7 @@ export namespace Project {
         updated: z.number(),
         initialized: z.number().optional(),
       }),
+      sandboxes: z.array(z.string()),
     })
     .meta({
       ref: "Project",
@@ -46,106 +47,73 @@ export namespace Project {
   export async function fromDirectory(directory: string) {
     log.info("fromDirectory", { directory })
 
-    const { id, worktree, vcs } = await iife(async () => {
+    const { id, sandbox, worktree, vcs } = await iife(async () => {
       const matches = Filesystem.up({ targets: [".git"], start: directory })
       const git = await matches.next().then((x) => x.value)
       await matches.return()
       if (git) {
-        // Task 1.1: Resolve worktree path early before ID generation
-        let worktree = path.dirname(git)
-        worktree = await $`git rev-parse --show-toplevel`
-          .quiet()
-          .nothrow()
-          .cwd(worktree)
-          .text()
-          .then((x) => path.resolve(worktree, x.trim()))
+        let sandbox = path.dirname(git)
 
-        // Task 1.2: Resolve actual gitDir (handles linked worktrees where .git is a file)
-        // May be relative for main worktrees, absolute for linked
-        const gitDirRaw = await $`git rev-parse --git-dir`
-          .quiet()
-          .nothrow()
-          .cwd(worktree)
+        // cached id calculation
+        let id = await Bun.file(path.join(git, "opencode"))
           .text()
           .then((x) => x.trim())
-        // Fall back to Filesystem.up result if git command fails
-        const gitDir = gitDirRaw ? path.resolve(worktree, gitDirRaw) : git
+          .catch(() => {})
 
-        // Task 1.3: Detect linked worktree (case-insensitive for Windows)
-        const normalizedGitDir = path.normalize(gitDir).toLowerCase()
-        const worktreeMarker = path.join(".git", "worktrees").toLowerCase()
-        const isLinkedWorktree = normalizedGitDir.includes(worktreeMarker)
-        log.info("worktree detection", { isLinkedWorktree, gitDir: normalizedGitDir })
-
-        // Task 1.4: Read caches
-        const cachedRootCommit = await Bun.file(path.join(gitDir, "opencode"))
-          .text()
-          .then((x) => x.trim())
-          .catch(() => undefined)
-        const cachedWorktreeHash = isLinkedWorktree
-          ? await Bun.file(path.join(gitDir, "opencode-worktree"))
-              .text()
-              .then((x) => x.trim())
-              .catch(() => undefined)
-          : undefined
-
-        // Return early with cached ID if both are available
-        if (cachedRootCommit && (!isLinkedWorktree || cachedWorktreeHash)) {
-          const id = isLinkedWorktree ? `${cachedRootCommit}-${cachedWorktreeHash}` : cachedRootCommit
-          return { id, worktree, vcs: "git" }
+        // generate id from root commit
+        if (!id) {
+          const roots = await $`git rev-list --max-parents=0 --all`
+            .quiet()
+            .nothrow()
+            .cwd(sandbox)
+            .text()
+            .then((x) =>
+              x
+                .split("\n")
+                .filter(Boolean)
+                .map((x) => x.trim())
+                .toSorted(),
+            )
+          id = roots[0]
+          if (id) Bun.file(path.join(git, "opencode")).write(id)
         }
 
-        // Compute root commit if needed
-        const roots = await $`git rev-list --max-parents=0 --all`
-          .quiet()
-          .nothrow()
-          .cwd(worktree)
-          .text()
-          .then((x) =>
-            x
-              .split("\n")
-              .filter(Boolean)
-              .map((x) => x.trim())
-              .toSorted(),
-          )
-        const rootCommit = roots[0]
-        if (!rootCommit) {
+        if (!id)
           return {
             id: "global",
-            worktree,
+            worktree: sandbox,
+            sandbox: sandbox,
             vcs: "git",
           }
-        }
 
-        // Task 1.5: Generate differentiated ID (cross-platform safe)
-        // Normalize path separators for consistent hashing across platforms (WSL + Windows)
-        const normalizedPath = worktree.replace(/\\/g, "/")
-        const worktreeHash = isLinkedWorktree ? Bun.hash(normalizedPath).toString(16) : undefined
-        const id = isLinkedWorktree ? `${rootCommit}-${worktreeHash}` : rootCommit
-
-        // Task 1.6: Write caches (awaited - fixes existing bug where writes weren't awaited)
-        if (isLinkedWorktree && worktreeHash) {
-          await Bun.file(path.join(gitDir, "opencode-worktree")).write(worktreeHash)
+        sandbox = await $`git rev-parse --show-toplevel`
+          .quiet()
+          .nothrow()
+          .cwd(sandbox)
+          .text()
+          .then((x) => path.resolve(sandbox, x.trim()))
+        const worktree = await $`git rev-parse --git-common-dir`
+          .quiet()
+          .nothrow()
+          .cwd(sandbox)
+          .text()
+          .then((x) => {
+            const dirname = path.dirname(x.trim())
+            if (dirname === ".") return sandbox
+            return dirname
+          })
+        return {
+          id,
+          sandbox,
+          worktree,
+          vcs: "git",
         }
-        if (!cachedRootCommit) {
-          await Bun.file(path.join(gitDir, "opencode")).write(rootCommit)
-        }
-
-        // Task 2.1-2.3: Migration hook (linked worktrees only, with race protection)
-        if (isLinkedWorktree) {
-          const newProjectExists = await Storage.read(["project", id]).catch(() => undefined)
-          if (!newProjectExists) {
-            await migrateWorktreeSessions(rootCommit, id, worktree)
-            await cleanupLegacyProject(rootCommit)
-          }
-        }
-
-        return { id, worktree, vcs: "git" }
       }
 
       return {
         id: "global",
         worktree: "/",
+        sandbox: "/",
         vcs: Info.shape.vcs.parse(Flag.OPENCODE_FAKE_VCS),
       }
     })
@@ -156,6 +124,7 @@ export namespace Project {
         id,
         worktree,
         vcs: vcs as Info["vcs"],
+        sandboxes: [],
         time: {
           created: Date.now(),
           updated: Date.now(),
@@ -165,6 +134,10 @@ export namespace Project {
         await migrateFromGlobal(id, worktree)
       }
     }
+
+    // migrate old projects before sandboxes
+    if (!existing.sandboxes) existing.sandboxes = []
+
     if (Flag.OPENCODE_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
     const result: Info = {
       ...existing,
@@ -175,6 +148,7 @@ export namespace Project {
         updated: Date.now(),
       },
     }
+    if (sandbox !== result.worktree && !result.sandboxes.includes(sandbox)) result.sandboxes.push(sandbox)
     await Storage.write<Info>(["project", id], result)
     GlobalBus.emit("event", {
       payload: {
@@ -182,7 +156,7 @@ export namespace Project {
         properties: result,
       },
     })
-    return result
+    return { project: result, sandbox }
   }
 
   export async function discover(input: Info) {
@@ -236,55 +210,6 @@ export namespace Project {
     }).catch((error) => {
       log.error("failed to migrate sessions from global to project", { error, projectId: newProjectID })
     })
-  }
-
-  // Project ID formats:
-  // - Main worktree: "{rootCommit}" (e.g., "a1b2c3d4...")
-  // - Linked worktree: "{rootCommit}-{pathHash}" (e.g., "a1b2c3d4...-7f8a9b2c")
-  // The separator is "-" (not "|") because project IDs are used in filesystem paths
-
-  // Task 2.2: Migrate sessions from old project ID to new project ID for linked worktrees
-  async function migrateWorktreeSessions(oldProjectID: string, newProjectID: string, worktree: string) {
-    const oldSessions = await Storage.list(["session", oldProjectID]).catch(() => [])
-    if (oldSessions.length === 0) return
-
-    log.info("migrating worktree sessions", {
-      from: oldProjectID,
-      to: newProjectID,
-      worktree,
-      count: oldSessions.length,
-    })
-
-    await work(10, oldSessions, async (key) => {
-      const sessionID = key[key.length - 1]
-      const session = await Storage.read<Session.Info>(key).catch(() => undefined)
-      if (!session) return
-      // Only migrate sessions that match this worktree
-      if (session.directory !== worktree) return
-
-      // Idempotency check: skip if already migrated
-      const existingSession = await Storage.read(["session", newProjectID, sessionID]).catch(() => undefined)
-      if (existingSession) {
-        log.info("session already migrated, skipping", { sessionID })
-        return
-      }
-
-      session.projectID = newProjectID
-      log.info("migrating session", { sessionID, from: oldProjectID, to: newProjectID })
-      await Storage.write(["session", newProjectID, sessionID], session)
-      await Storage.remove(key)
-    }).catch((error) => {
-      log.error("failed to migrate worktree sessions", { error, from: oldProjectID, to: newProjectID })
-    })
-  }
-
-  // Task 2.3: Clean up empty legacy project entry after migration
-  async function cleanupLegacyProject(oldProjectID: string) {
-    const remainingSessions = await Storage.list(["session", oldProjectID]).catch(() => [])
-    if (remainingSessions.length === 0) {
-      log.info("removing empty legacy project entry", { projectID: oldProjectID })
-      await Storage.remove(["project", oldProjectID]).catch(() => {})
-    }
   }
 
   export async function setInitialized(projectID: string) {
@@ -415,7 +340,7 @@ export namespace Project {
       }
 
       // Register project using fromDirectory
-      const project = await fromDirectory(projectPath)
+      const { project } = await fromDirectory(projectPath)
 
       // Set custom name if provided
       if (input.name) {
@@ -426,4 +351,15 @@ export namespace Project {
       return { project, created: isNewlyCreated }
     },
   )
+
+  export async function sandboxes(projectID: string) {
+    const project = await Storage.read<Info>(["project", projectID]).catch(() => undefined)
+    if (!project?.sandboxes) return []
+    const valid: string[] = []
+    for (const dir of project.sandboxes) {
+      const stat = await fs.stat(dir).catch(() => undefined)
+      if (stat?.isDirectory()) valid.push(dir)
+    }
+    return valid
+  }
 }
