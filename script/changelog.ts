@@ -221,27 +221,38 @@ export async function buildNotes(from: string, to: string) {
 
   console.log("generating changelog since " + from)
 
-  const opencode = await createOpencode({ port: 5044 })
   const notes: string[] = []
 
-  try {
-    const lines = await generateChangelog(commits, opencode)
-    notes.push(...lines)
-    console.log("---- Generated Changelog ----")
-    console.log(notes.join("\n"))
-    console.log("-----------------------------")
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
-      console.log("Changelog generation timed out, using raw commits")
-      for (const commit of commits) {
-        const attribution = commit.author && !team.includes(commit.author) ? ` (@${commit.author})` : ""
-        notes.push(`- ${commit.message}${attribution}`)
+  // Check if opencode CLI is available for AI-powered changelog generation
+  const hasOpencode = await Bun.which("opencode") !== null
+
+  if (hasOpencode) {
+    const opencode = await createOpencode({ port: 5044 })
+    try {
+      const lines = await generateChangelog(commits, opencode)
+      notes.push(...lines)
+      console.log("---- Generated Changelog ----")
+      console.log(notes.join("\n"))
+      console.log("-----------------------------")
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        console.log("Changelog generation timed out, using raw commits")
+        for (const commit of commits) {
+          const attribution = commit.author && !team.includes(commit.author) ? ` (@${commit.author})` : ""
+          notes.push(`- ${commit.message}${attribution}`)
+        }
+      } else {
+        throw error
       }
-    } else {
-      throw error
+    } finally {
+      opencode.server.close()
     }
-  } finally {
-    opencode.server.close()
+  } else {
+    console.log("opencode CLI not available, using raw commit messages")
+    for (const commit of commits) {
+      const attribution = commit.author && !team.includes(commit.author) ? ` (@${commit.author})` : ""
+      notes.push(`- ${commit.message}${attribution}`)
+    }
   }
 
   const contributors = await getContributors(from, to)
