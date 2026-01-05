@@ -6,6 +6,7 @@
   <a href="https://github.com/Latitudes-Dev/shuvcode/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/Latitudes-Dev/shuvcode?style=flat-square" /></a>
 </p>
 
+
 ---
 
 ## Screenshots
@@ -43,7 +44,7 @@
 curl -fsSL https://shuv.ai/install | bash
 
 # npm
-npm i -g shuvcode@latest
+npm i -g shuvcode@latest           # or bun/pnpm/yarn
 ```
 
 ---
@@ -51,6 +52,8 @@ npm i -g shuvcode@latest
 ## About
 
 This fork serves as an integration testing ground for upstream PRs before they are merged into the main opencode repository. We merge, test, and validate promising features and fixes to help ensure quality contributions to the upstream project.
+
+The desktop app is available from the [releases page](https://github.com/Latitudes-Dev/shuvcode/releases).
 
 ---
 
@@ -78,9 +81,10 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#5917](https://github.com/sst/opencode/pull/5917)                            | Draggable sidebar resize                    | [@agustif](https://github.com/agustif)                       | Open   | Click and drag the sidebar border to resize, width persisted to KV store |
 | [#5968](https://github.com/sst/opencode/pull/5968)                            | Better styling for small screens            | [@rekram1-node](https://github.com/rekram1-node)             | Reverted | Responsive TUI layout hiding elements on short/narrow terminals          |
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme       |
-| [Branch](https://github.com/ariane-emory/opencode/tree/feat/glob-permissions) | Granular File Permissions                   | [@ariane-emory](https://github.com/ariane-emory)             | N/A    | Glob pattern support for `permission.edit` to restrict agent file access |
 
-_Last updated: 2025-12-31_
+_Last updated: 2026-01-04_
+
+**Note:** Granular File Permissions (ariane-emory) was removed in v1.1.1 integration - upstream now provides similar functionality via PermissionNext.
 
 ---
 
@@ -205,30 +209,6 @@ Toggle density from the command palette or set in config:
   },
 }
 ```
-
----
-
-### Granular File Permissions
-
-Restrict which files an agent can edit using glob patterns:
-
-```jsonc
-{
-  "agent": {
-    "plan": {
-      "permission": {
-        "edit": {
-          "**/*.md": "allow",
-          "CONTEXT/**": "allow",
-          "*": "deny",
-        },
-      },
-    },
-  },
-}
-```
-
-Precedence rules: exact match > more path segments > longer pattern > `*` fallback
 
 ---
 

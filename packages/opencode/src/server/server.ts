@@ -21,8 +21,8 @@ import { LSP } from "../lsp"
 import { Format } from "../format"
 import { MessageV2 } from "../session/message-v2"
 import { TuiRoute } from "./tui"
-import { Permission } from "../permission"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Vcs } from "../project/vcs"
 import { Agent } from "../agent/agent"
 import { Auth } from "../auth"
@@ -30,7 +30,6 @@ import { Command } from "../command"
 import { ProviderAuth } from "../provider/auth"
 import { Global } from "../global"
 import { ProjectRoute } from "./project"
-import { Project } from "../project/project"
 import { ToolRegistry } from "../tool/registry"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { SessionPrompt } from "../session/prompt"
@@ -52,11 +51,13 @@ import { upgradeWebSocket, websocket, serveStatic } from "hono/bun"
 import type { BunWebSocketData } from "hono/bun"
 import { errors } from "./error"
 import { Pty } from "@/pty"
+import { PermissionNext } from "@/permission/next"
 import { Installation } from "@/installation"
 import { AskQuestion } from "@/askquestion"
 import { MDNS } from "./mdns"
 import fs from "fs"
 import path from "path"
+import { Worktree } from "../worktree"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -88,6 +89,7 @@ export namespace Server {
           if (err instanceof Storage.NotFoundError) status = 404
           else if (err instanceof Provider.ModelNotFoundError) status = 400
           else if (err instanceof Project.CreateError) status = 400
+          else if (err.name.startsWith("Worktree")) status = 400
           else status = 500
           return c.json(err.toObject(), { status })
         }
@@ -499,17 +501,11 @@ export namespace Server {
           // Combine and filter out 'invalid' tool
           const allIds = [...builtinIds.filter((id) => id !== "invalid"), ...mcpIds]
 
-          // Get enabled status based on agent tools config
-          const defaultAgentName = await Agent.defaultAgent()
-          const agent = await Agent.get(defaultAgentName)
-          const enabledTools = agent
-            ? mergeDeep(agent.tools, await ToolRegistry.enabled(agent))
-            : ({} as Record<string, boolean>)
-
+          // All tools enabled by default - permission system handles gating
           return c.json(
             allIds.map((id) => ({
               id,
-              enabled: Wildcard.all(id, enabledTools) !== false,
+              enabled: true,
             })),
           )
         },
@@ -647,6 +643,53 @@ export namespace Server {
             worktree: Instance.worktree,
             directory: Instance.directory,
           })
+        },
+      )
+      .post(
+        "/experimental/worktree",
+        describeRoute({
+          summary: "Create worktree",
+          description: "Create a new git worktree for the current project.",
+          operationId: "worktree.create",
+          responses: {
+            200: {
+              description: "Worktree created",
+              content: {
+                "application/json": {
+                  schema: resolver(Worktree.Info),
+                },
+              },
+            },
+            ...errors(400),
+          },
+        }),
+        validator("json", Worktree.create.schema),
+        async (c) => {
+          const body = c.req.valid("json")
+          const worktree = await Worktree.create(body)
+          return c.json(worktree)
+        },
+      )
+      .get(
+        "/experimental/worktree",
+        describeRoute({
+          summary: "List worktrees",
+          description: "List all sandbox worktrees for the current project.",
+          operationId: "worktree.list",
+          responses: {
+            200: {
+              description: "List of worktree directories",
+              content: {
+                "application/json": {
+                  schema: resolver(z.array(z.string())),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const sandboxes = await Project.sandboxes(Instance.project.id)
+          return c.json(sandboxes)
         },
       )
       .get(
@@ -1012,6 +1055,7 @@ export namespace Server {
           return c.json(true)
         },
       )
+
       .post(
         "/session/:sessionID/share",
         describeRoute({
@@ -1562,6 +1606,7 @@ export namespace Server {
         "/session/:sessionID/permissions/:permissionID",
         describeRoute({
           summary: "Respond to permission",
+          deprecated: true,
           description: "Approve or deny a permission request from the AI assistant.",
           operationId: "permission.respond",
           responses: {
@@ -1583,18 +1628,48 @@ export namespace Server {
             permissionID: z.string(),
           }),
         ),
-        validator(
-          "json",
-          z.object({ response: Permission.Response, modifyData: z.object({ content: z.string() }).optional() }),
-        ),
+        validator("json", z.object({ response: PermissionNext.Reply })),
         async (c) => {
           const params = c.req.valid("param")
-          const body = c.req.valid("json")
-          Permission.respond({
-            sessionID: params.sessionID,
-            permissionID: params.permissionID,
-            response: body.response,
-            modifyData: body.modifyData,
+          PermissionNext.reply({
+            requestID: params.permissionID,
+            reply: c.req.valid("json").response,
+          })
+          return c.json(true)
+        },
+      )
+      .post(
+        "/permission/:requestID/reply",
+        describeRoute({
+          summary: "Respond to permission request",
+          description: "Approve or deny a permission request from the AI assistant.",
+          operationId: "permission.reply",
+          responses: {
+            200: {
+              description: "Permission processed successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+            ...errors(400, 404),
+          },
+        }),
+        validator(
+          "param",
+          z.object({
+            requestID: z.string(),
+          }),
+        ),
+        validator("json", z.object({ reply: PermissionNext.Reply, message: z.string().optional() })),
+        async (c) => {
+          const params = c.req.valid("param")
+          const json = c.req.valid("json")
+          await PermissionNext.reply({
+            requestID: params.requestID,
+            reply: json.reply,
+            message: json.message,
           })
           return c.json(true)
         },
@@ -1680,14 +1755,14 @@ export namespace Server {
               description: "List of pending permissions",
               content: {
                 "application/json": {
-                  schema: resolver(Permission.Info.array()),
+                  schema: resolver(PermissionNext.Request.array()),
                 },
               },
             },
           },
         }),
         async (c) => {
-          const permissions = Permission.list()
+          const permissions = await PermissionNext.list()
           return c.json(permissions)
         },
       )
@@ -2369,6 +2444,27 @@ export namespace Server {
         },
       )
       .get(
+        "/experimental/resource",
+        describeRoute({
+          summary: "Get MCP resources",
+          description: "Get all available MCP resources from connected servers. Optionally filter by name.",
+          operationId: "experimental.resource.list",
+          responses: {
+            200: {
+              description: "MCP resources",
+              content: {
+                "application/json": {
+                  schema: resolver(z.record(z.string(), MCP.Resource)),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          return c.json(await MCP.resources())
+        },
+      )
+      .get(
         "/ide",
         describeRoute({
           summary: "Get IDE status",
@@ -2744,6 +2840,32 @@ export namespace Server {
           return c.json(true)
         },
       )
+      .post(
+        "/tui/select-session",
+        describeRoute({
+          summary: "Select session",
+          description: "Navigate the TUI to display the specified session.",
+          operationId: "tui.selectSession",
+          responses: {
+            200: {
+              description: "Session selected successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
+                },
+              },
+            },
+            ...errors(400, 404),
+          },
+        }),
+        validator("json", TuiEvent.SessionSelect.properties),
+        async (c) => {
+          const { sessionID } = c.req.valid("json")
+          await Session.get(sessionID)
+          await Bus.publish(TuiEvent.SessionSelect, { sessionID })
+          return c.json(true)
+        },
+      )
       .route("/tui/control", TuiRoute)
       .put(
         "/auth/:providerID",
@@ -2837,7 +2959,7 @@ export namespace Server {
         if (Installation.isBundled()) {
           const res = await serveStatic({
             root: path.relative(process.cwd(), path.join(path.dirname(process.execPath), "static")),
-            rewriteRequestPath: (path) => (path === "/" ? "/index.html" : path),
+            rewriteRequestPath: (reqPath) => (reqPath === "/" ? "/index.html" : reqPath),
           })(c, async () => {})
           if (res) return res
         }
@@ -2846,12 +2968,13 @@ export namespace Server {
           ? process.env.OPENCODE_DESKTOP_URL || "http://localhost:3000"
           : process.env.SHUVCODE_DESKTOP_URL || "https://desktop.shuv.ai"
         const url = new URL(desktopHost)
-        return proxy(`${desktopHost}${c.req.path}`, {
+        const response = await proxy(`${desktopHost}${c.req.path}`, {
           ...c.req,
           headers: {
             host: url.host,
           },
         })
+        return response
       }),
   )
 

@@ -8,7 +8,7 @@ function makePermission(type: string, metadata: Record<string, unknown>): Permis
     type,
     sessionID: "test-session",
     messageID: "test-message",
-    title: "Test Permission",
+    message: "Test Permission",
     metadata,
     time: { created: Date.now() },
   }

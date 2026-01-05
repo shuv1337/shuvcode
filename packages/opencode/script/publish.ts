@@ -59,6 +59,6 @@ if (!Script.preview) {
 
   // Skip upstream-specific publishing (AUR, Homebrew, Docker) for fork
   // These distribution channels are managed by the upstream sst/opencode project
-  // Our fork publishes to npm as "shuvcode" and creates GitHub releases on kcrommett/shuvcode
+  // Our fork publishes to npm as "shuvcode" and creates GitHub releases on Latitudes-Dev/shuvcode
   console.log("Skipping AUR, Homebrew, and Docker publishing (upstream-only)")
 }
