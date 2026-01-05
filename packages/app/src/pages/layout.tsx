@@ -53,7 +53,6 @@ import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { useServer } from "@/context/server"
-import { Header } from "@/components/header"
 
 export default function Layout(props: ParentProps) {
   const [store, setStore] = createStore({
@@ -931,7 +930,9 @@ export default function Layout(props: ParentProps) {
               }}
             >
               <A href="/" class="shrink-0 h-8 flex items-center justify-start px-2 w-full" data-tauri-drag-region>
-                <AsciiMark scale={0.45} class="shrink-0" />
+                <Show when={expanded()} fallback={<AsciiMark scale={0.45} class="shrink-0" />}>
+                  <AsciiLogo scale={0.55} class="shrink-0" />
+                </Show>
               </A>
             </div>
           </Show>
@@ -1072,12 +1073,12 @@ export default function Layout(props: ParentProps) {
               <Show when={expanded()}>Share feedback</Show>
             </Button>
           </Tooltip>
-          <Show when={sidebarProps.mobile}>
-            <FontPicker mobile />
-            <ThemePicker mobile />
-          </Show>
+          <div class="flex flex-col gap-1.5 self-stretch items-start shrink-0 px-2">
+            <FontPicker mobile={expanded()} />
+            <ThemePicker mobile={expanded()} />
+          </div>
           <Show when={expanded()}>
-            <div class="mt-2 px-3 text-11-regular text-text-weaker">
+            <div class="mt-2 px-3 pb-3 text-11-regular text-text-weaker">
               v{__APP_VERSION__} ({__COMMIT_HASH__})
             </div>
           </Show>
@@ -1088,11 +1089,6 @@ export default function Layout(props: ParentProps) {
 
   return (
     <div class="relative flex-1 min-h-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
-      <Header
-        navigateToProject={navigateToProject}
-        navigateToSession={navigateToSession}
-        onMobileMenuToggle={layout.mobileSidebar.toggle}
-      />
       <div class="flex-1 min-h-0 flex">
         <div
           classList={{
