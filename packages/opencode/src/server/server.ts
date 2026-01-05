@@ -79,6 +79,7 @@ export namespace Server {
 
   const app = new Hono()
   export const App = lazy(() =>
+    // @ts-ignore - Type instantiation too deep due to complex Hono route chain
     app
       .onError((err, c) => {
         log.error("failed", {

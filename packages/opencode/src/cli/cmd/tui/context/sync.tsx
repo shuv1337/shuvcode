@@ -18,7 +18,13 @@ import type {
   VcsInfo,
 } from "@opencode-ai/sdk/v2"
 // TODO: Re-add McpResource import after SDK regeneration (Phase 15)
-type McpResource = Record<string, unknown>
+type McpResource = {
+  name: string
+  uri: string
+  description?: string
+  mimeType?: string
+  client: string
+}
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { Binary } from "@opencode-ai/util/binary"
