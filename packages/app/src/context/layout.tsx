@@ -281,15 +281,51 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("session", "width", width)
         },
       },
-function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((x, i) => x === b[i])
-}
-
-type Dialog = "provider" | "model" | "connect"
+      mobileSidebar: {
+        opened: createMemo(() => store.mobileSidebar?.opened ?? false),
+        show() {
+          setStore("mobileSidebar", "opened", true)
+        },
+        hide() {
+          setStore("mobileSidebar", "opened", false)
+        },
+        toggle() {
+          setStore("mobileSidebar", "opened", (x) => !x)
+        },
       },
+      view(sessionKey: string) {
+        const s = createMemo(() => store.sessionView[sessionKey] ?? { scroll: {} })
+        return {
+          scroll(tab: string) {
+            return s().scroll?.[tab]
+          },
+          setScroll(tab: string, pos: SessionScroll) {
+            const current = store.sessionView[sessionKey]
+            if (!current) {
+              setStore("sessionView", sessionKey, { scroll: { [tab]: pos } })
+              return
+            }
+
+            const prev = current.scroll?.[tab]
+            if (prev?.x === pos.x && prev?.y === pos.y) return
+            setStore("sessionView", sessionKey, "scroll", tab, pos)
+          },
+          review: {
+            open: createMemo(() => s().reviewOpen),
+            setOpen(open: string[]) {
+              const current = store.sessionView[sessionKey]
+              if (!current) {
+                setStore("sessionView", sessionKey, { scroll: {}, reviewOpen: open })
+                return
+              }
+
+              if (same(current.reviewOpen, open)) return
+              setStore("sessionView", sessionKey, "reviewOpen", open)
+            },
+          },
+        }
+      },
+
       tabs(sessionKey: string) {
         const tabs = createMemo(() => store.sessionTabs[sessionKey] ?? { all: [] })
         return {
