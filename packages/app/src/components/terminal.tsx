@@ -1,62 +1,10 @@
-import { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
-import { ComponentProps, onCleanup, onMount, splitProps, Show, createSignal } from "solid-js"
+import type { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
+import { ComponentProps, createEffect, createSignal, onCleanup, onMount, Show, splitProps } from "solid-js"
 import { useSDK } from "@/context/sdk"
 import { SerializeAddon } from "@/addons/serialize"
 import { LocalPTY } from "@/context/terminal"
+import { resolveThemeVariant, useTheme } from "@opencode-ai/ui/theme"
 import { MobileTerminalInput } from "./mobile-terminal-input"
-
-function getWebSocketUrl(baseUrl: string, path: string): string {
-  if (baseUrl === "/" || baseUrl === "") {
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:"
-    return `${protocol}//${location.host}${path}`
-  }
-  const url = new URL(baseUrl)
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-  return `${url.origin}${path}`
-}
-
-function getTerminalTheme() {
-  const style = getComputedStyle(document.documentElement)
-  const get = (prop: string) => style.getPropertyValue(prop).trim()
-  return {
-    background: get("--terminal-background") || "#011627",
-    foreground: get("--terminal-foreground") || "#d6deeb",
-    cursor: get("--terminal-cursor") || "#82aaff",
-    black: get("--terminal-black") || "#011627",
-    red: get("--terminal-red") || "#ef5350",
-    green: get("--terminal-green") || "#c5e478",
-    yellow: get("--terminal-yellow") || "#ecc48d",
-    blue: get("--terminal-blue") || "#82aaff",
-    magenta: get("--terminal-magenta") || "#c792ea",
-    cyan: get("--terminal-cyan") || "#7fdbca",
-    white: get("--terminal-white") || "#d6deeb",
-    brightBlack: get("--terminal-bright-black") || "#5f7e97",
-    brightRed: get("--terminal-bright-red") || "#ff7875",
-    brightGreen: get("--terminal-bright-green") || "#d4ed8c",
-    brightYellow: get("--terminal-bright-yellow") || "#f2d4a8",
-    brightBlue: get("--terminal-bright-blue") || "#9dbfff",
-    brightMagenta: get("--terminal-bright-magenta") || "#d4a8f0",
-    brightCyan: get("--terminal-bright-cyan") || "#7fdbca",
-    brightWhite: get("--terminal-bright-white") || "#ffffff",
-  }
-}
-
-type TerminalSnapshot = {
-  buffer?: string
-  cols?: number
-  rows?: number
-  scrollY?: number
-}
-
-function getThemeSnapshot(term?: Term, serializeAddon?: SerializeAddon): TerminalSnapshot | undefined {
-  if (!term || !serializeAddon) return
-  return {
-    buffer: serializeAddon.serialize(),
-    cols: term.cols,
-    rows: term.rows,
-    scrollY: term.getViewportY(),
-  }
-}
 
 export interface TerminalProps extends ComponentProps<"div"> {
   pty: LocalPTY
@@ -65,8 +13,28 @@ export interface TerminalProps extends ComponentProps<"div"> {
   onConnectError?: (error: unknown) => void
 }
 
+type TerminalColors = {
+  background: string
+  foreground: string
+  cursor: string
+}
+
+const DEFAULT_TERMINAL_COLORS: Record<"light" | "dark", TerminalColors> = {
+  light: {
+    background: "#fcfcfc",
+    foreground: "#211e1e",
+    cursor: "#211e1e",
+  },
+  dark: {
+    background: "#191515",
+    foreground: "#d4d4d4",
+    cursor: "#d4d4d4",
+  },
+}
+
 export const Terminal = (props: TerminalProps) => {
   const sdk = useSDK()
+  const theme = useTheme()
   let container!: HTMLDivElement
   let mobileInputRef: HTMLInputElement | undefined
   const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnectError"])
@@ -74,39 +42,49 @@ export const Terminal = (props: TerminalProps) => {
   const isTouchDevice = "ontouchstart" in window
   const isMobileInputEnabled = isCoarsePointer || isTouchDevice
   const [socket, setSocket] = createSignal<WebSocket | undefined>()
-  const [terminalColors, setTerminalColors] = createSignal(getTerminalTheme())
   let isMounted = true
-  let ws: WebSocket
-  let term: Term
+  let ws: WebSocket | undefined
+  let term: Term | undefined
   let ghostty: Ghostty
   let serializeAddon: SerializeAddon
   let fitAddon: FitAddon
   let handleResize: () => void
-  let themeObserver: MutationObserver
-  let onTerminalThemeChange: () => void
-  let pendingThemeRefresh: number | undefined
+  let reconnect: number | undefined
+  let disposed = false
 
-  const focusTerminal = () => term?.focus()
-  const copySelection = () => {
-    if (!term || !term.hasSelection()) return false
-    const selection = term.getSelection()
-    if (!selection) return false
-    const clipboard = navigator.clipboard
-    if (clipboard?.writeText) {
-      clipboard.writeText(selection).catch(() => {})
-      return true
+  const getTerminalColors = (): TerminalColors => {
+    const mode = theme.mode()
+    const fallback = DEFAULT_TERMINAL_COLORS[mode]
+    const currentTheme = theme.themes()[theme.themeId()]
+    if (!currentTheme) return fallback
+    const variant = mode === "dark" ? currentTheme.dark : currentTheme.light
+    if (!variant?.seeds) return fallback
+    const resolved = resolveThemeVariant(variant, mode === "dark")
+    const text = resolved["text-stronger"] ?? fallback.foreground
+    const background = resolved["background-stronger"] ?? fallback.background
+    return {
+      background,
+      foreground: text,
+      cursor: text,
     }
-    if (!document.body) return false
-    const textarea = document.createElement("textarea")
-    textarea.value = selection
-    textarea.setAttribute("readonly", "")
-    textarea.style.position = "fixed"
-    textarea.style.opacity = "0"
-    document.body.appendChild(textarea)
-    textarea.select()
-    const copied = document.execCommand("copy")
-    document.body.removeChild(textarea)
-    return copied
+  }
+
+  const [terminalColors, setTerminalColors] = createSignal<TerminalColors>(getTerminalColors())
+
+  createEffect(() => {
+    const colors = getTerminalColors()
+    setTerminalColors(colors)
+    if (!term) return
+    const setOption = (term as unknown as { setOption?: (key: string, value: TerminalColors) => void }).setOption
+    if (!setOption) return
+    setOption("theme", colors)
+  })
+
+  const focusTerminal = () => {
+    const t = term
+    if (!t) return
+    t.focus()
+    setTimeout(() => t.textarea?.focus(), 0)
   }
   const handlePointerDown = () => {
     const activeElement = document.activeElement
@@ -117,191 +95,170 @@ export const Terminal = (props: TerminalProps) => {
   }
 
   onMount(async () => {
-    ghostty = await Ghostty.load()
-    if (!isMounted) return
+    const mod = await import("ghostty-web")
+    ghostty = await mod.Ghostty.load()
 
-    const wsUrl = getWebSocketUrl(
-      sdk.url,
-      `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`,
+    const wsSocket = new WebSocket(
+      sdk.url + `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`,
     )
-    ws = new WebSocket(wsUrl)
-    setSocket(ws)
+    ws = wsSocket
+    setSocket(wsSocket)
 
-    const buildTerminal = (snapshot?: TerminalSnapshot) => {
-      if (!isMounted) return
-      const theme = getTerminalTheme()
-      setTerminalColors(theme)
-      term = new Term({
-        cursorBlink: true,
-        fontSize: 14,
-        fontFamily: "meslo, Menlo, Monaco, Courier New, monospace",
-        allowTransparency: true,
-        theme,
-        scrollback: 10_000,
-        ghostty,
-      })
-      term.attachCustomKeyEventHandler((event) => {
-        const key = event.key.toLowerCase()
-        if (key === "c") {
-          const macCopy = event.metaKey && !event.ctrlKey && !event.altKey
-          const linuxCopy = event.ctrlKey && event.shiftKey && !event.metaKey
-          if ((macCopy || linuxCopy) && copySelection()) {
-            event.preventDefault()
-            return true
-          }
-        }
-        if (event.ctrlKey && key === "`") {
-          event.preventDefault()
-          return true
-        }
-        return false
-      })
+    const t = new mod.Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: "IBM Plex Mono, monospace",
+      allowTransparency: true,
+      theme: terminalColors(),
+      scrollback: 10_000,
+      ghostty,
+    })
+    term = t
 
-      fitAddon = new FitAddon()
-      serializeAddon = new SerializeAddon()
-      term.loadAddon(serializeAddon)
-      term.loadAddon(fitAddon)
+    const copy = () => {
+      const selection = t.getSelection()
+      if (!selection) return false
 
-      term.open(container)
-      container.addEventListener("pointerdown", handlePointerDown)
-      focusTerminal()
-
-      if (snapshot?.cols && snapshot?.rows) {
-        term.resize(snapshot.cols, snapshot.rows)
+      const body = document.body
+      if (body) {
+        const textarea = document.createElement("textarea")
+        textarea.value = selection
+        textarea.setAttribute("readonly", "")
+        textarea.style.position = "fixed"
+        textarea.style.opacity = "0"
+        body.appendChild(textarea)
+        textarea.select()
+        const copied = document.execCommand("copy")
+        body.removeChild(textarea)
+        if (copied) return true
       }
 
-      if (snapshot?.buffer !== undefined) {
-        term.reset()
-        term.write(snapshot.buffer)
-        if (typeof snapshot.scrollY === "number") {
-          term.scrollToLine(snapshot.scrollY)
-        }
+      const clipboard = navigator.clipboard
+      if (clipboard?.writeText) {
+        clipboard.writeText(selection).catch(() => {})
+        return true
       }
 
-      fitAddon.observeResize()
-      fitAddon.fit()
+      return false
+    }
 
-      term.onResize(async (size) => {
-        if (!isMounted) return
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          await sdk.client.pty.update({
+    t.attachCustomKeyEventHandler((event) => {
+      const key = event.key.toLowerCase()
+
+      if (event.ctrlKey && event.shiftKey && !event.metaKey && key === "c") {
+        copy()
+        return true
+      }
+
+      if (event.metaKey && !event.ctrlKey && !event.altKey && key === "c") {
+        if (!t.hasSelection()) return true
+        copy()
+        return true
+      }
+
+      // allow for ctrl-` to toggle terminal in parent
+      if (event.ctrlKey && key === "`") {
+        return true
+      }
+
+      return false
+    })
+
+    fitAddon = new mod.FitAddon()
+    serializeAddon = new SerializeAddon()
+    t.loadAddon(serializeAddon)
+    t.loadAddon(fitAddon)
+
+    t.open(container)
+    container.addEventListener("pointerdown", handlePointerDown)
+    focusTerminal()
+
+    if (local.pty.buffer) {
+      if (local.pty.rows && local.pty.cols) {
+        t.resize(local.pty.cols, local.pty.rows)
+      }
+      t.write(local.pty.buffer, () => {
+        if (local.pty.scrollY) {
+          t.scrollToLine(local.pty.scrollY)
+        }
+        fitAddon.fit()
+      })
+    }
+
+    fitAddon.observeResize()
+    handleResize = () => fitAddon.fit()
+    window.addEventListener("resize", handleResize)
+    t.onResize(async (size) => {
+      if (wsSocket.readyState === WebSocket.OPEN) {
+        await sdk.client.pty
+          .update({
             ptyID: local.pty.id,
             size: {
               cols: size.cols,
               rows: size.rows,
             },
           })
-        }
-      })
-      term.onData((data) => {
-        if (!isMounted) return
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(data)
-        }
-      })
-      term.onKey((key) => {
-        if (!isMounted) return
-        if (key.key == "Enter") {
-          props.onSubmit?.()
-        }
-      })
-
-      container.focus()
-    }
-
-    buildTerminal({
-      buffer: local.pty.buffer,
-      cols: local.pty.cols,
-      rows: local.pty.rows,
-      scrollY: local.pty.scrollY,
-    })
-
-    handleResize = () => fitAddon.fit()
-    window.addEventListener("resize", handleResize)
-
-    const refreshTerminalTheme = () => {
-      if (pendingThemeRefresh) {
-        cancelAnimationFrame(pendingThemeRefresh)
-      }
-      pendingThemeRefresh = requestAnimationFrame(() => {
-        pendingThemeRefresh = undefined
-        const snapshot = getThemeSnapshot(term, serializeAddon) ?? {}
-        term?.dispose()
-        fitAddon?.dispose()
-        buildTerminal(snapshot)
-        fitAddon.fit()
-      })
-    }
-
-    onTerminalThemeChange = () => refreshTerminalTheme()
-
-    themeObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.attributeName === "data-theme") {
-          refreshTerminalTheme()
-        }
+          .catch(() => {})
       }
     })
-    themeObserver.observe(document.documentElement, { attributes: true })
-    document.documentElement.addEventListener("terminal-theme-changed", onTerminalThemeChange)
-    ws.addEventListener("open", () => {
-      if (!isMounted) return
+    t.onData((data) => {
+      if (wsSocket.readyState === WebSocket.OPEN) {
+        wsSocket.send(data)
+      }
+    })
+    t.onKey((key) => {
+      if (key.key == "Enter") {
+        props.onSubmit?.()
+      }
+    })
+    // t.onScroll((ydisp) => {
+    // console.log("Scroll position:", ydisp)
+    // })
+    wsSocket.addEventListener("open", () => {
       console.log("WebSocket connected")
       sdk.client.pty
         .update({
           ptyID: local.pty.id,
           size: {
-            cols: term.cols,
-            rows: term.rows,
+            cols: t.cols,
+            rows: t.rows,
           },
         })
         .catch(() => {})
     })
-    ws.addEventListener("message", (event) => {
-      if (!isMounted) return
-      term.write(event.data)
+    wsSocket.addEventListener("message", (event: MessageEvent) => {
+      t.write(event.data)
     })
-    ws.addEventListener("error", (error) => {
-      if (!isMounted) return
+    wsSocket.addEventListener("error", (error: Event) => {
       console.error("WebSocket error:", error)
       props.onConnectError?.(error)
     })
-    ws.addEventListener("close", () => {
-      if (!isMounted) return
+    wsSocket.addEventListener("close", () => {
       console.log("WebSocket disconnected")
     })
   })
 
   onCleanup(() => {
     isMounted = false
-    if (pendingThemeRefresh) {
-      cancelAnimationFrame(pendingThemeRefresh)
-    }
     if (handleResize) {
       window.removeEventListener("resize", handleResize)
     }
     container.removeEventListener("pointerdown", handlePointerDown)
-    if (onTerminalThemeChange) {
-      document.documentElement.removeEventListener("terminal-theme-changed", onTerminalThemeChange)
-    }
-    themeObserver?.disconnect()
-    const savedSnapshot =
-      serializeAddon && term
-        ? {
-            buffer: serializeAddon.serialize(),
-            rows: term.rows,
-            cols: term.cols,
-            scrollY: term.getViewportY(),
-          }
-        : undefined
-    if (savedSnapshot && props.onCleanup) {
+
+    const t = term
+    if (serializeAddon && props.onCleanup && t) {
+      const buffer = serializeAddon.serialize()
       props.onCleanup({
         ...local.pty,
-        ...savedSnapshot,
+        buffer,
+        rows: t.rows,
+        cols: t.cols,
+        scrollY: t.getViewportY(),
       })
     }
+
     ws?.close()
-    term?.dispose()
+    t?.dispose()
   })
 
   const handleContainerClick = () => {

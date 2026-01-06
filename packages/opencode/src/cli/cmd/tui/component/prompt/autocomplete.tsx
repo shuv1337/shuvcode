@@ -12,6 +12,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
+import { useFrecency } from "./frecency"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -58,6 +59,7 @@ export type AutocompleteOption = {
   description?: string
   isDirectory?: boolean
   onSelect?: () => void
+  path?: string
 }
 
 export function Autocomplete(props: {
@@ -78,6 +80,7 @@ export function Autocomplete(props: {
   const command = useCommandDialog()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
+  const frecency = useFrecency()
 
   const [store, setStore] = createStore({
     index: 0,
@@ -170,6 +173,10 @@ export function Autocomplete(props: {
       draft.parts.push(part)
       props.setExtmark(partIndex, extmarkId)
     })
+
+    if (part.type === "file" && part.source && part.source.type === "file") {
+      frecency.updateFrecency(part.source.path)
+    }
   }
 
   const [files] = createResource(
@@ -188,9 +195,19 @@ export function Autocomplete(props: {
 
       // Add file options
       if (!result.error && result.data) {
+        const sortedFiles = result.data.sort((a, b) => {
+          const aScore = frecency.getFrecency(a)
+          const bScore = frecency.getFrecency(b)
+          if (aScore !== bScore) return bScore - aScore
+          const aDepth = a.split("/").length
+          const bDepth = b.split("/").length
+          if (aDepth !== bDepth) return aDepth - bDepth
+          return a.localeCompare(b)
+        })
+
         const width = props.anchor().width - 4
         options.push(
-          ...result.data.map((item): AutocompleteOption => {
+          ...sortedFiles.map((item): AutocompleteOption => {
             let url = `file://${process.cwd()}/${item}`
             let filename = item
             if (lineRange && !item.endsWith("/")) {
@@ -207,6 +224,7 @@ export function Autocomplete(props: {
             return {
               display: Locale.truncateMiddle(filename, width),
               isDirectory: isDir,
+              path: item,
               onSelect: () => {
                 insertPart(filename, {
                   type: "file",
@@ -487,10 +505,12 @@ export function Autocomplete(props: {
       limit: 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]
+        let score = objResults.score
         if (displayResult && displayResult.target.startsWith(store.visible + currentFilter)) {
-          return objResults.score * 2
+          score *= 2
         }
-        return objResults.score
+        const frecencyScore = objResults.obj.path ? frecency.getFrecency(objResults.obj.path) : 0
+        return score * (1 + frecencyScore)
       },
     })
 
