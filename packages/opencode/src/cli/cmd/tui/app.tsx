@@ -27,6 +27,7 @@ import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 
 import { PromptHistoryProvider } from "./component/prompt/history"
+import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
 import { ToastProvider, useToast } from "./ui/toast"
@@ -128,11 +129,13 @@ export function tui(input: { url: string; directory?: string; args: Args; onExit
                                 <PromptStashProvider>
                                   <DialogProvider>
                                     <CommandProvider>
-                                      <PromptHistoryProvider>
-                                        <PromptRefProvider>
-                                          <App />
-                                        </PromptRefProvider>
-                                      </PromptHistoryProvider>
+                                      <FrecencyProvider>
+                                        <PromptHistoryProvider>
+                                          <PromptRefProvider>
+                                            <App />
+                                          </PromptRefProvider>
+                                        </PromptHistoryProvider>
+                                      </FrecencyProvider>
                                     </CommandProvider>
                                   </DialogProvider>
                                 </PromptStashProvider>

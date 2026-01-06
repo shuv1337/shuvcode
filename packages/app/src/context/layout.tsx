@@ -1,5 +1,5 @@
 import { createStore, produce } from "solid-js/store"
-import { batch, createEffect, createMemo, onMount } from "solid-js"
+import { batch, createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useGlobalSync } from "./global-sync"
 import { useGlobalSDK } from "./global-sdk"
@@ -10,6 +10,7 @@ import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
 import { applyFontWithLoad } from "@/fonts/apply-font"
 import { getFontById, FONTS } from "@/fonts/font-definitions"
 import { same } from "@/utils/same"
+import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 
 export const REVIEW_PANE = {
   DEFAULT_WIDTH: 450,
@@ -39,11 +40,6 @@ export function getAvatarColors(key?: string) {
 }
 
 type Dialog = "provider" | "model" | "connect"
-
-type SessionScroll = {
-  x: number
-  y: number
-}
 
 type SessionView = {
   scroll: Record<string, SessionScroll>
@@ -91,32 +87,98 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         expandedSessions: {} as ExpandedSessions,
       }),
     )
-    const [ephemeral, setEphemeral] = createStore<{
-      connect: {
-        provider?: string
-        state?: "pending" | "complete" | "error"
-        error?: string
+
+    const MAX_SESSION_KEYS = 50
+    const meta = { active: undefined as string | undefined, pruned: false }
+    const used = new Map<string, number>()
+
+    function prune(keep?: string) {
+      if (!keep) return
+
+      const keys = new Set<string>()
+      for (const key of Object.keys(store.sessionView)) keys.add(key)
+      for (const key of Object.keys(store.sessionTabs)) keys.add(key)
+      if (keys.size <= MAX_SESSION_KEYS) return
+
+      const score = (key: string) => {
+        if (key === keep) return Number.MAX_SAFE_INTEGER
+        return used.get(key) ?? 0
       }
-      dialog: {
-        open?: Dialog
+
+      const ordered = Array.from(keys).sort((a, b) => score(b) - score(a))
+      const drop = ordered.slice(MAX_SESSION_KEYS)
+      if (drop.length === 0) return
+
+      setStore(
+        produce((draft) => {
+          for (const key of drop) {
+            delete draft.sessionView[key]
+            delete draft.sessionTabs[key]
+          }
+        }),
+      )
+
+      scroll.drop(drop)
+
+      for (const key of drop) {
+        used.delete(key)
       }
-      mobileReview: {
-        visible?: boolean
-        filesCount?: number
-        onOpen?: () => void
-      }
-      mobileMessageNav: {
-        visible?: boolean
-        messages?: { id: string; title?: string }[]
-        currentIndex?: number
-        onSelect?: (index: number) => void
-      }
-    }>({
-      connect: {},
-      dialog: {},
-      mobileReview: {},
-      mobileMessageNav: {},
+    }
+
+    function touch(sessionKey: string) {
+      meta.active = sessionKey
+      used.set(sessionKey, Date.now())
+
+      if (!ready()) return
+      if (meta.pruned) return
+
+      meta.pruned = true
+      prune(sessionKey)
+    }
+
+    const scroll = createScrollPersistence({
+      debounceMs: 250,
+      getSnapshot: (sessionKey) => store.sessionView[sessionKey]?.scroll,
+      onFlush: (sessionKey, next) => {
+        const current = store.sessionView[sessionKey]
+        const keep = meta.active ?? sessionKey
+        if (!current) {
+          setStore("sessionView", sessionKey, { scroll: next })
+          prune(keep)
+          return
+        }
+
+        setStore("sessionView", sessionKey, "scroll", (prev) => ({ ...(prev ?? {}), ...next }))
+        prune(keep)
+      },
     })
+
+    createEffect(() => {
+      if (!ready()) return
+      if (meta.pruned) return
+      const active = meta.active
+      if (!active) return
+      meta.pruned = true
+      prune(active)
+    })
+
+    onMount(() => {
+      const flush = () => batch(() => scroll.flushAll())
+      const handleVisibility = () => {
+        if (document.visibilityState !== "hidden") return
+        flush()
+      }
+
+      window.addEventListener("pagehide", flush)
+      document.addEventListener("visibilitychange", handleVisibility)
+
+      onCleanup(() => {
+        window.removeEventListener("pagehide", flush)
+        document.removeEventListener("visibilitychange", handleVisibility)
+        scroll.dispose()
+      })
+    })
+
     const usedColors = new Set<AvatarColorKey>()
 
     function pickAvailableColor(): AvatarColorKey {
@@ -334,21 +396,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
       },
       view(sessionKey: string) {
+        touch(sessionKey)
+        scroll.seed(sessionKey)
         const s = createMemo(() => store.sessionView[sessionKey] ?? { scroll: {} })
         return {
           scroll(tab: string) {
-            return s().scroll?.[tab]
+            return scroll.scroll(sessionKey, tab)
           },
           setScroll(tab: string, pos: SessionScroll) {
-            const current = store.sessionView[sessionKey]
-            if (!current) {
-              setStore("sessionView", sessionKey, { scroll: { [tab]: pos } })
-              return
-            }
-
-            const prev = current.scroll?.[tab]
-            if (prev?.x === pos.x && prev?.y === pos.y) return
-            setStore("sessionView", sessionKey, "scroll", tab, pos)
+            scroll.setScroll(sessionKey, tab, pos)
           },
           review: {
             open: createMemo(() => s().reviewOpen),
@@ -367,6 +423,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       },
 
       tabs(sessionKey: string) {
+        touch(sessionKey)
         const tabs = createMemo(() => store.sessionTabs[sessionKey] ?? { all: [] })
         return {
           tabs,
