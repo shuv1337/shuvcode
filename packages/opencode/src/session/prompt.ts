@@ -1497,6 +1497,73 @@ export namespace SessionPrompt {
       })
       throw error
     }
+
+    // Block session-only commands when session doesn't exist
+    // See fork-features.json: "Plugin command execution and sessionOnly guard"
+    if (command.sessionOnly) {
+      try {
+        await Session.get(input.sessionID)
+      } catch (error) {
+        const message = `/${command.name} requires an existing session`
+        log.warn("session-only command blocked", {
+          command: command.name,
+          sessionID: input.sessionID,
+          error,
+        })
+        Bus.publish(Session.Event.Error, {
+          sessionID: input.sessionID,
+          error: new NamedError.Unknown({
+            message,
+          }).toObject(),
+        })
+        throw new Error(message)
+      }
+    }
+
+    // Plugin commands execute directly via hook
+    // See fork-features.json: "Plugin command execution and sessionOnly guard"
+    if (command.type === "plugin") {
+      const plugins = await Plugin.list()
+      for (const plugin of plugins) {
+        const pluginCommands = plugin["plugin.command"]
+        const pluginCommand = pluginCommands?.[command.name]
+        if (!pluginCommand) continue
+
+        try {
+          const client = await Plugin.client()
+          await pluginCommand.execute({
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            client,
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          log.error("plugin command failed", { command: command.name, error: message })
+          Bus.publish(Session.Event.Error, {
+            sessionID: input.sessionID,
+            error: new NamedError.Unknown({
+              message: `/${command.name} failed: ${message}`,
+            }).toObject(),
+          })
+          throw error
+        }
+
+        // Emit event if plugin created a message
+        const last = await Session.messages({ sessionID: input.sessionID, limit: 1 })
+        if (last.length > 0) {
+          Bus.publish(Command.Event.Executed, {
+            name: command.name,
+            sessionID: input.sessionID,
+            arguments: input.arguments,
+            messageID: last[0].info.id,
+          })
+          return last[0]
+        }
+        return
+      }
+      return
+    }
+
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())
 
     const raw = input.arguments.match(argsRegex) ?? []
