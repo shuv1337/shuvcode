@@ -192,8 +192,8 @@ Notes from codebase alignment:
 - [x] Log when `ctx.metadata` attempts to write after completion.
 
 ### Milestone 2: Trace Event Delivery and Store Updates
-- [ ] Add logging to TUI sync handler when `message.part.updated` is received.
-- [ ] Add logging when `sync.data.part[messageID]` is updated in the store.
+- [x] Add logging to TUI sync handler when `message.part.updated` is received.
+- [x] Add logging when `sync.data.part[messageID]` is updated in the store.
 - [ ] Identify the TUI component that renders the Bash spinner and trace its props/derivations.
 - [ ] Confirm the component re-renders on part status change (post `isRunning` fix).
 
