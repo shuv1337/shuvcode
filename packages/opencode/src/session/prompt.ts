@@ -660,15 +660,41 @@ export namespace SessionPrompt {
       agent: input.agent.name,
       metadata: async (val: { title?: string; metadata?: any }) => {
         const match = input.processor.partFromToolCall(options.toolCallId)
-        if (match && match.state.status !== "running") {
+        if (!match) return
+
+        // Only allow updates for pending or running status
+        // Block updates after tool has completed or errored
+        if (match.state.status === "completed" || match.state.status === "error") {
           log.warn("ctx.metadata write attempt after completion", {
             status: match.state.status,
             tool: match.tool,
             callID: options.toolCallId,
           })
+          return
         }
-        if (match && match.state.status === "running") {
-          await Session.updatePart({
+
+        // Handle pending status: tool execute() can be called before tool-call event
+        // transitions the part to running. In this case, we transition it ourselves.
+        if (match.state.status === "pending") {
+          const updatedPart: MessageV2.ToolPart = {
+            ...match,
+            state: {
+              title: val.title,
+              metadata: val.metadata,
+              status: "running",
+              input: args,
+              time: { start: Date.now() },
+            },
+          }
+          await Session.updatePart(updatedPart)
+          // Update local toolcalls map so subsequent events see the new state
+          input.processor.updateToolCall(options.toolCallId, updatedPart)
+          return
+        }
+
+        // Normal running status update
+        if (match.state.status === "running") {
+          const updatedPart: MessageV2.ToolPart = {
             ...match,
             state: {
               title: val.title,
@@ -677,7 +703,10 @@ export namespace SessionPrompt {
               input: args,
               time: match.state.time,
             },
-          })
+          }
+          await Session.updatePart(updatedPart)
+          // Update local toolcalls map so subsequent events see the new state
+          input.processor.updateToolCall(options.toolCallId, updatedPart)
         }
       },
       async ask(req) {
