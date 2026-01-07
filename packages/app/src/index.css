@@ -101,6 +101,14 @@ body {
     min-height: -webkit-fill-available;
     min-height: 100dvh;
   }
+
+  .home-menu-button {
+    top: var(--safe-area-inset-top);
+  }
+
+  .session-scroll-container {
+    overscroll-behavior: contain;
+  }
 }
 
 /* PWA standalone mode - safe area handling for iOS */

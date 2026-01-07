@@ -2087,7 +2087,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
   const { theme } = useTheme()
 
   // Only show spinner for "running" status
-  const isRunning = props.part.state.status === "running"
+  const isRunning = createMemo(() => props.part.state.status === "running")
 
   // Dynamic line limit based on terminal height
   const displayLines = createMemo(() => {
@@ -2147,7 +2147,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
               <text fg={theme.textMuted}>Click to view full output</text>
             </box>
           </Show>
-          <Show when={isRunning}>
+          <Show when={isRunning()}>
             <text fg={local.agent.color(props.part.state.status)} paddingLeft={3}>
               {getSpinnerFrame()}
             </text>

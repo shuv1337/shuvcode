@@ -32,7 +32,7 @@ export default function Home() {
 
   return (
     <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom overflow-y-auto no-scrollbar">
-      <div class="xl:hidden absolute top-0 left-0 p-2">
+      <div class="home-menu-button xl:hidden absolute top-0 left-0 p-2">
         <IconButton
           icon="menu"
           variant="ghost"

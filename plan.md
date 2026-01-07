@@ -115,27 +115,27 @@ Notes from codebase alignment:
 ## Issue #264: PWA Safe Area and Viewport Locking
 
 ### Home Menu Button Fix
-- [ ] Add `.home-menu-button` class to menu button in `packages/app/src/pages/home.tsx` (menu button wrapper at top of Home).
+- [x] Add `.home-menu-button` class to menu button in `packages/app/src/pages/home.tsx` (menu button wrapper at top of Home).
 
 ### Session Header Fix
-- [ ] Add `data-tauri-drag-region` attribute to `SessionHeader` root header in `packages/app/src/components/session/session-header.tsx`.
+- [x] Add `data-tauri-drag-region` attribute to `SessionHeader` root header in `packages/app/src/components/session/session-header.tsx`.
 
 ### Session Scroll Container Fix
-- [ ] Add `.session-scroll-container` class to session scroll container in `packages/app/src/pages/session.tsx` (the main message list scroll div).
+- [x] Add `.session-scroll-container` class to session scroll container in `packages/app/src/pages/session.tsx` (the main message list scroll div).
 
 ### PWA CSS Rules
-- [ ] Extend PWA CSS rules in `packages/app/src/index.css`:
-  - [ ] Add `.home-menu-button { top: var(--safe-area-inset-top); }` inside `@media (display-mode: standalone)`.
-  - [ ] Add `.session-scroll-container { overscroll-behavior: contain; }` inside `@media (display-mode: standalone)`.
-  - [ ] Keep existing `header[data-tauri-drag-region]` safe-area rule.
+- [x] Extend PWA CSS rules in `packages/app/src/index.css`:
+  - [x] Add `.home-menu-button { top: var(--safe-area-inset-top); }` inside `@media (display-mode: standalone)`.
+  - [x] Add `.session-scroll-container { overscroll-behavior: contain; }` inside `@media (display-mode: standalone)`.
+  - [x] Keep existing `header[data-tauri-drag-region]` safe-area rule.
 
 ### PullToRefresh Guard
-- [ ] Update `packages/app/src/components/pull-to-refresh.tsx` to accept an `enabled` prop (function or boolean).
-- [ ] Add early return guards to `handleTouchStart`, `handleTouchMove`, `handleTouchEnd` when `enabled()` is false.
-- [ ] In `packages/app/src/pages/layout.tsx`: import `isPWA` from `packages/app/src/context/platform.tsx` and pass `enabled={!isPWA()}` to `PullToRefresh`.
+- [x] Update `packages/app/src/components/pull-to-refresh.tsx` to accept an `enabled` prop (function or boolean).
+- [x] Add early return guards to `handleTouchStart`, `handleTouchMove`, `handleTouchEnd` when `enabled()` is false.
+- [x] In `packages/app/src/pages/layout.tsx`: import `isPWA` from `packages/app/src/context/platform.tsx` and pass `enabled={!isPWA()}` to `PullToRefresh`.
 
 ### PWA Validation
-- [ ] Verify `#root`/body sizing still uses `h-dvh` and appropriate `min-height` values for iOS PWA.
+- [x] Verify `#root`/body sizing still uses `h-dvh` and appropriate `min-height` values for iOS PWA.
 - [ ] Manually verify iOS PWA on Dynamic Island device (iPhone 14+).
 - [ ] Manually verify iOS PWA on notch device (iPhone X-13).
 - [ ] Manually verify Android PWA pull-down behavior in session view.
@@ -185,7 +185,7 @@ Notes from codebase alignment:
 
 ### Milestone 1: Reproduce and Trace State Transitions
 - [ ] Reproduce in TUI and confirm the Bash part status after command completion (server-side).
-- [ ] Inspect `Bash` component `isRunning` at `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` for reactivity; change to `createMemo` or inline check.
+- [x] Inspect `Bash` component `isRunning` at `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` for reactivity; change to `createMemo` or inline check.
 - [ ] Add logging to `packages/opencode/src/session/processor.ts` (tool-result case) to verify it fires for Bash tool.
 - [ ] Add logging to `Session.updatePart` to confirm it is called with `status: "completed"`.
 - [ ] Log when `ctx.metadata` attempts to write after completion.
@@ -197,7 +197,7 @@ Notes from codebase alignment:
 - [ ] Confirm the component re-renders on part status change (post `isRunning` fix).
 
 ### Milestone 3: Fix Based on Findings
-- [ ] Fix Bash spinner reactivity (`isRunning` as memo or inline check).
+- [x] Fix Bash spinner reactivity (`isRunning` as memo or inline check).
 - [ ] If metadata regression confirmed: Prevent `completed`/`error` -> `running` writes (guard in `Session.updatePart` or `ctx.metadata`).
 - [ ] If event not delivering: Fix event stream subscription or reconnection logic.
 - [ ] If store not updating: Fix Solid.js store update (ensure `produce` or proper setter is used).

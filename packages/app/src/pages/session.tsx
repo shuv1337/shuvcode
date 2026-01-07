@@ -911,7 +911,7 @@ export default function Page() {
                           if (isDesktop()) scheduleScrollSpy(e.currentTarget)
                         }}
                         onClick={autoScroll.handleInteraction}
-                        class="relative min-w-0 w-full h-full overflow-y-auto no-scrollbar"
+                        class="session-scroll-container relative min-w-0 w-full h-full overflow-y-auto no-scrollbar"
                       >
                         <div
                           ref={autoScroll.contentRef}
