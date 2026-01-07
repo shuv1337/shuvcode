@@ -2147,11 +2147,32 @@ function GenericTool(props: ToolProps<any>) {
   )
 }
 
-function InlineTool(props: { icon: string; complete: any; pending: string; children: JSX.Element; part: ToolPart }) {
+function ToolTitle(props: { fallback: string; when: any; icon: string; children: JSX.Element }) {
+  const { theme } = useTheme()
+  return (
+    <text paddingLeft={3} fg={props.when ? theme.textMuted : theme.text}>
+      <Show fallback={<>~ {props.fallback}</>} when={props.when}>
+        <span style={{ bold: true }}>{props.icon}</span> {props.children}
+      </Show>
+    </text>
+  )
+}
+
+function InlineTool(props: {
+  icon: string
+  iconColor?: RGBA
+  complete: any
+  pending: string
+  children: JSX.Element
+  part: ToolPart
+}) {
   const [margin, setMargin] = createSignal(0)
   const { theme } = useTheme()
   const ctx = use()
   const sync = useSync()
+
+  // Show spinner when tool is actively running
+  const isRunning = createMemo(() => props.part.state.status === "running")
 
   const permission = createMemo(() => {
     const callID = sync.data.permission[ctx.sessionID]?.at(0)?.tool?.callID
@@ -2198,7 +2219,11 @@ function InlineTool(props: { icon: string; complete: any; pending: string; child
     >
       <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
         <Show fallback={<>~ {props.pending}</>} when={props.complete}>
-          <span style={{ bold: true }}>{props.icon}</span> {props.children}
+          <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
+        </Show>
+        <Show when={isRunning()}>
+          {" "}
+          <span style={{ fg: theme.primary }}>{getSpinnerFrame()}</span>
         </Show>
       </text>
       <Show when={error() && !denied()}>
@@ -2213,6 +2238,7 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  const isRunning = createMemo(() => props.part?.state.status === "running")
   return (
     <box
       border={["left"]}
@@ -2233,6 +2259,10 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
     >
       <text paddingLeft={3} fg={theme.textMuted}>
         {props.title}
+        <Show when={isRunning()}>
+          {" "}
+          <span style={{ fg: theme.primary }}>{getSpinnerFrame()}</span>
+        </Show>
       </text>
       {props.children}
       <Show when={error()}>
@@ -2449,8 +2479,10 @@ function Task(props: ToolProps<typeof TaskTool>) {
   const { navigate } = useRoute()
   const dialog = useDialog()
   const renderer = useRenderer()
+  const local = useLocal()
 
   const current = createMemo(() => props.metadata.summary?.findLast((x) => x.state.status !== "pending"))
+  const color = createMemo(() => local.agent.color(props.input.subagent_type ?? "unknown"))
 
   return (
     <Switch>
@@ -2488,11 +2520,13 @@ function Task(props: ToolProps<typeof TaskTool>) {
       <Match when={true}>
         <InlineTool
           icon="◉"
+          iconColor={color()}
           pending="Delegating..."
           complete={props.input.subagent_type ?? props.input.description}
           part={props.part}
         >
-          {Locale.titlecase(props.input.subagent_type ?? "unknown")} Task "{props.input.description}"
+          <span style={{ fg: theme.text }}>{Locale.titlecase(props.input.subagent_type ?? "unknown")}</span> Task "
+          {props.input.description}"
         </InlineTool>
       </Match>
     </Switch>

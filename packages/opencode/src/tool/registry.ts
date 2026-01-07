@@ -24,6 +24,7 @@ import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
+import { Truncate } from "../session/truncation"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -65,10 +66,11 @@ export namespace ToolRegistry {
         description: def.description,
         execute: async (args, ctx) => {
           const result = await def.execute(args as any, ctx)
+          const out = Truncate.output(result)
           return {
             title: "",
-            output: result,
-            metadata: {},
+            output: out.truncated ? out.content : result,
+            metadata: { truncated: out.truncated },
           }
         },
       }),

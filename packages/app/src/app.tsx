@@ -1,5 +1,5 @@
 import "@/index.css"
-import { ErrorBoundary, Show, Suspense, lazy, type ParentProps } from "solid-js"
+import { ErrorBoundary, Show, lazy, type ParentProps } from "solid-js"
 import { Router, Route, Navigate } from "@solidjs/router"
 import { MetaProvider } from "@solidjs/meta"
 import { Font } from "@opencode-ai/ui/font"
@@ -20,10 +20,12 @@ import { FileProvider } from "@/context/file"
 import { NotificationProvider } from "@/context/notification"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
 import { CommandProvider } from "@/context/command"
+import { Logo } from "@opencode-ai/ui/logo"
 import Layout from "@/pages/layout"
 import DirectoryLayout from "@/pages/directory-layout"
 import { ErrorPage } from "./pages/error"
 import { iife } from "@opencode-ai/util/iife"
+import { Suspense } from "solid-js"
 
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
@@ -31,8 +33,8 @@ const Loading = () => <div class="size-full flex items-center justify-center tex
 
 declare global {
   interface Window {
-    __SHUVCODE__?: { updaterEnabled?: boolean; port?: number }
-    __OPENCODE__?: { updaterEnabled?: boolean; port?: number }
+    __SHUVCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }
+    __OPENCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }
   }
 }
 
@@ -56,6 +58,25 @@ const defaultServerUrl = iife(() => {
   return window.location.origin
 })
 
+export function AppBaseProviders(props: ParentProps) {
+  return (
+    <MetaProvider>
+      <Font />
+      <ThemeProvider>
+        <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
+          <DialogProvider>
+            <MarkedProvider>
+              <DiffComponentProvider component={Diff}>
+                <CodeComponentProvider component={Code}>{props.children}</CodeComponentProvider>
+              </DiffComponentProvider>
+            </MarkedProvider>
+          </DialogProvider>
+        </ErrorBoundary>
+      </ThemeProvider>
+    </MetaProvider>
+  )
+}
+
 function ServerKey(props: ParentProps) {
   const server = useServer()
   return (
@@ -65,71 +86,56 @@ function ServerKey(props: ParentProps) {
   )
 }
 
-export function App() {
+export function AppInterface() {
   return (
-    <MetaProvider>
-      <Font />
-      <ThemeProvider defaultTheme="nightowl">
-        <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
-          <DialogProvider>
-            <MarkedProvider>
-              <DiffComponentProvider component={Diff}>
-                <CodeComponentProvider component={Code}>
-                  <ServerProvider defaultUrl={defaultServerUrl}>
-                    <ServerKey>
-                      <GlobalSDKProvider>
-                        <GlobalSyncProvider>
-                          <Router
-                            root={(props) => (
-                              <PermissionProvider>
-                                <LayoutProvider>
-                                  <NotificationProvider>
-                                    <CommandProvider>
-                                      <Layout>{props.children}</Layout>
-                                    </CommandProvider>
-                                  </NotificationProvider>
-                                </LayoutProvider>
-                              </PermissionProvider>
-                            )}
-                          >
-                            <Route
-                              path="/"
-                              component={() => (
-                                <Suspense fallback={<Loading />}>
-                                  <Home />
-                                </Suspense>
-                              )}
-                            />
-                            <Route path="/:dir" component={DirectoryLayout}>
-                              <Route path="/" component={() => <Navigate href="session" />} />
-                              <Route
-                                path="/session/:id?"
-                                component={(p) => (
-                                  <Show when={p.params.id ?? "new"} keyed>
-                                    <TerminalProvider>
-                                      <FileProvider>
-                                        <PromptProvider>
-                                          <Suspense fallback={<Loading />}>
-                                            <Session />
-                                          </Suspense>
-                                        </PromptProvider>
-                                      </FileProvider>
-                                    </TerminalProvider>
-                                  </Show>
-                                )}
-                              />
-                            </Route>
-                          </Router>
-                        </GlobalSyncProvider>
-                      </GlobalSDKProvider>
-                    </ServerKey>
-                  </ServerProvider>
-                </CodeComponentProvider>
-              </DiffComponentProvider>
-            </MarkedProvider>
-          </DialogProvider>
-        </ErrorBoundary>
-      </ThemeProvider>
-    </MetaProvider>
+    <ServerProvider defaultUrl={defaultServerUrl}>
+      <ServerKey>
+        <GlobalSDKProvider>
+          <GlobalSyncProvider>
+            <Router
+              root={(props) => (
+                <PermissionProvider>
+                  <LayoutProvider>
+                    <NotificationProvider>
+                      <CommandProvider>
+                        <Layout>{props.children}</Layout>
+                      </CommandProvider>
+                    </NotificationProvider>
+                  </LayoutProvider>
+                </PermissionProvider>
+              )}
+            >
+              <Route
+                path="/"
+                component={() => (
+                  <Suspense fallback={<Loading />}>
+                    <Home />
+                  </Suspense>
+                )}
+              />
+              <Route path="/:dir" component={DirectoryLayout}>
+                <Route path="/" component={() => <Navigate href="session" />} />
+                <Route
+                  path="/session/:id?"
+                  component={(p) => (
+                    <Show when={p.params.id ?? "new"} keyed>
+                      <TerminalProvider>
+                        <FileProvider>
+                          <PromptProvider>
+                            <Suspense fallback={<Loading />}>
+                              <Session />
+                            </Suspense>
+                          </PromptProvider>
+                        </FileProvider>
+                      </TerminalProvider>
+                    </Show>
+                  )}
+                />
+              </Route>
+            </Router>
+          </GlobalSyncProvider>
+        </GlobalSDKProvider>
+      </ServerKey>
+    </ServerProvider>
   )
 }

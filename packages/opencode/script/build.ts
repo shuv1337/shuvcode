@@ -139,7 +139,7 @@ for (const item of targets) {
       autoloadPackageJson: true,
       target: bunTarget as any,
       outfile: `dist/${name}/bin/shuvcode`,
-      execArgv: [`--user-agent=shuvcode/${Script.version}`, "--"],
+      execArgv: [`--user-agent=shuvcode/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
     entrypoints: ["./src/index.ts", parserWorker, workerPath],

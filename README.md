@@ -65,6 +65,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ------------------------------------------------------------------------ |
 | [#6476](https://github.com/sst/opencode/pull/6476)                            | Edit suggested changes before applying      | [@dmmulroy](https://github.com/dmmulroy)                     | Open   | Press 'e' to edit AI suggestions in your editor before accepting         |
 | [#6507](https://github.com/sst/opencode/pull/6507)                            | Optimize Ripgrep.tree() (109x faster)       | [@Karavil](https://github.com/Karavil)                       | Open   | 109x performance improvement for large repos by streaming ripgrep output |
+| [#5432](https://github.com/sst/opencode/pull/5432)                            | Stream grep output to prevent OOM           | [@Hona](https://github.com/Hona)                             | Open   | Stream ripgrep output in grep tool to prevent memory exhaustion          |
 | [#6360](https://github.com/sst/opencode/pull/6360)                            | Desktop: Edit Project                       | [@dbpolito](https://github.com/dbpolito)                     | Merged | Edit project name, icon color, and custom icon image in desktop sidebar  |
 | [#6368](https://github.com/sst/opencode/pull/6368)                            | Desktop: Sidebar subsessions support        | [@dbpolito](https://github.com/dbpolito)                     | Open   | Expand/collapse subsessions in sidebar with chevron indicators           |
 | [#6372](https://github.com/sst/opencode/pull/6372)                            | Desktop: Image Preview and Dedupe           | [@dbpolito](https://github.com/dbpolito)                     | Merged | Click user attachments to preview images, dedupe file uploads            |
@@ -82,7 +83,7 @@ The following PRs have been merged into this fork and are awaiting merge into up
 | [#5968](https://github.com/sst/opencode/pull/5968)                            | Better styling for small screens            | [@rekram1-node](https://github.com/rekram1-node)             | Reverted | Responsive TUI layout hiding elements on short/narrow terminals          |
 | [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme       |
 
-_Last updated: 2026-01-04_
+_Last updated: 2026-01-07_
 
 **Note:** Granular File Permissions (ariane-emory) was removed in v1.1.1 integration - upstream now provides similar functionality via PermissionNext.
 
