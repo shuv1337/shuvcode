@@ -194,11 +194,12 @@ Notes from codebase alignment:
 ### Milestone 2: Trace Event Delivery and Store Updates
 - [x] Add logging to TUI sync handler when `message.part.updated` is received.
 - [x] Add logging when `sync.data.part[messageID]` is updated in the store.
-- [ ] Identify the TUI component that renders the Bash spinner and trace its props/derivations.
-- [ ] Confirm the component re-renders on part status change (post `isRunning` fix).
+- [x] Identify the TUI component that renders the Bash spinner and trace its props/derivations.
+- [x] Confirm the component re-renders on part status change (post `isRunning` fix).
 
 ### Milestone 3: Fix Based on Findings
-- [x] Fix Bash spinner reactivity (`isRunning` as memo or inline check).
+- [x] Fix Bash spinner reactivity by avoiding plain object spreads in `ToolPart` and passing props explicitly.
+- [x] Fix Bash spinner color bug (using part status instead of agent name).
 - [ ] If metadata regression confirmed: Prevent `completed`/`error` -> `running` writes (guard in `Session.updatePart` or `ctx.metadata`).
 - [ ] If event not delivering: Fix event stream subscription or reconnection logic.
 - [ ] If store not updating: Fix Solid.js store update (ensure `produce` or proper setter is used).

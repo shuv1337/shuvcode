@@ -1892,76 +1892,194 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
   const sync = useSync()
 
-  const toolprops = {
-    get metadata() {
-      return props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})
-    },
-    get input() {
-      return props.part.state.input ?? {}
-    },
-    get output() {
-      return props.part.state.status === "completed" ? props.part.state.output : undefined
-    },
-    get permission() {
-      const permissions = sync.data.permission[props.message.sessionID] ?? []
-      const permissionIndex = permissions.findIndex((x) => x.tool?.callID === props.part.callID)
-      return permissions[permissionIndex]
-    },
-    get tool() {
-      return props.part.tool
-    },
-    get part() {
-      return props.part
-    },
-  }
-
   return (
     <Switch>
       <Match when={props.part.tool === "bash"}>
-        <Bash {...toolprops} />
+        <Bash
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "glob"}>
-        <Glob {...toolprops} />
+        <Glob
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "read"}>
-        <Read {...toolprops} />
+        <Read
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "grep"}>
-        <Grep {...toolprops} />
+        <Grep
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "list"}>
-        <List {...toolprops} />
+        <List
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "webfetch"}>
-        <WebFetch {...toolprops} />
+        <WebFetch
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "codesearch"}>
-        <CodeSearch {...toolprops} />
+        <CodeSearch
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "websearch"}>
-        <WebSearch {...toolprops} />
+        <WebSearch
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "write"}>
-        <Write {...toolprops} />
+        <Write
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "edit"}>
-        <Edit {...toolprops} />
+        <Edit
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "task"}>
-        <Task {...toolprops} />
+        <Task
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={props.part.tool === "patch"}>
-        <Patch {...toolprops} />
+        <Patch
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
-      <Match when={props.part.tool === "todowrite"}>
-        <TodoWrite {...toolprops} />
+      <Match when={props.part.tool === "todo-write"}>
+        <TodoWrite
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
       <Match when={true}>
-        <GenericTool {...toolprops} />
+        <GenericTool
+          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
+          input={props.part.state.input ?? {}}
+          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
+          permission={
+            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
+          }
+          tool={props.part.tool}
+          part={props.part}
+          message={props.message}
+        />
       </Match>
     </Switch>
   )
 }
+
 
 type ToolProps<T extends Tool.Info> = {
   input: Partial<Tool.InferParameters<T>>
@@ -1970,6 +2088,7 @@ type ToolProps<T extends Tool.Info> = {
   tool: string
   output?: string
   part: ToolPart
+  message: AssistantMessage
 }
 
 function GenericTool(props: ToolProps<any>) {
@@ -2148,7 +2267,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
             </box>
           </Show>
           <Show when={isRunning()}>
-            <text fg={local.agent.color(props.part.state.status)} paddingLeft={3}>
+            <text fg={local.agent.color(props.message.agent)} paddingLeft={3}>
               {getSpinnerFrame()}
             </text>
           </Show>
