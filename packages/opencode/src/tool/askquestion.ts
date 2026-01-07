@@ -31,6 +31,7 @@ export const AskQuestionTool = Tool.define(
           status: "waiting",
         },
       })
+      console.log("[AskQuestionTool] Metadata updated, waiting for response. callID:", callID)
 
       // Register the pending request and wait for response
       const answerPromise = AskQuestion.register(

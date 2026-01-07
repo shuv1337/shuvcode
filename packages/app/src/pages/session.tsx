@@ -259,11 +259,13 @@ export default function Page() {
 
         if (metadata?.status !== "waiting") continue
 
-        return {
+        const pending = {
           callID: toolPart.callID,
           messageID: toolPart.messageID,
           questions: (metadata.questions ?? []) as AskQuestionQuestion[],
         }
+        console.log("[Web] Detected pendingAskQuestion:", pending)
+        return pending
       }
     }
 

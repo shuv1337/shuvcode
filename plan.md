@@ -41,11 +41,11 @@ Notes from codebase alignment:
   - `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` pending detection
 
 ### Phase 1: Investigation & Debugging
-- [ ] Add debug logging to `packages/opencode/src/tool/askquestion.ts` after `ctx.metadata()` call.
-- [ ] Add debug logging to web detection memo in `packages/app/src/pages/session.tsx` (pendingAskQuestion).
-- [ ] Add debug logging to TUI detection memo in `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (pendingAskQuestionFromSync).
+- [x] Add debug logging to `packages/opencode/src/tool/askquestion.ts` after `ctx.metadata()` call.
+- [x] Add debug logging to web detection memo in `packages/app/src/pages/session.tsx` (pendingAskQuestion).
+- [x] Add debug logging to TUI detection memo in `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (pendingAskQuestionFromSync).
 - [ ] Verify SSE delivers `PartUpdated` events with correct structure (browser DevTools).
-- [ ] Verify `ctx.callID` is defined when askquestion tool executes (log `options.toolCallId` in `packages/opencode/src/session/prompt.ts`).
+- [x] Verify `ctx.callID` is defined when askquestion tool executes (log `options.toolCallId` in `packages/opencode/src/session/prompt.ts`).
 
 ### Phase 2: Sync/Reactivity
 - [ ] Confirm `ctx.metadata()` update path in `packages/opencode/src/session/prompt.ts` only updates running parts; if updates are delayed, document expected behavior.
