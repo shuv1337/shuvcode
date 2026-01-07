@@ -392,6 +392,14 @@ export namespace Session {
     const part = "delta" in input ? input.part : input
     const delta = "delta" in input ? input.delta : undefined
 
+    if (part.type === "tool") {
+      log.info("updatePart", {
+        tool: part.tool,
+        status: part.state.status,
+        callID: part.callID,
+      })
+    }
+
     await Storage.write(["part", part.messageID, part.id], part)
     Bus.publish(MessageV2.Event.PartUpdated, {
       part,

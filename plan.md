@@ -186,9 +186,9 @@ Notes from codebase alignment:
 ### Milestone 1: Reproduce and Trace State Transitions
 - [ ] Reproduce in TUI and confirm the Bash part status after command completion (server-side).
 - [x] Inspect `Bash` component `isRunning` at `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` for reactivity; change to `createMemo` or inline check.
-- [ ] Add logging to `packages/opencode/src/session/processor.ts` (tool-result case) to verify it fires for Bash tool.
-- [ ] Add logging to `Session.updatePart` to confirm it is called with `status: "completed"`.
-- [ ] Log when `ctx.metadata` attempts to write after completion.
+- [x] Add logging to `packages/opencode/src/session/processor.ts` (tool-result case) to verify it fires for Bash tool.
+- [x] Add logging to `Session.updatePart` to confirm it is called with `status: "completed"`.
+- [x] Log when `ctx.metadata` attempts to write after completion.
 
 ### Milestone 2: Trace Event Delivery and Store Updates
 - [ ] Add logging to TUI sync handler when `message.part.updated` is received.

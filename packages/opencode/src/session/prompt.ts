@@ -660,6 +660,13 @@ export namespace SessionPrompt {
       agent: input.agent.name,
       metadata: async (val: { title?: string; metadata?: any }) => {
         const match = input.processor.partFromToolCall(options.toolCallId)
+        if (match && match.state.status !== "running") {
+          log.warn("ctx.metadata write attempt after completion", {
+            status: match.state.status,
+            tool: match.tool,
+            callID: options.toolCallId,
+          })
+        }
         if (match && match.state.status === "running") {
           await Session.updatePart({
             ...match,
