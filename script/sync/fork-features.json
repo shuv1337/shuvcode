@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2026-01-07",
-  "lastChange": "Cherry-picked PR #5432: Stream ripgrep output in grep tool to prevent memory exhaustion. Also added spinner support for all running tool calls.",
-  "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, and critical PWA/SDK fixes.",
+  "lastChange": "Restored plugin command execution and sessionOnly guard that was lost during v1.1.6 merge.",
+  "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -1801,6 +1801,27 @@
           "markers": ["MATCH_LIMIT", "reader.read()", "proc.kill()", "truncated"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "Plugin command execution and sessionOnly guard",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Execute plugin commands directly via plugin hooks instead of treating them as templates. Includes sessionOnly guard to block commands that require an existing session. Lost during v1.1.6 merge and restored.",
+      "files": ["packages/opencode/src/session/prompt.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "SessionOnly guard checks if session exists before executing command",
+          "markers": ["command.sessionOnly", "Session.get(input.sessionID)", "requires an existing session"]
+        },
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Plugin command execution via plugin hooks with error handling",
+          "markers": ["command.type === \"plugin\"", "Plugin.list()", "pluginCommand.execute", "Plugin.client()"]
+        }
+      ],
+      "note": "This code was originally added in commit 57ac84410 but lost during v1.1.6 upstream merge. Tests in test/command/plugin-commands.test.ts verify this behavior."
     }
   ]
 }
