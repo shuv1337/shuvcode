@@ -1786,6 +1786,21 @@
           "markers": ["isRunning", "getSpinnerFrame", "Show when={isRunning()}", "theme.primary"]
         }
       ]
+    },
+    {
+      "pr": 5432,
+      "title": "Stream ripgrep output to prevent memory exhaustion",
+      "author": "Hona",
+      "status": "cherry-picked",
+      "description": "Stream ripgrep output line-by-line instead of buffering all into memory. Kills ripgrep early after 100 matches to prevent memory exhaustion on massive result sets. Removes per-file stat() calls for performance.",
+      "files": ["packages/opencode/src/tool/grep.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/tool/grep.ts",
+          "description": "Stream ripgrep stdout with ReadableStream reader and early termination",
+          "markers": ["MATCH_LIMIT", "reader.read()", "proc.kill()", "truncated"]
+        }
+      ]
     }
   ]
 }
