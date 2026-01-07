@@ -197,14 +197,35 @@ export namespace Provider {
 
       if (!profile && !awsAccessKeyId && !awsBearerToken) return { autoload: false }
 
-      const { fromNodeProviderChain } = await import(await BunProc.install("@aws-sdk/credential-providers"))
+      const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
+
+      // Helper to load credential provider with bundled/unbundled export handling
+      // When shuvcode bundles via Bun.build(), the export structure changes:
+      // - Unbundled (upstream): module.fromNodeProviderChain (direct named export)
+      // - Bundled (shuvcode): module.default.fromNodeProviderChain or module.default.default.fromNodeProviderChain
+      const loadCredentialProvider = async (options: { profile?: string }) => {
+        const awsSdkModule = await import(awsSdkPath)
+        // Handle both named exports and multiple default wrappers produced by Bun
+        const fromNodeProviderChain =
+          awsSdkModule.fromNodeProviderChain ??
+          awsSdkModule.default?.fromNodeProviderChain ??
+          awsSdkModule.default?.default?.fromNodeProviderChain
+
+        if (!fromNodeProviderChain) {
+          throw new Error(
+            "AWS SDK credentials provider is missing fromNodeProviderChain export. " +
+              "Inspect ~/.cache/opencode/bundled for the actual module shape and adjust this helper if Bun changes its wrapper.",
+          )
+        }
+        return fromNodeProviderChain(options)
+      }
 
       // Build credential provider options (only pass profile if specified)
       const credentialProviderOptions = profile ? { profile } : {}
 
       const providerOptions: AmazonBedrockProviderSettings = {
         region: defaultRegion,
-        credentialProvider: fromNodeProviderChain(credentialProviderOptions),
+        credentialProvider: await loadCredentialProvider(credentialProviderOptions),
       }
 
       // Add custom endpoint if specified (endpoint takes precedence over baseURL)
