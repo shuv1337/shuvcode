@@ -167,12 +167,12 @@ Notes from codebase alignment:
 - [ ] Test with light mode themes to ensure derived fallback works for both dark and light modes.
 
 ### Milestone 4: Transparency Tests
-- [ ] Add unit tests in `packages/opencode/test/theme.test.ts`.
-- [ ] Add test: `normalizeBackgrounds` with fully transparent theme.
-- [ ] Add test: `normalizeBackgrounds` with semi-transparent `backgroundMenu`.
-- [ ] Add test: `normalizeBackgrounds` fallback derivation from `primary`.
-- [ ] Add test: full `resolveTheme` with `transparent=false` and lucent-orng fixture.
-- [ ] Add test: `selectedForeground` verifies readable contrast when transparency is off.
+- [x] Add unit tests in `packages/opencode/test/theme.test.ts`.
+- [x] Add test: `normalizeBackgrounds` with fully transparent theme.
+- [x] Add test: `normalizeBackgrounds` with semi-transparent `backgroundMenu`.
+- [x] Add test: `normalizeBackgrounds` fallback derivation from `primary`.
+- [x] Add test: full `resolveTheme` with `transparent=false` and lucent-orng fixture.
+- [x] Add test: `selectedForeground` verifies readable contrast when transparency is off.
 
 ### Milestone 5: Manual Validation
 - [ ] Toggle transparency on/off in TUI and verify immediate updates.
