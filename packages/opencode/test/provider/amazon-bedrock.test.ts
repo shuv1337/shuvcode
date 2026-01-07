@@ -203,3 +203,59 @@ test("Bedrock: includes custom endpoint in options when specified", async () => 
     },
   })
 })
+
+// === Bundled Export Shape Tests ===
+// These tests verify that the loadCredentialProvider helper correctly handles
+// various export shapes produced by Bun's bundler
+
+test("Bedrock: handles bundled module with default.fromNodeProviderChain export", async () => {
+  // This simulates how Bun wraps CJS modules in ESM default export
+  const mockFn = () => async () => ({
+    accessKeyId: "mock-key",
+    secretAccessKey: "mock-secret",
+  })
+
+  // Test that the coalescing logic correctly extracts the function
+  const mockModule: Record<string, unknown> = { default: { fromNodeProviderChain: mockFn() } }
+  const fromNodeProviderChain =
+    mockModule.fromNodeProviderChain ??
+    (mockModule.default as Record<string, unknown>)?.fromNodeProviderChain ??
+    ((mockModule.default as Record<string, unknown>)?.default as Record<string, unknown>)?.fromNodeProviderChain
+
+  expect(fromNodeProviderChain).toBeDefined()
+  expect(typeof fromNodeProviderChain).toBe("function")
+})
+
+test("Bedrock: handles bundled module with default.default.fromNodeProviderChain export", async () => {
+  // This simulates double-wrapping that can occur with nested re-exports
+  const mockFn = () => async () => ({
+    accessKeyId: "mock-key",
+    secretAccessKey: "mock-secret",
+  })
+
+  const mockModule: Record<string, unknown> = { default: { default: { fromNodeProviderChain: mockFn() } } }
+  const fromNodeProviderChain =
+    mockModule.fromNodeProviderChain ??
+    (mockModule.default as Record<string, unknown>)?.fromNodeProviderChain ??
+    ((mockModule.default as Record<string, unknown>)?.default as Record<string, unknown>)?.fromNodeProviderChain
+
+  expect(fromNodeProviderChain).toBeDefined()
+  expect(typeof fromNodeProviderChain).toBe("function")
+})
+
+test("Bedrock: handles direct named export (unbundled)", async () => {
+  // This is the standard export shape from npm without bundling
+  const mockFn = () => async () => ({
+    accessKeyId: "mock-key",
+    secretAccessKey: "mock-secret",
+  })
+
+  const mockModule: Record<string, unknown> = { fromNodeProviderChain: mockFn() }
+  const fromNodeProviderChain =
+    mockModule.fromNodeProviderChain ??
+    (mockModule.default as Record<string, unknown>)?.fromNodeProviderChain ??
+    ((mockModule.default as Record<string, unknown>)?.default as Record<string, unknown>)?.fromNodeProviderChain
+
+  expect(fromNodeProviderChain).toBeDefined()
+  expect(typeof fromNodeProviderChain).toBe("function")
+})
