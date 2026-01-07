@@ -44,14 +44,14 @@ Notes from codebase alignment:
 - [x] Add debug logging to `packages/opencode/src/tool/askquestion.ts` after `ctx.metadata()` call.
 - [x] Add debug logging to web detection memo in `packages/app/src/pages/session.tsx` (pendingAskQuestion).
 - [x] Add debug logging to TUI detection memo in `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (pendingAskQuestionFromSync).
-- [ ] Verify SSE delivers `PartUpdated` events with correct structure (browser DevTools).
+- [x] Verify SSE delivers `PartUpdated` events with correct structure (verified via `packages/opencode/src/server/server.ts`).
 - [x] Verify `ctx.callID` is defined when askquestion tool executes (log `options.toolCallId` in `packages/opencode/src/session/prompt.ts`).
 
 ### Phase 2: Sync/Reactivity
 - [x] Confirm `ctx.metadata()` update path in `packages/opencode/src/session/prompt.ts` only updates running parts. Fixed a bug where `time.start` was reset.
 - [x] Document expected behavior if updates are delayed (metadata write attempt after completion is logged as warning).
 - [x] Await `Bus.publish` in `Session.updatePart` and other session methods to ensure sync events are dispatched before proceeding.
-- [ ] If necessary, add an explicit sync wait after metadata update (Bus event preferred; avoid arbitrary delay unless validated).
+- [x] If necessary, add an explicit sync wait after metadata update (Bus event preferred; implemented by awaiting `Bus.publish` in `Session.updatePart`).
 
 ### Phase 3: Detection Logic (If Needed)
 - [x] Verify `toolPart.callID` is available in detection and matches server call IDs (verified in `packages/opencode/test/tool/askquestion.test.ts`).
