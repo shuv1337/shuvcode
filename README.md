@@ -213,19 +213,9 @@ Toggle density from the command palette or set in config:
 
 ---
 
-### AskQuestion Tool (Experimental)
+### AskQuestion Tool
 
-Enable the AI to pause and ask structured questions via a wizard UI. Available in both TUI and web app.
-
-Enable in `opencode.json`:
-
-```jsonc
-{
-  "experimental": {
-    "askquestion_tool": true,
-  },
-}
-```
+The AI can pause and ask structured questions via a wizard UI. Available in both TUI and web app. This tool is enabled by default.
 
 Features:
 - Wizard-style multi-question dialogs with single/multi-select options
