@@ -220,8 +220,8 @@ Notes from codebase alignment:
 
 ## Final Validation
 
-- [ ] Run `bun test` in `packages/opencode`.
-- [ ] Run `bun turbo test` at repo root for full test suite.
-- [ ] TypeScript compilation succeeds for both `opencode` and `app` packages.
+- [x] Run `bun test` in `packages/opencode`.
+- [x] Run `bun turbo test` at repo root for full test suite.
+- [x] TypeScript compilation succeeds for both `opencode` and `app` packages.
 - [ ] All acceptance criteria verified.
-- [ ] Debug logging removed from all files.
+- [x] Debug logging removed from all files.
