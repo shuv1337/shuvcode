@@ -50,11 +50,12 @@ Notes from codebase alignment:
 ### Phase 2: Sync/Reactivity
 - [x] Confirm `ctx.metadata()` update path in `packages/opencode/src/session/prompt.ts` only updates running parts. Fixed a bug where `time.start` was reset.
 - [x] Document expected behavior if updates are delayed (metadata write attempt after completion is logged as warning).
+- [x] Await `Bus.publish` in `Session.updatePart` and other session methods to ensure sync events are dispatched before proceeding.
 - [ ] If necessary, add an explicit sync wait after metadata update (Bus event preferred; avoid arbitrary delay unless validated).
 
 ### Phase 3: Detection Logic (If Needed)
-- [ ] Verify `toolPart.callID` is available in detection and matches server call IDs.
-- [ ] Verify `toolPart.state.metadata` schema matches expected `{ status, questions }` in both web and TUI.
+- [x] Verify `toolPart.callID` is available in detection and matches server call IDs (verified in `packages/opencode/test/tool/askquestion.test.ts`).
+- [x] Verify `toolPart.state.metadata` schema matches expected `{ status, questions }` in both web and TUI (verified in `packages/opencode/test/tool/askquestion.test.ts`).
 
 ### Phase 4: Server Endpoint Tests
 - [x] Create `packages/opencode/test/server/askquestion.test.ts` (align with existing server test patterns).
@@ -200,14 +201,14 @@ Notes from codebase alignment:
 ### Milestone 3: Fix Based on Findings
 - [x] Fix Bash spinner reactivity by avoiding plain object spreads in `ToolPart` and passing props explicitly.
 - [x] Fix Bash spinner color bug (using part status instead of agent name).
-- [ ] If metadata regression confirmed: Prevent `completed`/`error` -> `running` writes (guard in `Session.updatePart` or `ctx.metadata`).
+- [x] Prevent `completed`/`error` -> `running` writes (guard in `Session.updatePart` and `ctx.metadata`).
 - [ ] If event not delivering: Fix event stream subscription or reconnection logic.
 - [ ] If store not updating: Fix Solid.js store update (ensure `produce` or proper setter is used).
 - [ ] If part lookup wrong: Fix the part ID/callID matching between processor and TUI.
 
 ### Milestone 4: Spinner Tests
 - [ ] Add a session-level test to verify tool-result -> part status `completed` transition.
-- [ ] If regression guard added: Add a test that prevents `completed`/`error` -> `running` status downgrade.
+- [x] Add a test that prevents `completed`/`error` -> `running` status downgrade (implemented in `packages/opencode/test/session/status-downgrade.test.ts`).
 
 ### Milestone 5: Manual Validation
 - [ ] Run a Bash command via the TUI and confirm the spinner stops.
