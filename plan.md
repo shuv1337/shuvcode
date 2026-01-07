@@ -223,5 +223,18 @@ Notes from codebase alignment:
 - [x] Run `bun test` in `packages/opencode`.
 - [x] Run `bun turbo test` at repo root for full test suite.
 - [x] TypeScript compilation succeeds for both `opencode` and `app` packages.
-- [ ] All acceptance criteria verified.
+- [ ] All acceptance criteria verified (blocked on manual validation - see unchecked items above).
 - [x] Debug logging removed from all files.
+
+---
+
+## Status Summary
+
+**Automated work complete.** All programmatic tasks have been implemented and tested (641 tests passing).
+
+**Remaining work requires manual validation:**
+- Issue #271: Browser/mobile visual testing
+- Issue #268: TUI/Web askquestion tool interaction testing
+- Issue #264: iOS/Android PWA behavior testing
+- Issue #269: TUI transparency toggle visual testing
+- Issue #270: TUI Bash spinner behavior testing
