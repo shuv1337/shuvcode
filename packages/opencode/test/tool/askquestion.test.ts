@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { AskQuestion } from "../../src/askquestion"
+import { AskQuestionTool } from "../../src/tool/askquestion"
 
 describe("AskQuestion Core", () => {
   test("register and respond", async () => {
@@ -68,6 +69,7 @@ describe("AskQuestion Detection Logic", () => {
       for (const part of [...parts].reverse()) {
         if (part.type !== "tool") continue
         if (part.tool !== "askquestion") continue
+        if (!part.callID) continue // Guard for missing callID
         if (part.state.status !== "running") continue
         
         const metadata = part.state.metadata
@@ -131,6 +133,29 @@ describe("AskQuestion Detection Logic", () => {
     expect(result).toBeNull()
   })
 
+  test("ignores askquestion with missing callID", () => {
+    const messages = [{ id: "m1" }]
+    const partsMap = {
+      m1: [
+        {
+          type: "tool",
+          tool: "askquestion",
+          // callID is missing
+          state: {
+            status: "running",
+            metadata: {
+              status: "waiting",
+              questions: [{ id: "q1", label: "Q1" }],
+            },
+          },
+        },
+      ],
+    }
+
+    const result = detectPending(messages, partsMap)
+    expect(result).toBeNull()
+  })
+
   test("ignores askquestion in different state", () => {
     const messages = [{ id: "m1" }]
     const partsMap = {
@@ -151,5 +176,30 @@ describe("AskQuestion Detection Logic", () => {
 
     const result = detectPending(messages, partsMap)
     expect(result).toBeNull()
+  })
+})
+
+describe("AskQuestionTool Execution", () => {
+  test("throws error when callID is missing", async () => {
+    const tool = await AskQuestionTool.init()
+    const ctx: any = {
+      sessionID: "s1",
+      messageID: "m1",
+      callID: undefined, // Missing callID
+    }
+    
+    // Provide a valid question to pass Zod validation
+    const questions = [
+      { 
+        id: "q1", 
+        label: "L1", 
+        question: "Q1", 
+        options: [
+          { value: "v1", label: "L1" }, 
+          { value: "v2", label: "L2" }
+        ] 
+      }
+    ]
+    expect(tool.execute({ questions }, ctx)).rejects.toThrow("AskQuestionTool requires a callID")
   })
 })

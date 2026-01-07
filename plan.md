@@ -56,24 +56,20 @@ Notes from codebase alignment:
 - [ ] Verify `toolPart.state.metadata` schema matches expected `{ status, questions }` in both web and TUI.
 
 ### Phase 4: Server Endpoint Tests
-- [ ] Create `packages/opencode/test/server/askquestion.test.ts` (align with existing server test patterns).
-- [ ] Add test: `POST /askquestion/respond` resolves pending request.
-- [ ] Add test: `POST /askquestion/cancel` rejects pending request.
-- [ ] Add test: `POST /askquestion/respond` returns 404/500 for unknown callID.
-
-### Phase 4: Sync Propagation Tests
-- [ ] Create `packages/opencode/test/tool/askquestion-sync.test.ts`.
-- [ ] Add test: metadata update publishes `PartUpdated` event with correct structure.
+- [x] Create `packages/opencode/test/server/askquestion.test.ts` (align with existing server test patterns).
+- [x] Add test: `POST /askquestion/respond` resolves pending request.
+- [x] Add test: `POST /askquestion/cancel` rejects pending request.
+- [x] Add test: `POST /askquestion/respond` returns 404/500 for unknown callID.
 
 ### Phase 4: Detection Edge Case Tests
-- [ ] Extend `packages/opencode/test/tool/askquestion.test.ts` with detection edge cases.
-- [ ] Add test: detects pending when callID is present.
-- [ ] Add test: returns null when callID is undefined.
-- [ ] Add test: ignores when part.state.status is not `running`.
-- [ ] Add test: ignores when metadata.status is `completed`.
+- [x] Extend `packages/opencode/test/tool/askquestion.test.ts` with detection edge cases.
+- [x] Add test: detects pending when callID is present.
+- [x] Add test: returns null when callID is undefined.
+- [x] Add test: ignores when part.state.status is not `running`.
+- [x] Add test: ignores when metadata.status is `completed`.
 
 ### Phase 4: Cleanup Tests
-- [ ] Add test: cleanup rejects all pending requests for session on abort.
+- [x] Add test: cleanup rejects all pending requests for session on abort.
 
 ### Phase 5: Manual Validation
 - [ ] Test in TUI mode: enable `experimental.askquestion_tool`, trigger LLM to use askquestion, verify dialog appears.
