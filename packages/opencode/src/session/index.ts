@@ -401,9 +401,10 @@ export namespace Session {
     }
 
     const key = ["part", part.messageID, part.id]
-
+ 
     if (part.type === "tool") {
       const existing = await Storage.read<MessageV2.Part>(key).catch(() => undefined)
+
       if (existing?.type === "tool") {
         const isDowngrade =
           (existing.state.status === "completed" || existing.state.status === "error") &&

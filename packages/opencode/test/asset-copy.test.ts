@@ -1,7 +1,8 @@
-import { describe, expect, test, afterEach } from "bun:test";
+import { describe, expect, test, afterEach, spyOn } from "bun:test";
 import fs from "fs/promises";
 import path from "path";
 import { copyPluginAssets, resolvePluginRoot } from "../src/util/asset-copy";
+import { Log } from "../src/util/log";
 
 const TEST_DIR = "/tmp/opencode-asset-test-" + Math.random().toString(36).slice(2);
 
@@ -72,6 +73,31 @@ describe("asset-copy utility", () => {
 
     expect(await Bun.file(path.join(targetDir, "normal.txt")).exists()).toBe(true);
     expect(await Bun.file(path.join(targetDir, "link.txt")).exists()).toBe(false);
+  });
+
+  test("copyPluginAssets should log when overwriting assets", async () => {
+    const pluginDir = path.join(TEST_DIR, "plugin-overwrite");
+    const targetDir = path.join(TEST_DIR, "target-overwrite");
+
+    await fs.mkdir(pluginDir, { recursive: true });
+    await fs.mkdir(targetDir, { recursive: true });
+
+    const assetPath = path.join(pluginDir, "style.css");
+    const targetPath = path.join(targetDir, "style.css");
+
+    await Bun.write(assetPath, "new content");
+    await Bun.write(targetPath, "old content");
+
+    const logger = Log.create({ service: "asset-copy" });
+    const infoSpy = spyOn(logger, "info");
+
+    await copyPluginAssets(pluginDir, targetDir);
+
+    expect(await Bun.file(targetPath).text()).toBe("new content");
+    expect(infoSpy).toHaveBeenCalledWith("overwriting plugin asset", expect.objectContaining({
+      src: "style.css",
+      dest: targetPath
+    }));
   });
 
   test("copyPluginAssets should skip out-of-bounds assets", async () => {

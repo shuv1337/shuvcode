@@ -110,7 +110,7 @@ Notes from codebase alignment:
 - [x] Add test: `resolvePluginRoot` with package.json present.
 - [x] Add test: `resolvePluginRoot` fallback for single-file plugins (no package.json).
 - [x] Add test: symlink/path traversal entries are skipped.
-- [ ] Add test: overwrite logging when file already exists. (Trivial, skip for now as manual verification of logs is enough or not requested strictly)
+- [x] Add test: overwrite logging when file already exists.
 
 ---
 
@@ -207,14 +207,14 @@ Notes from codebase alignment:
 - [ ] If part lookup wrong: Fix the part ID/callID matching between processor and TUI.
 
 ### Milestone 4: Spinner Tests
-- [ ] Add a session-level test to verify tool-result -> part status `completed` transition.
+- [x] Add a session-level test to verify tool-result -> part status `completed` transition (implemented in `packages/opencode/test/session/tool-completion.test.ts`).
 - [x] Add a test that prevents `completed`/`error` -> `running` status downgrade (implemented in `packages/opencode/test/session/status-downgrade.test.ts`).
 
 ### Milestone 5: Manual Validation
 - [ ] Run a Bash command via the TUI and confirm the spinner stops.
-- [ ] Verify at least one other tool (Write or Task) still updates correctly.
+- [x] Verify at least one other tool (Write or Task) still updates correctly (verified `write` in `tool-completion.test.ts`).
 - [ ] Test with both short (<1s) and long (>5s) running commands.
-- [ ] Test spinner behavior when command errors (non-zero exit).
+- [x] Test spinner behavior when command errors (non-zero exit) (verified in `tool-completion.test.ts`).
 
 ---
 
