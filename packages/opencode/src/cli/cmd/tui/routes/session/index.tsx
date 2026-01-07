@@ -407,13 +407,11 @@ export function Session() {
 
         if (metadata?.status !== "waiting") continue
 
-        const pending = {
+        return {
           callID: toolPart.callID,
           messageId: toolPart.messageID,
           questions: (metadata.questions ?? []) as AskQuestion.Question[],
         }
-        console.log("[TUI] Detected pendingAskQuestionFromSync:", pending)
-        return pending
       }
     }
 

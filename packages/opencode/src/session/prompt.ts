@@ -693,9 +693,6 @@ export namespace SessionPrompt {
         inputSchema: jsonSchema(schema as any),
         async execute(args, options) {
           const ctx = context(args, options)
-          if (item.id === "askquestion") {
-            console.log("[Prompt] Executing askquestion tool. toolCallId:", options.toolCallId)
-          }
           await Plugin.trigger(
             "tool.execute.before",
             {
