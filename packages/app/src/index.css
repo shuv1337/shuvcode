@@ -101,6 +101,14 @@ body {
     min-height: -webkit-fill-available;
     min-height: 100dvh;
   }
+
+  .home-menu-button {
+    top: var(--safe-area-inset-top);
+  }
+
+  .session-scroll-container {
+    overscroll-behavior: contain;
+  }
 }
 
 /* PWA standalone mode - safe area handling for iOS */
@@ -115,8 +123,8 @@ body {
 /* Mobile PWA prompt container bottom padding */
 @media (display-mode: standalone) and (max-width: 40rem) {
   /* Adjust bottom positioning for mobile prompt input */
-  .absolute.inset-x-0.bottom-4 {
-    bottom: max(1rem, var(--safe-area-inset-bottom));
+  [data-component="prompt-dock"] {
+    padding-bottom: max(1.5rem, var(--safe-area-inset-bottom));
   }
 }
 

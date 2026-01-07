@@ -21,7 +21,7 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
-import { usePlatform } from "@/context/platform"
+import { usePlatform, isPWA } from "@/context/platform"
 import { createStore, produce } from "solid-js/store"
 import {
   DragDropProvider,
@@ -1175,7 +1175,9 @@ export default function Layout(props: ParentProps) {
         <main class="size-full overflow-x-hidden flex flex-col items-start contain-strict">
           <div class="hidden sm:contents">{props.children}</div>
           <div class="contents sm:hidden">
-            <PullToRefresh>{props.children}</PullToRefresh>
+            <PullToRefresh enabled={!isPWA()}>
+              {props.children}
+            </PullToRefresh>
           </div>
         </main>
       </div>

@@ -26,3 +26,4 @@ docker/workspace
 # Local dev files
 opencode-dev
 logs/
+.loop*

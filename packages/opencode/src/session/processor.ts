@@ -41,6 +41,9 @@ export namespace SessionProcessor {
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
+      updateToolCall(toolCallID: string, part: MessageV2.ToolPart) {
+        toolcalls[toolCallID] = part
+      },
       async process(streamInput: LLM.StreamInput) {
         log.info("process")
         needsCompaction = false
@@ -125,13 +128,19 @@ export namespace SessionProcessor {
                 case "tool-call": {
                   const match = toolcalls[value.toolCallId]
                   if (match) {
+                    // Check if ctx.metadata() already transitioned the part to running
+                    // (tool execute() can be called before this stream event fires)
+                    const existingState = match.state.status === "running" ? match.state : undefined
                     const part = await Session.updatePart({
                       ...match,
                       tool: value.toolName,
                       state: {
                         status: "running",
                         input: value.input,
-                        time: {
+                        // Preserve existing title and metadata if already set by ctx.metadata()
+                        title: existingState?.title,
+                        metadata: existingState?.metadata,
+                        time: existingState?.time ?? {
                           start: Date.now(),
                         },
                       },
@@ -170,6 +179,7 @@ export namespace SessionProcessor {
                 }
                 case "tool-result": {
                   const match = toolcalls[value.toolCallId]
+                  log.info("tool-result", { toolCallId: value.toolCallId, tool: match?.tool })
                   if (match && match.state.status === "running") {
                     await Session.updatePart({
                       ...match,

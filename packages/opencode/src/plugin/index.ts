@@ -6,6 +6,7 @@ import { Log } from "../util/log"
 import { createOpencodeClient } from "@opencode-ai/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
+import { copyPluginAssets, resolvePluginRoot } from "../util/asset-copy"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { Global } from "../global"
@@ -66,6 +67,10 @@ export namespace Plugin {
         // Fall back to direct import (will fail if deps are missing)
         return filePath
       }
+
+      const pluginRoot = await resolvePluginRoot(filePath)
+      await copyPluginAssets(pluginRoot, bundledDir)
+      await copyPluginAssets(pluginRoot, Global.Path.cache)
 
       return bundledFile
     } catch (e) {

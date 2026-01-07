@@ -201,7 +201,7 @@ export namespace Session {
     }
     log.info("created", result)
     await Storage.write(["session", Instance.project.id, result.id], result)
-    Bus.publish(Event.Created, {
+    await Bus.publish(Event.Created, {
       info: result,
     })
     const cfg = await Config.get()
@@ -215,7 +215,7 @@ export namespace Session {
         .catch(() => {
           // Silently ignore sharing errors during session creation
         })
-    Bus.publish(Event.Updated, {
+    await Bus.publish(Event.Updated, {
       info: result,
     })
     return result
@@ -267,7 +267,7 @@ export namespace Session {
       editor(draft)
       draft.time.updated = Date.now()
     })
-    Bus.publish(Event.Updated, {
+    await Bus.publish(Event.Updated, {
       info: result,
     })
     return result
@@ -328,7 +328,7 @@ export namespace Session {
       }
       await Storage.remove(["session", project.id, sessionID])
       AskQuestion.cleanup(sessionID)
-      Bus.publish(Event.Deleted, {
+      await Bus.publish(Event.Deleted, {
         info: session,
       })
     } catch (e) {
@@ -338,7 +338,7 @@ export namespace Session {
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
     await Storage.write(["message", msg.sessionID, msg.id], msg)
-    Bus.publish(MessageV2.Event.Updated, {
+    await Bus.publish(MessageV2.Event.Updated, {
       info: msg,
     })
     return msg
@@ -351,7 +351,7 @@ export namespace Session {
     }),
     async (input) => {
       await Storage.remove(["message", input.sessionID, input.messageID])
-      Bus.publish(MessageV2.Event.Removed, {
+      await Bus.publish(MessageV2.Event.Removed, {
         sessionID: input.sessionID,
         messageID: input.messageID,
       })
@@ -367,7 +367,7 @@ export namespace Session {
     }),
     async (input) => {
       await Storage.remove(["part", input.messageID, input.partID])
-      Bus.publish(MessageV2.Event.PartRemoved, {
+      await Bus.publish(MessageV2.Event.PartRemoved, {
         sessionID: input.sessionID,
         messageID: input.messageID,
         partID: input.partID,
@@ -392,8 +392,37 @@ export namespace Session {
     const part = "delta" in input ? input.part : input
     const delta = "delta" in input ? input.delta : undefined
 
-    await Storage.write(["part", part.messageID, part.id], part)
-    Bus.publish(MessageV2.Event.PartUpdated, {
+    if (part.type === "tool") {
+      log.info("updatePart", {
+        tool: part.tool,
+        status: part.state.status,
+        callID: part.callID,
+      })
+    }
+
+    const key = ["part", part.messageID, part.id]
+ 
+    if (part.type === "tool") {
+      const existing = await Storage.read<MessageV2.Part>(key).catch(() => undefined)
+
+      if (existing?.type === "tool") {
+        const isDowngrade =
+          (existing.state.status === "completed" || existing.state.status === "error") &&
+          part.state.status === "running"
+        if (isDowngrade) {
+          log.warn("updatePart: preventing status downgrade", {
+            from: existing.state.status,
+            to: part.state.status,
+            tool: part.tool,
+            callID: part.callID,
+          })
+          return existing
+        }
+      }
+    }
+
+    await Storage.write(key, part)
+    await Bus.publish(MessageV2.Event.PartUpdated, {
       part,
       delta,
     })

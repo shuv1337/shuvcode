@@ -32,7 +32,7 @@ import { DialogSelectModel } from "@/components/dialog-select-model"
 import { DialogSelectMcp } from "@/components/dialog-select-mcp"
 import { useCommand } from "@/context/command"
 import { useNavigate, useParams } from "@solidjs/router"
-import { UserMessage, ToolPart } from "@opencode-ai/sdk/v2"
+import { Part, UserMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import type { FileDiff } from "@opencode-ai/sdk/v2/client"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
@@ -243,30 +243,79 @@ export default function Page() {
     if (!params.id) return null
     const sessionMessages = sync.data.message[params.id] ?? []
 
-    // Search backwards for the most recent pending question
-    for (const message of [...sessionMessages].reverse()) {
-      const parts = sync.data.part[message.id] ?? []
+    const getMetadata = (toolPart: ToolPart) => {
+      const stateMetadata = (toolPart.state as { metadata?: unknown }).metadata as
+        | { status?: string; questions?: AskQuestionQuestion[] }
+        | undefined
+      const partMetadata = toolPart.metadata as
+        | { status?: string; questions?: AskQuestionQuestion[] }
+        | undefined
+      return stateMetadata ?? partMetadata
+    }
 
+    const findInParts = (parts: Part[]) => {
       for (const part of [...parts].reverse()) {
         if (part.type !== "tool") continue
         const toolPart = part as ToolPart
 
         if (toolPart.tool !== "askquestion") continue
+        if (!toolPart.callID) continue
         if (toolPart.state.status !== "running") continue
 
-        const metadata = toolPart.state.metadata as { status?: string; questions?: AskQuestionQuestion[] } | undefined
+        const metadata = getMetadata(toolPart)
+        if (metadata?.status && metadata.status !== "waiting") continue
 
-        if (metadata?.status !== "waiting") continue
+        const inputQuestions = (toolPart.state.input as { questions?: AskQuestionQuestion[] }).questions
+        const questions = (metadata?.questions ?? inputQuestions) as AskQuestionQuestion[] | undefined
+        if (!questions || questions.length === 0) continue
 
         return {
           callID: toolPart.callID,
           messageID: toolPart.messageID,
-          questions: (metadata.questions ?? []) as AskQuestionQuestion[],
+          questions,
+        }
+      }
+      return null
+    }
+
+    // Search backwards for the most recent pending question
+    for (const message of [...sessionMessages].reverse()) {
+      const parts = sync.data.part[message.id] ?? []
+      const pending = findInParts(parts)
+      if (pending) return pending
+    }
+
+    // Fallback: scan all parts in case message list is delayed/out of order
+    let latest: { pending: { callID: string; messageID: string; questions: AskQuestionQuestion[] }; time: number } | null = null
+    for (const parts of Object.values(sync.data.part)) {
+      for (const part of parts) {
+        if (part.type !== "tool") continue
+        const toolPart = part as ToolPart
+        if (toolPart.tool !== "askquestion") continue
+        if (toolPart.sessionID !== params.id) continue
+        if (!toolPart.callID) continue
+        if (toolPart.state.status !== "running") continue
+
+        const metadata = getMetadata(toolPart)
+        if (metadata?.status && metadata.status !== "waiting") continue
+
+        const inputQuestions = (toolPart.state.input as { questions?: AskQuestionQuestion[] }).questions
+        const questions = (metadata?.questions ?? inputQuestions) as AskQuestionQuestion[] | undefined
+        if (!questions || questions.length === 0) continue
+
+        const time = (toolPart.state as { time?: { start?: number } }).time?.start ?? 0
+        const pending = {
+          callID: toolPart.callID,
+          messageID: toolPart.messageID,
+          questions,
+        }
+        if (!latest || time > latest.time) {
+          latest = { pending, time }
         }
       }
     }
 
-    return null
+    return latest?.pending ?? null
   })
 
   // Handlers for AskQuestion wizard
@@ -910,7 +959,7 @@ export default function Page() {
                           if (isDesktop()) scheduleScrollSpy(e.currentTarget)
                         }}
                         onClick={autoScroll.handleInteraction}
-                        class="relative min-w-0 w-full h-full overflow-y-auto no-scrollbar"
+                        class="session-scroll-container relative min-w-0 w-full h-full overflow-y-auto no-scrollbar"
                       >
                         <div
                           ref={autoScroll.contentRef}
@@ -988,8 +1037,9 @@ export default function Page() {
           {/* Prompt input */}
           <div
             ref={(el) => (promptDock = el)}
-            class="absolute inset-x-0 bottom-0 pt-12 pb-4 md:pb-8 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
-            style={{ "padding-bottom": "env(safe-area-inset-bottom, 0px)" }}
+            data-component="prompt-dock"
+            class="absolute inset-x-0 bottom-0 pt-12 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
+            style={{ "padding-bottom": "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
           >
             <div
               classList={{

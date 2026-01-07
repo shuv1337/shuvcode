@@ -4,12 +4,21 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 const PULL_THRESHOLD = 80
 const RESISTANCE = 2.5
 
-export function PullToRefresh(props: ParentProps) {
+export interface PullToRefreshProps extends ParentProps {
+  enabled?: boolean | (() => boolean)
+}
+
+export function PullToRefresh(props: PullToRefreshProps) {
   let containerRef: HTMLDivElement | undefined
   const [pullDistance, setPullDistance] = createSignal(0)
   const [isRefreshing, setIsRefreshing] = createSignal(false)
   const [startY, setStartY] = createSignal(0)
   const [isPulling, setIsPulling] = createSignal(false)
+
+  const isEnabled = () => {
+    if (typeof props.enabled === "function") return props.enabled()
+    return props.enabled ?? true
+  }
 
   const canPull = () => {
     if (!containerRef) return false
@@ -19,6 +28,7 @@ export function PullToRefresh(props: ParentProps) {
   }
 
   const handleTouchStart = (e: TouchEvent) => {
+    if (!isEnabled()) return
     if (isRefreshing()) return
     if (!canPull()) return
 
@@ -28,6 +38,7 @@ export function PullToRefresh(props: ParentProps) {
   }
 
   const handleTouchMove = (e: TouchEvent) => {
+    if (!isEnabled()) return
     if (!isPulling() || isRefreshing()) return
 
     const touch = e.touches[0]
@@ -48,6 +59,7 @@ export function PullToRefresh(props: ParentProps) {
   }
 
   const handleTouchEnd = async () => {
+    if (!isEnabled()) return
     if (!isPulling()) return
     setIsPulling(false)
 

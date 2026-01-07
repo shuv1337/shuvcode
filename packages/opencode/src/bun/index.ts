@@ -6,6 +6,7 @@ import { NamedError } from "@opencode-ai/util/error"
 import { readableStreamToText } from "bun"
 import { createRequire } from "module"
 import { Lock } from "../util/lock"
+import { copyPluginAssets } from "../util/asset-copy"
 
 export namespace BunProc {
   const log = Log.create({ service: "bun" })
@@ -221,34 +222,4 @@ export namespace BunProc {
     return bundledFile
   }
 
-  async function copyPluginAssets(pluginDir: string, targetDir: string) {
-    // Find and copy non-JS/TS assets that plugins might need at runtime
-    const assetExtensions = [".html", ".css", ".json", ".txt", ".svg", ".png", ".jpg", ".gif"]
-
-    async function copyAssetsRecursive(srcDir: string, destDir: string) {
-      const entries = await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: srcDir, dot: false }))
-
-      for (const entry of entries) {
-        const ext = path.extname(entry).toLowerCase()
-        if (assetExtensions.includes(ext)) {
-          const srcPath = path.join(srcDir, entry)
-          const destPath = path.join(destDir, path.basename(entry))
-
-          try {
-            const content = await Bun.file(srcPath).arrayBuffer()
-            await Bun.write(destPath, content)
-            log.info("copied plugin asset", { src: entry, dest: destPath })
-          } catch (e) {
-            log.error("failed to copy plugin asset", {
-              src: srcPath,
-              dest: destPath,
-              error: (e as Error).message,
-            })
-          }
-        }
-      }
-    }
-
-    await copyAssetsRecursive(pluginDir, targetDir)
-  }
 }
