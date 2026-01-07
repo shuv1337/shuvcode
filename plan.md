@@ -48,7 +48,8 @@ Notes from codebase alignment:
 - [x] Verify `ctx.callID` is defined when askquestion tool executes (log `options.toolCallId` in `packages/opencode/src/session/prompt.ts`).
 
 ### Phase 2: Sync/Reactivity
-- [ ] Confirm `ctx.metadata()` update path in `packages/opencode/src/session/prompt.ts` only updates running parts; if updates are delayed, document expected behavior.
+- [x] Confirm `ctx.metadata()` update path in `packages/opencode/src/session/prompt.ts` only updates running parts. Fixed a bug where `time.start` was reset.
+- [x] Document expected behavior if updates are delayed (metadata write attempt after completion is logged as warning).
 - [ ] If necessary, add an explicit sync wait after metadata update (Bus event preferred; avoid arbitrary delay unless validated).
 
 ### Phase 3: Detection Logic (If Needed)
