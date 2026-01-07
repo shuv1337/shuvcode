@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
   "lastUpdated": "2026-01-07",
-  "lastChange": "v1.1.4 merge: Added iOS PWA viewport locking, Bedrock bundled SDK fix, plugin asset bundling with audio support, AskQuestion detection improvements with callID validation, TUI bash spinner reactivity fix, TUI transparency normalization, and session metadata preservation fixes.",
-  "note": "v1.1.4 sync. Fork includes critical PWA fixes for iOS overscroll, Bun bundling compatibility for AWS SDK, and improved AskQuestion tool reliability.",
+  "lastChange": "Cherry-picked PR #5432: Stream ripgrep output in grep tool to prevent memory exhaustion. Also added spinner support for all running tool calls.",
+  "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, and critical PWA/SDK fixes.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
