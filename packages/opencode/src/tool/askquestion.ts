@@ -17,6 +17,11 @@ export const AskQuestionTool = Tool.define(
     }),
 
     async execute(params, ctx) {
+      const { callID } = ctx
+      if (!callID) {
+        throw new Error("AskQuestionTool requires a callID. Ensure tool usage is properly tracked.")
+      }
+
       // Update the tool metadata to show what we're waiting for
       // IMPORTANT: Must await to ensure Part is synced before we block waiting for response
       await ctx.metadata({
@@ -29,7 +34,7 @@ export const AskQuestionTool = Tool.define(
 
       // Register the pending request and wait for response
       const answerPromise = AskQuestion.register(
-        ctx.callID!,
+        callID,
         ctx.sessionID,
         ctx.messageID,
         params.questions,
@@ -37,7 +42,7 @@ export const AskQuestionTool = Tool.define(
 
       // Handle abort signal
       const abortHandler = () => {
-        AskQuestion.cancel(ctx.callID!)
+        AskQuestion.cancel(callID)
       }
       ctx.abort.addEventListener("abort", abortHandler)
       using _ = defer(() => ctx.abort.removeEventListener("abort", abortHandler))

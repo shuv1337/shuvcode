@@ -400,6 +400,7 @@ export function Session() {
         const toolPart = part as ToolPart
 
         if (toolPart.tool !== "askquestion") continue
+        if (!toolPart.callID) continue
         if (toolPart.state.status !== "running") continue
 
         const metadata = toolPart.state.metadata as { status?: string; questions?: AskQuestion.Question[] } | undefined
