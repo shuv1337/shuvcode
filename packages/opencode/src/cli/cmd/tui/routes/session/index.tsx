@@ -2171,6 +2171,9 @@ function InlineTool(props: {
   const ctx = use()
   const sync = useSync()
 
+  // Show spinner when tool is actively running
+  const isRunning = createMemo(() => props.part.state.status === "running")
+
   const permission = createMemo(() => {
     const callID = sync.data.permission[ctx.sessionID]?.at(0)?.tool?.callID
     if (!callID) return false
@@ -2218,6 +2221,10 @@ function InlineTool(props: {
         <Show fallback={<>~ {props.pending}</>} when={props.complete}>
           <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
         </Show>
+        <Show when={isRunning()}>
+          {" "}
+          <span style={{ fg: theme.primary }}>{getSpinnerFrame()}</span>
+        </Show>
       </text>
       <Show when={error() && !denied()}>
         <text fg={theme.error}>{error()}</text>
@@ -2231,6 +2238,7 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  const isRunning = createMemo(() => props.part?.state.status === "running")
   return (
     <box
       border={["left"]}
@@ -2251,6 +2259,10 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
     >
       <text paddingLeft={3} fg={theme.textMuted}>
         {props.title}
+        <Show when={isRunning()}>
+          {" "}
+          <span style={{ fg: theme.primary }}>{getSpinnerFrame()}</span>
+        </Show>
       </text>
       {props.children}
       <Show when={error()}>

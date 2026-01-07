@@ -1766,6 +1766,26 @@
           "markers": ["status", "running", "completed", "error"]
         }
       ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI spinner for running tool calls and subagent tasks",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Show custom spinner animation for all running tool calls (not just bash) including subagent tasks. Extends InlineTool and BlockTool components to display spinner when tool state is 'running'.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "InlineTool component shows spinner when isRunning() is true",
+          "markers": ["isRunning", "getSpinnerFrame", "Show when={isRunning()}", "theme.primary"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "BlockTool component shows spinner next to title when running",
+          "markers": ["isRunning", "getSpinnerFrame", "Show when={isRunning()}", "theme.primary"]
+        }
+      ]
     }
   ]
 }
