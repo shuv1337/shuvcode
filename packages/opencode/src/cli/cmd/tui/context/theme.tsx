@@ -1,5 +1,5 @@
 import { RGBA } from "@opentui/core"
-import { createEffect, createMemo } from "solid-js"
+import { createEffect, createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { createSimpleContext } from "./helper"
 import { useKV } from "./kv"
