@@ -223,11 +223,7 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light", transparent: boo
   // Handle thinkingOpacity - optional with default of 0.6
   const thinkingOpacity = theme.theme.thinkingOpacity ?? 0.6
 
-  if (transparent) {
-    resolved.background = RGBA.fromInts(0, 0, 0, 0)
-    // NOTE: Could alternatively apply an alpha channel to the theme's base background color
-    // instead of forcing full transparency, allowing for adjustable opacity levels
-  }
+  normalizeBackgrounds(resolved, transparent, mode)
 
   return {
     ...resolved,
@@ -235,6 +231,49 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light", transparent: boo
     thinkingOpacity,
     transparent,
   } as Theme
+}
+
+function normalizeBackgrounds(resolved: Partial<ThemeColors>, transparent: boolean, mode: "dark" | "light") {
+  if (transparent) {
+    resolved.background = RGBA.fromInts(0, 0, 0, 0)
+    return
+  }
+
+  const isOpaque = (c?: RGBA) => c && c.a === 1
+
+  // 1. Resolve base background if not opaque
+  if (!isOpaque(resolved.background)) {
+    const fallbacks = [resolved.backgroundMenu, resolved.backgroundElement, resolved.backgroundPanel]
+    const found = fallbacks.find(isOpaque)
+    if (found) {
+      resolved.background = found
+    } else {
+      // last resort fallback: derive from primary
+      const primary = resolved.primary || RGBA.fromInts(0, 0, 0)
+      if (mode === "dark") {
+        resolved.background = RGBA.fromInts(
+          Math.round(primary.r * 255 * 0.1),
+          Math.round(primary.g * 255 * 0.1),
+          Math.round(primary.b * 255 * 0.1),
+        )
+      } else {
+        // 95% luminance fallback for light mode
+        resolved.background = RGBA.fromInts(
+          Math.round(255 - (255 - primary.r * 255) * 0.05),
+          Math.round(255 - (255 - primary.g * 255) * 0.05),
+          Math.round(255 - (255 - primary.b * 255) * 0.05),
+        )
+      }
+    }
+  }
+
+  // 2. Ensure ALL backgrounds are opaque if transparent is OFF
+  const forceOpaque = (c: RGBA) => RGBA.fromInts(Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), 255)
+
+  resolved.background = forceOpaque(resolved.background!)
+  resolved.backgroundPanel = forceOpaque(resolved.backgroundPanel || resolved.background)
+  resolved.backgroundElement = forceOpaque(resolved.backgroundElement || resolved.background)
+  resolved.backgroundMenu = forceOpaque(resolved.backgroundMenu || resolved.background)
 }
 
 function ansiToRgba(code: number): RGBA {

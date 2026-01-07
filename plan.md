@@ -154,11 +154,11 @@ Notes from codebase alignment:
 - [ ] Verify that `lucent-orng` theme resolves to alpha=0 even when toggle is off (confirms root cause).
 
 ### Milestone 2: Fix Theme Resolution
-- [ ] Create `normalizeBackgrounds(resolved, transparent)` helper in `packages/opencode/src/cli/cmd/tui/context/theme.tsx`.
-- [ ] Implement fallback chain: `backgroundMenu` -> `backgroundElement` -> `backgroundPanel` -> derive from `primary`.
-- [ ] Treat semi-transparent colors as ineligible for fallback (require alpha=1 for fallback eligibility).
-- [ ] For last resort fallback: derive from primary at 10% luminance for dark mode, 95% for light mode.
-- [ ] Call `normalizeBackgrounds()` at the end of `resolveTheme()` before returning.
+- [x] Create `normalizeBackgrounds(resolved, transparent)` helper in `packages/opencode/src/cli/cmd/tui/context/theme.tsx`.
+- [x] Implement fallback chain: `backgroundMenu` -> `backgroundElement` -> `backgroundPanel` -> derive from `primary`.
+- [x] Treat semi-transparent colors as ineligible for fallback (require alpha=1 for fallback eligibility).
+- [x] For last resort fallback: derive from primary at 10% luminance for dark mode, 95% for light mode.
+- [x] Call `normalizeBackgrounds()` at the end of `resolveTheme()` before returning.
 
 ### Milestone 3: Contrast and Theme UX
 - [ ] Re-validate `selectedForeground` behavior with opaque backgrounds.
