@@ -1825,10 +1825,6 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
-     * Enable the askquestion tool for LLM to ask clarifying questions
-     */
-    askquestion_tool?: boolean
-    /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */
     openTelemetry?: boolean
