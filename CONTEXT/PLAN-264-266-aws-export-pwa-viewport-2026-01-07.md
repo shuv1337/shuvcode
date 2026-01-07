@@ -108,6 +108,10 @@ On iOS Safari PWA (standalone mode), the viewport can scroll past content bounda
 | `packages/app/src/pages/session.tsx` | 879 | Main container has `overflow-hidden` |
 | `packages/app/src/pages/session.tsx` | 962 | Scroll container class is `session-scroll-container` |
 
+**Additional context:** `index.html` already applies `h-dvh` on `#root` and sets the `interactive-widget=resizes-content` viewport meta tag, so adding `position: fixed`/`inset: 0` requires reconsidering the existing `min-height` rules and safe-area padding to avoid conflicting heights when the keyboard appears on iOS. Safe-area offsets are currently handled by `header[data-tauri-drag-region]` and the prompt dock, so the plan must keep a single source of truth for padding to prevent double offsets.
+
+Also note that `[data-slot="list-scroll"]` already defines `overscroll-behavior: contain` inside `packages/ui/src/components/list.css:76-82`, and `.overflow-y-auto` is a widely used utility. The plan should therefore target the session-specific scroll container (and any other PWA-only scroll containers we explicitly add) instead of a global utility class to avoid unintended desktop regressions.
+
 ### External References
 
 **iOS Safari PWA Viewport Solutions:**
@@ -167,16 +171,16 @@ const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
 // Helper to load credential provider with bundled/unbundled export handling
 const loadCredentialProvider = async (options: { profile?: string }) => {
   const awsSdkModule = await import(awsSdkPath)
-  // Handle both bundled (default export) and unbundled (named export) versions
-  // Bundled modules may wrap exports under module.default
-  const fromNodeProviderChain = 
-    awsSdkModule.fromNodeProviderChain ?? 
-    awsSdkModule.default?.fromNodeProviderChain
-  
+  // Handle both named exports and multiple default wrappers produced by Bun.
+  const fromNodeProviderChain =
+    awsSdkModule.fromNodeProviderChain ??
+    awsSdkModule.default?.fromNodeProviderChain ??
+    awsSdkModule.default?.default?.fromNodeProviderChain
+
   if (!fromNodeProviderChain) {
     throw new Error(
       "AWS SDK credentials provider is missing fromNodeProviderChain export. " +
-      "This may indicate a bundling incompatibility."
+        "Inspect ~/.cache/opencode/bundled for the actual module shape and adjust this helper if Bun changes its wrapper."
     )
   }
   return fromNodeProviderChain(options)
@@ -185,22 +189,15 @@ const loadCredentialProvider = async (options: { profile?: string }) => {
 // Build credential provider options (only pass profile if specified)
 const credentialProviderOptions = profile ? { profile } : {}
 
-let credentialProvider
-try {
-  credentialProvider = await loadCredentialProvider(credentialProviderOptions)
-} catch (err) {
-  const message = err instanceof Error ? err.message : String(err)
-  // Retry with tslib installed if that's the issue
-  if (!message.includes("tslib")) throw err
-  await BunProc.install("tslib")
-  credentialProvider = await loadCredentialProvider(credentialProviderOptions)
-}
-
 const providerOptions: AmazonBedrockProviderSettings = {
   region: defaultRegion,
-  credentialProvider,
+  credentialProvider: await loadCredentialProvider(credentialProviderOptions),
 }
 ```
+
+**Note:** `BunProc.install` already installs `tslib` (see `packages/opencode/src/bun/index.ts` and `packages/opencode/test/preload.ts`). The helper above therefore surfaces clear errors rather than retrying installs; if we encounter missing helpers during manual testing we will inspect the bundled artifact under `~/.cache/opencode/bundled` for additional wrapper layers and expand the helper accordingly.
+
+We also intend to add a focused unit test in `packages/opencode/test/provider/amazon-bedrock.test.ts` that mocks a bundled module returning `default` or `default.default` to validate the helper covers the real-world export shapes produced by Bun.
 
 ### Issue #264: PWA Viewport Locking CSS
 
@@ -316,36 +313,30 @@ const providerOptions: AmazonBedrockProviderSettings = {
 
 ### Milestone 1: Fix AWS SDK Export Regression (#266)
 
-- [ ] **1.1** Open `packages/opencode/src/provider/provider.ts`
-- [ ] **1.2** Locate the Amazon Bedrock provider autoload section (around line 197-220)
-- [ ] **1.3** Replace the direct destructuring import with the `loadCredentialProvider` helper pattern from `e3bb2644e`
-- [ ] **1.4** Ensure the helper handles:
-  - Direct named export: `awsSdkModule.fromNodeProviderChain`
-  - Bundled default export: `awsSdkModule.default?.fromNodeProviderChain`
-- [ ] **1.5** Keep the tslib retry logic for runtime compatibility
-- [ ] **1.6** Run existing Bedrock tests: `bun test packages/opencode/test/provider/amazon-bedrock.test.ts`
-- [ ] **1.7** Clear local bundled cache and verify fix: `rm -rf ~/.cache/opencode/bundled/*aws*`
+- [x] **1.1** Open `packages/opencode/src/provider/provider.ts`
+- [x] **1.2** Locate the Amazon Bedrock provider autoload section (around line 197-220)
+- [x] **1.3** Introduce the `loadCredentialProvider` helper that checks named exports plus `default`/`default.default` wrappers before throwing the diagnostics error.
+- [x] **1.4** Inspect the bundled artifact for `@aws-sdk/credential-providers` (e.g., `~/.cache/opencode/bundled/@aws-sdk-credential-providers.js`) to confirm the export shape and note additional wrappers if Bun changes its bundler output.
+- [x] **1.5** Document that `BunProc.install` already installs `tslib`, so the helper surfaces diagnostics instead of retrying tslib installs.
+- [x] **1.6** Add a targeted unit test in `packages/opencode/test/provider/amazon-bedrock.test.ts` that mocks `fromNodeProviderChain` coming from `default` / `default.default`.
+- [x] **1.7** Run existing Bedrock tests: `bun test packages/opencode/test/provider/amazon-bedrock.test.ts`
+- [ ] **1.8** Clear local bundled cache and verify fix: `rm -rf ~/.cache/opencode/bundled/*aws*`
 
 ### Milestone 2: Fix PWA Viewport Scrolling (#264)
 
-- [ ] **2.1** Open `packages/app/src/index.css`
-- [ ] **2.2** Locate the `@media (display-mode: standalone)` block (lines 90-122)
-- [ ] **2.3** Add `position: fixed`, `overflow: hidden`, and `overscroll-behavior: none` to:
-  - `html`
-  - `body`
-  - `#root`
-- [ ] **2.4** Add `overscroll-behavior: contain` to additional scroll containers:
-  - `.overflow-y-auto`
-  - `[data-slot="list-scroll"]`
-- [ ] **2.5** Verify existing `-webkit-overflow-scrolling: touch` is present for smooth scrolling
+- [x] **2.1** Open `packages/app/src/index.css`
+- [x] **2.2** Locate the `@media (display-mode: standalone)` block (lines 90-122)
+- [x] **2.3** Add `position: fixed`, `inset: 0`, `overflow: hidden`, and `overscroll-behavior: none` to `html`, `body`, and `#root`, then remove the conflicting `min-height` declarations so the fixed layout becomes the canonical height source.
+- [x] **2.4** Apply `overscroll-behavior: contain` (plus `-webkit-overflow-scrolling: touch`) to `.session-scroll-container` and other explicitly PWA-only scroll containers; avoid global utilities like `.overflow-y-auto` and note that `[data-slot="list-scroll"]` already declares the necessary rule.
+- [x] **2.5** Review safe-area padding so only one layer (header/prompt dock or `#root`) adds offsets; update documentation/comments to capture the chosen strategy before adjusting children.
 - [ ] **2.6** Test on iOS Safari PWA:
-  - iPhone with Dynamic Island (14 Pro or newer)
-  - iPhone with notch (X-13)
-- [ ] **2.7** Verify no desktop browser regressions
+  - iPhone with Dynamic Island (14 Pro or newer): open the keyboard, rotate the device, and confirm no blank-space overscroll or stuck scroll positions.
+  - iPhone with notch (X-13): pull beyond the top/bottom of content and ensure viewport locking holds.
+- [ ] **2.7** Verify Android PWA, desktop browsers, and other standalone contexts still behave normally when scrolling and dismissing the keyboard.
 
 ### Milestone 3: Testing and Validation
 
-- [ ] **3.1** Run full test suite: `bun turbo test`
+- [x] **3.1** Run full test suite: `bun turbo test`
 - [ ] **3.2** Manual test: Amazon Bedrock provider with bundled binary
 - [ ] **3.3** Manual test: iOS PWA viewport locking (see test steps below)
 - [ ] **3.4** Manual test: Android PWA behavior (ensure no regressions)
@@ -366,8 +357,8 @@ const providerOptions: AmazonBedrockProviderSettings = {
 
 ### Automated Tests
 
-- [ ] `bun test packages/opencode/test/provider/amazon-bedrock.test.ts` passes
-- [ ] `bun turbo test` at repo root passes
+- [x] `bun test packages/opencode/test/provider/amazon-bedrock.test.ts` passes
+- [x] `bun turbo test` at repo root passes
 - [ ] TypeScript compilation succeeds: `bun run type-check`
 
 ### Manual Test: AWS SDK (#266)
@@ -406,6 +397,8 @@ grep -i "credentialProvider" ~/.cache/opencode/logs/*.log
 6. **Expected:** Viewport should NOT scroll past content; overscroll should be contained
 7. **Test:** Try to pull down at the top of the session
 8. **Expected:** No rubber-banding that exposes blank space above content
+9. **Test:** Focus the prompt input so the keyboard opens, then blur it; confirm the viewport does not jump or reveal blank space and `#root` remains fixed to safe-area edges.
+10. **Test:** Rotate the device (portrait <-> landscape) and ensure the fixed layout still respects the safe-area padding without double offsets (header/prompt should align with `var(--safe-area-inset-*)`).
 
 **Android PWA Test:**
 
@@ -414,6 +407,7 @@ grep -i "credentialProvider" ~/.cache/opencode/logs/*.log
 3. Navigate to session view
 4. **Test:** Pull down gesture at top
 5. **Expected:** No page refresh triggered (PullToRefresh disabled in PWA)
+6. **Test:** Open the keyboard from the prompt input and verify the viewport stays locked to the content area (no overscroll above/below).
 
 **Desktop Browser Test:**
 
@@ -421,6 +415,7 @@ grep -i "credentialProvider" ~/.cache/opencode/logs/*.log
 2. Navigate to session view
 3. **Test:** Scroll behavior
 4. **Expected:** Normal scrolling, no visual regressions
+5. **Test:** Open and dismiss panels/modal to confirm the fixed root does not trap focus or clip portal content.
 
 ---
 
@@ -453,11 +448,11 @@ Remove the `position: fixed` rules from the PWA media query in `packages/app/src
 
 ## Known Limitations
 
-1. **PWA viewport fix may affect layout:** Adding `position: fixed` to `#root` may require adjustments to components that use `position: sticky` or calculate heights relative to the viewport.
+1. **PWA viewport fix may affect layout:** Adding `position: fixed` to `html`/`body`/`#root` supersedes the previous `min-height`/`h-dvh` strategy and may require tweaks to any component that assumes a dynamic viewport height (e.g., sticky headers or keyboard-aware containers).
 
 2. **AWS SDK bundling is fragile:** The bundler export handling is a workaround for Bun's bundling behavior. Future Bun updates may change export handling.
 
-3. **Safe area padding on #root:** If safe area padding is added to `#root`, child components may double-apply safe areas. This needs testing.
+3. **Safe area padding decisions need consolidation:** `header[data-tauri-drag-region]`, prompt dock padding, and a potential `#root` padding should share the same assumption; otherwise components may double-apply offsets.
 
 ---
 
@@ -467,6 +462,7 @@ Remove the `position: fixed` rules from the PWA media query in `packages/app/src
 |----------|--------|------------|
 | Should `#root` have safe area padding? | NEEDS TESTING | Test without first; add if needed |
 | Does `position: fixed` on body break any modals? | NEEDS TESTING | Modals use portal rendering, should be unaffected |
+| Does keyboard resizing / orientation changes break the fixed layout? | NEEDS TESTING | Verify on iOS Safari PWA that keyboard open/close and rotations keep content locked and portals accessible |
 | Should we add a JS-based scroll lock as fallback? | DEFERRED | CSS-only solution is preferred; add JS only if CSS fails |
 
 ---
