@@ -115,8 +115,8 @@ body {
 /* Mobile PWA prompt container bottom padding */
 @media (display-mode: standalone) and (max-width: 40rem) {
   /* Adjust bottom positioning for mobile prompt input */
-  .absolute.inset-x-0.bottom-4 {
-    bottom: max(1rem, var(--safe-area-inset-bottom));
+  [data-component="prompt-dock"] {
+    padding-bottom: max(1.5rem, var(--safe-area-inset-bottom));
   }
 }
 
