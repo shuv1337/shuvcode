@@ -95,19 +95,40 @@ body {
     --pwa-bottom-offset: var(--safe-area-inset-bottom);
   }
 
-  /* Ensure the app fills the screen properly in PWA mode */
+  /* Critical iOS viewport locking - prevents rubber-banding on html/body */
+  html {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Root container must also be fixed to prevent viewport bounce */
   #root {
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
-    min-height: 100dvh;
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* Safe areas handled by child components (header/prompt-dock) */
   }
 
   .home-menu-button {
     top: var(--safe-area-inset-top);
   }
 
+  /* Scroll containers should contain overscroll within their bounds */
   .session-scroll-container {
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
