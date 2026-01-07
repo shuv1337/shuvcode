@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-04",
-  "lastChange": "v1.1.1 merge: Abandoned glob-permissions (ariane-emory) in favor of upstream PermissionNext. Abandoned fork worktree ID support for upstream sandboxes. Kept AskQuestion tool.",
-  "note": "v1.1.1 introduces upstream worktree/sandbox support and PermissionNext with Wildcard pattern matching",
+  "lastUpdated": "2026-01-07",
+  "lastChange": "v1.1.4 merge: Added iOS PWA viewport locking, Bedrock bundled SDK fix, plugin asset bundling with audio support, AskQuestion detection improvements with callID validation, TUI bash spinner reactivity fix, TUI transparency normalization, and session metadata preservation fixes.",
+  "note": "v1.1.4 sync. Fork includes critical PWA fixes for iOS overscroll, Bun bundling compatibility for AWS SDK, and improved AskQuestion tool reliability.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -192,7 +192,7 @@
       "title": "AskQuestion tool for user input",
       "author": "iljod",
       "status": "open",
-      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI/web wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563. Disabled by default - enable with experimental.askquestion_tool config.",
+      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI/web wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563. Disabled by default - enable with experimental.askquestion_tool config. v1.1.4 improvements: callID validation, fallback scan detection for delayed messages, getMetadata/findInParts helpers.",
       "experimentalConfig": "askquestion_tool",
       "files": [
         "packages/opencode/src/askquestion/index.ts",
@@ -205,7 +205,9 @@
         "packages/opencode/src/config/config.ts",
         "packages/opencode/src/tool/registry.ts",
         "packages/app/src/components/askquestion-wizard.tsx",
-        "packages/app/src/pages/session.tsx"
+        "packages/app/src/pages/session.tsx",
+        "packages/opencode/test/server/askquestion.test.ts",
+        "packages/opencode/test/tool/askquestion.test.ts"
       ],
       "criticalCode": [
         {
@@ -215,8 +217,8 @@
         },
         {
           "file": "packages/opencode/src/tool/askquestion.ts",
-          "description": "Tool definition with Zod schema for 1-6 questions",
-          "markers": ["AskQuestionTool", "questions.min(1).max(6)"]
+          "description": "Tool definition with Zod schema for 1-6 questions and callID validation",
+          "markers": ["AskQuestionTool", "questions.min(1).max(6)", "if (!callID)", "ctx.callID"]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
@@ -225,8 +227,8 @@
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Detection of pending askquestion tools and rendering of dialog",
-          "markers": ["pendingAskQuestionFromSync", "DialogAskQuestion"]
+          "description": "Detection of pending askquestion with callID guard and fallback scan",
+          "markers": ["pendingAskQuestionFromSync", "DialogAskQuestion", "if (!toolPart.callID) continue", "getMetadata", "findInParts"]
         },
         {
           "file": "packages/opencode/src/server/server.ts",
@@ -250,8 +252,8 @@
         },
         {
           "file": "packages/app/src/pages/session.tsx",
-          "description": "Web app detection of pending askquestion and wizard rendering",
-          "markers": ["pendingAskQuestion", "AskQuestionWizard", "handleAskQuestionSubmit", "handleAskQuestionCancel"]
+          "description": "Web app detection with callID guard and fallback scan for delayed messages",
+          "markers": ["pendingAskQuestion", "AskQuestionWizard", "if (!toolPart.callID) continue", "getMetadata", "findInParts"]
         }
       ]
     },
@@ -445,13 +447,13 @@
       "title": "Toggle transparent background",
       "author": "JosXa",
       "status": "open",
-      "description": "Command palette toggle for transparent TUI background, works with any theme",
+      "description": "Command palette toggle for transparent TUI background, works with any theme. v1.1.4 fix: normalizeBackgrounds() ensures opaque fallbacks for transparent themes (like lucent-orng) when toggle is off.",
       "files": ["packages/opencode/src/cli/cmd/tui/app.tsx", "packages/opencode/src/cli/cmd/tui/context/theme.tsx"],
       "criticalCode": [
         {
           "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
-          "description": "Transparent state in Theme context and resolveTheme function",
-          "markers": ["transparent", "setTransparent", "resolveTheme"]
+          "description": "Transparent state, resolveTheme, and normalizeBackgrounds for opaque fallbacks",
+          "markers": ["transparent", "setTransparent", "resolveTheme", "normalizeBackgrounds"]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
@@ -1622,6 +1624,146 @@
           "file": "packages/opencode/src/config/config.ts",
           "description": "input_paste keybind includes ctrl+shift+v for Linux",
           "markers": ["input_paste:", "ctrl+v,ctrl+shift+v"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "iOS PWA viewport locking to prevent overscroll bounce",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Lock viewport on iOS PWA to prevent rubber-banding/overscroll bounce. Uses position:fixed on html/body/root, overscroll-behavior:none, and -webkit-overflow-scrolling for scroll containers.",
+      "files": [
+        "packages/app/src/index.css",
+        "packages/app/src/components/pull-to-refresh.tsx",
+        "packages/app/src/pages/layout.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/index.css",
+          "description": "PWA standalone mode viewport locking rules",
+          "markers": ["@media (display-mode: standalone)", "position: fixed", "overscroll-behavior: none", "-webkit-overflow-scrolling: touch"]
+        },
+        {
+          "file": "packages/app/src/index.css",
+          "description": "Session scroll container with contained overscroll",
+          "markers": [".session-scroll-container", "overscroll-behavior: contain"]
+        },
+        {
+          "file": "packages/app/src/components/pull-to-refresh.tsx",
+          "description": "Enabled prop to disable pull-to-refresh in PWA mode",
+          "markers": ["enabled", "props.enabled"]
+        },
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Pass enabled={!isPWA()} to PullToRefresh component",
+          "markers": ["isPWA()", "enabled={!isPWA()}"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Bedrock bundled AWS SDK export shape fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Handle Bun's bundled export shapes for AWS SDK credential providers. When shuvcode bundles via Bun.build(), the export structure changes from direct named exports to nested default wrappers.",
+      "files": [
+        "packages/opencode/src/provider/provider.ts",
+        "packages/opencode/test/provider/bedrock.test.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/provider/provider.ts",
+          "description": "loadCredentialProvider helper with bundled/unbundled export handling",
+          "markers": [
+            "loadCredentialProvider",
+            "awsSdkModule.fromNodeProviderChain",
+            "awsSdkModule.default?.fromNodeProviderChain",
+            "awsSdkModule.default?.default?.fromNodeProviderChain"
+          ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Plugin asset bundling with audio support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Unified plugin asset bundling utility that copies static assets (including audio files) while preserving directory structure. Includes symlink/path traversal security checks.",
+      "files": [
+        "packages/opencode/src/util/asset-copy.ts",
+        "packages/opencode/src/bun/index.ts",
+        "packages/opencode/src/plugin/index.ts",
+        "packages/opencode/test/asset-copy.test.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "ASSET_EXTENSIONS constant with audio formats",
+          "markers": ["ASSET_EXTENSIONS", ".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac"]
+        },
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "copyPluginAssets function with directory structure preservation",
+          "markers": ["copyPluginAssets", "realpath", "lstat", "isSymbolicLink"]
+        },
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "resolvePluginRoot to find nearest package.json",
+          "markers": ["resolvePluginRoot", "package.json"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI bash spinner reactivity fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix TUI bash spinner not stopping after command completion. Changed isRunning from non-reactive constant to createMemo for proper reactivity.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Bash component uses createMemo for isRunning state",
+          "markers": ["createMemo", "isRunning", "props.part.state.status"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI transparency normalization fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix transparent themes (like lucent-orng) showing invisible backgrounds when transparency toggle is off. normalizeBackgrounds() ensures opaque fallbacks for background colors.",
+      "files": ["packages/opencode/src/cli/cmd/tui/context/theme.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+          "description": "normalizeBackgrounds function with fallback chain",
+          "markers": ["normalizeBackgrounds", "backgroundMenu", "backgroundElement", "backgroundPanel"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Session metadata preservation during streaming",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix metadata being lost during tool-call stream events. Preserves time.start in ctx.metadata and adds running guard to prevent status regression.",
+      "files": [
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/src/session/message-v2.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Preserve time.start in ctx.metadata updates",
+          "markers": ["time.start", "ctx.metadata"]
+        },
+        {
+          "file": "packages/opencode/src/session/message-v2.ts",
+          "description": "Running guard to prevent completed/error -> running regression",
+          "markers": ["status", "running", "completed", "error"]
         }
       ]
     }
