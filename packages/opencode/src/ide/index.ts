@@ -199,41 +199,62 @@ export namespace Ide {
     return `✻ [shuvcode] Edit: ${path.basename(filePath)} ⧉`
   }
 
-  export async function status(): Promise<Record<string, Status>> {
-    const discovered = await discoverLockFiles()
-    const result: Record<string, Status> = {}
-
-    for (const [key, lockFile] of discovered) {
-      result[key] = {
-        status: activeConnection?.key === key ? "connected" : "disconnected",
-        name: lockFile.ideName,
-        workspaceFolders: lockFile.workspaceFolders,
-      }
+  function resolveDirectory(directory?: string) {
+    if (directory) return directory
+    try {
+      return Instance.directory
+    } catch {
+      return process.cwd()
     }
-
-    return result
   }
 
-  export async function connect(key: string): Promise<void> {
-    if (activeConnection) {
-      await disconnect()
-    }
+  export async function status(directory?: string): Promise<Record<string, Status>> {
+    const target = resolveDirectory(directory)
+    return Instance.provide({
+      directory: target,
+      fn: async () => {
+        const discovered = await discoverLockFiles()
+        const result: Record<string, Status> = {}
 
-    const instanceDirectory = Instance.directory
-    const connection = await Connection.create(key)
+        for (const [key, lockFile] of discovered) {
+          result[key] = {
+            status: activeConnection?.key === key ? "connected" : "disconnected",
+            name: lockFile.ideName,
+            workspaceFolders: lockFile.workspaceFolders,
+          }
+        }
 
-    connection.onNotification = (method, params) => {
-      handleNotification(method, params, instanceDirectory)
-    }
+        return result
+      },
+    })
+  }
 
-    connection.onClose = () => {
-      log.info("IDE connection closed callback", { key })
-      if (activeConnection?.key === key) {
-        activeConnection = null
-      }
-    }
+  export async function connect(key: string, directory?: string): Promise<void> {
+    const target = resolveDirectory(directory)
+    await Instance.provide({
+      directory: target,
+      fn: async () => {
+        if (activeConnection) {
+          await disconnect()
+        }
 
-    activeConnection = connection
+        const instanceDirectory = Instance.directory
+        const connection = await Connection.create(key)
+
+        connection.onNotification = (method, params) => {
+          handleNotification(method, params, instanceDirectory)
+        }
+
+        connection.onClose = () => {
+          log.info("IDE connection closed callback", { key })
+          if (activeConnection?.key === key) {
+            activeConnection = null
+          }
+        }
+
+        activeConnection = connection
+      },
+    })
   }
 
   function handleNotification(method: string, params: unknown, instanceDirectory: string) {
