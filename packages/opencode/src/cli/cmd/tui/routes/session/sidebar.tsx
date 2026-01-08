@@ -443,7 +443,7 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
             <span style={{ fg: theme.text }}>
               <b>code</b>
             </span>{" "}
-            <span>{Installation.VERSION}</span> <span>({Installation.COMMIT_HASH})</span>
+            <span>{Installation.VERSION}</span>
           </text>
         </box>
       </box>

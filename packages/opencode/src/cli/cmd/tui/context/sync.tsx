@@ -36,6 +36,7 @@ import { useArgs } from "./args"
 import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@opencode-ai/sdk"
+import { Ide } from "@/ide"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -371,7 +372,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),
             sdk.client.mcp.status().then((x) => setStore("mcp", reconcile(x.data!))),
-            sdk.client.ide.status().then((x) => setStore("ide", reconcile(x.data!))),
+            Ide.status().then((x) => setStore("ide", reconcile(x))),
             // TODO: Re-enable after SDK regeneration (Phase 15) - sdk.client.experimental.resource.list()
             (sdk.client as { experimental?: { resource: { list: () => Promise<{ data?: Record<string, McpResource> }> } } }).experimental?.resource.list().then((x) => setStore("mcp_resource", reconcile(x?.data ?? {}))),
             sdk.client.formatter.status().then((x) => setStore("formatter", reconcile(x.data!))),

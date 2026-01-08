@@ -20,16 +20,21 @@ const parameters = z.object({
   command: z.string().describe("The command that triggered this task").optional(),
 })
 
+export const TASK_DESCRIPTION = DESCRIPTION
+
+export function filterSubagents(agents: Agent.Info[], permission?: PermissionNext.Ruleset) {
+  if (!permission) return agents
+  return agents.filter((agent) => PermissionNext.evaluate("task", agent.name, permission).action !== "deny")
+}
+
 export const TaskTool = Tool.define("task", async (ctx) => {
   const agents = await Agent.list().then((x) => x.filter((a) => a.mode !== "primary"))
 
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent
-  const accessibleAgents = caller
-    ? agents.filter((a) => PermissionNext.evaluate("task", a.name, caller.permission).action !== "deny")
-    : agents
+  const accessibleAgents = caller ? filterSubagents(agents, caller.permission) : agents
 
-  const description = DESCRIPTION.replace(
+  const description = TASK_DESCRIPTION.replace(
     "{agents}",
     accessibleAgents
       .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)

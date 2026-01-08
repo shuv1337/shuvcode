@@ -1468,7 +1468,7 @@ export function Session() {
             zIndex={100}
             flexDirection="row"
             justifyContent="flex-end"
-            onMouseUp={() => setSidebar("hide")}
+            onMouseUp={() => setSidebar(() => "hide")}
           >
             <box onMouseUp={(e) => e.stopPropagation()}>
               <Sidebar sessionID={route.sessionID} width={w()} />

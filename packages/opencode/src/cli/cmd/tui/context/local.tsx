@@ -381,12 +381,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       async toggle(name: string) {
         const current = sync.data.ide[name]
         if (current?.status === "connected") {
-          await sdk.client.ide.disconnect({ name })
+          await Ide.disconnect()
         } else {
-          await sdk.client.ide.connect({ name })
+          await Ide.connect(name)
         }
-        const status = await sdk.client.ide.status()
-        if (status.data) sync.set("ide", reconcile(status.data))
+        const status = await Ide.status()
+        sync.set("ide", reconcile(status))
       },
     }
 
@@ -398,8 +398,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       sdk.event.on(Ide.Event.SelectionChanged.type, async (evt) => {
         setSelStore("current", evt.properties.selection)
         // Refresh IDE status when we receive a selection
-        const status = await sdk.client.ide.status()
-        if (status.data) sync.set("ide", reconcile(status.data))
+        const status = await Ide.status()
+        sync.set("ide", reconcile(status))
       })
 
       return {

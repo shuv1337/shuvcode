@@ -18,6 +18,7 @@ import {
   type LspStatus,
   type VcsInfo,
   type PermissionRequest,
+  type QuestionRequest,
   createOpencodeClient,
 } from "@opencode-ai/sdk/v2/client"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -54,6 +55,9 @@ type State = {
   node: FileNode[]
   permission: {
     [sessionID: string]: PermissionRequest[]
+  }
+  question: {
+    [sessionID: string]: QuestionRequest[]
   }
   mcp: {
     [name: string]: McpStatus
@@ -112,6 +116,7 @@ function createGlobalSync() {
         changes: [],
         node: [],
         permission: {},
+        question: {},
         mcp: {},
         lsp: [],
         vcs: undefined,
@@ -214,6 +219,38 @@ const data = Array.isArray(x.data) ? x.data : []
                   reconcile(
                     permissions
                       .filter((p) => !!p?.id)
+                      .slice()
+                      .sort((a, b) => a.id.localeCompare(b.id)),
+                    { key: "id" },
+                  ),
+                )
+              }
+            })
+          }),
+          sdk.question.list().then((x) => {
+            const grouped: Record<string, QuestionRequest[]> = {}
+            for (const request of x.data ?? []) {
+              if (!request?.id || !request.sessionID) continue
+              const existing = grouped[request.sessionID]
+              if (existing) {
+                existing.push(request)
+                continue
+              }
+              grouped[request.sessionID] = [request]
+            }
+
+            batch(() => {
+              for (const sessionID of Object.keys(store.question)) {
+                if (grouped[sessionID]) continue
+                setStore("question", sessionID, [])
+              }
+              for (const [sessionID, requests] of Object.entries(grouped)) {
+                setStore(
+                  "question",
+                  sessionID,
+                  reconcile(
+                    requests
+                      .filter((request) => !!request?.id)
                       .slice()
                       .sort((a, b) => a.id.localeCompare(b.id)),
                     { key: "id" },
@@ -406,6 +443,42 @@ const data = Array.isArray(x.data) ? x.data : []
           event.properties.sessionID,
           produce((draft) => {
             draft.splice(result.index, 1)
+          }),
+        )
+        break
+      }
+      case "question.replied":
+      case "question.rejected": {
+        const requests = store.question[event.properties.sessionID]
+        if (!requests) break
+        const result = Binary.search(requests, event.properties.requestID, (r) => r.id)
+        if (!result.found) break
+        setStore(
+          "question",
+          event.properties.sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 1)
+          }),
+        )
+        break
+      }
+      case "question.asked": {
+        const request = event.properties
+        const requests = store.question[request.sessionID]
+        if (!requests) {
+          setStore("question", request.sessionID, [request])
+          break
+        }
+        const result = Binary.search(requests, request.id, (r) => r.id)
+        if (result.found) {
+          setStore("question", request.sessionID, result.index, reconcile(request))
+          break
+        }
+        setStore(
+          "question",
+          request.sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 0, request)
           }),
         )
         break

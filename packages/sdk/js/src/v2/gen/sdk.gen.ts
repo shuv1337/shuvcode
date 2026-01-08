@@ -64,6 +64,8 @@ import type {
   PermissionRespondResponses,
   PermissionRuleset,
   ProjectBrowseResponses,
+  ProjectCreateErrors,
+  ProjectCreateResponses,
   ProjectCurrentResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
@@ -262,6 +264,47 @@ export class Project extends HeyApiClient {
       url: "/project",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Create project
+   *
+   * Create a new project directory and initialize it as a git repository, or add an existing directory as a project.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      path?: string
+      name?: string
+      repo?: string
+      degit?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "name" },
+            { in: "body", key: "repo" },
+            { in: "body", key: "degit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectCreateResponses, ProjectCreateErrors, ThrowOnError>({
+      url: "/project",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

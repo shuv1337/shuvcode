@@ -109,7 +109,6 @@ export namespace ToolRegistry {
       SkillTool,
       ...(Flag.OPENCODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
-      AskQuestionTool,
       ...custom,
     ]
   }
