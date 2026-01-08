@@ -383,7 +383,7 @@ export namespace SessionPrompt {
           sessionID: sessionID,
           abort,
           callID: part.callID,
-          extra: { userInvokedAgents: [task.agent] },
+          extra: { userInvokedAgents: [task.agent], bypassAgentCheck: true },
           async metadata(input) {
             await Session.updatePart({
               ...part,
@@ -550,6 +550,9 @@ export namespace SessionPrompt {
         .filter((m) => m.info.role === "user")
         .flatMap((m) => m.parts.filter((p) => p.type === "agent") as MessageV2.AgentPart[])
         .map((p) => p.name)
+      // Check if user explicitly invoked an agent via @ in this turn
+      const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
+      const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
 
       const tools = await resolveTools({
         agent,
@@ -558,6 +561,7 @@ export namespace SessionPrompt {
         tools: lastUser.tools,
         processor,
         userInvokedAgents,
+        bypassAgentCheck,
       })
 
       if (step === 1) {
@@ -647,6 +651,7 @@ export namespace SessionPrompt {
     tools?: Record<string, boolean>
     processor: SessionProcessor.Info
     userInvokedAgents: string[]
+    bypassAgentCheck: boolean
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
@@ -656,7 +661,11 @@ export namespace SessionPrompt {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, userInvokedAgents: input.userInvokedAgents },
+      extra: {
+        model: input.model,
+        userInvokedAgents: input.userInvokedAgents,
+        bypassAgentCheck: input.bypassAgentCheck,
+      },
       agent: input.agent.name,
       metadata: async (val: { title?: string; metadata?: any }) => {
         const match = input.processor.partFromToolCall(options.toolCallId)
@@ -821,7 +830,6 @@ export namespace SessionPrompt {
         }
       }
     }
-
     return tools
   }
 

@@ -11,11 +11,7 @@ export function normalizeServerUrl(input: string) {
   const trimmed = input.trim()
   if (!trimmed) return
   const withProtocol = /^https?:\/\//.test(trimmed) ? trimmed : `http://${trimmed}`
-  const cleaned = withProtocol.replace(/\/+$/, "")
-  if ((cleaned === "http:" || cleaned === "https:") && typeof window !== "undefined") {
-    return window.location.origin
-  }
-  return cleaned.replace(/^(https?:\/\/[^/]+).*/, "$1")
+  return withProtocol.replace(/\/+$/, "")
 }
 
 export function serverDisplayName(url: string) {
@@ -39,11 +35,10 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
     const platform = usePlatform()
 
     const [store, setStore, _, ready] = persisted(
-      Persist.global("server", ["server.v4", "server.v3"]),
+      Persist.global("server", ["server.v3"]),
       createStore({
         list: [] as string[],
         projects: {} as Record<string, StoredProject[]>,
-        active: "" as string, // Persist the last active server
       }),
     )
 
@@ -52,10 +47,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
     function setActive(input: string) {
       const url = normalizeServerUrl(input)
       if (!url) return
-      batch(() => {
-        setActiveRaw(url)
-        setStore("active", url) // Persist active server
-      })
+      setActiveRaw(url)
     }
 
     function add(input: string) {
@@ -64,10 +56,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
 
       const fallback = normalizeServerUrl(props.defaultUrl)
       if (fallback && url === fallback) {
-        batch(() => {
-          setActiveRaw(url)
-          setStore("active", url)
-        })
+        setActiveRaw(url)
         return
       }
 
@@ -76,7 +65,6 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
           setStore("list", store.list.length, url)
         }
         setActiveRaw(url)
-        setStore("active", url)
       })
     }
 
@@ -90,17 +78,13 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       batch(() => {
         setStore("list", list)
         setActiveRaw(next)
-        setStore("active", next)
       })
     }
 
-    // Initialize active server from persisted state or default
     createEffect(() => {
       if (!ready()) return
       if (active()) return
-      // Priority: persisted active > default URL
-      const persistedActive = store.active ? normalizeServerUrl(store.active) : undefined
-      const url = persistedActive || normalizeServerUrl(props.defaultUrl)
+      const url = normalizeServerUrl(props.defaultUrl)
       if (!url) return
       setActiveRaw(url)
     })

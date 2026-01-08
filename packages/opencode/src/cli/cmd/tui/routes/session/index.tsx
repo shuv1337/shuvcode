@@ -1,4 +1,5 @@
 import {
+  batch,
   createContext,
   createEffect,
   createMemo,
@@ -21,22 +22,13 @@ import {
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
-  RGBA,
   type ScrollAcceleration,
-  type ColorInput,
   TextAttributes,
+  RGBA,
 } from "@opentui/core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { SearchInput, type SearchInputRef } from "@tui/component/prompt/search"
-import type {
-  AssistantMessage,
-  Part,
-  ToolPart,
-  UserMessage,
-  TextPart,
-  ReasoningPart,
-  ToolState,
-} from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@opencode-ai/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import type { Tool } from "@/tool/tool"
@@ -51,6 +43,7 @@ import type { EditTool } from "@/tool/edit"
 import type { PatchTool } from "@/tool/patch"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
+import type { QuestionTool } from "@/tool/question"
 import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -61,7 +54,6 @@ import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
 import type { PromptInfo } from "../../component/prompt/history"
-import { iife } from "@/util/iife"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
@@ -89,10 +81,9 @@ import {
   DEFAULT_SPINNER_KEY,
   DEFAULT_SPINNER_INTERVAL_MS,
 } from "../../util/spinners"
-import { DialogAskQuestion } from "../../ui/dialog-askquestion.tsx"
-import { DialogExportOptions } from "../../ui/dialog-export-options"
-import type { AskQuestion } from "@/askquestion"
 import { PermissionPrompt } from "./permission"
+import { QuestionPrompt } from "./question"
+import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 
 // Re-export for backward compatibility
@@ -228,8 +219,12 @@ export function Session() {
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const permissions = createMemo(() => {
-    if (session()?.parentID) return sync.data.permission[route.sessionID] ?? []
+    if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
+  })
+  const questions = createMemo(() => {
+    if (session()?.parentID) return []
+    return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
 
   const pending = createMemo(() => {
@@ -241,7 +236,8 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  const [sidebar, setSidebar] = createSignal<"show" | "hide" | "auto">(kv.get("sidebar", "auto"))
+  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
+  const [sidebarOpen, setSidebarOpen] = createSignal(false)
 
   const hw = 1
   const min = 20
@@ -253,17 +249,18 @@ export function Session() {
 
   const [w, setW] = createSignal(clamp(kv.get("sidebar_width", 42)))
   const [conceal, setConceal] = createSignal(true)
-  const [showThinking, setShowThinking] = createSignal(kv.get("thinking_visibility", true))
-  const [showTimestamps, setShowTimestamps] = createSignal(kv.get("timestamps", "hide") === "show")
+  const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
+  const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
+  const showTimestamps = createMemo(() => timestamps() === "show")
   const [showTokens, setShowTokens] = createSignal(kv.get("tokens", "hide") === "show")
   const [usernameVisible, setUsernameVisible] = createSignal(kv.get("username_visible", true))
-  const [showDetails, setShowDetails] = createSignal(kv.get("tool_details_visibility", true))
-  const [showAssistantMetadata, setShowAssistantMetadata] = createSignal(kv.get("assistant_metadata_visibility", true))
-  const [showScrollbar, setShowScrollbar] = createSignal(kv.get("scrollbar_visible", false))
+  const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
+  const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
+  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
   const [headerVisible, setHeaderVisible] = createSignal(kv.get("header_visible", true))
   const [userMessageMarkdown, setUserMessageMarkdown] = createSignal(kv.get("user_message_markdown", true))
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
-  const [animationsEnabled, setAnimationsEnabled] = createSignal(kv.get("animations_enabled", true))
+  const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
 
   // Initialize spinner style and interval from KV store
   const savedSpinnerStyle = kv.get("spinner_style", DEFAULT_SPINNER_KEY)
@@ -339,7 +336,7 @@ export function Session() {
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
     if (session()?.parentID) return false
-    if (sidebar() === "show") return true
+    if (sidebarOpen()) return true
     if (sidebar() === "auto" && wide()) return true
     return false
   })
@@ -384,86 +381,6 @@ export function Session() {
     if (route.initialPrompt && prompt) {
       prompt.set(route.initialPrompt)
     }
-  })
-
-  // Detect pending askquestion tools from synced message parts
-  // Access via session.messages -> parts for proper Solid.js reactivity
-  const pendingAskQuestionFromSync = createMemo(() => {
-    const sessionMessages = sync.data.message[route.sessionID] ?? []
-
-    const getMetadata = (toolPart: ToolPart) => {
-      const stateMetadata = (toolPart.state as { metadata?: unknown }).metadata as
-        | { status?: string; questions?: AskQuestion.Question[] }
-        | undefined
-      const partMetadata = toolPart.metadata as
-        | { status?: string; questions?: AskQuestion.Question[] }
-        | undefined
-      return stateMetadata ?? partMetadata
-    }
-
-    const findInParts = (parts: Part[]) => {
-      for (const part of [...parts].reverse()) {
-        if (part.type !== "tool") continue
-        const toolPart = part as ToolPart
-
-        if (toolPart.tool !== "askquestion") continue
-        if (!toolPart.callID) continue
-        if (toolPart.state.status !== "running") continue
-
-        const metadata = getMetadata(toolPart)
-        if (metadata?.status && metadata.status !== "waiting") continue
-
-        const inputQuestions = (toolPart.state.input as { questions?: AskQuestion.Question[] }).questions
-        const questions = (metadata?.questions ?? inputQuestions) as AskQuestion.Question[] | undefined
-        if (!questions || questions.length === 0) continue
-
-        return {
-          callID: toolPart.callID,
-          messageId: toolPart.messageID,
-          questions,
-        }
-      }
-      return null
-    }
-
-    // Search backwards for the most recent pending question (message-first)
-    for (const message of [...sessionMessages].reverse()) {
-      const parts = sync.data.part[message.id] ?? []
-      const pending = findInParts(parts)
-      if (pending) return pending
-    }
-
-    // Fallback: scan all parts in case message list is delayed/out of order
-    let latest: { pending: { callID: string; messageId: string; questions: AskQuestion.Question[] }; time: number } | null = null
-    for (const parts of Object.values(sync.data.part)) {
-      for (const part of parts) {
-        if (part.type !== "tool") continue
-        const toolPart = part as ToolPart
-        if (toolPart.tool !== "askquestion") continue
-        if (toolPart.sessionID !== route.sessionID) continue
-        if (!toolPart.callID) continue
-        if (toolPart.state.status !== "running") continue
-
-        const metadata = getMetadata(toolPart)
-        if (metadata?.status && metadata.status !== "waiting") continue
-
-        const inputQuestions = (toolPart.state.input as { questions?: AskQuestion.Question[] }).questions
-        const questions = (metadata?.questions ?? inputQuestions) as AskQuestion.Question[] | undefined
-        if (!questions || questions.length === 0) continue
-
-        const time = (toolPart.state as { time?: { start?: number } }).time?.start ?? 0
-        const pending = {
-          callID: toolPart.callID,
-          messageId: toolPart.messageID,
-          questions,
-        }
-        if (!latest || time > latest.time) {
-          latest = { pending, time }
-        }
-      }
-    }
-
-    return latest?.pending ?? null
   })
 
   let scroll: ScrollBoxRenderable
@@ -828,26 +745,10 @@ export function Session() {
       keybind: "sidebar_toggle",
       category: "Session",
       onSelect: (dialog) => {
-        setSidebar((prev) => {
-          if (prev === "auto") return sidebarVisible() ? "hide" : "show"
-          if (prev === "show") return "hide"
-          return "show"
-        })
-        if (sidebar() === "show") kv.set("sidebar", "auto")
-        if (sidebar() === "hide") kv.set("sidebar", "hide")
-        dialog.clear()
-      },
-    },
-    {
-      title: usernameVisible() ? "Hide username" : "Show username",
-      value: "session.username_visible.toggle",
-      keybind: "username_toggle",
-      category: "Session",
-      onSelect: (dialog) => {
-        setUsernameVisible((prev) => {
-          const next = !prev
-          kv.set("username_visible", next)
-          return next
+        batch(() => {
+          const isVisible = sidebarVisible()
+          setSidebar(() => (isVisible ? "hide" : "auto"))
+          setSidebarOpen(!isVisible)
         })
         dialog.clear()
       },
@@ -867,11 +768,7 @@ export function Session() {
       value: "session.toggle.timestamps",
       category: "Session",
       onSelect: (dialog) => {
-        setShowTimestamps((prev) => {
-          const next = !prev
-          kv.set("timestamps", next ? "show" : "hide")
-          return next
-        })
+        setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
         dialog.clear()
       },
     },
@@ -880,11 +777,7 @@ export function Session() {
       value: "session.toggle.thinking",
       category: "Session",
       onSelect: (dialog) => {
-        setShowThinking((prev) => {
-          const next = !prev
-          kv.set("thinking_visibility", next)
-          return next
-        })
+        setShowThinking((prev) => !prev)
         dialog.clear()
       },
     },
@@ -916,9 +809,7 @@ export function Session() {
       keybind: "tool_details",
       category: "Session",
       onSelect: (dialog) => {
-        const newValue = !showDetails()
-        setShowDetails(newValue)
-        kv.set("tool_details_visibility", newValue)
+        setShowDetails((prev) => !prev)
         dialog.clear()
       },
     },
@@ -928,11 +819,7 @@ export function Session() {
       keybind: "scrollbar_toggle",
       category: "Session",
       onSelect: (dialog) => {
-        setShowScrollbar((prev) => {
-          const next = !prev
-          kv.set("scrollbar_visible", next)
-          return next
-        })
+        setShowScrollbar((prev) => !prev)
         dialog.clear()
       },
     },
@@ -968,11 +855,7 @@ export function Session() {
       value: "session.toggle.animations",
       category: "Session",
       onSelect: (dialog) => {
-        setAnimationsEnabled((prev) => {
-          const next = !prev
-          kv.set("animations_enabled", next)
-          return next
-        })
+        setAnimationsEnabled((prev) => !prev)
         dialog.clear()
       },
     },
@@ -1494,44 +1377,6 @@ export function Session() {
                   </scrollbox>
                   <box flexShrink={0}>
                     <Switch>
-                      <Match when={pendingAskQuestionFromSync()}>
-                        {(pending) => (
-                          <DialogAskQuestion
-                            questions={pending().questions}
-                            onSubmit={async (answers) => {
-                              await fetch(`${sdk.url}/askquestion/respond`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  callID: pending().callID,
-                                  sessionID: route.sessionID,
-                                  answers,
-                                }),
-                              }).catch(() => {
-                                toast.show({
-                                  message: "Failed to submit answers",
-                                  variant: "error",
-                                })
-                              })
-                            }}
-                            onCancel={async () => {
-                              await fetch(`${sdk.url}/askquestion/cancel`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  callID: pending().callID,
-                                  sessionID: route.sessionID,
-                                }),
-                              }).catch(() => {
-                                toast.show({
-                                  message: "Failed to cancel",
-                                  variant: "error",
-                                })
-                              })
-                            }}
-                          />
-                        )}
-                      </Match>
                       <Match when={permissions().length > 0}>
                         <PermissionPrompt request={permissions()[0]} />
                       </Match>
@@ -1555,13 +1400,25 @@ export function Session() {
                           }}
                         />
                       </Match>
-                      <Match when={!pendingAskQuestionFromSync() && !searchMode() && permissions().length === 0}>
+                      <Match when={permissions().length === 0 && questions().length > 0}>
+                        <QuestionPrompt request={questions()[0]} />
+                      </Match>
+                      <Match when={true}>
                         <Prompt
+                          visible={
+                            !session()?.parentID &&
+                            !searchMode() &&
+                            permissions().length === 0 &&
+                            questions().length === 0
+                          }
                           ref={(r) => {
                             prompt = r
                             promptRef.set(r)
+                            if (route.initialPrompt) {
+                              r.set(route.initialPrompt)
+                            }
                           }}
-                          disabled={permissions().length > 0}
+                          disabled={permissions().length > 0 || questions().length > 0}
                           onSubmit={() => {
                             toBottom()
                           }}
@@ -1651,6 +1508,7 @@ function UserMessage(props: {
   const [hover, setHover] = createSignal(false)
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => (queued() ? theme.accent : local.agent.color(props.message.agent)))
+  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
@@ -1701,7 +1559,7 @@ function UserMessage(props: {
               <HighlightedText text={text()?.text ?? ""} messageID={props.message.id} />
             </Show>
             <Show when={files().length}>
-              <box flexDirection="row" paddingBottom={1} paddingTop={1} gap={1} flexWrap="wrap">
+              <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
                   {(file) => {
                     const bg = createMemo(() => {
@@ -1719,23 +1577,22 @@ function UserMessage(props: {
                 </For>
               </box>
             </Show>
-            <text fg={theme.textMuted}>
-              {ctx.usernameVisible() ? `${sync.data.config.username ?? "You "}` : "You "}
-              <Show
-                when={queued()}
-                fallback={
-                  <Show when={ctx.showTimestamps()}>
+            <Show
+              when={queued()}
+              fallback={
+                <Show when={ctx.showTimestamps()}>
+                  <text fg={theme.textMuted}>
                     <span style={{ fg: theme.textMuted }}>
-                      {ctx.usernameVisible() ? " · " : " "}
                       {Locale.todayTimeOrDateTime(props.message.time.created)}
                     </span>
-                  </Show>
-                }
-              >
-                <span> </span>
+                  </text>
+                </Show>
+              }
+            >
+              <text fg={theme.textMuted}>
                 <span style={{ bg: theme.accent, fg: theme.backgroundPanel, bold: true }}> QUEUED </span>
-              </Show>
-            </text>
+              </text>
+            </Show>
           </box>
         </box>
       </Show>
@@ -1938,193 +1795,92 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 // Pending messages moved to individual tool pending functions
 
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
+  const ctx = use()
   const sync = useSync()
 
+  // Hide tool if showDetails is false and tool completed successfully
+  const shouldHide = createMemo(() => {
+    if (ctx.showDetails()) return false
+    if (props.part.state.status !== "completed") return false
+    return true
+  })
+
+  const toolprops = {
+    get metadata() {
+      return props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})
+    },
+    get input() {
+      return props.part.state.input ?? {}
+    },
+    get output() {
+      return props.part.state.status === "completed" ? props.part.state.output : undefined
+    },
+    get permission() {
+      const permissions = sync.data.permission[props.message.sessionID] ?? []
+      const permissionIndex = permissions.findIndex((x) => x.tool?.callID === props.part.callID)
+      return permissions[permissionIndex]
+    },
+    get tool() {
+      return props.part.tool
+    },
+    get part() {
+      return props.part
+    },
+    get message() {
+      return props.message
+    },
+  }
+
   return (
-    <Switch>
-      <Match when={props.part.tool === "bash"}>
-        <Bash
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "glob"}>
-        <Glob
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "read"}>
-        <Read
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "grep"}>
-        <Grep
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "list"}>
-        <List
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "webfetch"}>
-        <WebFetch
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "codesearch"}>
-        <CodeSearch
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "websearch"}>
-        <WebSearch
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "write"}>
-        <Write
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "edit"}>
-        <Edit
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "task"}>
-        <Task
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "patch"}>
-        <Patch
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={props.part.tool === "todo-write"}>
-        <TodoWrite
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-      <Match when={true}>
-        <GenericTool
-          metadata={props.part.state.status === "pending" ? {} : (props.part.state.metadata ?? {})}
-          input={props.part.state.input ?? {}}
-          output={props.part.state.status === "completed" ? props.part.state.output : undefined}
-          permission={
-            sync.data.permission[props.message.sessionID]?.find((x) => x.tool?.callID === props.part.callID) as any
-          }
-          tool={props.part.tool}
-          part={props.part}
-          message={props.message}
-        />
-      </Match>
-    </Switch>
+    <Show when={!shouldHide()}>
+      <Switch>
+        <Match when={props.part.tool === "bash"}>
+          <Bash {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "glob"}>
+          <Glob {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "read"}>
+          <Read {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "grep"}>
+          <Grep {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "list"}>
+          <List {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "webfetch"}>
+          <WebFetch {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "codesearch"}>
+          <CodeSearch {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "websearch"}>
+          <WebSearch {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "write"}>
+          <Write {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "edit"}>
+          <Edit {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "task"}>
+          <Task {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "patch"}>
+          <Patch {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "todowrite"}>
+          <TodoWrite {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "question"}>
+          <Question {...toolprops} />
+        </Match>
+        <Match when={true}>
+          <GenericTool {...toolprops} />
+        </Match>
+      </Switch>
+    </Show>
   )
 }
 
@@ -2188,7 +1944,12 @@ function InlineTool(props: {
 
   const error = createMemo(() => (props.part.state.status === "error" ? props.part.state.error : undefined))
 
-  const denied = createMemo(() => error()?.includes("rejected permission") || error()?.includes("specified a rule"))
+  const denied = createMemo(
+    () =>
+      error()?.includes("rejected permission") ||
+      error()?.includes("specified a rule") ||
+      error()?.includes("user dismissed"),
+  )
 
   return (
     <box
@@ -2637,6 +2398,34 @@ function TodoWrite(props: ToolProps<typeof TodoWriteTool>) {
       <Match when={true}>
         <InlineTool icon="⚙" pending="Updating todos..." complete={false} part={props.part}>
           Updating todos...
+        </InlineTool>
+      </Match>
+    </Switch>
+  )
+}
+
+function Question(props: ToolProps<typeof QuestionTool>) {
+  const { theme } = useTheme()
+  const count = createMemo(() => props.input.questions?.length ?? 0)
+  return (
+    <Switch>
+      <Match when={props.metadata.answers}>
+        <BlockTool title="# Questions" part={props.part}>
+          <box>
+            <For each={props.input.questions ?? []}>
+              {(q, i) => (
+                <box flexDirection="row" gap={1}>
+                  <text fg={theme.textMuted}>{q.question}</text>
+                  <text fg={theme.text}>{props.metadata.answers?.[i()] || "(no answer)"}</text>
+                </box>
+              )}
+            </For>
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool icon="→" pending="Asking questions..." complete={count()} part={props.part}>
+          Asked {count()} question{count() !== 1 ? "s" : ""}
         </InlineTool>
       </Match>
     </Switch>

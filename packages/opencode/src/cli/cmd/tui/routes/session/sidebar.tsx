@@ -11,14 +11,16 @@ import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { getSpinnerFrame } from "../../util/spinners"
 import { useToast } from "../../ui/toast"
+import { TodoItem } from "../../component/todo-item"
 
-export function Sidebar(props: { sessionID: string; width: number }) {
+export function Sidebar(props: { sessionID: string; width: number; overlay?: boolean }) {
   const sync = useSync()
   const route = useRoute()
   const { theme } = useTheme()
   const toast = useToast()
   const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
+  const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
 
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
 
@@ -26,6 +28,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
     context: true,
     mcp: true,
     diff: true,
+    todo: true,
     lsp: true,
     subagents: true,
   })
@@ -41,6 +44,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
       context: kv.get("sidebar_expanded_context", true),
       mcp: kv.get("sidebar_expanded_mcp", true),
       diff: kv.get("sidebar_expanded_diff", true),
+      todo: kv.get("sidebar_expanded_todo", true),
       lsp: kv.get("sidebar_expanded_lsp", true),
       subagents: kv.get("sidebar_expanded_subagents", true),
     })
@@ -123,6 +127,7 @@ export function Sidebar(props: { sessionID: string; width: number }) {
         paddingBottom={1}
         paddingLeft={2}
         paddingRight={2}
+        position={props.overlay ? "absolute" : "relative"}
       >
         <scrollbox flexGrow={1}>
           <box flexShrink={0} gap={1} paddingRight={1}>
@@ -329,6 +334,26 @@ export function Sidebar(props: { sessionID: string; width: number }) {
                 </For>
               </Show>
             </box>
+
+            {/* Todo Section */}
+            <Show when={todo().length > 0 && todo().some((item) => item.status !== "completed")}>
+              <box>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("todo", !expanded.todo)}>
+                  <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
+                  <text fg={theme.text}>
+                    <b>Todo</b>
+                    <Show when={!expanded.todo}>
+                      <span style={{ fg: theme.textMuted }}> ({todo().length})</span>
+                    </Show>
+                  </text>
+                </box>
+                <Show when={expanded.todo}>
+                  <For each={todo()}>
+                    {(item) => <TodoItem status={item.status} content={item.content} />}
+                  </For>
+                </Show>
+              </box>
+            </Show>
 
             {/* Changed Files Section */}
             <Show when={diff().length > 0}>

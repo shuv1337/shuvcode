@@ -8,6 +8,7 @@ import type {
   Todo,
   Command,
   PermissionRequest,
+  QuestionRequest,
   LspStatus,
   McpStatus,
   IdeStatus,
@@ -50,6 +51,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       permission: {
         [sessionID: string]: PermissionRequest[]
       }
+      question: {
+        [sessionID: string]: QuestionRequest[]
+      }
       config: Config
       session: Session[]
       session_status: {
@@ -89,6 +93,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       status: "loading",
       agent: [],
       permission: {},
+      question: {},
       command: [],
       provider: [],
       provider_default: {},
@@ -145,6 +150,44 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           }
           setStore(
             "permission",
+            request.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 0, request)
+            }),
+          )
+          break
+        }
+
+        case "question.replied":
+        case "question.rejected": {
+          const requests = store.question[event.properties.sessionID]
+          if (!requests) break
+          const match = Binary.search(requests, event.properties.requestID, (r) => r.id)
+          if (!match.found) break
+          setStore(
+            "question",
+            event.properties.sessionID,
+            produce((draft) => {
+              draft.splice(match.index, 1)
+            }),
+          )
+          break
+        }
+
+        case "question.asked": {
+          const request = event.properties
+          const requests = store.question[request.sessionID]
+          if (!requests) {
+            setStore("question", request.sessionID, [request])
+            break
+          }
+          const match = Binary.search(requests, request.id, (r) => r.id)
+          if (match.found) {
+            setStore("question", request.sessionID, match.index, reconcile(request))
+            break
+          }
+          setStore(
+            "question",
             request.sessionID,
             produce((draft) => {
               draft.splice(match.index, 0, request)

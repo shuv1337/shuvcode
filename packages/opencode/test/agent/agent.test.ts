@@ -1,6 +1,4 @@
 import { test, expect } from "bun:test"
-import path from "path"
-import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
@@ -449,86 +447,65 @@ test("legacy tools config maps write/edit/patch/multiedit to edit permission", a
   })
 })
 
-test("default_agent config sets default property on specified agent", async () => {
+test("Truncate.DIR is allowed even when user denies external_directory globally", async () => {
+  const { Truncate } = await import("../../src/tool/truncation")
   await using tmp = await tmpdir({
-    init: async (dir) => {
-      const opencodeDir = path.join(dir, ".opencode")
-      await fs.mkdir(opencodeDir, { recursive: true })
-      const agentDir = path.join(opencodeDir, "agent")
-      await fs.mkdir(agentDir, { recursive: true })
-
-      // Create custom agent
-      await Bun.write(
-        path.join(agentDir, "orchestrator.md"),
-        `---
-model: test/model
-mode: primary
----
-Orchestrator agent prompt`,
-      )
-
-      // Set as default
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
-          default_agent: "orchestrator",
-        }),
-      )
+    config: {
+      permission: {
+        external_directory: "deny",
+      },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const agents = await Agent.list()
-      const orchestrator = agents.find((a) => a.name === "orchestrator")
-      expect(orchestrator?.default).toBe(true)
-
-      const build = agents.find((a) => a.name === "build")
-      expect(build?.default).toBeFalsy()
-
-      const defaultName = await Agent.defaultAgent()
-      expect(defaultName).toBe("orchestrator")
+      const build = await Agent.get("build")
+      expect(PermissionNext.evaluate("external_directory", Truncate.DIR, build!.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("external_directory", "/some/other/path", build!.permission).action).toBe("deny")
     },
   })
 })
 
-test("default_agent falls back to build when invalid agent specified", async () => {
+test("Truncate.DIR is allowed even when user denies external_directory per-agent", async () => {
+  const { Truncate } = await import("../../src/tool/truncation")
   await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencode.json"),
-        JSON.stringify({
-          $schema: "https://opencode.ai/config.json",
-          default_agent: "nonexistent-agent",
-        }),
-      )
+    config: {
+      agent: {
+        build: {
+          permission: {
+            external_directory: "deny",
+          },
+        },
+      },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const agents = await Agent.list()
-      const build = agents.find((a) => a.name === "build")
-      expect(build?.default).toBe(true)
-
-      const defaultName = await Agent.defaultAgent()
-      expect(defaultName).toBe("build")
+      const build = await Agent.get("build")
+      expect(PermissionNext.evaluate("external_directory", Truncate.DIR, build!.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("external_directory", "/some/other/path", build!.permission).action).toBe("deny")
     },
   })
 })
 
-test("defaultAgent returns build when no default_agent configured", async () => {
-  await using tmp = await tmpdir()
+test("explicit Truncate.DIR deny is respected", async () => {
+  const { Truncate } = await import("../../src/tool/truncation")
+  await using tmp = await tmpdir({
+    config: {
+      permission: {
+        external_directory: {
+          "*": "deny",
+          [Truncate.DIR]: "deny",
+        },
+      },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const agents = await Agent.list()
-      const build = agents.find((a) => a.name === "build")
-      expect(build?.default).toBe(true)
-
-      const defaultName = await Agent.defaultAgent()
-      expect(defaultName).toBe("build")
+      const build = await Agent.get("build")
+      expect(PermissionNext.evaluate("external_directory", Truncate.DIR, build!.permission).action).toBe("deny")
     },
   })
 })

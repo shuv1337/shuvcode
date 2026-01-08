@@ -7,10 +7,6 @@ import type {
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
-  AskquestionCancelErrors,
-  AskquestionCancelResponses,
-  AskquestionRespondErrors,
-  AskquestionRespondResponses,
   Auth as Auth2,
   AuthSetErrors,
   AuthSetResponses,
@@ -38,9 +34,6 @@ import type {
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
-  IdeConnectResponses,
-  IdeDisconnectResponses,
-  IdeStatusResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -71,8 +64,6 @@ import type {
   PermissionRespondResponses,
   PermissionRuleset,
   ProjectBrowseResponses,
-  ProjectCreateErrors,
-  ProjectCreateResponses,
   ProjectCurrentResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
@@ -94,6 +85,11 @@ import type {
   PtyRemoveResponses,
   PtyUpdateErrors,
   PtyUpdateResponses,
+  QuestionListResponses,
+  QuestionRejectErrors,
+  QuestionRejectResponses,
+  QuestionReplyErrors,
+  QuestionReplyResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -142,6 +138,7 @@ import type {
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
+  ToolListErrors,
   ToolListResponses,
   TuiAppendPromptErrors,
   TuiAppendPromptResponses,
@@ -265,47 +262,6 @@ export class Project extends HeyApiClient {
       url: "/project",
       ...options,
       ...params,
-    })
-  }
-
-  /**
-   * Create project
-   *
-   * Create a new project directory and initialize it as a git repository, or add an existing directory as a project.
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      path?: string
-      name?: string
-      repo?: string
-      degit?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "path" },
-            { in: "body", key: "name" },
-            { in: "body", key: "repo" },
-            { in: "body", key: "degit" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ProjectCreateResponses, ProjectCreateErrors, ThrowOnError>({
-      url: "/project",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
@@ -678,25 +634,6 @@ export class Config extends HeyApiClient {
 
 export class Tool extends HeyApiClient {
   /**
-   * List tools
-   *
-   * Get a list of all available tools with their enabled status.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ToolListResponses, unknown, ThrowOnError>({
-      url: "/tool/list",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * List tool IDs
    *
    * Get a list of all available tool IDs, including both built-in tools and dynamically registered tools.
@@ -710,6 +647,38 @@ export class Tool extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ToolIdsResponses, ToolIdsErrors, ThrowOnError>({
       url: "/experimental/tool/ids",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List tools
+   *
+   * Get a list of available tools with their JSON schema parameters for a specific provider and model combination.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      provider: string
+      model: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "provider" },
+            { in: "query", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ToolListResponses, ToolListErrors, ThrowOnError>({
+      url: "/experimental/tool",
       ...options,
       ...params,
     })
@@ -1850,31 +1819,36 @@ export class Permission extends HeyApiClient {
   }
 }
 
-export class Askquestion extends HeyApiClient {
+export class Question extends HeyApiClient {
   /**
-   * Respond to askquestion
+   * List pending questions
    *
-   * Submit answers to a pending askquestion tool call.
+   * Get all pending question requests across all sessions.
    */
-  public respond<ThrowOnError extends boolean = false>(
+  public list<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      sessionID?: string
-      callID?: string
-      answers?: Array<{
-        /**
-         * ID of the question being answered
-         */
-        questionId: string
-        /**
-         * Selected option value(s)
-         */
-        values: Array<string>
-        /**
-         * Custom text if user typed their own response
-         */
-        customText?: string
-      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<QuestionListResponses, unknown, ThrowOnError>({
+      url: "/question",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Reply to question request
+   *
+   * Provide answers to a question request from the AI assistant.
+   */
+  public reply<ThrowOnError extends boolean = false>(
+    parameters: {
+      requestID: string
+      directory?: string
+      answers?: Array<string>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1883,16 +1857,15 @@ export class Askquestion extends HeyApiClient {
       [
         {
           args: [
+            { in: "path", key: "requestID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "callID" },
             { in: "body", key: "answers" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<AskquestionRespondResponses, AskquestionRespondErrors, ThrowOnError>({
-      url: "/askquestion/respond",
+    return (options?.client ?? this.client).post<QuestionReplyResponses, QuestionReplyErrors, ThrowOnError>({
+      url: "/question/{requestID}/reply",
       ...options,
       ...params,
       headers: {
@@ -1904,15 +1877,14 @@ export class Askquestion extends HeyApiClient {
   }
 
   /**
-   * Cancel askquestion
+   * Reject question request
    *
-   * Cancel a pending askquestion tool call.
+   * Reject a question request from the AI assistant.
    */
-  public cancel<ThrowOnError extends boolean = false>(
-    parameters?: {
+  public reject<ThrowOnError extends boolean = false>(
+    parameters: {
+      requestID: string
       directory?: string
-      sessionID?: string
-      callID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1921,22 +1893,16 @@ export class Askquestion extends HeyApiClient {
       [
         {
           args: [
+            { in: "path", key: "requestID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "callID" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<AskquestionCancelResponses, AskquestionCancelErrors, ThrowOnError>({
-      url: "/askquestion/cancel",
+    return (options?.client ?? this.client).post<QuestionRejectResponses, QuestionRejectErrors, ThrowOnError>({
+      url: "/question/{requestID}/reject",
       ...options,
       ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 }
@@ -2642,83 +2608,6 @@ export class Experimental extends HeyApiClient {
   resource = new Resource({ client: this.client })
 }
 
-export class Ide extends HeyApiClient {
-  /**
-   * Get IDE status
-   *
-   * Get the status of all IDE instances.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<IdeStatusResponses, unknown, ThrowOnError>({
-      url: "/ide",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Connect to an IDE instance
-   */
-  public connect<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<IdeConnectResponses, unknown, ThrowOnError>({
-      url: "/ide/{name}/connect",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Disconnect from an IDE instance
-   */
-  public disconnect<ThrowOnError extends boolean = false>(
-    parameters: {
-      name: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "name" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<IdeDisconnectResponses, unknown, ThrowOnError>({
-      url: "/ide/{name}/disconnect",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -3149,7 +3038,7 @@ export class OpencodeClient extends HeyApiClient {
 
   permission = new Permission({ client: this.client })
 
-  askquestion = new Askquestion({ client: this.client })
+  question = new Question({ client: this.client })
 
   command = new Command({ client: this.client })
 
@@ -3164,8 +3053,6 @@ export class OpencodeClient extends HeyApiClient {
   mcp = new Mcp({ client: this.client })
 
   experimental = new Experimental({ client: this.client })
-
-  ide = new Ide({ client: this.client })
 
   lsp = new Lsp({ client: this.client })
 
