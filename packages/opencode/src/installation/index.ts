@@ -1,6 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
 import path from "path"
-import fs from "fs"
 import { $ } from "bun"
 import z from "zod"
 import { NamedError } from "@opencode-ai/util/error"
@@ -11,15 +10,10 @@ import { Flag } from "../flag/flag"
 declare global {
   const OPENCODE_VERSION: string
   const OPENCODE_CHANNEL: string
-  const OPENCODE_BASE_VERSION: string
-  const OPENCODE_COMMIT_HASH: string
 }
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
-
-  // Package name for npm registry - shuvcode fork uses "shuvcode"
-  const PACKAGE_NAME = "shuvcode"
 
   export type Method = Awaited<ReturnType<typeof method>>
 
@@ -63,19 +57,12 @@ export namespace Installation {
     return CHANNEL === "local"
   }
 
-  export function isBundled() {
-    const staticPath = path.join(path.dirname(process.execPath), "static")
-    return fs.existsSync(staticPath)
-  }
-
   export async function method() {
+    if (process.execPath.includes(path.join(".opencode", "bin"))) return "curl"
+    if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
     const exec = process.execPath.toLowerCase()
 
     const checks = [
-      {
-        name: "bun" as const,
-        command: () => $`bun pm ls -g`.throws(false).quiet().text(),
-      },
       {
         name: "npm" as const,
         command: () => $`npm list -g --depth=0`.throws(false).quiet().text(),
@@ -87,6 +74,14 @@ export namespace Installation {
       {
         name: "pnpm" as const,
         command: () => $`pnpm list -g --depth=0`.throws(false).quiet().text(),
+      },
+      {
+        name: "bun" as const,
+        command: () => $`bun pm ls -g`.throws(false).quiet().text(),
+      },
+      {
+        name: "brew" as const,
+        command: () => $`brew list --formula opencode`.throws(false).quiet().text(),
       },
     ]
 
@@ -100,7 +95,7 @@ export namespace Installation {
 
     for (const check of checks) {
       const output = await check.command()
-      if (output.includes(PACKAGE_NAME)) {
+      if (output.includes(check.name === "brew" ? "opencode" : "opencode-ai")) {
         return check.name
       }
     }
@@ -115,23 +110,42 @@ export namespace Installation {
     }),
   )
 
+  async function getBrewFormula() {
+    const tapFormula = await $`brew list --formula anomalyco/tap/opencode`.throws(false).quiet().text()
+    if (tapFormula.includes("opencode")) return "anomalyco/tap/opencode"
+    const coreFormula = await $`brew list --formula opencode`.throws(false).quiet().text()
+    if (coreFormula.includes("opencode")) return "opencode"
+    return "opencode"
+  }
+
   export async function upgrade(method: Method, target: string) {
     let cmd
     switch (method) {
-      case "bun":
-        cmd = $`bun install -g ${PACKAGE_NAME}@${target}`
+      case "curl":
+        cmd = $`curl -fsSL https://opencode.ai/install | bash`.env({
+          ...process.env,
+          VERSION: target,
+        })
         break
       case "npm":
-        cmd = $`npm install -g ${PACKAGE_NAME}@${target}`
+        cmd = $`npm install -g opencode-ai@${target}`
         break
       case "pnpm":
-        cmd = $`pnpm install -g ${PACKAGE_NAME}@${target}`
+        cmd = $`pnpm install -g opencode-ai@${target}`
         break
-      case "yarn":
-        cmd = $`yarn global add ${PACKAGE_NAME}@${target}`
+      case "bun":
+        cmd = $`bun install -g opencode-ai@${target}`
         break
+      case "brew": {
+        const formula = await getBrewFormula()
+        cmd = $`brew install ${formula}`.env({
+          HOMEBREW_NO_AUTO_UPDATE: "1",
+          ...process.env,
+        })
+        break
+      }
       default:
-        throw new Error(`Unknown or unsupported upgrade method: ${method}. Use: bun, npm, pnpm, or yarn`)
+        throw new Error(`Unknown method: ${method}`)
     }
     const result = await cmd.quiet().throws(false)
     log.info("upgraded", {
@@ -149,30 +163,43 @@ export namespace Installation {
 
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
-  export const BASE_VERSION = typeof OPENCODE_BASE_VERSION === "string" ? OPENCODE_BASE_VERSION : VERSION
-  export const COMMIT_HASH = typeof OPENCODE_COMMIT_HASH === "string" ? OPENCODE_COMMIT_HASH : "unknown"
-  export const USER_AGENT = `shuvcode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
+  export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
 
-  export function displayVersion() {
-    if (!isPreview()) return VERSION
-    if (BASE_VERSION === VERSION) return VERSION
-    return `${BASE_VERSION} (${VERSION})`
-  }
+  export async function latest(installMethod?: Method) {
+    const detectedMethod = installMethod || (await method())
 
-  export async function latest(_installMethod?: Method) {
-    // Fetch latest version from npm registry for shuvcode
-    // Use npm config registry if available, fallback to npmjs.org
-    // Note: shuvcode is not on brew, so we skip brew-specific checks
-    const registry = await iife(async () => {
-      const r = (await $`npm config get registry`.quiet().nothrow().text()).trim()
-      const reg = r || "https://registry.npmjs.org"
-      return reg.endsWith("/") ? reg.slice(0, -1) : reg
-    })
-    return fetch(`${registry}/${PACKAGE_NAME}/latest`)
+    if (detectedMethod === "brew") {
+      const formula = await getBrewFormula()
+      if (formula === "opencode") {
+        return fetch("https://formulae.brew.sh/api/formula/opencode.json")
+          .then((res) => {
+            if (!res.ok) throw new Error(res.statusText)
+            return res.json()
+          })
+          .then((data: any) => data.versions.stable)
+      }
+    }
+
+    if (detectedMethod === "npm" || detectedMethod === "bun" || detectedMethod === "pnpm") {
+      const registry = await iife(async () => {
+        const r = (await $`npm config get registry`.quiet().nothrow().text()).trim()
+        const reg = r || "https://registry.npmjs.org"
+        return reg.endsWith("/") ? reg.slice(0, -1) : reg
+      })
+      const channel = CHANNEL
+      return fetch(`${registry}/opencode-ai/${channel}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(res.statusText)
+          return res.json()
+        })
+        .then((data: any) => data.version)
+    }
+
+    return fetch("https://api.github.com/repos/anomalyco/opencode/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()
       })
-      .then((data: any) => data.version)
+      .then((data: any) => data.tag_name.replace(/^v/, ""))
   }
 }

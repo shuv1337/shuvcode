@@ -1,10 +1,9 @@
 import type { Ghostty, Terminal as Term, FitAddon } from "ghostty-web"
-import { ComponentProps, createEffect, createSignal, onCleanup, onMount, Show, splitProps } from "solid-js"
+import { ComponentProps, createEffect, createSignal, onCleanup, onMount, splitProps } from "solid-js"
 import { useSDK } from "@/context/sdk"
 import { SerializeAddon } from "@/addons/serialize"
 import { LocalPTY } from "@/context/terminal"
 import { resolveThemeVariant, useTheme, withAlpha, type HexColor } from "@opencode-ai/ui/theme"
-import { MobileTerminalInput } from "./mobile-terminal-input"
 
 export interface TerminalProps extends ComponentProps<"div"> {
   pty: LocalPTY
@@ -39,13 +38,7 @@ export const Terminal = (props: TerminalProps) => {
   const sdk = useSDK()
   const theme = useTheme()
   let container!: HTMLDivElement
-  let mobileInputRef: HTMLInputElement | undefined
   const [local, others] = splitProps(props, ["pty", "class", "classList", "onConnectError"])
-  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches
-  const isTouchDevice = "ontouchstart" in window
-  const isMobileInputEnabled = isCoarsePointer || isTouchDevice
-  const [socket, setSocket] = createSignal<WebSocket | undefined>()
-  let isMounted = true
   let ws: WebSocket | undefined
   let term: Term | undefined
   let ghostty: Ghostty
@@ -105,11 +98,10 @@ export const Terminal = (props: TerminalProps) => {
     const mod = await import("ghostty-web")
     ghostty = await mod.Ghostty.load()
 
-    const wsSocket = new WebSocket(
+    const socket = new WebSocket(
       sdk.url + `/pty/${local.pty.id}/connect?directory=${encodeURIComponent(sdk.directory)}`,
     )
-    ws = wsSocket
-    setSocket(wsSocket)
+    ws = socket
 
     const t = new mod.Terminal({
       cursorBlink: true,
@@ -196,7 +188,7 @@ export const Terminal = (props: TerminalProps) => {
     handleResize = () => fitAddon.fit()
     window.addEventListener("resize", handleResize)
     t.onResize(async (size) => {
-      if (wsSocket.readyState === WebSocket.OPEN) {
+      if (socket.readyState === WebSocket.OPEN) {
         await sdk.client.pty
           .update({
             ptyID: local.pty.id,
@@ -209,8 +201,8 @@ export const Terminal = (props: TerminalProps) => {
       }
     })
     t.onData((data) => {
-      if (wsSocket.readyState === WebSocket.OPEN) {
-        wsSocket.send(data)
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(data)
       }
     })
     t.onKey((key) => {
@@ -221,7 +213,7 @@ export const Terminal = (props: TerminalProps) => {
     // t.onScroll((ydisp) => {
     // console.log("Scroll position:", ydisp)
     // })
-    wsSocket.addEventListener("open", () => {
+    socket.addEventListener("open", () => {
       console.log("WebSocket connected")
       sdk.client.pty
         .update({
@@ -233,20 +225,19 @@ export const Terminal = (props: TerminalProps) => {
         })
         .catch(() => {})
     })
-    wsSocket.addEventListener("message", (event: MessageEvent) => {
+    socket.addEventListener("message", (event) => {
       t.write(event.data)
     })
-    wsSocket.addEventListener("error", (error: Event) => {
+    socket.addEventListener("error", (error) => {
       console.error("WebSocket error:", error)
       props.onConnectError?.(error)
     })
-    wsSocket.addEventListener("close", () => {
+    socket.addEventListener("close", () => {
       console.log("WebSocket disconnected")
     })
   })
 
   onCleanup(() => {
-    isMounted = false
     if (handleResize) {
       window.removeEventListener("resize", handleResize)
     }
@@ -268,12 +259,6 @@ export const Terminal = (props: TerminalProps) => {
     t?.dispose()
   })
 
-  const handleContainerClick = () => {
-    if (isMobileInputEnabled && mobileInputRef) {
-      mobileInputRef.focus()
-    }
-  }
-
   return (
     <div
       ref={container}
@@ -283,15 +268,10 @@ export const Terminal = (props: TerminalProps) => {
       classList={{
         ...(local.classList ?? {}),
         "select-text": true,
-        "size-full px-3 sm:px-6 py-3 font-mono relative": true,
+        "size-full px-6 py-3 font-mono": true,
         [local.class ?? ""]: !!local.class,
       }}
-      onClick={handleContainerClick}
       {...others}
-    >
-      <Show when={isMobileInputEnabled}>
-        <MobileTerminalInput ref={(el) => (mobileInputRef = el)} socket={socket()} enabled={isMounted} />
-      </Show>
-    </div>
+    />
   )
 }
