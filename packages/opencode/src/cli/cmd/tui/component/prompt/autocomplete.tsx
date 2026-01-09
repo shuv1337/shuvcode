@@ -54,6 +54,7 @@ export type AutocompleteRef = {
 
 export type AutocompleteOption = {
   display: string
+  value?: string
   aliases?: string[]
   disabled?: boolean
   description?: string
@@ -223,6 +224,7 @@ export function Autocomplete(props: {
             const isDir = item.endsWith("/")
             return {
               display: Locale.truncateMiddle(filename, width),
+              value: filename,
               isDirectory: isDir,
               path: item,
               onSelect: () => {
@@ -261,8 +263,10 @@ export function Autocomplete(props: {
     const width = props.anchor().width - 4
 
     for (const res of Object.values(sync.data.mcp_resource)) {
+      const text = `${res.name} (${res.uri})`
       options.push({
-        display: Locale.truncateMiddle(`${res.name} (${res.uri})`, width),
+        display: Locale.truncateMiddle(text, width),
+        value: text,
         description: res.description,
         onSelect: () => {
           insertPart(res.name, {
@@ -496,7 +500,11 @@ export function Autocomplete(props: {
     }
 
     const result = fuzzysort.go(removeLineRange(currentFilter), mixed, {
-      keys: [(obj) => removeLineRange(obj.display.trimEnd()), "description", (obj) => obj.aliases?.join(" ") ?? ""],
+      keys: [
+        (obj) => removeLineRange((obj.value ?? obj.display).trimEnd()),
+        "description",
+        (obj) => obj.aliases?.join(" ") ?? "",
+      ],
       limit: 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]

@@ -1,4 +1,18 @@
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, ParentProps, Show, Switch, untrack, type JSX } from "solid-js"
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  onMount,
+  ParentProps,
+  Show,
+  Switch,
+  untrack,
+  type JSX,
+} from "solid-js"
 import { DateTime } from "luxon"
 import { A, useNavigate, useParams } from "@solidjs/router"
 import { useLayout, getAvatarColors, LocalProject } from "@/context/layout"
@@ -22,7 +36,7 @@ import { getFilename } from "@opencode-ai/util/path"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Session } from "@opencode-ai/sdk/v2/client"
 import { usePlatform, isPWA } from "@/context/platform"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import {
   DragDropProvider,
   DragDropSensors,
@@ -39,6 +53,7 @@ import { useNotification } from "@/context/notification"
 import { usePermission } from "@/context/permission"
 import { Binary } from "@opencode-ai/util/binary"
 import { PullToRefresh } from "@/components/pull-to-refresh"
+import { retry } from "@opencode-ai/util/retry"
 
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
@@ -52,6 +67,7 @@ import { applyTheme } from "@/theme/apply-theme"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
+import { navStart } from "@/utils/perf"
 import { useServer } from "@/context/server"
 
 export default function Layout(props: ParentProps) {
@@ -312,6 +328,146 @@ export default function Layout(props: ParentProps) {
 
   const currentSessions = createMemo(() => projectSessions(currentProject()))
 
+  type PrefetchQueue = {
+    inflight: Set<string>
+    pending: string[]
+    pendingSet: Set<string>
+    running: number
+  }
+
+  const prefetchChunk = 200
+  const prefetchConcurrency = 1
+  const prefetchPendingLimit = 6
+  const prefetchToken = { value: 0 }
+  const prefetchQueues = new Map<string, PrefetchQueue>()
+
+  createEffect(() => {
+    params.dir
+    globalSDK.url
+
+    prefetchToken.value += 1
+    for (const q of prefetchQueues.values()) {
+      q.pending.length = 0
+      q.pendingSet.clear()
+    }
+  })
+
+  const queueFor = (directory: string) => {
+    const existing = prefetchQueues.get(directory)
+    if (existing) return existing
+
+    const created: PrefetchQueue = {
+      inflight: new Set(),
+      pending: [],
+      pendingSet: new Set(),
+      running: 0,
+    }
+    prefetchQueues.set(directory, created)
+    return created
+  }
+
+  const prefetchMessages = (directory: string, sessionID: string, token: number) => {
+    const [, setStore] = globalSync.child(directory)
+
+    return retry(() => globalSDK.client.session.messages({ directory, sessionID, limit: prefetchChunk }))
+      .then((messages) => {
+        if (prefetchToken.value !== token) return
+
+        const items = (messages.data ?? []).filter((x) => !!x?.info?.id)
+        const next = items
+          .map((x) => x.info)
+          .filter((m) => !!m?.id)
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id))
+
+        batch(() => {
+          setStore("message", sessionID, reconcile(next, { key: "id" }))
+
+          for (const message of items) {
+            setStore(
+              "part",
+              message.info.id,
+              reconcile(
+                message.parts
+                  .filter((p) => !!p?.id)
+                  .slice()
+                  .sort((a, b) => a.id.localeCompare(b.id)),
+                { key: "id" },
+              ),
+            )
+          }
+        })
+      })
+      .catch(() => undefined)
+  }
+
+  const pumpPrefetch = (directory: string) => {
+    const q = queueFor(directory)
+    if (q.running >= prefetchConcurrency) return
+
+    const sessionID = q.pending.shift()
+    if (!sessionID) return
+
+    q.pendingSet.delete(sessionID)
+    q.inflight.add(sessionID)
+    q.running += 1
+
+    const token = prefetchToken.value
+
+    void prefetchMessages(directory, sessionID, token).finally(() => {
+      q.running -= 1
+      q.inflight.delete(sessionID)
+      pumpPrefetch(directory)
+    })
+  }
+
+  const prefetchSession = (session: Session, priority: "high" | "low" = "low") => {
+    const directory = session.directory
+    if (!directory) return
+
+    const [store] = globalSync.child(directory)
+    if (store.message[session.id] !== undefined) return
+
+    const q = queueFor(directory)
+    if (q.inflight.has(session.id)) return
+    if (q.pendingSet.has(session.id)) return
+
+    if (priority === "high") q.pending.unshift(session.id)
+    if (priority !== "high") q.pending.push(session.id)
+    q.pendingSet.add(session.id)
+
+    while (q.pending.length > prefetchPendingLimit) {
+      const dropped = q.pending.pop()
+      if (!dropped) continue
+      q.pendingSet.delete(dropped)
+    }
+
+    pumpPrefetch(directory)
+  }
+
+  createEffect(() => {
+    const sessions = currentSessions()
+    const id = params.id
+
+    if (!id) {
+      const first = sessions[0]
+      if (first) prefetchSession(first)
+
+      const second = sessions[1]
+      if (second) prefetchSession(second)
+      return
+    }
+
+    const index = sessions.findIndex((s) => s.id === id)
+    if (index === -1) return
+
+    const next = sessions[index + 1]
+    if (next) prefetchSession(next)
+
+    const prev = sessions[index - 1]
+    if (prev) prefetchSession(prev)
+  })
+
   function navigateSessionByOffset(offset: number) {
     const projects = layout.projects.list()
     if (projects.length === 0) return
@@ -337,6 +493,27 @@ export default function Layout(props: ParentProps) {
 
     if (targetIndex >= 0 && targetIndex < sessions.length) {
       const session = sessions[targetIndex]
+      const next = sessions[targetIndex + 1]
+      const prev = sessions[targetIndex - 1]
+
+      if (offset > 0) {
+        if (next) prefetchSession(next, "high")
+        if (prev) prefetchSession(prev)
+      }
+
+      if (offset < 0) {
+        if (prev) prefetchSession(prev, "high")
+        if (next) prefetchSession(next)
+      }
+
+      if (import.meta.env.DEV) {
+        navStart({
+          dir: base64Encode(session.directory),
+          from: params.id,
+          to: session.id,
+          trigger: offset > 0 ? "alt+arrowdown" : "alt+arrowup",
+        })
+      }
       navigateToSession(session)
       queueMicrotask(() => scrollToSession(session.id))
       return
@@ -352,7 +529,27 @@ export default function Layout(props: ParentProps) {
       return
     }
 
-    const targetSession = offset > 0 ? nextProjectSessions[0] : nextProjectSessions[nextProjectSessions.length - 1]
+    const index = offset > 0 ? 0 : nextProjectSessions.length - 1
+    const targetSession = nextProjectSessions[index]
+    const nextSession = nextProjectSessions[index + 1]
+    const prevSession = nextProjectSessions[index - 1]
+
+    if (offset > 0) {
+      if (nextSession) prefetchSession(nextSession, "high")
+    }
+
+    if (offset < 0) {
+      if (prevSession) prefetchSession(prevSession, "high")
+    }
+
+    if (import.meta.env.DEV) {
+      navStart({
+        dir: base64Encode(targetSession.directory),
+        from: params.id,
+        to: targetSession.id,
+        trigger: offset > 0 ? "alt+arrowdown" : "alt+arrowup",
+      })
+    }
     navigateToSession(targetSession)
     queueMicrotask(() => scrollToSession(targetSession.id))
   }
@@ -655,33 +852,21 @@ export default function Layout(props: ParentProps) {
       const status = sessionStore.session_status[props.session.id]
       return status?.type === "busy" || status?.type === "retry"
     })
-
-    const SessionRow = () => (
-      <div
-        data-session-id={props.session.id}
-        class="group/session relative w-full pr-2 py-1 rounded-md cursor-default transition-colors
-               hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
-        style={{ "padding-left": `${8 + depth() * 8}px` }}
-        onClick={() => {
-          // TODO: Re-enable layout.sessions.toggle when layout context is merged
-          // hasChildren() && layout.sessions.toggle(props.session.id)
-        }}
-      >
-        <Tooltip placement={props.mobile ? "bottom" : "right"} value={props.session.title} gutter={10}>
-          <A
-            href={`${props.slug}/session/${props.session.id}`}
-            class="flex flex-col min-w-0 text-left w-full focus:outline-none"
-          >
-            <div class="flex items-center self-stretch gap-6 justify-between transition-[padding] group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7">
-              <div class="flex items-center gap-1 min-w-0">
-                <Show when={hasChildren()} fallback={<div class="w-4 shrink-0" />}>
-                  <Icon
-                    name="chevron-down"
-                    size="small"
-                    class="transition-transform text-icon-base -ml-0.5"
-                    classList={{ "-rotate-90": !isExpanded() }}
-                  />
-                </Show>
+    return (
+      <>
+        <div
+          data-session-id={props.session.id}
+          class="group/session relative w-full rounded-md cursor-default transition-colors
+                 hover:bg-surface-raised-base-hover focus-within:bg-surface-raised-base-hover has-[.active]:bg-surface-raised-base-hover"
+        >
+          <Tooltip placement={props.mobile ? "bottom" : "right"} value={props.session.title} gutter={10}>
+            <A
+              href={`${props.slug}/session/${props.session.id}`}
+              class="flex flex-col min-w-0 text-left w-full focus:outline-none pl-4 pr-2 py-1"
+              onMouseEnter={() => prefetchSession(props.session, "high")}
+              onFocus={() => prefetchSession(props.session, "high")}
+            >
+              <div class="flex items-center self-stretch gap-6 justify-between transition-[padding] group-hover/session:pr-7 group-focus-within/session:pr-7 group-active/session:pr-7">
                 <span
                   classList={{
                     "text-14-regular text-text-strong overflow-hidden text-ellipsis truncate": true,
@@ -690,8 +875,7 @@ export default function Layout(props: ParentProps) {
                 >
                   {props.session.title}
                 </span>
-              </div>
-              <div class="shrink-0 group-hover/session:hidden group-active/session:hidden group-focus-within/session:hidden">
+                <div class="shrink-0 group-hover/session:hidden group-active/session:hidden group-focus-within/session:hidden">
                 <Switch>
                   <Match when={isWorking()}>
                     <Spinner class="size-2.5 mr-0.5" />
@@ -721,9 +905,9 @@ export default function Layout(props: ParentProps) {
                     </span>
                   </Match>
                 </Switch>
+                </div>
               </div>
-            </div>
-            <Show when={props.session.summary?.files}>
+              <Show when={props.session.summary?.files}>
               <div class="flex justify-between items-center self-stretch pl-5">
                 <span class="text-12-regular text-text-weak">{`${props.session.summary?.files || "No"} file${props.session.summary?.files !== 1 ? "s" : ""} changed`}</span>
                 <Show when={props.session.summary}>{(summary) => <DiffChanges changes={summary()} />}</Show>
@@ -752,25 +936,6 @@ export default function Layout(props: ParentProps) {
           </Tooltip>
         </div>
       </div>
-    )
-
-    return (
-      <>
-        <SessionRow />
-        <Show when={hasChildren() && isExpanded()}>
-          <For each={childSessions()}>
-            {(child) => (
-              <SessionItem
-                session={child}
-                slug={props.slug}
-                project={props.project}
-                mobile={props.mobile}
-                depth={depth() + 1}
-                allSessions={props.allSessions}
-              />
-            )}
-          </For>
-        </Show>
       </>
     )
   }
@@ -910,7 +1075,7 @@ export default function Layout(props: ParentProps) {
             </Collapsible>
           </Match>
           <Match when={true}>
-            <Tooltip placement="right" value={props.project.worktree}>
+            <Tooltip placement="right" value={getFilename(props.project.worktree)}>
               <ProjectVisual project={props.project} />
             </Tooltip>
           </Match>

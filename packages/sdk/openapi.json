@@ -3263,9 +3263,10 @@
                 "type": "object",
                 "properties": {
                   "answers": {
+                    "description": "User answers in order of questions (each answer is an array of selected labels)",
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "$ref": "#/components/schemas/QuestionAnswer"
                     }
                   }
                 },
@@ -7126,6 +7127,10 @@
             "items": {
               "$ref": "#/components/schemas/QuestionOption"
             }
+          },
+          "multiple": {
+            "description": "Allow selecting multiple choices",
+            "type": "boolean"
           }
         },
         "required": ["question", "header", "options"]
@@ -7176,6 +7181,12 @@
         },
         "required": ["type", "properties"]
       },
+      "QuestionAnswer": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "Event.question.replied": {
         "type": "object",
         "properties": {
@@ -7195,7 +7206,7 @@
               "answers": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/QuestionAnswer"
                 }
               }
             },
