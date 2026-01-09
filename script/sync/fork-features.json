@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-08",
-  "lastChange": "Updated builtinPlugins to use opencode-anthropic-auth-shuv@latest instead of opencode-anthropic-auth@0.0.7.",
+  "lastUpdated": "2026-01-09",
+  "lastChange": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution (#285). Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths.",
   "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
   "builtinPlugins": {
     "description": "Builtin plugin versions in BUILTIN array that MUST be preserved. Upstream may update these versions but we use our fork for stability.",
@@ -1843,6 +1843,22 @@
         }
       ],
       "note": "Original fix was in commit 401b498c7. Regressed in upstream PR #7150 (commit dee022674) which made directory conditional on --dir flag."
+    },
+    {
+      "pr": 285,
+      "title": "Plugin loading align with upstream",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution. Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths. Local file:// plugins still bundle for compiled binary compatibility.",
+      "files": ["packages/opencode/src/bun/index.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/bun/index.ts",
+          "description": "BunProc.install() returns node_modules path directly, no bundling",
+          "markers": ["return mod", "const mod = path.join(Global.Path.cache, \"node_modules\", pkg)"]
+        }
+      ],
+      "note": "Fork previously bundled npm plugins with Bun.build() which broke __dirname-relative asset paths in OAuth plugins (opencode-openai-codex-auth, opencode-antigravity-auth). Upstream imports directly from node_modules. Local plugins still use bundleLocalPlugin() for file:// paths."
     }
   ]
 }
