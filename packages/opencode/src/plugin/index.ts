@@ -12,11 +12,13 @@ import { Flag } from "../flag/flag"
 import { Global } from "../global"
 import * as path from "node:path"
 import * as crypto from "node:crypto"
+import { AnthropicAuthPlugin } from "./builtin/anthropic-auth"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["opencode-copilot-auth@0.0.9", "opencode-anthropic-auth@0.0.5"]
+  const BUILTIN = ["opencode-copilot-auth@0.0.9"]
+  const BUILTIN_PLUGINS: PluginInstance[] = [AnthropicAuthPlugin]
 
   /**
    * Bundle a local plugin file with its dependencies.
@@ -157,6 +159,24 @@ export namespace Plugin {
           })
         }
         throw e
+      }
+    }
+
+    // Load bundled built-in plugins directly (no npm fetch needed)
+    if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
+      for (const fn of BUILTIN_PLUGINS) {
+        try {
+          log.info("loading bundled plugin", { name: fn.name })
+          const init = await fn(input)
+          hooks.push(init)
+        } catch (e) {
+          const err = e as Error
+          log.error("failed to load bundled plugin", {
+            name: fn.name,
+            error: err.message,
+          })
+          throw e
+        }
       }
     }
 

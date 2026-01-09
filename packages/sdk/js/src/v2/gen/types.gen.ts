@@ -917,37 +917,6 @@ export type EventGlobalDisposed = {
   }
 }
 
-export type EventIdeInstalled = {
-  type: "ide.installed"
-  properties: {
-    ide: string
-  }
-}
-
-export type IdeSelection = {
-  text: string
-  filePath: string
-  fileUrl: string
-  selection: {
-    start: {
-      line: number
-      character: number
-    }
-    end: {
-      line: number
-      character: number
-    }
-    isEmpty: boolean
-  }
-}
-
-export type EventIdeSelectionUpdated = {
-  type: "ide.selection.updated"
-  properties: {
-    selection: IdeSelection
-  }
-}
-
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -991,8 +960,6 @@ export type Event =
   | EventPtyDeleted
   | EventServerConnected
   | EventGlobalDisposed
-  | EventIdeInstalled
-  | EventIdeSelectionUpdated
 
 export type GlobalEvent = {
   directory: string
