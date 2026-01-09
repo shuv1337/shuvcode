@@ -5,17 +5,14 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/dialog-model"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
-import { useLocal } from "../../context/local"
 
 export function Footer() {
   const { theme } = useTheme()
   const sync = useSync()
   const route = useRoute()
-  const local = useLocal()
   const mcp = createMemo(() => Object.values(sync.data.mcp).filter((x) => x.status === "connected").length)
   const mcpError = createMemo(() => Object.values(sync.data.mcp).some((x) => x.status === "failed"))
   const lsp = createMemo(() => Object.keys(sync.data.lsp))
-  const ide = createMemo(() => Object.values(sync.data.ide).find((x) => x.status === "connected"))
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
@@ -80,18 +77,6 @@ export function Footer() {
                   </Match>
                 </Switch>
                 {mcp()} MCP
-              </text>
-            </Show>
-            <Show when={ide()}>
-              <text fg={theme.text}>
-                <span style={{ fg: theme.success }}>◆ </span>
-                {ide()!.name}
-              </text>
-            </Show>
-            <Show when={local.selection.formatted()}>
-              <text fg={theme.text}>
-                <span style={{ fg: theme.accent }}>[] </span>
-                {local.selection.formatted()}
               </text>
             </Show>
             <text fg={theme.textMuted}>/status</text>

@@ -8,7 +8,6 @@ import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
-import { useLocal } from "../context/local"
 import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
@@ -89,8 +88,6 @@ export function Home() {
     }
   })
   const directory = useDirectory()
-  const local = useLocal()
-  const ide = createMemo(() => Object.values(sync.data.ide).find((x) => x.status === "connected"))
 
   return (
     <>
@@ -126,18 +123,6 @@ export function Home() {
                 </Match>
               </Switch>
               {connectedMcpCount()} MCP
-            </text>
-          </Show>
-          <Show when={ide()}>
-            <text fg={theme.text}>
-              <span style={{ fg: theme.success }}>◆ </span>
-              {ide()!.name}
-            </text>
-          </Show>
-          <Show when={local.selection.formatted()}>
-            <text fg={theme.text}>
-              <span style={{ fg: theme.accent }}>[] </span>
-              {local.selection.formatted()}
             </text>
           </Show>
           <text fg={theme.textMuted}>/status</text>
