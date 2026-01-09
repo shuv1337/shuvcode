@@ -1,9 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-07",
-  "lastChange": "Restored plugin command execution and sessionOnly guard that was lost during v1.1.6 merge.",
+  "lastUpdated": "2026-01-08",
+  "lastChange": "Added builtinPlugins section to pin opencode-anthropic-auth@0.0.7 during merges.",
   "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
+  "builtinPlugins": {
+    "description": "Builtin plugin versions in BUILTIN array that MUST be preserved. Upstream may update these versions but we pin specific versions for stability.",
+    "packages/opencode/src/plugin/index.ts": [
+      {
+        "name": "opencode-anthropic-auth",
+        "version": "0.0.7",
+        "reason": "Pinned version for Anthropic OAuth authentication plugin. Do not accept upstream version bumps without testing.",
+        "marker": "const BUILTIN = ["
+      }
+    ]
+  },
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
