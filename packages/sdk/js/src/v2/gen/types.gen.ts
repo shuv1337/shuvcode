@@ -628,6 +628,75 @@ export type EventTodoUpdated = {
   }
 }
 
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
 export type EventAskquestionRequested = {
   type: "askquestion.requested"
   properties: {
@@ -699,75 +768,6 @@ export type EventAskquestionCancelled = {
   properties: {
     sessionID: string
     callID: string
-  }
-}
-
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
   }
 }
 
@@ -864,37 +864,6 @@ export type EventVcsBranchUpdated = {
   }
 }
 
-export type EventIdeInstalled = {
-  type: "ide.installed"
-  properties: {
-    ide: string
-  }
-}
-
-export type IdeSelection = {
-  text: string
-  filePath: string
-  fileUrl: string
-  selection: {
-    start: {
-      line: number
-      character: number
-    }
-    end: {
-      line: number
-      character: number
-    }
-    isEmpty: boolean
-  }
-}
-
-export type EventIdeSelectionUpdated = {
-  type: "ide.selection.updated"
-  properties: {
-    selection: IdeSelection
-  }
-}
-
 export type Pty = {
   id: string
   title: string
@@ -948,6 +917,37 @@ export type EventGlobalDisposed = {
   }
 }
 
+export type EventIdeInstalled = {
+  type: "ide.installed"
+  properties: {
+    ide: string
+  }
+}
+
+export type IdeSelection = {
+  text: string
+  filePath: string
+  fileUrl: string
+  selection: {
+    start: {
+      line: number
+      character: number
+    }
+    end: {
+      line: number
+      character: number
+    }
+    isEmpty: boolean
+  }
+}
+
+export type EventIdeSelectionUpdated = {
+  type: "ide.selection.updated"
+  properties: {
+    selection: IdeSelection
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -969,15 +969,15 @@ export type Event =
   | EventSessionCompacted
   | EventFileEdited
   | EventTodoUpdated
-  | EventAskquestionRequested
-  | EventAskquestionAnswered
-  | EventAskquestionCancelled
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventCommandExecuted
+  | EventAskquestionRequested
+  | EventAskquestionAnswered
+  | EventAskquestionCancelled
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -985,14 +985,14 @@ export type Event =
   | EventSessionError
   | EventFileWatcherUpdated
   | EventVcsBranchUpdated
-  | EventIdeInstalled
-  | EventIdeSelectionUpdated
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
   | EventServerConnected
   | EventGlobalDisposed
+  | EventIdeInstalled
+  | EventIdeSelectionUpdated
 
 export type GlobalEvent = {
   directory: string
@@ -2155,7 +2155,6 @@ export type Agent = {
   mode: "subagent" | "primary" | "all"
   native?: boolean
   hidden?: boolean
-  default?: boolean
   topP?: number
   temperature?: number
   color?: string
@@ -2206,13 +2205,6 @@ export type McpResource = {
   description?: string
   mimeType?: string
   client: string
-}
-
-export type IdeStatus = {
-  status: "connected" | "disconnected" | "failed"
-  name: string
-  workspaceFolders?: Array<string>
-  error?: string
 }
 
 export type LspStatus = {
@@ -2647,27 +2639,6 @@ export type ConfigUpdateResponses = {
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
-export type ToolListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tool/list"
-}
-
-export type ToolListResponses = {
-  /**
-   * Tool list
-   */
-  200: Array<{
-    id: string
-    enabled: boolean
-  }>
-}
-
-export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
-
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -2695,7 +2666,7 @@ export type ToolIdsResponses = {
 
 export type ToolIdsResponse = ToolIdsResponses[keyof ToolIdsResponses]
 
-export type ToolList2Data = {
+export type ToolListData = {
   body?: never
   path?: never
   query: {
@@ -2706,23 +2677,23 @@ export type ToolList2Data = {
   url: "/experimental/tool"
 }
 
-export type ToolList2Errors = {
+export type ToolListErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type ToolList2Error = ToolList2Errors[keyof ToolList2Errors]
+export type ToolListError = ToolListErrors[keyof ToolListErrors]
 
-export type ToolList2Responses = {
+export type ToolListResponses = {
   /**
    * Tools
    */
   200: ToolList
 }
 
-export type ToolList2Response = ToolList2Responses[keyof ToolList2Responses]
+export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
 
 export type InstanceDisposeData = {
   body?: never
@@ -3842,88 +3813,6 @@ export type PermissionReplyResponses = {
 
 export type PermissionReplyResponse = PermissionReplyResponses[keyof PermissionReplyResponses]
 
-export type AskquestionRespondData = {
-  body?: {
-    sessionID: string
-    callID: string
-    answers: Array<{
-      /**
-       * ID of the question being answered
-       */
-      questionId: string
-      /**
-       * Selected option value(s)
-       */
-      values: Array<string>
-      /**
-       * Custom text if user typed their own response
-       */
-      customText?: string
-    }>
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/askquestion/respond"
-}
-
-export type AskquestionRespondErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type AskquestionRespondError = AskquestionRespondErrors[keyof AskquestionRespondErrors]
-
-export type AskquestionRespondResponses = {
-  /**
-   * Response submitted successfully
-   */
-  200: boolean
-}
-
-export type AskquestionRespondResponse = AskquestionRespondResponses[keyof AskquestionRespondResponses]
-
-export type AskquestionCancelData = {
-  body?: {
-    sessionID: string
-    callID: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/askquestion/cancel"
-}
-
-export type AskquestionCancelErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type AskquestionCancelError = AskquestionCancelErrors[keyof AskquestionCancelErrors]
-
-export type AskquestionCancelResponses = {
-  /**
-   * Cancelled successfully
-   */
-  200: boolean
-}
-
-export type AskquestionCancelResponse = AskquestionCancelResponses[keyof AskquestionCancelResponses]
-
 export type PermissionListData = {
   body?: never
   path?: never
@@ -4698,66 +4587,6 @@ export type ExperimentalResourceListResponses = {
 
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
-
-export type IdeStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/ide"
-}
-
-export type IdeStatusResponses = {
-  /**
-   * IDE instance status
-   */
-  200: {
-    [key: string]: IdeStatus
-  }
-}
-
-export type IdeStatusResponse = IdeStatusResponses[keyof IdeStatusResponses]
-
-export type IdeConnectData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/ide/{name}/connect"
-}
-
-export type IdeConnectResponses = {
-  /**
-   * IDE connected successfully
-   */
-  200: boolean
-}
-
-export type IdeConnectResponse = IdeConnectResponses[keyof IdeConnectResponses]
-
-export type IdeDisconnectData = {
-  body?: never
-  path: {
-    name: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/ide/{name}/disconnect"
-}
-
-export type IdeDisconnectResponses = {
-  /**
-   * IDE disconnected successfully
-   */
-  200: boolean
-}
-
-export type IdeDisconnectResponse = IdeDisconnectResponses[keyof IdeDisconnectResponses]
 
 export type LspStatusData = {
   body?: never

@@ -140,8 +140,8 @@ import type {
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
-  ToolList2Errors,
-  ToolList2Responses,
+  ToolListErrors,
+  ToolListResponses,
   TuiAppendPromptErrors,
   TuiAppendPromptResponses,
   TuiClearPromptResponses,
@@ -720,7 +720,7 @@ export class Tool extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<ToolList2Responses, ToolList2Errors, ThrowOnError>({
+    return (options?.client ?? this.client).get<ToolListResponses, ToolListErrors, ThrowOnError>({
       url: "/experimental/tool",
       ...options,
       ...params,
