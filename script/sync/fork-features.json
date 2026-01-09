@@ -1859,6 +1859,55 @@
         }
       ],
       "note": "Fork previously bundled npm plugins with Bun.build() which broke __dirname-relative asset paths in OAuth plugins (opencode-openai-codex-auth, opencode-antigravity-auth). Upstream imports directly from node_modules. Local plugins still use bundleLocalPlugin() for file:// paths."
+    },
+    {
+      "pr": 0,
+      "title": "Shuvcode upgrade and auto-update functionality",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fork-specific package name, npm registry, GitHub releases URL, and install script for shuvcode upgrade command. Uses shuvcode npm package instead of opencode-ai, checks Latitudes-Dev/shuvcode GitHub releases, and uses shuv.ai install script.",
+      "files": [
+        "packages/opencode/src/installation/index.ts",
+        "packages/opencode/src/cli/cmd/tui/component/tips.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "PACKAGE_NAME constant for shuvcode npm package",
+          "markers": ["const PACKAGE_NAME = \"shuvcode\""]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm/bun/pnpm install commands use shuvcode package",
+          "markers": ["${PACKAGE_NAME}@${target}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "curl install uses shuv.ai install script",
+          "markers": ["https://shuv.ai/install"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm registry check uses shuvcode package",
+          "markers": ["${registry}/${PACKAGE_NAME}/${channel}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "GitHub releases check uses Latitudes-Dev/shuvcode",
+          "markers": ["https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "USER_AGENT uses shuvcode package name",
+          "markers": ["${PACKAGE_NAME}/${CHANNEL}/${VERSION}"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/tips.ts",
+          "description": "Tips reference shuvcode command and shuv.ai",
+          "markers": ["shuvcode upgrade", "shuv.ai", "ghcr.io/latitudes-dev/shuvcode"]
+        }
+      ],
+      "note": "CRITICAL: Upstream merges frequently overwrite these with anomalyco/opencode and opencode-ai references. Always verify after merge."
     }
   ]
 }
