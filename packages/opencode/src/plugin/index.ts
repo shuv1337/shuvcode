@@ -16,7 +16,7 @@ import * as crypto from "node:crypto"
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["opencode-anthropic-auth@0.0.7", "opencode-copilot-auth@0.0.9"]
+  const BUILTIN = ["opencode-anthropic-auth-shuv@latest", "opencode-copilot-auth@0.0.9"]
 
   /**
    * Bundle a local plugin file with its dependencies.
