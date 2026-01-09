@@ -12,6 +12,9 @@ declare global {
   const OPENCODE_CHANNEL: string
 }
 
+// Fork customization: shuvcode package name for npm registry and user agent
+const PACKAGE_NAME = "shuvcode"
+
 export namespace Installation {
   const log = Log.create({ service: "installation" })
 
@@ -95,7 +98,8 @@ export namespace Installation {
 
     for (const check of checks) {
       const output = await check.command()
-      if (output.includes(check.name === "brew" ? "opencode" : "opencode-ai")) {
+      // Fork customization: shuvcode is not on brew, check for shuvcode package
+      if (output.includes(check.name === "brew" ? "opencode" : PACKAGE_NAME)) {
         return check.name
       }
     }
@@ -110,6 +114,7 @@ export namespace Installation {
     }),
   )
 
+  // Fork customization: shuvcode is not on brew, but keep the function for compatibility
   async function getBrewFormula() {
     const tapFormula = await $`brew list --formula anomalyco/tap/opencode`.throws(false).quiet().text()
     if (tapFormula.includes("opencode")) return "anomalyco/tap/opencode"
@@ -122,21 +127,26 @@ export namespace Installation {
     let cmd
     switch (method) {
       case "curl":
-        cmd = $`curl -fsSL https://opencode.ai/install | bash`.env({
+        // Fork customization: use shuv.ai install script
+        cmd = $`curl -fsSL https://shuv.ai/install | bash`.env({
           ...process.env,
           VERSION: target,
         })
         break
       case "npm":
-        cmd = $`npm install -g opencode-ai@${target}`
+        // Fork customization: use shuvcode package
+        cmd = $`npm install -g ${PACKAGE_NAME}@${target}`
         break
       case "pnpm":
-        cmd = $`pnpm install -g opencode-ai@${target}`
+        // Fork customization: use shuvcode package
+        cmd = $`pnpm install -g ${PACKAGE_NAME}@${target}`
         break
       case "bun":
-        cmd = $`bun install -g opencode-ai@${target}`
+        // Fork customization: use shuvcode package
+        cmd = $`bun install -g ${PACKAGE_NAME}@${target}`
         break
       case "brew": {
+        // Fork customization: shuvcode is not on brew, fallback to upstream formula
         const formula = await getBrewFormula()
         cmd = $`brew install ${formula}`.env({
           HOMEBREW_NO_AUTO_UPDATE: "1",
@@ -163,7 +173,8 @@ export namespace Installation {
 
   export const VERSION = typeof OPENCODE_VERSION === "string" ? OPENCODE_VERSION : "local"
   export const CHANNEL = typeof OPENCODE_CHANNEL === "string" ? OPENCODE_CHANNEL : "local"
-  export const USER_AGENT = `opencode/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
+  // Fork customization: use shuvcode user agent
+  export const USER_AGENT = `${PACKAGE_NAME}/${CHANNEL}/${VERSION}/${Flag.OPENCODE_CLIENT}`
 
   export async function latest(installMethod?: Method) {
     const detectedMethod = installMethod || (await method())
@@ -187,7 +198,8 @@ export namespace Installation {
         return reg.endsWith("/") ? reg.slice(0, -1) : reg
       })
       const channel = CHANNEL
-      return fetch(`${registry}/opencode-ai/${channel}`)
+      // Fork customization: use shuvcode package name
+      return fetch(`${registry}/${PACKAGE_NAME}/${channel}`)
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText)
           return res.json()
@@ -195,7 +207,8 @@ export namespace Installation {
         .then((data: any) => data.version)
     }
 
-    return fetch("https://api.github.com/repos/anomalyco/opencode/releases/latest")
+    // Fork customization: check Latitudes-Dev/shuvcode releases instead of upstream
+    return fetch("https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()

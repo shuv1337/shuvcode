@@ -6,7 +6,6 @@ import { NamedError } from "@opencode-ai/util/error"
 import { readableStreamToText } from "bun"
 import { createRequire } from "module"
 import { Lock } from "../util/lock"
-import { copyPluginAssets } from "../util/asset-copy"
 
 export namespace BunProc {
   const log = Log.create({ service: "bun" })
@@ -66,19 +65,15 @@ export namespace BunProc {
     using _ = await Lock.write("bun-install")
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
-    const bundledDir = path.join(Global.Path.cache, "bundled")
-    const bundledFile = path.join(bundledDir, `${pkg.replace(/\//g, "-")}.js`)
     const pkgjson = Bun.file(path.join(Global.Path.cache, "package.json"))
     const parsed = await pkgjson.json().catch(async () => {
-      const result = { dependencies: {}, bundled: {} }
+      const result = { dependencies: {} }
       await Bun.write(pkgjson.name!, JSON.stringify(result, null, 2))
       return result
     })
 
-    // Check if already installed and bundled
-    const bundledExists = await Bun.file(bundledFile).exists()
-    if (parsed.dependencies[pkg] === version && bundledExists) {
-      return bundledFile
+    if (parsed.dependencies[pkg] === version) {
+      return mod
     }
 
     const proxied = !!(
@@ -129,97 +124,15 @@ export namespace BunProc {
       resolvedVersion = installedPkg.version
     }
 
-    const tslibPath = path.join(Global.Path.cache, "node_modules", "tslib", "package.json")
-    const tslibExists = await Bun.file(tslibPath).exists()
-    if (!tslibExists) {
-      const resolvedTslibVersion = "latest"
-      log.info("installing tslib dependency for runtime compatibility", {
-        pkg,
-        tslib: resolvedTslibVersion,
-      })
-      await BunProc.run([
-        "add",
-        "--force",
-        "--exact",
-        "--cwd",
-        Global.Path.cache,
-        `tslib@${resolvedTslibVersion}`,
-      ], {
-        cwd: Global.Path.cache,
-      }).catch((e) => {
-        throw new InstallFailedError(
-          { pkg: "tslib", version: resolvedTslibVersion },
-          {
-            cause: e,
-          },
-        )
-      })
-    }
+    parsed.dependencies[pkg] = resolvedVersion
+    await Bun.write(pkgjson.name!, JSON.stringify(parsed, null, 2))
 
-    // Bundle the plugin with all dependencies for compiled binary compatibility
-    // This creates a single file that doesn't require subpath export resolution
-    await Bun.file(bundledDir)
-      .exists()
-      .then(async (exists) => {
-        if (!exists) await Bun.$`mkdir -p ${bundledDir}`
-      })
-
-    // Find the entry point from package.json
-    const entryPoint = (installedPkg ?? {}).main || "index.js"
-    const entryPath = path.join(mod, entryPoint)
-
-    log.info("bundling plugin for compiled binary compatibility", {
+    log.info("successfully installed plugin", {
       pkg,
-      entryPath,
-      bundledFile,
+      path: mod,
     })
 
-    try {
-      const result = await Bun.build({
-        entrypoints: [entryPath],
-        outdir: bundledDir,
-        naming: `${pkg.replace(/\//g, "-")}.js`,
-        target: "bun",
-        format: "esm",
-        // Bundle all dependencies to avoid subpath export resolution issues
-        packages: "bundle",
-      })
-
-      if (!result.success) {
-        log.error("failed to bundle plugin - falling back to unbundled module", {
-          pkg,
-          logs: result.logs,
-          unbundledPath: mod,
-        })
-        // Fall back to unbundled module
-        return mod
-      }
-
-      log.info("successfully bundled plugin", {
-        pkg,
-        bundledFile,
-      })
-
-      // Copy non-JS assets (HTML, CSS, etc.) that plugins may need at runtime
-      // Some bundled code uses __dirname + ".." to find assets, so copy to both
-      // the bundled dir and the parent cache dir for compatibility
-      await copyPluginAssets(mod, bundledDir)
-      await copyPluginAssets(mod, Global.Path.cache)
-    } catch (e) {
-      log.error("failed to bundle plugin - falling back to unbundled module", {
-        pkg,
-        error: (e as Error).message,
-        unbundledPath: mod,
-      })
-      // Fall back to unbundled module
-      return mod
-    }
-
-    parsed.dependencies[pkg] = resolvedVersion
-    if (!parsed.bundled) parsed.bundled = {}
-    parsed.bundled[pkg] = bundledFile
-    await Bun.write(pkgjson.name!, JSON.stringify(parsed, null, 2))
-    return bundledFile
+    return mod
   }
 
 }

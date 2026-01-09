@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-08",
-  "lastChange": "Updated builtinPlugins to use opencode-anthropic-auth-shuv@latest instead of opencode-anthropic-auth@0.0.7.",
+  "lastUpdated": "2026-01-09",
+  "lastChange": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution (#285). Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths.",
   "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
   "builtinPlugins": {
     "description": "Builtin plugin versions in BUILTIN array that MUST be preserved. Upstream may update these versions but we use our fork for stability.",
@@ -1827,6 +1827,87 @@
         }
       ],
       "note": "This code was originally added in commit 57ac84410 but lost during v1.1.6 upstream merge. Tests in test/command/plugin-commands.test.ts verify this behavior."
+    },
+    {
+      "pr": 283,
+      "title": "Attach command auto-pass cwd",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "The attach command always passes client's cwd to server via x-opencode-directory header. This ensures file autocomplete, theme discovery, and exports use the client's directory when attaching to a remote server.",
+      "files": ["packages/opencode/src/cli/cmd/tui/attach.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/attach.ts",
+          "description": "Always capture and pass process.cwd() to tui()",
+          "markers": ["const directory = process.cwd()", "directory,"]
+        }
+      ],
+      "note": "Original fix was in commit 401b498c7. Regressed in upstream PR #7150 (commit dee022674) which made directory conditional on --dir flag."
+    },
+    {
+      "pr": 285,
+      "title": "Plugin loading align with upstream",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution. Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths. Local file:// plugins still bundle for compiled binary compatibility.",
+      "files": ["packages/opencode/src/bun/index.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/bun/index.ts",
+          "description": "BunProc.install() returns node_modules path directly, no bundling",
+          "markers": ["return mod", "const mod = path.join(Global.Path.cache, \"node_modules\", pkg)"]
+        }
+      ],
+      "note": "Fork previously bundled npm plugins with Bun.build() which broke __dirname-relative asset paths in OAuth plugins (opencode-openai-codex-auth, opencode-antigravity-auth). Upstream imports directly from node_modules. Local plugins still use bundleLocalPlugin() for file:// paths."
+    },
+    {
+      "pr": 0,
+      "title": "Shuvcode upgrade and auto-update functionality",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fork-specific package name, npm registry, GitHub releases URL, and install script for shuvcode upgrade command. Uses shuvcode npm package instead of opencode-ai, checks Latitudes-Dev/shuvcode GitHub releases, and uses shuv.ai install script.",
+      "files": [
+        "packages/opencode/src/installation/index.ts",
+        "packages/opencode/src/cli/cmd/tui/component/tips.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "PACKAGE_NAME constant for shuvcode npm package",
+          "markers": ["const PACKAGE_NAME = \"shuvcode\""]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm/bun/pnpm install commands use shuvcode package",
+          "markers": ["${PACKAGE_NAME}@${target}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "curl install uses shuv.ai install script",
+          "markers": ["https://shuv.ai/install"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm registry check uses shuvcode package",
+          "markers": ["${registry}/${PACKAGE_NAME}/${channel}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "GitHub releases check uses Latitudes-Dev/shuvcode",
+          "markers": ["https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "USER_AGENT uses shuvcode package name",
+          "markers": ["${PACKAGE_NAME}/${CHANNEL}/${VERSION}"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/tips.ts",
+          "description": "Tips reference shuvcode command and shuv.ai",
+          "markers": ["shuvcode upgrade", "shuv.ai", "ghcr.io/latitudes-dev/shuvcode"]
+        }
+      ],
+      "note": "CRITICAL: Upstream merges frequently overwrite these with anomalyco/opencode and opencode-ai references. Always verify after merge."
     }
   ]
 }
