@@ -7,6 +7,7 @@ import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
+import { Truncate } from "./truncation"
 
 import { $ } from "bun"
 import { Filesystem } from "@/util/filesystem"
@@ -17,7 +18,7 @@ import { ptyToText } from "ghostty-opentui"
 
 import { BashArity } from "@/permission/arity"
 
-const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH || 30_000
+const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH ?? (Truncate.MAX_BYTES + 1)
 
 /**
  * Process carriage returns in output text.
