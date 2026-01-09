@@ -1908,6 +1908,22 @@
         }
       ],
       "note": "CRITICAL: Upstream merges frequently overwrite these with anomalyco/opencode and opencode-ai references. Always verify after merge."
+    },
+    {
+      "pr": 0,
+      "title": "Web command proxies to app.shuv.ai",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "The 'shuvcode web' command proxies to app.shuv.ai instead of upstream's app.opencode.ai. This allows users to access our hosted web app instance.",
+      "files": ["packages/opencode/src/server/server.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/server/server.ts",
+          "description": "Proxy URL and host header for web command",
+          "markers": ["https://app.shuv.ai", "host: \"app.shuv.ai\""]
+        }
+      ],
+      "note": "CRITICAL: Upstream uses app.opencode.ai. This gets overwritten during merges. Always verify after merge that proxy URL is app.shuv.ai."
     }
   ]
 }

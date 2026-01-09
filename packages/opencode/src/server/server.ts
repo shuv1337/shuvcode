@@ -2814,11 +2814,11 @@ export namespace Server {
         )
         .all("/*", async (c) => {
           const path = c.req.path
-          const response = await proxy(`https://app.opencode.ai${path}`, {
+          const response = await proxy(`https://app.shuv.ai${path}`, {
             ...c.req,
             headers: {
               ...c.req.raw.headers,
-              host: "app.opencode.ai",
+              host: "app.shuv.ai",
             },
           })
           return response
