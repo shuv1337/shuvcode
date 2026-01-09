@@ -22,10 +22,13 @@ export const AttachCommand = cmd({
       }),
   handler: async (args) => {
     if (args.dir) process.chdir(args.dir)
+    // Always pass client's cwd so attached sessions operate in the client's directory
+    // This ensures file autocomplete, theme discovery, and exports use the correct directory
+    const directory = process.cwd()
     await tui({
       url: args.url,
       args: { sessionID: args.session },
-      directory: args.dir ? process.cwd() : undefined,
+      directory,
     })
   },
 })

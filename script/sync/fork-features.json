@@ -1827,6 +1827,22 @@
         }
       ],
       "note": "This code was originally added in commit 57ac84410 but lost during v1.1.6 upstream merge. Tests in test/command/plugin-commands.test.ts verify this behavior."
+    },
+    {
+      "pr": 283,
+      "title": "Attach command auto-pass cwd",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "The attach command always passes client's cwd to server via x-opencode-directory header. This ensures file autocomplete, theme discovery, and exports use the client's directory when attaching to a remote server.",
+      "files": ["packages/opencode/src/cli/cmd/tui/attach.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/attach.ts",
+          "description": "Always capture and pass process.cwd() to tui()",
+          "markers": ["const directory = process.cwd()", "directory,"]
+        }
+      ],
+      "note": "Original fix was in commit 401b498c7. Regressed in upstream PR #7150 (commit dee022674) which made directory conditional on --dir flag."
     }
   ]
 }
