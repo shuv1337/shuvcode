@@ -50,7 +50,9 @@ export namespace ToolRegistry {
 
     const plugins = await Plugin.list()
     for (const plugin of plugins) {
-      for (const [id, def] of Object.entries(plugin.tool ?? {})) {
+      const tools = plugin.tool as Record<string, ToolDefinition> | undefined
+      if (!tools) continue
+      for (const [id, def] of Object.entries(tools)) {
         custom.push(fromPlugin(id, def))
       }
     }
