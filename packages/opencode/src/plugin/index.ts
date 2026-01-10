@@ -12,6 +12,7 @@ import { Flag } from "../flag/flag"
 import { Global } from "../global"
 import * as path from "node:path"
 import * as crypto from "node:crypto"
+import { CodexAuthPlugin } from "./codex"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -91,6 +92,9 @@ export namespace Plugin {
     )
   }
 
+  // Built-in plugins that are directly imported (not installed from npm)
+  const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin]
+
   const state = Instance.state(async () => {
     const client = createOpencodeClient({
       baseUrl: "http://localhost:4096",
@@ -107,11 +111,23 @@ export namespace Plugin {
       serverUrl: Server.url(),
       $: Bun.$,
     }
+
+    // Load internal plugins first
+    if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
+      for (const plugin of INTERNAL_PLUGINS) {
+        log.info("loading internal plugin", { name: plugin.name })
+        const init = await plugin(input)
+        hooks.push(init)
+      }
+    }
+
     const plugins = [...(config.plugin ?? [])]
     if (!Flag.OPENCODE_DISABLE_DEFAULT_PLUGINS) {
       plugins.push(...BUILTIN)
     }
     for (let plugin of plugins) {
+      // ignore old codex plugin since it is supported first party now
+      if (plugin.includes("opencode-openai-codex-auth")) continue
       log.info("loading plugin", { path: plugin })
       let pluginUrl: string
       let localPluginPath: string | undefined
