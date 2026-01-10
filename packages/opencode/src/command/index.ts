@@ -7,6 +7,7 @@ import { Plugin } from "../plugin"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import { MCP } from "../mcp"
+import type { Hooks } from "@opencode-ai/plugin"
 
 export namespace Command {
   export const Event = {
@@ -129,7 +130,7 @@ export namespace Command {
     // Plugin commands
     const plugins = await Plugin.list()
     for (const plugin of plugins) {
-      const commands = plugin["plugin.command"]
+      const commands: NonNullable<Hooks["plugin.command"]> | undefined = plugin["plugin.command"]
       if (!commands) continue
       for (const [name, cmd] of Object.entries(commands)) {
         if (result[name]) continue // Don't override existing commands
