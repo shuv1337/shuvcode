@@ -84,7 +84,11 @@ export namespace Plugin {
   }
 
   function isModuleResolutionError(err: Error): boolean {
-    return err.message?.includes("Cannot find module") || err.message?.includes("Cannot find package")
+    return (
+      err.message?.includes("Cannot find module") ||
+      err.message?.includes("Cannot find package") ||
+      (err as NodeJS.ErrnoException).code === "MODULE_NOT_FOUND"
+    )
   }
 
   const state = Instance.state(async () => {
@@ -157,9 +161,18 @@ export namespace Plugin {
             plugin,
             error: err.message,
           })
-          const bundledPath = await bundleLocalPlugin(localPluginPath)
-          await loadPluginModule(pathToFileURL(bundledPath).href)
-          continue
+          try {
+            const bundledPath = await bundleLocalPlugin(localPluginPath)
+            await loadPluginModule(pathToFileURL(bundledPath).href)
+            continue
+          } catch (bundleErr) {
+            const bErr = bundleErr as Error
+            log.error("failed to load bundled plugin", {
+              plugin,
+              error: bErr.message,
+            })
+            throw bErr
+          }
         }
         // Check for module resolution issues
         if (isModuleResolutionError(err)) {
