@@ -83,6 +83,10 @@ export namespace Plugin {
     }
   }
 
+  function isModuleResolutionError(err: Error): boolean {
+    return err.message?.includes("Cannot find module") || err.message?.includes("Cannot find package")
+  }
+
   const state = Instance.state(async () => {
     const client = createOpencodeClient({
       baseUrl: "http://localhost:4096",
@@ -106,6 +110,7 @@ export namespace Plugin {
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })
       let pluginUrl: string
+      let localPluginPath: string | undefined
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
@@ -122,14 +127,14 @@ export namespace Plugin {
         // Resolve relative file:// paths against the working directory
         const filePath = plugin.substring("file://".length)
         const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(Instance.directory, filePath)
-        // Bundle local plugins with their dependencies for compiled binary compatibility
-        const bundledPath = await bundleLocalPlugin(absolutePath)
-        pluginUrl = pathToFileURL(bundledPath).href
+        localPluginPath = absolutePath
+        pluginUrl = pathToFileURL(absolutePath).href
       }
-      try {
+
+      const loadPluginModule = async (url: string) => {
         // Use dynamic import() with absolute file:// URLs for ES module compatibility
         // pathToFileURL ensures proper URL encoding regardless of import.meta.url context
-        const mod = await import(pluginUrl)
+        const mod = await import(url)
         // Prevent duplicate initialization when plugins export the same function
         // as both a named export and default export (e.g., `export const X` and `export default X`).
         // Object.entries(mod) would return both entries pointing to the same function reference.
@@ -141,10 +146,23 @@ export namespace Plugin {
           const init = await fn(input)
           hooks.push(init)
         }
+      }
+
+      try {
+        await loadPluginModule(pluginUrl)
       } catch (e) {
         const err = e as Error
+        if (localPluginPath && isModuleResolutionError(err)) {
+          log.warn("failed to load local plugin directly, bundling fallback", {
+            plugin,
+            error: err.message,
+          })
+          const bundledPath = await bundleLocalPlugin(localPluginPath)
+          await loadPluginModule(pathToFileURL(bundledPath).href)
+          continue
+        }
         // Check for module resolution issues
-        if (err.message?.includes("Cannot find module") || err.message?.includes("Cannot find package")) {
+        if (isModuleResolutionError(err)) {
           log.error("failed to load plugin", {
             plugin,
             error: err.message,
