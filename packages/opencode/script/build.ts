@@ -15,6 +15,11 @@ process.chdir(dir)
 import pkg from "../package.json"
 import { Script } from "@opencode-ai/script"
 
+// Fix auto-update: binary channel must match npm publish tag, not git branch
+// When we publish "integration" builds to "latest" npm tag, the binary should think it's on "latest"
+// Otherwise auto-update checks the wrong npm tag and causes version downgrades
+const publishChannel = Script.channel === "integration" ? "latest" : Script.channel
+
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
@@ -149,7 +154,7 @@ for (const item of targets) {
       OPENCODE_COMMIT_HASH: `'${Script.commitHash}'`,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
       OPENCODE_WORKER_PATH: workerPath,
-      OPENCODE_CHANNEL: `'${Script.channel}'`,
+      OPENCODE_CHANNEL: `'${publishChannel}'`,
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
   })
