@@ -30,14 +30,15 @@ export namespace ProviderAuth {
 
   export async function methods() {
     const s = await state().then((x) => x.methods)
-    return mapValues(s, (x: Hooks["auth"]) =>
-      x.methods.map(
+    return mapValues(s, (x: Hooks["auth"] | undefined) => {
+      if (!x) return []
+      return x.methods.map(
         (method): Method => ({
           type: method.type,
           label: method.label,
         }),
-      ),
-    )
+      )
+    })
   }
 
   export const Authorization = z
