@@ -386,6 +386,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const {
     flat: atFlat,
     active: atActive,
+    setActive: setAtActive,
     onInput: atOnInput,
     onKeyDown: atOnKeyDown,
   } = useFilteredList<AtOption>({
@@ -463,6 +464,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   const {
     flat: slashFlat,
     active: slashActive,
+    setActive: setSlashActive,
     onInput: slashOnInput,
     onKeyDown: slashOnKeyDown,
     refetch: slashRefetch,
@@ -1313,6 +1315,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           class="absolute inset-x-0 -top-3 -translate-y-full origin-bottom-left max-h-80 min-h-10
                  overflow-auto no-scrollbar flex flex-col p-2 rounded-md
                  border border-border-base bg-surface-raised-stronger-non-alpha shadow-md"
+          onMouseDown={(e) => e.preventDefault()}
         >
           <Switch>
             <Match when={store.popover === "at"}>
@@ -1327,10 +1330,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         "w-full flex items-center gap-x-2 rounded-md px-2 py-0.5": true,
                         "bg-surface-raised-base-hover": atActive() === atKey(item),
                       }}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        handleAtSelect(item)
-                      }}
+                      onClick={() => handleAtSelect(item)}
+                      onMouseEnter={() => setAtActive(atKey(item))}
                     >
                       <Show
                         when={item.type === "agent"}
@@ -1376,10 +1377,8 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                         "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
                         "bg-surface-raised-base-hover": slashActive() === cmd.id,
                       }}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        handleSlashSelect(cmd)
-                      }}
+                      onClick={() => handleSlashSelect(cmd)}
+                      onMouseEnter={() => setSlashActive(cmd.id)}
                     >
                       <div class="flex items-center gap-2 min-w-0">
                         <span class="text-14-regular text-text-strong whitespace-nowrap">/{cmd.trigger}</span>
