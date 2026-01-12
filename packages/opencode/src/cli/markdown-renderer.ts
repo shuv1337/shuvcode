@@ -1052,88 +1052,64 @@ function renderTableThemed(tableLines: string[], theme: MarkdownTheme, chunks: T
 
   // Word wrap text to fit width, returns array of lines
   // Preserves markdown syntax by not breaking inside backticks
-  // Handles <br> tags as explicit line breaks
-  // Post-processes lines to ensure bold markers are complete on each line
+  // Falls back to breaking on . or - for long tokens
   const wordWrap = (text: string, width: number): string[] => {
-    // First, handle <br> tags by splitting into segments
-    const brSegments = text.split(/<br\s*\/?>/gi)
-    
-    // Process each segment and collect all lines
-    const allLines: string[] = []
-    
-    for (const segment of brSegments) {
-      const segmentTrimmed = segment.trim()
-      if (!segmentTrimmed) {
-        allLines.push("")
-        continue
-      }
-      
-      if (visibleLength(segmentTrimmed) <= width) {
-        allLines.push(segmentTrimmed)
-        continue
-      }
+    if (visibleLength(text) <= width) return [text]
 
-      // Split into tokens, keeping backtick-quoted sections together
-      const tokens: string[] = []
-      let current = ""
-      let inBacktick = false
+    // Split into tokens, keeping backtick-quoted sections together
+    const tokens: string[] = []
+    let current = ""
+    let inBacktick = false
 
-      for (let i = 0; i < segmentTrimmed.length; i++) {
-        const char = segmentTrimmed[i]
-        if (char === "`") {
-          inBacktick = !inBacktick
-          current += char
-        } else if (char === " " && !inBacktick) {
-          if (current) tokens.push(current)
-          tokens.push(" ")
-          current = ""
-        } else {
-          current += char
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      if (char === "`") {
+        inBacktick = !inBacktick
+        current += char
+      } else if (char === " " && !inBacktick) {
+        if (current) tokens.push(current)
+        tokens.push(" ")
+        current = ""
+      } else {
+        current += char
+      }
+    }
+    if (current) tokens.push(current)
+
+    // Break a long token on . or - characters
+    // If token is backtick-quoted, wrap each part in backticks
+    const breakLongToken = (token: string, maxLen: number): string[] => {
+      if (token.length <= maxLen) return [token]
+
+      const isQuoted = token.startsWith("`") && token.endsWith("`")
+      const inner = isQuoted ? token.slice(1, -1) : token
+
+      const parts: string[] = []
+      let part = ""
+      for (let i = 0; i < inner.length; i++) {
+        part += inner[i]
+        // Break after . or - if we're getting long (leave room for backticks if quoted)
+        const effectiveMax = isQuoted ? maxLen - 2 : maxLen
+        if (part.length >= effectiveMax - 2 && ".-".includes(inner[i]) && i < inner.length - 1) {
+          parts.push(isQuoted ? "`" + part + "`" : part)
+          part = ""
         }
       }
-      if (current) tokens.push(current)
+      if (part) parts.push(isQuoted ? "`" + part + "`" : part)
+      return parts
+    }
 
-      // Break a long token on / - characters if it doesn't fit
-      // Recursively breaks until all parts fit within maxLen
-      const breakLongToken = (token: string, maxLen: number): string[] => {
-        if (visibleLength(token) <= maxLen) return [token]
-        
-        // Don't break backtick-quoted tokens
-        if (token.startsWith("`") && token.endsWith("`")) return [token]
-        
-        // Try to find a break point
-        let bestBreak = -1
-        for (let i = 0; i < token.length - 1; i++) {
-          if ("/-".includes(token[i]) && visibleLength(token.slice(0, i + 1)) <= maxLen) {
-            bestBreak = i
-          }
+    const lines: string[] = []
+    let line = ""
+    for (const token of tokens) {
+      if (token === " ") {
+        if (visibleLength(line) > 0 && visibleLength(line) < width) {
+          line += " "
         }
-        
-        if (bestBreak === -1) {
-          // No good break point found, return as-is
-          return [token]
-        }
-        
-        const firstPart = token.slice(0, bestBreak + 1)
-        const rest = token.slice(bestBreak + 1)
-        
-        // Recursively break the rest if still too long
-        if (visibleLength(rest) > maxLen) {
-          return [firstPart, ...breakLongToken(rest, maxLen)]
-        }
-        
-        return [firstPart, rest]
-      }
-
-      // Simple word wrap - fit tokens into lines, breaking long tokens if needed
-      const lines: string[] = []
-      let line = ""
-
-      const addToken = (token: string) => {
+      } else if (visibleLength(line) === 0) {
+        // Token at start of line - break if too long
         if (visibleLength(token) > width) {
-          // Token too long, need to break it
-          const parts = breakLongToken(token, width)
-          for (const part of parts) {
+          for (const part of breakLongToken(token, width)) {
             if (visibleLength(line) === 0) {
               line = part
             } else if (visibleLength(line + part) <= width) {
@@ -1143,64 +1119,32 @@ function renderTableThemed(tableLines: string[], theme: MarkdownTheme, chunks: T
               line = part
             }
           }
-        } else if (visibleLength(line) === 0) {
-          line = token
-        } else if (visibleLength(line + token) <= width) {
-          line += token
         } else {
-          lines.push(line.trimEnd())
           line = token
         }
-      }
-
-      for (const token of tokens) {
-        if (token === " ") {
-          if (visibleLength(line) > 0 && visibleLength(line) < width) {
-            line += " "
+      } else if (visibleLength(line + token) <= width) {
+        line += token
+      } else {
+        lines.push(line.trimEnd())
+        // New line - break token if too long
+        if (visibleLength(token) > width) {
+          for (const part of breakLongToken(token, width)) {
+            if (visibleLength(line) === 0) {
+              line = part
+            } else if (visibleLength(line + part) <= width) {
+              line += part
+            } else {
+              lines.push(line.trimEnd())
+              line = part
+            }
           }
         } else {
-          addToken(token)
+          line = token
         }
       }
-      if (line) lines.push(line.trimEnd())
-      
-      // Post-process: fix bold markers across line breaks
-      // Each line should have complete **...** pairs for renderInlineThemed to work
-      const countBoldMarkers = (s: string): number => (s.match(/\*\*/g) || []).length
-      
-      let inBold = false
-      for (let i = 0; i < lines.length; i++) {
-        let l = lines[i]
-        const markers = countBoldMarkers(l)
-        
-        // If we're in bold from previous line, prepend **
-        if (inBold && !l.startsWith("**")) {
-          l = "**" + l
-        }
-        
-        // Recount after potential prepend
-        const newMarkers = countBoldMarkers(l)
-        const lineEndsInBold = (newMarkers % 2 === 1)
-        
-        // If line ends in bold (odd markers), close it and mark for next line
-        if (lineEndsInBold) {
-          if (!l.endsWith("**")) {
-            l = l + "**"
-          }
-          inBold = true
-        } else {
-          // Even markers - check if we started in bold
-          // If we started in bold and have even markers, we're still in bold
-          inBold = inBold && (markers % 2 === 0)
-        }
-        
-        lines[i] = l
-      }
-      
-      allLines.push(...(lines.length ? lines : [""]))
     }
-    
-    return allLines.length ? allLines : [""]
+    if (line) lines.push(line.trimEnd())
+    return lines.length ? lines : [""]
   }
 
   const headerRow = parseRow(tableLines[0])
