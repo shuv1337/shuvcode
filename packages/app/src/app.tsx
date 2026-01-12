@@ -47,8 +47,7 @@ const defaultServerUrl = iife(() => {
   if (window.__OPENCODE__?.serverUrl) return window.__OPENCODE__.serverUrl
 
   // 3. Known production hosts -> localhost (same as upstream + shuv.ai)
-  if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai"))
-    return "http://localhost:4096"
+  if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai")) return "http://localhost:4096"
 
   // 4. Desktop app (Tauri) with injected port
   if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
@@ -91,9 +90,15 @@ function ServerKey(props: ParentProps) {
   )
 }
 
-export function AppInterface() {
+export function AppInterface(props: { defaultUrl?: string }) {
+  const getDefaultServerUrl = () => {
+    // Use props if provided, otherwise use module-level defaultServerUrl
+    if (props.defaultUrl) return props.defaultUrl
+    return defaultServerUrl
+  }
+
   return (
-    <ServerProvider defaultUrl={defaultServerUrl}>
+    <ServerProvider defaultUrl={getDefaultServerUrl()}>
       <ServerKey>
         <GlobalSDKProvider>
           <GlobalSyncProvider>
