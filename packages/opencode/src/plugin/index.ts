@@ -1,96 +1,18 @@
 import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencode-ai/plugin"
-import { pathToFileURL } from "node:url"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { createOpencodeClient } from "@opencode-ai/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
-import { copyPluginAssets, resolvePluginRoot } from "../util/asset-copy"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { Global } from "../global"
-import * as path from "node:path"
-import * as crypto from "node:crypto"
 import { CodexAuthPlugin } from "./codex"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
-  const BUILTIN = ["opencode-anthropic-auth-shuv@latest", "opencode-copilot-auth@0.0.11"]
-
-  /**
-   * Bundle a local plugin file with its dependencies.
-   * This ensures that local plugins can use npm dependencies that are installed
-   * in their parent directory's node_modules.
-   */
-  async function bundleLocalPlugin(filePath: string): Promise<string> {
-    const bundledDir = path.join(Global.Path.cache, "bundled-local")
-    await Bun.file(bundledDir)
-      .exists()
-      .then(async (exists) => {
-        if (!exists) await Bun.$`mkdir -p ${bundledDir}`
-      })
-
-    // Create a hash of the file path and its modification time for cache invalidation
-    const stat = await Bun.file(filePath)
-      .stat()
-      .catch(() => null)
-    const mtime = stat?.mtimeMs ?? 0
-    const hash = crypto.createHash("md5").update(`${filePath}:${mtime}`).digest("hex").slice(0, 12)
-    const baseName = path.basename(filePath, path.extname(filePath))
-    const bundledFile = path.join(bundledDir, `${baseName}-${hash}.js`)
-
-    // Check if already bundled
-    if (await Bun.file(bundledFile).exists()) {
-      log.info("using cached bundled local plugin", { path: filePath, bundled: bundledFile })
-      return bundledFile
-    }
-
-    log.info("bundling local plugin with dependencies", { path: filePath, bundled: bundledFile })
-
-    try {
-      const result = await Bun.build({
-        entrypoints: [filePath],
-        outdir: bundledDir,
-        naming: `${baseName}-${hash}.js`,
-        target: "bun",
-        format: "esm",
-        // Bundle all dependencies to resolve imports like 'jsonc-parser'
-        packages: "bundle",
-      })
-
-      if (!result.success) {
-        log.error("failed to bundle local plugin", {
-          path: filePath,
-          logs: result.logs,
-        })
-        // Fall back to direct import (will fail if deps are missing)
-        return filePath
-      }
-
-      const pluginRoot = await resolvePluginRoot(filePath)
-      await copyPluginAssets(pluginRoot, bundledDir)
-      await copyPluginAssets(pluginRoot, Global.Path.cache)
-
-      return bundledFile
-    } catch (e) {
-      log.error("failed to bundle local plugin", {
-        path: filePath,
-        error: (e as Error).message,
-      })
-      // Fall back to direct import
-      return filePath
-    }
-  }
-
-  function isModuleResolutionError(err: Error): boolean {
-    return (
-      err.message?.includes("Cannot find module") ||
-      err.message?.includes("Cannot find package") ||
-      (err as NodeJS.ErrnoException).code === "MODULE_NOT_FOUND"
-    )
-  }
+  const BUILTIN = ["opencode-copilot-auth@0.0.12", "opencode-anthropic-auth@0.0.8"]
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin]
@@ -126,81 +48,27 @@ export namespace Plugin {
       // ignore old codex plugin since it is supported first party now
       if (plugin.includes("opencode-openai-codex-auth")) continue
       log.info("loading plugin", { path: plugin })
-      let pluginUrl: string
-      let localPluginPath: string | undefined
       if (!plugin.startsWith("file://")) {
         const lastAtIndex = plugin.lastIndexOf("@")
         const pkg = lastAtIndex > 0 ? plugin.substring(0, lastAtIndex) : plugin
         const version = lastAtIndex > 0 ? plugin.substring(lastAtIndex + 1) : "latest"
-        // Gracefully handle built-in plugin failures
         const builtin = BUILTIN.some((x) => x.startsWith(pkg + "@"))
-        const pluginPath = await BunProc.install(pkg, version).catch((err) => {
+        plugin = await BunProc.install(pkg, version).catch((err) => {
           if (builtin) return ""
           throw err
         })
-        if (!pluginPath) continue
-        pluginUrl = pathToFileURL(pluginPath).href
-      } else {
-        // Resolve relative file:// paths against the working directory
-        const filePath = plugin.substring("file://".length)
-        const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(Instance.directory, filePath)
-        localPluginPath = absolutePath
-        pluginUrl = pathToFileURL(absolutePath).href
+        if (!plugin) continue
       }
-
-      const loadPluginModule = async (url: string) => {
-        // Use dynamic import() with absolute file:// URLs for ES module compatibility
-        // pathToFileURL ensures proper URL encoding regardless of import.meta.url context
-        const mod = await import(url)
-        // Prevent duplicate initialization when plugins export the same function
-        // as both a named export and default export (e.g., `export const X` and `export default X`).
-        // Object.entries(mod) would return both entries pointing to the same function reference.
-        const seen = new Set<PluginInstance>()
-        for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-          if (seen.has(fn)) continue
-          seen.add(fn)
-          if (typeof fn !== "function") continue
-          const init = await fn(input)
-          hooks.push(init)
-        }
-      }
-
-      try {
-        await loadPluginModule(pluginUrl)
-      } catch (e) {
-        const err = e as Error
-        if (localPluginPath && isModuleResolutionError(err)) {
-          log.warn("failed to load local plugin directly, bundling fallback", {
-            plugin,
-            error: err.message,
-          })
-          try {
-            const bundledPath = await bundleLocalPlugin(localPluginPath)
-            await loadPluginModule(pathToFileURL(bundledPath).href)
-            continue
-          } catch (bundleErr) {
-            const bErr = bundleErr as Error
-            log.error("failed to load bundled plugin", {
-              plugin,
-              error: bErr.message,
-            })
-            throw bErr
-          }
-        }
-        // Check for module resolution issues
-        if (isModuleResolutionError(err)) {
-          log.error("failed to load plugin", {
-            plugin,
-            error: err.message,
-            hint: "Make sure all plugin dependencies are installed. Run 'bun install' in the plugin directory.",
-          })
-        } else {
-          log.error("failed to load plugin", {
-            plugin,
-            error: err.message,
-          })
-        }
-        throw e
+      const mod = await import(plugin)
+      // Prevent duplicate initialization when plugins export the same function
+      // as both a named export and default export (e.g., `export const X` and `export default X`).
+      // Object.entries(mod) would return both entries pointing to the same function reference.
+      const seen = new Set<PluginInstance>()
+      for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+        if (seen.has(fn)) continue
+        seen.add(fn)
+        const init = await fn(input)
+        hooks.push(init)
       }
     }
 
@@ -219,7 +87,7 @@ export namespace Plugin {
     for (const hook of await state().then((x) => x.hooks)) {
       const fn = hook[name]
       if (!fn) continue
-      // @ts-ignore if you feel adventurous, please fix the typing, make sure to bump the try-counter if you
+      // @ts-expect-error if you feel adventurous, please fix the typing, make sure to bump the try-counter if you
       // give up.
       // try-counter: 2
       await fn(input, output)
@@ -239,7 +107,7 @@ export namespace Plugin {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
     for (const hook of hooks) {
-      // @ts-ignore this is because we haven't moved plugin to sdk v2
+      // @ts-expect-error this is because we haven't moved plugin to sdk v2
       await hook.config?.(config)
     }
     Bus.subscribeAll(async (input) => {
