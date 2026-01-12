@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-11",
-  "lastChange": "v1.1.14 sync. Reverted plugin bundling and custom auth plugin to upstream. Fork now uses upstream BUILTIN plugins array.",
-  "note": "v1.1.14 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
+  "lastUpdated": "2026-01-12",
+  "lastChange": "v1.1.15 sync. Adopted upstream's refactored desktop server connection logic with shuvcode branding. Tips component now uses upstream's TSX structure.",
+  "note": "v1.1.15 sync. Upstream adds password auth (OPENCODE_SERVER_PASSWORD), improved tips display, permission wildcarding fixes, and desktop server detection improvements.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
