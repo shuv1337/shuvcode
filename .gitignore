@@ -27,3 +27,4 @@ docker/workspace
 opencode-dev
 logs/
 .loop*
+*.bun-build
