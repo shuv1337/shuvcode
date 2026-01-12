@@ -1,20 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-09",
-  "lastChange": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution (#285). Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths.",
-  "note": "v1.1.6 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
-  "builtinPlugins": {
-    "description": "Builtin plugin versions in BUILTIN array that MUST be preserved. Upstream may update these versions but we use our fork for stability.",
-    "packages/opencode/src/plugin/index.ts": [
-      {
-        "name": "opencode-anthropic-auth-shuv",
-        "version": "latest",
-        "reason": "Fork of Anthropic OAuth authentication plugin published to npm. Uses @latest to always get newest version.",
-        "marker": "const BUILTIN = ["
-      }
-    ]
-  },
+  "lastUpdated": "2026-01-11",
+  "lastChange": "v1.1.14 sync. Reverted plugin bundling and custom auth plugin to upstream. Fork now uses upstream BUILTIN plugins array.",
+  "note": "v1.1.14 sync. Fork includes streaming grep optimization, spinner for all tool calls, plugin command execution, and critical PWA/SDK fixes.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -50,10 +39,7 @@
       "author": "fork",
       "removedDate": "2025-12-30",
       "reason": "Upstream now provides DialogSelectServer with equivalent functionality. Simplified to align with upstream while maintaining shuv.ai domain support.",
-      "filesRemoved": [
-        "packages/app/src/components/dialog-server-settings.tsx",
-        "packages/app/src/lib/server-url.ts"
-      ],
+      "filesRemoved": ["packages/app/src/components/dialog-server-settings.tsx", "packages/app/src/lib/server-url.ts"],
       "note": "Server URL handling simplified in app.tsx to match upstream. shuv.ai domains are supported alongside opencode.ai."
     },
     {
@@ -62,9 +48,7 @@
       "author": "upstream",
       "removedDate": "2025-12-30",
       "reason": "Upstream's Open Project uses native file picker which doesn't work in web browsers. Our Add Project dialog (DialogCreateProject) with folder browser provides better web app experience.",
-      "filesRemoved": [
-        "packages/app/src/components/dialog-select-directory.tsx"
-      ],
+      "filesRemoved": ["packages/app/src/components/dialog-select-directory.tsx"],
       "codeRemoved": [
         "chooseProject() function in layout.tsx and home.tsx",
         "project.open command with mod+o keybind",
@@ -96,10 +80,7 @@
       "author": "fork",
       "removedDate": "2026-01-01",
       "reason": "StatusBar at bottom conflicts with iPhone dynamic island and home indicator in PWA standalone mode. Hidden in PWA while kept for browser use.",
-      "filesModified": [
-        "packages/app/src/context/platform.tsx",
-        "packages/app/src/pages/session.tsx"
-      ],
+      "filesModified": ["packages/app/src/context/platform.tsx", "packages/app/src/pages/session.tsx"],
       "codeAdded": [
         "isPWA() function in platform.tsx for PWA detection",
         "Show when={!isPWA()} wrapper around StatusBar"
@@ -132,10 +113,7 @@
       "author": "fork",
       "removedDate": "2026-01-04",
       "reason": "Upstream v1.1.1 introduced proper sandbox/worktree support with Instance.worktree and Project.sandboxes. Our linked worktree ID scheme ({rootCommit}-{hash}) replaced by upstream's simpler approach.",
-      "filesModified": [
-        "packages/opencode/src/project/project.ts",
-        "packages/opencode/test/project/project.test.ts"
-      ],
+      "filesModified": ["packages/opencode/src/project/project.ts", "packages/opencode/test/project/project.test.ts"],
       "codeRemoved": [
         "Linked worktree ID generation with separator",
         "opencode-worktree hash file creation",
@@ -193,10 +171,7 @@
       "author": "Karavil",
       "status": "open",
       "description": "109x performance improvement for Ripgrep.tree() in large repositories by processing ripgrep output line-by-line instead of accumulating in memory",
-      "files": [
-        "packages/opencode/src/file/ripgrep.ts",
-        "packages/opencode/test/file/ripgrep.test.ts"
-      ]
+      "files": ["packages/opencode/src/file/ripgrep.ts", "packages/opencode/test/file/ripgrep.test.ts"]
     },
     {
       "pr": 5958,
@@ -238,7 +213,13 @@
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
           "description": "Detection of pending askquestion with callID guard and fallback scan",
-          "markers": ["pendingAskQuestionFromSync", "DialogAskQuestion", "if (!toolPart.callID) continue", "getMetadata", "findInParts"]
+          "markers": [
+            "pendingAskQuestionFromSync",
+            "DialogAskQuestion",
+            "if (!toolPart.callID) continue",
+            "getMetadata",
+            "findInParts"
+          ]
         },
         {
           "file": "packages/opencode/src/server/server.ts",
@@ -258,7 +239,13 @@
         {
           "file": "packages/app/src/pages/session.tsx",
           "description": "Web app detection with callID guard and fallback scan for delayed messages",
-          "markers": ["pendingAskQuestion", "AskQuestionWizard", "if (!toolPart.callID) continue", "getMetadata", "findInParts"]
+          "markers": [
+            "pendingAskQuestion",
+            "AskQuestionWizard",
+            "if (!toolPart.callID) continue",
+            "getMetadata",
+            "findInParts"
+          ]
         }
       ]
     },
@@ -316,7 +303,13 @@
         {
           "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
           "description": "Terminal dimension hooks and tall/wide memos for responsive layout",
-          "markers": ["useTerminalDimensions", "tall()", "wide()", "dimensions().height > 40", "dimensions().width > 120"]
+          "markers": [
+            "useTerminalDimensions",
+            "tall()",
+            "wide()",
+            "dimensions().height > 40",
+            "dimensions().width > 120"
+          ]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
@@ -993,7 +986,11 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Redesigned project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input, Git Clone tab for cloning repos. Uses List component for keyboard navigation and shows git/added badges. This replaces upstream's Open Project functionality which uses native file picker (doesn't work in web browsers).",
-      "files": ["packages/app/src/components/dialog-create-project.tsx", "packages/app/src/pages/home.tsx", "packages/app/src/pages/layout.tsx"],
+      "files": [
+        "packages/app/src/components/dialog-create-project.tsx",
+        "packages/app/src/pages/home.tsx",
+        "packages/app/src/pages/layout.tsx"
+      ],
       "criticalCode": [
         {
           "file": "packages/app/src/components/dialog-create-project.tsx",
@@ -1435,9 +1432,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Redesigned Create Project dialog with three tabs: Add Existing (folder browser), Create New (directory picker + project name), and Git Clone (URL input). Includes path validation and directory picker integration.",
-      "files": [
-        "packages/app/src/components/dialog-create-project.tsx"
-      ],
+      "files": ["packages/app/src/components/dialog-create-project.tsx"],
       "criticalCode": [
         {
           "file": "packages/app/src/components/dialog-create-project.tsx",
@@ -1498,9 +1493,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Filter archived sessions from the session list in the desktop app sync context to prevent showing deleted/archived sessions.",
-      "files": [
-        "packages/app/src/context/global-sync.tsx"
-      ],
+      "files": ["packages/app/src/context/global-sync.tsx"],
       "criticalCode": [
         {
           "file": "packages/app/src/context/global-sync.tsx",
@@ -1647,7 +1640,12 @@
         {
           "file": "packages/app/src/index.css",
           "description": "PWA standalone mode viewport locking rules",
-          "markers": ["@media (display-mode: standalone)", "position: fixed", "overscroll-behavior: none", "-webkit-overflow-scrolling: touch"]
+          "markers": [
+            "@media (display-mode: standalone)",
+            "position: fixed",
+            "overscroll-behavior: none",
+            "-webkit-overflow-scrolling: touch"
+          ]
         },
         {
           "file": "packages/app/src/index.css",
@@ -1672,10 +1670,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Handle Bun's bundled export shapes for AWS SDK credential providers. When shuvcode bundles via Bun.build(), the export structure changes from direct named exports to nested default wrappers.",
-      "files": [
-        "packages/opencode/src/provider/provider.ts",
-        "packages/opencode/test/provider/bedrock.test.ts"
-      ],
+      "files": ["packages/opencode/src/provider/provider.ts", "packages/opencode/test/provider/bedrock.test.ts"],
       "criticalCode": [
         {
           "file": "packages/opencode/src/provider/provider.ts",
@@ -1755,10 +1750,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Fix metadata being lost during tool-call stream events. Preserves time.start in ctx.metadata and adds running guard to prevent status regression.",
-      "files": [
-        "packages/opencode/src/session/prompt.ts",
-        "packages/opencode/src/session/message-v2.ts"
-      ],
+      "files": ["packages/opencode/src/session/prompt.ts", "packages/opencode/src/session/message-v2.ts"],
       "criticalCode": [
         {
           "file": "packages/opencode/src/session/prompt.ts",
@@ -1866,10 +1858,7 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Fork-specific package name, npm registry, GitHub releases URL, and install script for shuvcode upgrade command. Uses shuvcode npm package instead of opencode-ai, checks Latitudes-Dev/shuvcode GitHub releases, and uses shuv.ai install script.",
-      "files": [
-        "packages/opencode/src/installation/index.ts",
-        "packages/opencode/src/cli/cmd/tui/component/tips.ts"
-      ],
+      "files": ["packages/opencode/src/installation/index.ts", "packages/opencode/src/cli/cmd/tui/component/tips.ts"],
       "criticalCode": [
         {
           "file": "packages/opencode/src/installation/index.ts",

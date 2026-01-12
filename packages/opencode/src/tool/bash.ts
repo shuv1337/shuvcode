@@ -110,7 +110,7 @@ export const BashTool = Tool.define("bash", async () => {
         throw new Error("Failed to parse command")
       }
       const directories = new Set<string>()
-      if (!Filesystem.contains(Instance.directory, cwd)) directories.add(cwd)
+      if (!Instance.containsPath(cwd)) directories.add(cwd)
       const patterns = new Set<string>()
       const always = new Set<string>()
 
@@ -149,7 +149,7 @@ export const BashTool = Tool.define("bash", async () => {
                 process.platform === "win32" && resolved.match(/^\/[a-z]\//)
                   ? resolved.replace(/^\/([a-z])\//, (_, drive) => `${drive.toUpperCase()}:\\`).replace(/\//g, "\\")
                   : resolved
-              if (!Filesystem.contains(Instance.directory, normalized)) directories.add(normalized)
+              if (!Instance.containsPath(normalized)) directories.add(normalized)
             }
           }
         }
