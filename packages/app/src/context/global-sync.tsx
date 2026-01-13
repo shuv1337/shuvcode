@@ -31,7 +31,7 @@ import { batch, createContext, useContext, onCleanup, onMount, type ParentProps,
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import { isHostedEnvironment } from "@/utils/hosted"
-import { useServer } from "./server"
+import { usePlatform } from "./platform"
 
 type State = {
   status: "loading" | "partial" | "complete"
@@ -77,7 +77,7 @@ type ConnectionState = "connecting" | "ready" | "needs_config" | "error"
 
 function createGlobalSync() {
   const globalSDK = useGlobalSDK()
-  const server = useServer()
+  const platform = usePlatform()
   const [globalStore, setGlobalStore] = createStore<{
     connectionState: ConnectionState
     ready: boolean
@@ -135,7 +135,7 @@ function createGlobalSync() {
       .list({ directory })
       .then((x) => {
         const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
-const data = Array.isArray(x.data) ? x.data : []
+        const data = Array.isArray(x.data) ? x.data : []
         const nonArchived = data
           .filter((s) => !!s?.id)
           .filter((s) => !s.time?.archived)
@@ -161,6 +161,7 @@ const data = Array.isArray(x.data) ? x.data : []
     const [store, setStore] = child(directory)
     const sdk = createOpencodeClient({
       baseUrl: globalSDK.url,
+      fetch: platform.fetch,
       directory,
       throwOnError: true,
     })
@@ -486,6 +487,7 @@ const data = Array.isArray(x.data) ? x.data : []
       case "lsp.updated": {
         const sdk = createOpencodeClient({
           baseUrl: globalSDK.url,
+          fetch: platform.fetch,
           directory,
           throwOnError: true,
         })
@@ -547,7 +549,7 @@ const data = Array.isArray(x.data) ? x.data : []
       ),
       retry(() =>
         globalSDK.client.project.list().then(async (x) => {
-const data = Array.isArray(x.data) ? x.data : []
+          const data = Array.isArray(x.data) ? x.data : []
           const projects = data
             .filter((p) => !!p?.id)
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
