@@ -39,26 +39,25 @@ declare global {
 }
 
 const defaultServerUrl = iife(() => {
-  // 1. Query parameter (highest priority)
-  const param = new URLSearchParams(document.location.search).get("url")
-  if (param) return param
+  // NOTE: The ?url= query parameter was intentionally removed due to CVE-2026-22813 (GHSA-c83v-7274-4vgp)
+  // Allowing arbitrary server URLs via query params enables XSS attacks on localhost:4096
 
-  // 2. Configured server URL (from desktop settings)
+  // 1. Configured server URL (from desktop settings)
   if (window.__OPENCODE__?.serverUrl) return window.__OPENCODE__.serverUrl
 
-  // 3. Known production hosts -> localhost (same as upstream + shuv.ai)
+  // 2. Known production hosts -> localhost (same as upstream + shuv.ai)
   if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai")) return "http://localhost:4096"
 
-  // 4. Desktop app (Tauri) with injected port
+  // 3. Desktop app (Tauri) with injected port
   if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
   if (window.__OPENCODE__?.port) return `http://127.0.0.1:${window.__OPENCODE__.port}`
 
-  // 5. Dev mode -> same-origin so Vite proxy handles LAN access + CORS
+  // 4. Dev mode -> same-origin so Vite proxy handles LAN access + CORS
   if (import.meta.env.DEV) {
     return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
   }
 
-  // 6. Default -> same origin (production web command)
+  // 5. Default -> same origin (production web command)
   return window.location.origin
 })
 

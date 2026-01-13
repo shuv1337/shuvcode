@@ -120,6 +120,19 @@
         "Session migration for linked worktrees"
       ],
       "note": "Upstream uses Project.sandboxes array to track worktrees. Main worktree is always Project.worktree."
+    },
+    {
+      "pr": "CVE-2026-22813",
+      "title": "Query parameter server URL override",
+      "author": "fork",
+      "removedDate": "2026-01-12",
+      "reason": "Critical XSS vulnerability (GHSA-c83v-7274-4vgp, CVE-2026-22813) - malicious websites could execute commands via ?url= parameter. Upstream fixed in v1.1.10 by removing this feature.",
+      "filesModified": ["packages/app/src/app.tsx"],
+      "codeRemoved": [
+        "const param = new URLSearchParams(document.location.search).get('url')",
+        "if (param) return param"
+      ],
+      "note": "The ?url= query parameter allowed arbitrary server URL override, enabling XSS on localhost:4096. Attackers could inject malicious server URLs that return XSS payloads, then use /pty/ API to execute arbitrary commands."
     }
   ],
   "apiDependencies": [
