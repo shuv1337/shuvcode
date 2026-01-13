@@ -155,6 +155,7 @@ pub fn create_command(app: &tauri::AppHandle, args: &str) -> Command {
         .shell()
         .sidecar("shuvcode-cli")
         .unwrap()
+        .args(args.split_whitespace())
         .env("SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
         .env("SHUVCODE_CLIENT", "desktop")
         .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
