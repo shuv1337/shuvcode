@@ -13,13 +13,14 @@
 - the default branch in this repo is `dev`
 
 ## Testing
+
 - Avoid testing logic directly inside Solid.js `.tsx` files if they import JSX runtimes, as `bun test` may fail with `jsxDEV` errors.
 - Separate pure logic into `.ts` files (e.g., `theme-utils.ts`) and test those instead.
 
 ## Upstream Merge Operations
 
-
 When merging upstream tags (e.g., v1.1.1):
+
 1. Use `git merge <tag> --no-commit` to start merge without auto-commit
 2. List conflicts: `git diff --name-only --diff-filter=U`
 3. Cannot commit plan updates mid-merge - all conflict resolution must complete first

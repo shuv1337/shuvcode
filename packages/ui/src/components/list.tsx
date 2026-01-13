@@ -10,9 +10,15 @@ export interface ListSearchProps {
   autofocus?: boolean
 }
 
+export interface ListGroup<T> {
+  category: string
+  items: T[]
+}
+
 export interface ListProps<T> extends FilteredListProps<T> {
   class?: string
   children: (item: T) => JSX.Element
+  groupHeader?: (group: ListGroup<T>) => JSX.Element
   emptyMessage?: string
   onKeyEvent?: (event: KeyboardEvent, item: T | undefined) => void
   onActiveChange?: (item: T | undefined) => void
@@ -118,7 +124,7 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
     setScrollRef,
   })
 
-  function GroupHeader(props: { category: string }): JSX.Element {
+  function GroupHeader(groupProps: { category: string; children?: JSX.Element }): JSX.Element {
     const [stuck, setStuck] = createSignal(false)
     const [header, setHeader] = createSignal<HTMLDivElement | undefined>(undefined)
 
@@ -140,7 +146,7 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
 
     return (
       <div data-slot="list-header" data-stuck={stuck()} ref={setHeader}>
-        {props.category}
+        {groupProps.children ?? groupProps.category}
       </div>
     )
   }
@@ -187,7 +193,7 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
             {(group) => (
               <div data-slot="list-group">
                 <Show when={group.category}>
-                  <GroupHeader category={group.category} />
+                  <GroupHeader category={group.category}>{props.groupHeader?.(group)}</GroupHeader>
                 </Show>
                 <div data-slot="list-items">
                   <For each={group.items}>

@@ -148,7 +148,7 @@ export namespace Installation {
       case "brew": {
         // Fork customization: shuvcode is not on brew, fallback to upstream formula
         const formula = await getBrewFormula()
-        cmd = $`brew install ${formula}`.env({
+        cmd = $`brew upgrade ${formula}`.env({
           HOMEBREW_NO_AUTO_UPDATE: "1",
           ...process.env,
         })
