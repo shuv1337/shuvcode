@@ -9,7 +9,11 @@ export function isHostedEnvironment(): boolean {
 
 /**
  * Checks if a ?url= query parameter was provided in the URL.
- * This indicates the user is trying to connect to a specific server.
+ *
+ * SECURITY WARNING: This function exists ONLY for display purposes (e.g., showing
+ * "Could not connect to X" in welcome-screen.tsx). The ?url= parameter must NEVER
+ * be used to determine actual server connections due to CVE-2026-22813 (XSS vulnerability).
+ * Server URL is determined exclusively by app.tsx defaultServerUrl logic.
  */
 export function hasUrlQueryParam(): boolean {
   if (typeof window === "undefined") return false
@@ -18,6 +22,11 @@ export function hasUrlQueryParam(): boolean {
 
 /**
  * Gets the ?url= query parameter value if present.
+ *
+ * SECURITY WARNING: This function exists ONLY for display purposes (e.g., showing
+ * error messages with the attempted URL). The returned value must NEVER be used
+ * for actual server connections due to CVE-2026-22813 (XSS vulnerability).
+ * Server URL is determined exclusively by app.tsx defaultServerUrl logic.
  */
 export function getUrlQueryParam(): string | null {
   if (typeof window === "undefined") return null
