@@ -555,32 +555,58 @@
     {
       "category": "functional",
       "description": "Parse `id_token` using existing `parseJwtClaims` helper",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "extractUserInfo function parses id_token using parseJwtClaims helper.",
+        "Function already implemented in packages/opencode/src/plugin/codex.ts:92-105.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Extract `email` from id token claims",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "extractUserInfo function extracts email from parsed id_token claims.",
+        "Already implemented in packages/opencode/src/plugin/codex.ts:98.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Extract `name` from id token claims if available",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "extractUserInfo function extracts name from parsed id_token claims.",
+        "Already implemented in packages/opencode/src/plugin/codex.ts:99.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Extract `accountId` using existing `extractAccountIdFromClaims` helper",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "extractUserInfo function extracts accountId using extractAccountIdFromClaims helper.",
+        "Already implemented in packages/opencode/src/plugin/codex.ts:100.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Return object with `email`, `name`, `accountId`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "extractUserInfo function returns UserInfo object with email, name, accountId.",
+        "Already implemented in packages/opencode/src/plugin/codex.ts:92-105.",
+        "Returns undefined for missing fields, maintaining backwards compatibility.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

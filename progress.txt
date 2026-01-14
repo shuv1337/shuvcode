@@ -103,3 +103,9 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - Added test confirming minimal OAuth results (without optional fields) persist correctly.
 - Ran `bun run typecheck` - passed.
 - Ran `bun test` in packages/opencode - 7 pass, 0 fail (all codex-migration tests).
+
+## Iteration 29 - 2026-01-14
+- Marked extractUserInfo tasks as complete in prd.json - function already implemented in packages/opencode/src/plugin/codex.ts:92-105.
+- The function: parses id_token using parseJwtClaims, extracts email, name, and accountId from claims, returns UserInfo object.
+- Ran bun run typecheck - passed.
+- Ran bun run lint in packages/opencode - 745 pass, 1 skip, 0 fail.
