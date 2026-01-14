@@ -7131,6 +7131,10 @@
           "multiple": {
             "description": "Allow selecting multiple choices",
             "type": "boolean"
+          },
+          "custom": {
+            "description": "Allow typing a custom answer (default: true)",
+            "type": "boolean"
           }
         },
         "required": ["question", "header", "options"]
@@ -7516,6 +7520,9 @@
             "type": "string",
             "pattern": "^ses.*"
           },
+          "slug": {
+            "type": "string"
+          },
           "projectID": {
             "type": "string"
           },
@@ -7602,7 +7609,7 @@
             "required": ["messageID"]
           }
         },
-        "required": ["id", "projectID", "directory", "title", "version", "time"]
+        "required": ["id", "slug", "projectID", "directory", "title", "version", "time"]
       },
       "Event.session.created": {
         "type": "object",

@@ -230,14 +230,14 @@ function createGlobalSync() {
           }),
           sdk.question.list().then((x) => {
             const grouped: Record<string, QuestionRequest[]> = {}
-            for (const request of x.data ?? []) {
-              if (!request?.id || !request.sessionID) continue
-              const existing = grouped[request.sessionID]
+            for (const question of x.data ?? []) {
+              if (!question?.id || !question.sessionID) continue
+              const existing = grouped[question.sessionID]
               if (existing) {
-                existing.push(request)
+                existing.push(question)
                 continue
               }
-              grouped[request.sessionID] = [request]
+              grouped[question.sessionID] = [question]
             }
 
             batch(() => {
@@ -245,13 +245,13 @@ function createGlobalSync() {
                 if (grouped[sessionID]) continue
                 setStore("question", sessionID, [])
               }
-              for (const [sessionID, requests] of Object.entries(grouped)) {
+              for (const [sessionID, questions] of Object.entries(grouped)) {
                 setStore(
                   "question",
                   sessionID,
                   reconcile(
-                    requests
-                      .filter((request) => !!request?.id)
+                    questions
+                      .filter((q) => !!q?.id)
                       .slice()
                       .sort((a, b) => a.id.localeCompare(b.id)),
                     { key: "id" },
@@ -448,38 +448,40 @@ function createGlobalSync() {
         )
         break
       }
+      case "question.asked": {
+        const sessionID = event.properties.sessionID
+        const questions = store.question[sessionID]
+        if (!questions) {
+          setStore("question", sessionID, [event.properties])
+          break
+        }
+
+        const result = Binary.search(questions, event.properties.id, (q) => q.id)
+        if (result.found) {
+          setStore("question", sessionID, result.index, reconcile(event.properties))
+          break
+        }
+
+        setStore(
+          "question",
+          sessionID,
+          produce((draft) => {
+            draft.splice(result.index, 0, event.properties)
+          }),
+        )
+        break
+      }
       case "question.replied":
       case "question.rejected": {
-        const requests = store.question[event.properties.sessionID]
-        if (!requests) break
-        const result = Binary.search(requests, event.properties.requestID, (r) => r.id)
+        const questions = store.question[event.properties.sessionID]
+        if (!questions) break
+        const result = Binary.search(questions, event.properties.requestID, (q) => q.id)
         if (!result.found) break
         setStore(
           "question",
           event.properties.sessionID,
           produce((draft) => {
             draft.splice(result.index, 1)
-          }),
-        )
-        break
-      }
-      case "question.asked": {
-        const request = event.properties
-        const requests = store.question[request.sessionID]
-        if (!requests) {
-          setStore("question", request.sessionID, [request])
-          break
-        }
-        const result = Binary.search(requests, request.id, (r) => r.id)
-        if (result.found) {
-          setStore("question", request.sessionID, result.index, reconcile(request))
-          break
-        }
-        setStore(
-          "question",
-          request.sessionID,
-          produce((draft) => {
-            draft.splice(result.index, 0, request)
           }),
         )
         break
