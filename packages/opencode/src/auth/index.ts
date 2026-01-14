@@ -18,6 +18,7 @@ export namespace Auth {
       accountId: z.string().optional(),
       enterpriseUrl: z.string().optional(),
       email: z.string().optional(),
+      name: z.string().optional(),
     })
     .meta({ ref: "OAuth" })
 
