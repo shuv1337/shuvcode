@@ -137,11 +137,9 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - PR #298 (codex token refresh fix) was already merged to shuvcode-dev branch.
 - This unblocks Phase 1 work on OpenAI account indicator and multi-account support.
 
-## Iteration 37 - 2026-01-14
-- Marked "Create packages/opencode/src/skill/index.ts" as complete in prd.json.
-- Verified index.ts exists with SkillIndex interface and caching logic.
-- Implements loadIndex (cache with TTL), buildIndex (fetch and write), search (fuzzysort ranking).
-
-- Marked "Create packages/opencode/src/skill/installer.ts" as complete in prd.json.
-- Verified installer.ts exists with installSkill and uninstallSkill functions.
-- Copies skill files to SKILLS_DIR and updates manifest with installed metadata.
+## Iteration 38 - 2026-01-14
+- Marked "Create packages/opencode/src/skill/fetcher/github.ts" as complete in prd.json.
+- Verified github.ts exists with 200 lines implementing git and tarball fetching.
+- fetchRegistry() entry point with hasGit() check and tarball fallback.
+- scanSkills() walks directories matching SKILL.md globs with minimatch.
+- parseSkillFile() extracts YAML frontmatter for skill metadata.

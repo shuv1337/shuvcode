@@ -821,8 +821,16 @@
     {
       "category": "functional",
       "description": "Create `packages/opencode/src/skill/fetcher/github.ts`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Created github.ts with fetchRegistry(registry) as main entry point.",
+        "Implements hasGit() check and falls back to tarball download if git unavailable.",
+        "fetchWithGit() uses git clone --depth=1 --filter=blob:none --sparse with sparse-checkout.",
+        "fetchWithTarball() downloads archive.tar.gz and extracts with tar command.",
+        "scanSkills() walks directory matching globs (default: */SKILL.md, skills/**/SKILL.md).",
+        "parseSkillFile() extracts YAML frontmatter (name, description, tags, license, version).",
+        "buildIndex() convenience function wraps fetchRegistry."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
