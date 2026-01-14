@@ -130,8 +130,11 @@
     {
       "category": "functional",
       "description": "Merge PR before starting Phase 1",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "PR #298 merged - fixes codex token refresh to write to openai provider ID.",
+        "Branch is up to date with PR changes."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

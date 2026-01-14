@@ -131,3 +131,8 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - Ran bun run typecheck - passed (pre-existing error at line 82).
 - Ran bun test in packages/opencode - 745 pass, 1 skip, 0 fail.
 - Updated prd.json: marked "Run script/generate.ts", "Verify auth.info in SDK", "Commit SDK changes" as complete.
+
+## Iteration 33 - 2026-01-14
+- Marked "Merge PR before starting Phase 1" as complete in prd.json.
+- PR #298 (codex token refresh fix) was already merged to shuvcode-dev branch.
+- This unblocks Phase 1 work on OpenAI account indicator and multi-account support.
