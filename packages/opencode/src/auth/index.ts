@@ -39,7 +39,9 @@ export namespace Auth {
 
   export async function get(providerID: string) {
     const auth = await all()
-    return auth[providerID]
+    const entry = auth[providerID]
+    if (entry || providerID !== "openai") return entry
+    return auth.codex
   }
 
   export async function all(): Promise<Record<string, Info>> {

@@ -31,8 +31,12 @@
     {
       "category": "functional",
       "description": "In `Auth.get(\"openai\")` at `packages/opencode/src/auth/index.ts`, add fallback check for legacy `codex` entry",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added openai fallback to return legacy codex auth when openai entry missing.",
+        "Ran `bun run typecheck` and `bun test` (from `packages/opencode`).",
+        "Attempted `bun run lint` at repo root; script missing."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

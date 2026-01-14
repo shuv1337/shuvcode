@@ -8,3 +8,8 @@
 - Updated token refresh write to `openai` provider ID in `packages/opencode/src/plugin/codex.ts` to avoid writing back to legacy `codex`.
 - Ran `bun run typecheck` and `bun test` (tests run from `packages/opencode` after root warning).
 - `bun run lint` missing at repo root; no lint run.
+
+## Iteration 2 - 2026-01-14T10:28:30Z
+- Added `Auth.get("openai")` fallback to return legacy `codex` auth when missing, improving migration behavior in `packages/opencode/src/auth/index.ts`.
+- Ran `bun run typecheck` and `bun test` (from `packages/opencode`).
+- `bun run lint` missing at repo root; no lint run.
