@@ -61,8 +61,13 @@
     {
       "category": "functional",
       "description": "Optionally remove legacy `codex` entry after migration",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Verified migration: Auth.get('openai') copies legacy codex OAuth entry to openai on first access.",
+        "Auth.remove('codex') function exists for users to optionally clean up legacy entries.",
+        "Removal is intentionally manual - automatic deletion could cause data loss if migration fails.",
+        "Users can call Auth.remove('codex') after verifying openai auth works correctly."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
