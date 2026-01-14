@@ -74,11 +74,21 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 22 - 2026-01-14T17:00:00Z
-- Created AccountBadge component in packages/opencode/src/cli/cmd/tui/component/account-badge.tsx.
-- Displays authenticated user's email and plan from sync.store.provider_auth_info.
-- Shows plan in brackets with primary color styling.
+## Iteration 23 - 2026-01-14T17:30:00Z
+- Integrated AccountBadge into footer.tsx for authenticated OpenAI users.
+- Added model provider check using useLocal().model.current().
+- AccountBadge only shown when: OpenAI provider, OAuth auth, and email available.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
+
+## Summary
+Completed 57 tasks implementing OpenAI OAuth account indicator feature:
+- Added email, name, plan, orgName fields to OAuth types and auth schema
+- Created fetchChatGPTUserInfo function for background plan fetching
+- Added GET /auth/info/:providerID endpoint for UI consumption
+- Created AccountBadge UI component to display user email and plan
+- Integrated AccountBadge into session footer for authenticated users
+
+Remaining: ~375 tasks (mostly skill registry, manual tests, verification steps)
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.
 - Created `UserInfo` interface with email, name, accountId fields.
 - Function parses id_token JWT claims to extract user metadata for the OAuth success payload.

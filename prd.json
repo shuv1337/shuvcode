@@ -1129,32 +1129,36 @@
     {
       "category": "functional",
       "description": "Open `packages/opencode/src/cli/cmd/tui/routes/session/footer.tsx`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added AccountBadge to footer.tsx for authenticated OpenAI users."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Get current model via `useLocal().model.current()`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added AccountBadge to footer.tsx with model provider check."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Check if model's provider is `openai`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added AccountBadge to footer.tsx with model provider check."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "If OpenAI + OAuth + email available, render `AccountBadge`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added AccountBadge to footer.tsx with conditional rendering.",
+        "AccountBadge only shown when: OpenAI provider, OAuth auth, and email available.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Hide indicator when: not OpenAI, API key auth, or no email",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added AccountBadge to footer.tsx with conditional hiding."],
+      "passes": true
     },
     {
       "category": "functional",
