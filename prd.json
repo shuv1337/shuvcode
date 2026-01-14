@@ -233,14 +233,24 @@
     {
       "category": "functional",
       "description": "Add `openai_multi_account: z.boolean().optional().default(false)`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added `experimental.openai_multi_account` flag with default false in config schema.",
+        "Ran `bun run typecheck`.",
+        "Ran `bun test` in `packages/opencode` (root guard blocks tests).",
+        "`bun run lint` missing at repo root."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add description: \"Enable multi-account storage and switching for OpenAI OAuth\"",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Documented the multi-account flag description alongside schema entry.",
+        "Ran `bun run typecheck`.",
+        "Ran `bun test` in `packages/opencode` (root guard blocks tests).",
+        "`bun run lint` missing at repo root."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
