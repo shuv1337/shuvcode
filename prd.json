@@ -119,8 +119,12 @@
     {
       "category": "functional",
       "description": "Add optional `email?: string` field to OAuth success variant",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added optional email field to OAuth success result types.",
+        "Ran `bun run typecheck` and `bun test` (from `packages/opencode`).",
+        "Attempted `bun run lint` at repo root; script missing."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

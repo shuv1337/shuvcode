@@ -18,3 +18,8 @@
 - Added `experimental.openai_multi_account` schema flag with default false and description in `packages/opencode/src/config/config.ts`.
 - Ran `bun run typecheck`; `bun test` at repo root blocked by guard, then `bun test` in `packages/opencode`.
 - `bun run lint` missing at repo root; noted and continued.
+
+## Iteration 4 - 2026-01-14T10:51:30Z
+- Added optional `email` field to OAuth success result types in `packages/plugin/src/index.ts` for richer account metadata.
+- Ran `bun run typecheck` and `bun test` (from `packages/opencode`).
+- `bun run lint` missing at repo root; no lint run.
