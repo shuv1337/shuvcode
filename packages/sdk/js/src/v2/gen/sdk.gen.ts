@@ -8,6 +8,8 @@ import type {
   AppLogErrors,
   AppLogResponses,
   Auth as Auth2,
+  AuthInfoErrors,
+  AuthInfoResponses,
   AuthSetErrors,
   AuthSetResponses,
   CommandListResponses,
@@ -2507,6 +2509,36 @@ export class Auth extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Get auth info
+   *
+   * Get authentication metadata for a provider including email, plan, and account ID.
+   */
+  public info<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AuthInfoResponses, AuthInfoErrors, ThrowOnError>({
+      url: "/auth/info/{providerID}",
+      ...options,
+      ...params,
     })
   }
 }

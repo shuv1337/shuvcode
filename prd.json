@@ -1111,11 +1111,13 @@
       "category": "functional",
       "description": "Add `GET /auth/info/:providerID` route",
       "steps": [
-        "Added GET /auth/info/:providerID endpoint that returns auth metadata.",
+        "Added GET /auth/info/:providerID endpoint in server.ts at line 2806-2840.",
         "Returns authenticated, type, email, plan, accountId for OAuth providers.",
         "Returns 404 with authenticated: false if provider not found.",
-        "Ran `bun run typecheck` - passed (with pre-existing type inference warning).",
-        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+        "Generated openapi.json with new endpoint.",
+        "Regenerated SDK with auth.info method.",
+        "Ran `bun run typecheck` - passed (pre-existing error at line 82).",
+        "Ran `bun test` in packages/opencode - 745 pass, 1 skip, 0 fail."
       ],
       "passes": true
     },
@@ -1146,20 +1148,28 @@
     {
       "category": "functional",
       "description": "Run `bun run script/generate.ts`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Generated openapi.json with new endpoints via bun dev generate.",
+        "Rebuilt SDK including auth.info endpoint in v2/gen.",
+        "Ran SDK build script successfully."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Verify `auth.info` endpoint appears in SDK types",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Verified auth.info in SDK v2/gen/sdk.gen.ts with AuthInfoData, AuthInfoResponses types.",
+        "Endpoint is accessible via client.auth.info() method.",
+        "Ran SDK build successfully."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Commit SDK changes",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Committed server.ts with auth.info endpoint and openapi.json with SDK changes."],
+      "passes": true
     },
     {
       "category": "functional",

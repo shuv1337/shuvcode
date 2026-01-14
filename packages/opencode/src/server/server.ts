@@ -2771,11 +2771,11 @@ export namespace Server {
           "/auth/info/:providerID",
           describeRoute({
             summary: "Get auth info",
-            description: "Get authentication information for a provider",
+            description: "Get authentication metadata for a provider including email, plan, and account ID.",
             operationId: "auth.info",
             responses: {
               200: {
-                description: "Auth information",
+                description: "Auth info retrieved successfully",
                 content: {
                   "application/json": {
                     schema: resolver(
@@ -2790,7 +2790,7 @@ export namespace Server {
                   },
                 },
               },
-              ...errors(400, 404),
+              ...errors(404),
             },
           }),
           validator(
@@ -2810,13 +2810,13 @@ export namespace Server {
                 404,
               )
             }
-            const oauthAuth = auth.type === "oauth" ? auth : null
+            const oauth = auth.type === "oauth" ? auth : null
             return c.json({
               authenticated: true,
               type: auth.type,
-              email: oauthAuth?.email,
-              plan: oauthAuth?.plan,
-              accountId: oauthAuth?.accountId,
+              email: oauth?.email,
+              plan: oauth?.plan,
+              accountId: oauth?.accountId,
             })
           },
         )

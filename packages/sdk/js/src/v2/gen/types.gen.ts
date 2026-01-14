@@ -1884,9 +1884,20 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
-     * Timeout in milliseconds for model context protocol (MCP) requests
+     * Timeout in milliseconds for MCP server initialization
      */
     mcp_timeout?: number
+    skills?: {
+      registries?: Array<{
+        id: string
+        type: "github" | "clawdhub" | "url"
+        url: string
+        enabled?: boolean
+        globs?: Array<string>
+      }>
+      default_scope?: "user" | "project"
+      auto_update?: boolean
+    }
   }
 }
 
@@ -4936,6 +4947,41 @@ export type AuthSetResponses = {
 }
 
 export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
+
+export type AuthInfoData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/auth/info/{providerID}"
+}
+
+export type AuthInfoErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type AuthInfoError = AuthInfoErrors[keyof AuthInfoErrors]
+
+export type AuthInfoResponses = {
+  /**
+   * Auth info retrieved successfully
+   */
+  200: {
+    authenticated: boolean
+    type?: string
+    email?: string
+    plan?: string
+    accountId?: string
+  }
+}
+
+export type AuthInfoResponse = AuthInfoResponses[keyof AuthInfoResponses]
 
 export type EventSubscribeData = {
   body?: never
