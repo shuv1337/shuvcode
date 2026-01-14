@@ -16,6 +16,11 @@ on:
         description: "Override version (optional)"
         required: false
         type: string
+      publishDesktop:
+        description: "Publish desktop (tauri) artifacts"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version || inputs.bump }}
@@ -92,6 +97,7 @@ jobs:
 
   publish-tauri:
     needs: publish
+    if: inputs.publishDesktop == 'true'
     continue-on-error: false
     strategy:
       fail-fast: false
@@ -209,7 +215,7 @@ jobs:
     needs:
       - publish
       - publish-tauri
-    if: needs.publish.outputs.tag
+    if: needs.publish.outputs.tag && (needs.publish-tauri.result == 'success' || needs.publish-tauri.result == 'skipped')
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v3
