@@ -8,9 +8,15 @@
   "items": [
     {
       "category": "functional",
-      "description": "OpenAI Account Indicator & Multi-Account Support",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "description": "Create `packages/opencode/src/skill/manifest.ts`",
+      "steps": [
+        "Created manifest.ts with InstalledSkill and SkillManifest interfaces.",
+        "Defines MANIFEST_PATH constant pointing to skills-manifest.json in config.",
+        "Implements loadManifest(), saveManifest(), getInstalled(), addInstalled(), removeInstalled().",
+        "Uses createEmptyManifest() for initialization and handles corrupt/missing files gracefully.",
+        "Loaded by skill installer to track installed skills and their metadata."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
