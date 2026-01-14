@@ -33,3 +33,9 @@
 - Ran `bun run typecheck` and `bun test` (from `packages/opencode`).
 - `bun run lint` missing at repo root; no lint run.
 
+## Iteration 8 - 2026-01-14T11:22:00Z
+- Added optional `name` field to OAuth success result types in `packages/plugin/src/index.ts`.
+- Ran `bun run typecheck`.
+- Ran `bun test` from `packages/opencode` after root test guard message.
+- `bun run lint` missing at repo root; no lint run.
+

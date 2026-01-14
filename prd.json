@@ -137,8 +137,13 @@
     {
       "category": "functional",
       "description": "Add optional `name?: string` field to OAuth success variant",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added optional name field to OAuth success result types in packages/plugin/src/index.ts.",
+        "Ran `bun run typecheck`.",
+        "Ran `bun test` from packages/opencode after root guard message.",
+        "`bun run lint` missing at repo root."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
