@@ -2768,6 +2768,59 @@ export namespace Server {
           },
         )
         .get(
+          "/auth/info/:providerID",
+          describeRoute({
+            summary: "Get auth info",
+            description: "Get authentication information for a provider",
+            operationId: "auth.info",
+            responses: {
+              200: {
+                description: "Auth information",
+                content: {
+                  "application/json": {
+                    schema: resolver(
+                      z.object({
+                        authenticated: z.boolean(),
+                        type: z.string().optional(),
+                        email: z.string().optional(),
+                        plan: z.string().optional(),
+                        accountId: z.string().optional(),
+                      }),
+                    ),
+                  },
+                },
+              },
+              ...errors(400, 404),
+            },
+          }),
+          validator(
+            "param",
+            z.object({
+              providerID: z.string(),
+            }),
+          ),
+          async (c) => {
+            const providerID = c.req.valid("param").providerID
+            const auth = await Auth.get(providerID)
+            if (!auth) {
+              return c.json(
+                {
+                  authenticated: false,
+                },
+                404,
+              )
+            }
+            const oauthAuth = auth.type === "oauth" ? auth : null
+            return c.json({
+              authenticated: true,
+              type: auth.type,
+              email: oauthAuth?.email,
+              plan: oauthAuth?.plan,
+              accountId: oauthAuth?.accountId,
+            })
+          },
+        )
+        .get(
           "/event",
           describeRoute({
             summary: "Subscribe to events",
