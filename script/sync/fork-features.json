@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-12",
-  "lastChange": "v1.1.15 sync. Adopted upstream's refactored desktop server connection logic with shuvcode branding. Tips component now uses upstream's TSX structure.",
+  "lastUpdated": "2026-01-14",
+  "lastChange": "Disable desktop (tauri) publish workflow by default to avoid unnecessary CLI downloads during release.",
   "note": "v1.1.15 sync. Upstream adds password auth (OPENCODE_SERVER_PASSWORD), improved tips display, permission wildcarding fixes, and desktop server detection improvements.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -1926,6 +1926,22 @@
         }
       ],
       "note": "CRITICAL: Upstream uses app.opencode.ai. This gets overwritten during merges. Always verify after merge that proxy URL is app.shuv.ai."
+    },
+    {
+      "pr": 0,
+      "title": "Publish workflow skips desktop release by default",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "The publish workflow only runs the desktop (tauri) release job when explicitly requested, avoiding unnecessary tauri-cli installs and platform downloads when no desktop app is shipped.",
+      "files": [".github/workflows/publish.yml"],
+      "criticalCode": [
+        {
+          "file": ".github/workflows/publish.yml",
+          "description": "publishDesktop input and publish-tauri job guard",
+          "markers": ["publishDesktop", "if: inputs.publishDesktop == 'true'"]
+        }
+      ],
+      "note": "Triggered by publish failure from @tauri-apps/cli-win32-ia32-msvc integrity errors; publish desktop artifacts only when needed."
     }
   ]
 }
