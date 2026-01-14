@@ -444,8 +444,15 @@
     {
       "category": "functional",
       "description": "Create `extractUserInfo(tokens: TokenResponse)` function",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added `name` field to IdTokenClaims interface for standard OIDC claim.",
+        "Created `UserInfo` interface with email, name, accountId fields.",
+        "Implemented `extractUserInfo` function that parses id_token and extracts user metadata.",
+        "Updated OAuth callback to use extractUserInfo and include email/name in success payload.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

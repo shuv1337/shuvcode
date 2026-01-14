@@ -46,6 +46,7 @@ export interface IdTokenClaims {
   chatgpt_account_id?: string
   organizations?: Array<{ id: string }>
   email?: string
+  name?: string
   "https://api.openai.com/auth"?: {
     chatgpt_account_id?: string
   }
@@ -80,6 +81,27 @@ export function extractAccountId(tokens: TokenResponse): string | undefined {
     return claims ? extractAccountIdFromClaims(claims) : undefined
   }
   return undefined
+}
+
+export interface UserInfo {
+  email?: string
+  name?: string
+  accountId?: string
+}
+
+export function extractUserInfo(tokens: TokenResponse): UserInfo {
+  const info: UserInfo = {}
+
+  if (tokens.id_token) {
+    const claims = parseJwtClaims(tokens.id_token)
+    if (claims) {
+      info.email = claims.email
+      info.name = claims.name
+      info.accountId = extractAccountIdFromClaims(claims)
+    }
+  }
+
+  return info
 }
 
 function buildAuthorizeUrl(redirectUri: string, pkce: PkceCodes, state: string): string {
@@ -503,13 +525,15 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               callback: async () => {
                 const tokens = await callbackPromise
                 stopOAuthServer()
-                const accountId = extractAccountId(tokens)
+                const userInfo = extractUserInfo(tokens)
                 return {
                   type: "success" as const,
                   refresh: tokens.refresh_token,
                   access: tokens.access_token,
                   expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
-                  accountId,
+                  accountId: userInfo.accountId,
+                  email: userInfo.email,
+                  name: userInfo.name,
                 }
               },
             }
