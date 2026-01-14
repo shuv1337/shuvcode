@@ -74,13 +74,14 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 25 - 2026-01-14T18:30:00Z
-- Added skills registry configuration schema to config.ts.
-- Added RegistrySource schema with id, type, url, enabled, globs fields.
-- Added skills object with registries array, default_scope, and auto_update fields.
+## Iteration 26 - 2026-01-14T19:00:00Z
+- Created skill/registry.ts with RegistrySource and IndexedSkill interfaces.
+- Added DEFAULT_REGISTRIES with awesome-claude-skills (enabled) and clawdhub (disabled).
+- Implemented getRegistries() that merges user config with defaults by id.
+- Allows config to override url, enabled, and globs for each registry.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
 
-Completed: 70 tasks | Remaining: ~370 tasks
+Completed: 82 tasks | Remaining: ~360 tasks
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.
 - Created `UserInfo` interface with email, name, accountId fields.
 - Function parses id_token JWT claims to extract user metadata for the OAuth success payload.

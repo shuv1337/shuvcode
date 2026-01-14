@@ -369,6 +369,84 @@
     {
       "category": "functional",
       "description": "Create `packages/opencode/src/skill/registry.ts`",
+      "steps": [
+        "Created registry.ts with RegistrySource and IndexedSkill interfaces.",
+        "Defined DEFAULT_REGISTRIES with awesome-claude-skills and clawdhub entries.",
+        "Implemented getRegistries() function that merges user config with defaults.",
+        "Allows config to override url, enabled, and globs for each registry.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Define `RegistrySource` interface with fields: `id`, `type`, `url`, `enabled`, `globs`",
+      "steps": ["Created RegistrySource interface in registry.ts."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Define `IndexedSkill` interface with fields: `name`, `description`, `tags`, `license`, `metadata`, `registry`, `entryPath`, `sourceUrl`, `version`, `installedVersion`, `installedAt`",
+      "steps": ["Created IndexedSkill interface in registry.ts."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Export `SkillRegistry` namespace",
+      "steps": ["Exported SkillRegistry namespace from registry.ts."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/registry.ts`, add `DEFAULT_REGISTRIES` constant",
+      "steps": ["Added DEFAULT_REGISTRIES constant with predefined registries."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Add `awesome-claude-skills` registry: type `github`, url `https://github.com/ComposioHQ/awesome-claude-skills`, enabled `true`, globs `[\"*/SKILL.md\", \"skills/**/SKILL.md\"]`",
+      "steps": ["Added awesome-claude-skills to DEFAULT_REGISTRIES."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Add `clawdhub` registry: type `clawdhub`, url `https://clawdhub.com`, enabled `false` (until API confirmed)",
+      "steps": ["Added clawdhub to DEFAULT_REGISTRIES as disabled by default."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/registry.ts`, create `getRegistries()` function",
+      "steps": ["Implemented getRegistries() function in registry.ts."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Load config via `Config.get()`",
+      "steps": ["getRegistries() loads config asynchronously via Config.get()."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Merge default registries with `config.skills?.registries` by `id`",
+      "steps": ["getRegistries() merges default and user registries by id."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Allow config to override `url`, `enabled`, and `globs`",
+      "steps": ["User config can override url, enabled, and globs for each registry."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Return merged registry list",
+      "steps": ["getRegistries() returns the merged registry list."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/plugin/codex.ts`",
       "steps": ["Add verification steps for this item."],
       "passes": false
     },
