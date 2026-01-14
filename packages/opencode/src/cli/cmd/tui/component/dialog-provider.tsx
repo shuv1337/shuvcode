@@ -30,16 +30,27 @@ export function createDialogProviderOptions() {
     return pipe(
       sync.data.provider_next.all,
       sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
-      map((provider) => ({
-        title: provider.name,
-        value: provider.id,
-        description: {
-          opencode: "(Recommended)",
-          anthropic: "(Claude Max or API key)",
-          openai: "(ChatGPT Plus/Pro or API key)",
-        }[provider.id],
-        category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
-        async onSelect() {
+      map((provider) => {
+        const authInfo = sync.data.provider_auth_info[provider.id]
+        const isOAuthConnected = authInfo?.authenticated && authInfo?.email
+
+        let description: string
+        if (isOAuthConnected) {
+          description = `Connected: ${authInfo.email}${authInfo.plan ? ` [${authInfo.plan}]` : ""}`
+        } else {
+          description = {
+            opencode: "(Recommended)",
+            anthropic: "(Claude Max or API key)",
+            openai: "(ChatGPT Plus/Pro or API key)",
+          }[provider.id] || ""
+        }
+
+        return {
+          title: provider.name,
+          value: provider.id,
+          description,
+          category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
+          async onSelect() {
           const methods = sync.data.provider_auth[provider.id] ?? [
             {
               type: "api",

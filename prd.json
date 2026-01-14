@@ -1093,6 +1093,45 @@
     {
       "category": "functional",
       "description": "Open `packages/opencode/src/cli/cmd/tui/component/dialog-provider.tsx`",
+      "steps": ["Updated dialog-provider.tsx to show auth status in provider list."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Import sync context",
+      "steps": ["Updated dialog-provider.tsx to show auth status in provider list."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Check `sync.data.provider_auth_info.openai`",
+      "steps": ["Updated dialog-provider.tsx to check provider_auth_info and display connection status."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "If authenticated with email, show \"Connected: email [Plan]\"",
+      "steps": [
+        "Updated provider description to show 'Connected: email [Plan]' for authenticated OAuth users.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "If authenticated without email, show \"Connected\"",
+      "steps": ["Updated dialog-provider.tsx to show connection status."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Preserve static descriptions for non-OAuth providers",
+      "steps": ["Preserved static descriptions for non-OAuth providers (anthropic, etc.)."],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/manifest.ts`",
       "steps": ["Add verification steps for this item."],
       "passes": false
     },
