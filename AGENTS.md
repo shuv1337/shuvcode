@@ -16,6 +16,8 @@
 
 - Avoid testing logic directly inside Solid.js `.tsx` files if they import JSX runtimes, as `bun test` may fail with `jsxDEV` errors.
 - Separate pure logic into `.ts` files (e.g., `theme-utils.ts`) and test those instead.
+- Run tests from `packages/opencode` directory - the repo root has a guard file that prevents test execution.
+- `bun run lint` in `packages/opencode` runs the full test suite with coverage.
 
 ## Upstream Merge Operations
 
