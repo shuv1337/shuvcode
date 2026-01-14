@@ -41,14 +41,22 @@
     {
       "category": "functional",
       "description": "If `openai` entry missing but `codex` exists with OAuth type, copy `codex` to `openai`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "When openai auth is missing, mirror legacy codex OAuth data into the openai entry.",
+        "Ran `bun run typecheck` and `bun test` (from `packages/opencode`).",
+        "`bun run lint` missing at repo root."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add migration log message for debugging",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Logged when falling back to legacy codex auth in Auth.get.",
+        "Ran `bun run typecheck`.",
+        "Ran `bun test` and `bun run lint` (from `packages/opencode`)."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

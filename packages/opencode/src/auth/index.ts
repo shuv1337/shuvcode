@@ -2,8 +2,11 @@ import path from "path"
 import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
+import { Log } from "../util/log"
 
 export const OAUTH_DUMMY_KEY = "opencode-oauth-dummy-key"
+
+const log = Log.create({ service: "auth" })
 
 export namespace Auth {
   export const Oauth = z
@@ -41,7 +44,14 @@ export namespace Auth {
     const auth = await all()
     const entry = auth[providerID]
     if (entry || providerID !== "openai") return entry
-    return auth.codex
+    const legacy = auth.codex
+    if (legacy) {
+      log.info("auth migration: using legacy codex entry", { providerID: "openai" })
+    }
+    if (legacy?.type === "oauth") {
+      await set("openai", legacy)
+    }
+    return legacy
   }
 
   export async function all(): Promise<Record<string, Info>> {

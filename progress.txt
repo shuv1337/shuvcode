@@ -23,3 +23,13 @@
 - Added optional `email` field to OAuth success result types in `packages/plugin/src/index.ts` for richer account metadata.
 - Ran `bun run typecheck` and `bun test` (from `packages/opencode`).
 - `bun run lint` missing at repo root; no lint run.
+
+## Iteration 5 - 2026-01-14T11:02:00Z
+- Logged legacy `codex` fallback usage in `packages/opencode/src/auth/index.ts` to aid migration debugging.
+- Ran `bun run typecheck`, `bun test`, and `bun run lint` (from `packages/opencode`).
+
+## Iteration 6 - 2026-01-14T11:06:00Z
+- Mirrored legacy `codex` OAuth auth into `openai` when `openai` entry missing in `packages/opencode/src/auth/index.ts`.
+- Ran `bun run typecheck` and `bun test` (from `packages/opencode`).
+- `bun run lint` missing at repo root; no lint run.
+
