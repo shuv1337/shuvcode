@@ -231,3 +231,45 @@ test("token refresh writes to openai provider ID (not legacy codex)", async () =
     },
   })
 })
+
+test("OAuth result without optional metadata fields is valid (backwards compatibility)", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Auth.remove("testprovider").catch(() => {})
+
+      const minimalAuth = {
+        type: "oauth" as const,
+        refresh: "minimal-refresh",
+        access: "minimal-access",
+        expires: Date.now() + 3600 * 1000,
+      }
+
+      await Auth.set("testprovider", minimalAuth)
+
+      const result = await Auth.get("testprovider")
+
+      expect(result).toBeDefined()
+      expect(result?.type).toBe("oauth")
+      expect((result as any).refresh).toBe("minimal-refresh")
+      expect((result as any).access).toBe("minimal-access")
+      expect((result as any).expires).toBeDefined()
+      expect((result as any).email).toBeUndefined()
+      expect((result as any).name).toBeUndefined()
+      expect((result as any).plan).toBeUndefined()
+      expect((result as any).orgName).toBeUndefined()
+      expect((result as any).accountId).toBeUndefined()
+    },
+  })
+})

@@ -202,8 +202,15 @@
     {
       "category": "functional",
       "description": "Verify backwards compatibility: plugins not returning these fields still work",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Verified plugin type definitions: email, name, plan, orgName are all optional (? suffix) in AuthOuathResult.",
+        "Verified auth schema: all new fields use z.string().optional() in Auth.Oauth Zod schema.",
+        "Verified provider/auth.ts: uses conditional checks (if (result.email)) before setting optional fields.",
+        "Added test 'OAuth result without optional metadata fields is valid' confirming minimal auth works.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun test` in packages/opencode - 7 pass, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

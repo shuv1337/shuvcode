@@ -95,3 +95,11 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - Branch shuvcode-dev pushed to remote (26 commits ahead of origin)
 - Fixed pre-existing typecheck error in server.ts (TS2589: Type instantiation is excessively deep)
 - Typecheck passes, tests pass
+
+## Iteration 28 - 2026-01-14
+- Verified backwards compatibility for new OAuth metadata fields (email, name, plan, orgName).
+- All new fields are optional in both plugin types (TypeScript ? suffix) and auth schema (Zod .optional()).
+- Provider auth handler uses conditional checks before setting optional fields.
+- Added test confirming minimal OAuth results (without optional fields) persist correctly.
+- Ran `bun run typecheck` - passed.
+- Ran `bun test` in packages/opencode - 7 pass, 0 fail (all codex-migration tests).
