@@ -995,8 +995,14 @@
     {
       "category": "functional",
       "description": "Create `packages/opencode/src/skill/index.ts`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Created index.ts with SkillIndex interface (version, skills[], builtAt).",
+        "Defines INDEX_CACHE_DIR at path.join(Global.Path.cache, 'skill-index').",
+        "Implements loadIndex(registryId) - checks cache with TTL, returns null if missing/expired.",
+        "Implements buildIndex(registry) - fetches registry, writes combined index to cache.",
+        "Implements search() - uses fuzzysort for name/description/tags ranking with registry/tag filters."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
@@ -1445,8 +1451,14 @@
     {
       "category": "functional",
       "description": "Create `packages/opencode/src/skill/installer.ts`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Created installer.ts with SKILLS_DIR at path.join(Global.Path.data, 'skills').",
+        "Implements installSkill(skill, sourceDir) - copies files, updates manifest, creates metadata.",
+        "Implements uninstallSkill(skillName) - removes skill dir, updates manifest.",
+        "Uses manifest module to track installed skills with version and installedAt timestamps.",
+        "getSkillInstallPath() creates safe filenames by sanitizing skill names."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
