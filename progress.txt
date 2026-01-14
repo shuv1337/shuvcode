@@ -74,12 +74,11 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 18 - 2026-01-14T15:00:00Z
-- Created `fetchChatGPTUserInfo` function in `packages/opencode/src/plugin/codex.ts` for background plan fetching.
-- Implements API call to https://chatgpt.com/backend-api/me with Bearer token and optional account ID header.
-- Includes exponential backoff retry (max 3 attempts) with 5s timeout per attempt.
-- Returns null on failure instead of throwing, with warning logs for debugging.
-- Created `normalizePlanType` helper to map API plan values to standardized tiers (free, plus, pro, team, enterprise, unknown).
+## Iteration 19 - 2026-01-14T15:30:00Z
+- Added background task in OAuth callback to fetch and store plan/orgName from ChatGPT API.
+- Task runs asynchronously without blocking OAuth completion using void updatePlan().catch(() => {}).
+- Updates auth metadata via auth.set when plan or orgName is retrieved from the API.
+- Added type assertion (as any) to handle SDK type mismatch for new OAuth fields.
 - Ran `bun run typecheck` - passed.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.

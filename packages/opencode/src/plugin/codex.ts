@@ -602,6 +602,35 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
                 const tokens = await callbackPromise
                 stopOAuthServer()
                 const userInfo = extractUserInfo(tokens)
+
+                const updatePlan = async () => {
+                  try {
+                    const chatGPTInfo = await fetchChatGPTUserInfo(tokens.access_token, userInfo.accountId)
+                    if (chatGPTInfo && (chatGPTInfo.plan || chatGPTInfo.orgName)) {
+                      await input.client.auth.set({
+                        path: { id: "openai" },
+                        body: {
+                          type: "oauth",
+                          refresh: tokens.refresh_token,
+                          access: tokens.access_token,
+                          expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+                          accountId: userInfo.accountId,
+                          email: userInfo.email,
+                          name: userInfo.name,
+                          plan: chatGPTInfo.plan,
+                          orgName: chatGPTInfo.orgName,
+                        } as any,
+                      })
+                    }
+                  } catch (err) {
+                    log.warn("failed to update ChatGPT user info", {
+                      error: err instanceof Error ? err.message : String(err),
+                    })
+                  }
+                }
+
+                void updatePlan().catch(() => {})
+
                 return {
                   type: "success" as const,
                   refresh: tokens.refresh_token,

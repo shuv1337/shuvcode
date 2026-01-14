@@ -1868,6 +1868,10 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
+     * Enable multi-account storage and switching for OpenAI OAuth
+     */
+    openai_multi_account?: boolean
+    /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */
     openTelemetry?: boolean
@@ -2205,6 +2209,10 @@ export type OAuth = {
   expires: number
   accountId?: string
   enterpriseUrl?: string
+  email?: string
+  name?: string
+  plan?: string
+  orgName?: string
 }
 
 export type ApiAuth = {
