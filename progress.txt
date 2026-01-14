@@ -1,0 +1,10 @@
+# Ralph Progress
+
+## Iteration 0 - Initialized 2026-01-14T10:20:23.718Z
+- Plan: prd.json
+- Notes: Initialized via ralph init.
+
+## Iteration 1 - 2026-01-14T10:24:00Z
+- Updated token refresh write to `openai` provider ID in `packages/opencode/src/plugin/codex.ts` to avoid writing back to legacy `codex`.
+- Ran `bun run typecheck` and `bun test` (tests run from `packages/opencode` after root warning).
+- `bun run lint` missing at repo root; no lint run.

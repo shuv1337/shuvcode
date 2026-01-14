@@ -1,0 +1,2600 @@
+{
+  "metadata": {
+    "generated": true,
+    "generator": "ralph-init",
+    "createdAt": "2026-01-14T10:20:23.717Z",
+    "sourceFile": "plan.md"
+  },
+  "items": [
+    {
+      "category": "functional",
+      "description": "OpenAI Account Indicator & Multi-Account Support",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Skill Registry & Installer",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Change `packages/opencode/src/plugin/codex.ts:433` from `path: { id: \"codex\" }` to `path: { id: \"openai\" }`",
+      "steps": [
+        "Updated auth refresh write to use provider id `openai`.",
+        "Ran `bun run typecheck` and `bun test` (from `packages/opencode`).",
+        "Attempted `bun run lint` at repo root; script missing."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "In `Auth.get(\"openai\")` at `packages/opencode/src/auth/index.ts`, add fallback check for legacy `codex` entry",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If `openai` entry missing but `codex` exists with OAuth type, copy `codex` to `openai`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add migration log message for debugging",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Optionally remove legacy `codex` entry after migration",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create test file `packages/opencode/test/auth/codex-migration.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add test: token refresh writes to `openai` provider ID",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add test: legacy `codex` entries are migrated on read",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Manual test: fresh OAuth login writes to `openai`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Manual test: token refresh updates `openai`, not `codex`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Manual test: existing users with `codex` entries are migrated",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create PR: \"fix(codex): write token refresh to openai provider ID\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Merge PR before starting Phase 1",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/plugin/src/index.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Locate the `OAuthCallbackResult` type definition",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add optional `email?: string` field to OAuth success variant",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add optional `name?: string` field to OAuth success variant",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add optional `plan?: string` field to OAuth success variant",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add optional `orgName?: string` field to OAuth success variant",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Update JSDoc comments for new fields",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify backwards compatibility: plugins not returning these fields still work",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/auth/index.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `email: z.string().optional()` to `Oauth` schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `name: z.string().optional()` to `Oauth` schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `plan: z.string().optional()` to `Oauth` schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `orgName: z.string().optional()` to `Oauth` schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/provider/auth.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Locate `ProviderAuth.callback` function (lines 75-119)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In the OAuth success branch, add: `if (result.email) info.email = result.email`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add: `if (result.name) info.name = result.name`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add: `if (result.plan) info.plan = result.plan`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add: `if (result.orgName) info.orgName = result.orgName`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/config/config.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Locate the experimental config schema section",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `openai_multi_account: z.boolean().optional().default(false)`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add description: \"Enable multi-account storage and switching for OpenAI OAuth\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `RegistrySource` schema with fields: `id`, `type`, `url`, `enabled`, `globs`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `skills` object to Info schema with `registries` array",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `default_scope: z.enum([\"user\", \"project\"]).optional().default(\"project\")`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `auto_update: z.boolean().optional().default(false)`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/registry.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `RegistrySource` interface with fields: `id`, `type`, `url`, `enabled`, `globs`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `IndexedSkill` interface with fields: `name`, `description`, `tags`, `license`, `metadata`, `registry`, `entryPath`, `sourceUrl`, `version`, `installedVersion`, `installedAt`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `SkillManifest` interface with fields: `registryId`, `source`, `skill`, `version`, `installedAt`, `scope`, `files`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Export `SkillRegistry` namespace",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/registry.ts`, add `DEFAULT_REGISTRIES` constant",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `awesome-claude-skills` registry: type `github`, url `https://github.com/ComposioHQ/awesome-claude-skills`, enabled `true`, globs `[\"*/SKILL.md\", \"skills/**/SKILL.md\"]`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `clawdhub` registry: type `clawdhub`, url `https://clawdhub.com`, enabled `false` (until API confirmed)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/registry.ts`, create `getRegistries()` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Load config via `Config.get()`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Merge default registries with `config.skills?.registries` by `id`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Allow config to override `url`, `enabled`, and `globs`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return merged registry list",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/plugin/codex.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `extractUserInfo(tokens: TokenResponse)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Parse `id_token` using existing `parseJwtClaims` helper",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Extract `email` from id token claims",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Extract `name` from id token claims if available",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Extract `accountId` using existing `extractAccountIdFromClaims` helper",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return object with `email`, `name`, `accountId`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/plugin/codex.ts`, locate OAuth callback handler",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `extractUserInfo(tokens)` after successful token exchange",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Include `email`, `name`, `accountId` in the success payload returned",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/plugin/codex.ts`, create `fetchChatGPTUserInfo` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define constants: `CHATGPT_API_TIMEOUT = 5000`, `CHATGPT_API_MAX_RETRIES = 3`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement fetch to `https://chatgpt.com/backend-api/me` with Bearer token",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Include `ChatGPT-Account-Id` header when `accountId` available",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement exponential backoff retry (max 3 attempts)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Log warnings (not errors) on failure",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return `null` on any failure, never throw",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/plugin/codex.ts`, create `normalizePlanType` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Map response values to: `free`, `plus`, `pro`, `team`, `enterprise`, `unknown`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Handle case variations and unexpected values",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In OAuth callback, spawn background task to call `fetchChatGPTUserInfo`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Do NOT await in callback path (non-blocking)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "When plan fetch completes, update stored metadata via `Auth.set`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Ensure OAuth completes successfully even with network errors",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/fetcher/github.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define cache directory: `path.join(Global.Path.cache, \"skill-registries\", registryId)`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `fetchRegistry(registry: RegistrySource)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement tarball download from GitHub archive URL",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Extract archive to cache directory",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/fetcher/github.ts`, create `scanSkills` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use registry `globs` to find `SKILL.md` files (default: `*/SKILL.md`, `skills/**/SKILL.md`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Parse YAML frontmatter from each `SKILL.md`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Extract: `name`, `description`, `license`, `metadata`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Compute `entryPath` relative to registry root",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Compute `sourceUrl` for direct GitHub link",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/fetcher/github.ts`, create `buildIndex` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `scanSkills` and map results to `IndexedSkill` objects",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Include `registry` field set to registry `id`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return array of `IndexedSkill`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/fetcher/github.ts`, add `hasGit()` check",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If git available, implement `sparseCheckout` for incremental updates",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use: `git clone --depth=1 --filter=blob:none --sparse <repo>`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Then: `git sparse-checkout set <skill-path>`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Fall back to tarball if git not available",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/fetcher/clawdhub.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add TODO comment: \"Enable after API contract confirmed\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define expected API endpoints in comments",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `fetchRegistry` that returns empty array when disabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Log info message when registry is accessed but disabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/fetcher/url.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement fetch of JSON index from registry URL",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Parse index into `IndexedSkill` array",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support downloading skill bundles referenced by index",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/index.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define cache path: `path.join(Global.Path.cache, \"skill-index.json\")`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define TTL constant: `INDEX_TTL = 60 * 60 * 1000` (1 hour)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `IndexManager` namespace",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/index.ts`, create `loadIndex` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check if cached index exists and is within TTL",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If valid cache, parse and return",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If missing or expired, return `null`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/index.ts`, create `buildIndex` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Get enabled registries via `SkillRegistry.getRegistries()`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "For each registry, call appropriate fetcher based on `type`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Combine all `IndexedSkill` arrays",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Write combined index to cache file with timestamp",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/index.ts`, create `search` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use `fuzzysort` (already in codebase) for ranking",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Search across `name`, `description`, `tags`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `--registry` filter",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `--tag` filter",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return ranked results",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/index.ts`, wrap cache reads in try/catch",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If cache is corrupted or schema mismatch, delete and rebuild",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Log info message when rebuilding cache",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/server/server.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `GET /auth/info/:providerID` route",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use `describeRoute` with operationId `auth.info`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define response schema: `authenticated`, `type`, `email`, `plan`, `accountId`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `validator(\"param\", z.object({ providerID: z.string() }))`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement handler: call `Auth.get(providerID)`, return metadata",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Run `bun run script/generate.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify `auth.info` endpoint appears in SDK types",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Commit SDK changes",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/cli/cmd/tui/context/sync.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `provider_auth_info` to store type",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define shape: `{ [providerID: string]: { authenticated, type?, email?, plan?, accountId? } }`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Load auth info for `openai` provider during bootstrap",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call SDK `client.auth.info({ path: { providerID: \"openai\" } })`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/cli/cmd/tui/component/account-badge.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Accept props: `email`, `plan`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define plan colors using theme tokens: free=textMuted, plus=success, pro=primary, team=info, enterprise=warning",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Format display: `email [Plan]` or just `email` if plan unknown",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Export `AccountBadge` component",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/cli/cmd/tui/component/dialog-provider.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Import sync context",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check `sync.data.provider_auth_info.openai`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If authenticated with email, show \"Connected: email [Plan]\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If authenticated without email, show \"Connected\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Preserve static descriptions for non-OAuth providers",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/cli/cmd/tui/routes/session/footer.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Get current model via `useLocal().model.current()`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check if model's provider is `openai`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If OpenAI + OAuth + email available, render `AccountBadge`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Hide indicator when: not OpenAI, API key auth, or no email",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/manifest.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `readManifest(skillPath: string)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `writeManifest(skillPath: string, manifest: SkillManifest)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Manifest location: `.skill-manifest.json` alongside `SKILL.md`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/manifest.ts`, create `hashFile` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use `crypto.createHash('sha256')` for file content",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return hex-encoded hash",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/manifest.ts`, create `buildFileList` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Scan skill directory for all files",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Compute SHA256 hash for each file",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return array: `[{ path, sha256 }]`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/skill/installer.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define installation paths:",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Project: `.opencode/skills/<skill>/`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "User: `~/.config/opencode/skill/<skill>/`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `SkillInstaller` namespace",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `copySkillFiles` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Copy entire skill folder from cache to target directory",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Preserve file structure",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Set appropriate permissions",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `install` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Accept: `skillName`, `registryId`, `version`, `scope`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Resolve target directory based on scope",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `copySkillFiles`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create manifest with: `registryId`, `source`, `skill`, `version`, `installedAt`, `scope`, `files`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Write manifest via `writeManifest`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, after successful install:",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `Skill.refresh()` or trigger fresh scan",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Ensure `skills list` reflects new install without restart",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `remove` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Accept: `skillName`, `scope`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Delete skill directory and manifest",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Invalidate skill cache",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `OpenAIAccount` schema with: `id`, `email`, `name`, `plan`, `orgName`, `refresh`, `access`, `expires`, `addedAt`, `lastUsedAt`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `OpenAIAccounts` schema with: `version: z.literal(1)`, `activeAccountId`, `accounts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Export types",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/auth/openai-accounts.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define filepath: `path.join(Global.Path.data, \"openai-accounts.json\")`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `OpenAIAccountManager` namespace",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Implement write lock via promise chain",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/auth/openai-accounts.ts`, create `read` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Parse and validate against `OpenAIAccounts` schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return default empty structure if file missing",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `write` function with atomic write (temp file + rename)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Set file permissions to `0600`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `list()`: return all accounts",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `getActive()`: return active account or null",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `add(account)`: add account to list, handle duplicates by id",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `remove(accountId)`: remove account, select new active if needed",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `setActive(accountId)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use `withWriteLock` for thread safety",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Find account in list, throw if not found",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Update `activeAccountId` and `lastUsedAt`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Write to `openai-accounts.json`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Mirror to `auth.json` via `Auth.set(\"openai\", { ... })`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `updateTokens(accountId, tokens)` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use `withWriteLock`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Update account's `access`, `refresh`, `expires`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Mirror to `auth.json` for active account",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In all account manager operations, first check `Auth.get(\"openai\")?.type`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If type is `\"api\"`, skip multi-account functionality",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return early with appropriate response",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/cli/cmd/skills.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use yargs command builder pattern (reference: `mcp.ts`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Define `SkillsCommand` with subcommands",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Export command",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/index.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Import `SkillsCommand`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Register as top-level command",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `list` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use fresh skill scan (not cached `Skill.state`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display: name, version, scope, update status",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Format as table",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `search <query>` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `IndexManager.search(query)`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display: name, description, registry, tags",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show `registry/name` when collisions exist",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `info <skill>` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `registry/skill` format for disambiguation",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If installed, read local `SKILL.md` for metadata",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If not installed, use registry index",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display: description, tags, license, source URL, versions, install status",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `install <skill>` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `--version <sha|tag>` option",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `--scope user|project` option (default: project)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show confirmation prompt with: source, version, files, risk hints",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `SkillInstaller.install`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show success message",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `update [skill]` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If no skill specified, update all",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Compare installed version with latest",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show diff preview before updating",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Support `--force` to skip confirmation",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Warn if local modifications detected",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `remove <skill>` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show confirmation prompt",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `SkillInstaller.remove`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `registry list` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display all configured registries with status",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show: id, type, url, enabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `registry add` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Accept: `--id`, `--type`, `--url`, `--globs`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use JSONC edit flow (reference: MCP config updates)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Write to `opencode.json` under `skills.registries`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `registry remove <id>` subcommand",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use JSONC edit flow",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Remove registry from `skills.registries`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/auth/openai-accounts.ts`, create `migrate` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check if `accounts.length > 0`, skip if already migrated",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Read `Auth.get(\"openai\")` and `Auth.get(\"codex\")`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Filter to OAuth entries only",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Pick entry with latest `expires` timestamp",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create account with id from `accountId` or `crypto.randomUUID()`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `OpenAIAccountManager`, call `migrate()` in `read()` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Only run once per session (use flag)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Log migration info",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `read()`, validate JSON schema",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If corrupted: log warning, backup to `.corrupt.<timestamp>`, re-run migration",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If migration also fails, continue without multi-account",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `shuvcode auth --reset-openai-accounts` flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Delete `openai-accounts.json`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Force re-migration on next start",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `GET /openai/accounts` - list accounts",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `POST /openai/accounts/active` - set active account",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `DELETE /openai/accounts/:id` - remove account",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check `experimental.openai_multi_account` flag, return 404 if disabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify new endpoints in SDK types",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `openai_accounts?: OpenAIAccount[]` to store",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `openai_active_account_id?: string | null` to store",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Load during bootstrap if feature flag enabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `reloadProviders()` method for targeted refresh",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/src/cli/cmd/tui/component/dialog-openai-accounts.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "List accounts with email, plan badge, \"Active\" indicator",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add \"Add another account\" option at bottom",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add delete action with confirmation",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "On select, call SDK to set active account",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `sync.reloadProviders()` after switch",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/opencode/src/cli/cmd/tui/app.tsx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add \"Switch OpenAI Account\" command",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Set category: \"Provider\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `suggested` check for OpenAI OAuth active",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "On select, open `DialogOpenAIAccounts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `openai_account_switch: z.string().optional().default(\"none\")`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add description: \"Switch OpenAI account\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In loader function, check `experimental.openai_multi_account` flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If enabled, call `OpenAIAccountManager.getActive()`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Use account data if available, else fall back to `auth.json`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In token refresh logic, check feature flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If enabled, call `OpenAIAccountManager.updateTokens`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If disabled, use existing `Auth.set` directly",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In OAuth success callback, check feature flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If enabled, call `OpenAIAccountManager.add` and `setActive`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "If disabled, use existing behavior",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `checkForUpdates` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Read manifest for installed version",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Query registry for latest version",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return: `{ current, latest, hasUpdate }`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `detectLocalChanges` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Compare current file hashes with manifest hashes",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return list of modified files",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `update` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Call `detectLocalChanges`, warn if modifications exist",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Require `--force` to override local changes",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create backup before update (optional)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Install new version",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Update manifest",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `skills update --registry` flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Refresh registry cache regardless of TTL",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Rebuild index",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/skill/installer.ts`, create `analyzeRisks` function",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check for shell scripts (`.sh`, `.bash`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check for filesystem path references",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Check for network calls (`fetch`, `curl`, `http`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Return array of risk hints",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Enhance confirmation prompt to show risk hints",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display: source, version, files, risk hints",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Require explicit `y` to proceed",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "In `skills info`, show license field",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Warn if license missing or non-standard",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Note individual skills may have different licenses",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/test/auth/oauth-metadata.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: `ProviderAuth.callback` persists OAuth metadata fields",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: `extractUserInfo` parses email + accountId from JWT",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: `extractUserInfo` handles missing fields gracefully",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: `normalizePlanType` covers all plan variants",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/test/auth/openai-accounts.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: CRUD operations (add, list, remove, getActive)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: `setActive` updates `auth.json`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: file locking prevents concurrent write corruption",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: migration handles both `openai` and legacy `codex` entries",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: migration handles malformed entries gracefully",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: schema validation rejects invalid account data",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/test/skill/registry.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: registry source management",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: merge-by-id behavior for config + defaults",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: index building and searching",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: registry glob layouts (root-level vs `skills/**`)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: version resolution",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/test/skill/installer.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: installation to project scope",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: installation to user scope",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: manifest creation with file hashes",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: file copying preserves structure",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: post-install refresh behavior",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Create `packages/opencode/test/skill/manifest.test.ts`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: manifest read/write roundtrip",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: file hash computation",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: file hash verification",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: version comparison",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: OAuth flow stores metadata and creates account entry",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: account switching updates `auth.json` and active tokens",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: token refresh updates both storage layers",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: API requests use active account token",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: concurrent token refreshes don't corrupt storage",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: full install/update/remove flow",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: with mock registry (use tmpdir fixture)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: local modification detection",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: cache wipe rebuild behavior",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: user with only API key auth (multi-account hidden)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: user with expired tokens on multiple accounts",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: network failure during account switch",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: ChatGPT API returns unexpected format",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: JWT missing email claim",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: migration from very old auth.json format",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: corrupted openai-accounts.json recovery",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: switching accounts during active API request",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: skill name collision across registries",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: registry unavailable (offline mode)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: malformed SKILL.md frontmatter",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: missing manifest file",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Test: corrupted cache rebuild",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `shuvcode auth --status` flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show current auth state for all providers",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Show multi-account summary if enabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add `shuvcode auth --list-accounts` flag",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Only show when feature enabled",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Display account list with active indicator",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Open `packages/web/src/content/docs/skills.mdx`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add section: \"Skill Registry\"",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Document CLI commands with examples",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add installation walkthrough",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Document registry configuration",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add help text to all skills subcommands",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Include examples in help output",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Add documentation for `experimental.openai_multi_account`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Explain when to enable/disable",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Document limitations and known issues",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Fresh OAuth login shows account info in `/connect`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Existing install migrates `openai` + `codex` entries",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "API-key auth remains untouched and hides account switching",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Account switching updates footer and active model usage",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "ChatGPT backend failures do not block login",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Multiple rapid account switches don't corrupt data",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Feature flag disabled = no multi-account UI visible",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills search pdf` shows results from registries",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills info pdf` shows description, tags, license",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills install pdf --scope project` installs correctly",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Installed skills are discoverable by agents",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills list` reflects new installs without restart",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills update` shows diff preview",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "`skills remove` confirms before deletion",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Run `bun test` in `packages/opencode`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Run `bun turbo test` at root",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "All tests pass",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Run `bun turbo typecheck`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "No type errors",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Run `bun turbo build`",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Build succeeds",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify no tokens logged",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify file permissions are correct (0600)",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    },
+    {
+      "category": "functional",
+      "description": "Verify input validation on all endpoints",
+      "steps": ["Add verification steps for this item."],
+      "passes": false
+    }
+  ]
+}
