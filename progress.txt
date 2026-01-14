@@ -60,3 +60,10 @@
 - Ran `bun test` in `packages/opencode` - 738 pass, 1 skip, 0 fail.
 - `bun run lint` script missing at repo root.
 
+## Iteration 12 - 2026-01-14T13:00:00Z
+- Added `orgName: z.string().optional()` to `Auth.Oauth` Zod schema in `packages/opencode/src/auth/index.ts`.
+- This completes the OAuth metadata group (email, name, plan, orgName) to persist organization name returned by OAuth plugins.
+- Ran `bun run typecheck` - passed.
+- Ran `bun test` in `packages/opencode` - 738 pass, 1 skip, 0 fail.
+- `bun run lint` script missing at repo root.
+
