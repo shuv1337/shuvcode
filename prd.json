@@ -691,8 +691,17 @@
     {
       "category": "functional",
       "description": "In OAuth callback, spawn background task to call `fetchChatGPTUserInfo`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Background task implemented at packages/opencode/src/plugin/codex.ts:606-632.",
+        "updatePlan() async function calls fetchChatGPTUserInfo at line 608.",
+        "Spawns via 'void updatePlan().catch(() => {})' at line 632 - non-blocking.",
+        "Updates auth metadata via input.client.auth.set when plan/orgName retrieved.",
+        "OAuth success returns immediately (lines 634-642) regardless of background task result.",
+        "try/catch with log.warn on failure at lines 625-628.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

@@ -137,7 +137,9 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - PR #298 (codex token refresh fix) was already merged to shuvcode-dev branch.
 - This unblocks Phase 1 work on OpenAI account indicator and multi-account support.
 
-## Iteration 34 - 2026-01-14
-- Marked "Optionally remove legacy codex entry after migration" as complete in prd.json.
-- Verified migration: Auth.get('openai') copies legacy codex OAuth entry on first access.
-- Auth.remove('codex') function exists for manual cleanup - removal is intentionally not automatic to prevent data loss.
+## Iteration 35 - 2026-01-14
+- Marked "In OAuth callback, spawn background task to call fetchChatGPTUserInfo" as complete in prd.json.
+- Verified implementation at packages/opencode/src/plugin/codex.ts:606-632.
+- Background task spawns via 'void updatePlan().catch(() => {})' - non-blocking.
+- Updates auth metadata via auth.set when plan/orgName retrieved from ChatGPT API.
+- OAuth success returns immediately regardless of background task result.
