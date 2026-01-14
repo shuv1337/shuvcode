@@ -182,3 +182,52 @@ test("multiple providers can be stored independently", async () => {
     },
   })
 })
+
+test("token refresh writes to openai provider ID (not legacy codex)", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Auth.remove("codex").catch(() => {})
+      await Auth.remove("openai").catch(() => {})
+
+      const legacyCodexAuth = {
+        type: "oauth" as const,
+        refresh: "legacy-codex-refresh",
+        access: "legacy-codex-access",
+        expires: Date.now() - 1000,
+        email: "user@example.com",
+      }
+
+      await Auth.set("codex", legacyCodexAuth)
+
+      const allBefore = await Auth.all()
+      expect(allBefore.codex).toBeDefined()
+      expect(allBefore.openai).toBeUndefined()
+
+      const result = await Auth.get("openai")
+
+      expect(result).toBeDefined()
+      expect(result?.type).toBe("oauth")
+      expect((result as any).email).toBe("user@example.com")
+
+      const allAfter = await Auth.all()
+      expect(allAfter.openai).toBeDefined()
+      expect(allAfter.openai?.type).toBe("oauth")
+      expect((allAfter.openai as any).refresh).toBe("legacy-codex-refresh")
+
+      expect(allAfter.codex).toBeDefined()
+      expect(allAfter.codex?.type).toBe("oauth")
+    },
+  })
+})

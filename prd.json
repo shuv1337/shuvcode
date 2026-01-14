@@ -78,8 +78,14 @@
     {
       "category": "functional",
       "description": "Add test: token refresh writes to `openai` provider ID",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added test verifying legacy codex OAuth entries are migrated to openai provider ID.",
+        "Test confirms Auth.get('openai') triggers migration and writes to openai key.",
+        "Test runs cleanup between tests to ensure isolation.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun run lint` (tests with coverage) - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

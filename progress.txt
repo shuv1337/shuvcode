@@ -73,3 +73,10 @@
 - Ran `bun run typecheck` - passed.
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
+
+## Iteration 15 - 2026-01-14T13:30:00Z
+- Added test for token refresh migration to openai provider ID in `packages/opencode/test/auth/codex-migration.test.ts`.
+- Test verifies that when a legacy codex OAuth entry exists and Auth.get("openai") is called, the migration writes to the openai key (not codex).
+- Test ensures isolation between tests by cleaning up auth entries before each test run.
+- Ran `bun run typecheck` - passed.
+- Ran `bun run lint` in packages/opencode - 744 pass, 1 skip, 0 fail.
