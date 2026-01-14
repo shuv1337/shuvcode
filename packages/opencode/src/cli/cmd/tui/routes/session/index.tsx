@@ -81,6 +81,7 @@ import {
   DEFAULT_SPINNER_KEY,
   DEFAULT_SPINNER_INTERVAL_MS,
 } from "../../util/spinners"
+import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
@@ -380,6 +381,23 @@ export function Session() {
   createEffect(() => {
     if (route.initialPrompt && prompt) {
       prompt.set(route.initialPrompt)
+    }
+  })
+
+  let lastSwitch: string | undefined = undefined
+  sdk.event.on("message.part.updated", (evt) => {
+    const part = evt.properties.part
+    if (part.type !== "tool") return
+    if (part.sessionID !== route.sessionID) return
+    if (part.state.status !== "completed") return
+    if (part.id === lastSwitch) return
+
+    if (part.tool === "plan_exit") {
+      local.agent.set("build")
+      lastSwitch = part.id
+    } else if (part.tool === "plan_enter") {
+      local.agent.set("plan")
+      lastSwitch = part.id
     }
   })
 
@@ -1884,7 +1902,6 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   )
 }
 
-
 type ToolProps<T extends Tool.Info> = {
   input: Partial<Tool.InferParameters<T>>
   metadata: Partial<Tool.InferMetadata<T>>
@@ -2043,6 +2060,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
   const ctx = use()
   const local = useLocal()
   const { theme } = useTheme()
+  const sync = useSync()
 
   // Only show spinner for "running" status
   const isRunning = createMemo(() => props.part.state.status === "running")
@@ -2067,6 +2085,32 @@ function Bash(props: ToolProps<typeof BashTool>) {
 
   const truncated = createMemo(() => plainOutput().split("\n").length > displayLines())
 
+  // Upstream feature: show working directory when different from project root
+  const workdirDisplay = createMemo(() => {
+    const workdir = props.input.workdir
+    if (!workdir || workdir === ".") return undefined
+
+    const base = sync.data.path.directory
+    if (!base) return undefined
+
+    const absolute = path.resolve(base, workdir)
+    if (absolute === base) return undefined
+
+    const home = Global.Path.home
+    if (!home) return absolute
+
+    const match = absolute === home || absolute.startsWith(home + path.sep)
+    return match ? absolute.replace(home, "~") : absolute
+  })
+
+  const title = createMemo(() => {
+    const desc = props.input.description ?? "Shell"
+    const wd = workdirDisplay()
+    if (!wd) return `# ${desc}`
+    if (desc.includes(wd)) return `# ${desc}`
+    return `# ${desc} in ${wd}`
+  })
+
   return (
     <Switch>
       <Match when={props.metadata.output !== undefined}>
@@ -2082,7 +2126,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
           borderColor={theme.background}
         >
           <text paddingLeft={3} fg={theme.textMuted}>
-            # {props.input.description || "Shell"}
+            {title()}
           </text>
           <Show when={props.input.command}>
             <text fg={theme.text}>$ {props.input.command}</text>
