@@ -74,10 +74,10 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 21 - 2026-01-14T16:30:00Z
-- Added provider_auth_info field to sync store in sync.tsx.
-- Loads auth info for openai provider during bootstrap via auth.info endpoint.
-- Uses type assertion to bypass SDK type mismatch (endpoint not yet in SDK types).
+## Iteration 22 - 2026-01-14T17:00:00Z
+- Created AccountBadge component in packages/opencode/src/cli/cmd/tui/component/account-badge.tsx.
+- Displays authenticated user's email and plan from sync.store.provider_auth_info.
+- Shows plan in brackets with primary color styling.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.
 - Created `UserInfo` interface with email, name, accountId fields.
