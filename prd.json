@@ -187,8 +187,13 @@
     {
       "category": "functional",
       "description": "Update JSDoc comments for new fields",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.",
+        "`bun run lint` script missing at repo root."
+      ],
+      "passes": true
     },
     {
       "category": "functional",

@@ -102,6 +102,16 @@ export type AuthHook = {
   )[]
 }
 
+/**
+ * OAuth authorization result with optional user and account metadata.
+ *
+ * The following optional fields provide additional user information from the OAuth provider:
+ * - `email`: The user's email address (if available from the identity provider)
+ * - `name`: The user's display name (if available from the identity provider)
+ * - `plan`: The user's subscription plan tier (e.g., "free", "plus", "pro", "team", "enterprise")
+ * - `orgName`: The organization name the user belongs to (if applicable)
+ * - `accountId`: The provider-specific account identifier for multi-account support
+ */
 export type AuthOuathResult = { url: string; instructions: string } & (
   | {
       method: "auto"
