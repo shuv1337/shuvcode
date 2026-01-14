@@ -745,14 +745,24 @@
     {
       "category": "functional",
       "description": "Map response values to: `free`, `plus`, `pro`, `team`, `enterprise`, `unknown`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "normalizePlanType function implemented at packages/opencode/src/plugin/codex.ts:171-181.",
+        "Maps plan values to standardized tiers: free, plus, pro, team, enterprise, unknown.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Handle case variations and unexpected values",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "normalizePlanType function handles case by lowercasing and stripping non-alpha characters.",
+        "Returns 'unknown' for unrecognized plan values.",
+        "Ran bun run typecheck - passed.",
+        "Ran bun run lint (tests with coverage) - 745 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
