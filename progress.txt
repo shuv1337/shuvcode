@@ -74,12 +74,11 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 20 - 2026-01-14T16:00:00Z
-- Added GET /auth/info/:providerID endpoint in server.ts for retrieving auth metadata.
-- Returns authenticated, type, email, plan, accountId for OAuth providers.
-- Returns 404 with authenticated: false if provider not found.
+## Iteration 21 - 2026-01-14T16:30:00Z
+- Added provider_auth_info field to sync store in sync.tsx.
+- Loads auth info for openai provider during bootstrap via auth.info endpoint.
+- Uses type assertion to bypass SDK type mismatch (endpoint not yet in SDK types).
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
-- Typecheck shows pre-existing type inference warning in server.ts (line 82) unrelated to changes.
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.
 - Created `UserInfo` interface with email, name, accountId fields.
 - Function parses id_token JWT claims to extract user metadata for the OAuth success payload.

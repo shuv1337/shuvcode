@@ -1020,32 +1020,40 @@
     {
       "category": "functional",
       "description": "Open `packages/opencode/src/cli/cmd/tui/context/sync.tsx`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added provider_auth_info field to sync store and load during bootstrap."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add `provider_auth_info` to store type",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added provider_auth_info field to sync store with authenticated, type, email, plan, accountId.",
+        "Loads auth info for openai provider during bootstrap.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Define shape: `{ [providerID: string]: { authenticated, type?, email?, plan?, accountId? } }`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added provider_auth_info field to sync store with authenticated, type, email, plan, accountId."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Load auth info for `openai` provider during bootstrap",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added call to auth.info endpoint for openai provider during bootstrap.",
+        "Uses type assertion to bypass SDK type mismatch (endpoint not yet in SDK).",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Call SDK `client.auth.info({ path: { providerID: \"openai\" } })`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added call to auth.info endpoint for openai provider during bootstrap."],
+      "passes": true
     },
     {
       "category": "functional",
