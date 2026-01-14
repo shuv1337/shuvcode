@@ -67,3 +67,11 @@
 - Ran `bun test` in `packages/opencode` - 738 pass, 1 skip, 0 fail.
 - `bun run lint` script missing at repo root.
 
+## Iteration 13 - 2026-01-14T14:15:00Z
+- Added OAuth metadata persistence in `ProviderAuth.callback` at `packages/opencode/src/provider/auth.ts:109-120`.
+- Now persists `email`, `name`, `plan`, and `orgName` fields from OAuth callback result to Auth storage.
+- This enables account info display in UI once the fields are returned by OAuth providers.
+- Ran `bun run typecheck` - passed.
+- Ran `bun test` in `packages/opencode` - 738 pass, 1 skip, 0 fail.
+- `bun run lint` in packages/opencode runs tests with coverage - all pass.
+

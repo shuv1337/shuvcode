@@ -111,6 +111,8 @@ export type AuthOuathResult = { url: string; instructions: string } & (
             provider?: string
             email?: string
             name?: string
+            plan?: string
+            orgName?: string
           } & (
             | {
                 refresh: string
@@ -133,6 +135,8 @@ export type AuthOuathResult = { url: string; instructions: string } & (
             provider?: string
             email?: string
             name?: string
+            plan?: string
+            orgName?: string
           } & (
             | {
                 refresh: string
