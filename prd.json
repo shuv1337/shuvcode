@@ -67,8 +67,13 @@
     {
       "category": "functional",
       "description": "Create test file `packages/opencode/test/auth/codex-migration.test.ts`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Created test file with 5 tests covering auth migration scenarios.",
+        "Tests verify: non-existent provider returns undefined, openai auth is stored/retrieved correctly, fresh auth without migration, set writes to correct provider, multiple providers stored independently.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun run lint` (which runs tests with coverage) - 743 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
