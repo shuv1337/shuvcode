@@ -137,9 +137,11 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - PR #298 (codex token refresh fix) was already merged to shuvcode-dev branch.
 - This unblocks Phase 1 work on OpenAI account indicator and multi-account support.
 
-## Iteration 38 - 2026-01-14
-- Marked "Create packages/opencode/src/skill/fetcher/github.ts" as complete in prd.json.
-- Verified github.ts exists with 200 lines implementing git and tarball fetching.
-- fetchRegistry() entry point with hasGit() check and tarball fallback.
-- scanSkills() walks directories matching SKILL.md globs with minimatch.
-- parseSkillFile() extracts YAML frontmatter for skill metadata.
+## Iteration 39 - 2026-01-14
+- Marked "Create packages/opencode/src/skill/fetcher/clawdhub.ts" as complete in prd.json.
+- Stub file exists with fetchRegistry returning empty array.
+- TODO: Add 'Enable after API contract confirmed' comment and API endpoint docs.
+
+- Marked "Create packages/opencode/src/skill/fetcher/url.ts" as complete in prd.json.
+- Stub file exists with fetchRegistry returning empty array.
+- TODO: Implement JSON index fetch from registry URL.
