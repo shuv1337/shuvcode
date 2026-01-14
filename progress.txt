@@ -88,3 +88,10 @@ Completed: 82 tasks | Remaining: ~360 tasks
 - Updated OAuth callback to use extractUserInfo and return email/name in success payload.
 - Ran `bun run typecheck` - passed.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
+
+## Iteration 27 - 2026-01-14T
+- Created PR for codex token refresh fix: https://github.com/Latitudes-Dev/shuvcode/pull/298
+- PR includes: write token refresh to openai provider ID, fallback to legacy codex entry for backward compatibility
+- Branch shuvcode-dev pushed to remote (26 commits ahead of origin)
+- Fixed pre-existing typecheck error in server.ts (TS2589: Type instantiation is excessively deep)
+- Typecheck passes, tests pass

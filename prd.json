@@ -120,8 +120,12 @@
     {
       "category": "functional",
       "description": "Create PR: \"fix(codex): write token refresh to openai provider ID\"",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "PR created at https://github.com/Latitudes-Dev/shuvcode/pull/298",
+        "Branches ahead of origin/shuvcode-dev by 26 commits",
+        "Fix includes: write token refresh to openai provider ID, fallback to legacy codex entry"
+      ],
+      "passes": true
     },
     {
       "category": "functional",
