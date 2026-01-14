@@ -104,6 +104,82 @@ export function extractUserInfo(tokens: TokenResponse): UserInfo {
   return info
 }
 
+const CHATGPT_API_TIMEOUT = 5000
+const CHATGPT_API_MAX_RETRIES = 3
+
+export interface ChatGPTUserInfo {
+  email?: string
+  name?: string
+  plan?: string
+  orgName?: string
+}
+
+export async function fetchChatGPTUserInfo(accessToken: string, accountId?: string): Promise<ChatGPTUserInfo | null> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  }
+
+  if (accountId) {
+    headers["ChatGPT-Account-Id"] = accountId
+  }
+
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt < CHATGPT_API_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), CHATGPT_API_TIMEOUT)
+
+      const response = await fetch("https://chatgpt.com/backend-api/me", {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        log.warn("failed to fetch ChatGPT user info", { status: response.status })
+        return null
+      }
+
+      const data = await response.json()
+
+      return {
+        email: data.user?.email,
+        name: data.user?.name,
+        plan: data.subscription?.plan ? normalizePlanType(data.subscription.plan) : undefined,
+        orgName: data.organization?.name,
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      log.warn("error fetching ChatGPT user info", { attempt: attempt + 1, error: error.message })
+      lastError = error
+
+      if (attempt < CHATGPT_API_MAX_RETRIES - 1) {
+        const delay = Math.pow(2, attempt) * 100
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  log.warn("failed to fetch ChatGPT user info after max retries", { error: lastError?.message })
+  return null
+}
+
+function normalizePlanType(plan: string): string {
+  const normalized = plan.toLowerCase().replace(/[^a-z]/g, "")
+
+  if (["free", "nopaid", "default"].includes(normalized)) return "free"
+  if (["plus", "plusmonthly", "plusannual"].includes(normalized)) return "plus"
+  if (["pro", "promonthly", "proannual", "pro2", "pro2monthly", "pro2annual"].includes(normalized)) return "pro"
+  if (["team", "teammonthly", "teamannual"].includes(normalized)) return "team"
+  if (["enterprise", "enterprise2023", "enterprise2024"].includes(normalized)) return "enterprise"
+
+  return "unknown"
+}
+
 function buildAuthorizeUrl(redirectUri: string, pkce: PkceCodes, state: string): string {
   const params = new URLSearchParams({
     response_type: "code",

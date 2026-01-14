@@ -510,50 +510,103 @@
     {
       "category": "functional",
       "description": "In `packages/opencode/src/plugin/codex.ts`, create `fetchChatGPTUserInfo` function",
+      "steps": [
+        "Created fetchChatGPTUserInfo function with CHATGPT_API_TIMEOUT=5000 and CHATGPT_API_MAX_RETRIES=3.",
+        "Implements fetch to https://chatgpt.com/backend-api/me with Bearer token.",
+        "Includes ChatGPT-Account-Id header when accountId is available.",
+        "Implements exponential backoff retry with max 3 attempts.",
+        "Logs warnings on failure and returns null instead of throwing.",
+        "Created normalizePlanType helper to map API plan values to standardized tiers.",
+        "Ran `bun run typecheck` - passed.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "In `packages/opencode/src/plugin/codex.ts`, create `normalizePlanType` function",
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Map response values to: `free`, `plus`, `pro`, `team`, `enterprise`, `unknown`",
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "Handle case variations and unexpected values",
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
+    },
+    {
+      "category": "functional",
+      "description": "In OAuth callback, spawn background task to call `fetchChatGPTUserInfo`",
       "steps": ["Add verification steps for this item."],
       "passes": false
     },
     {
       "category": "functional",
       "description": "Define constants: `CHATGPT_API_TIMEOUT = 5000`, `CHATGPT_API_MAX_RETRIES = 3`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Implement fetch to `https://chatgpt.com/backend-api/me` with Bearer token",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Include `ChatGPT-Account-Id` header when `accountId` available",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Implement exponential backoff retry (max 3 attempts)",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Log warnings (not errors) on failure",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Return `null` on any failure, never throw",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "In `packages/opencode/src/plugin/codex.ts`, create `normalizePlanType` function",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added JSDoc comments to AuthOuathResult type documenting email, name, plan, orgName, and accountId fields."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
