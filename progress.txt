@@ -39,3 +39,10 @@
 - Ran `bun test` from `packages/opencode` after root test guard message.
 - `bun run lint` missing at repo root; no lint run.
 
+## Iteration 9 - 2026-01-14T11:45:00Z
+- Added `email: z.string().optional()` to `Auth.Oauth` Zod schema in `packages/opencode/src/auth/index.ts`.
+- This enables the auth module to persist the email field returned by OAuth plugins.
+- Ran `bun run typecheck` - passed.
+- Ran `bun test` in `packages/opencode` - 738 pass, 1 skip, 0 fail.
+- `bun run lint` script missing at repo root.
+
