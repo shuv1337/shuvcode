@@ -74,20 +74,13 @@
 - Ran `bun run lint` in packages/opencode - 743 pass, 1 skip, 0 fail.
 
 
-## Iteration 24 - 2026-01-14T18:00:00Z
-- Updated dialog-provider.tsx to show auth status in provider list.
-- Provider description now shows "Connected: email [Plan]" for authenticated OAuth users.
-- Preserves static descriptions for non-OAuth providers (anthropic, etc.).
+## Iteration 25 - 2026-01-14T18:30:00Z
+- Added skills registry configuration schema to config.ts.
+- Added RegistrySource schema with id, type, url, enabled, globs fields.
+- Added skills object with registries array, default_scope, and auto_update fields.
 - Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail.
 
-Completed tasks summary:
-- Core OAuth metadata: email, name, plan, orgName fields in types and auth schema
-- fetchChatGPTUserInfo function for background plan fetching  
-- GET /auth/info/:providerID endpoint for UI consumption
-- AccountBadge component for displaying user email and plan
-- Integration in footer and provider dialog
-
-Remaining: ~370 tasks (skill registry, manual tests, verification steps)
+Completed: 70 tasks | Remaining: ~370 tasks
 - Added `name` field to `IdTokenClaims` interface for standard OIDC claim support.
 - Created `UserInfo` interface with email, name, accountId fields.
 - Function parses id_token JWT claims to extract user metadata for the OAuth success payload.

@@ -341,26 +341,30 @@
     {
       "category": "functional",
       "description": "Define `RegistrySource` schema with fields: `id`, `type`, `url`, `enabled`, `globs`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": [
+        "Added RegistrySource schema to experimental.skills.registries in config.ts.",
+        "Schema includes id, type (github/clawdhub/url), url, enabled, and globs fields.",
+        "Ran `bun test` in packages/opencode - 744 pass, 1 skip, 0 fail."
+      ],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add `skills` object to Info schema with `registries` array",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added skills object with registries array to experimental config."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add `default_scope: z.enum([\"user\", \"project\"]).optional().default(\"project\")`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added default_scope field to skills config with project default."],
+      "passes": true
     },
     {
       "category": "functional",
       "description": "Add `auto_update: z.boolean().optional().default(false)`",
-      "steps": ["Add verification steps for this item."],
-      "passes": false
+      "steps": ["Added auto_update field to skills config with false default."],
+      "passes": true
     },
     {
       "category": "functional",
