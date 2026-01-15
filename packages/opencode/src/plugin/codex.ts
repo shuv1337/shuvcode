@@ -46,6 +46,7 @@ export interface IdTokenClaims {
   chatgpt_account_id?: string
   organizations?: Array<{ id: string }>
   email?: string
+  name?: string
   "https://api.openai.com/auth"?: {
     chatgpt_account_id?: string
   }
@@ -80,6 +81,103 @@ export function extractAccountId(tokens: TokenResponse): string | undefined {
     return claims ? extractAccountIdFromClaims(claims) : undefined
   }
   return undefined
+}
+
+export interface UserInfo {
+  email?: string
+  name?: string
+  accountId?: string
+}
+
+export function extractUserInfo(tokens: TokenResponse): UserInfo {
+  const info: UserInfo = {}
+
+  if (tokens.id_token) {
+    const claims = parseJwtClaims(tokens.id_token)
+    if (claims) {
+      info.email = claims.email
+      info.name = claims.name
+      info.accountId = extractAccountIdFromClaims(claims)
+    }
+  }
+
+  return info
+}
+
+const CHATGPT_API_TIMEOUT = 5000
+const CHATGPT_API_MAX_RETRIES = 3
+
+export interface ChatGPTUserInfo {
+  email?: string
+  name?: string
+  plan?: string
+  orgName?: string
+}
+
+export async function fetchChatGPTUserInfo(accessToken: string, accountId?: string): Promise<ChatGPTUserInfo | null> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  }
+
+  if (accountId) {
+    headers["ChatGPT-Account-Id"] = accountId
+  }
+
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt < CHATGPT_API_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), CHATGPT_API_TIMEOUT)
+
+      const response = await fetch("https://chatgpt.com/backend-api/me", {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        log.warn("failed to fetch ChatGPT user info", { status: response.status })
+        return null
+      }
+
+      const data = await response.json()
+
+      return {
+        email: data.user?.email,
+        name: data.user?.name,
+        plan: data.subscription?.plan ? normalizePlanType(data.subscription.plan) : undefined,
+        orgName: data.organization?.name,
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      log.warn("error fetching ChatGPT user info", { attempt: attempt + 1, error: error.message })
+      lastError = error
+
+      if (attempt < CHATGPT_API_MAX_RETRIES - 1) {
+        const delay = Math.pow(2, attempt) * 100
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  log.warn("failed to fetch ChatGPT user info after max retries", { error: lastError?.message })
+  return null
+}
+
+function normalizePlanType(plan: string): string {
+  const normalized = plan.toLowerCase().replace(/[^a-z]/g, "")
+
+  if (["free", "nopaid", "default"].includes(normalized)) return "free"
+  if (["plus", "plusmonthly", "plusannual"].includes(normalized)) return "plus"
+  if (["pro", "promonthly", "proannual", "pro2", "pro2monthly", "pro2annual"].includes(normalized)) return "pro"
+  if (["team", "teammonthly", "teamannual"].includes(normalized)) return "team"
+  if (["enterprise", "enterprise2023", "enterprise2024"].includes(normalized)) return "enterprise"
+
+  return "unknown"
 }
 
 function buildAuthorizeUrl(redirectUri: string, pkce: PkceCodes, state: string): string {
@@ -430,7 +528,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               const tokens = await refreshAccessToken(currentAuth.refresh)
               const newAccountId = extractAccountId(tokens) || authWithAccount.accountId
               await input.client.auth.set({
-                path: { id: "codex" },
+                path: { id: "openai" },
                 body: {
                   type: "oauth",
                   refresh: tokens.refresh_token,
@@ -503,13 +601,44 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               callback: async () => {
                 const tokens = await callbackPromise
                 stopOAuthServer()
-                const accountId = extractAccountId(tokens)
+                const userInfo = extractUserInfo(tokens)
+
+                const updatePlan = async () => {
+                  try {
+                    const chatGPTInfo = await fetchChatGPTUserInfo(tokens.access_token, userInfo.accountId)
+                    if (chatGPTInfo && (chatGPTInfo.plan || chatGPTInfo.orgName)) {
+                      await input.client.auth.set({
+                        path: { id: "openai" },
+                        body: {
+                          type: "oauth",
+                          refresh: tokens.refresh_token,
+                          access: tokens.access_token,
+                          expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+                          accountId: userInfo.accountId,
+                          email: userInfo.email,
+                          name: userInfo.name,
+                          plan: chatGPTInfo.plan,
+                          orgName: chatGPTInfo.orgName,
+                        } as any,
+                      })
+                    }
+                  } catch (err) {
+                    log.warn("failed to update ChatGPT user info", {
+                      error: err instanceof Error ? err.message : String(err),
+                    })
+                  }
+                }
+
+                void updatePlan().catch(() => {})
+
                 return {
                   type: "success" as const,
                   refresh: tokens.refresh_token,
                   access: tokens.access_token,
                   expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
-                  accountId,
+                  accountId: userInfo.accountId,
+                  email: userInfo.email,
+                  name: userInfo.name,
                 }
               },
             }
