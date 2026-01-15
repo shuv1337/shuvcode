@@ -2773,6 +2773,59 @@ export namespace Server {
           },
         )
         .get(
+          "/auth/info/:providerID",
+          describeRoute({
+            summary: "Get auth info",
+            description: "Get authentication metadata for a provider including email, plan, and account ID.",
+            operationId: "auth.info",
+            responses: {
+              200: {
+                description: "Auth info retrieved successfully",
+                content: {
+                  "application/json": {
+                    schema: resolver(
+                      z.object({
+                        authenticated: z.boolean(),
+                        type: z.string().optional(),
+                        email: z.string().optional(),
+                        plan: z.string().optional(),
+                        accountId: z.string().optional(),
+                      }),
+                    ),
+                  },
+                },
+              },
+              ...errors(404),
+            },
+          }),
+          validator(
+            "param",
+            z.object({
+              providerID: z.string(),
+            }),
+          ),
+          async (c) => {
+            const providerID = c.req.valid("param").providerID
+            const auth = await Auth.get(providerID)
+            if (!auth) {
+              return c.json(
+                {
+                  authenticated: false,
+                },
+                404,
+              )
+            }
+            const oauth = auth.type === "oauth" ? auth : null
+            return c.json({
+              authenticated: true,
+              type: auth.type,
+              email: oauth?.email,
+              plan: oauth?.plan,
+              accountId: oauth?.accountId,
+            })
+          },
+        )
+        .get(
           "/event",
           describeRoute({
             summary: "Subscribe to events",

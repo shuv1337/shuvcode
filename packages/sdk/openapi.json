@@ -10475,6 +10475,18 @@
           },
           "enterpriseUrl": {
             "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "orgName": {
+            "type": "string"
           }
         },
         "required": ["type", "refresh", "access", "expires"]
