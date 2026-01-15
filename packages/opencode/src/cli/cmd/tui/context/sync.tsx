@@ -73,6 +73,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       formatter: FormatterStatus[]
       vcs: VcsInfo | undefined
       path: Path
+      provider_auth_info: Record<
+        string,
+        {
+          authenticated: boolean
+          type?: string
+          email?: string
+          plan?: string
+          accountId?: string
+        }
+      >
     }>({
       provider_next: {
         all: [],
@@ -100,6 +110,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       formatter: [],
       vcs: undefined,
       path: { state: "", config: "", worktree: "", directory: "" },
+      provider_auth_info: {},
     })
 
     const sdk = useSDK()
@@ -352,6 +363,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
             sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
             sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
+            (
+              sdk.client.auth as unknown as {
+                info: (opts: { path: { providerID: string } }) => Promise<{
+                  data: { authenticated: boolean; type?: string; email?: string; plan?: string; accountId?: string }
+                }>
+              }
+            )
+              .info({ path: { providerID: "openai" } })
+              .then((x) => {
+                setStore("provider_auth_info", "openai", x.data)
+              }),
           ]).then(() => {
             setStore("status", "complete")
           })

@@ -30,63 +30,86 @@ export function createDialogProviderOptions() {
     return pipe(
       sync.data.provider_next.all,
       sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
-      map((provider) => ({
-        title: provider.name,
-        value: provider.id,
-        description: {
-          opencode: "(Recommended)",
-          anthropic: "(Claude Max or API key)",
-          openai: "(ChatGPT Plus/Pro or API key)",
-        }[provider.id],
-        category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
-        async onSelect() {
-          const methods = sync.data.provider_auth[provider.id] ?? [
+      map((provider) => {
+        const authInfo = sync.data.provider_auth_info[provider.id]
+        const isOAuthConnected = authInfo?.authenticated && authInfo?.email
+
+        let description: string
+        if (isOAuthConnected) {
+          description = `Connected: ${authInfo.email}${authInfo.plan ? ` [${authInfo.plan}]` : ""}`
+        } else {
+          description =
             {
-              type: "api",
-              label: "API key",
-            },
-          ]
-          let index: number | null = 0
-          if (methods.length > 1) {
-            index = await new Promise<number | null>((resolve) => {
-              dialog.replace(
-                () => (
-                  <DialogSelect
-                    title="Select auth method"
-                    options={methods.map((x, index) => ({
-                      title: x.label,
-                      value: index,
-                    }))}
-                    onSelect={(option) => resolve(option.value)}
+              opencode: "(Recommended)",
+              anthropic: "(Claude Max or API key)",
+              openai: "(ChatGPT Plus/Pro or API key)",
+            }[provider.id] || ""
+        }
+
+        return {
+          title: provider.name,
+          value: provider.id,
+          description,
+          category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
+          onSelect: async () => {
+            const methods = sync.data.provider_auth[provider.id] ?? [
+              {
+                type: "api",
+                label: "API key",
+              },
+            ]
+            let index: number | null = 0
+            if (methods.length > 1) {
+              index = await new Promise<number | null>((resolve) => {
+                dialog.replace(
+                  () => (
+                    <DialogSelect
+                      title="Select auth method"
+                      options={methods.map((x, index) => ({
+                        title: x.label,
+                        value: index,
+                      }))}
+                      onSelect={(option) => resolve(option.value)}
+                    />
+                  ),
+                  () => resolve(null),
+                )
+              })
+            }
+            if (index == null) return
+            const method = methods[index]
+            if (method.type === "oauth") {
+              const result = await sdk.client.provider.oauth.authorize({
+                providerID: provider.id,
+                method: index,
+              })
+              if (result.data?.method === "code") {
+                dialog.replace(() => (
+                  <CodeMethod
+                    providerID={provider.id}
+                    title={method.label}
+                    index={index}
+                    authorization={result.data!}
                   />
-                ),
-                () => resolve(null),
-              )
-            })
-          }
-          if (index == null) return
-          const method = methods[index]
-          if (method.type === "oauth") {
-            const result = await sdk.client.provider.oauth.authorize({
-              providerID: provider.id,
-              method: index,
-            })
-            if (result.data?.method === "code") {
-              dialog.replace(() => (
-                <CodeMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
-              ))
+                ))
+              }
+              if (result.data?.method === "auto") {
+                dialog.replace(() => (
+                  <AutoMethod
+                    providerID={provider.id}
+                    title={method.label}
+                    index={index}
+                    authorization={result.data!}
+                  />
+                ))
+              }
             }
-            if (result.data?.method === "auto") {
-              dialog.replace(() => (
-                <AutoMethod providerID={provider.id} title={method.label} index={index} authorization={result.data!} />
-              ))
+            if (method.type === "api") {
+              return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
             }
-          }
-          if (method.type === "api") {
-            return dialog.replace(() => <ApiMethod providerID={provider.id} title={method.label} />)
-          }
-        },
-      })),
+          },
+        }
+      }),
     )
   })
   return options
