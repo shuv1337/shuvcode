@@ -1026,6 +1026,11 @@ export namespace Config {
           chatMaxRetries: z.number().optional().describe("Number of retries for chat completions on failure"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+          openai_multi_account: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe("Enable multi-account storage and switching for OpenAI OAuth"),
           openTelemetry: z
             .boolean()
             .optional()
