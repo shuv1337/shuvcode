@@ -1035,12 +1035,24 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-          mcp_timeout: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          mcp_timeout: z.number().int().optional().describe("Timeout in milliseconds for MCP server initialization"),
+          skills: z
+            .object({
+              registries: z
+                .array(
+                  z.object({
+                    id: z.string(),
+                    type: z.enum(["github", "clawdhub", "url"]),
+                    url: z.string().url(),
+                    enabled: z.boolean().optional().default(true),
+                    globs: z.array(z.string()).optional().default(["*/SKILL.md", "skills/**/SKILL.md"]),
+                  }),
+                )
+                .optional(),
+              default_scope: z.enum(["user", "project"]).optional().default("project"),
+              auto_update: z.boolean().optional().default(false),
+            })
+            .optional(),
         })
         .optional(),
     })
