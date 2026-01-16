@@ -165,13 +165,12 @@ function createGlobalSync() {
     return globalSDK.client.session
       .list({ directory, roots: true })
       .then((x) => {
-        const nonArchived =
-          x.data ??
-          []
-            .filter((s) => !!s?.id)
-            .filter((s) => !s.time?.archived)
-            .slice()
-            .sort((a, b) => a.id.localeCompare(b.id))
+        const data = Array.isArray(x.data) ? x.data : []
+        const nonArchived = data
+          .filter((s) => !!s?.id)
+          .filter((s) => !s.time?.archived)
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id))
 
         const sandboxWorkspace = globalStore.project.some((p) => (p.sandboxes ?? []).includes(directory))
         if (sandboxWorkspace) {
