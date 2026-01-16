@@ -166,3 +166,7 @@ body {
     min-width: 32px;
   }
 }
+
+*[data-tauri-drag-region] {
+  app-region: drag;
+}

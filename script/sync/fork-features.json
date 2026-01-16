@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-14",
-  "lastChange": "Disable desktop (tauri) publish workflow by default to avoid unnecessary CLI downloads during release.",
-  "note": "v1.1.15 sync. Upstream adds password auth (OPENCODE_SERVER_PASSWORD), improved tips display, permission wildcarding fixes, and desktop server detection improvements.",
+  "lastUpdated": "2026-01-15",
+  "lastChange": "v1.1.23 sync: preserve shuvcode branding (TUI logo, tauri window), inline theme preload script, and update merge notes.",
+  "note": "v1.1.23 sync. Upstream adds new console UI, snapshot updates, and install method tweaks; keep fork branding and theme preload behavior.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -23,6 +23,16 @@
       }
     ]
   },
+  "mergeNotes": [
+    {
+      "date": "2026-01-15",
+      "note": "Husky pre-push runs `bun turbo typecheck`. Ensure `package.json` packageManager matches installed Bun (currently bun@1.3.6) or push will fail."
+    },
+    {
+      "date": "2026-01-15",
+      "note": "Console app WebGPU/Stripe additions required ambient type shims in packages/console/app/src/global.d.ts during v1.1.23 sync."
+    }
+  ],
   "removedFeatures": [
     {
       "pr": 5568,
@@ -1926,6 +1936,70 @@
         }
       ],
       "note": "CRITICAL: Upstream uses app.opencode.ai. This gets overwritten during merges. Always verify after merge that proxy URL is app.shuv.ai."
+    },
+    {
+      "pr": 0,
+      "title": "TUI shuvcode logo rendering",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "TUI keeps shuvcode ASCII logo strings while retaining the shadow-marker rendering helper. Requires tint helper export for shadow colors.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/logo.tsx",
+        "packages/opencode/src/cli/cmd/tui/context/theme.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/logo.tsx",
+          "description": "Shuvcode LOGO_LEFT/LOGO_RIGHT strings with SHADOW_MARKER rendering",
+          "markers": ["SHADOW_MARKER", "LOGO_LEFT", "LOGO_RIGHT"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+          "description": "Tint helper used by logo shadow rendering",
+          "markers": ["export function tint"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Inline theme preload script for app and desktop",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Use inline theme preload script with localStorage `theme` and keep background root classes to avoid FOUC; upstream switched to oc-theme-preload.js and different root classes.",
+      "files": ["packages/app/index.html", "packages/desktop/index.html"],
+      "criticalCode": [
+        {
+          "file": "packages/app/index.html",
+          "description": "Inline theme preload script and bg-background-base root",
+          "markers": ["oc-theme-preload-script", "localStorage.getItem(\"theme\")", "bg-background-base"]
+        },
+        {
+          "file": "packages/desktop/index.html",
+          "description": "Inline theme preload script and bg-background-base root",
+          "markers": ["oc-theme-preload-script", "bg-background-base"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop window builder and tauri branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Desktop app uses custom WebviewWindow builder with Shuvcode title, __SHUVCODE__ init object, and tauri.prod.conf.json app.windows config with Shuvcode identifiers.",
+      "files": ["packages/desktop/src-tauri/src/lib.rs", "packages/desktop/src-tauri/tauri.prod.conf.json"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "Manual window builder and __SHUVCODE__ initialization",
+          "markers": ["WebviewWindow::builder", "window.__SHUVCODE__", "title(\"Shuvcode\")"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/tauri.prod.conf.json",
+          "description": "Shuvcode productName/identifier and app.windows config",
+          "markers": ["productName", "identifier", "\"title\": \"Shuvcode\""]
+        }
+      ],
+      "note": "Upstream uses WebviewWindowBuilder::from_config and OpenCode identifiers."
     },
     {
       "pr": 0,

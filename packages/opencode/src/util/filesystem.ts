@@ -1,5 +1,4 @@
 import { realpathSync } from "fs"
-import { exists } from "fs/promises"
 import { homedir } from "os"
 import { dirname, join, relative } from "path"
 
@@ -9,6 +8,19 @@ export namespace Filesystem {
     if (p.startsWith("~/")) return join(homedir(), p.slice(2))
     return p
   }
+
+  export const exists = (p: string) =>
+    Bun.file(p)
+      .stat()
+      .then(() => true)
+      .catch(() => false)
+
+  export const isDir = (p: string) =>
+    Bun.file(p)
+      .stat()
+      .then((s) => s.isDirectory())
+      .catch(() => false)
+
   /**
    * On Windows, normalize a path to its canonical casing using the filesystem.
    * This is needed because Windows paths are case-insensitive but LSP servers
@@ -37,7 +49,7 @@ export namespace Filesystem {
     const result = []
     while (true) {
       const search = join(current, target)
-      if (await exists(search).catch(() => false)) result.push(search)
+      if (await exists(search)) result.push(search)
       if (stop === current) break
       const parent = dirname(current)
       if (parent === current) break
@@ -52,7 +64,7 @@ export namespace Filesystem {
     while (true) {
       for (const target of targets) {
         const search = join(current, target)
-        if (await exists(search).catch(() => false)) yield search
+        if (await exists(search)) yield search
       }
       if (stop === current) break
       const parent = dirname(current)

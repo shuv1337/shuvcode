@@ -1,12 +1,22 @@
+/// <reference path="./global.d.ts" />
 // @refresh reload
 import { createHandler, StartServer } from "@solidjs/start/server"
+import type { JSX } from "solid-js"
 
 const criticalCSS = `[data-component="top"]{min-height:80px;display:flex;align-items:center}`
 
 export default createHandler(
   () => (
     <StartServer
-      document={({ assets, children, scripts }) => (
+      document={({
+        assets,
+        children,
+        scripts,
+      }: {
+        assets: JSX.Element
+        children: JSX.Element
+        scripts: JSX.Element
+      }) => (
         <html lang="en">
           <head>
             <meta charset="utf-8" />

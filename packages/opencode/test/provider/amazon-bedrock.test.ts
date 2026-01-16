@@ -1,5 +1,6 @@
 import { test, expect, mock } from "bun:test"
 import path from "path"
+import { unlink } from "fs/promises"
 
 // === Mocks ===
 // These mocks are required because Provider.list() triggers:
@@ -119,29 +120,52 @@ test("Bedrock: loads when bearer token from auth.json is present", async () => {
   })
 
   const authPath = path.join(Global.Path.data, "auth.json")
-  await Bun.write(
-    authPath,
-    JSON.stringify({
-      "amazon-bedrock": {
-        type: "api",
-        key: "test-bearer-token",
-      },
-    }),
-  )
 
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("AWS_PROFILE", "")
-      Env.set("AWS_ACCESS_KEY_ID", "")
-      Env.set("AWS_BEARER_TOKEN_BEDROCK", "")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["amazon-bedrock"]).toBeDefined()
-      expect(providers["amazon-bedrock"].options?.region).toBe("eu-west-1")
-    },
-  })
+  // Save original auth.json if it exists
+  let originalAuth: string | undefined
+  try {
+    originalAuth = await Bun.file(authPath).text()
+  } catch {
+    // File doesn't exist, that's fine
+  }
+
+  try {
+    // Write test auth.json
+    await Bun.write(
+      authPath,
+      JSON.stringify({
+        "amazon-bedrock": {
+          type: "api",
+          key: "test-bearer-token",
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("AWS_PROFILE", "")
+        Env.set("AWS_ACCESS_KEY_ID", "")
+        Env.set("AWS_BEARER_TOKEN_BEDROCK", "")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["amazon-bedrock"]).toBeDefined()
+        expect(providers["amazon-bedrock"].options?.region).toBe("eu-west-1")
+      },
+    })
+  } finally {
+    // Restore original or delete
+    if (originalAuth !== undefined) {
+      await Bun.write(authPath, originalAuth)
+    } else {
+      try {
+        await unlink(authPath)
+      } catch {
+        // Ignore errors if file doesn't exist
+      }
+    }
+  }
 })
 
 test("Bedrock: config profile takes precedence over AWS_PROFILE env var", async () => {
@@ -264,4 +288,38 @@ test("Bedrock: handles direct named export (unbundled)", async () => {
 
   expect(fromNodeProviderChain).toBeDefined()
   expect(typeof fromNodeProviderChain).toBe("function")
+})
+
+test("Bedrock: autoloads when AWS_WEB_IDENTITY_TOKEN_FILE is present", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          provider: {
+            "amazon-bedrock": {
+              options: {
+                region: "us-east-1",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("AWS_WEB_IDENTITY_TOKEN_FILE", "/var/run/secrets/eks.amazonaws.com/serviceaccount/token")
+      Env.set("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/my-eks-role")
+      Env.set("AWS_PROFILE", "")
+      Env.set("AWS_ACCESS_KEY_ID", "")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers["amazon-bedrock"]).toBeDefined()
+      expect(providers["amazon-bedrock"].options?.region).toBe("us-east-1")
+    },
+  })
 })

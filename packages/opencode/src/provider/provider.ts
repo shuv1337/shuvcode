@@ -197,37 +197,44 @@ export namespace Provider {
         return undefined
       })
 
-      if (!profile && !awsAccessKeyId && !awsBearerToken) return { autoload: false }
+      const awsWebIdentityTokenFile = Env.get("AWS_WEB_IDENTITY_TOKEN_FILE")
 
-      const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
-
-      // Helper to load credential provider with bundled/unbundled export handling
-      // When shuvcode bundles via Bun.build(), the export structure changes:
-      // - Unbundled (upstream): module.fromNodeProviderChain (direct named export)
-      // - Bundled (shuvcode): module.default.fromNodeProviderChain or module.default.default.fromNodeProviderChain
-      const loadCredentialProvider = async (options: { profile?: string }) => {
-        const awsSdkModule = await import(awsSdkPath)
-        // Handle both named exports and multiple default wrappers produced by Bun
-        const fromNodeProviderChain =
-          awsSdkModule.fromNodeProviderChain ??
-          awsSdkModule.default?.fromNodeProviderChain ??
-          awsSdkModule.default?.default?.fromNodeProviderChain
-
-        if (!fromNodeProviderChain) {
-          throw new Error(
-            "AWS SDK credentials provider is missing fromNodeProviderChain export. " +
-              "Inspect ~/.cache/opencode/bundled for the actual module shape and adjust this helper if Bun changes its wrapper.",
-          )
-        }
-        return fromNodeProviderChain(options)
-      }
-
-      // Build credential provider options (only pass profile if specified)
-      const credentialProviderOptions = profile ? { profile } : {}
+      if (!profile && !awsAccessKeyId && !awsBearerToken && !awsWebIdentityTokenFile) return { autoload: false }
 
       const providerOptions: AmazonBedrockProviderSettings = {
         region: defaultRegion,
-        credentialProvider: await loadCredentialProvider(credentialProviderOptions),
+      }
+
+      // Only use credential chain if no bearer token exists
+      // Bearer token takes precedence over credential chain (profiles, access keys, IAM roles, web identity tokens)
+      if (!awsBearerToken) {
+        const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
+
+        // Helper to load credential provider with bundled/unbundled export handling
+        // When shuvcode bundles via Bun.build(), the export structure changes:
+        // - Unbundled (upstream): module.fromNodeProviderChain (direct named export)
+        // - Bundled (shuvcode): module.default.fromNodeProviderChain or module.default.default.fromNodeProviderChain
+        const loadCredentialProvider = async (options: { profile?: string }) => {
+          const awsSdkModule = await import(awsSdkPath)
+          // Handle both named exports and multiple default wrappers produced by Bun
+          const fromNodeProviderChain =
+            awsSdkModule.fromNodeProviderChain ??
+            awsSdkModule.default?.fromNodeProviderChain ??
+            awsSdkModule.default?.default?.fromNodeProviderChain
+
+          if (!fromNodeProviderChain) {
+            throw new Error(
+              "AWS SDK credentials provider is missing fromNodeProviderChain export. " +
+                "Inspect ~/.cache/opencode/bundled for the actual module shape and adjust this helper if Bun changes its wrapper.",
+            )
+          }
+          return fromNodeProviderChain(options)
+        }
+
+        // Build credential provider options (only pass profile if specified)
+        const credentialProviderOptions = profile ? { profile } : {}
+
+        providerOptions.credentialProvider = await loadCredentialProvider(credentialProviderOptions)
       }
 
       // Add custom endpoint if specified (endpoint takes precedence over baseURL)
@@ -413,7 +420,7 @@ export namespace Provider {
         },
       }
     },
-    async gitlab(input) {
+    gitlab: async (input) => {
       const instanceUrl = Env.get("GITLAB_INSTANCE_URL") || "https://gitlab.com"
 
       const auth = await Auth.get(input.id)
@@ -437,10 +444,8 @@ export namespace Provider {
             ...(providerConfig?.options?.featureFlags || {}),
           },
         },
-        async getModel(sdk: ReturnType<typeof createGitLab>, modelID: string, options?: { anthropicModel?: string }) {
-          const anthropicModel = options?.anthropicModel
+        async getModel(sdk: ReturnType<typeof createGitLab>, modelID: string) {
           return sdk.agenticChat(modelID, {
-            anthropicModel,
             featureFlags: {
               duo_agent_platform_agentic_chat: true,
               duo_agent_platform: true,
@@ -573,6 +578,7 @@ export namespace Provider {
       }),
       limit: z.object({
         context: z.number(),
+        input: z.number().optional(),
         output: z.number(),
       }),
       status: z.enum(["alpha", "beta", "deprecated", "active"]),
@@ -635,6 +641,7 @@ export namespace Provider {
       },
       limit: {
         context: model.limit.context,
+        input: model.limit.input,
         output: model.limit.output,
       },
       capabilities: {
@@ -886,7 +893,12 @@ export namespace Provider {
 
     for (const [providerID, fn] of Object.entries(CUSTOM_LOADERS)) {
       if (disabled.has(providerID)) continue
-      const result = await fn(database[providerID])
+      const data = database[providerID]
+      if (!data) {
+        log.error("Provider does not exist in model list " + providerID)
+        continue
+      }
+      const result = await fn(data)
       if (result && (result.autoload || providers[providerID])) {
         if (result.getModel) modelLoaders[providerID] = result.getModel
         mergeProvider(providerID, {
