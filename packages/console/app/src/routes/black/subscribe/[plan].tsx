@@ -1,3 +1,4 @@
+/// <reference path="../../../global.d.ts" />
 import { A, createAsync, query, redirect, useParams } from "@solidjs/router"
 import { Title } from "@solidjs/meta"
 import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js"

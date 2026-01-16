@@ -1,3 +1,4 @@
+/// <reference path="../global.d.ts" />
 import { createSignal, createEffect, onMount, onCleanup, Show, For, Accessor, Setter } from "solid-js"
 import "./light-rays.css"
 

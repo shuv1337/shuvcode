@@ -1,3 +1,4 @@
+/// <reference path="./global.d.ts" />
 // @refresh reload
 import { createHandler, StartServer } from "@solidjs/start/server"
 import type { JSX } from "solid-js"
