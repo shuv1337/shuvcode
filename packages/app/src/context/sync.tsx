@@ -39,7 +39,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     Promise.all(Object.values(load).map((p) => p())).then(() => setStore("status", "complete"))
 
     const absolute = (path: string) => (store.path.directory + "/" + path).replace("//", "/")
-    const chunk = 200
+    const chunk = 400
     const inflight = new Map<string, Promise<void>>()
     const inflightDiff = new Map<string, Promise<void>>()
     const inflightTodo = new Map<string, Promise<void>>()

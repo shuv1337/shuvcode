@@ -21,17 +21,29 @@ import {
   type QuestionRequest,
   createOpencodeClient,
 } from "@opencode-ai/sdk/v2/client"
-import { createStore, produce, reconcile } from "solid-js/store"
+import { createStore, produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import { Binary } from "@opencode-ai/util/binary"
 import { retry } from "@opencode-ai/util/retry"
 import { useGlobalSDK } from "./global-sdk"
 import { ErrorPage, type InitError } from "../pages/error"
 import { WelcomeScreen } from "../components/welcome-screen"
-import { batch, createContext, useContext, onCleanup, onMount, type ParentProps, Switch, Match } from "solid-js"
+import {
+  batch,
+  createContext,
+  createEffect,
+  useContext,
+  onCleanup,
+  onMount,
+  type Accessor,
+  type ParentProps,
+  Switch,
+  Match,
+} from "solid-js"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import { isHostedEnvironment } from "@/utils/hosted"
 import { usePlatform } from "./platform"
+import { Persist, persisted } from "@/utils/persist"
 
 type State = {
   status: "loading" | "partial" | "complete"
@@ -42,6 +54,7 @@ type State = {
   config: Config
   path: Path
   session: Session[]
+  sessionTotal: number
   session_status: {
     [sessionID: string]: SessionStatus
   }
@@ -75,9 +88,16 @@ type State = {
 
 type ConnectionState = "connecting" | "ready" | "needs_config" | "error"
 
+type VcsCache = {
+  store: Store<{ value: VcsInfo | undefined }>
+  setStore: SetStoreFunction<{ value: VcsInfo | undefined }>
+  ready: Accessor<boolean>
+}
+
 function createGlobalSync() {
   const globalSDK = useGlobalSDK()
   const platform = usePlatform()
+  const vcsCache = new Map<string, VcsCache>()
   const [globalStore, setGlobalStore] = createStore<{
     connectionState: ConnectionState
     ready: boolean
@@ -97,10 +117,16 @@ function createGlobalSync() {
     provider_auth: {},
   })
 
-  const children: Record<string, ReturnType<typeof createStore<State>>> = {}
+  const children: Record<string, [Store<State>, SetStoreFunction<State>]> = {}
   function child(directory: string) {
     if (!directory) console.error("No directory provided")
     if (!children[directory]) {
+      const cache = persisted(
+        Persist.workspace(directory, "vcs", ["vcs.v1"]),
+        createStore({ value: undefined as VcsInfo | undefined }),
+      )
+      vcsCache.set(directory, { store: cache[0], setStore: cache[1], ready: cache[3] })
+
       children[directory] = createStore<State>({
         project: "",
         provider: { all: [], connected: [], default: {} },
@@ -110,6 +136,7 @@ function createGlobalSync() {
         agent: [],
         command: [],
         session: [],
+        sessionTotal: 0,
         session_status: {},
         session_diff: {},
         todo: {},
@@ -119,34 +146,48 @@ function createGlobalSync() {
         question: {},
         mcp: {},
         lsp: [],
-        vcs: undefined,
-        limit: 10,
+        vcs: cache[0].value,
+        limit: 5,
         message: {},
         part: {},
       })
       bootstrapInstance(directory)
     }
-    return children[directory]
+    const childStore = children[directory]
+    if (!childStore) throw new Error("Failed to create store")
+    return childStore
   }
 
   async function loadSessions(directory: string) {
     const [store, setStore] = child(directory)
-    globalSDK.client.session
-      .list({ directory })
+    const limit = store.limit
+
+    return globalSDK.client.session
+      .list({ directory, roots: true })
       .then((x) => {
+        const nonArchived =
+          x.data ??
+          []
+            .filter((s) => !!s?.id)
+            .filter((s) => !s.time?.archived)
+            .slice()
+            .sort((a, b) => a.id.localeCompare(b.id))
+
+        const sandboxWorkspace = globalStore.project.some((p) => (p.sandboxes ?? []).includes(directory))
+        if (sandboxWorkspace) {
+          setStore("session", reconcile(nonArchived, { key: "id" }))
+          return
+        }
+
         const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000
-        const data = Array.isArray(x.data) ? x.data : []
-        const nonArchived = data
-          .filter((s) => !!s?.id)
-          .filter((s) => !s.time?.archived)
-          .slice()
-          .sort((a, b) => a.id.localeCompare(b.id))
         // Include up to the limit, plus any updated in the last 4 hours
         const sessions = nonArchived.filter((s, i) => {
-          if (i < store.limit) return true
+          if (i < limit) return true
           const updated = new Date(s.time?.updated ?? s.time?.created).getTime()
           return updated > fourHoursAgo
         })
+        // Store total session count (used for "load more" pagination)
+        setStore("sessionTotal", nonArchived.length)
         setStore("session", reconcile(sessions, { key: "id" }))
       })
       .catch((err) => {
@@ -159,11 +200,20 @@ function createGlobalSync() {
   async function bootstrapInstance(directory: string) {
     if (!directory) return
     const [store, setStore] = child(directory)
+    const cache = vcsCache.get(directory)
+    if (!cache) return
     const sdk = createOpencodeClient({
       baseUrl: globalSDK.url,
       fetch: platform.fetch,
       directory,
       throwOnError: true,
+    })
+
+    createEffect(() => {
+      if (!cache.ready()) return
+      const cached = cache.store.value
+      if (!cached?.branch) return
+      setStore("vcs", (value) => value ?? cached)
     })
 
     const blockingRequests = {
@@ -195,7 +245,11 @@ function createGlobalSync() {
           loadSessions(directory),
           sdk.mcp.status().then((x) => setStore("mcp", x.data!)),
           sdk.lsp.status().then((x) => setStore("lsp", x.data!)),
-          sdk.vcs.get().then((x) => setStore("vcs", x.data)),
+          sdk.vcs.get().then((x) => {
+            const next = x.data ?? store.vcs
+            setStore("vcs", next)
+            if (next?.branch) cache.setStore("value", next)
+          }),
           sdk.permission.list().then((x) => {
             const grouped: Record<string, PermissionRequest[]> = {}
             for (const perm of x.data ?? []) {
@@ -408,7 +462,10 @@ function createGlobalSync() {
         break
       }
       case "vcs.branch.updated": {
-        setStore("vcs", { branch: event.properties.branch })
+        const next = { branch: event.properties.branch }
+        setStore("vcs", next)
+        const cache = vcsCache.get(directory)
+        if (cache) cache.setStore("value", next)
         break
       }
       case "permission.asked": {
