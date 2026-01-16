@@ -236,7 +236,6 @@ export namespace Provider {
 
         providerOptions.credentialProvider = await loadCredentialProvider(credentialProviderOptions)
       }
-      }
 
       // Add custom endpoint if specified (endpoint takes precedence over baseURL)
       const endpoint = providerConfig?.options?.endpoint ?? providerConfig?.options?.baseURL
