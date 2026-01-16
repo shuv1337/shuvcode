@@ -1,10 +1,23 @@
 /// <reference types="@solidjs/start/env" />
 
-declare module "@stripe/stripe-js"
-declare module "solid-stripe"
+declare module "@stripe/stripe-js" {
+  export type Stripe = unknown
+  export type PaymentMethod = { id: string; type: string; card?: { last4?: string } }
+  export const loadStripe: (...args: unknown[]) => Promise<Stripe | null>
+}
+
+declare module "solid-stripe" {
+  export const Elements: (props: any) => any
+  export const PaymentElement: (props: any) => any
+  export const AddressElement: (props: any) => any
+  export const useStripe: () => any
+  export const useElements: () => any
+}
 
 declare module "@solidjs/start/server" {
   export type APIEvent = { request: Request }
+  export const createHandler: (...args: unknown[]) => unknown
+  export const StartServer: (props: any) => any
 }
 
 declare global {
@@ -46,3 +59,5 @@ declare global {
   const GPUBufferUsage: Record<string, number>
   const GPUShaderStage: Record<string, number>
 }
+
+export {}
