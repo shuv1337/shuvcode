@@ -77,6 +77,7 @@ export namespace ModelsDev {
   export type Provider = z.infer<typeof Provider>
 
   export async function get() {
+    if (Flag.OPENCODE_DISABLE_MODELS_FETCH) return {}
     refresh()
     const file = Bun.file(filepath)
     const result = await file.json().catch(() => {})

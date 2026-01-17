@@ -8,6 +8,7 @@ import type { AssistantMessage, Session } from "@opencode-ai/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Installation } from "@/installation"
 
 const Title = (props: { session: Accessor<Session>; truncate?: boolean }) => {
   const { theme } = useTheme()
@@ -155,7 +156,10 @@ export function Header() {
             <Match when={true}>
               <box flexDirection="row" justifyContent="space-between" gap={1}>
                 <Title session={session} truncate={!tall()} />
-                <ContextInfo context={context} cost={cost} />
+                <box flexDirection="row" gap={1} flexShrink={0}>
+                  <ContextInfo context={context} cost={cost} />
+                  <text fg={theme.textMuted}>v{Installation.VERSION}</text>
+                </box>
               </box>
             </Match>
           </Switch>
