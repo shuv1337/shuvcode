@@ -31,6 +31,8 @@ import {
   batch,
   createContext,
   createEffect,
+  getOwner,
+  runWithOwner,
   useContext,
   onCleanup,
   onMount,
@@ -97,6 +99,8 @@ type VcsCache = {
 function createGlobalSync() {
   const globalSDK = useGlobalSDK()
   const platform = usePlatform()
+  const owner = getOwner()
+  if (!owner) throw new Error("GlobalSync must be created within owner")
   const vcsCache = new Map<string, VcsCache>()
   const [globalStore, setGlobalStore] = createStore<{
     connectionState: ConnectionState
@@ -118,40 +122,48 @@ function createGlobalSync() {
   })
 
   const children: Record<string, [Store<State>, SetStoreFunction<State>]> = {}
+
   function child(directory: string) {
     if (!directory) console.error("No directory provided")
     if (!children[directory]) {
-      const cache = persisted(
-        Persist.workspace(directory, "vcs", ["vcs.v1"]),
-        createStore({ value: undefined as VcsInfo | undefined }),
+      const cache = runWithOwner(owner, () =>
+        persisted(
+          Persist.workspace(directory, "vcs", ["vcs.v1"]),
+          createStore({ value: undefined as VcsInfo | undefined }),
+        ),
       )
+      if (!cache) throw new Error("Failed to create persisted cache")
       vcsCache.set(directory, { store: cache[0], setStore: cache[1], ready: cache[3] })
 
-      children[directory] = createStore<State>({
-        project: "",
-        provider: { all: [], connected: [], default: {} },
-        config: {},
-        path: { state: "", config: "", worktree: "", directory: "", home: "" },
-        status: "loading" as const,
-        agent: [],
-        command: [],
-        session: [],
-        sessionTotal: 0,
-        session_status: {},
-        session_diff: {},
-        todo: {},
-        changes: [],
-        node: [],
-        permission: {},
-        question: {},
-        mcp: {},
-        lsp: [],
-        vcs: cache[0].value,
-        limit: 5,
-        message: {},
-        part: {},
-      })
-      bootstrapInstance(directory)
+      const init = () => {
+        children[directory] = createStore<State>({
+          project: "",
+          provider: { all: [], connected: [], default: {} },
+          config: {},
+          path: { state: "", config: "", worktree: "", directory: "", home: "" },
+          status: "loading" as const,
+          agent: [],
+          command: [],
+          session: [],
+          sessionTotal: 0,
+          session_status: {},
+          session_diff: {},
+          todo: {},
+          changes: [],
+          node: [],
+          permission: {},
+          question: {},
+          mcp: {},
+          lsp: [],
+          vcs: cache[0].value,
+          limit: 5,
+          message: {},
+          part: {},
+        })
+        bootstrapInstance(directory)
+      }
+
+      runWithOwner(owner, init)
     }
     const childStore = children[directory]
     if (!childStore) throw new Error("Failed to create store")
@@ -352,6 +364,23 @@ function createGlobalSync() {
     switch (event.type) {
       case "server.instance.disposed": {
         bootstrapInstance(directory)
+        break
+      }
+      case "session.created": {
+        const result = Binary.search(store.session, event.properties.info.id, (s) => s.id)
+        if (result.found) {
+          setStore("session", result.index, reconcile(event.properties.info))
+          break
+        }
+        setStore(
+          "session",
+          produce((draft) => {
+            draft.splice(result.index, 0, event.properties.info)
+          }),
+        )
+        if (!event.properties.info.parentID) {
+          setStore("sessionTotal", store.sessionTotal + 1)
+        }
         break
       }
       case "session.updated": {

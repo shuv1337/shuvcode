@@ -84,7 +84,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       createStore({
         sidebar: {
           opened: false,
-          width: 280,
+          width: 344,
           workspaces: {} as Record<string, boolean>,
           workspacesDefault: false,
         },

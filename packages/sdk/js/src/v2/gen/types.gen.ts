@@ -62,6 +62,13 @@ export type EventLspUpdated = {
   }
 }
 
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
 export type FileDiff = {
   file: string
   before: string
@@ -429,16 +436,11 @@ export type Part =
       prompt: string
       description: string
       agent: string
-      command?: string
       model?: {
         providerID: string
         modelID: string
       }
-      parentAgent?: string
-      parentModel?: {
-        providerID: string
-        modelID: string
-      }
+      command?: string
     }
   | ReasoningPart
   | FilePart
@@ -604,13 +606,6 @@ export type EventSessionCompacted = {
   }
 }
 
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
 export type Todo = {
   /**
    * Brief description of the task
@@ -697,6 +692,14 @@ export type EventMcpToolsChanged = {
   }
 }
 
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -704,80 +707,6 @@ export type EventCommandExecuted = {
     sessionID: string
     arguments: string
     messageID: string
-  }
-}
-
-export type EventAskquestionRequested = {
-  type: "askquestion.requested"
-  properties: {
-    sessionID: string
-    messageID: string
-    callID: string
-    questions: Array<{
-      /**
-       * Unique identifier for the question
-       */
-      id: string
-      /**
-       * Short tab label, e.g. 'UI Framework'
-       */
-      label: string
-      /**
-       * The full question to ask the user
-       */
-      question: string
-      /**
-       * 2-8 suggested answer options
-       */
-      options: Array<{
-        /**
-         * Short identifier for the option
-         */
-        value: string
-        /**
-         * Display label for the option
-         */
-        label: string
-        /**
-         * Additional context for the option
-         */
-        description?: string
-      }>
-      /**
-       * Allow selecting multiple options
-       */
-      multiSelect?: boolean
-    }>
-  }
-}
-
-export type EventAskquestionAnswered = {
-  type: "askquestion.answered"
-  properties: {
-    sessionID: string
-    callID: string
-    answers: Array<{
-      /**
-       * ID of the question being answered
-       */
-      questionId: string
-      /**
-       * Selected option value(s)
-       */
-      values: Array<string>
-      /**
-       * Custom text if user typed their own response
-       */
-      customText?: string
-    }>
-  }
-}
-
-export type EventAskquestionCancelled = {
-  type: "askquestion.cancelled"
-  properties: {
-    sessionID: string
-    callID: string
   }
 }
 
@@ -914,15 +843,15 @@ export type EventPtyDeleted = {
   }
 }
 
-export type EventServerConnected = {
-  type: "server.connected"
+export type EventGlobalDisposed = {
+  type: "global.disposed"
   properties: {
     [key: string]: unknown
   }
 }
 
-export type EventGlobalDisposed = {
-  type: "global.disposed"
+export type EventServerConnected = {
+  type: "server.connected"
   properties: {
     [key: string]: unknown
   }
@@ -935,6 +864,7 @@ export type Event =
   | EventServerInstanceDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
+  | EventFileEdited
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
@@ -947,17 +877,14 @@ export type Event =
   | EventQuestionReplied
   | EventQuestionRejected
   | EventSessionCompacted
-  | EventFileEdited
   | EventTodoUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
   | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
   | EventCommandExecuted
-  | EventAskquestionRequested
-  | EventAskquestionAnswered
-  | EventAskquestionCancelled
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -969,20 +896,12 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
-  | EventServerConnected
   | EventGlobalDisposed
+  | EventServerConnected
 
 export type GlobalEvent = {
   directory: string
   payload: Event
-}
-
-export type ProjectCreateResult = {
-  project: Project
-  /**
-   * True if a new project was created, false if an existing project was added
-   */
-  created: boolean
 }
 
 export type BadRequestError = {
@@ -998,13 +917,6 @@ export type NotFoundError = {
   data: {
     message: string
   }
-}
-
-export type DirectoryInfo = {
-  path: string
-  name: string
-  isGitRepo: boolean
-  isExistingProject: boolean
 }
 
 /**
@@ -1091,10 +1003,6 @@ export type KeybindsConfig = {
    * Unshare current session
    */
   session_unshare?: string
-  /**
-   * Search in session messages
-   */
-  session_search?: string
   /**
    * Interrupt current session
    */
@@ -1408,20 +1316,6 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
-/**
- * IDE integration configuration for lockfile discovery and authentication
- */
-export type IdeConfig = {
-  /**
-   * Directory to scan for IDE lockfiles
-   */
-  lockfile_dir?: string
-  /**
-   * HTTP header name for IDE authentication
-   */
-  auth_header_name?: string
-}
-
 export type PermissionActionConfig = "ask" | "allow" | "deny"
 
 export type PermissionObjectConfig = {
@@ -1636,6 +1530,10 @@ export type McpOAuthConfig = {
    * OAuth scopes to request during authorization
    */
   scope?: string
+  /**
+   * OAuth redirect URI (default: http://127.0.0.1:19876/mcp/oauth/callback).
+   */
+  redirectUri?: string
 }
 
 export type McpRemoteConfig = {
@@ -1704,13 +1602,8 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
-    /**
-     * Control TUI layout density: 'auto' adapts to terminal height, 'comfortable' uses standard spacing, 'compact' reduces vertical whitespace
-     */
-    density?: "auto" | "comfortable" | "compact"
   }
   server?: ServerConfig
-  ide?: IdeConfig
   /**
    * Command configuration, see https://opencode.ai/docs/commands
    */
@@ -1773,7 +1666,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://opencode.ai/docs/agent
+   * Agent configuration, see https://opencode.ai/docs/agents
    */
   agent?: {
     plan?: AgentConfig
@@ -1903,106 +1796,6 @@ export type Config = {
   }
 }
 
-export type ToolIds = Array<string>
-
-export type ToolListItem = {
-  id: string
-  description: string
-  parameters: unknown
-}
-
-export type ToolList = Array<ToolListItem>
-
-export type Path = {
-  home: string
-  state: string
-  config: string
-  worktree: string
-  directory: string
-}
-
-export type Worktree = {
-  name: string
-  branch: string
-  directory: string
-}
-
-export type WorktreeCreateInput = {
-  name?: string
-  startCommand?: string
-}
-
-export type VcsInfo = {
-  branch: string
-}
-
-export type TextPartInput = {
-  id?: string
-  type: "text"
-  text: string
-  synthetic?: boolean
-  ignored?: boolean
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type FilePartInput = {
-  id?: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
-}
-
-export type AgentPartInput = {
-  id?: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
-export type SubtaskPartInput = {
-  id?: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  command?: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  parentAgent?: string
-  parentModel?: {
-    providerID: string
-    modelID: string
-  }
-}
-
-export type Command = {
-  name: string
-  description?: string
-  agent?: string
-  model?: string
-  mcp?: boolean
-  template: string
-  type?: "template" | "plugin"
-  subtask?: boolean
-  sessionOnly?: boolean
-  aliases?: Array<string>
-  hints: Array<string>
-}
-
 export type Model = {
   id: string
   providerID: string
@@ -2088,6 +1881,83 @@ export type Provider = {
   }
 }
 
+export type ToolIds = Array<string>
+
+export type ToolListItem = {
+  id: string
+  description: string
+  parameters: unknown
+}
+
+export type ToolList = Array<ToolListItem>
+
+export type Worktree = {
+  name: string
+  branch: string
+  directory: string
+}
+
+export type WorktreeCreateInput = {
+  name?: string
+  startCommand?: string
+}
+
+export type McpResource = {
+  name: string
+  uri: string
+  description?: string
+  mimeType?: string
+  client: string
+}
+
+export type TextPartInput = {
+  id?: string
+  type: "text"
+  text: string
+  synthetic?: boolean
+  ignored?: boolean
+  time?: {
+    start: number
+    end?: number
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type FilePartInput = {
+  id?: string
+  type: "file"
+  mime: string
+  filename?: string
+  url: string
+  source?: FilePartSource
+}
+
+export type AgentPartInput = {
+  id?: string
+  type: "agent"
+  name: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
+export type SubtaskPartInput = {
+  id?: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+}
+
 export type ProviderAuthMethod = {
   type: "oauth" | "api"
   label: string
@@ -2145,27 +2015,6 @@ export type File = {
   status: "added" | "deleted" | "modified"
 }
 
-export type Agent = {
-  name: string
-  description?: string
-  mode: "subagent" | "primary" | "all"
-  native?: boolean
-  hidden?: boolean
-  topP?: number
-  temperature?: number
-  color?: string
-  permission: PermissionRuleset
-  model?: {
-    modelID: string
-    providerID: string
-  }
-  prompt?: string
-  options: {
-    [key: string]: unknown
-  }
-  steps?: number
-}
-
 export type McpStatusConnected = {
   status: "connected"
 }
@@ -2195,12 +2044,48 @@ export type McpStatus =
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
 
-export type McpResource = {
+export type Path = {
+  home: string
+  state: string
+  config: string
+  worktree: string
+  directory: string
+}
+
+export type VcsInfo = {
+  branch: string
+}
+
+export type Command = {
   name: string
-  uri: string
   description?: string
-  mimeType?: string
-  client: string
+  agent?: string
+  model?: string
+  mcp?: boolean
+  template: string
+  subtask?: boolean
+  hints: Array<string>
+}
+
+export type Agent = {
+  name: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  native?: boolean
+  hidden?: boolean
+  topP?: number
+  temperature?: number
+  color?: string
+  permission: PermissionRuleset
+  model?: {
+    modelID: string
+    providerID: string
+  }
+  prompt?: string
+  options: {
+    [key: string]: unknown
+  }
+  steps?: number
 }
 
 export type LspStatus = {
@@ -2307,38 +2192,6 @@ export type ProjectListResponses = {
 
 export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
 
-export type ProjectCreateData = {
-  body?: {
-    path: string
-    name?: string
-    repo?: string
-    degit?: boolean
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/project"
-}
-
-export type ProjectCreateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ProjectCreateError = ProjectCreateErrors[keyof ProjectCreateErrors]
-
-export type ProjectCreateResponses = {
-  /**
-   * Created or added project information
-   */
-  200: ProjectCreateResult
-}
-
-export type ProjectCreateResponse = ProjectCreateResponses[keyof ProjectCreateResponses]
-
 export type ProjectCurrentData = {
   body?: never
   path?: never
@@ -2395,26 +2248,6 @@ export type ProjectUpdateResponses = {
 }
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
-
-export type ProjectBrowseData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    query?: string
-    limit?: number
-  }
-  url: "/project/browse"
-}
-
-export type ProjectBrowseResponses = {
-  /**
-   * List of directories
-   */
-  200: Array<DirectoryInfo>
-}
-
-export type ProjectBrowseResponse = ProjectBrowseResponses[keyof ProjectBrowseResponses]
 
 export type PtyListData = {
   body?: never
@@ -2636,6 +2469,29 @@ export type ConfigUpdateResponses = {
 
 export type ConfigUpdateResponse = ConfigUpdateResponses[keyof ConfigUpdateResponses]
 
+export type ConfigProvidersData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/config/providers"
+}
+
+export type ConfigProvidersResponses = {
+  /**
+   * List of providers
+   */
+  200: {
+    providers: Array<Provider>
+    default: {
+      [key: string]: string
+    }
+  }
+}
+
+export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -2692,42 +2548,6 @@ export type ToolListResponses = {
 
 export type ToolListResponse = ToolListResponses[keyof ToolListResponses]
 
-export type InstanceDisposeData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/instance/dispose"
-}
-
-export type InstanceDisposeResponses = {
-  /**
-   * Instance disposed
-   */
-  200: boolean
-}
-
-export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
-
-export type PathGetData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/path"
-}
-
-export type PathGetResponses = {
-  /**
-   * Path
-   */
-  200: Path
-}
-
-export type PathGetResponse = PathGetResponses[keyof PathGetResponses]
-
 export type WorktreeListData = {
   body?: never
   path?: never
@@ -2773,23 +2593,26 @@ export type WorktreeCreateResponses = {
 
 export type WorktreeCreateResponse = WorktreeCreateResponses[keyof WorktreeCreateResponses]
 
-export type VcsGetData = {
+export type ExperimentalResourceListData = {
   body?: never
   path?: never
   query?: {
     directory?: string
   }
-  url: "/vcs"
+  url: "/experimental/resource"
 }
 
-export type VcsGetResponses = {
+export type ExperimentalResourceListResponses = {
   /**
-   * VCS info
+   * MCP resources
    */
-  200: VcsInfo
+  200: {
+    [key: string]: McpResource
+  }
 }
 
-export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
+export type ExperimentalResourceListResponse =
+  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
 
 export type SessionListData = {
   body?: never
@@ -3225,9 +3048,6 @@ export type SessionShareResponse = SessionShareResponses[keyof SessionShareRespo
 export type SessionDiffData = {
   body?: never
   path: {
-    /**
-     * Session ID
-     */
     sessionID: string
   }
   query?: {
@@ -3237,22 +3057,9 @@ export type SessionDiffData = {
   url: "/session/{sessionID}/diff"
 }
 
-export type SessionDiffErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionDiffError = SessionDiffErrors[keyof SessionDiffErrors]
-
 export type SessionDiffResponses = {
   /**
-   * List of diffs
+   * Successfully retrieved diff
    */
   200: Array<FileDiff>
 }
@@ -3924,47 +3731,6 @@ export type QuestionRejectResponses = {
 
 export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
 
-export type CommandListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/command"
-}
-
-export type CommandListResponses = {
-  /**
-   * List of commands
-   */
-  200: Array<Command>
-}
-
-export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
-
-export type ConfigProvidersData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/config/providers"
-}
-
-export type ConfigProvidersResponses = {
-  /**
-   * List of providers
-   */
-  200: {
-    providers: Array<Provider>
-    default: {
-      [key: string]: string
-    }
-  }
-}
-
-export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
-
 export type ProviderListData = {
   body?: never
   path?: never
@@ -4279,70 +4045,6 @@ export type FileStatusResponses = {
 
 export type FileStatusResponse = FileStatusResponses[keyof FileStatusResponses]
 
-export type AppLogData = {
-  body?: {
-    /**
-     * Service name for the log entry
-     */
-    service: string
-    /**
-     * Log level
-     */
-    level: "debug" | "info" | "error" | "warn"
-    /**
-     * Log message
-     */
-    message: string
-    /**
-     * Additional metadata for the log entry
-     */
-    extra?: {
-      [key: string]: unknown
-    }
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/log"
-}
-
-export type AppLogErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AppLogError = AppLogErrors[keyof AppLogErrors]
-
-export type AppLogResponses = {
-  /**
-   * Log entry written successfully
-   */
-  200: boolean
-}
-
-export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
-
-export type AppAgentsData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/agent"
-}
-
-export type AppAgentsResponses = {
-  /**
-   * List of agents
-   */
-  200: Array<Agent>
-}
-
-export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
-
 export type McpStatusData = {
   body?: never
   path?: never
@@ -4574,63 +4276,6 @@ export type McpDisconnectResponses = {
 }
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
-
-export type ExperimentalResourceListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/resource"
-}
-
-export type ExperimentalResourceListResponses = {
-  /**
-   * MCP resources
-   */
-  200: {
-    [key: string]: McpResource
-  }
-}
-
-export type ExperimentalResourceListResponse =
-  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
-
-export type LspStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/lsp"
-}
-
-export type LspStatusResponses = {
-  /**
-   * LSP server status
-   */
-  200: Array<LspStatus>
-}
-
-export type LspStatusResponse = LspStatusResponses[keyof LspStatusResponses]
-
-export type FormatterStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/formatter"
-}
-
-export type FormatterStatusResponses = {
-  /**
-   * Formatter status
-   */
-  200: Array<FormatterStatus>
-}
-
-export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
 
 export type TuiAppendPromptData = {
   body?: {
@@ -4925,6 +4570,200 @@ export type TuiControlResponseResponses = {
 }
 
 export type TuiControlResponseResponse = TuiControlResponseResponses[keyof TuiControlResponseResponses]
+
+export type InstanceDisposeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/instance/dispose"
+}
+
+export type InstanceDisposeResponses = {
+  /**
+   * Instance disposed
+   */
+  200: boolean
+}
+
+export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
+
+export type PathGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/path"
+}
+
+export type PathGetResponses = {
+  /**
+   * Path
+   */
+  200: Path
+}
+
+export type PathGetResponse = PathGetResponses[keyof PathGetResponses]
+
+export type VcsGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/vcs"
+}
+
+export type VcsGetResponses = {
+  /**
+   * VCS info
+   */
+  200: VcsInfo
+}
+
+export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
+
+export type CommandListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/command"
+}
+
+export type CommandListResponses = {
+  /**
+   * List of commands
+   */
+  200: Array<Command>
+}
+
+export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
+
+export type AppLogData = {
+  body?: {
+    /**
+     * Service name for the log entry
+     */
+    service: string
+    /**
+     * Log level
+     */
+    level: "debug" | "info" | "error" | "warn"
+    /**
+     * Log message
+     */
+    message: string
+    /**
+     * Additional metadata for the log entry
+     */
+    extra?: {
+      [key: string]: unknown
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/log"
+}
+
+export type AppLogErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AppLogError = AppLogErrors[keyof AppLogErrors]
+
+export type AppLogResponses = {
+  /**
+   * Log entry written successfully
+   */
+  200: boolean
+}
+
+export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
+
+export type AppAgentsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/agent"
+}
+
+export type AppAgentsResponses = {
+  /**
+   * List of agents
+   */
+  200: Array<Agent>
+}
+
+export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
+
+export type AppSkillsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill"
+}
+
+export type AppSkillsResponses = {
+  /**
+   * List of skills
+   */
+  200: Array<{
+    name: string
+    description: string
+    location: string
+  }>
+}
+
+export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type LspStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/lsp"
+}
+
+export type LspStatusResponses = {
+  /**
+   * LSP server status
+   */
+  200: Array<LspStatus>
+}
+
+export type LspStatusResponse = LspStatusResponses[keyof LspStatusResponses]
+
+export type FormatterStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/formatter"
+}
+
+export type FormatterStatusResponses = {
+  /**
+   * Formatter status
+   */
+  200: Array<FormatterStatus>
+}
+
+export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
 
 export type AuthSetData = {
   body?: Auth
