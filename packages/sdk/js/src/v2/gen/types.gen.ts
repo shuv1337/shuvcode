@@ -441,6 +441,11 @@ export type Part =
         modelID: string
       }
       command?: string
+      parentAgent?: string
+      parentModel?: {
+        providerID: string
+        modelID: string
+      }
     }
   | ReasoningPart
   | FilePart
@@ -710,6 +715,80 @@ export type EventCommandExecuted = {
   }
 }
 
+export type EventAskquestionRequested = {
+  type: "askquestion.requested"
+  properties: {
+    sessionID: string
+    messageID: string
+    callID: string
+    questions: Array<{
+      /**
+       * Unique identifier for the question
+       */
+      id: string
+      /**
+       * Short tab label, e.g. 'UI Framework'
+       */
+      label: string
+      /**
+       * The full question to ask the user
+       */
+      question: string
+      /**
+       * 2-8 suggested answer options
+       */
+      options: Array<{
+        /**
+         * Short identifier for the option
+         */
+        value: string
+        /**
+         * Display label for the option
+         */
+        label: string
+        /**
+         * Additional context for the option
+         */
+        description?: string
+      }>
+      /**
+       * Allow selecting multiple options
+       */
+      multiSelect?: boolean
+    }>
+  }
+}
+
+export type EventAskquestionAnswered = {
+  type: "askquestion.answered"
+  properties: {
+    sessionID: string
+    callID: string
+    answers: Array<{
+      /**
+       * ID of the question being answered
+       */
+      questionId: string
+      /**
+       * Selected option value(s)
+       */
+      values: Array<string>
+      /**
+       * Custom text if user typed their own response
+       */
+      customText?: string
+    }>
+  }
+}
+
+export type EventAskquestionCancelled = {
+  type: "askquestion.cancelled"
+  properties: {
+    sessionID: string
+    callID: string
+  }
+}
+
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -885,6 +964,9 @@ export type Event =
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
+  | EventAskquestionRequested
+  | EventAskquestionAnswered
+  | EventAskquestionCancelled
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -904,6 +986,14 @@ export type GlobalEvent = {
   payload: Event
 }
 
+export type ProjectCreateResult = {
+  project: Project
+  /**
+   * True if a new project was created, false if an existing project was added
+   */
+  created: boolean
+}
+
 export type BadRequestError = {
   data: unknown
   errors: Array<{
@@ -917,6 +1007,13 @@ export type NotFoundError = {
   data: {
     message: string
   }
+}
+
+export type DirectoryInfo = {
+  path: string
+  name: string
+  isGitRepo: boolean
+  isExistingProject: boolean
 }
 
 /**
@@ -1003,6 +1100,10 @@ export type KeybindsConfig = {
    * Unshare current session
    */
   session_unshare?: string
+  /**
+   * Search in session messages
+   */
+  session_search?: string
   /**
    * Interrupt current session
    */
@@ -1316,6 +1417,20 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
+/**
+ * IDE integration configuration for lockfile discovery and authentication
+ */
+export type IdeConfig = {
+  /**
+   * Directory to scan for IDE lockfiles
+   */
+  lockfile_dir?: string
+  /**
+   * HTTP header name for IDE authentication
+   */
+  auth_header_name?: string
+}
+
 export type PermissionActionConfig = "ask" | "allow" | "deny"
 
 export type PermissionObjectConfig = {
@@ -1602,8 +1717,13 @@ export type Config = {
      * Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column
      */
     diff_style?: "auto" | "stacked"
+    /**
+     * Control TUI layout density: 'auto' adapts to terminal height, 'comfortable' uses standard spacing, 'compact' reduces vertical whitespace
+     */
+    density?: "auto" | "comfortable" | "compact"
   }
   server?: ServerConfig
+  ide?: IdeConfig
   /**
    * Command configuration, see https://opencode.ai/docs/commands
    */
@@ -1956,6 +2076,11 @@ export type SubtaskPartInput = {
     modelID: string
   }
   command?: string
+  parentAgent?: string
+  parentModel?: {
+    providerID: string
+    modelID: string
+  }
 }
 
 export type ProviderAuthMethod = {
@@ -2063,7 +2188,10 @@ export type Command = {
   model?: string
   mcp?: boolean
   template: string
+  type?: "template" | "plugin"
   subtask?: boolean
+  sessionOnly?: boolean
+  aliases?: Array<string>
   hints: Array<string>
 }
 
@@ -2192,6 +2320,38 @@ export type ProjectListResponses = {
 
 export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
 
+export type ProjectCreateData = {
+  body?: {
+    path: string
+    name?: string
+    repo?: string
+    degit?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project"
+}
+
+export type ProjectCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProjectCreateError = ProjectCreateErrors[keyof ProjectCreateErrors]
+
+export type ProjectCreateResponses = {
+  /**
+   * Created or added project information
+   */
+  200: ProjectCreateResult
+}
+
+export type ProjectCreateResponse = ProjectCreateResponses[keyof ProjectCreateResponses]
+
 export type ProjectCurrentData = {
   body?: never
   path?: never
@@ -2248,6 +2408,26 @@ export type ProjectUpdateResponses = {
 }
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+
+export type ProjectBrowseData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    query?: string
+    limit?: number
+  }
+  url: "/project/browse"
+}
+
+export type ProjectBrowseResponses = {
+  /**
+   * List of directories
+   */
+  200: Array<DirectoryInfo>
+}
+
+export type ProjectBrowseResponse = ProjectBrowseResponses[keyof ProjectBrowseResponses]
 
 export type PtyListData = {
   body?: never

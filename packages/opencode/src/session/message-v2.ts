@@ -175,12 +175,6 @@ export namespace MessageV2 {
       })
       .optional(),
     command: z.string().optional(),
-    model: z
-      .object({
-        providerID: z.string(),
-        modelID: z.string(),
-      })
-      .optional(),
     parentAgent: z.string().optional(),
     parentModel: z
       .object({
