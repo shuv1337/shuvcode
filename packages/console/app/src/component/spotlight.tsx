@@ -532,7 +532,7 @@ export default function Spotlight(props: SpotlightProps) {
       }
       containerRef.appendChild(canvas)
 
-      const context = canvas.getContext("webgpu")
+      const context = canvas.getContext("webgpu") as GPUCanvasContext | null
       if (!context) {
         console.warn("Failed to get WebGPU context")
         return
