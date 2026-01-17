@@ -58,6 +58,20 @@ export function Prompt(props: PromptProps) {
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
 
+  // Paste coalescing: buffer rapid consecutive paste events (e.g., from MobaXterm
+  // which fragments large pastes into multiple bracketed paste sequences)
+  const pasteBuffer: { chunks: string[]; timer: Timer | null } = {
+    chunks: [],
+    timer: null,
+  }
+  const [isPasting, setIsPasting] = createSignal(false)
+  const PASTE_DEBOUNCE_MS = 100
+
+  // Cleanup paste timer on unmount
+  onCleanup(() => {
+    if (pasteBuffer.timer) clearTimeout(pasteBuffer.timer)
+  })
+
   const keybind = useKeybind()
   const local = useLocal()
   const sdk = useSDK()
@@ -488,6 +502,7 @@ export function Prompt(props: PromptProps) {
   async function submit() {
     if (props.disabled) return
     if (autocomplete?.visible) return
+    if (isPasting()) return // Block submit during paste coalescing
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
@@ -688,6 +703,59 @@ export function Prompt(props: PromptProps) {
     return
   }
 
+  // Process a coalesced paste (called after debounce timer expires)
+  async function processCoalescedPaste(pastedContent: string) {
+    if (!pastedContent) {
+      command.trigger("prompt.paste")
+      return
+    }
+
+    // Check if pasted content is a file path
+    const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+    const isUrl = /^(https?):\/\//.test(filepath)
+    if (!isUrl) {
+      try {
+        const file = Bun.file(filepath)
+        // Handle SVG as raw text content, not as base64 image
+        if (file.type === "image/svg+xml") {
+          const content = await file.text().catch(() => {})
+          if (content) {
+            pasteText(content, `[SVG: ${file.name ?? "image"}]`)
+            return
+          }
+        }
+        if (file.type.startsWith("image/")) {
+          const content = await file
+            .arrayBuffer()
+            .then((buffer) => Buffer.from(buffer).toString("base64"))
+            .catch(() => {})
+          if (content) {
+            await pasteImage({
+              filename: file.name,
+              mime: file.type,
+              content,
+            })
+            return
+          }
+        }
+      } catch {}
+    }
+
+    const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+    if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
+      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+      return
+    }
+
+    // Insert the text directly for small pastes
+    input.insertText(pastedContent)
+    setTimeout(() => {
+      input.getLayoutNode().markDirty()
+      input.gotoBufferEnd()
+      renderer.requestRender()
+    }, 0)
+  }
+
   const highlight = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
@@ -853,72 +921,36 @@ export function Prompt(props: PromptProps) {
                 }
               }}
               onSubmit={submit}
-              onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
-                  event.preventDefault()
-                  return
-                }
+              onPaste={(event: PasteEvent) => {
+                event.preventDefault()
+                if (props.disabled) return
 
                 // Normalize line endings at the boundary
                 // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
                 // Replace CRLF first, then any remaining CR
                 const normalizedText = event.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
-                if (!pastedContent) {
-                  command.trigger("prompt.paste")
-                  return
-                }
 
-                // trim ' from the beginning and end of the pasted content. just
-                // ' and nothing else
-                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
-                const isUrl = /^(https?):\/\//.test(filepath)
-                if (!isUrl) {
+                // Buffer the paste content for coalescing
+                // Some terminals (e.g., MobaXterm) fragment large pastes into multiple
+                // bracketed paste sequences, which would otherwise trigger premature submit
+                // Don't trim individual chunks - preserve inter-fragment whitespace
+                pasteBuffer.chunks.push(normalizedText)
+                setIsPasting(true)
+
+                // Reset the debounce timer
+                if (pasteBuffer.timer) clearTimeout(pasteBuffer.timer)
+                pasteBuffer.timer = setTimeout(async () => {
+                  // Coalesce all chunks and process
+                  const coalesced = pasteBuffer.chunks.join("").trim()
+                  pasteBuffer.chunks = []
+                  pasteBuffer.timer = null
                   try {
-                    const file = Bun.file(filepath)
-                    // Handle SVG as raw text content, not as base64 image
-                    if (file.type === "image/svg+xml") {
-                      event.preventDefault()
-                      const content = await file.text().catch(() => {})
-                      if (content) {
-                        pasteText(content, `[SVG: ${file.name ?? "image"}]`)
-                        return
-                      }
-                    }
-                    if (file.type.startsWith("image/")) {
-                      event.preventDefault()
-                      const content = await file
-                        .arrayBuffer()
-                        .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch(() => {})
-                      if (content) {
-                        await pasteImage({
-                          filename: file.name,
-                          mime: file.type,
-                          content,
-                        })
-                        return
-                      }
-                    }
-                  } catch {}
-                }
-
-                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
-                  event.preventDefault()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-                  return
-                }
-
-                // Force layout update and render for the pasted content
-                setTimeout(() => {
-                  input.getLayoutNode().markDirty()
-                  input.gotoBufferEnd()
-                  renderer.requestRender()
-                }, 0)
+                    await processCoalescedPaste(coalesced)
+                  } finally {
+                    // Only clear isPasting if no new paste arrived during processing
+                    if (!pasteBuffer.timer) setIsPasting(false)
+                  }
+                }, PASTE_DEBOUNCE_MS)
               }}
               ref={(r: TextareaRenderable) => {
                 input = r
