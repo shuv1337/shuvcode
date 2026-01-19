@@ -30,7 +30,7 @@ process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 // Also write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+await fs.writeFile(path.join(cacheDir, "version"), "18")
 const response = await fetch("https://models.dev/api.json")
 if (response.ok) {
   await fs.writeFile(path.join(cacheDir, "models.json"), await response.text())

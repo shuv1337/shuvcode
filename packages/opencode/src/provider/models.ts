@@ -77,8 +77,9 @@ export namespace ModelsDev {
   export type Provider = z.infer<typeof Provider>
 
   export async function get() {
-    if (Flag.OPENCODE_DISABLE_MODELS_FETCH) return {}
-    refresh()
+    if (!Flag.OPENCODE_DISABLE_MODELS_FETCH) {
+      refresh()
+    }
     const file = Bun.file(filepath)
     const result = await file.json().catch(() => {})
     if (result) return result as Record<string, Provider>
@@ -87,6 +88,9 @@ export namespace ModelsDev {
     if (typeof data === "function") {
       const json = await data()
       return JSON.parse(json) as Record<string, Provider>
+    }
+    if (Flag.OPENCODE_DISABLE_MODELS_FETCH) {
+      throw new Error("Models fetch disabled and no cached data available")
     }
     // Direct fetch fallback when macro is unavailable
     const response = await fetch("https://models.dev/api.json", {
