@@ -160,6 +160,7 @@ import type {
   TuiSelectSessionResponses,
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
+  UsageGetResponses,
   VcsGetResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
@@ -1918,83 +1919,6 @@ export class Question extends HeyApiClient {
   }
 }
 
-export class Usage extends HeyApiClient {
-  /**
-   * Get usage
-   *
-   * Fetch usage limits for authenticated providers.
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      provider?: string
-      refresh?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "provider" },
-            { in: "query", key: "refresh" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      {
-        entries: Array<{
-          provider: string
-          displayName: string
-          snapshot: {
-            primary: {
-              usedPercent: number
-              windowMinutes: number | null
-              resetsAt: number | null
-            } | null
-            secondary: {
-              usedPercent: number
-              windowMinutes: number | null
-              resetsAt: number | null
-            } | null
-            credits: {
-              hasCredits: boolean
-              unlimited: boolean
-              balance: string | null
-            } | null
-            planType:
-              | "guest"
-              | "free"
-              | "go"
-              | "plus"
-              | "pro"
-              | "free_workspace"
-              | "team"
-              | "business"
-              | "education"
-              | "quorum"
-              | "k12"
-              | "enterprise"
-              | "edu"
-              | null
-            updatedAt: number
-          }
-        }>
-        error?: string
-      },
-      unknown,
-      ThrowOnError
-    >({
-      url: "/usage",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Oauth extends HeyApiClient {
   /**
    * OAuth authorize
@@ -2977,6 +2901,40 @@ export class Command extends HeyApiClient {
   }
 }
 
+export class Usage extends HeyApiClient {
+  /**
+   * Get usage
+   *
+   * Fetch usage limits for authenticated providers.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      provider?: string
+      refresh?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "provider" },
+            { in: "query", key: "refresh" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<UsageGetResponses, unknown, ThrowOnError>({
+      url: "/usage",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class App extends HeyApiClient {
   /**
    * Write log
@@ -3245,11 +3203,6 @@ export class OpencodeClient extends HeyApiClient {
     return (this._mcp ??= new Mcp({ client: this.client }))
   }
 
-  private _usage?: Usage
-  get usage(): Usage {
-    return (this._usage ??= new Usage({ client: this.client }))
-  }
-
   private _tui?: Tui
   get tui(): Tui {
     return (this._tui ??= new Tui({ client: this.client }))
@@ -3273,6 +3226,11 @@ export class OpencodeClient extends HeyApiClient {
   private _command?: Command
   get command(): Command {
     return (this._command ??= new Command({ client: this.client }))
+  }
+
+  private _usage?: Usage
+  get usage(): Usage {
+    return (this._usage ??= new Usage({ client: this.client }))
   }
 
   private _app?: App
