@@ -883,6 +883,46 @@ export type EventVcsBranchUpdated = {
   }
 }
 
+export type EventUsageUpdated = {
+  type: "usage.updated"
+  properties: {
+    provider: string
+    snapshot: {
+      primary: {
+        usedPercent: number
+        windowMinutes: number | null
+        resetsAt: number | null
+      } | null
+      secondary: {
+        usedPercent: number
+        windowMinutes: number | null
+        resetsAt: number | null
+      } | null
+      credits: {
+        hasCredits: boolean
+        unlimited: boolean
+        balance: string | null
+      } | null
+      planType:
+        | "guest"
+        | "free"
+        | "go"
+        | "plus"
+        | "pro"
+        | "free_workspace"
+        | "team"
+        | "business"
+        | "education"
+        | "quorum"
+        | "k12"
+        | "enterprise"
+        | "edu"
+        | null
+      updatedAt: number
+    }
+  }
+}
+
 export type Pty = {
   id: string
   title: string
@@ -974,6 +1014,7 @@ export type Event =
   | EventSessionError
   | EventFileWatcherUpdated
   | EventVcsBranchUpdated
+  | EventUsageUpdated
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
@@ -1645,10 +1686,6 @@ export type McpOAuthConfig = {
    * OAuth scopes to request during authorization
    */
   scope?: string
-  /**
-   * OAuth redirect URI (default: http://127.0.0.1:19876/mcp/oauth/callback).
-   */
-  redirectUri?: string
 }
 
 export type McpRemoteConfig = {
@@ -3911,6 +3948,83 @@ export type QuestionRejectResponses = {
 
 export type QuestionRejectResponse = QuestionRejectResponses[keyof QuestionRejectResponses]
 
+export type CommandListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/command"
+}
+
+export type CommandListResponses = {
+  /**
+   * List of commands
+   */
+  200: Array<Command>
+}
+
+export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
+
+export type UsageGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    provider?: string
+    refresh?: boolean
+  }
+  url: "/usage"
+}
+
+export type UsageGetResponses = {
+  /**
+   * Usage response
+   */
+  200: {
+    entries: Array<{
+      provider: string
+      displayName: string
+      snapshot: {
+        primary: {
+          usedPercent: number
+          windowMinutes: number | null
+          resetsAt: number | null
+        } | null
+        secondary: {
+          usedPercent: number
+          windowMinutes: number | null
+          resetsAt: number | null
+        } | null
+        credits: {
+          hasCredits: boolean
+          unlimited: boolean
+          balance: string | null
+        } | null
+        planType:
+          | "guest"
+          | "free"
+          | "go"
+          | "plus"
+          | "pro"
+          | "free_workspace"
+          | "team"
+          | "business"
+          | "education"
+          | "quorum"
+          | "k12"
+          | "enterprise"
+          | "edu"
+          | null
+        updatedAt: number
+      }
+    }>
+    error?: string
+  }
+}
+
+export type UsageGetResponse = UsageGetResponses[keyof UsageGetResponses]
+
 export type ProviderListData = {
   body?: never
   path?: never
@@ -4804,24 +4918,6 @@ export type VcsGetResponses = {
 }
 
 export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
-
-export type CommandListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/command"
-}
-
-export type CommandListResponses = {
-  /**
-   * List of commands
-   */
-  200: Array<Command>
-}
-
-export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
 
 export type AppLogData = {
   body?: {

@@ -351,8 +351,8 @@ export namespace ACP {
       log.info("initialize", { protocolVersion: params.protocolVersion })
 
       const authMethod: AuthMethod = {
-        description: "Run `opencode auth login` in the terminal",
-        name: "Login with opencode",
+        description: "Run `shuvcode auth login` in the terminal",
+        name: "Login with shuvcode",
         id: "opencode-login",
       }
 
@@ -360,9 +360,9 @@ export namespace ACP {
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
           "terminal-auth": {
-            command: "opencode",
+            command: "shuvcode",
             args: ["auth", "login"],
-            label: "OpenCode Login",
+            label: "Shuvcode Login",
           },
         }
       }

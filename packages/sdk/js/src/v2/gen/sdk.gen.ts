@@ -1918,6 +1918,83 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class Usage extends HeyApiClient {
+  /**
+   * Get usage
+   *
+   * Fetch usage limits for authenticated providers.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      provider?: string
+      refresh?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "provider" },
+            { in: "query", key: "refresh" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      {
+        entries: Array<{
+          provider: string
+          displayName: string
+          snapshot: {
+            primary: {
+              usedPercent: number
+              windowMinutes: number | null
+              resetsAt: number | null
+            } | null
+            secondary: {
+              usedPercent: number
+              windowMinutes: number | null
+              resetsAt: number | null
+            } | null
+            credits: {
+              hasCredits: boolean
+              unlimited: boolean
+              balance: string | null
+            } | null
+            planType:
+              | "guest"
+              | "free"
+              | "go"
+              | "plus"
+              | "pro"
+              | "free_workspace"
+              | "team"
+              | "business"
+              | "education"
+              | "quorum"
+              | "k12"
+              | "enterprise"
+              | "edu"
+              | null
+            updatedAt: number
+          }
+        }>
+        error?: string
+      },
+      unknown,
+      ThrowOnError
+    >({
+      url: "/usage",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Oauth extends HeyApiClient {
   /**
    * OAuth authorize
@@ -3166,6 +3243,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _usage?: Usage
+  get usage(): Usage {
+    return (this._usage ??= new Usage({ client: this.client }))
   }
 
   private _tui?: Tui
