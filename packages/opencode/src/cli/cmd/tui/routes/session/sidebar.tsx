@@ -61,7 +61,7 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
     const parts: ToolPart[] = []
     for (const message of messages()) {
       for (const part of sync.data.part[message.id] ?? []) {
-        if (part.type === "tool" && part.tool === "task") parts.push(part)
+        if (part.type === "tool" && part.state.input?.subagent_type) parts.push(part)
       }
     }
     return parts
@@ -139,7 +139,7 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
                 <text fg={theme.textMuted}>{session()?.share?.url}</text>
               </Show>
             </box>
-{/* Context Section */}
+            {/* Context Section */}
             <box>
               <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("context", !expanded.context)}>
                 <text fg={theme.text}>{expanded.context ? "▼" : "▶"}</text>
