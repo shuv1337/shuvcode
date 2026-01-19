@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-15",
-  "lastChange": "v1.1.23 sync: preserve shuvcode branding (TUI logo, tauri window), inline theme preload script, and update merge notes.",
-  "note": "v1.1.23 sync. Upstream adds new console UI, snapshot updates, and install method tweaks; keep fork branding and theme preload behavior.",
+  "lastUpdated": "2026-01-19",
+  "lastChange": "Add CLI binary name branding: scriptName 'shuvcode' and all user-facing command references updated from 'opencode' to 'shuvcode'.",
+  "note": "v1.1.25 sync. CLI --help now shows 'shuvcode' instead of 'opencode' for all command names and help text.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
     "packages/opencode/package.json": [
@@ -1580,6 +1580,47 @@
           "file": "packages/desktop/src/updater.ts",
           "description": "Updater enabled flag checks __SHUVCODE__ first",
           "markers": ["window.__SHUVCODE__?.updaterEnabled ?? window.__OPENCODE__?.updaterEnabled"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "CLI binary name and help text branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand CLI binary name from 'opencode' to 'shuvcode' in --help output and all user-facing command suggestions. The yargs scriptName is set to 'shuvcode' and all help text references like 'Run: opencode auth add' are changed to 'Run: shuvcode auth add'.",
+      "files": [
+        "packages/opencode/src/index.ts",
+        "packages/opencode/src/server/server.ts",
+        "packages/opencode/src/mcp/index.ts",
+        "packages/opencode/src/acp/agent.ts",
+        "packages/opencode/src/cli/cmd/mcp.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/index.ts",
+          "description": "Yargs scriptName set to shuvcode for --help output",
+          "markers": [".scriptName(\"shuvcode\")"]
+        },
+        {
+          "file": "packages/opencode/src/server/server.ts",
+          "description": "Usage tracking auth error messages reference shuvcode",
+          "markers": ["Run: shuvcode auth add"]
+        },
+        {
+          "file": "packages/opencode/src/mcp/index.ts",
+          "description": "MCP auth required toast message references shuvcode",
+          "markers": ["Run: shuvcode mcp auth"]
+        },
+        {
+          "file": "packages/opencode/src/acp/agent.ts",
+          "description": "ACP auth method description and terminal-auth command use shuvcode",
+          "markers": ["Run `shuvcode auth login`", "command: \"shuvcode\"", "label: \"Shuvcode Login\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/mcp.ts",
+          "description": "MCP list command outro references shuvcode",
+          "markers": ["Add servers with: shuvcode mcp add"]
         }
       ]
     },

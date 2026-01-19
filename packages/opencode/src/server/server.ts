@@ -114,7 +114,7 @@ export namespace Server {
       if (providers.length === 0) {
         return c.json({
           entries: [],
-          error: "No OAuth providers with usage tracking are authenticated. Run: opencode auth add codex",
+          error: "No OAuth providers with usage tracking are authenticated. Run: shuvcode auth add codex",
         })
       }
 
@@ -130,11 +130,11 @@ export namespace Server {
 
         const authEntry = await Usage.getProviderAuth(provider)
         if (!authEntry) {
-          errors.push(`Not authenticated with ${info.displayName}. Run: opencode auth add ${info.authKeys[0]}`)
+          errors.push(`Not authenticated with ${info.displayName}. Run: shuvcode auth add ${info.authKeys[0]}`)
           continue
         }
         if (info.requiresOAuth && authEntry.auth.type !== "oauth") {
-          errors.push(`Not authenticated with ${info.displayName} OAuth. Run: opencode auth add ${info.authKeys[0]}`)
+          errors.push(`Not authenticated with ${info.displayName} OAuth. Run: shuvcode auth add ${info.authKeys[0]}`)
           continue
         }
 
