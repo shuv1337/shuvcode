@@ -41,6 +41,18 @@ import { ProviderTransform } from "./transform"
 export namespace Provider {
   const log = Log.create({ service: "provider" })
 
+  function isGpt5OrLater(modelID: string): boolean {
+    const match = /^gpt-(\d+)/.exec(modelID)
+    if (!match) {
+      return false
+    }
+    return Number(match[1]) >= 5
+  }
+
+  function shouldUseCopilotResponsesApi(modelID: string): boolean {
+    return isGpt5OrLater(modelID) && !modelID.startsWith("gpt-5-mini")
+  }
+
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
     "@ai-sdk/anthropic": createAnthropic,
@@ -120,12 +132,7 @@ export namespace Provider {
       return {
         autoload: false,
         async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          // All GPT-5* models support the /responses API with reasoning
-          // But only GPT-5* models
-          if (modelID.startsWith("gpt-5")) {
-            return sdk.responses(modelID)
-          }
-          return sdk.chat(modelID)
+          return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
         },
         options: {},
       }
@@ -134,10 +141,7 @@ export namespace Provider {
       return {
         autoload: false,
         async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          if (modelID.startsWith("gpt-5")) {
-            return sdk.responses(modelID)
-          }
-          return sdk.chat(modelID)
+          return shouldUseCopilotResponsesApi(modelID) ? sdk.responses(modelID) : sdk.chat(modelID)
         },
         options: {},
       }
@@ -210,33 +214,12 @@ export namespace Provider {
       // Only use credential chain if no bearer token exists
       // Bearer token takes precedence over credential chain (profiles, access keys, IAM roles, web identity tokens)
       if (!awsBearerToken) {
-        const awsSdkPath = await BunProc.install("@aws-sdk/credential-providers")
-
-        // Helper to load credential provider with bundled/unbundled export handling
-        // When shuvcode bundles via Bun.build(), the export structure changes:
-        // - Unbundled (upstream): module.fromNodeProviderChain (direct named export)
-        // - Bundled (shuvcode): module.default.fromNodeProviderChain or module.default.default.fromNodeProviderChain
-        const loadCredentialProvider = async (options: { profile?: string }) => {
-          const awsSdkModule = await import(awsSdkPath)
-          // Handle both named exports and multiple default wrappers produced by Bun
-          const fromNodeProviderChain =
-            awsSdkModule.fromNodeProviderChain ??
-            awsSdkModule.default?.fromNodeProviderChain ??
-            awsSdkModule.default?.default?.fromNodeProviderChain
-
-          if (!fromNodeProviderChain) {
-            throw new Error(
-              "AWS SDK credentials provider is missing fromNodeProviderChain export. " +
-                "Inspect ~/.cache/opencode/bundled for the actual module shape and adjust this helper if Bun changes its wrapper.",
-            )
-          }
-          return fromNodeProviderChain(options)
-        }
+        const { fromNodeProviderChain } = await import(await BunProc.install("@aws-sdk/credential-providers"))
 
         // Build credential provider options (only pass profile if specified)
         const credentialProviderOptions = profile ? { profile } : {}
 
-        providerOptions.credentialProvider = await loadCredentialProvider(credentialProviderOptions)
+        providerOptions.credentialProvider = fromNodeProviderChain(credentialProviderOptions)
       }
 
       // Add custom endpoint if specified (endpoint takes precedence over baseURL)
@@ -618,7 +601,10 @@ export namespace Provider {
       api: {
         id: model.id,
         url: provider.api!,
-        npm: model.provider?.npm ?? provider.npm ?? "@ai-sdk/openai-compatible",
+        npm: iife(() => {
+          if (provider.id.startsWith("github-copilot")) return "@ai-sdk/github-copilot"
+          return model.provider?.npm ?? provider.npm ?? "@ai-sdk/openai-compatible"
+        }),
       },
       status: model.status ?? "active",
       headers: model.headers ?? {},
@@ -632,13 +618,13 @@ export namespace Provider {
         },
         experimentalOver200K: model.cost?.context_over_200k
           ? {
-            cache: {
-              read: model.cost.context_over_200k.cache_read ?? 0,
-              write: model.cost.context_over_200k.cache_write ?? 0,
-            },
-            input: model.cost.context_over_200k.input,
-            output: model.cost.context_over_200k.output,
-          }
+              cache: {
+                read: model.cost.context_over_200k.cache_read ?? 0,
+                write: model.cost.context_over_200k.cache_write ?? 0,
+              },
+              input: model.cost.context_over_200k.input,
+              output: model.cost.context_over_200k.output,
+            }
           : undefined,
       },
       limit: {
@@ -925,16 +911,6 @@ export namespace Provider {
         continue
       }
 
-      if (providerID === "github-copilot" || providerID === "github-copilot-enterprise") {
-        provider.models = mapValues(provider.models, (model) => ({
-          ...model,
-          api: {
-            ...model.api,
-            npm: "@ai-sdk/github-copilot",
-          },
-        }))
-      }
-
       const configProvider = config.provider?.[providerID]
 
       for (const [modelID, model] of Object.entries(provider.models)) {
@@ -1072,7 +1048,7 @@ export namespace Provider {
       const mod = await import(installedPath)
 
       const fn = mod[Object.keys(mod).find((key) => key.startsWith("create"))!]
-      const loaded = await fn({
+      const loaded = fn({
         name: model.providerID,
         ...options,
       })
