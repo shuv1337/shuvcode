@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test"
-import { createSdk, dirSlug, getWorktree, promptSelector, sessionPath, connectingSelector } from "./utils"
+import { createSdk, dirSlug, getWorktree, promptSelector, sessionPath, waitForAppReady } from "./utils"
 
 type TestFixtures = {
   sdk: ReturnType<typeof createSdk>
@@ -31,8 +31,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   gotoSession: async ({ page, directory }, use) => {
     const gotoSession = async (sessionID?: string) => {
       await page.goto(sessionPath(directory, sessionID))
-      // Wait for app to finish connecting (may show "Connecting to server..." briefly)
-      await expect(page.locator(connectingSelector)).toHaveCount(0, { timeout: 30000 })
+      // Wait for app to be ready (may show loading states briefly)
+      await waitForAppReady(page)
       await expect(page.locator(promptSelector)).toBeVisible({ timeout: 15000 })
     }
     await use(gotoSession)
