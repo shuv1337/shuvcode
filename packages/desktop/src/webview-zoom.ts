@@ -23,6 +23,7 @@ window.addEventListener("keydown", (event) => {
     } else {
       return
     }
+    event.preventDefault()
     zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM_LEVEL), MAX_ZOOM_LEVEL)
     invoke("plugin:webview|set_webview_zoom", {
       value: zoomLevel,
