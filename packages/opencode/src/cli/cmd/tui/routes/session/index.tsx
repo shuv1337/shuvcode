@@ -836,7 +836,7 @@ export function Session() {
 
             // Open with EDITOR if available
             const result = await Editor.open({ value: transcript, renderer })
-            if (result?.ok) {
+            if (result.ok) {
               await Bun.write(filepath, result.content)
             }
 
