@@ -107,7 +107,7 @@ export const SPINNERS: Record<string, string[]> = {
 }
 
 /** Default spinner key */
-export const DEFAULT_SPINNER_KEY = "DUAL_DOTS_SPIN"
+export const DEFAULT_SPINNER_KEY = "DOTS"
 
 /** Default spinner interval in milliseconds */
 export const DEFAULT_SPINNER_INTERVAL_MS = 60
