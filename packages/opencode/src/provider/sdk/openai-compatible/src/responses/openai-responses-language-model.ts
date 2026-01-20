@@ -827,13 +827,11 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
     > = {}
 
     // Track current active reasoning output_index for correlating summary events
-    // (fallback for providers that omit output_index on summary events).
     let currentReasoningOutputIndex: number | null = null
 
-    // Track stable text part ids per output_index.
-    // Copilot may change item_id across text deltas; normalize to one id per output item.
-    const activeTextIds: Record<number, string> = {}
-    const startedTextItemIds = new Set<string>()
+    // Track a stable text part id for the current assistant message.
+    // Copilot may change item_id across text deltas; normalize to one id.
+    let currentTextId: string | null = null
 
     let serviceTier: string | undefined
 
@@ -930,7 +928,7 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                 })
               } else if (value.item.type === "message") {
                 // Start a stable text part for this assistant message
-                activeTextIds[value.output_index] = value.item.id
+                currentTextId = value.item.id
                 controller.enqueue({
                   type: "text-start",
                   id: value.item.id,
@@ -1093,19 +1091,12 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                   },
                 })
               } else if (value.item.type === "message") {
-                const textId = activeTextIds[value.output_index]
-                if (textId) {
+                if (currentTextId) {
                   controller.enqueue({
                     type: "text-end",
-                    id: textId,
+                    id: currentTextId,
                   })
-                  delete activeTextIds[value.output_index]
-                } else if (startedTextItemIds.has(value.item.id)) {
-                  controller.enqueue({
-                    type: "text-end",
-                    id: value.item.id,
-                  })
-                  startedTextItemIds.delete(value.item.id)
+                  currentTextId = null
                 }
               } else if (isResponseOutputItemDoneReasoningChunk(value)) {
                 const activeReasoningPart = activeReasoning[value.output_index]
@@ -1196,38 +1187,21 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                 modelId: value.response.model,
               })
             } else if (isTextDeltaChunk(value)) {
-              const outputIndex = value.output_index
-              let textId: string
-
-              if (typeof outputIndex === "number") {
-                textId = activeTextIds[outputIndex] ?? value.item_id
-                if (!activeTextIds[outputIndex]) {
-                  controller.enqueue({
-                    type: "text-start",
-                    id: textId,
-                    providerMetadata: {
-                      openai: { itemId: value.item_id },
-                    },
-                  })
-                  activeTextIds[outputIndex] = textId
-                }
-              } else {
-                textId = value.item_id
-                if (!startedTextItemIds.has(textId)) {
-                  startedTextItemIds.add(textId)
-                  controller.enqueue({
-                    type: "text-start",
-                    id: textId,
-                    providerMetadata: {
-                      openai: { itemId: value.item_id },
-                    },
-                  })
-                }
+              // Ensure a text-start exists, and normalize deltas to a stable id
+              if (!currentTextId) {
+                currentTextId = value.item_id
+                controller.enqueue({
+                  type: "text-start",
+                  id: currentTextId,
+                  providerMetadata: {
+                    openai: { itemId: value.item_id },
+                  },
+                })
               }
 
               controller.enqueue({
                 type: "text-delta",
-                id: textId,
+                id: currentTextId,
                 delta: value.delta,
               })
 
@@ -1235,9 +1209,8 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                 logprobs.push(value.logprobs)
               }
             } else if (isResponseReasoningSummaryPartAddedChunk(value)) {
-              const outputIndex =
-                typeof value.output_index === "number" ? value.output_index : currentReasoningOutputIndex
-              const activeItem = outputIndex !== null ? activeReasoning[outputIndex] : null
+              const activeItem =
+                currentReasoningOutputIndex !== null ? activeReasoning[currentReasoningOutputIndex] : null
 
               // the first reasoning start is pushed in isResponseOutputItemAddedReasoningChunk.
               if (activeItem && value.summary_index > 0) {
@@ -1255,9 +1228,8 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                 })
               }
             } else if (isResponseReasoningSummaryTextDeltaChunk(value)) {
-              const outputIndex =
-                typeof value.output_index === "number" ? value.output_index : currentReasoningOutputIndex
-              const activeItem = outputIndex !== null ? activeReasoning[outputIndex] : null
+              const activeItem =
+                currentReasoningOutputIndex !== null ? activeReasoning[currentReasoningOutputIndex] : null
 
               if (activeItem) {
                 controller.enqueue({
@@ -1309,12 +1281,10 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
           },
 
           flush(controller) {
-            // Close any dangling text parts
-            for (const textId of Object.values(activeTextIds)) {
-              controller.enqueue({ type: "text-end", id: textId })
-            }
-            for (const textId of startedTextItemIds) {
-              controller.enqueue({ type: "text-end", id: textId })
+            // Close any dangling text part
+            if (currentTextId) {
+              controller.enqueue({ type: "text-end", id: currentTextId })
+              currentTextId = null
             }
 
             const providerMetadata: SharedV2ProviderMetadata = {
@@ -1356,8 +1326,6 @@ const usageSchema = z.object({
 const textDeltaChunkSchema = z.object({
   type: z.literal("response.output_text.delta"),
   item_id: z.string(),
-  output_index: z.number().optional(),
-  content_index: z.number().optional(),
   delta: z.string(),
   logprobs: LOGPROBS_SCHEMA.nullish(),
 })
@@ -1536,14 +1504,12 @@ const responseAnnotationAddedSchema = z.object({
 const responseReasoningSummaryPartAddedSchema = z.object({
   type: z.literal("response.reasoning_summary_part.added"),
   item_id: z.string(),
-  output_index: z.number().optional(),
   summary_index: z.number(),
 })
 
 const responseReasoningSummaryTextDeltaSchema = z.object({
   type: z.literal("response.reasoning_summary_text.delta"),
   item_id: z.string(),
-  output_index: z.number().optional(),
   summary_index: z.number(),
   delta: z.string(),
 })

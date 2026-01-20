@@ -37,7 +37,7 @@ export function DialogSelectTheme(props: { originalTheme: string }) {
         current={currentTheme()}
         filterKeys={["name", "id"]}
         onSelect={handleSelect}
-        onActiveChange={handleActiveChange}
+        onMove={handleActiveChange}
       >
         {(theme: Theme) => (
           <div class="flex items-center gap-2">
@@ -80,7 +80,13 @@ export function ThemePicker(props: { class?: string; mobile?: boolean }) {
         </Tooltip>
       }
     >
-      <Button variant="ghost" size="large" class="w-full justify-start gap-3 px-2 rounded-lg" icon="glasses" onClick={openDialog}>
+      <Button
+        variant="ghost"
+        size="large"
+        class="w-full justify-start gap-3 px-2 rounded-lg"
+        icon="glasses"
+        onClick={openDialog}
+      >
         <span class="text-14-medium text-text-strong">Theme</span>
       </Button>
     </Show>
