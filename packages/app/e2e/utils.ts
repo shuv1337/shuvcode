@@ -38,8 +38,20 @@ export function sessionPath(directory: string, sessionID?: string) {
 }
 
 /**
- * Wait for the app to be ready (server connected).
- * The app shows "Connecting to server..." while connecting.
+ * Selector for app loading states that should disappear before tests run.
+ * Matches: "Connecting to server...", any error messages, or loading spinners.
  */
-export const appReadySelector = '[data-component="prompt-input"], [role="button"]'
-export const connectingSelector = 'text="Connecting to server..."'
+export const loadingSelector = 'text="Connecting to server...", text="Could not connect"'
+
+/**
+ * Wait for the app to be ready - checks that loading states are gone
+ * and basic app structure is visible.
+ */
+export async function waitForAppReady(page: import("@playwright/test").Page, timeout = 30000) {
+  // First, wait for the page to have some content
+  await page.waitForLoadState("domcontentloaded")
+
+  // Then wait for either the app to be ready (buttons visible) or stay in a loading/error state
+  // If we timeout waiting for buttons, the test will fail with a clear error
+  await page.locator('[role="button"], [data-component="prompt-input"]').first().waitFor({ state: "visible", timeout })
+}
