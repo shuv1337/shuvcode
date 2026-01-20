@@ -9,11 +9,12 @@ export interface DialogProps extends ParentProps {
   size?: "sm" | "md" | "lg"
   class?: ComponentProps<"div">["class"]
   classList?: ComponentProps<"div">["classList"]
+  fit?: boolean
 }
 
 export function Dialog(props: DialogProps) {
   return (
-    <div data-component="dialog">
+    <div data-component="dialog" data-fit={props.fit ? true : undefined}>
       <div data-slot="dialog-container" data-size={props.size}>
         <Kobalte.Content
           data-slot="dialog-content"

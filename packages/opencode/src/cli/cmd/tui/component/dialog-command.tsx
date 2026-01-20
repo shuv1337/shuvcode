@@ -61,7 +61,7 @@ function init() {
     trigger(name: string, source?: "prompt") {
       for (const option of options()) {
         if (option.value === name) {
-          option.onSelect?.(dialog, source)
+          option.onSelect?.(dialog)
           return
         }
       }
@@ -82,6 +82,17 @@ function init() {
     },
     get options() {
       return options()
+    },
+    slashes() {
+      return options()
+        .filter((o) => (o as CommandOption).value.startsWith("/"))
+        .map((o) => ({
+          display: (o as any).display ?? (o as CommandOption).value,
+          value: (o as CommandOption).value,
+          description: (o as CommandOption).description,
+          aliases: (o as any).aliases,
+          onSelect: () => (o as CommandOption).onSelect?.(dialog),
+        })) as any
     },
   }
   return result

@@ -19,7 +19,6 @@ import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import { parseUriList } from "../../util/uri"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
@@ -31,7 +30,6 @@ import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
-import { DialogUsage, type UsageEntry } from "../dialog-usage"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 
 export type PromptProps = {
@@ -39,7 +37,6 @@ export type PromptProps = {
   visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
-  onSearchToggle?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   showPlaceholder?: boolean
@@ -62,20 +59,6 @@ export function Prompt(props: PromptProps) {
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
 
-  // Paste coalescing: buffer rapid consecutive paste events (e.g., from MobaXterm
-  // which fragments large pastes into multiple bracketed paste sequences)
-  const pasteBuffer: { chunks: string[]; timer: Timer | null } = {
-    chunks: [],
-    timer: null,
-  }
-  const [isPasting, setIsPasting] = createSignal(false)
-  const PASTE_DEBOUNCE_MS = 100
-
-  // Cleanup paste timer on unmount
-  onCleanup(() => {
-    if (pasteBuffer.timer) clearTimeout(pasteBuffer.timer)
-  })
-
   const keybind = useKeybind()
   const local = useLocal()
   const sdk = useSDK()
@@ -90,34 +73,6 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
-
-  function handleUsageCommand(commandText: string) {
-    const parts = commandText.trim().split(/\s+/)
-    const provider = parts.length > 1 && !parts[1].startsWith("-") ? parts[1] : undefined
-    const refresh = parts.some((part) => part === "--refresh" || part === "-r")
-
-    type UsageResponse = {
-      entries: UsageEntry[]
-      error?: string
-    }
-
-    sdk.client.usage
-      .get({ provider, refresh })
-      .then((res) => {
-        const data = res.data as UsageResponse | undefined
-        if (!data) return
-        if (data.entries.length > 0) {
-          dialog.replace(() => <DialogUsage entries={data.entries} />)
-          return
-        }
-        const message = data.error ?? "No usage data available."
-        DialogAlert.show(dialog, "Usage", message)
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        DialogAlert.show(dialog, "Usage", message)
-      })
-  }
 
   function promptModelWarning() {
     toast.show({
@@ -202,7 +157,7 @@ export function Prompt(props: PromptProps) {
         title: "Clear prompt",
         value: "prompt.clear",
         category: "Prompt",
-        disabled: true,
+        hidden: true,
         onSelect: (dialog) => {
           input.extmarks.clear()
           input.clear()
@@ -212,9 +167,9 @@ export function Prompt(props: PromptProps) {
       {
         title: "Submit prompt",
         value: "prompt.submit",
-        disabled: true,
         keybind: "input_submit",
         category: "Prompt",
+        hidden: true,
         onSelect: (dialog) => {
           if (!input.focused) return
           submit()
@@ -224,9 +179,9 @@ export function Prompt(props: PromptProps) {
       {
         title: "Paste",
         value: "prompt.paste",
-        disabled: true,
         keybind: "input_paste",
         category: "Prompt",
+        hidden: true,
         onSelect: async () => {
           const content = await Clipboard.read()
           if (content?.mime.startsWith("image/")) {
@@ -242,8 +197,9 @@ export function Prompt(props: PromptProps) {
         title: "Interrupt session",
         value: "session.interrupt",
         keybind: "session_interrupt",
-        disabled: status().type === "idle",
         category: "Session",
+        hidden: true,
+        enabled: status().type !== "idle",
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
@@ -274,7 +230,10 @@ export function Prompt(props: PromptProps) {
         category: "Session",
         keybind: "editor_open",
         value: "prompt.editor",
-        onSelect: async (dialog, trigger) => {
+        slash: {
+          name: "editor",
+        },
+        onSelect: async (dialog) => {
           dialog.clear()
 
           // replace summarized text parts with the actual text
@@ -287,7 +246,7 @@ export function Prompt(props: PromptProps) {
 
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
-          const value = trigger === "prompt" ? "" : text
+          const value = text
           const result = await Editor.open({ value, renderer })
           if (!result.ok) return
 
@@ -478,7 +437,7 @@ export function Prompt(props: PromptProps) {
       title: "Stash prompt",
       value: "prompt.stash",
       category: "Prompt",
-      disabled: !store.prompt.input,
+      enabled: !!store.prompt.input,
       onSelect: (dialog) => {
         if (!store.prompt.input) return
         stash.push({
@@ -496,7 +455,7 @@ export function Prompt(props: PromptProps) {
       title: "Stash pop",
       value: "prompt.stash.pop",
       category: "Prompt",
-      disabled: stash.list().length === 0,
+      enabled: stash.list().length > 0,
       onSelect: (dialog) => {
         const entry = stash.pop()
         if (entry) {
@@ -512,7 +471,7 @@ export function Prompt(props: PromptProps) {
       title: "Stash list",
       value: "prompt.stash.list",
       category: "Prompt",
-      disabled: stash.list().length === 0,
+      enabled: stash.list().length > 0,
       onSelect: (dialog) => {
         dialog.replace(() => (
           <DialogStash
@@ -530,8 +489,7 @@ export function Prompt(props: PromptProps) {
 
   async function submit() {
     if (props.disabled) return
-    if (autocomplete?.visible && !store.prompt.input.startsWith("/usage")) return
-    if (isPasting()) return // Block submit during paste coalescing
+    if (autocomplete?.visible) return
     if (!store.prompt.input) return
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
@@ -575,16 +533,7 @@ export function Prompt(props: PromptProps) {
     const currentMode = store.mode
     const variant = local.model.variant.current()
 
-    const isShell = store.mode === "shell"
-    const isUsage = inputText.startsWith("/usage")
-    const isCommand =
-      inputText.startsWith("/") &&
-      iife(() => {
-        const command = inputText.split(" ")[0].slice(1)
-        return sync.data.command.some((x) => x.name === command)
-      })
-
-    if (isShell) {
+    if (store.mode === "shell") {
       sdk.client.session.shell({
         sessionID,
         agent: local.agent.current().name,
@@ -595,23 +544,15 @@ export function Prompt(props: PromptProps) {
         command: inputText,
       })
       setStore("mode", "normal")
-    }
-
-    if (isUsage) {
-      handleUsageCommand(inputText)
-      input.extmarks.clear()
-      setStore("prompt", {
-        input: "",
-        parts: [],
+    } else if (
+      inputText.startsWith("/") &&
+      iife(() => {
+        const command = inputText.split(" ")[0].slice(1)
+        console.log(command)
+        return sync.data.command.some((x) => x.name === command)
       })
-      setStore("extmarkToPartIndex", new Map())
-      props.onSubmit?.()
-      input.clear()
-      return
-    }
-
-    if (isCommand) {
-      const [command, ...args] = inputText.split(" ")
+    ) {
+      let [command, ...args] = inputText.split(" ")
       sdk.client.session.command({
         sessionID,
         command: command.slice(1),
@@ -627,30 +568,29 @@ export function Prompt(props: PromptProps) {
             ...x,
           })),
       })
+    } else {
+      sdk.client.session
+        .prompt({
+          sessionID,
+          ...selectedModel,
+          messageID,
+          agent: local.agent.current().name,
+          model: selectedModel,
+          variant,
+          parts: [
+            {
+              id: Identifier.ascending("part"),
+              type: "text",
+              text: inputText,
+            },
+            ...nonTextParts.map((x) => ({
+              id: Identifier.ascending("part"),
+              ...x,
+            })),
+          ],
+        })
+        .catch(() => {})
     }
-
-    if (!isShell && !isUsage && !isCommand) {
-      sdk.client.session.prompt({
-        sessionID,
-        ...selectedModel,
-        messageID,
-        agent: local.agent.current().name,
-        model: selectedModel,
-        variant,
-        parts: [
-          {
-            id: Identifier.ascending("part"),
-            type: "text",
-            text: inputText,
-          },
-          ...nonTextParts.map((x) => ({
-            id: Identifier.ascending("part"),
-            ...x,
-          })),
-        ],
-      })
-    }
-
     history.append({
       ...store.prompt,
       mode: currentMode,
@@ -674,22 +614,6 @@ export function Prompt(props: PromptProps) {
     input.clear()
   }
   const exit = useExit()
-
-  let lastExitAttempt = 0
-
-  async function tryExit() {
-    const now = Date.now()
-    if (now - lastExitAttempt < 2000) {
-      await exit()
-      return
-    }
-    lastExitAttempt = now
-    toast.show({
-      variant: "warning",
-      message: "Press again to exit",
-      duration: 2000,
-    })
-  }
 
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
@@ -768,103 +692,19 @@ export function Prompt(props: PromptProps) {
     return
   }
 
-  // Process a coalesced paste (called after debounce timer expires)
-  async function processCoalescedPaste(pastedContent: string) {
-    if (!pastedContent) {
-      command.trigger("prompt.paste")
-      return
-    }
-
-    // Handle file:// URIs or text/uri-list (common for drag-and-drop on Linux)
-    if (pastedContent.includes("file://")) {
-      const paths = parseUriList(pastedContent)
-      if (paths.length > 0) {
-        let handled = false
-        for (const path of paths) {
-          try {
-            const file = Bun.file(path)
-            if (file.type.startsWith("image/")) {
-              const content = await file
-                .arrayBuffer()
-                .then((buffer) => Buffer.from(buffer).toString("base64"))
-                .catch(() => {})
-              if (content) {
-                await pasteImage({
-                  filename: file.name,
-                  mime: file.type,
-                  content,
-                })
-                handled = true
-                continue
-              }
-            }
-          } catch {}
-        }
-
-        if (handled) return
-      }
-    }
-
-    // Check if pasted content is a file path
-    const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
-    const isUrl = /^(https?):\/\//.test(filepath)
-    if (!isUrl) {
-      try {
-        const file = Bun.file(filepath)
-        // Handle SVG as raw text content, not as base64 image
-        if (file.type === "image/svg+xml") {
-          const content = await file.text().catch(() => {})
-          if (content) {
-            pasteText(content, `[SVG: ${file.name ?? "image"}]`)
-            return
-          }
-        }
-        if (file.type.startsWith("image/")) {
-          const content = await file
-            .arrayBuffer()
-            .then((buffer) => Buffer.from(buffer).toString("base64"))
-            .catch(() => {})
-          if (content) {
-            await pasteImage({
-              filename: file.name,
-              mime: file.type,
-              content,
-            })
-            return
-          }
-        }
-      } catch {}
-    }
-
-    const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-    if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
-      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-      return
-    }
-
-    // Insert the text directly for small pastes
-    input.insertText(pastedContent)
-    setTimeout(() => {
-      input.getLayoutNode().markDirty()
-      input.gotoBufferEnd()
-      renderer.requestRender()
-    }, 0)
-  }
-
   const highlight = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
     return local.agent.color(local.agent.current().name)
   })
 
-  const hasVariants = createMemo(() => local.model.variant.list().length > 0)
   const showVariant = createMemo(() => {
-    if (!hasVariants()) return false
+    const variants = local.model.variant.list()
+    if (variants.length === 0) return false
     const current = local.model.variant.current()
     return !!current
   })
 
-  const spinnerColor = createMemo(() => local.agent.color(local.agent.current().name))
   const spinnerDef = createMemo(() => {
     const color = local.agent.color(local.agent.current().name)
     return {
@@ -872,12 +712,14 @@ export function Prompt(props: PromptProps) {
         color,
         style: "blocks",
         inactiveFactor: 0.6,
+        // enableFading: false,
         minAlpha: 0.3,
       }),
       color: createColors({
         color,
         style: "blocks",
         inactiveFactor: 0.6,
+        // enableFading: false,
         minAlpha: 0.3,
       }),
     }
@@ -904,7 +746,6 @@ export function Prompt(props: PromptProps) {
         fileStyleId={fileStyleId}
         agentStyleId={agentStyleId}
         promptPartTypeId={() => promptPartTypeId}
-        onUsage={handleUsageCommand}
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
         <box
@@ -971,7 +812,7 @@ export function Prompt(props: PromptProps) {
                 }
                 if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
-                    await tryExit()
+                    await exit()
                     // Don't preventDefault - let textarea potentially handle the event
                     e.preventDefault()
                     return
@@ -1016,36 +857,71 @@ export function Prompt(props: PromptProps) {
                 }
               }}
               onSubmit={submit}
-              onPaste={(event: PasteEvent) => {
-                event.preventDefault()
-                if (props.disabled) return
+              onPaste={async (event: PasteEvent) => {
+                if (props.disabled) {
+                  event.preventDefault()
+                  return
+                }
 
                 // Normalize line endings at the boundary
                 // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
                 // Replace CRLF first, then any remaining CR
                 const normalizedText = event.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+                const pastedContent = normalizedText.trim()
+                if (!pastedContent) {
+                  command.trigger("prompt.paste")
+                  return
+                }
 
-                // Buffer the paste content for coalescing
-                // Some terminals (e.g., MobaXterm) fragment large pastes into multiple
-                // bracketed paste sequences, which would otherwise trigger premature submit
-                // Don't trim individual chunks - preserve inter-fragment whitespace
-                pasteBuffer.chunks.push(normalizedText)
-                setIsPasting(true)
-
-                // Reset the debounce timer
-                if (pasteBuffer.timer) clearTimeout(pasteBuffer.timer)
-                pasteBuffer.timer = setTimeout(async () => {
-                  // Coalesce all chunks and process
-                  const coalesced = pasteBuffer.chunks.join("").trim()
-                  pasteBuffer.chunks = []
-                  pasteBuffer.timer = null
+                // trim ' from the beginning and end of the pasted content. just
+                // ' and nothing else
+                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+                const isUrl = /^(https?):\/\//.test(filepath)
+                if (!isUrl) {
                   try {
-                    await processCoalescedPaste(coalesced)
-                  } finally {
-                    // Only clear isPasting if no new paste arrived during processing
-                    if (!pasteBuffer.timer) setIsPasting(false)
-                  }
-                }, PASTE_DEBOUNCE_MS)
+                    const file = Bun.file(filepath)
+                    // Handle SVG as raw text content, not as base64 image
+                    if (file.type === "image/svg+xml") {
+                      event.preventDefault()
+                      const content = await file.text().catch(() => {})
+                      if (content) {
+                        pasteText(content, `[SVG: ${file.name ?? "image"}]`)
+                        return
+                      }
+                    }
+                    if (file.type.startsWith("image/")) {
+                      event.preventDefault()
+                      const content = await file
+                        .arrayBuffer()
+                        .then((buffer) => Buffer.from(buffer).toString("base64"))
+                        .catch(() => {})
+                      if (content) {
+                        await pasteImage({
+                          filename: file.name,
+                          mime: file.type,
+                          content,
+                        })
+                        return
+                      }
+                    }
+                  } catch {}
+                }
+
+                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+                if (
+                  (lineCount >= 3 || pastedContent.length > 150) &&
+                  !sync.data.config.experimental?.disable_paste_summary
+                ) {
+                  event.preventDefault()
+                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+                  return
+                }
+
+                // Force layout update and render for the pasted content
+                setTimeout(() => {
+                  input.getLayoutNode().markDirty()
+                  renderer.requestRender()
+                }, 0)
               }}
               ref={(r: TextareaRenderable) => {
                 input = r
@@ -1194,9 +1070,11 @@ export function Prompt(props: PromptProps) {
             <box gap={2} flexDirection="row">
               <Switch>
                 <Match when={store.mode === "normal"}>
-                  <text fg={theme.text}>
-                    {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                  </text>
+                  <Show when={local.model.variant.list().length > 0}>
+                    <text fg={theme.text}>
+                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
+                    </text>
+                  </Show>
                   <text fg={theme.text}>
                     {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
                   </text>

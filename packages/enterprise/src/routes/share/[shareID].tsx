@@ -16,7 +16,6 @@ import { iife } from "@opencode-ai/util/iife"
 import { Binary } from "@opencode-ai/util/binary"
 import { NamedError } from "@opencode-ai/util/error"
 import { DateTime } from "luxon"
-import { SessionMessageRail } from "@opencode-ai/ui/session-message-rail"
 import { createStore } from "solid-js/store"
 import z from "zod"
 import NotFound from "../[...404]"
@@ -26,6 +25,7 @@ import { Diff as SSRDiff } from "@opencode-ai/ui/diff-ssr"
 import { clientOnly } from "@solidjs/start"
 import { type IconName } from "@opencode-ai/ui/icons/provider"
 import { Meta, Title } from "@solidjs/meta"
+import { Base64 } from "js-base64"
 
 const ClientOnlyDiff = clientOnly(() => import("@opencode-ai/ui/diff").then((m) => ({ default: m.Diff })))
 const ClientOnlyCode = clientOnly(() => import("@opencode-ai/ui/code").then((m) => ({ default: m.Code })))
@@ -185,8 +185,27 @@ export default function () {
           if (!match().found) throw new Error(`Session ${data().sessionID} not found`)
           const info = createMemo(() => data().session[match().index])
           const ogImage = createMemo(() => {
-            // Use static fallback image for shuvcode
-            return `/social-share.png`
+            const models = new Set<string>()
+            const messages = data().message[data().sessionID] ?? []
+            for (const msg of messages) {
+              if (msg.role === "assistant" && msg.modelID) {
+                models.add(msg.modelID)
+              }
+            }
+            const modelIDs = Array.from(models)
+            const encodedTitle = encodeURIComponent(Base64.encode(encodeURIComponent(info().title.substring(0, 700))))
+            let modelParam: string
+            if (modelIDs.length === 1) {
+              modelParam = modelIDs[0]
+            } else if (modelIDs.length === 2) {
+              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs[1]}`)
+            } else if (modelIDs.length > 2) {
+              modelParam = encodeURIComponent(`${modelIDs[0]} & ${modelIDs.length - 1} others`)
+            } else {
+              modelParam = "unknown"
+            }
+            const version = `v${info().version}`
+            return `https://social-cards.sst.dev/opencode-share/${encodedTitle}.png?model=${modelParam}&version=${version}&id=${data().shareID}`
           })
 
           return (
@@ -194,7 +213,7 @@ export default function () {
               <Show when={info().title}>
                 <Title>{info().title} | shuvcode</Title>
               </Show>
-              <Meta name="description" content="shuvcode - AI coding agent for the terminal." />
+              <Meta name="description" content="opencode - The AI coding agent built for the terminal." />
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <ClientOnlyWorkerPoolProvider>
@@ -204,6 +223,7 @@ export default function () {
                       {iife(() => {
                         const [store, setStore] = createStore({
                           messageId: undefined as string | undefined,
+                          expandedSteps: {} as Record<string, boolean>,
                         })
                         const messages = createMemo(() =>
                           data().sessionID
@@ -245,20 +265,22 @@ export default function () {
 
                         const title = () => (
                           <div class="flex flex-col gap-4">
-                            <div class="h-8 flex gap-4 items-center justify-start self-stretch">
-                              <div class="pl-1 pr-2 flex items-center gap-1.5 bg-surface-strong shadow-xs-border-base">
-                                <AsciiMark scale={0.35} class="shrink-0" />
+                            <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
+                              <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit">
+                                <AsciiMark class="shrink-0 w-3 my-0.5" />
                                 <div class="text-12-mono text-text-base">v{info().version}</div>
                               </div>
-                              <div class="flex gap-2 items-center">
-                                <ProviderIcon
-                                  id={provider() as IconName}
-                                  class="size-3.5 shrink-0 text-icon-strong-base"
-                                />
-                                <div class="text-12-regular text-text-base">{model()?.name ?? modelID()}</div>
-                              </div>
-                              <div class="text-12-regular text-text-weaker">
-                                {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
+                              <div class="flex gap-4 items-center">
+                                <div class="flex gap-2 items-center">
+                                  <ProviderIcon
+                                    id={provider() as IconName}
+                                    class="size-3.5 shrink-0 text-icon-strong-base"
+                                  />
+                                  <div class="text-12-regular text-text-base">{model()?.name ?? modelID()}</div>
+                                </div>
+                                <div class="text-12-regular text-text-weaker">
+                                  {DateTime.fromMillis(info().time.created).toFormat("dd MMM yyyy, HH:mm")}
+                                </div>
                               </div>
                             </div>
                             <div class="text-left text-16-medium text-text-strong">{info().title}</div>
@@ -266,18 +288,20 @@ export default function () {
                         )
 
                         const turns = () => (
-                          <div class="relative mt-2 pt-6 pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
-                            <div class="px-4">{title()}</div>
+                          <div class="relative mt-2 pb-8 min-w-0 w-full h-full overflow-y-auto no-scrollbar">
+                            <div class="px-4 py-6">{title()}</div>
                             <div class="flex flex-col gap-15 items-start justify-start mt-4">
                               <For each={messages()}>
                                 {(message) => (
                                   <SessionTurn
                                     sessionID={data().sessionID}
+                                    sessionTitle={info().title}
                                     messageID={message.id}
+                                    stepsExpanded={store.expandedSteps[message.id] ?? false}
+                                    onStepsExpandedToggle={() => setStore("expandedSteps", message.id, (v) => !v)}
                                     classes={{
                                       root: "min-w-0 w-full relative",
-                                      content:
-                                        "flex flex-col justify-between !overflow-visible [&_[data-slot=session-turn-message-header]]:top-[-32px]",
+                                      content: "flex flex-col justify-between !overflow-visible",
                                       container: "px-4",
                                     }}
                                   />
@@ -285,7 +309,7 @@ export default function () {
                               </For>
                             </div>
                             <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
-                              <AsciiLogo scale={1.5} class="opacity-20" />
+                              <AsciiLogo class="w-58.5 opacity-12" />
                             </div>
                           </div>
                         )
@@ -295,8 +319,10 @@ export default function () {
                         return (
                           <div class="relative bg-background-stronger w-screen h-screen overflow-hidden flex flex-col">
                             <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
-                              <div class="flex items-center">
-                                <AsciiMark scale={0.6} />
+                              <div class="">
+                                <a href="https://opencode.ai">
+                                  <AsciiMark />
+                                </a>
                               </div>
                               <div class="flex gap-3 items-center">
                                 <IconButton
@@ -326,45 +352,36 @@ export default function () {
                                 <div
                                   classList={{
                                     "@container relative shrink-0 pt-14 flex flex-col gap-10 min-h-0 w-full": true,
-                                    "mx-auto max-w-146": !wide(),
                                   }}
                                 >
                                   <div
                                     classList={{
-                                      "w-full flex justify-start items-start min-w-0": true,
-                                      "max-w-146 mx-auto px-6": wide(),
-                                      "pr-6 pl-18": !wide() && messages().length > 1,
-                                      "px-6": !wide() && messages().length === 1,
+                                      "w-full flex justify-start items-start min-w-0 px-6": true,
                                     }}
                                   >
                                     {title()}
                                   </div>
                                   <div class="flex items-start justify-start h-full min-h-0">
-                                    <SessionMessageRail
-                                      messages={messages()}
-                                      current={activeMessage()}
-                                      onMessageSelect={setActiveMessage}
-                                      wide={wide()}
-                                    />
                                     <SessionTurn
                                       sessionID={data().sessionID}
                                       messageID={store.messageId ?? firstUserMessage()!.id!}
+                                      stepsExpanded={
+                                        store.expandedSteps[store.messageId ?? firstUserMessage()!.id!] ?? false
+                                      }
+                                      onStepsExpandedToggle={() => {
+                                        const id = store.messageId ?? firstUserMessage()!.id!
+                                        setStore("expandedSteps", id, (v) => !v)
+                                      }}
                                       classes={{
                                         root: "grow",
-                                        content: "flex flex-col justify-between items-start",
-                                        container:
-                                          "w-full pb-20 " +
-                                          (wide()
-                                            ? "max-w-146 mx-auto px-6"
-                                            : messages().length > 1
-                                              ? "pr-6 pl-18"
-                                              : "px-6"),
+                                        content: "flex flex-col justify-between",
+                                        container: "w-full pb-20 px-6",
                                       }}
                                     >
                                       <div
                                         classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}
                                       >
-                                        <AsciiLogo scale={1.5} class="opacity-20" />
+                                        <AsciiLogo class="w-58.5 opacity-12" />
                                       </div>
                                     </SessionTurn>
                                   </div>
