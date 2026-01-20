@@ -1107,7 +1107,7 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} width={42} />
+              <Sidebar sessionID={route.sessionID} />
             </Match>
             <Match when={!wide()}>
               <box
@@ -1119,7 +1119,7 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} width={42} overlay />
+                <Sidebar sessionID={route.sessionID} overlay />
               </box>
             </Match>
           </Switch>
