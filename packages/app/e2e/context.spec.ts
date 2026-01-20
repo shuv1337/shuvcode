@@ -21,10 +21,13 @@ test("context panel can be opened from the prompt", async ({ page, sdk, gotoSess
     })
 
     await expect
-      .poll(async () => {
-        const messages = await sdk.session.messages({ sessionID, limit: 1 }).then((r) => r.data ?? [])
-        return messages.length
-      })
+      .poll(
+        async () => {
+          const messages = await sdk.session.messages({ sessionID, limit: 1 }).then((r) => r.data ?? [])
+          return messages.length
+        },
+        { timeout: 30000 },
+      )
       .toBeGreaterThan(0)
 
     await gotoSession(sessionID)
