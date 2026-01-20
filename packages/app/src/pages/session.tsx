@@ -814,9 +814,21 @@ export default function Page() {
   })
 
   const isWorking = createMemo(() => status().type !== "idle")
+
   const autoScroll = createAutoScroll({
-    working: isWorking,
+    working: () => true,
   })
+
+  createEffect(
+    on(
+      isWorking,
+      (working, prev) => {
+        if (!working || prev) return
+        autoScroll.forceScrollToBottom()
+      },
+      { defer: true },
+    ),
+  )
 
   let scrollSpyFrame: number | undefined
   let scrollSpyTarget: HTMLDivElement | undefined
@@ -1127,26 +1139,36 @@ export default function Page() {
                     when={!mobileReview()}
                     fallback={
                       <div class="relative h-full overflow-hidden">
-                        <Show
-                          when={diffsReady()}
-                          fallback={<div class="px-4 py-4 text-text-weak">Loading changes...</div>}
-                        >
-                          <SessionReviewTab
-                            diffs={diffs}
-                            view={view}
-                            diffStyle="unified"
-                            onViewFile={(path) => {
-                              const value = file.tab(path)
-                              tabs().open(value)
-                              file.load(path)
-                            }}
-                            classes={{
-                              root: "pb-[calc(var(--prompt-height,8rem)+32px)]",
-                              header: "px-4",
-                              container: "px-4",
-                            }}
-                          />
-                        </Show>
+                        <Switch>
+                          <Match when={hasReview()}>
+                            <Show
+                              when={diffsReady()}
+                              fallback={<div class="px-4 py-4 text-text-weak">Loading changes...</div>}
+                            >
+                              <SessionReviewTab
+                                diffs={diffs}
+                                view={view}
+                                diffStyle="unified"
+                                onViewFile={(path) => {
+                                  const value = file.tab(path)
+                                  tabs().open(value)
+                                  file.load(path)
+                                }}
+                                classes={{
+                                  root: "pb-[calc(var(--prompt-height,8rem)+32px)]",
+                                  header: "px-4",
+                                  container: "px-4",
+                                }}
+                              />
+                            </Show>
+                          </Match>
+                          <Match when={true}>
+                            <div class="h-full px-4 pb-30 flex flex-col items-center justify-center text-center gap-6">
+                              <Icon name="checklist" class="w-10 h-10 opacity-20" />
+                              <div class="text-13-regular text-text-weak max-w-56">No changes in this session yet</div>
+                            </div>
+                          </Match>
+                        </Switch>
                       </div>
                     }
                   >
@@ -1214,6 +1236,7 @@ export default function Page() {
                                   data-message-id={message.id}
                                   classList={{
                                     "min-w-0 w-full max-w-full": true,
+                                    "md:max-w-200": !showTabs(),
                                     "last:min-h-[calc(100vh-5.5rem-var(--prompt-height,8rem)-64px)] md:last:min-h-[calc(100vh-4.5rem-var(--prompt-height,10rem)-64px)]":
                                       platform.platform !== "desktop",
                                     "last:min-h-[calc(100vh-7rem-var(--prompt-height,8rem)-64px)] md:last:min-h-[calc(100vh-6rem-var(--prompt-height,10rem)-64px)]":
@@ -1398,22 +1421,32 @@ export default function Page() {
                   <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden contain-strict">
                     <Show when={activeTab() === "review"}>
                       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
-                        <Show
-                          when={diffsReady()}
-                          fallback={<div class="px-6 py-4 text-text-weak">Loading changes...</div>}
-                        >
-                          <SessionReviewTab
-                            diffs={diffs}
-                            view={view}
-                            diffStyle={layout.review.diffStyle()}
-                            onDiffStyleChange={layout.review.setDiffStyle}
-                            onViewFile={(path) => {
-                              const value = file.tab(path)
-                              tabs().open(value)
-                              file.load(path)
-                            }}
-                          />
-                        </Show>
+                        <Switch>
+                          <Match when={hasReview()}>
+                            <Show
+                              when={diffsReady()}
+                              fallback={<div class="px-6 py-4 text-text-weak">Loading changes...</div>}
+                            >
+                              <SessionReviewTab
+                                diffs={diffs}
+                                view={view}
+                                diffStyle={layout.review.diffStyle()}
+                                onDiffStyleChange={layout.review.setDiffStyle}
+                                onViewFile={(path) => {
+                                  const value = file.tab(path)
+                                  tabs().open(value)
+                                  file.load(path)
+                                }}
+                              />
+                            </Show>
+                          </Match>
+                          <Match when={true}>
+                            <div class="h-full px-6 pb-30 flex flex-col items-center justify-center text-center gap-6">
+                              <Icon name="checklist" class="w-10 h-10 opacity-20" />
+                              <div class="text-13-regular text-text-weak max-w-56">No changes in this session yet</div>
+                            </div>
+                          </Match>
+                        </Switch>
                       </div>
                     </Show>
                   </Tabs.Content>
