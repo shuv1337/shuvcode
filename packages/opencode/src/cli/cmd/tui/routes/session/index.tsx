@@ -836,7 +836,7 @@ export function Session() {
 
             // Open with EDITOR if available
             const result = await Editor.open({ value: transcript, renderer })
-            if (result.ok) {
+            if (result?.ok) {
               await Bun.write(filepath, result.content)
             }
 
@@ -1107,7 +1107,7 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
+              <Sidebar sessionID={route.sessionID} width={42} />
             </Match>
             <Match when={!wide()}>
               <box
@@ -1119,7 +1119,7 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} overlay />
+                <Sidebar sessionID={route.sessionID} width={42} overlay />
               </box>
             </Match>
           </Switch>

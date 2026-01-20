@@ -248,7 +248,7 @@ export function Prompt(props: PromptProps) {
 
           const value = text
           const result = await Editor.open({ value, renderer })
-          if (!result.ok) return
+          if (!result?.ok) return
 
           const content = result.content
           input.setText(content)

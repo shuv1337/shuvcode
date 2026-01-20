@@ -21,7 +21,7 @@ export function DialogSelectTheme(props: { originalTheme: string }) {
     dialog.close()
   }
 
-  function handleMove(theme: Theme | undefined) {
+  function handleActiveChange(theme: Theme | undefined) {
     if (!theme) return
     setPreviewTheme(theme.id)
     applyTheme(theme.id)
@@ -37,7 +37,7 @@ export function DialogSelectTheme(props: { originalTheme: string }) {
         current={currentTheme()}
         filterKeys={["name", "id"]}
         onSelect={handleSelect}
-        onMove={handleMove}
+        onMove={handleActiveChange}
       >
         {(theme: Theme) => (
           <div class="flex items-center gap-2">
