@@ -20,10 +20,10 @@ permissions:
 jobs:
   publish:
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    # Only run if tests passed (workflow_run) or manual dispatch
+    # Only run if tests passed (workflow_run) or manual dispatch ON INTEGRATION BRANCH
     # Also skip release commits to prevent infinite loop
     if: |
-      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/integration') ||
       (github.event_name == 'workflow_run' && 
        github.event.workflow_run.conclusion == 'success' &&
        !startsWith(github.event.workflow_run.head_commit.message, 'release:') &&
