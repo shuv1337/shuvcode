@@ -8,7 +8,7 @@ import { WorkerPoolProvider } from "@opencode-ai/ui/context/worker-pool"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
 import { Share } from "~/core/share"
-import { Logo, Mark } from "@opencode-ai/ui/logo"
+import { AsciiLogo, AsciiMark } from "@opencode-ai/ui/logo"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { createDefaultOptions } from "@opencode-ai/ui/pierre"
@@ -211,7 +211,7 @@ export default function () {
           return (
             <>
               <Show when={info().title}>
-                <Title>{info().title} | OpenCode</Title>
+                <Title>{info().title} | shuvcode</Title>
               </Show>
               <Meta name="description" content="opencode - The AI coding agent built for the terminal." />
               <Meta property="og:image" content={ogImage()} />
@@ -267,7 +267,7 @@ export default function () {
                           <div class="flex flex-col gap-4">
                             <div class="flex flex-col gap-2 sm:flex-row sm:gap-4 sm:items-center sm:h-8 justify-start self-stretch">
                               <div class="pl-[2.5px] pr-2 flex items-center gap-1.75 bg-surface-strong shadow-xs-border-base w-fit">
-                                <Mark class="shrink-0 w-3 my-0.5" />
+                                <AsciiMark class="shrink-0 w-3 my-0.5" />
                                 <div class="text-12-mono text-text-base">v{info().version}</div>
                               </div>
                               <div class="flex gap-4 items-center">
@@ -309,7 +309,7 @@ export default function () {
                               </For>
                             </div>
                             <div class="px-4 flex items-center justify-center pt-20 pb-8 shrink-0">
-                              <Logo class="w-58.5 opacity-12" />
+                              <AsciiLogo class="w-58.5 opacity-12" />
                             </div>
                           </div>
                         )
@@ -321,13 +321,13 @@ export default function () {
                             <header class="h-12 px-6 py-2 flex items-center justify-between self-stretch bg-background-base border-b border-border-weak-base">
                               <div class="">
                                 <a href="https://opencode.ai">
-                                  <Mark />
+                                  <AsciiMark />
                                 </a>
                               </div>
                               <div class="flex gap-3 items-center">
                                 <IconButton
                                   as={"a"}
-                                  href="https://github.com/anomalyco/opencode"
+                                  href="https://github.com/Latitudes-Dev/shuvcode"
                                   target="_blank"
                                   icon="github"
                                   variant="ghost"
@@ -381,7 +381,7 @@ export default function () {
                                       <div
                                         classList={{ "w-full flex items-center justify-center pb-8 shrink-0": true }}
                                       >
-                                        <Logo class="w-58.5 opacity-12" />
+                                        <AsciiLogo class="w-58.5 opacity-12" />
                                       </div>
                                     </SessionTurn>
                                   </div>

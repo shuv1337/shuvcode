@@ -89,7 +89,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         terminal: {
           opened: false,
           height: 280,
-          opened: false,
         },
         review: {
           opened: false,

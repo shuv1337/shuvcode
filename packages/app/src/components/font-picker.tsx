@@ -26,7 +26,7 @@ function DialogSelectFont(props: { originalFont: string }) {
     dialog.close()
   }
 
-  async function handleActiveChange(font: FontDefinition | undefined) {
+  async function handleMove(font: FontDefinition | undefined) {
     if (!font) return
 
     const loaded = await ensureFontLoaded(font)
@@ -46,7 +46,7 @@ function DialogSelectFont(props: { originalFont: string }) {
         current={currentFont()}
         filterKeys={["name", "family"]}
         onSelect={handleSelect}
-        onActiveChange={handleActiveChange}
+        onMove={handleMove}
       >
         {(font: FontDefinition) => (
           <div class="flex items-center gap-2" style={{ "font-family": `"${font.family}", monospace` }}>

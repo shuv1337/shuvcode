@@ -836,8 +836,8 @@ export function Session() {
 
             // Open with EDITOR if available
             const result = await Editor.open({ value: transcript, renderer })
-            if (result !== undefined) {
-              await Bun.write(filepath, result)
+            if (result?.ok) {
+              await Bun.write(filepath, result.content)
             }
 
             toast.show({ message: `Session exported to ${filename}`, variant: "success" })
@@ -1119,7 +1119,7 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} />
+                <Sidebar sessionID={route.sessionID} overlay />
               </box>
             </Match>
           </Switch>
