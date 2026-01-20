@@ -36,3 +36,10 @@ export function dirPath(directory: string) {
 export function sessionPath(directory: string, sessionID?: string) {
   return `${dirPath(directory)}/session${sessionID ? `/${sessionID}` : ""}`
 }
+
+/**
+ * Wait for the app to be ready (server connected).
+ * The app shows "Connecting to server..." while connecting.
+ */
+export const appReadySelector = '[data-component="prompt-input"], [role="button"]'
+export const connectingSelector = 'text="Connecting to server..."'
