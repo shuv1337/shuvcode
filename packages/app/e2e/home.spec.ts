@@ -4,7 +4,8 @@ import { serverName } from "./utils"
 test("home renders and shows core entrypoints", async ({ page }) => {
   await page.goto("/")
 
-  await expect(page.getByRole("button", { name: "Open project" }).first()).toBeVisible()
+  // Fork uses "Add project" instead of upstream's "Open project" (DialogCreateProject customization)
+  await expect(page.getByRole("button", { name: "Add project" }).first()).toBeVisible()
   await expect(page.getByRole("button", { name: serverName })).toBeVisible()
 })
 
