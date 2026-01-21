@@ -3,6 +3,8 @@ import net from "node:net"
 import os from "node:os"
 import path from "node:path"
 
+const isWindows = process.platform === "win32"
+
 async function freePort() {
   return await new Promise<number>((resolve, reject) => {
     const server = net.createServer()
@@ -27,12 +29,28 @@ async function freePort() {
 async function waitForHealth(url: string, server: Bun.Subprocess) {
   const timeoutMs = process.env.CI ? 180_000 : 60_000
   const timeout = Date.now() + timeoutMs
+  let attempts = 0
+
+  // Give the server a moment to start on Windows
+  if (isWindows) {
+    await new Promise((r) => setTimeout(r, 2000))
+  }
 
   while (Date.now() < timeout) {
+    attempts++
+    if (attempts % 20 === 0) {
+      console.log(
+        `[e2e] Health check attempt ${attempts}, elapsed: ${Math.round((Date.now() - (timeout - timeoutMs)) / 1000)}s`,
+      )
+    }
+
     const ok = await fetch(url)
       .then((r) => r.ok)
       .catch(() => false)
-    if (ok) return
+    if (ok) {
+      console.log(`[e2e] Server healthy after ${attempts} attempts`)
+      return
+    }
 
     const exited = await Promise.race([
       server.exited.then(() => true).catch(() => true),
@@ -60,7 +78,10 @@ const extraArgs = (() => {
 })()
 
 const serverHost = process.env.OPENCODE_E2E_SERVER_HOST ?? "127.0.0.1"
-const [serverPort, webPort] = await Promise.all([freePort(), freePort()])
+// Use fixed ports on Windows to avoid port binding race conditions
+const serverPort = isWindows ? 14096 : await freePort()
+const webPort = isWindows ? 14097 : await freePort()
+console.log(`[e2e] Using server port ${serverPort}, web port ${webPort}`)
 
 const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-e2e-"))
 
@@ -102,17 +123,29 @@ const seed = Bun.spawn(["bun", "script/seed-e2e.ts"], {
 
 const seedExit = await seed.exited
 if (seedExit !== 0) {
+  console.error(`[e2e] Seed process failed with exit code ${seedExit}`)
   process.exit(seedExit)
 }
+console.log(`[e2e] Seed completed successfully`)
 
+// On Windows, add a small delay to ensure file handles are released
+if (isWindows) {
+  console.log(`[e2e] Waiting for Windows file handles to be released...`)
+  await new Promise((r) => setTimeout(r, 1000))
+}
+
+console.log(`[e2e] Starting server on ${serverHost}:${serverPort}...`)
+
+// Run the serve command directly instead of through `bun dev` for better Windows compatibility
 const server = Bun.spawn(
   [
     "bun",
-    "dev",
-    "--",
+    "run",
+    "--conditions=browser",
+    "./src/index.ts",
     "--print-logs",
     "--log-level",
-    "WARN",
+    "INFO", // Use INFO level for better debugging
     "serve",
     "--port",
     String(serverPort),
@@ -127,9 +160,14 @@ const server = Bun.spawn(
   },
 )
 
-try {
-  await waitForHealth(`http://${serverHost}:${serverPort}/global/health`, server)
+console.log(`[e2e] Server process spawned with PID ${server.pid}`)
 
+try {
+  const healthUrl = `http://${serverHost}:${serverPort}/global/health`
+  console.log(`[e2e] Waiting for server health at ${healthUrl}`)
+  await waitForHealth(healthUrl, server)
+
+  console.log(`[e2e] Server is healthy, starting Playwright tests...`)
   const runner = Bun.spawn(["bun", "test:e2e", ...extraArgs], {
     cwd: appDir,
     env: runnerEnv,
@@ -138,6 +176,15 @@ try {
   })
 
   process.exitCode = await runner.exited
+  console.log(`[e2e] Tests completed with exit code ${process.exitCode}`)
+} catch (error) {
+  console.error(`[e2e] Error: ${error}`)
+  // Try to get any output from the server process
+  if (server.exitCode !== null) {
+    console.error(`[e2e] Server exited with code ${server.exitCode}`)
+  }
+  throw error
 } finally {
+  console.log(`[e2e] Stopping server...`)
   server.kill()
 }
