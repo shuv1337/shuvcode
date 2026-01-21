@@ -27,7 +27,7 @@ jobs:
             host: windows-latest
             playwright: bunx playwright install
             workdir: packages/app
-            command: bun test:e2e
+            command: bun test:e2e:local
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
@@ -46,26 +46,18 @@ jobs:
         run: ${{ matrix.settings.playwright }}
 
       - name: Set OS-specific paths
+        if: runner.os != 'Windows'
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            printf '%s\n' "OPENCODE_E2E_ROOT=${{ runner.temp }}\\opencode-e2e" >> "$GITHUB_ENV"
-            printf '%s\n' "OPENCODE_TEST_HOME=${{ runner.temp }}\\opencode-e2e\\home" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_DATA_HOME=${{ runner.temp }}\\opencode-e2e\\share" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_CACHE_HOME=${{ runner.temp }}\\opencode-e2e\\cache" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_CONFIG_HOME=${{ runner.temp }}\\opencode-e2e\\config" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_STATE_HOME=${{ runner.temp }}\\opencode-e2e\\state" >> "$GITHUB_ENV"
-            printf '%s\n' "MODELS_DEV_API_JSON=${{ github.workspace }}\\packages\\opencode\\test\\tool\\fixtures\\models-api.json" >> "$GITHUB_ENV"
-          else
-            printf '%s\n' "OPENCODE_E2E_ROOT=${{ runner.temp }}/opencode-e2e" >> "$GITHUB_ENV"
-            printf '%s\n' "OPENCODE_TEST_HOME=${{ runner.temp }}/opencode-e2e/home" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_DATA_HOME=${{ runner.temp }}/opencode-e2e/share" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_CACHE_HOME=${{ runner.temp }}/opencode-e2e/cache" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_CONFIG_HOME=${{ runner.temp }}/opencode-e2e/config" >> "$GITHUB_ENV"
-            printf '%s\n' "XDG_STATE_HOME=${{ runner.temp }}/opencode-e2e/state" >> "$GITHUB_ENV"
-            printf '%s\n' "MODELS_DEV_API_JSON=${{ github.workspace }}/packages/opencode/test/tool/fixtures/models-api.json" >> "$GITHUB_ENV"
-          fi
+          printf '%s\n' "OPENCODE_E2E_ROOT=${{ runner.temp }}/opencode-e2e" >> "$GITHUB_ENV"
+          printf '%s\n' "OPENCODE_TEST_HOME=${{ runner.temp }}/opencode-e2e/home" >> "$GITHUB_ENV"
+          printf '%s\n' "XDG_DATA_HOME=${{ runner.temp }}/opencode-e2e/share" >> "$GITHUB_ENV"
+          printf '%s\n' "XDG_CACHE_HOME=${{ runner.temp }}/opencode-e2e/cache" >> "$GITHUB_ENV"
+          printf '%s\n' "XDG_CONFIG_HOME=${{ runner.temp }}/opencode-e2e/config" >> "$GITHUB_ENV"
+          printf '%s\n' "XDG_STATE_HOME=${{ runner.temp }}/opencode-e2e/state" >> "$GITHUB_ENV"
+          printf '%s\n' "MODELS_DEV_API_JSON=${{ github.workspace }}/packages/opencode/test/tool/fixtures/models-api.json" >> "$GITHUB_ENV"
 
       - name: Seed opencode data
+        if: runner.os != 'Windows'
         working-directory: packages/opencode
         run: bun script/seed-e2e.ts
         env:
@@ -85,7 +77,7 @@ jobs:
           OPENCODE_E2E_MESSAGE: "Seeded for UI e2e"
           OPENCODE_E2E_MODEL: "opencode/gpt-5-nano"
 
-      - name: Run opencode server (linux)
+      - name: Run opencode server
         if: runner.os != 'Windows'
         working-directory: packages/opencode
         run: bun dev -- --print-logs --log-level WARN serve --port 4096 --hostname 0.0.0.0 &
@@ -103,37 +95,8 @@ jobs:
           XDG_STATE_HOME: ${{ env.XDG_STATE_HOME }}
           OPENCODE_CLIENT: "app"
 
-      - name: Run opencode server (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: >-
-          Start-Process -FilePath "bun" -ArgumentList @(
-            "dev",
-            "--",
-            "--print-logs",
-            "--log-level",
-            "WARN",
-            "serve",
-            "--port",
-            "4096",
-            "--hostname",
-            "0.0.0.0"
-          ) -WorkingDirectory "packages/opencode" -NoNewWindow
-        env:
-          MODELS_DEV_API_JSON: ${{ env.MODELS_DEV_API_JSON }}
-          OPENCODE_DISABLE_MODELS_FETCH: "true"
-          OPENCODE_DISABLE_SHARE: "true"
-          OPENCODE_DISABLE_LSP_DOWNLOAD: "true"
-          OPENCODE_DISABLE_DEFAULT_PLUGINS: "true"
-          OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "true"
-          OPENCODE_TEST_HOME: ${{ env.OPENCODE_TEST_HOME }}
-          XDG_DATA_HOME: ${{ env.XDG_DATA_HOME }}
-          XDG_CACHE_HOME: ${{ env.XDG_CACHE_HOME }}
-          XDG_CONFIG_HOME: ${{ env.XDG_CONFIG_HOME }}
-          XDG_STATE_HOME: ${{ env.XDG_STATE_HOME }}
-          OPENCODE_CLIENT: "app"
-
       - name: Wait for opencode server
+        if: runner.os != 'Windows'
         run: |
           for i in {1..60}; do
             curl -fsS "http://localhost:4096/global/health" > /dev/null && exit 0
