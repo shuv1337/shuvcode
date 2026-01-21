@@ -59,6 +59,7 @@ const extraArgs = (() => {
   return args
 })()
 
+const serverHost = process.env.OPENCODE_E2E_SERVER_HOST ?? "127.0.0.1"
 const [serverPort, webPort] = await Promise.all([freePort(), freePort()])
 
 const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-e2e-"))
@@ -85,9 +86,9 @@ const serverEnv = {
 
 const runnerEnv = {
   ...process.env,
-  PLAYWRIGHT_SERVER_HOST: "localhost",
+  PLAYWRIGHT_SERVER_HOST: serverHost,
   PLAYWRIGHT_SERVER_PORT: String(serverPort),
-  VITE_OPENCODE_SERVER_HOST: "localhost",
+  VITE_OPENCODE_SERVER_HOST: serverHost,
   VITE_OPENCODE_SERVER_PORT: String(serverPort),
   PLAYWRIGHT_PORT: String(webPort),
 } satisfies Record<string, string>
@@ -116,7 +117,7 @@ const server = Bun.spawn(
     "--port",
     String(serverPort),
     "--hostname",
-    "127.0.0.1",
+    serverHost,
   ],
   {
     cwd: opencodeDir,
@@ -127,7 +128,7 @@ const server = Bun.spawn(
 )
 
 try {
-  await waitForHealth(`http://localhost:${serverPort}/global/health`, server)
+  await waitForHealth(`http://${serverHost}:${serverPort}/global/health`, server)
 
   const runner = Bun.spawn(["bun", "test:e2e", ...extraArgs], {
     cwd: appDir,
