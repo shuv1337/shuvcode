@@ -85,9 +85,40 @@ jobs:
           OPENCODE_E2E_MESSAGE: "Seeded for UI e2e"
           OPENCODE_E2E_MODEL: "opencode/gpt-5-nano"
 
-      - name: Run opencode server
+      - name: Run opencode server (linux)
+        if: runner.os != 'Windows'
         working-directory: packages/opencode
         run: bun dev -- --print-logs --log-level WARN serve --port 4096 --hostname 0.0.0.0 &
+        env:
+          MODELS_DEV_API_JSON: ${{ env.MODELS_DEV_API_JSON }}
+          OPENCODE_DISABLE_MODELS_FETCH: "true"
+          OPENCODE_DISABLE_SHARE: "true"
+          OPENCODE_DISABLE_LSP_DOWNLOAD: "true"
+          OPENCODE_DISABLE_DEFAULT_PLUGINS: "true"
+          OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "true"
+          OPENCODE_TEST_HOME: ${{ env.OPENCODE_TEST_HOME }}
+          XDG_DATA_HOME: ${{ env.XDG_DATA_HOME }}
+          XDG_CACHE_HOME: ${{ env.XDG_CACHE_HOME }}
+          XDG_CONFIG_HOME: ${{ env.XDG_CONFIG_HOME }}
+          XDG_STATE_HOME: ${{ env.XDG_STATE_HOME }}
+          OPENCODE_CLIENT: "app"
+
+      - name: Run opencode server (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          Start-Process -FilePath "bun" -ArgumentList @(
+            "dev",
+            "--",
+            "--print-logs",
+            "--log-level",
+            "WARN",
+            "serve",
+            "--port",
+            "4096",
+            "--hostname",
+            "0.0.0.0"
+          ) -WorkingDirectory "packages/opencode" -NoNewWindow
         env:
           MODELS_DEV_API_JSON: ${{ env.MODELS_DEV_API_JSON }}
           OPENCODE_DISABLE_MODELS_FETCH: "true"
