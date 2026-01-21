@@ -153,6 +153,7 @@ export function Session() {
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
+  const [headerVisible, setHeaderVisible] = kv.signal("header_visible", true)
   const [draggingSidebar, setDraggingSidebar] = createSignal(false)
   const [sidebarDragStartX, setSidebarDragStartX] = createSignal(0)
   const [sidebarDragStartWidth, setSidebarDragStartWidth] = createSignal(0)
@@ -630,6 +631,16 @@ export function Session() {
       },
     },
     {
+      title: headerVisible() ? "Hide session header" : "Show session header",
+      value: "session.header.toggle",
+      keybind: "header_toggle",
+      category: "Session",
+      onSelect: (dialog) => {
+        setHeaderVisible((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
       title: "Page up",
       value: "session.page.up",
       keybind: "messages_page_up",
@@ -1021,7 +1032,7 @@ export function Session() {
       >
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={!sidebarVisible() || !wide()}>
+            <Show when={(!sidebarVisible() || !wide()) && headerVisible()}>
               <Header />
             </Show>
             <scrollbox
