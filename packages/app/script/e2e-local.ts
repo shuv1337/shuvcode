@@ -24,16 +24,28 @@ async function freePort() {
   })
 }
 
-async function waitForHealth(url: string) {
-  const timeout = Date.now() + 60_000
+async function waitForHealth(url: string, server: Bun.Subprocess) {
+  const timeoutMs = process.env.CI ? 180_000 : 60_000
+  const timeout = Date.now() + timeoutMs
+
   while (Date.now() < timeout) {
     const ok = await fetch(url)
       .then((r) => r.ok)
       .catch(() => false)
     if (ok) return
+
+    const exited = await Promise.race([
+      server.exited.then(() => true).catch(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 0)),
+    ])
+
+    if (exited) {
+      throw new Error(`Server exited before health check: ${url}`)
+    }
+
     await new Promise((r) => setTimeout(r, 250))
   }
-  throw new Error(`Timed out waiting for server health: ${url}`)
+  throw new Error(`Timed out waiting for server health after ${timeoutMs / 1000}s: ${url}`)
 }
 
 const appDir = process.cwd()
@@ -115,7 +127,7 @@ const server = Bun.spawn(
 )
 
 try {
-  await waitForHealth(`http://localhost:${serverPort}/global/health`)
+  await waitForHealth(`http://localhost:${serverPort}/global/health`, server)
 
   const runner = Bun.spawn(["bun", "test:e2e", ...extraArgs], {
     cwd: appDir,
