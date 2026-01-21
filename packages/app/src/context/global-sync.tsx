@@ -45,6 +45,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import { isHostedEnvironment } from "@/utils/hosted"
 import { usePlatform } from "./platform"
+import { useLanguage } from "@/context/language"
 import { Persist, persisted } from "@/utils/persist"
 
 type State = {
@@ -103,6 +104,7 @@ type ChildOptions = {
 function createGlobalSync() {
   const globalSDK = useGlobalSDK()
   const platform = usePlatform()
+  const language = useLanguage()
   const owner = getOwner()
   if (!owner) throw new Error("GlobalSync must be created within owner")
   const vcsCache = new Map<string, VcsCache>()
@@ -247,7 +249,7 @@ function createGlobalSync() {
       .catch((err) => {
         console.error("Failed to load sessions", err)
         const project = getFilename(directory)
-        showToast({ title: `Failed to load sessions for ${project}`, description: err.message })
+        showToast({ title: language.t("toast.session.listFailed.title", { project }), description: err.message })
       })
 
     sessionLoads.set(directory, promise)
@@ -700,10 +702,7 @@ function createGlobalSync() {
         return
       }
       // For non-hosted environments, show the error page
-      setGlobalStore(
-        "error",
-        new Error(`Could not connect to server. Is there a server running at \`${globalSDK.url}\`?`),
-      )
+      setGlobalStore("error", new Error(language.t("error.globalSync.connectFailed", { url: globalSDK.url })))
       setGlobalStore("connectionState", "error")
       return
     }

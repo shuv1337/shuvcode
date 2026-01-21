@@ -5,6 +5,7 @@ import path from "path"
 import fs from "fs/promises"
 import fsSync from "fs"
 import { afterAll } from "bun:test"
+const { Global } = await import("../src/global")
 
 const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid)
 await fs.mkdir(dir, { recursive: true })
@@ -31,7 +32,8 @@ process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
 await fs.writeFile(path.join(cacheDir, "version"), "18")
-const response = await fetch("https://models.dev/api.json")
+const url = Global.Path.modelsDevUrl
+const response = await fetch(`${url}/api.json`)
 if (response.ok) {
   await fs.writeFile(path.join(cacheDir, "models.json"), await response.text())
 }
