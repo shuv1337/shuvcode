@@ -54,7 +54,7 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
   const mcpEntries = createMemo(() =>
     Object.entries(sync.data.mcp)
       .filter(([_, item]) => item.status !== "disabled")
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => a.localeCompare(b)),
   )
 
   // Collect all Task tool parts with subagent_type, deduplicated by part ID
@@ -164,7 +164,11 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
             {/* Subagents Section */}
             <Show when={subagentGroups().length > 0}>
               <box>
-                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("subagents", !expanded.subagents)}>
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  onMouseDown={() => setExpandedWithPersist("subagents", !expanded.subagents)}
+                >
                   <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>Subagents</b>
@@ -360,9 +364,7 @@ export function Sidebar(props: { sessionID: string; width: number; overlay?: boo
                   </text>
                 </box>
                 <Show when={expanded.todo}>
-                  <For each={todo()}>
-                    {(item) => <TodoItem status={item.status} content={item.content} />}
-                  </For>
+                  <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                 </Show>
               </box>
             </Show>

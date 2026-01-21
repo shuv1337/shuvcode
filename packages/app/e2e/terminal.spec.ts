@@ -4,7 +4,7 @@ import { terminalSelector, terminalToggleKey } from "./utils"
 test("terminal panel can be toggled", async ({ page, gotoSession }) => {
   await gotoSession()
 
-  const terminal = page.locator(terminalSelector)
+  const terminal = page.locator(terminalSelector).first()
   const initiallyOpen = await terminal.isVisible()
   if (initiallyOpen) {
     await page.keyboard.press(terminalToggleKey)

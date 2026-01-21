@@ -33,7 +33,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       await page.goto(sessionPath(directory, sessionID))
       // Wait for app to be ready (may show loading states briefly)
       await waitForAppReady(page)
-      await expect(page.locator(promptSelector)).toBeVisible({ timeout: 15000 })
+      await expect(page.locator(promptSelector).first()).toBeVisible({ timeout: 15000 })
     }
     await use(gotoSession)
   },

@@ -33449,5 +33449,29 @@
         "limit": { "context": 131072, "output": 32768 }
       }
     }
+  },
+  "gitlab": {
+    "id": "gitlab",
+    "env": ["GITLAB_API_KEY"],
+    "npm": "@gitlab/gitlab-ai-provider",
+    "name": "GitLab",
+    "doc": "https://docs.gitlab.com/ee/user/gitlab_duo/",
+    "models": {
+      "gitlab-duo": {
+        "id": "gitlab-duo",
+        "name": "GitLab Duo",
+        "family": "gitlab-duo",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2024-02-01",
+        "last_updated": "2024-02-01",
+        "modalities": { "input": ["text"], "output": ["text"] },
+        "open_weights": false,
+        "cost": { "input": 0, "output": 0 },
+        "limit": { "context": 8192, "output": 2048 }
+      }
+    }
   }
 }

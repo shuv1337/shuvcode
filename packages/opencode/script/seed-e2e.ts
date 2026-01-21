@@ -1,3 +1,6 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+
 const dir = process.env.OPENCODE_E2E_PROJECT_DIR ?? process.cwd()
 const title = process.env.OPENCODE_E2E_SESSION_TITLE ?? "E2E Session"
 const text = process.env.OPENCODE_E2E_MESSAGE ?? "Seeded for UI e2e"
@@ -7,7 +10,21 @@ const providerID = parts[0] ?? "opencode"
 const modelID = parts[1] ?? "gpt-5-nano"
 const now = Date.now()
 
+const seedModelsCache = async () => {
+  const modelsPath = process.env.MODELS_DEV_API_JSON
+  if (!modelsPath) return
+
+  const file = Bun.file(modelsPath)
+  if (!(await file.exists())) return
+
+  const { Global } = await import("../src/global")
+  await fs.mkdir(Global.Path.cache, { recursive: true })
+  const target = path.join(Global.Path.cache, "models.json")
+  await Bun.write(target, await file.text())
+}
+
 const seed = async () => {
+  await seedModelsCache()
   const { Instance } = await import("../src/project/instance")
   const { InstanceBootstrap } = await import("../src/project/bootstrap")
   const { Session } = await import("../src/session")

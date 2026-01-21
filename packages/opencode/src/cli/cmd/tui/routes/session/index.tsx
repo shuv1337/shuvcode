@@ -22,6 +22,7 @@ import {
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
+  MouseEvent,
   type ScrollAcceleration,
   TextAttributes,
   RGBA,
@@ -1170,6 +1171,7 @@ export function Session() {
               <>
                 <box
                   width={sidebarHandleWidth}
+                  height="100%"
                   border={showSidebarHandle() ? ["left", "right"] : []}
                   customBorderChars={showSidebarHandle() ? SplitBorder.customBorderChars : undefined}
                   borderColor={draggingSidebar() ? theme.borderActive : theme.primary}
