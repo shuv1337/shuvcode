@@ -90,16 +90,18 @@ function init() {
       return options()
     },
     slashes() {
-      return options().flatMap((option) => {
-        const slash = option.slash
-        if (!slash) return []
-        return {
-          display: "/" + slash.name,
-          description: option.description ?? option.title,
-          aliases: slash.aliases?.map((alias) => "/" + alias),
-          onSelect: () => result.trigger(option.value),
-        }
-      })
+      return options()
+        .filter((option) => !option.value.startsWith("suggested."))
+        .flatMap((option) => {
+          const slash = option.slash
+          if (!slash) return []
+          return {
+            display: "/" + slash.name,
+            description: option.description ?? option.title,
+            aliases: slash.aliases?.map((alias) => "/" + alias),
+            onSelect: () => result.trigger(option.value),
+          }
+        })
     },
   }
   return result
