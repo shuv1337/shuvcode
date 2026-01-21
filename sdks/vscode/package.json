@@ -2,11 +2,11 @@
   "name": "shuvcode",
   "displayName": "shuvcode",
   "description": "shuvcode for VS Code",
-  "version": "1.1.27",
-  "publisher": "latitudes-dev"
+  "version": "1.1.28",
+  "publisher": "latitudes-dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/opencode"
+    "url": "https://github.com/Latitudes-Dev/shuvcode"
   },
   "license": "MIT",
   "icon": "images/icon.png",

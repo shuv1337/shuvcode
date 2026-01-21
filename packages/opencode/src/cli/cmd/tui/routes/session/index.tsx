@@ -22,6 +22,7 @@ import {
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
+  MouseEvent,
   type ScrollAcceleration,
   TextAttributes,
   RGBA,
@@ -139,6 +140,11 @@ export function Session() {
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const sidebarHandleWidth = 2
+  const sidebarMinWidth = 20
+  const sidebarMaxWidth = 80
+  const clampSidebarWidth = (value: number) => Math.max(sidebarMinWidth, Math.min(sidebarMaxWidth, value))
+  const [sidebarWidth, setSidebarWidth] = createSignal(clampSidebarWidth(kv.get("sidebar_width", 42)))
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
@@ -147,6 +153,11 @@ export function Session() {
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
   const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
+  const [draggingSidebar, setDraggingSidebar] = createSignal(false)
+  const [sidebarDragStartX, setSidebarDragStartX] = createSignal(0)
+  const [sidebarDragStartWidth, setSidebarDragStartWidth] = createSignal(0)
+  const [sidebarHandleHover, setSidebarHandleHover] = createSignal(false)
+  const showSidebarHandle = createMemo(() => draggingSidebar() || sidebarHandleHover())
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -156,7 +167,46 @@ export function Session() {
     return false
   })
   const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(() => {
+    if (!sidebarVisible() || !wide()) return dimensions().width - 4
+    return dimensions().width - sidebarWidth() - sidebarHandleWidth - 4
+  })
+  const overlaySidebarWidth = createMemo(() => Math.min(sidebarWidth(), Math.max(0, dimensions().width - 4)))
+
+  createEffect(
+    on(
+      () => kv.get("sidebar_width", 42),
+      (value) => {
+        if (!kv.ready) return
+        setSidebarWidth(clampSidebarWidth(value))
+      },
+    ),
+  )
+
+  const saveSidebarWidth = () => {
+    kv.set("sidebar_width", sidebarWidth())
+  }
+
+  const startSidebarDrag = (x: number) => {
+    setDraggingSidebar(true)
+    setSidebarDragStartX(x)
+    setSidebarDragStartWidth(sidebarWidth())
+  }
+
+  const updateSidebarDrag = (x: number) => {
+    if (!draggingSidebar()) return
+    setSidebarWidth(clampSidebarWidth(sidebarDragStartWidth() + (sidebarDragStartX() - x)))
+  }
+
+  const endSidebarDrag = () => {
+    if (!draggingSidebar()) return
+    setDraggingSidebar(false)
+    saveSidebarWidth()
+  }
+
+  createEffect(() => {
+    if (!sidebarVisible() || !wide()) setDraggingSidebar(false)
+  })
 
   const scrollAcceleration = createMemo(() => {
     const tui = sync.data.config.tui
@@ -1107,7 +1157,22 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} width={42} />
+              <>
+                <box
+                  width={sidebarHandleWidth}
+                  height="100%"
+                  border={["left"]}
+                  borderColor={draggingSidebar() ? theme.borderActive : theme.border}
+                  backgroundColor={showSidebarHandle() ? theme.backgroundElement : theme.background}
+                  onMouseDown={(event: MouseEvent) => startSidebarDrag(event.x)}
+                  onMouseDrag={(event: MouseEvent) => updateSidebarDrag(event.x)}
+                  onMouseUp={endSidebarDrag}
+                  onMouseDragEnd={endSidebarDrag}
+                  onMouseOver={() => setSidebarHandleHover(true)}
+                  onMouseOut={() => setSidebarHandleHover(false)}
+                />
+                <Sidebar sessionID={route.sessionID} width={sidebarWidth()} />
+              </>
             </Match>
             <Match when={!wide()}>
               <box
@@ -1119,7 +1184,7 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} width={42} overlay />
+                <Sidebar sessionID={route.sessionID} width={overlaySidebarWidth()} overlay />
               </box>
             </Match>
           </Switch>

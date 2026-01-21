@@ -1,6 +1,4 @@
 import { test, expect } from "./fixtures"
-import { promptSelector } from "./utils"
-
 test("context panel can be opened from the prompt", async ({ page, sdk, gotoSession }) => {
   const title = `e2e smoke context ${Date.now()}`
   const created = await sdk.session.create({ title }).then((r) => r.data)
