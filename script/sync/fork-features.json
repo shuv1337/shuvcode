@@ -499,8 +499,25 @@
       "title": "Toggle session header visibility",
       "author": "fork",
       "status": "fork-only",
-      "description": "Command palette option to hide/show the session header when sidebar is hidden",
-      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/config/config.ts"]
+      "description": "Command palette option to hide/show the session header when sidebar is hidden. Persists preference via KV store.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "headerVisible signal declaration persisted to KV store",
+          "markers": ["const [headerVisible, setHeaderVisible] = kv.signal(\"header_visible\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Command palette entry for toggling header visibility",
+          "markers": ["Hide session header", "Show session header", "session.header.toggle", "header_toggle"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Show condition for Header including headerVisible check",
+          "markers": ["&& headerVisible()"]
+        }
+      ]
     },
     {
       "pr": 0,
