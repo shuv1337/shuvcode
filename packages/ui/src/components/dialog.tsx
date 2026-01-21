@@ -6,18 +6,23 @@ export interface DialogProps extends ParentProps {
   title?: JSXElement
   description?: JSXElement
   action?: JSXElement
-  size?: "sm" | "md" | "lg"
+  size?: "sm" | "md" | "lg" | "normal" | "large" | "x-large"
   class?: ComponentProps<"div">["class"]
   classList?: ComponentProps<"div">["classList"]
   fit?: boolean
 }
 
 export function Dialog(props: DialogProps) {
+  const containerSize = props.size === "sm" || props.size === "md" || props.size === "lg" ? props.size : undefined
+  const dialogSize =
+    props.size === "large" || props.size === "x-large" || props.size === "normal" ? props.size : "normal"
+
   return (
-    <div data-component="dialog" data-fit={props.fit ? true : undefined}>
-      <div data-slot="dialog-container" data-size={props.size}>
+    <div data-component="dialog" data-fit={props.fit ? true : undefined} data-size={dialogSize}>
+      <div data-slot="dialog-container" data-size={containerSize}>
         <Kobalte.Content
           data-slot="dialog-content"
+          data-no-header={!props.title && !props.action ? "" : undefined}
           classList={{
             ...(props.classList ?? {}),
             [props.class ?? ""]: !!props.class,

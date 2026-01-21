@@ -182,21 +182,21 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   log.info("tool-result", { toolCallId: value.toolCallId, tool: match?.tool })
                   if (match && match.state.status === "running") {
-                    await Session.updatePart({
-                      ...match,
-                      state: {
-                        status: "completed",
-                        input: value.output.modifiedInput ?? value.input,
-                        output: value.output.output,
-                        metadata: value.output.metadata,
-                        title: value.output.title,
-                        time: {
-                          start: match.state.time.start,
-                          end: Date.now(),
+                      await Session.updatePart({
+                        ...match,
+                        state: {
+                          status: "completed",
+                          input: value.output.modifiedInput ?? value.input ?? match.state.input,
+                          output: value.output.output,
+                          metadata: value.output.metadata,
+                          title: value.output.title,
+                          time: {
+                            start: match.state.time.start,
+                            end: Date.now(),
+                          },
+                          attachments: value.output.attachments,
                         },
-                        attachments: value.output.attachments,
-                      },
-                    })
+                      })
 
                     delete toolcalls[value.toolCallId]
                   }
@@ -210,7 +210,7 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "error",
-                        input: value.input,
+                        input: value.input ?? match.state.input,
                         error: (value.error as any).toString(),
                         time: {
                           start: match.state.time.start,

@@ -11,7 +11,7 @@ test("can open an existing session and type into the prompt", async ({ page, sdk
   try {
     await gotoSession(sessionID)
 
-    const prompt = page.locator(promptSelector)
+    const prompt = page.locator(promptSelector).first()
     await prompt.click()
     await page.keyboard.type("hello from e2e")
     await expect(prompt).toContainText("hello from e2e")

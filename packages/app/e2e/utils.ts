@@ -53,5 +53,15 @@ export async function waitForAppReady(page: import("@playwright/test").Page, tim
 
   // Then wait for either the app to be ready (buttons visible) or stay in a loading/error state
   // If we timeout waiting for buttons, the test will fail with a clear error
-  await page.locator('[role="button"], [data-component="prompt-input"]').first().waitFor({ state: "visible", timeout })
+  const readyChecks = [
+    page.locator('[data-component="prompt-input"]').first(),
+    page.getByRole("button", { name: "Add project" }).first(),
+    page.getByRole("button", { name: serverName }).first(),
+  ]
+
+  try {
+    await Promise.any(readyChecks.map((locator) => locator.waitFor({ state: "visible", timeout })))
+  } catch (error) {
+    throw new Error("Timed out waiting for app to be ready")
+  }
 }
