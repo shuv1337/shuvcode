@@ -7,7 +7,6 @@ const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server
 // slightly too early due to clock skew / timer drift.
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000 // 3 seconds
-
 function normalizeDomain(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "")
 }
@@ -20,6 +19,7 @@ function getUrls(domain: string) {
 }
 
 export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
+  const sdk = input.client
   return {
     auth: {
       provider: "github-copilot",
@@ -84,11 +84,11 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
             })
 
             const headers: Record<string, string> = {
+              "x-initiator": isAgent ? "agent" : "user",
               ...(init?.headers as Record<string, string>),
               "User-Agent": `opencode/${Installation.VERSION}`,
               Authorization: `Bearer ${info.refresh}`,
               "Openai-Intent": "conversation-edits",
-              "X-Initiator": isAgent ? "agent" : "user",
             }
 
             if (isVision) {
@@ -274,6 +274,20 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
           },
         },
       ],
+    },
+    "chat.headers": async (input, output) => {
+      if (!input.model.providerID.includes("github-copilot")) return
+      const session = await sdk.session
+        .get({
+          path: {
+            id: input.sessionID,
+          },
+          throwOnError: true,
+        })
+        .catch(() => undefined)
+      if (!session || !session.data.parentID) return
+      // mark subagent sessions as agent initiated matching standard that other copilot tools have
+      output.headers["x-initiator"] = "agent"
     },
   }
 }

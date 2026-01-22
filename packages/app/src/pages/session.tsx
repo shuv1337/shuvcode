@@ -1,4 +1,16 @@
-import { For, onCleanup, onMount, Show, Match, Switch, createMemo, createEffect, on, createSignal } from "solid-js"
+import {
+  For,
+  Index,
+  onCleanup,
+  onMount,
+  Show,
+  Match,
+  Switch,
+  createMemo,
+  createEffect,
+  on,
+  createSignal,
+} from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { Dynamic } from "solid-js/web"
@@ -18,6 +30,7 @@ import { useCodeComponent } from "@opencode-ai/ui/context/code"
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { SessionReview } from "@opencode-ai/ui/session-review"
+import { AsciiMark } from "@opencode-ai/ui/logo"
 
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
@@ -51,8 +64,6 @@ import {
   NewSessionView,
 } from "@/components/session"
 import { usePlatform } from "@/context/platform"
-import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility"
-import { AskQuestionWizard, type AskQuestionQuestion, type AskQuestionAnswer } from "@/components/askquestion-wizard"
 import { navMark, navParams } from "@/utils/perf"
 import { same } from "@/utils/same"
 
@@ -81,6 +92,15 @@ function SessionReviewTab(props: SessionReviewTabProps) {
   let scroll: HTMLDivElement | undefined
   let frame: number | undefined
   let pending: { x: number; y: number } | undefined
+
+  const sdk = useSDK()
+
+  const readFile = (path: string) => {
+    return sdk.client.file
+      .read({ path })
+      .then((x) => x.data)
+      .catch(() => undefined)
+  }
 
   const restoreScroll = (retries = 0) => {
     const el = scroll
@@ -150,6 +170,7 @@ function SessionReviewTab(props: SessionReviewTabProps) {
       diffStyle={props.diffStyle}
       onDiffStyleChange={props.onDiffStyleChange}
       onViewFile={props.onViewFile}
+      readFile={readFile}
     />
   )
 }
@@ -170,10 +191,6 @@ export default function Page() {
   const sdk = useSDK()
   const prompt = usePrompt()
   const permission = usePermission()
-
-  // Initialize keyboard visibility tracking for mobile terminal support
-  useKeyboardVisibility()
-
   const [pendingMessage, setPendingMessage] = createSignal<string | undefined>(undefined)
   const [pendingHash, setPendingHash] = createSignal<string | undefined>(undefined)
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
@@ -302,51 +319,6 @@ export default function Page() {
   }, emptyUserMessages)
   const lastUserMessage = createMemo(() => visibleUserMessages().at(-1))
 
-  const pendingAskQuestion = createMemo(() => {
-    const requests = sync.data.question[params.id ?? ""] ?? []
-    const request = requests[0]
-    if (!request) return null
-
-    const questions: AskQuestionQuestion[] = request.questions.map((question, index) => ({
-      id: `${request.id}-${index}`,
-      label: question.header,
-      question: question.question,
-      options: question.options.map((option) => ({
-        value: option.label,
-        label: option.label,
-        description: option.description,
-      })),
-      multiSelect: false,
-    }))
-
-    return {
-      requestID: request.id,
-      questions,
-    }
-  })
-
-  const handleAskQuestionSubmit = async (answers: AskQuestionAnswer[]) => {
-    const pending = pendingAskQuestion()
-    if (!pending) return
-    const mapped = answers.map((answer) => {
-      const custom = answer.customText?.trim()
-      if (custom) return [custom]
-      return answer.values
-    })
-    await sdk.client.question.reply({
-      requestID: pending.requestID,
-      answers: mapped,
-    })
-  }
-
-  const handleAskQuestionCancel = async () => {
-    const pending = pendingAskQuestion()
-    if (!pending) return
-    await sdk.client.question.reject({
-      requestID: pending.requestID,
-    })
-  }
-
   createEffect(
     on(
       () => lastUserMessage()?.id,
@@ -418,6 +390,22 @@ export default function Page() {
   let inputRef!: HTMLDivElement
   let promptDock: HTMLDivElement | undefined
   let scroller: HTMLDivElement | undefined
+
+  const [scrollGesture, setScrollGesture] = createSignal(0)
+  const scrollGestureWindowMs = 250
+
+  const markScrollGesture = (target?: EventTarget | null) => {
+    const root = scroller
+    if (!root) return
+
+    const el = target instanceof Element ? target : undefined
+    const nested = el?.closest("[data-scrollable]")
+    if (nested && nested !== root) return
+
+    setScrollGesture(Date.now())
+  }
+
+  const hasScrollGesture = () => Date.now() - scrollGesture() < scrollGestureWindowMs
 
   createEffect(() => {
     if (!params.id) return
@@ -547,7 +535,10 @@ export default function Page() {
       description: language.t("command.terminal.new.description"),
       category: language.t("command.category.terminal"),
       keybind: "ctrl+alt+t",
-      onSelect: () => terminal.new(),
+      onSelect: () => {
+        if (terminal.all().length > 0) terminal.new()
+        view().terminal.open()
+      },
     },
     {
       id: "steps.toggle",
@@ -618,16 +609,12 @@ export default function Page() {
     },
     {
       id: "model.variant.cycle",
-      title: "Cycle thinking effort",
-      description: "Switch to the next effort level",
-      category: "Model",
-      keybind: "shift+mod+t",
+      title: language.t("command.model.variant.cycle"),
+      description: language.t("command.model.variant.cycle.description"),
+      category: language.t("command.category.model"),
+      keybind: "shift+mod+d",
       onSelect: () => {
         local.model.variant.cycle()
-        showToast({
-          title: "Thinking effort changed",
-          description: "The thinking effort has been changed to " + (local.model.variant.current() ?? "Default"),
-        })
       },
     },
     {
@@ -821,7 +808,7 @@ export default function Page() {
     const activeElement = document.activeElement as HTMLElement | undefined
     if (activeElement) {
       const isProtected = activeElement.closest("[data-prevent-autofocus]")
-      const isInput = /^(INPUT|TEXTAREA|SELECT)$/.test(activeElement.tagName) || activeElement.isContentEditable
+      const isInput = /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(activeElement.tagName) || activeElement.isContentEditable
       if (isProtected || isInput) return
     }
     if (dialog.active) return
@@ -833,6 +820,12 @@ export default function Page() {
 
     // Don't autofocus chat if terminal panel is open
     if (view().terminal.opened()) return
+
+    // Only treat explicit scroll keys as potential "user scroll" gestures.
+    if (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End") {
+      markScrollGesture()
+      return
+    }
 
     if (event.key.length === 1 && event.key !== "Unidentified" && !(event.ctrlKey || event.metaKey)) {
       inputRef?.focus()
@@ -907,17 +900,14 @@ export default function Page() {
       .filter((tab) => tab !== "context"),
   )
 
-  const reviewTab = createMemo(() => hasReview() || tabs().active() === "review")
-  const mobileReview = createMemo(() => !isDesktop() && hasReview() && store.mobileTab === "review")
+  const mobileReview = createMemo(() => !isDesktop() && view().reviewPanel.opened() && store.mobileTab === "review")
 
-  const showTabs = createMemo(
-    () => view().reviewPanel.opened() && (hasReview() || tabs().all().length > 0 || contextOpen()),
-  )
+  const showTabs = createMemo(() => view().reviewPanel.opened())
 
   const activeTab = createMemo(() => {
     const active = tabs().active()
     if (active) return active
-    if (reviewTab()) return "review"
+    if (hasReview()) return "review"
 
     const first = openedTabs()[0]
     if (first) return first
@@ -944,12 +934,15 @@ export default function Page() {
     sync.session.diff(id)
   })
 
-  const isWorking = createMemo(() => status().type !== "idle")
-
   const autoScroll = createAutoScroll({
     working: () => true,
     overflowAnchor: "dynamic",
   })
+
+  const resumeScroll = () => {
+    setStore("messageId", undefined)
+    autoScroll.forceScrollToBottom()
+  }
 
   // When the user returns to the bottom, treat the active message as "latest".
   createEffect(
@@ -958,18 +951,6 @@ export default function Page() {
       (scrolled) => {
         if (scrolled) return
         setStore("messageId", undefined)
-      },
-      { defer: true },
-    ),
-  )
-
-  createEffect(
-    on(
-      isWorking,
-      (working, prev) => {
-        if (!working || prev) return
-        if (autoScroll.userScrolled()) return
-        autoScroll.forceScrollToBottom()
       },
       { defer: true },
     ),
@@ -1091,12 +1072,24 @@ export default function Page() {
     window.history.replaceState(null, "", `#${anchor(id)}`)
   }
 
+  createEffect(() => {
+    const sessionID = params.id
+    if (!sessionID) return
+    const raw = sessionStorage.getItem("opencode.pendingMessage")
+    if (!raw) return
+    const parts = raw.split("|")
+    const pendingSessionID = parts[0]
+    const messageID = parts[1]
+    if (!pendingSessionID || !messageID) return
+    if (pendingSessionID !== sessionID) return
+
+    sessionStorage.removeItem("opencode.pendingMessage")
+    setPendingMessage(messageID)
+  })
+
   const scrollToElement = (el: HTMLElement, behavior: ScrollBehavior) => {
     const root = scroller
-    if (!root) {
-      el.scrollIntoView({ behavior, block: "start" })
-      return
-    }
+    if (!root) return false
 
     const a = el.getBoundingClientRect()
     const b = root.getBoundingClientRect()
@@ -1162,6 +1155,7 @@ export default function Page() {
     setPendingHash(undefined)
     autoScroll.forceScrollToBottom()
   }
+
   const getActiveMessageId = (container: HTMLDivElement) => {
     const cutoff = container.scrollTop + 100
     const nodes = container.querySelectorAll<HTMLElement>("[data-message-id]")
@@ -1202,28 +1196,7 @@ export default function Page() {
     if (!sessionID || !ready) return
 
     requestAnimationFrame(() => {
-      const hash = window.location.hash.slice(1)
-      if (!hash) {
-        autoScroll.forceScrollToBottom()
-        return
-      }
-
-      const hashTarget = document.getElementById(hash)
-      if (hashTarget) {
-        scrollToElement(hashTarget, "auto")
-        return
-      }
-
-      const match = hash.match(/^message-(.+)$/)
-      if (match) {
-        const msg = visibleUserMessages().find((m) => m.id === match[1])
-        if (msg) {
-          scrollToMessage(msg, "auto")
-          return
-        }
-      }
-
-      autoScroll.forceScrollToBottom()
+      applyHash("auto")
     })
   })
 
@@ -1257,6 +1230,7 @@ export default function Page() {
     window.addEventListener("hashchange", handler)
     onCleanup(() => window.removeEventListener("hashchange", handler))
   })
+
   createEffect(() => {
     document.addEventListener("keydown", handleKeyDown)
   })
@@ -1321,8 +1295,8 @@ export default function Page() {
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
       <SessionHeader />
       <div class="flex-1 min-h-0 flex flex-col md:flex-row">
-        {/* Mobile tab bar - only shown on mobile when there are diffs */}
-        <Show when={!isDesktop() && hasReview()}>
+        {/* Mobile tab bar - only shown on mobile when user opened review */}
+        <Show when={!isDesktop() && view().reviewPanel.opened()}>
           <Tabs class="h-auto">
             <Tabs.List>
               <Tabs.Trigger
@@ -1398,8 +1372,10 @@ export default function Page() {
                           </Match>
                           <Match when={true}>
                             <div class="h-full px-4 pb-30 flex flex-col items-center justify-center text-center gap-6">
-                              <Icon name="checklist" class="w-10 h-10 opacity-20" />
-                              <div class="text-13-regular text-text-weak max-w-56">No changes in this session yet</div>
+                              <AsciiMark class="opacity-10" />
+                              <div class="text-14-regular text-text-weak max-w-56">
+                                {language.t("session.review.empty")}
+                              </div>
                             </div>
                           </Match>
                         </Switch>
@@ -1407,37 +1383,63 @@ export default function Page() {
                     }
                   >
                     <div class="relative w-full h-full min-w-0">
-                      <Show when={autoScroll.userScrolled()}>
-                        <div class="absolute right-4 md:right-6 bottom-[calc(var(--prompt-height,8rem)+16px)] z-[60] pointer-events-none">
-                          <Button
-                            variant="secondary"
-                            size="small"
-                            icon="chevron-down"
-                            class="pointer-events-auto shadow-sm"
-                            onClick={() => {
-                              setStore("messageId", undefined)
-                              autoScroll.forceScrollToBottom()
-                              window.history.replaceState(null, "", window.location.href.replace(/#.*$/, ""))
-                            }}
-                          >
-                            {language.t("session.messages.jumpToLatest")}
-                          </Button>
-                        </div>
-                      </Show>
+                      <div
+                        class="absolute left-1/2 -translate-x-1/2 bottom-[calc(var(--prompt-height,8rem)+32px)] z-[60] pointer-events-none transition-all duration-200 ease-out"
+                        classList={{
+                          "opacity-100 translate-y-0 scale-100": autoScroll.userScrolled(),
+                          "opacity-0 translate-y-2 scale-95 pointer-events-none": !autoScroll.userScrolled(),
+                        }}
+                      >
+                        <button
+                          class="pointer-events-auto size-8 flex items-center justify-center rounded-full bg-background-base border border-border-base shadow-sm text-text-base hover:bg-background-stronger transition-colors"
+                          onClick={() => {
+                            setStore("messageId", undefined)
+                            autoScroll.forceScrollToBottom()
+                            window.history.replaceState(null, "", window.location.href.replace(/#.*$/, ""))
+                          }}
+                        >
+                          <Icon name="arrow-down-to-line" />
+                        </button>
+                      </div>
                       <div
                         ref={setScrollRef}
+                        onWheel={(e) => markScrollGesture(e.target)}
+                        onTouchMove={(e) => markScrollGesture(e.target)}
+                        onPointerDown={(e) => {
+                          if (e.target !== e.currentTarget) return
+                          markScrollGesture(e.target)
+                        }}
                         onScroll={(e) => {
+                          if (!hasScrollGesture()) return
+                          markScrollGesture(e.target)
                           autoScroll.handleScroll()
                           if (isDesktop() && autoScroll.userScrolled()) scheduleScrollSpy(e.currentTarget)
                         }}
-                        onClick={autoScroll.handleInteraction}
-                        class="session-scroll-container relative min-w-0 w-full h-full overflow-y-auto no-scrollbar"
+                        class="relative min-w-0 w-full h-full overflow-y-auto session-scroller"
                         style={{ "--session-title-height": info()?.title ? "40px" : "0px" }}
                       >
+                        <Show when={info()?.title}>
+                          <div
+                            classList={{
+                              "sticky top-0 z-30 bg-background-stronger": true,
+                              "w-full": true,
+                              "px-4 md:px-6": true,
+                              "md:max-w-200 md:mx-auto": !showTabs(),
+                            }}
+                          >
+                            <div class="h-10 flex items-center">
+                              <h1 class="text-16-medium text-text-strong truncate">{info()?.title}</h1>
+                            </div>
+                          </div>
+                        </Show>
+
                         <div
                           ref={autoScroll.contentRef}
+                          role="log"
                           class="flex flex-col gap-32 items-start justify-start pb-[calc(var(--prompt-height,8rem)+64px)] md:pb-[calc(var(--prompt-height,10rem)+64px)] transition-[margin]"
                           classList={{
+                            "w-full": true,
+                            "md:max-w-200 md:mx-auto": !showTabs(),
                             "mt-0.5": !showTabs(),
                             "mt-0": showTabs(),
                           }}
@@ -1491,10 +1493,6 @@ export default function Page() {
                                   classList={{
                                     "min-w-0 w-full max-w-full": true,
                                     "md:max-w-200": !showTabs(),
-                                    "last:min-h-[calc(100vh-5.5rem-var(--prompt-height,8rem)-64px)] md:last:min-h-[calc(100vh-4.5rem-var(--prompt-height,10rem)-64px)]":
-                                      platform.platform !== "desktop",
-                                    "last:min-h-[calc(100vh-7rem-var(--prompt-height,8rem)-64px)] md:last:min-h-[calc(100vh-6rem-var(--prompt-height,10rem)-64px)]":
-                                      platform.platform === "desktop",
                                   }}
                                 >
                                   <SessionTurn
@@ -1507,15 +1505,8 @@ export default function Page() {
                                     }
                                     classes={{
                                       root: "min-w-0 w-full relative",
-                                      content:
-                                        "flex flex-col justify-between !overflow-visible [&_[data-slot=session-turn-message-header]]:top-[-32px]",
-                                      container:
-                                        "px-4 md:px-6 " +
-                                        (!showTabs()
-                                          ? "md:max-w-200 md:mx-auto"
-                                          : visibleUserMessages().length > 1
-                                            ? "md:pr-6 md:pl-18"
-                                            : ""),
+                                      content: "flex flex-col justify-between !overflow-visible",
+                                      container: "w-full px-4 md:px-6",
                                     }}
                                   />
                                 </div>
@@ -1553,9 +1544,7 @@ export default function Page() {
           {/* Prompt input */}
           <div
             ref={(el) => (promptDock = el)}
-            data-component="prompt-dock"
-            class="absolute inset-x-0 bottom-0 pt-12 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
-            style={{ "padding-bottom": "max(1.5rem, env(safe-area-inset-bottom, 0px))" }}
+            class="absolute inset-x-0 bottom-0 pt-12 pb-4 md:pb-6 flex flex-col justify-center items-center z-50 px-4 md:px-0 bg-gradient-to-t from-background-stronger via-background-stronger to-transparent pointer-events-none"
           >
             <div
               classList={{
@@ -1563,17 +1552,8 @@ export default function Page() {
                 "md:max-w-200": !showTabs(),
               }}
             >
-              <Show when={pendingAskQuestion()}>
-                {(pending) => (
-                  <AskQuestionWizard
-                    questions={pending().questions}
-                    onSubmit={handleAskQuestionSubmit}
-                    onCancel={handleAskQuestionCancel}
-                  />
-                )}
-              </Show>
               <Show
-                when={!pendingAskQuestion() && prompt.ready()}
+                when={prompt.ready()}
                 fallback={
                   <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
                     {handoff.prompt || language.t("prompt.loading")}
@@ -1586,6 +1566,7 @@ export default function Page() {
                   }}
                   newSessionWorktree={newSessionWorktree()}
                   onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
+                  onSubmit={resumeScroll}
                 />
               </Show>
             </div>
@@ -1604,7 +1585,11 @@ export default function Page() {
 
         {/* Desktop tabs panel (Review + Context + Files) - hidden on mobile */}
         <Show when={isDesktop() && showTabs()}>
-          <div class="relative flex-1 min-w-0 h-full border-l border-border-weak-base">
+          <aside
+            id="review-panel"
+            aria-label={language.t("session.panel.reviewAndFiles")}
+            class="relative flex-1 min-w-0 h-full border-l border-border-weak-base"
+          >
             <DragDropProvider
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
@@ -1616,7 +1601,7 @@ export default function Page() {
               <Tabs value={activeTab()} onChange={openTab}>
                 <div class="sticky top-0 shrink-0 flex">
                   <Tabs.List>
-                    <Show when={reviewTab()}>
+                    <Show when={true}>
                       <Tabs.Trigger value="review">
                         <div class="flex items-center gap-3">
                           <Show when={diffs()}>
@@ -1638,7 +1623,12 @@ export default function Page() {
                         value="context"
                         closeButton={
                           <Tooltip value={language.t("common.closeTab")} placement="bottom">
-                            <IconButton icon="close" variant="ghost" onClick={() => tabs().close("context")} />
+                            <IconButton
+                              icon="close"
+                              variant="ghost"
+                              onClick={() => tabs().close("context")}
+                              aria-label={language.t("common.closeTab")}
+                            />
                           </Tooltip>
                         }
                         hideCloseButton
@@ -1664,12 +1654,13 @@ export default function Page() {
                           variant="ghost"
                           iconSize="large"
                           onClick={() => dialog.show(() => <DialogSelectFile />)}
+                          aria-label={language.t("command.file.open")}
                         />
                       </TooltipKeybind>
                     </div>
                   </Tabs.List>
                 </div>
-                <Show when={reviewTab()}>
+                <Show when={true}>
                   <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden contain-strict">
                     <Show when={activeTab() === "review"}>
                       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
@@ -1698,8 +1689,10 @@ export default function Page() {
                           </Match>
                           <Match when={true}>
                             <div class="h-full px-6 pb-30 flex flex-col items-center justify-center text-center gap-6">
-                              <Icon name="checklist" class="w-10 h-10 opacity-20" />
-                              <div class="text-13-regular text-text-weak max-w-56">No changes in this session yet</div>
+                              <AsciiMark class="opacity-10" />
+                              <div class="text-14-regular text-text-weak max-w-56">
+                                {language.t("session.review.empty")}
+                              </div>
                             </div>
                           </Match>
                         </Switch>
@@ -1963,12 +1956,15 @@ export default function Page() {
                 </Show>
               </DragOverlay>
             </DragDropProvider>
-          </div>
+          </aside>
         </Show>
       </div>
 
       <Show when={isDesktop() && view().terminal.opened()}>
         <div
+          id="terminal-panel"
+          role="region"
+          aria-label={language.t("terminal.title")}
           class="relative w-full flex flex-col shrink-0 border-t border-border-weak-base"
           style={{ height: `${layout.terminal.height()}px` }}
         >
@@ -2040,7 +2036,13 @@ export default function Page() {
                         keybind={command.keybind("terminal.new")}
                         class="flex items-center"
                       >
-                        <IconButton icon="plus-small" variant="ghost" iconSize="large" onClick={terminal.new} />
+                        <IconButton
+                          icon="plus-small"
+                          variant="ghost"
+                          iconSize="large"
+                          onClick={terminal.new}
+                          aria-label={language.t("command.terminal.new")}
+                        />
                       </TooltipKeybind>
                     </div>
                   </Tabs.List>
