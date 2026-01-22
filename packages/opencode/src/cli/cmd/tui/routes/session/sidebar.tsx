@@ -1,34 +1,87 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Show, Switch, Match } from "solid-js"
+import { createMemo, For, Show, Switch, Match, createEffect } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
+import { useRoute } from "../../context/route"
 import { Locale } from "@/util/locale"
 import path from "path"
-import type { AssistantMessage } from "@opencode-ai/sdk/v2"
-import { Global } from "@/global"
+import type { AssistantMessage, ToolPart } from "@opencode-ai/sdk/v2"
 import { Installation } from "@/installation"
-import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
+import { getSpinnerFrame } from "../../util/spinners"
+import { useToast } from "../../ui/toast"
 import { TodoItem } from "../../component/todo-item"
 
-export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: number }) {
+export function Sidebar(props: { sessionID: string; width: number; overlay?: boolean }) {
   const sync = useSync()
+  const route = useRoute()
   const { theme } = useTheme()
-  const session = createMemo(() => sync.session.get(props.sessionID)!)
+  const toast = useToast()
+  const session = createMemo(() => sync.session.get(props.sessionID))
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
+
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
 
   const [expanded, setExpanded] = createStore({
+    context: true,
     mcp: true,
     diff: true,
     todo: true,
     lsp: true,
+    subagents: true,
   })
 
-  // Sort MCP servers alphabetically for consistent display order
-  const mcpEntries = createMemo(() => Object.entries(sync.data.mcp).sort(([a], [b]) => a.localeCompare(b)))
+  const setExpandedWithPersist = (key: keyof typeof expanded, value: boolean) => {
+    setExpanded(key, value)
+    kv.set(`sidebar_expanded_${key}`, value)
+  }
+
+  createEffect(() => {
+    if (!kv.ready) return
+    setExpanded({
+      context: kv.get("sidebar_expanded_context", true),
+      mcp: kv.get("sidebar_expanded_mcp", true),
+      diff: kv.get("sidebar_expanded_diff", true),
+      todo: kv.get("sidebar_expanded_todo", true),
+      lsp: kv.get("sidebar_expanded_lsp", true),
+      subagents: kv.get("sidebar_expanded_subagents", true),
+    })
+  })
+
+  // Sort MCP servers alphabetically for consistent display order, filtering out disabled servers
+  const mcpEntries = createMemo(() =>
+    Object.entries(sync.data.mcp)
+      .filter(([_, item]) => item.status !== "disabled")
+      .sort(([a], [b]) => a.localeCompare(b)),
+  )
+
+  // Collect all Task tool parts with subagent_type, deduplicated by part ID
+  const taskToolParts = createMemo(() => {
+    const partsMap = new Map<string, ToolPart>()
+    for (const message of messages()) {
+      for (const part of sync.data.part[message.id] ?? []) {
+        if (part.type === "tool" && part.state.input?.subagent_type) {
+          partsMap.set(part.id, part)
+        }
+      }
+    }
+    return Array.from(partsMap.values())
+  })
+
+  // Group parts by agent type for organized display
+  const subagentGroups = createMemo(() => {
+    const groups = new Map<string, ToolPart[]>()
+    for (const part of taskToolParts()) {
+      const input = part.state.input as Record<string, unknown>
+      const agentName = input?.subagent_type as string
+      if (!agentName) continue
+      if (!groups.has(agentName)) groups.set(agentName, [])
+      groups.get(agentName)!.push(part)
+    }
+    return Array.from(groups.entries())
+  })
 
   // Count connected and error MCP servers for collapsed header display
   const connectedMcpCount = createMemo(() => mcpEntries().filter(([_, item]) => item.status === "connected").length)
@@ -72,7 +125,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
     <Show when={session()}>
       <box
         backgroundColor={theme.backgroundPanel}
-        width={props.width ?? 42}
+        width={props.width}
+        height="100%"
         paddingTop={1}
         paddingBottom={1}
         paddingLeft={2}
@@ -83,30 +137,126 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
           <box flexShrink={0} gap={1} paddingRight={1}>
             <box paddingRight={1}>
               <text fg={theme.text}>
-                <b>{session().title}</b>
+                <b>{session()?.title}</b>
               </text>
-              <Show when={session().share?.url}>
-                <text fg={theme.textMuted}>{session().share!.url}</text>
+              <Show when={session()?.share?.url}>
+                <text fg={theme.textMuted}>{session()?.share?.url}</text>
               </Show>
             </box>
+            {/* Context Section */}
             <box>
-              <text fg={theme.text}>
-                <b>Context</b>
-              </text>
-              <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
-              <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
-              <text fg={theme.textMuted}>{cost()} spent</text>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("context", !expanded.context)}>
+                <text fg={theme.text}>{expanded.context ? "▼" : "▶"}</text>
+                <text fg={theme.text}>
+                  <b>Context</b>
+                  <Show when={!expanded.context}>
+                    <span style={{ fg: theme.textMuted }}> ({context()?.tokens ?? 0} tokens)</span>
+                  </Show>
+                </text>
+              </box>
+              <Show when={expanded.context}>
+                <text fg={theme.textMuted}>{context()?.tokens ?? 0} tokens</text>
+                <text fg={theme.textMuted}>{context()?.percentage ?? 0}% used</text>
+                <text fg={theme.textMuted}>{cost()} spent</text>
+              </Show>
             </box>
-            <Show when={mcpEntries().length > 0}>
+
+            {/* Subagents Section */}
+            <Show when={subagentGroups().length > 0}>
               <box>
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() => mcpEntries().length > 2 && setExpanded("mcp", !expanded.mcp)}
+                  onMouseDown={() => setExpandedWithPersist("subagents", !expanded.subagents)}
                 >
-                  <Show when={mcpEntries().length > 2}>
-                    <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
-                  </Show>
+                  <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
+                  <text fg={theme.text}>
+                    <b>Subagents</b>
+                    <Show when={!expanded.subagents}>
+                      <span style={{ fg: theme.textMuted }}> ({subagentGroups().length} types)</span>
+                    </Show>
+                  </text>
+                </box>
+                <Show when={expanded.subagents}>
+                  <For each={subagentGroups()}>
+                    {([agentName, parts]) => {
+                      const hasActive = () =>
+                        parts.some((p) => p.state.status === "running" || p.state.status === "pending")
+                      return (
+                        <box>
+                          <box flexDirection="row" gap={1}>
+                            <text flexShrink={0} style={{ fg: hasActive() ? theme.success : theme.text }}>
+                              •
+                            </text>
+                            <text fg={theme.text} wrapMode="word">
+                              {agentName}
+                            </text>
+                          </box>
+                          <For each={parts}>
+                            {(part) => {
+                              const status = () => part.state.status
+                              const isActive = () => status() === "running" || status() === "pending"
+                              const input = part.state.input as Record<string, unknown>
+                              const description = (input?.description as string) ?? ""
+
+                              // Memoize the indicator to avoid reactivity issues
+                              const indicator = createMemo(() => {
+                                if (status() === "running" || status() === "pending") {
+                                  return getSpinnerFrame()
+                                }
+                                return status() === "error" ? "✗" : "✓"
+                              })
+
+                              // Get subagent session ID from metadata, not part.sessionID (which is the parent)
+                              const metadata =
+                                part.state.status === "completed"
+                                  ? part.state.metadata
+                                  : ((part.state as { metadata?: Record<string, unknown> }).metadata ?? {})
+                              const subagentSessionId = (metadata?.sessionId as string) ?? undefined
+
+                              return (
+                                <box
+                                  flexDirection="row"
+                                  gap={1}
+                                  paddingLeft={2}
+                                  onMouseDown={async () => {
+                                    if (subagentSessionId) {
+                                      try {
+                                        await sync.session.sync(subagentSessionId)
+                                        route.navigate({ type: "session", sessionID: subagentSessionId })
+                                      } catch (e) {
+                                        console.error("Failed to sync subagent session:", e)
+                                        toast.show({
+                                          message: `Session not found`,
+                                          variant: "error",
+                                        })
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <text flexShrink={0} fg={isActive() ? theme.success : theme.textMuted}>
+                                    {indicator()}
+                                  </text>
+                                  <text fg={isActive() ? theme.text : theme.textMuted} wrapMode="word">
+                                    {description}
+                                  </text>
+                                </box>
+                              )
+                            }}
+                          </For>
+                        </box>
+                      )
+                    }}
+                  </For>
+                </Show>
+              </box>
+            </Show>
+
+            {/* MCP Section */}
+            <Show when={mcpEntries().length > 0}>
+              <box>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("mcp", !expanded.mcp)}>
+                  <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>MCP</b>
                     <Show when={!expanded.mcp}>
@@ -118,7 +268,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
                     </Show>
                   </text>
                 </box>
-                <Show when={mcpEntries().length <= 2 || expanded.mcp}>
+                <Show when={expanded.mcp}>
                   <For each={mcpEntries()}>
                     {([key, item]) => (
                       <box flexDirection="row" gap={1}>
@@ -158,20 +308,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
                 </Show>
               </box>
             </Show>
+
+            {/* LSP Section */}
             <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
-              >
-                <Show when={sync.data.lsp.length > 2}>
-                  <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
-                </Show>
+              <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("lsp", !expanded.lsp)}>
+                <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
                 <text fg={theme.text}>
                   <b>LSP</b>
+                  <Show when={!expanded.lsp}>
+                    <span style={{ fg: theme.textMuted }}> ({sync.data.lsp.length} active)</span>
+                  </Show>
                 </text>
               </box>
-              <Show when={sync.data.lsp.length <= 2 || expanded.lsp}>
+              <Show when={expanded.lsp}>
                 <Show when={sync.data.lsp.length === 0}>
                   <text fg={theme.textMuted}>
                     {sync.data.config.lsp === false
@@ -201,40 +350,38 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
                 </For>
               </Show>
             </box>
-            <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
+
+            {/* Todo Section */}
+            <Show when={todo().length > 0 && todo().some((item) => item.status !== "completed")}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
-                >
-                  <Show when={todo().length > 2}>
-                    <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
-                  </Show>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("todo", !expanded.todo)}>
+                  <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>Todo</b>
+                    <Show when={!expanded.todo}>
+                      <span style={{ fg: theme.textMuted }}> ({todo().length})</span>
+                    </Show>
                   </text>
                 </box>
-                <Show when={todo().length <= 2 || expanded.todo}>
-                  <For each={todo()}>{(todo) => <TodoItem status={todo.status} content={todo.content} />}</For>
+                <Show when={expanded.todo}>
+                  <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                 </Show>
               </box>
             </Show>
+
+            {/* Changed Files Section */}
             <Show when={diff().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseDown={() => diff().length > 2 && setExpanded("diff", !expanded.diff)}
-                >
-                  <Show when={diff().length > 2}>
-                    <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
-                  </Show>
+                <box flexDirection="row" gap={1} onMouseDown={() => setExpandedWithPersist("diff", !expanded.diff)}>
+                  <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
-                    <b>Modified Files</b>
+                    <b>Changed Files</b>
+                    <Show when={!expanded.diff}>
+                      <span style={{ fg: theme.textMuted }}> ({diff().length} files)</span>
+                    </Show>
                   </text>
                 </box>
-                <Show when={diff().length <= 2 || expanded.diff}>
+                <Show when={expanded.diff}>
                   <For each={diff() || []}>
                     {(item) => {
                       return (
@@ -299,9 +446,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
             <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
           </text>
           <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
+            <span style={{ fg: theme.success }}>•</span> <b>shuv</b>
             <span style={{ fg: theme.text }}>
-              <b>Code</b>
+              <b>code</b>
             </span>{" "}
             <span>{Installation.VERSION}</span>
           </text>

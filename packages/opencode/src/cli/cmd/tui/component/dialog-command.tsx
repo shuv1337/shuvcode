@@ -16,9 +16,15 @@ import type { KeybindsConfig } from "@opencode-ai/sdk/v2"
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
 
+export type Slash = {
+  name: string
+  aliases?: string[]
+}
+
 export type CommandOption = DialogSelectOption & {
   keybind?: keyof KeybindsConfig
   suggested?: boolean
+  slash?: Slash
 }
 
 function init() {
@@ -85,14 +91,17 @@ function init() {
     },
     slashes() {
       return options()
-        .filter((o) => (o as CommandOption).value.startsWith("/"))
-        .map((o) => ({
-          display: (o as any).display ?? (o as CommandOption).value,
-          value: (o as CommandOption).value,
-          description: (o as CommandOption).description,
-          aliases: (o as any).aliases,
-          onSelect: () => (o as CommandOption).onSelect?.(dialog),
-        })) as any
+        .filter((option) => !option.value.startsWith("suggested."))
+        .flatMap((option) => {
+          const slash = option.slash
+          if (!slash) return []
+          return {
+            display: "/" + slash.name,
+            description: option.description ?? option.title,
+            aliases: slash.aliases?.map((alias) => "/" + alias),
+            onSelect: () => result.trigger(option.value),
+          }
+        })
     },
   }
   return result

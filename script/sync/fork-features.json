@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-19",
-  "lastChange": "Add CLI binary name branding: scriptName 'shuvcode' and all user-facing command references updated from 'opencode' to 'shuvcode'.",
+  "lastUpdated": "2026-01-20",
+  "lastChange": "Restore resizable TUI sidebar with hover-only handle and persisted width.",
   "note": "v1.1.25 sync. CLI --help now shows 'shuvcode' instead of 'opencode' for all command names and help text.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -277,7 +277,7 @@
       "title": "Draggable sidebar resize",
       "author": "agustif",
       "status": "open",
-      "description": "Click and drag the sidebar border to resize width, persisted to KV store",
+      "description": "Click and drag the sidebar edge to resize width, persisted to KV store. Handle is only visible on hover/drag with a wider hit area.",
       "files": [
         "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
         "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
@@ -285,13 +285,15 @@
       "criticalCode": [
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Drag state signals and mouse event handlers for sidebar resize",
+          "description": "Drag state signals, width persistence, and mouse event handlers for sidebar resize",
           "markers": [
-            "drag",
-            "setDrag",
-            "down(x: number)",
-            "move(x: number)",
-            "up()",
+            "sidebar_width",
+            "setSidebarWidth",
+            "clampSidebarWidth",
+            "saveSidebarWidth",
+            "startSidebarDrag",
+            "updateSidebarDrag",
+            "endSidebarDrag",
             "onMouseDrag",
             "onMouseUp",
             "onMouseDragEnd"
@@ -299,8 +301,17 @@
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Sidebar border with hover highlight and mouse down handler",
-          "markers": ["setHov", "onMouseDown", "onMouseOver", "onMouseOut", "borderColor={drag()"]
+          "description": "Hover-only resize handle with widened hit area",
+          "markers": [
+            "sidebarHandleWidth",
+            "sidebarHandleHover",
+            "showSidebarHandle",
+            "onMouseDown",
+            "onMouseOver",
+            "onMouseOut",
+            "borderColor={draggingSidebar()",
+            "backgroundColor={showSidebarHandle()"
+          ]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
@@ -488,8 +499,25 @@
       "title": "Toggle session header visibility",
       "author": "fork",
       "status": "fork-only",
-      "description": "Command palette option to hide/show the session header when sidebar is hidden",
-      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/config/config.ts"]
+      "description": "Command palette option to hide/show the session header when sidebar is hidden. Persists preference via KV store.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "headerVisible signal declaration persisted to KV store",
+          "markers": ["const [headerVisible, setHeaderVisible] = kv.signal(\"header_visible\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Command palette entry for toggling header visibility",
+          "markers": ["Hide session header", "Show session header", "session.header.toggle", "header_toggle"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Show condition for Header including headerVisible check",
+          "markers": ["&& headerVisible()"]
+        }
+      ]
     },
     {
       "pr": 0,

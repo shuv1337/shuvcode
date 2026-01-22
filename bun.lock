@@ -376,6 +376,9 @@
     },
     "packages/script": {
       "name": "@opencode-ai/script",
+      "dependencies": {
+        "semver": "^7.6.0",
+      },
       "devDependencies": {
         "@types/bun": "catalog:",
       },
