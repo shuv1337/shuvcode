@@ -62,12 +62,7 @@ export default function Home() {
           <div class="mt-10 sm:mt-20 w-full max-w-xl flex flex-col gap-4 px-4 sm:px-3 pb-10">
             <div class="flex gap-2 items-center justify-between flex-wrap">
               <div class="text-14-medium text-text-strong">Recent projects</div>
-              <Button
-                icon="folder-add-left"
-                size="normal"
-                class="pl-2 pr-3"
-                onClick={addProject}
-              >
+              <Button icon="folder-add-left" size="normal" class="pl-2 pr-3" onClick={addProject}>
                 <span class="hidden sm:inline">Add project</span>
                 <span class="sm:hidden">Add</span>
               </Button>

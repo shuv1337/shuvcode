@@ -16,8 +16,6 @@ import { A, useParams } from "@solidjs/router"
 import { createMemo, createResource, Show } from "solid-js"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { iife } from "@opencode-ai/util/iife"
-import { ThemePicker } from "@/components/theme-picker"
-import { FontPicker } from "@/components/font-picker"
 
 export function Header(props: {
   navigateToProject: (directory: string) => void
@@ -57,12 +55,7 @@ export function Header(props: {
       <div class="pl-4 px-6 flex items-center justify-between gap-4 w-full">
         <Show
           when={layout.projects.list().length > 0 && params.dir}
-          fallback={
-            <div class="hidden md:flex items-center gap-2 ml-auto">
-              <ThemePicker />
-              <FontPicker />
-            </div>
-          }
+          fallback={<div class="hidden md:flex items-center gap-2 ml-auto" />}
         >
           {(directory) => {
             const currentDirectory = createMemo(() => base64Decode(directory()))
@@ -121,11 +114,6 @@ export function Header(props: {
                   </Show>
                 </div>
                 <div class="flex items-center gap-4">
-                  {/* Theme and Font first - desktop only */}
-                  <div class="hidden md:flex items-center gap-2">
-                    <ThemePicker />
-                    <FontPicker />
-                  </div>
                   {/* Review toggle - requires session */}
                   <Show when={currentSession()}>
                     <Tooltip

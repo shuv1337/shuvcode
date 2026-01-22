@@ -1,5 +1,6 @@
 import { test, expect, mock } from "bun:test"
 import path from "path"
+import { unlink } from "fs/promises"
 
 // === Mocks ===
 // These mocks prevent real package installations during tests
@@ -100,28 +101,50 @@ test("GitLab Duo: loads with OAuth token from auth.json", async () => {
   })
 
   const authPath = path.join(Global.Path.data, "auth.json")
-  await Bun.write(
-    authPath,
-    JSON.stringify({
-      gitlab: {
-        type: "oauth",
-        access: "test-access-token",
-        refresh: "test-refresh-token",
-        expires: Date.now() + 3600000,
-      },
-    }),
-  )
 
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("GITLAB_TOKEN", "")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["gitlab"]).toBeDefined()
-    },
-  })
+  // Save original auth.json if it exists
+  let originalAuth: string | undefined
+  try {
+    originalAuth = await Bun.file(authPath).text()
+  } catch {
+    // File doesn't exist, that's fine
+  }
+
+  try {
+    await Bun.write(
+      authPath,
+      JSON.stringify({
+        gitlab: {
+          type: "oauth",
+          access: "test-access-token",
+          refresh: "test-refresh-token",
+          expires: Date.now() + 3600000,
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("GITLAB_TOKEN", "")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["gitlab"]).toBeDefined()
+      },
+    })
+  } finally {
+    // Restore original or delete
+    if (originalAuth !== undefined) {
+      await Bun.write(authPath, originalAuth)
+    } else {
+      try {
+        await unlink(authPath)
+      } catch {
+        // Ignore errors if file doesn't exist
+      }
+    }
+  }
 })
 
 test("GitLab Duo: loads with Personal Access Token from auth.json", async () => {
@@ -136,28 +159,50 @@ test("GitLab Duo: loads with Personal Access Token from auth.json", async () => 
     },
   })
 
-  const authPath2 = path.join(Global.Path.data, "auth.json")
-  await Bun.write(
-    authPath2,
-    JSON.stringify({
-      gitlab: {
-        type: "api",
-        key: "glpat-test-pat-token",
-      },
-    }),
-  )
+  const authPath = path.join(Global.Path.data, "auth.json")
 
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("GITLAB_TOKEN", "")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers["gitlab"]).toBeDefined()
-      expect(providers["gitlab"].key).toBe("glpat-test-pat-token")
-    },
-  })
+  // Save original auth.json if it exists
+  let originalAuth: string | undefined
+  try {
+    originalAuth = await Bun.file(authPath).text()
+  } catch {
+    // File doesn't exist, that's fine
+  }
+
+  try {
+    await Bun.write(
+      authPath,
+      JSON.stringify({
+        gitlab: {
+          type: "api",
+          key: "glpat-test-pat-token",
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("GITLAB_TOKEN", "")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["gitlab"]).toBeDefined()
+        expect(providers["gitlab"].key).toBe("glpat-test-pat-token")
+      },
+    })
+  } finally {
+    // Restore original or delete
+    if (originalAuth !== undefined) {
+      await Bun.write(authPath, originalAuth)
+    } else {
+      try {
+        await unlink(authPath)
+      } catch {
+        // Ignore errors if file doesn't exist
+      }
+    }
+  }
 })
 
 test("GitLab Duo: supports self-hosted instance configuration", async () => {

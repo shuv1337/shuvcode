@@ -92,8 +92,8 @@ export namespace ModelsDev {
     if (Flag.OPENCODE_DISABLE_MODELS_FETCH) {
       throw new Error("Models fetch disabled and no cached data available")
     }
-    // Direct fetch fallback when macro is unavailable
-    const response = await fetch("https://models.dev/api.json", {
+    const url = Global.Path.modelsDevUrl
+    const response = await fetch(`${url}/api.json`, {
       headers: {
         "User-Agent": Installation.USER_AGENT,
       },
@@ -112,7 +112,8 @@ export namespace ModelsDev {
     log.info("refreshing", {
       file,
     })
-    const result = await fetch("https://models.dev/api.json", {
+    const url = Global.Path.modelsDevUrl
+    const result = await fetch(`${url}/api.json`, {
       headers: {
         "User-Agent": Installation.USER_AGENT,
       },

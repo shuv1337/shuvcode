@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-20",
-  "lastChange": "Restore resizable TUI sidebar with hover-only handle and persisted width.",
+  "lastUpdated": "2026-01-22",
+  "lastChange": "Remove fork-specific desktop theme/font picker feature entry.",
   "note": "v1.1.25 sync. CLI --help now shows 'shuvcode' instead of 'opencode' for all command names and help text.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -145,21 +145,7 @@
       "note": "The ?url= query parameter allowed arbitrary server URL override, enabling XSS on localhost:4096. Attackers could inject malicious server URLs that return XSS payloads, then use /pty/ API to execute arbitrary commands."
     }
   ],
-  "apiDependencies": [
-    {
-      "api": "useDialog",
-      "location": "packages/ui/src/context/dialog.tsx",
-      "description": "Dialog context API used by fork-specific components",
-      "currentSignature": "{ show(element, onClose?), close(), active }",
-      "affectedFiles": ["packages/app/src/components/font-picker.tsx", "packages/app/src/components/theme-picker.tsx"],
-      "migrationHistory": [
-        {
-          "version": "v1.0.162",
-          "change": "dialog.replace() -> dialog.show(), dialog.pop() -> dialog.close()"
-        }
-      ]
-    }
-  ],
+  "apiDependencies": [],
   "features": [
     {
       "pr": 6476,
@@ -576,70 +562,6 @@
           "file": "packages/app/src/theme/apply-theme.ts",
           "description": "BASE_THEMES including OpenCode theme",
           "markers": ["{ id: \"opencode\", name: \"OpenCode\" }"]
-        }
-      ]
-    },
-    {
-      "pr": 0,
-      "title": "Desktop theme/font pickers, branding, and inline header",
-      "author": "fork",
-      "status": "fork-only",
-      "description": "Inline header in layout.tsx with shuvcode ASCII branding (AsciiLogo when expanded, AsciiMark when collapsed), theme/font picker buttons, mobile session dropdown, and responsive layout. Upstream refactored header into separate component which lost these customizations.",
-      "files": [
-        "packages/app/src/pages/layout.tsx",
-        "packages/app/src/components/font-picker.tsx",
-        "packages/app/src/components/theme-picker.tsx",
-        "packages/ui/src/components/logo.tsx"
-      ],
-      "apiDependency": "useDialog",
-      "criticalCode": [
-        {
-          "file": "packages/app/src/pages/layout.tsx",
-          "description": "Inline header with shuvcode branding, theme/font pickers, mobile dropdown",
-          "markers": [
-            "import { AsciiLogo, AsciiMark }",
-            "import { ThemePicker }",
-            "import { FontPicker }",
-            "import { Select }",
-            "<AsciiLogo scale={0.55}",
-            "<AsciiMark scale={0.45}",
-            "<FontPicker />",
-            "<ThemePicker />",
-            "max-w-[calc(100vw-2rem)]",
-            "sm:hidden",
-            "hidden sm:flex"
-          ]
-        },
-        {
-          "file": "packages/app/src/components/font-picker.tsx",
-          "description": "Font picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
-          "markers": ["dialog.show(", "dialog.close()"]
-        },
-        {
-          "file": "packages/app/src/components/theme-picker.tsx",
-          "description": "Theme picker dialog using useDialog API - MUST UPDATE when dialog.tsx API changes",
-          "markers": ["dialog.show(", "dialog.close()"]
-        },
-        {
-          "file": "packages/app/src/pages/layout.tsx",
-          "description": "Mobile media query for auto-collapse sidebar/terminal/review",
-          "markers": [
-            "onMount(() =>",
-            "matchMedia(\"(max-width: 40rem)\")",
-            "layout.sidebar.close()",
-            "layout.terminal.close()",
-            "layout.review.tab()"
-          ]
-        },
-        {
-          "file": "packages/ui/src/components/logo.tsx",
-          "description": "AsciiLogo/AsciiMark definitions for shuvcode branding",
-          "markers": [
-            "export const AsciiMark",
-            "export const AsciiLogo",
-            "data-component=\"ascii-mark\"",
-            "data-component=\"ascii-logo\""
-          ]
         }
       ]
     },
