@@ -4,6 +4,7 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
 import { TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { useTheme } from "@opencode-ai/ui/theme"
+import { AsciiMark } from "@opencode-ai/ui/logo"
 
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
@@ -88,6 +89,11 @@ export function Titlebar() {
       >
         <Show when={mac()}>
           <div class="w-[72px] h-full shrink-0" data-tauri-drag-region />
+        </Show>
+        <div class="shrink-0 w-8 h-8 flex items-center justify-center" data-tauri-drag-region>
+          <AsciiMark scale={0.45} />
+        </div>
+        <Show when={mac()}>
           <div class="xl:hidden w-10 shrink-0 flex items-center justify-center">
             <IconButton
               icon="menu"

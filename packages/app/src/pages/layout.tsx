@@ -21,7 +21,6 @@ import { useGlobalSync } from "@/context/global-sync"
 import { Persist, persisted } from "@/utils/persist"
 import { base64Decode, base64Encode } from "@opencode-ai/util/encode"
 import { Avatar } from "@opencode-ai/ui/avatar"
-import { AsciiLogo, AsciiMark } from "@opencode-ai/ui/logo"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -61,20 +60,17 @@ import { playSound, soundSrc } from "@/utils/sound"
 
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme"
-import { FontPicker } from "@/components/font-picker"
-import { ThemePicker, DialogSelectTheme } from "@/components/theme-picker"
 import { DialogSelectProvider } from "@/components/dialog-select-provider"
 import { DialogSelectServer } from "@/components/dialog-select-server"
 import { DialogSettings } from "@/components/dialog-settings"
 import { useCommand, type CommandOption } from "@/context/command"
 import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { navStart } from "@/utils/perf"
-import { DialogCreateProject } from "@/components/dialog-create-project"
+import { DialogSelectDirectory } from "@/components/dialog-select-directory"
 import { DialogSessionRenameGlobal } from "@/components/dialog-session-rename-global"
 import { DialogEditProject } from "@/components/dialog-edit-project"
 import { Titlebar } from "@/components/titlebar"
 import { useServer } from "@/context/server"
-import { applyTheme } from "@/theme/apply-theme"
 import { useLanguage, type Locale } from "@/context/language"
 
 export default function Layout(props: ParentProps) {
@@ -94,11 +90,18 @@ export default function Layout(props: ParentProps) {
   const pageReady = createMemo(() => ready())
 
   let scrollContainerRef: HTMLDivElement | undefined
+  const smQuery = window.matchMedia("(min-width: 640px)")
   const xlQuery = window.matchMedia("(min-width: 1280px)")
+  const [isSmallViewport, setIsSmallViewport] = createSignal(smQuery.matches)
   const [isLargeViewport, setIsLargeViewport] = createSignal(xlQuery.matches)
-  const handleViewportChange = (e: MediaQueryListEvent) => setIsLargeViewport(e.matches)
-  xlQuery.addEventListener("change", handleViewportChange)
-  onCleanup(() => xlQuery.removeEventListener("change", handleViewportChange))
+  const handleSmallViewportChange = (e: MediaQueryListEvent) => setIsSmallViewport(e.matches)
+  const handleLargeViewportChange = (e: MediaQueryListEvent) => setIsLargeViewport(e.matches)
+  smQuery.addEventListener("change", handleSmallViewportChange)
+  xlQuery.addEventListener("change", handleLargeViewportChange)
+  onCleanup(() => {
+    smQuery.removeEventListener("change", handleSmallViewportChange)
+    xlQuery.removeEventListener("change", handleLargeViewportChange)
+  })
 
   const params = useParams()
   const [autoselect, setAutoselect] = createSignal(!params.dir)
@@ -835,6 +838,13 @@ export default function Layout(props: ParentProps) {
         onSelect: () => layout.sidebar.toggle(),
       },
       {
+        id: "project.open",
+        title: language.t("command.project.open"),
+        category: language.t("command.category.project"),
+        keybind: "mod+o",
+        onSelect: () => chooseProject(),
+      },
+      {
         id: "provider.connect",
         title: language.t("command.provider.connect"),
         category: language.t("command.category.provider"),
@@ -876,15 +886,6 @@ export default function Layout(props: ParentProps) {
         onSelect: () => {
           const session = currentSessions().find((s) => s.id === params.id)
           if (session) archiveSession(session)
-        },
-      },
-      {
-        id: "theme.picker",
-        title: "Theme picker",
-        category: "Theme",
-        onSelect: () => {
-          const originalTheme = theme.themeId()
-          dialog.show(() => <DialogSelectTheme originalTheme={originalTheme} />, () => applyTheme(theme.themeId()))
         },
       },
       {
@@ -961,10 +962,6 @@ export default function Layout(props: ParentProps) {
     dialog.show(() => <DialogSettings />)
   }
 
-  function createProject() {
-    dialog.show(() => <DialogCreateProject />)
-  }
-
   function navigateToProject(directory: string | undefined) {
     if (!directory) return
     server.projects.touch(directory)
@@ -1015,6 +1012,32 @@ export default function Layout(props: ParentProps) {
     layout.projects.close(directory)
     if (next) navigateToProject(next.worktree)
     else navigate("/")
+  }
+
+  async function chooseProject() {
+    function resolve(result: string | string[] | null) {
+      if (Array.isArray(result)) {
+        for (const directory of result) {
+          openProject(directory, false)
+        }
+        navigateToProject(result[0])
+      } else if (result) {
+        openProject(result)
+      }
+    }
+
+    if (platform.openDirectoryPickerDialog && server.isLocal()) {
+      const result = await platform.openDirectoryPickerDialog?.({
+        title: language.t("command.project.open"),
+        multiple: true,
+      })
+      resolve(result)
+    } else {
+      dialog.show(
+        () => <DialogSelectDirectory multiple={true} onSelect={resolve} />,
+        () => resolve(null),
+      )
+    }
   }
 
   const errorMessage = (err: unknown) => {
@@ -2095,68 +2118,82 @@ export default function Layout(props: ParentProps) {
     const homedir = createMemo(() => sync.data.path.home)
 
     return (
-      <div class="flex flex-col h-full w-full overflow-hidden">
-        <div class="border-b border-border-weak-base w-full h-12 flex items-center justify-center shrink-0">
-          <A
-            href="/"
-            class="shrink-0 h-8 flex items-center justify-center w-full"
-            data-tauri-drag-region
-            onClick={() => sidebarProps.mobile && layout.mobileSidebar.hide()}
-          >
-            <Show when={expanded()} fallback={<AsciiMark scale={0.45} class="shrink-0" />}>
-              <AsciiLogo scale={0.55} class="shrink-0" />
-            </Show>
-          </A>
-        </div>
-        <div class="flex flex-1 min-h-0 w-full overflow-hidden">
-          <div class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden">
-            <div class="flex-1 min-h-0 w-full">
-              <DragDropProvider
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                collisionDetector={closestCenter}
-              >
-                <DragDropSensors />
-                <ConstrainDragXAxis />
-                <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-2 overflow-y-auto no-scrollbar">
-                  <SortableProvider ids={layout.projects.list().map((p) => p.worktree)}>
-                    <For each={layout.projects.list()}>
-                      {(project) => <SortableProject project={project} mobile={sidebarProps.mobile} />}
-                    </For>
-                  </SortableProvider>
-                  <Tooltip placement={sidebarProps.mobile ? "bottom" : "right"} value="Add project">
-                    <IconButton icon="plus" variant="ghost" size="large" onClick={createProject} />
-                  </Tooltip>
-                </div>
-                <DragOverlay>
-                  <ProjectDragOverlay />
-                </DragOverlay>
-              </DragDropProvider>
-            </div>
-            <div class="shrink-0 w-full pt-3 pb-3 flex flex-col items-center gap-2">
-              <Tooltip placement={sidebarProps.mobile ? "bottom" : "right"} value="Settings">
-                <IconButton icon="settings-gear" variant="ghost" size="large" onClick={openSettings} />
-              </Tooltip>
-              <Tooltip placement={sidebarProps.mobile ? "bottom" : "right"} value="Help">
-                <IconButton
-                  icon="help"
-                  variant="ghost"
-                  size="large"
-                  onClick={() => platform.openLink("https://opencode.ai/desktop-feedback")}
-                />
-              </Tooltip>
-            </div>
-          </div>
-
-          <Show when={expanded()}>
-            <div
-              classList={{
-                "flex flex-col min-h-0 bg-background-stronger border border-b-0 border-border-weak-base rounded-tl-sm": true,
-                "flex-1 min-w-0": sidebarProps.mobile,
-              }}
-              style={{ width: sidebarProps.mobile ? undefined : `${Math.max(layout.sidebar.width() - 64, 0)}px` }}
+      <div class="flex h-full w-full overflow-hidden">
+        <div class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden">
+          <div class="flex-1 min-h-0 w-full">
+            <DragDropProvider
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              collisionDetector={closestCenter}
             >
+              <DragDropSensors />
+              <ConstrainDragXAxis />
+              <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-2 overflow-y-auto no-scrollbar">
+                <SortableProvider ids={layout.projects.list().map((p) => p.worktree)}>
+                  <For each={layout.projects.list()}>
+                    {(project) => <SortableProject project={project} mobile={sidebarProps.mobile} />}
+                  </For>
+                </SortableProvider>
+                <Tooltip
+                  placement={sidebarProps.mobile ? "bottom" : "right"}
+                  value={
+                    <div class="flex items-center gap-2">
+                      <span>{language.t("command.project.open")}</span>
+                      <Show when={!sidebarProps.mobile}>
+                        <span class="text-icon-base text-12-medium">{command.keybind("project.open")}</span>
+                      </Show>
+                    </div>
+                  }
+                >
+                  <IconButton
+                    icon="plus"
+                    variant="ghost"
+                    size="large"
+                    onClick={chooseProject}
+                    aria-label={language.t("command.project.open")}
+                  />
+                </Tooltip>
+              </div>
+              <DragOverlay>
+                <ProjectDragOverlay />
+              </DragOverlay>
+            </DragDropProvider>
+          </div>
+          <div class="shrink-0 w-full pt-3 pb-3 flex flex-col items-center gap-2">
+            <TooltipKeybind
+              placement={sidebarProps.mobile ? "bottom" : "right"}
+              title={language.t("sidebar.settings")}
+              keybind={command.keybind("settings.open")}
+            >
+              <IconButton
+                icon="settings-gear"
+                variant="ghost"
+                size="large"
+                onClick={openSettings}
+                aria-label={language.t("sidebar.settings")}
+              />
+            </TooltipKeybind>
+            <Tooltip placement={sidebarProps.mobile ? "bottom" : "right"} value={language.t("sidebar.help")}>
+              <IconButton
+                icon="help"
+                variant="ghost"
+                size="large"
+                onClick={() => platform.openLink("https://opencode.ai/desktop-feedback")}
+                aria-label={language.t("sidebar.help")}
+              />
+            </Tooltip>
+          </div>
+        </div>
+
+        <Show when={expanded()}>
+          <div
+            classList={{
+              "flex flex-col min-h-0 bg-background-stronger border border-b-0 border-border-weak-base rounded-tl-sm": true,
+              "flex-1 min-w-0": sidebarProps.mobile,
+            }}
+            style={{ width: sidebarProps.mobile ? undefined : `${Math.max(layout.sidebar.width() - 64, 0)}px` }}
+          >
             <Show when={project()} keyed>
               {(p) => (
                 <>
@@ -2312,61 +2349,20 @@ export default function Layout(props: ParentProps) {
                 </div>
               </div>
             </Show>
-            <div class="shrink-0 px-2 py-3 border-t border-border-weak-base">
-              <div class="flex flex-col gap-2">
-                <Button
-                  class="flex w-full text-text-base stroke-[1.5px] rounded-lg justify-start px-2"
-                  variant="ghost"
-                  size="large"
-                  icon="folder-add-left"
-                  onClick={createProject}
-                >
-                  Add project
-                </Button>
-                <Button
-                  class="flex w-full text-text-base stroke-[1.5px] rounded-lg justify-start px-2"
-                  variant="ghost"
-                  size="large"
-                  icon="settings-gear"
-                  onClick={openServer}
-                >
-                  Switch server
-                </Button>
-                <Button
-                  as={"a"}
-                  href="https://opencode.ai/desktop-feedback"
-                  target="_blank"
-                  class="flex w-full text-text-base stroke-[1.5px] rounded-lg justify-start px-2"
-                  variant="ghost"
-                  size="large"
-                  icon="bubble-5"
-                >
-                  Share feedback
-                </Button>
-                <div class="flex flex-col gap-1.5">
-                  <FontPicker mobile={expanded()} />
-                  <ThemePicker mobile={expanded()} />
-                </div>
-                <div class="mt-2 px-1 text-11-regular text-text-weaker">
-                  v{__APP_VERSION__} ({__COMMIT_HASH__})
-                </div>
-              </div>
-            </div>
           </div>
         </Show>
       </div>
-    </div>
     )
   }
 
   return (
     <div class="relative bg-background-base flex-1 min-h-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
       <Titlebar />
-      <div class="flex-1 min-h-0 flex">
+      <div class="flex-1 min-h-0 flex isolate">
         <div
           classList={{
             "hidden xl:block": true,
-            "relative shrink-0": true,
+            "relative shrink-0 z-20": true,
           }}
           style={{ width: layout.sidebar.opened() ? `${Math.max(layout.sidebar.width(), 244)}px` : "64px" }}
         >
@@ -2410,15 +2406,21 @@ export default function Layout(props: ParentProps) {
 
         <main
           classList={{
-            "size-full overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base": true,
+            "flex-1 min-w-0 min-h-0 overflow-x-hidden flex flex-col items-start contain-strict border-t border-border-weak-base relative z-0": true,
             "xl:border-l xl:rounded-tl-sm": !layout.sidebar.opened(),
           }}
         >
           <Show when={!autoselecting()} fallback={<div class="size-full" />}>
-            <div class="hidden sm:contents">{props.children}</div>
-            <div class="contents sm:hidden">
-              <PullToRefresh enabled={!isPWA()}>{props.children}</PullToRefresh>
-            </div>
+            <Show
+              when={isSmallViewport()}
+              fallback={
+                <div class="contents">
+                  <PullToRefresh enabled={!isPWA()}>{props.children}</PullToRefresh>
+                </div>
+              }
+            >
+              <div class="contents">{props.children}</div>
+            </Show>
           </Show>
         </main>
       </div>
