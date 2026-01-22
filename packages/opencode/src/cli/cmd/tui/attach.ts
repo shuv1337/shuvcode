@@ -21,10 +21,17 @@ export const AttachCommand = cmd({
         describe: "session id to continue",
       }),
   handler: async (args) => {
-    if (args.dir) process.chdir(args.dir)
-    // Always pass client's cwd so attached sessions operate in the client's directory
-    // This ensures file autocomplete, theme discovery, and exports use the correct directory
-    const directory = process.cwd()
+    let directory = args.dir
+    if (args.dir) {
+      try {
+        process.chdir(args.dir)
+        // Use resolved path for local directories to ensure file autocomplete,
+        // theme discovery, and exports use the correct directory
+        directory = process.cwd()
+      } catch {
+        // If the directory doesn't exist locally (remote attach), pass it through.
+      }
+    }
     await tui({
       url: args.url,
       args: { sessionID: args.session },

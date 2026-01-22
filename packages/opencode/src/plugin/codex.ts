@@ -1,12 +1,14 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import z from "zod"
 import { Log } from "../util/log"
-import { OAUTH_DUMMY_KEY } from "../auth"
+import { Installation } from "../installation"
+import { Auth, OAUTH_DUMMY_KEY } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 import { Bus } from "../bus"
 import { TuiEvent } from "../cli/cmd/tui/event"
 import { Session } from "../session"
 import { Usage, type PlanType, type Snapshot } from "../usage"
+import os from "os"
 
 const log = Log.create({ service: "plugin.codex" })
 
@@ -477,7 +479,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               const tokens = await refreshAccessToken(currentAuth.refresh)
               const newAccountId = extractAccountId(tokens) || authWithAccount.accountId
               await input.client.auth.set({
-                path: { id: "codex" },
+                path: { id: "openai" },
                 body: {
                   type: "oauth",
                   refresh: tokens.refresh_token,
@@ -578,6 +580,12 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
           type: "api",
         },
       ],
+    },
+    "chat.headers": async (input, output) => {
+      if (input.model.providerID !== "openai") return
+      output.headers.originator = "opencode"
+      output.headers["User-Agent"] = `opencode/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`
+      output.headers.session_id = input.sessionID
     },
   }
 }
