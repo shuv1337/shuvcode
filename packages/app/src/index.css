@@ -1,7 +1,7 @@
 @import "@opencode-ai/ui/styles/tailwind";
 
 :root {
-  /* Font is set via JavaScript in index.html and font-picker.tsx */
+  /* Font is set via JavaScript in index.html */
   /* Default fallback handled in inline script */
 
   /* Safe area insets for mobile devices (notch, home indicator, etc.) */
