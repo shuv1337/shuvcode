@@ -26,14 +26,30 @@ process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 // These plugins have dependencies that can fail to bundle in CI environments
 process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 
+// Ensure cache directory exists before Global import writes version file
+const cacheDir = path.join(process.env["XDG_CACHE_HOME"]!, "opencode")
+await fs.mkdir(cacheDir, { recursive: true })
+
+// Now safe to import from src/
+const { Global } = await import("../src/global")
+
 // Pre-fetch models.json so tests don't need the macro fallback
 // Also write the cache version file to prevent global/index.ts from clearing the cache
-const cacheDir = path.join(dir, "cache", "opencode")
-await fs.mkdir(cacheDir, { recursive: true })
 await fs.writeFile(path.join(cacheDir, "version"), "18")
-const response = await fetch("https://models.dev/api.json")
-if (response.ok) {
-  await fs.writeFile(path.join(cacheDir, "models.json"), await response.text())
+const fixturePath = path.join(import.meta.dir, "fixture", "models.dev.json")
+let modelsJson: string | undefined
+try {
+  modelsJson = await fs.readFile(fixturePath, "utf8")
+} catch {}
+if (!modelsJson) {
+  const url = Global.Path.modelsDevUrl
+  const response = await fetch(`${url}/api.json`).catch(() => undefined)
+  if (response?.ok) {
+    modelsJson = await response.text()
+  }
+}
+if (modelsJson) {
+  await fs.writeFile(path.join(cacheDir, "models.json"), modelsJson)
 }
 // Disable models.dev refresh to avoid race conditions during tests
 process.env["OPENCODE_DISABLE_MODELS_FETCH"] = "true"
@@ -59,7 +75,6 @@ delete process.env["FIREWORKS_API_KEY"]
 delete process.env["CEREBRAS_API_KEY"]
 delete process.env["SAMBANOVA_API_KEY"]
 
-// Now safe to import from src/
 const { Log } = await import("../src/util/log")
 
 Log.init({

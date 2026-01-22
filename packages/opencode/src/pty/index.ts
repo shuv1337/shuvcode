@@ -156,7 +156,12 @@ export namespace Pty {
     }
 
     const cwd = input.cwd || Instance.directory
-    const env = { ...process.env, ...input.env, TERM: "xterm-256color" } as Record<string, string>
+    const env = {
+      ...process.env,
+      ...input.env,
+      TERM: "xterm-256color",
+      OPENCODE_TERMINAL: "1",
+    } as Record<string, string>
     log.info("creating session", { id, cmd: command, args, cwd })
 
     const spawn = await pty()
@@ -200,6 +205,10 @@ export namespace Pty {
     ptyProcess.onExit(({ exitCode }) => {
       log.info("session exited", { id, exitCode })
       session.info.status = "exited"
+      for (const ws of session.subscribers) {
+        ws.close()
+      }
+      session.subscribers.clear()
       Bus.publish(Event.Exited, { id, exitCode })
       for (const ws of session.subscribers) {
         ws.close()

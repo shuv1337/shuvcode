@@ -1,7 +1,7 @@
 @import "@opencode-ai/ui/styles/tailwind";
 
 :root {
-  /* Font is set via JavaScript in index.html and font-picker.tsx */
+  /* Font is set via JavaScript in index.html */
   /* Default fallback handled in inline script */
 
   /* Safe area insets for mobile devices (notch, home indicator, etc.) */
@@ -165,6 +165,26 @@ body {
     min-height: 32px;
     min-width: 32px;
   }
+}
+
+[data-component="markdown"] ul {
+  list-style: disc outside;
+  padding-left: 1.5rem;
+}
+
+[data-component="markdown"] ol {
+  list-style: decimal outside;
+  padding-left: 1.5rem;
+}
+
+[data-component="markdown"] li > p:first-child {
+  display: inline;
+  margin: 0;
+}
+
+[data-component="markdown"] li > p + p {
+  display: block;
+  margin-top: 0.5rem;
 }
 
 *[data-tauri-drag-region] {
