@@ -36,6 +36,7 @@ import {
   useContext,
   onCleanup,
   onMount,
+  untrack,
   type Accessor,
   type ParentProps,
   Switch,
@@ -186,7 +187,10 @@ function createGlobalSync() {
 
   createEffect(() => {
     if (!projectCacheReady()) return
-    if (globalStore.project.length === 0 && projectCache.value.length !== 0) return
+    // Use untrack to read cache length without creating dependency
+    // This effect should only re-run when globalStore.project changes
+    const cacheLen = untrack(() => projectCache.value.length)
+    if (globalStore.project.length === 0 && cacheLen !== 0) return
     setProjectCache("value", globalStore.project.map(sanitizeProject))
   })
 
@@ -268,11 +272,17 @@ function createGlobalSync() {
         children[directory] = child
 
         createEffect(() => {
-          child[1]("projectMeta", meta[0].value)
+          const newValue = meta[0].value
+          // Avoid reactive loops by skipping write if value unchanged
+          if (JSON.stringify(child[0].projectMeta) === JSON.stringify(newValue)) return
+          child[1]("projectMeta", newValue)
         })
 
         createEffect(() => {
-          child[1]("icon", icon[0].value)
+          const newValue = icon[0].value
+          // Avoid reactive loops by skipping write if value unchanged
+          if (child[0].icon === newValue) return
+          child[1]("icon", newValue)
         })
       }
 
@@ -882,6 +892,10 @@ function createGlobalSync() {
       icon,
       commands,
     }
+    // Avoid reactive loops by skipping write if value unchanged
+    const prevStr = JSON.stringify(store.projectMeta)
+    const nextStr = JSON.stringify(next)
+    if (prevStr === nextStr) return
     cached.setStore("value", next)
     setStore("projectMeta", next)
   }
