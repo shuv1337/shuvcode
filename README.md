@@ -11,13 +11,13 @@
 
 ## Screenshots
 
-### Desktop App
+### Web App
 
 <p align="center">
   <img src="shuvcode-desktop-session-review-diff.png" alt="Desktop session with diff viewer" width="800" />
 </p>
 
-*Desktop session view with AI chat, session sidebar, and real-time code diff review*
+*Web session view with chat, session sidebar, and real-time code diff review*
 
 ### Mobile PWA
 
@@ -53,7 +53,6 @@ npm i -g shuvcode@latest           # or bun/pnpm/yarn
 
 This fork serves as an integration testing ground for upstream PRs before they are merged into the main opencode repository. We merge, test, and validate promising features and fixes to help ensure quality contributions to the upstream project.
 
-The desktop app is available from the [releases page](https://github.com/Latitudes-Dev/shuvcode/releases).
 
 ---
 
