@@ -1,7 +1,7 @@
 {
-  "name": "@shuvcode/desktop",
+  "name": "@opencode-ai/desktop",
   "private": true,
-  "version": "1.1.33-2",
+  "version": "1.1.34",
   "type": "module",
   "license": "MIT",
   "scripts": {

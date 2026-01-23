@@ -31,12 +31,12 @@ import {
   batch,
   createContext,
   createEffect,
+  untrack,
   getOwner,
   runWithOwner,
   useContext,
   onCleanup,
   onMount,
-  untrack,
   type Accessor,
   type ParentProps,
   Switch,
@@ -187,11 +187,12 @@ function createGlobalSync() {
 
   createEffect(() => {
     if (!projectCacheReady()) return
-    // Use untrack to read cache length without creating dependency
-    // This effect should only re-run when globalStore.project changes
-    const cacheLen = untrack(() => projectCache.value.length)
-    if (globalStore.project.length === 0 && cacheLen !== 0) return
-    setProjectCache("value", globalStore.project.map(sanitizeProject))
+    const projects = globalStore.project
+    if (projects.length === 0) {
+      const cachedLength = untrack(() => projectCache.value.length)
+      if (cachedLength !== 0) return
+    }
+    setProjectCache("value", projects.map(sanitizeProject))
   })
 
   createEffect(async () => {
