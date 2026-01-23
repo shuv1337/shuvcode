@@ -85,7 +85,7 @@ export function AppBaseProviders(props: ParentProps) {
   return (
     <MetaProvider>
       <Font />
-      <ThemeProvider>
+      <ThemeProvider defaultTheme="nightowl">
         <LanguageProvider>
           <UiI18nBridge>
             <ErrorBoundary fallback={(error) => <ErrorPage error={error} />}>
@@ -153,7 +153,7 @@ export function AppInterface(props: { defaultUrl?: string }) {
                 <Route
                   path="/session/:id?"
                   component={(p) => (
-                    <Show when={p.params.id ?? "new"} keyed>
+                    <Show when={p.params.id ?? "new"}>
                       <TerminalProvider>
                         <FileProvider>
                           <PromptProvider>
