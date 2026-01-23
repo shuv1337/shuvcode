@@ -6,7 +6,6 @@ import { useGlobalSDK } from "./global-sdk"
 import { useServer } from "./server"
 import { Project } from "@opencode-ai/sdk/v2"
 import { Persist, persisted, removePersisted } from "@/utils/persist"
-import { applyTheme, DEFAULT_THEME_ID } from "@/theme/apply-theme"
 import { applyFontWithLoad } from "@/fonts/apply-font"
 import { getFontById, FONTS } from "@/fonts/font-definitions"
 import { same } from "@/utils/same"
@@ -100,7 +99,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         session: {
           width: 600,
         },
-        theme: DEFAULT_THEME_ID,
         font: FONTS[0].id,
         mobileSidebar: {
           opened: false,
@@ -370,10 +368,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     })
 
     createEffect(() => {
-      applyTheme(store.theme)
-    })
-
-    createEffect(() => {
       const font = getFontById(store.font) ?? FONTS[0]
       applyFontWithLoad(font)
     })
@@ -483,12 +477,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
             return
           }
           setStore("session", "width", width)
-        },
-      },
-      theme: {
-        current: createMemo(() => store.theme),
-        set(theme: string) {
-          setStore("theme", theme)
         },
       },
       font: {
