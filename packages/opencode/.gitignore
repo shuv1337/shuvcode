@@ -3,3 +3,4 @@ dist
 gen
 app.log
 static
+src/provider/models-snapshot.ts
