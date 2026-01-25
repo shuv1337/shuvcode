@@ -71,6 +71,10 @@ interface SessionReviewTabProps {
   diffStyle: DiffStyle
   onDiffStyleChange?: (style: DiffStyle) => void
   onViewFile?: (file: string) => void
+  onLineComment?: (comment: { file: string; selection: SelectedLineRange; comment: string; preview?: string }) => void
+  comments?: LineComment[]
+  focusedComment?: { file: string; id: string } | null
+  onFocusedCommentChange?: (focus: { file: string; id: string } | null) => void
   classes?: {
     root?: string
     header?: string
@@ -159,6 +163,10 @@ function SessionReviewTab(props: SessionReviewTabProps) {
       diffs={props.diffs()}
       diffStyle={props.diffStyle}
       onDiffStyleChange={props.onDiffStyleChange}
+      onLineComment={props.onLineComment}
+      comments={props.comments}
+      focusedComment={props.focusedComment}
+      onFocusedCommentChange={props.onFocusedCommentChange}
       onViewFile={props.onViewFile}
       readFile={readFile}
     />
