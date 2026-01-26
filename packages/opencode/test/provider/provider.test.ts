@@ -1,7 +1,12 @@
 import { test, expect, mock } from "bun:test"
 import path from "path"
 
-// Mock BunProc and default plugins to prevent actual installations during tests
+// === Mocks ===
+// These mocks are required because Provider.list() triggers:
+// 1. BunProc.install() for default plugins
+// 2. Plugin.list() which calls BunProc.install() for default plugins
+// Without mocks, these would attempt real package installations that timeout in tests.
+
 mock.module("../../src/bun/index", () => ({
   BunProc: {
     install: async (pkg: string, _version?: string) => {
@@ -22,10 +27,11 @@ mock.module("opencode-copilot-auth", () => ({ default: mockPlugin }))
 mock.module("opencode-anthropic-auth", () => ({ default: mockPlugin }))
 mock.module("@gitlab/opencode-gitlab-auth", () => ({ default: mockPlugin }))
 
-import { tmpdir } from "../fixture/fixture"
-import { Instance } from "../../src/project/instance"
-import { Provider } from "../../src/provider/provider"
-import { Env } from "../../src/env"
+// Import after mocks are set up
+const { tmpdir } = await import("../fixture/fixture")
+const { Instance } = await import("../../src/project/instance")
+const { Provider } = await import("../../src/provider/provider")
+const { Env } = await import("../../src/env")
 
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
