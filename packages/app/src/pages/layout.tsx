@@ -559,8 +559,6 @@ export default function Layout(props: ParentProps) {
   const workspaceLabel = (directory: string, branch?: string, projectId?: string) =>
     workspaceName(directory, projectId, branch) ?? branch ?? getFilename(directory)
 
-  const isWorkspaceEditing = () => editor.active.startsWith("workspace:")
-
   const workspaceSetting = createMemo(() => {
     const project = currentProject()
     if (!project) return false
