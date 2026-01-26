@@ -32,7 +32,6 @@ mock.module("@aws-sdk/credential-providers", () => ({
 
 const mockPlugin = () => ({})
 mock.module("opencode-copilot-auth", () => ({ default: mockPlugin }))
-mock.module("opencode-anthropic-auth-shuv", () => ({ default: mockPlugin }))
 mock.module("opencode-anthropic-auth", () => ({ default: mockPlugin }))
 mock.module("@gitlab/opencode-gitlab-auth", () => ({ default: mockPlugin }))
 
