@@ -22,17 +22,39 @@ process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
 process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
 process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 
-// Disable default plugins (opencode-anthropic-auth-shuv, opencode-copilot-auth) during tests
+// Disable default plugins (opencode-anthropic-auth, opencode-copilot-auth) during tests
 // These plugins have dependencies that can fail to bundle in CI environments
 process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+await fs.writeFile(path.join(cacheDir, "version"), "18")
+
+// Pre-fetch models.json since models-snapshot.ts is only generated during build
+// This ensures provider tests have access to the models database
+const fixturePath = path.join(import.meta.dir, "fixture", "models.dev.json")
+let modelsJson: string | undefined
+try {
+  modelsJson = await fs.readFile(fixturePath, "utf8")
+} catch {
+  // Fixture doesn't exist, try fetching from models.dev
+  const response = await fetch("https://models.dev/api.json").catch(() => undefined)
+  if (response?.ok) {
+    modelsJson = await response.text()
+    // Save as fixture for future runs
+    await fs.writeFile(fixturePath, modelsJson).catch(() => {})
+  }
+}
+if (modelsJson) {
+  await fs.writeFile(path.join(cacheDir, "models.json"), modelsJson)
+}
 
 // Disable models.dev refresh to avoid race conditions during tests
 process.env["OPENCODE_DISABLE_MODELS_FETCH"] = "true"
+
+// Clear config-related env vars to ensure project configs are loaded in tests
+delete process.env["OPENCODE_DISABLE_PROJECT_CONFIG"]
 
 // Clear provider env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
