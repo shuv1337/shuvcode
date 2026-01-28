@@ -62,16 +62,37 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
     const migrate = (value: unknown) => {
       if (!isRecord(value)) return value
+
       const sidebar = value.sidebar
-      if (!isRecord(sidebar)) return value
-      if (typeof sidebar.workspaces !== "boolean") return value
-      return {
-        ...value,
-        sidebar: {
+      const migratedSidebar = (() => {
+        if (!isRecord(sidebar)) return sidebar
+        if (typeof sidebar.workspaces !== "boolean") return sidebar
+        return {
           ...sidebar,
           workspaces: {},
           workspacesDefault: sidebar.workspaces,
-        },
+        }
+      })()
+
+      const fileTree = value.fileTree
+      const migratedFileTree = (() => {
+        if (!isRecord(fileTree)) return fileTree
+        if (fileTree.tab === "changes" || fileTree.tab === "all") return fileTree
+
+        const width = typeof fileTree.width === "number" ? fileTree.width : 344
+        return {
+          ...fileTree,
+          opened: true,
+          width: width === 260 ? 344 : width,
+          tab: "changes",
+        }
+      })()
+
+      if (migratedSidebar === sidebar && migratedFileTree === fileTree) return value
+      return {
+        ...value,
+        sidebar: migratedSidebar,
+        fileTree: migratedFileTree,
       }
     }
 
@@ -91,10 +112,15 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         },
         review: {
           opened: false,
+          panelOpened: true,
           state: "pane" as "pane" | "tab",
           width: REVIEW_PANE.DEFAULT_WIDTH as number,
           diffStyle: "split" as ReviewDiffStyle,
-          panelOpened: true,
+        },
+        fileTree: {
+          opened: true,
+          width: 344,
+          tab: "changes" as "changes" | "all",
         },
         session: {
           width: 600,
@@ -234,7 +260,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
     }
 
     function enrich(project: { worktree: string; expanded: boolean }) {
-      const [childStore] = globalSync.child(project.worktree)
+      const [childStore] = globalSync.child(project.worktree, { bootstrap: false })
       const projectID = childStore.project
       const metadata = projectID
         ? globalSync.data.project.find((x) => x.id === projectID)
@@ -507,6 +533,46 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           setStore("review", "width", width)
         },
       },
+      fileTree: {
+        opened: createMemo(() => store.fileTree?.opened ?? true),
+        width: createMemo(() => store.fileTree?.width ?? 344),
+        tab: createMemo(() => store.fileTree?.tab ?? "changes"),
+        setTab(tab: "changes" | "all") {
+          if (!store.fileTree) {
+            setStore("fileTree", { opened: true, width: 344, tab })
+            return
+          }
+          setStore("fileTree", "tab", tab)
+        },
+        open() {
+          if (!store.fileTree) {
+            setStore("fileTree", { opened: true, width: 344, tab: "changes" })
+            return
+          }
+          setStore("fileTree", "opened", true)
+        },
+        close() {
+          if (!store.fileTree) {
+            setStore("fileTree", { opened: false, width: 344, tab: "changes" })
+            return
+          }
+          setStore("fileTree", "opened", false)
+        },
+        toggle() {
+          if (!store.fileTree) {
+            setStore("fileTree", { opened: true, width: 344, tab: "changes" })
+            return
+          }
+          setStore("fileTree", "opened", (x) => !x)
+        },
+        resize(width: number) {
+          if (!store.fileTree) {
+            setStore("fileTree", { opened: true, width, tab: "changes" })
+            return
+          }
+          setStore("fileTree", "width", width)
+        },
+      },
       session: {
         width: createMemo(() => store.session?.width ?? 600),
         resize(width: number) {
@@ -651,7 +717,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         return {
           tabs,
           active: createMemo(() => tabs().active),
-          all: createMemo(() => tabs().all),
+          all: createMemo(() => tabs().all.filter((tab) => tab !== "review")),
           setActive(tab: string | undefined) {
             const session = key()
             if (!store.sessionTabs[session]) {
@@ -662,10 +728,11 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           },
           setAll(all: string[]) {
             const session = key()
+            const next = all.filter((tab) => tab !== "review")
             if (!store.sessionTabs[session]) {
-              setStore("sessionTabs", session, { all, active: undefined })
+              setStore("sessionTabs", session, { all: next, active: undefined })
             } else {
-              setStore("sessionTabs", session, "all", all)
+              setStore("sessionTabs", session, "all", next)
             }
           },
           async open(tab: string) {
@@ -674,7 +741,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
 
             if (tab === "review") {
               if (!store.sessionTabs[session]) {
-                setStore("sessionTabs", session, { all: [], active: tab })
+                setStore("sessionTabs", session, { all: current.all, active: tab })
                 return
               }
               setStore("sessionTabs", session, "active", tab)

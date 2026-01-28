@@ -31,6 +31,7 @@ import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
+import { parseUriList } from "../../util/uri"
 
 export type PromptProps = {
   sessionID?: string
@@ -621,6 +622,22 @@ export function Prompt(props: PromptProps) {
   }
   const exit = useExit()
 
+  let lastExitAttempt = 0
+
+  async function tryExit() {
+    const now = Date.now()
+    if (now - lastExitAttempt < 2000) {
+      await exit()
+      return
+    }
+    lastExitAttempt = now
+    toast.show({
+      variant: "warning",
+      message: "Press again to exit",
+      duration: 2000,
+    })
+  }
+
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
@@ -818,7 +835,7 @@ export function Prompt(props: PromptProps) {
                 }
                 if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
-                    await exit()
+                    await tryExit()
                     // Don't preventDefault - let textarea potentially handle the event
                     e.preventDefault()
                     return
@@ -873,10 +890,15 @@ export function Prompt(props: PromptProps) {
                 // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
                 // Replace CRLF first, then any remaining CR
                 const normalizedText = event.text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
+                let pastedContent = normalizedText.trim()
                 if (!pastedContent) {
                   command.trigger("prompt.paste")
                   return
+                }
+
+                const uriPaths = parseUriList(pastedContent)
+                if (uriPaths.length > 0) {
+                  pastedContent = uriPaths.length === 1 ? uriPaths[0] : uriPaths.join("\n")
                 }
 
                 // trim ' from the beginning and end of the pasted content. just
