@@ -11,6 +11,7 @@ export interface DialogProps extends ParentProps {
   class?: ComponentProps<"div">["class"]
   classList?: ComponentProps<"div">["classList"]
   fit?: boolean
+  transition?: boolean
 }
 
 export function Dialog(props: DialogProps) {
@@ -20,7 +21,12 @@ export function Dialog(props: DialogProps) {
     props.size === "large" || props.size === "x-large" || props.size === "normal" ? props.size : "normal"
 
   return (
-    <div data-component="dialog" data-fit={props.fit ? true : undefined} data-size={dialogSize}>
+    <div
+      data-component="dialog"
+      data-fit={props.fit ? true : undefined}
+      data-size={dialogSize}
+      data-transition={props.transition ? true : undefined}
+    >
       <div data-slot="dialog-container" data-size={containerSize}>
         <Kobalte.Content
           data-slot="dialog-content"
@@ -58,7 +64,9 @@ export function Dialog(props: DialogProps) {
             </div>
           </Show>
           <Show when={props.description}>
-            <Kobalte.Description data-slot="dialog-description">{props.description}</Kobalte.Description>
+            <Kobalte.Description data-slot="dialog-description" style={{ "margin-left": "-4px" }}>
+              {props.description}
+            </Kobalte.Description>
           </Show>
           <div data-slot="dialog-body">{props.children}</div>
         </Kobalte.Content>

@@ -6,7 +6,6 @@
   <a href="https://github.com/Latitudes-Dev/shuvcode/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/Latitudes-Dev/shuvcode?style=flat-square" /></a>
 </p>
 
-
 ---
 
 ## Screenshots
@@ -17,7 +16,7 @@
   <img src="shuvcode-desktop-session-review-diff.png" alt="Desktop session with diff viewer" width="800" />
 </p>
 
-*Web session view with chat, session sidebar, and real-time code diff review*
+_Web session view with chat, session sidebar, and real-time code diff review_
 
 ### Mobile PWA
 
@@ -33,7 +32,7 @@
   <img src="shuvcode-mobile-theme-selector.png" alt="Mobile theme selector" width="250" />
 </p>
 
-*Mobile PWA: Recent projects, sidebar menu, AI chat with terminal, commit summary, git clone dialog, and theme selector*
+_Mobile PWA: Recent projects, sidebar menu, AI chat with terminal, commit summary, git clone dialog, and theme selector_
 
 ---
 
@@ -53,34 +52,33 @@ npm i -g shuvcode@latest           # or bun/pnpm/yarn
 
 This fork serves as an integration testing ground for upstream PRs before they are merged into the main opencode repository. We merge, test, and validate promising features and fixes to help ensure quality contributions to the upstream project.
 
-
 ---
 
 ## Merged PRs (Pending Upstream)
 
 The following PRs have been merged into this fork and are awaiting merge into upstream:
 
-| PR                                                                            | Title                                       | Author                                                       | Status | Description                                                              |
-| ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | ------ | ------------------------------------------------------------------------ |
-| [#6476](https://github.com/sst/opencode/pull/6476)                            | Edit suggested changes before applying      | [@dmmulroy](https://github.com/dmmulroy)                     | Open   | Press 'e' to edit AI suggestions in your editor before accepting         |
-| [#6507](https://github.com/sst/opencode/pull/6507)                            | Optimize Ripgrep.tree() (109x faster)       | [@Karavil](https://github.com/Karavil)                       | Open   | 109x performance improvement for large repos by streaming ripgrep output |
-| [#5432](https://github.com/sst/opencode/pull/5432)                            | Stream grep output to prevent OOM           | [@Hona](https://github.com/Hona)                             | Open   | Stream ripgrep output in grep tool to prevent memory exhaustion          |
-| [#6360](https://github.com/sst/opencode/pull/6360)                            | Desktop: Edit Project                       | [@dbpolito](https://github.com/dbpolito)                     | Merged | Edit project name, icon color, and custom icon image in desktop sidebar  |
-| [#6368](https://github.com/sst/opencode/pull/6368)                            | Desktop: Sidebar subsessions support        | [@dbpolito](https://github.com/dbpolito)                     | Open   | Expand/collapse subsessions in sidebar with chevron indicators           |
-| [#6372](https://github.com/sst/opencode/pull/6372)                            | Desktop: Image Preview and Dedupe           | [@dbpolito](https://github.com/dbpolito)                     | Merged | Click user attachments to preview images, dedupe file uploads            |
-| [#4898](https://github.com/sst/opencode/pull/4898)                            | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)                   | Open   | Ctrl+ / to search through session messages with highlighting             |
-| [#4791](https://github.com/sst/opencode/pull/4791)                            | Bash output with ANSI                       | [@remorses](https://github.com/remorses)                     | Open   | Full terminal emulation for bash output with color support               |
-| [#4900](https://github.com/sst/opencode/pull/4900)                            | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni)           | Open   | Require double Ctrl+C within 2 seconds to prevent accidental exits       |
-| [#4709](https://github.com/sst/opencode/pull/4709)                            | Live token usage during streaming           | [@arsham](https://github.com/arsham)                         | Open   | Real-time token tracking and display during model responses              |
-| [#4865](https://github.com/sst/opencode/pull/4865)                            | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open   | Show subagents in sidebar with click-to-navigate and parent keybind      |
-| [#4515](https://github.com/sst/opencode/pull/4515)                            | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Merged | Display configured plugins in /status dialog alongside MCP/LSP servers   |
-| [#4411](https://github.com/sst/opencode/pull/4411)                            | Plugin Commands                             | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open   | Register custom `/commands` from plugins with aliases and sessionOnly    |
-| [#5958](https://github.com/sst/opencode/pull/5958)                            | AskQuestion Tool                            | [@iljod](https://github.com/iljod)                           | Open   | Interactive tool for AI to collect user input via TUI/web wizard dialogs |
-| [#5508](https://github.com/sst/opencode/pull/5508)                            | Cache management command                    | [@JosXa](https://github.com/JosXa)                           | Open   | `opencode cache info` and `opencode cache clean` for plugin cache mgmt   |
-| [#5873](https://github.com/sst/opencode/pull/5873)                            | IDE integration UX improvements             | [@tofunori](https://github.com/tofunori)                     | Open   | Selection in footer, synthetic context, home screen IDE status           |
-| [#5917](https://github.com/sst/opencode/pull/5917)                            | Draggable sidebar resize                    | [@agustif](https://github.com/agustif)                       | Open   | Click and drag the sidebar border to resize, width persisted to KV store |
-| [#5968](https://github.com/sst/opencode/pull/5968)                            | Better styling for small screens            | [@rekram1-node](https://github.com/rekram1-node)             | Reverted | Responsive TUI layout hiding elements on short/narrow terminals          |
-| [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140)                    | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open   | Command palette toggle for transparent TUI background on any theme       |
+| PR                                                         | Title                                       | Author                                                       | Status   | Description                                                              |
+| ---------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ | -------- | ------------------------------------------------------------------------ |
+| [#6476](https://github.com/sst/opencode/pull/6476)         | Edit suggested changes before applying      | [@dmmulroy](https://github.com/dmmulroy)                     | Open     | Press 'e' to edit AI suggestions in your editor before accepting         |
+| [#6507](https://github.com/sst/opencode/pull/6507)         | Optimize Ripgrep.tree() (109x faster)       | [@Karavil](https://github.com/Karavil)                       | Open     | 109x performance improvement for large repos by streaming ripgrep output |
+| [#5432](https://github.com/sst/opencode/pull/5432)         | Stream grep output to prevent OOM           | [@Hona](https://github.com/Hona)                             | Open     | Stream ripgrep output in grep tool to prevent memory exhaustion          |
+| [#6360](https://github.com/sst/opencode/pull/6360)         | Desktop: Edit Project                       | [@dbpolito](https://github.com/dbpolito)                     | Merged   | Edit project name, icon color, and custom icon image in desktop sidebar  |
+| [#6368](https://github.com/sst/opencode/pull/6368)         | Desktop: Sidebar subsessions support        | [@dbpolito](https://github.com/dbpolito)                     | Open     | Expand/collapse subsessions in sidebar with chevron indicators           |
+| [#6372](https://github.com/sst/opencode/pull/6372)         | Desktop: Image Preview and Dedupe           | [@dbpolito](https://github.com/dbpolito)                     | Merged   | Click user attachments to preview images, dedupe file uploads            |
+| [#4898](https://github.com/sst/opencode/pull/4898)         | Search in messages                          | [@OpeOginni](https://github.com/OpeOginni)                   | Open     | Ctrl+ / to search through session messages with highlighting             |
+| [#4791](https://github.com/sst/opencode/pull/4791)         | Bash output with ANSI                       | [@remorses](https://github.com/remorses)                     | Open     | Full terminal emulation for bash output with color support               |
+| [#4900](https://github.com/sst/opencode/pull/4900)         | Double Ctrl+C to exit                       | [@AmineGuitouni](https://github.com/AmineGuitouni)           | Open     | Require double Ctrl+C within 2 seconds to prevent accidental exits       |
+| [#4709](https://github.com/sst/opencode/pull/4709)         | Live token usage during streaming           | [@arsham](https://github.com/arsham)                         | Open     | Real-time token tracking and display during model responses              |
+| [#4865](https://github.com/sst/opencode/pull/4865)         | Subagents sidebar with clickable navigation | [@franlol](https://github.com/franlol)                       | Open     | Show subagents in sidebar with click-to-navigate and parent keybind      |
+| [#4515](https://github.com/sst/opencode/pull/4515)         | Show plugins in /status                     | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Merged   | Display configured plugins in /status dialog alongside MCP/LSP servers   |
+| [#4411](https://github.com/sst/opencode/pull/4411)         | Plugin Commands                             | [@spoons-and-mirrors](https://github.com/spoons-and-mirrors) | Open     | Register custom `/commands` from plugins with aliases and sessionOnly    |
+| [#5958](https://github.com/sst/opencode/pull/5958)         | AskQuestion Tool                            | [@iljod](https://github.com/iljod)                           | Open     | Interactive tool for AI to collect user input via TUI/web wizard dialogs |
+| [#5508](https://github.com/sst/opencode/pull/5508)         | Cache management command                    | [@JosXa](https://github.com/JosXa)                           | Open     | `opencode cache info` and `opencode cache clean` for plugin cache mgmt   |
+| [#5873](https://github.com/sst/opencode/pull/5873)         | IDE integration UX improvements             | [@tofunori](https://github.com/tofunori)                     | Open     | Selection in footer, synthetic context, home screen IDE status           |
+| [#5917](https://github.com/sst/opencode/pull/5917)         | Draggable sidebar resize                    | [@agustif](https://github.com/agustif)                       | Open     | Click and drag the sidebar border to resize, width persisted to KV store |
+| [#5968](https://github.com/sst/opencode/pull/5968)         | Better styling for small screens            | [@rekram1-node](https://github.com/rekram1-node)             | Reverted | Responsive TUI layout hiding elements on short/narrow terminals          |
+| [#140](https://github.com/Latitudes-Dev/shuvcode/pull/140) | Toggle transparent background               | [@JosXa](https://github.com/JosXa)                           | Open     | Command palette toggle for transparent TUI background on any theme       |
 
 _Last updated: 2026-01-07_
 
@@ -217,6 +215,7 @@ Toggle density from the command palette or set in config:
 The AI can pause and ask structured questions via a wizard UI. Available in both TUI and web app. This tool is enabled by default.
 
 Features:
+
 - Wizard-style multi-question dialogs with single/multi-select options
 - Custom text input for freeform responses
 - Keyboard navigation (1-8 quick select, Tab between questions, Enter to confirm)

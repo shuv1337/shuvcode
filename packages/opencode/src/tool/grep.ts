@@ -55,6 +55,7 @@ export const GrepTool = Tool.define("grep", {
     const proc = Bun.spawn([rgPath, ...args], {
       stdout: "pipe",
       stderr: "pipe",
+      signal: ctx.abort,
     })
 
     // Stream ripgrep output to prevent memory exhaustion on large result sets

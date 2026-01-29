@@ -2,6 +2,7 @@ import { splitProps, type JSX } from "solid-js"
 
 export interface ResizeHandleProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "onResize"> {
   direction: "horizontal" | "vertical"
+  edge?: "start" | "end"
   size: number
   min: number
   max: number
@@ -14,6 +15,7 @@ export interface ResizeHandleProps extends Omit<JSX.HTMLAttributes<HTMLDivElemen
 export function ResizeHandle(props: ResizeHandleProps) {
   const [local, rest] = splitProps(props, [
     "direction",
+    "edge",
     "size",
     "min",
     "max",
@@ -27,6 +29,7 @@ export function ResizeHandle(props: ResizeHandleProps) {
 
   const handleMouseDown = (e: MouseEvent) => {
     e.preventDefault()
+    const edge = local.edge ?? (local.direction === "vertical" ? "start" : "end")
     const start = local.direction === "horizontal" ? e.clientX : e.clientY
     const startSize = local.size
     let current = startSize
