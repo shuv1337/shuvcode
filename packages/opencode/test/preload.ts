@@ -29,7 +29,14 @@ process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "18")
+const globalIndexPath = path.join(import.meta.dir, "../src/global/index.ts")
+let cacheVersion = "21"
+try {
+  const contents = await fs.readFile(globalIndexPath, "utf8")
+  const match = contents.match(/const CACHE_VERSION = "([^"]+)"/)
+  if (match) cacheVersion = match[1]
+} catch {}
+await fs.writeFile(path.join(cacheDir, "version"), cacheVersion)
 
 // Pre-fetch models.json since models-snapshot.ts is only generated during build
 // This ensures provider tests have access to the models database
