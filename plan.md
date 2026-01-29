@@ -45,25 +45,31 @@ Note: The upstream version uses shadow markers (`_^~`) for visual effects. If th
 
 ---
 
-### 2. Verify/Restore ANSI Bash Output (PR #4791)
+### 2. Restore ANSI Bash Output Rendering with ghostty-opentui (PR #4791)
 
-**Problem:** Need to verify the ghostty-opentui integration is working for ANSI terminal emulation in bash output.
+**Problem:** ANSI output is not rendered in the TUI because the Bash tool output is stripped of ANSI codes before display.
 
 **Current State:**
 
-- `ghostty-opentui` dependency exists in package.json (version 1.3.7) ✓
-- Need to verify the integration code in session/index.tsx
+- `ghostty-opentui` dependency exists and `ptyToText` is used in `packages/opencode/src/tool/bash.ts` ✓
+- Build step installs native bindings in `packages/opencode/script/build.ts` ✓
+- TUI renders bash output as plain text with `stripAnsi` in `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, so colors are removed
 
-**Check Required:**
-The fork-features.json documents these markers that should exist:
+**Fix Required:**
+Implement ANSI-aware rendering for bash tool output in the TUI using `ghostty-opentui` (as in the prior fork behavior) instead of stripping ANSI.
 
-- `packages/opencode/script/build.ts`: Should have `bun install --os="*" --cpu="*" ghostty-opentui`
+**Implementation Notes:**
+
+1. Replace `stripAnsi` usage in `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (Bash tool block) with a `ghostty-opentui` render path (e.g., GhosttyTerminalRenderable) that parses ANSI/VT sequences.
+2. Preserve colors/styles in the TUI while keeping the existing expanded/collapsed view behavior.
+3. Keep a safe fallback for non-ANSI output (render plain text when no ANSI sequences are present).
+4. Ensure copy-to-clipboard and transcript export remain readable (plain text is fine).
 
 **Verification Steps:**
 
-1. Check if `packages/opencode/script/build.ts` has the ghostty install command
-2. Check if bash tool output renders ANSI colors in TUI
-3. If not working, may need to restore GhosttyTerminalRenderable integration
+1. Confirm `packages/opencode/script/build.ts` still installs ghostty-opentui
+2. Run a bash tool command that emits ANSI (e.g., `ls --color=always` or `printf '\\x1b[31mred\\x1b[0m'`)
+3. Verify colors render in the TUI without being stripped
 
 **Files to check:**
 
@@ -93,59 +99,59 @@ The spinner feature appears intact. Verify by:
 
 ---
 
-### 4. Add Fork-Specific Test for Double Ctrl+C
+### 4. Add Regression Test for Double Ctrl+C
 
-**Problem:** The double Ctrl+C feature was lost during merge and needs a regression test.
+**Problem:** The double Ctrl+C feature exists but needs a regression test to prevent regressions.
 
 **Implementation Required:**
-Create a test file at `packages/opencode/test/tui/double-ctrl-c.test.ts`:
+Avoid testing Solid `.tsx` directly. Extract the exit timing logic into a small `.ts` helper and test that helper.
 
-```typescript
-import { describe, expect, test } from "bun:test"
+Suggested structure:
 
-describe("Double Ctrl+C to exit", () => {
-  test("tryExit function exists and requires two presses within 2 seconds", async () => {
-    // This test verifies the implementation exists in prompt/index.tsx
-    // The actual behavior is:
-    // 1. First Ctrl+C shows toast "Press again to exit" (2 second duration)
-    // 2. Second Ctrl+C within 2 seconds exits the application
-    // 3. If more than 2 seconds pass, the first press is "forgotten"
+1. Add helper `packages/opencode/src/cli/cmd/tui/component/prompt/exit.ts` that encapsulates:
+   - last attempt timestamp tracking
+   - 2 second window logic
+   - return value indicating whether to exit or show toast
+2. Update `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` to use the helper.
+3. Create test at `packages/opencode/test/cli/tui/double-ctrl-c.test.ts` that verifies:
+   - first call returns "warn"
+   - second call within 2 seconds returns "exit"
+   - calls after 2 seconds reset behavior
 
-    const promptSource = await Bun.file("src/cli/cmd/tui/component/prompt/index.tsx").text()
+**Files to modify/create:**
 
-    // Verify tryExit function exists
-    expect(promptSource).toContain("async function tryExit()")
-
-    // Verify lastExitAttempt tracking
-    expect(promptSource).toContain("let lastExitAttempt = 0")
-
-    // Verify 2-second window check
-    expect(promptSource).toContain("now - lastExitAttempt < 2000")
-
-    // Verify toast message
-    expect(promptSource).toContain('message: "Press again to exit"')
-
-    // Verify tryExit is called on app_exit keybind
-    expect(promptSource).toContain("await tryExit()")
-    expect(promptSource).toContain('keybind.match("app_exit"')
-  })
-})
-```
-
-**Files to create:**
-
-- `packages/opencode/test/tui/double-ctrl-c.test.ts`
+- `packages/opencode/src/cli/cmd/tui/component/prompt/exit.ts`
+- `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`
+- `packages/opencode/test/cli/tui/double-ctrl-c.test.ts`
 
 ---
 
-### 5. Update fork-features.json
+### 5. Remove legacy AskQuestion tool (fork)
+
+**Problem:** The fork still contains a legacy AskQuestion tool, but we should rely exclusively on the upstream-native `question` tool.
+
+**Fix Required:**
+Remove legacy AskQuestion code and any remaining references.
+
+**Files to remove/modify:**
+
+- `packages/opencode/src/askquestion/index.ts`
+- `packages/opencode/src/tool/askquestion.ts`
+- `packages/opencode/src/tool/askquestion.txt`
+- `packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx`
+- `packages/opencode/src/session/index.ts` (remove AskQuestion import + cleanup call)
+- `packages/app/src/components/askquestion-wizard.tsx`
+
+---
+
+### 6. Update fork-features.json
 
 **Changes Required:**
 
-#### 5.1 Remove entries for features no longer maintained:
+#### 6.1 Remove entries for features no longer maintained
 
-- Remove AskQuestion tool entry (PR #5958) - lost in v1.1.26 sync, not being restored
-- Remove Search in messages entry (PR #4898) - lost in v1.1.26 sync, not being restored
+- Remove AskQuestion tool entry (PR #5958) - fork should use upstream native `question` tool only
+- Keep Search in messages entry (PR #4898) if code still exists
 
 #### 5.2 Enhance Double Ctrl+C entry with criticalCode markers:
 
@@ -209,21 +215,32 @@ describe("Double Ctrl+C to exit", () => {
 1. **Fix shuvcode logo** (CRITICAL - user-visible branding)
    - Edit `packages/opencode/src/cli/logo.ts`
 
-2. **Add double Ctrl+C test**
-   - Create `packages/opencode/test/tui/double-ctrl-c.test.ts`
-   - Run test to verify it passes
+2. **Add double Ctrl+C regression test**
+   - Create `packages/opencode/src/cli/cmd/tui/component/prompt/exit.ts`
+   - Wire helper in `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`
+   - Create `packages/opencode/test/cli/tui/double-ctrl-c.test.ts`
+   - Run the test
 
-3. **Update fork-features.json**
-   - Remove AskQuestion entry (PR #5958)
-   - Remove Search in messages entry (PR #4898)
+3. **Remove legacy AskQuestion tool**
+   - Delete `packages/opencode/src/askquestion/index.ts`
+   - Delete `packages/opencode/src/tool/askquestion.ts`
+   - Delete `packages/opencode/src/tool/askquestion.txt`
+   - Delete `packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx`
+   - Remove AskQuestion cleanup from `packages/opencode/src/session/index.ts`
+   - Delete `packages/app/src/components/askquestion-wizard.tsx`
+
+4. **Update fork-features.json**
    - Enhance Double Ctrl+C entry with criticalCode
    - Add shuvcode logo entry
+   - Remove AskQuestion entry
+   - Keep Search in messages entry if code still exists
 
-4. **Verify ANSI bash output**
-   - Check build.ts for ghostty install
-   - Manual test in TUI if needed
+5. **Restore ANSI bash output rendering**
+   - Replace `stripAnsi` rendering in the Bash tool block
+   - Add ANSI-capable rendering path
+   - Manual TUI verification with a colored command
 
-5. **Commit and push**
+6. **Commit and push**
    - Stage all changes
    - Commit with message: `fix: restore shuvcode branding and add fork feature tests`
 
@@ -233,7 +250,7 @@ describe("Double Ctrl+C to exit", () => {
 
 ```bash
 # Run double Ctrl+C test
-bun test test/tui/double-ctrl-c.test.ts
+bun test test/cli/tui/double-ctrl-c.test.ts
 
 # Typecheck
 bun turbo typecheck --filter=opencode
@@ -243,6 +260,9 @@ grep -n "shuvcode\|█▀▀▀ █▀▀█ █  █" packages/opencode/src/cli
 
 # Verify ghostty in build
 grep -n "ghostty-opentui" packages/opencode/script/build.ts
+
+# Verify ANSI render path (stripAnsi removed from Bash output)
+grep -n "stripAnsi" packages/opencode/src/cli/cmd/tui/routes/session/index.tsx
 ```
 
 ---

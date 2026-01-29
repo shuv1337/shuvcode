@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-22",
-  "lastChange": "Remove fork-specific desktop theme/font picker feature entry.",
+  "lastUpdated": "2026-01-29",
+  "lastChange": "Remove legacy AskQuestion tool entry; rely on native question tool.",
   "note": "v1.1.25 sync. CLI --help now shows 'shuvcode' instead of 'opencode' for all command names and help text.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -181,82 +181,6 @@
       "status": "open",
       "description": "109x performance improvement for Ripgrep.tree() in large repositories by processing ripgrep output line-by-line instead of accumulating in memory",
       "files": ["packages/opencode/src/file/ripgrep.ts", "packages/opencode/test/file/ripgrep.test.ts"]
-    },
-    {
-      "pr": 5958,
-      "title": "AskQuestion tool for user input",
-      "author": "iljod",
-      "status": "open",
-      "description": "Interactive tool that allows AI to pause and solicit structured feedback via TUI/web wizard with single/multi-select and confirm dialogs. Fixes race conditions from PR 5563. Enabled by default. v1.1.4 improvements: callID validation, fallback scan detection for delayed messages, getMetadata/findInParts helpers.",
-      "files": [
-        "packages/opencode/src/askquestion/index.ts",
-        "packages/opencode/src/tool/askquestion.ts",
-        "packages/opencode/src/tool/askquestion.txt",
-        "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
-        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-        "packages/opencode/src/server/server.ts",
-        "packages/opencode/src/session/prompt.ts",
-        "packages/opencode/src/config/config.ts",
-        "packages/opencode/src/tool/registry.ts",
-        "packages/app/src/components/askquestion-wizard.tsx",
-        "packages/app/src/pages/session.tsx",
-        "packages/opencode/test/server/askquestion.test.ts",
-        "packages/opencode/test/tool/askquestion.test.ts"
-      ],
-      "criticalCode": [
-        {
-          "file": "packages/opencode/src/askquestion/index.ts",
-          "description": "AskQuestion namespace with pending question registry and answer handling",
-          "markers": ["export namespace AskQuestion", "pendingQuestions", "respond", "cancel"]
-        },
-        {
-          "file": "packages/opencode/src/tool/askquestion.ts",
-          "description": "Tool definition with Zod schema for 1-6 questions and callID validation",
-          "markers": ["AskQuestionTool", "questions.min(1).max(6)", "if (!callID)", "ctx.callID"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/ui/dialog-askquestion.tsx",
-          "description": "TUI dialog component for answering questions with keyboard navigation",
-          "markers": ["DialogAskQuestion", "onSubmit", "onCancel"]
-        },
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Detection of pending askquestion with callID guard and fallback scan",
-          "markers": [
-            "pendingAskQuestionFromSync",
-            "DialogAskQuestion",
-            "if (!toolPart.callID) continue",
-            "getMetadata",
-            "findInParts"
-          ]
-        },
-        {
-          "file": "packages/opencode/src/server/server.ts",
-          "description": "API endpoints for askquestion respond and cancel",
-          "markers": ["/askquestion/respond", "/askquestion/cancel", "AskQuestion.respond", "AskQuestion.cancel"]
-        },
-        {
-          "file": "packages/opencode/src/tool/registry.ts",
-          "description": "AskQuestionTool registration (enabled by default)",
-          "markers": ["AskQuestionTool"]
-        },
-        {
-          "file": "packages/app/src/components/askquestion-wizard.tsx",
-          "description": "Web app wizard component with keyboard navigation and mobile support",
-          "markers": ["AskQuestionWizard", "AskQuestionQuestion", "handleKeyDown", "handleSubmit"]
-        },
-        {
-          "file": "packages/app/src/pages/session.tsx",
-          "description": "Web app detection with callID guard and fallback scan for delayed messages",
-          "markers": [
-            "pendingAskQuestion",
-            "AskQuestionWizard",
-            "if (!toolPart.callID) continue",
-            "getMetadata",
-            "findInParts"
-          ]
-        }
-      ]
     },
     {
       "pr": 5917,
