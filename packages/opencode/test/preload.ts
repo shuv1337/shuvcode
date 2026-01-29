@@ -27,9 +27,10 @@ process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 process.env["OPENCODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 
 // Write the cache version file to prevent global/index.ts from clearing the cache
+// NOTE: This must match CACHE_VERSION in src/global/index.ts
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "18")
+await fs.writeFile(path.join(cacheDir, "version"), "20")
 
 // Pre-fetch models.json since models-snapshot.ts is only generated during build
 // This ensures provider tests have access to the models database
