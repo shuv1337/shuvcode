@@ -233,6 +233,26 @@ export type TextPart = {
   }
 }
 
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+  parentAgent?: string
+  parentModel?: {
+    providerID: string
+    modelID: string
+  }
+}
+
 export type ReasoningPart = {
   id: string
   sessionID: string
@@ -449,25 +469,7 @@ export type CompactionPart = {
 
 export type Part =
   | TextPart
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      type: "subtask"
-      prompt: string
-      description: string
-      agent: string
-      model?: {
-        providerID: string
-        modelID: string
-      }
-      command?: string
-      parentAgent?: string
-      parentModel?: {
-        providerID: string
-        modelID: string
-      }
-    }
+  | SubtaskPart
   | ReasoningPart
   | FilePart
   | ToolPart
@@ -632,6 +634,14 @@ export type EventSessionCompacted = {
   }
 }
 
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -656,14 +666,6 @@ export type EventTodoUpdated = {
   properties: {
     sessionID: string
     todos: Array<Todo>
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
   }
 }
 
@@ -1022,8 +1024,8 @@ export type Event =
   | EventQuestionReplied
   | EventQuestionRejected
   | EventSessionCompacted
-  | EventTodoUpdated
   | EventFileWatcherUpdated
+  | EventTodoUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1051,36 +1053,6 @@ export type Event =
 export type GlobalEvent = {
   directory: string
   payload: Event
-}
-
-export type ProjectCreateResult = {
-  project: Project
-  /**
-   * True if a new project was created, false if an existing project was added
-   */
-  created: boolean
-}
-
-export type BadRequestError = {
-  data: unknown
-  errors: Array<{
-    [key: string]: unknown
-  }>
-  success: false
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
-
-export type DirectoryInfo = {
-  path: string
-  name: string
-  isGitRepo: boolean
-  isExistingProject: boolean
 }
 
 /**
@@ -1987,6 +1959,58 @@ export type Config = {
   }
 }
 
+export type BadRequestError = {
+  data: unknown
+  errors: Array<{
+    [key: string]: unknown
+  }>
+  success: false
+}
+
+export type OAuth = {
+  type: "oauth"
+  refresh: string
+  access: string
+  expires: number
+  accountId?: string
+  enterpriseUrl?: string
+}
+
+export type ApiAuth = {
+  type: "api"
+  key: string
+}
+
+export type WellKnownAuth = {
+  type: "wellknown"
+  key: string
+  token: string
+}
+
+export type Auth = OAuth | ApiAuth | WellKnownAuth
+
+export type ProjectCreateResult = {
+  project: Project
+  /**
+   * True if a new project was created, false if an existing project was added
+   */
+  created: boolean
+}
+
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
+export type DirectoryInfo = {
+  path: string
+  name: string
+  isGitRepo: boolean
+  isExistingProject: boolean
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -2311,28 +2335,6 @@ export type FormatterStatus = {
   enabled: boolean
 }
 
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-  enterpriseUrl?: string
-}
-
-export type ApiAuth = {
-  type: "api"
-  key: string
-}
-
-export type WellKnownAuth = {
-  type: "wellknown"
-  key: string
-  token: string
-}
-
-export type Auth = OAuth | ApiAuth | WellKnownAuth
-
 export type GlobalHealthData = {
   body?: never
   path?: never
@@ -2368,6 +2370,47 @@ export type GlobalEventResponses = {
 
 export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
 
+export type GlobalConfigGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigGetResponses = {
+  /**
+   * Get global config info
+   */
+  200: Config
+}
+
+export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
+
+export type GlobalConfigUpdateData = {
+  body?: Config
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
+
+export type GlobalConfigUpdateResponses = {
+  /**
+   * Successfully updated global config
+   */
+  200: Config
+}
+
+export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
+
 export type GlobalDisposeData = {
   body?: never
   path?: never
@@ -2383,6 +2426,60 @@ export type GlobalDisposeResponses = {
 }
 
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type AuthRemoveData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
+
+export type AuthRemoveResponses = {
+  /**
+   * Successfully removed authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
+
+export type AuthSetData = {
+  body?: Auth
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthSetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
+
+export type AuthSetResponses = {
+  /**
+   * Successfully set authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
 export type ProjectListData = {
   body?: never
@@ -5146,35 +5243,6 @@ export type FormatterStatusResponses = {
 }
 
 export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
-
-export type AuthSetData = {
-  body?: Auth
-  path: {
-    providerID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/auth/{providerID}"
-}
-
-export type AuthSetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
-
-export type AuthSetResponses = {
-  /**
-   * Successfully set authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
 export type EventSubscribeData = {
   body?: never
