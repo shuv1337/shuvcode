@@ -20,6 +20,11 @@ export default function Home() {
   const navigate = useNavigate()
   const server = useServer()
   const homedir = createMemo(() => sync.data.path.home)
+  const recent = createMemo(() => {
+    return sync.data.project
+      .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+      .slice(0, 5)
+  })
 
   function openProject(directory: string) {
     layout.projects.open(directory)
@@ -34,11 +39,7 @@ export default function Home() {
   return (
     <div class="size-full bg-background-base flex flex-col items-center pt-20 sm:pt-55 pb-safe-bottom overflow-y-auto no-scrollbar">
       <div class="home-menu-button xl:hidden absolute top-0 left-0 p-2">
-        <IconButton
-          icon="menu"
-          variant="ghost"
-          onClick={layout.mobileSidebar.toggle}
-        />
+        <IconButton icon="menu" variant="ghost" onClick={layout.mobileSidebar.toggle} />
       </div>
       <AsciiLogo scale={1.5} class="opacity-30 max-[40rem]:scale-75 max-[40rem]:origin-center" />
       <Button
@@ -68,11 +69,7 @@ export default function Home() {
               </Button>
             </div>
             <ul class="flex flex-col gap-2">
-              <For
-                each={sync.data.project
-                  .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
-                  .slice(0, 10)}
-              >
+              <For each={recent()}>
                 {(project) => (
                   <Button
                     size="large"

@@ -14,22 +14,23 @@ import { GlobalSyncProvider } from "@/context/global-sync"
 import { PermissionProvider } from "@/context/permission"
 import { LayoutProvider } from "@/context/layout"
 import { GlobalSDKProvider } from "@/context/global-sdk"
-import { ServerProvider, useServer } from "@/context/server"
+import { normalizeServerUrl, ServerProvider, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
 import { PromptProvider } from "@/context/prompt"
 import { FileProvider } from "@/context/file"
 import { CommentsProvider } from "@/context/comments"
 import { NotificationProvider } from "@/context/notification"
+import { ModelsProvider } from "@/context/models"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
 import { CommandProvider } from "@/context/command"
 import { LanguageProvider, useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { Logo } from "@opencode-ai/ui/logo"
+import { HighlightsProvider } from "@/context/highlights"
+import { iife } from "@opencode-ai/util/iife"
 import Layout from "@/pages/layout"
 import DirectoryLayout from "@/pages/directory-layout"
 import { ErrorPage } from "./pages/error"
-import { iife } from "@opencode-ai/util/iife"
 import { Suspense } from "solid-js"
 
 const Home = lazy(() => import("@/pages/home"))
@@ -132,9 +133,13 @@ export function AppInterface(props: { defaultUrl?: string }) {
                   <PermissionProvider>
                     <LayoutProvider>
                       <NotificationProvider>
-                        <CommandProvider>
-                          <Layout>{props.children}</Layout>
-                        </CommandProvider>
+                        <ModelsProvider>
+                          <CommandProvider>
+                            <HighlightsProvider>
+                              <Layout>{props.children}</Layout>
+                            </HighlightsProvider>
+                          </CommandProvider>
+                        </ModelsProvider>
                       </NotificationProvider>
                     </LayoutProvider>
                   </PermissionProvider>
