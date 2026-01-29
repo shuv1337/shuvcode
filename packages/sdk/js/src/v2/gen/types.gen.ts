@@ -748,80 +748,6 @@ export type EventCommandExecuted = {
   }
 }
 
-export type EventAskquestionRequested = {
-  type: "askquestion.requested"
-  properties: {
-    sessionID: string
-    messageID: string
-    callID: string
-    questions: Array<{
-      /**
-       * Unique identifier for the question
-       */
-      id: string
-      /**
-       * Short tab label, e.g. 'UI Framework'
-       */
-      label: string
-      /**
-       * The full question to ask the user
-       */
-      question: string
-      /**
-       * 2-8 suggested answer options
-       */
-      options: Array<{
-        /**
-         * Short identifier for the option
-         */
-        value: string
-        /**
-         * Display label for the option
-         */
-        label: string
-        /**
-         * Additional context for the option
-         */
-        description?: string
-      }>
-      /**
-       * Allow selecting multiple options
-       */
-      multiSelect?: boolean
-    }>
-  }
-}
-
-export type EventAskquestionAnswered = {
-  type: "askquestion.answered"
-  properties: {
-    sessionID: string
-    callID: string
-    answers: Array<{
-      /**
-       * ID of the question being answered
-       */
-      questionId: string
-      /**
-       * Selected option value(s)
-       */
-      values: Array<string>
-      /**
-       * Custom text if user typed their own response
-       */
-      customText?: string
-    }>
-  }
-}
-
-export type EventAskquestionCancelled = {
-  type: "askquestion.cancelled"
-  properties: {
-    sessionID: string
-    callID: string
-  }
-}
-
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -1033,9 +959,6 @@ export type Event =
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
-  | EventAskquestionRequested
-  | EventAskquestionAnswered
-  | EventAskquestionCancelled
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted

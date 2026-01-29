@@ -18,7 +18,6 @@ import { SessionPrompt } from "./prompt"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
-import { AskQuestion } from "@/askquestion"
 
 import type { Provider } from "@/provider/provider"
 import { PermissionNext } from "@/permission/next"
@@ -356,7 +355,6 @@ export namespace Session {
         await Storage.remove(msg)
       }
       await Storage.remove(["session", project.id, sessionID])
-      AskQuestion.cleanup(sessionID)
       await Bus.publish(Event.Deleted, {
         info: session,
       })
@@ -430,7 +428,7 @@ export namespace Session {
     }
 
     const key = ["part", part.messageID, part.id]
- 
+
     if (part.type === "tool") {
       const existing = await Storage.read<MessageV2.Part>(key).catch(() => undefined)
 
