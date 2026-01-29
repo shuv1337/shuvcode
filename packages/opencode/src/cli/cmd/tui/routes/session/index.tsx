@@ -44,7 +44,7 @@ import type { ApplyPatchTool } from "@/tool/apply_patch"
 import type { WebFetchTool } from "@/tool/webfetch"
 import type { TaskTool } from "@/tool/task"
 import type { QuestionTool } from "@/tool/question"
-import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
+import { extend, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "@tui/context/keybind"
@@ -65,7 +65,7 @@ import { Clipboard } from "../../util/clipboard"
 import { Toast, useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv.tsx"
 import { Editor } from "../../util/editor"
-import stripAnsi from "strip-ansi"
+import { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer"
 import { Footer } from "./footer.tsx"
 import { usePromptRef } from "../../context/prompt"
 import { useExit } from "../../context/exit"
@@ -76,6 +76,7 @@ import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
 
+extend({ "ghostty-terminal": GhosttyTerminalRenderable })
 addDefaultParsers(parsers.parsers)
 
 class CustomSpeedScroll implements ScrollAcceleration {
@@ -1689,16 +1690,20 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
 }
 
 function Bash(props: ToolProps<typeof BashTool>) {
+  const ctx = use()
   const { theme } = useTheme()
   const sync = useSync()
-  const output = createMemo(() => stripAnsi(props.metadata.output?.trim() ?? ""))
+  const output = createMemo(() => props.metadata.output?.trim() ?? "")
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
   const overflow = createMemo(() => lines().length > 10)
+  const limit = createMemo(() => (expanded() || !overflow() ? undefined : 10))
   const limited = createMemo(() => {
     if (expanded() || !overflow()) return output()
     return [...lines().slice(0, 10), "…"].join("\n")
   })
+  const hasAnsi = createMemo(() => output().includes("\u001b"))
+  const cols = createMemo(() => Math.max(40, ctx.width - 8))
 
   const workdirDisplay = createMemo(() => {
     const workdir = props.input.workdir
@@ -1735,7 +1740,9 @@ function Bash(props: ToolProps<typeof BashTool>) {
         >
           <box gap={1}>
             <text fg={theme.text}>$ {props.input.command}</text>
-            <text fg={theme.text}>{limited()}</text>
+            <Show when={hasAnsi()} fallback={<text fg={theme.text}>{limited()}</text>}>
+              <ghostty-terminal ansi={output()} cols={cols()} limit={limit()} />
+            </Show>
             <Show when={overflow()}>
               <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
             </Show>
