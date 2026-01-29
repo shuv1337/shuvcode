@@ -1549,6 +1549,10 @@ describe("ProviderTransform.variants", () => {
           url: "https://api.anthropic.com",
           npm: "@ai-sdk/anthropic",
         },
+        limit: {
+          context: 128000,
+          output: 32002,
+        },
       })
       const result = ProviderTransform.variants(model)
       expect(Object.keys(result)).toEqual(["high", "max"])
