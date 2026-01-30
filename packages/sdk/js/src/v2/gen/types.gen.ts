@@ -233,6 +233,26 @@ export type TextPart = {
   }
 }
 
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+  parentAgent?: string
+  parentModel?: {
+    providerID: string
+    modelID: string
+  }
+}
+
 export type ReasoningPart = {
   id: string
   sessionID: string
@@ -449,25 +469,7 @@ export type CompactionPart = {
 
 export type Part =
   | TextPart
-  | {
-      id: string
-      sessionID: string
-      messageID: string
-      type: "subtask"
-      prompt: string
-      description: string
-      agent: string
-      model?: {
-        providerID: string
-        modelID: string
-      }
-      command?: string
-      parentAgent?: string
-      parentModel?: {
-        providerID: string
-        modelID: string
-      }
-    }
+  | SubtaskPart
   | ReasoningPart
   | FilePart
   | ToolPart
@@ -746,80 +748,6 @@ export type EventCommandExecuted = {
   }
 }
 
-export type EventAskquestionRequested = {
-  type: "askquestion.requested"
-  properties: {
-    sessionID: string
-    messageID: string
-    callID: string
-    questions: Array<{
-      /**
-       * Unique identifier for the question
-       */
-      id: string
-      /**
-       * Short tab label, e.g. 'UI Framework'
-       */
-      label: string
-      /**
-       * The full question to ask the user
-       */
-      question: string
-      /**
-       * 2-8 suggested answer options
-       */
-      options: Array<{
-        /**
-         * Short identifier for the option
-         */
-        value: string
-        /**
-         * Display label for the option
-         */
-        label: string
-        /**
-         * Additional context for the option
-         */
-        description?: string
-      }>
-      /**
-       * Allow selecting multiple options
-       */
-      multiSelect?: boolean
-    }>
-  }
-}
-
-export type EventAskquestionAnswered = {
-  type: "askquestion.answered"
-  properties: {
-    sessionID: string
-    callID: string
-    answers: Array<{
-      /**
-       * ID of the question being answered
-       */
-      questionId: string
-      /**
-       * Selected option value(s)
-       */
-      values: Array<string>
-      /**
-       * Custom text if user typed their own response
-       */
-      customText?: string
-    }>
-  }
-}
-
-export type EventAskquestionCancelled = {
-  type: "askquestion.cancelled"
-  properties: {
-    sessionID: string
-    callID: string
-  }
-}
-
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -1031,9 +959,6 @@ export type Event =
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
-  | EventAskquestionRequested
-  | EventAskquestionAnswered
-  | EventAskquestionCancelled
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -1051,36 +976,6 @@ export type Event =
 export type GlobalEvent = {
   directory: string
   payload: Event
-}
-
-export type ProjectCreateResult = {
-  project: Project
-  /**
-   * True if a new project was created, false if an existing project was added
-   */
-  created: boolean
-}
-
-export type BadRequestError = {
-  data: unknown
-  errors: Array<{
-    [key: string]: unknown
-  }>
-  success: false
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
-
-export type DirectoryInfo = {
-  path: string
-  name: string
-  isGitRepo: boolean
-  isExistingProject: boolean
 }
 
 /**
@@ -1987,6 +1882,58 @@ export type Config = {
   }
 }
 
+export type BadRequestError = {
+  data: unknown
+  errors: Array<{
+    [key: string]: unknown
+  }>
+  success: false
+}
+
+export type OAuth = {
+  type: "oauth"
+  refresh: string
+  access: string
+  expires: number
+  accountId?: string
+  enterpriseUrl?: string
+}
+
+export type ApiAuth = {
+  type: "api"
+  key: string
+}
+
+export type WellKnownAuth = {
+  type: "wellknown"
+  key: string
+  token: string
+}
+
+export type Auth = OAuth | ApiAuth | WellKnownAuth
+
+export type ProjectCreateResult = {
+  project: Project
+  /**
+   * True if a new project was created, false if an existing project was added
+   */
+  created: boolean
+}
+
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
+export type DirectoryInfo = {
+  path: string
+  name: string
+  isGitRepo: boolean
+  isExistingProject: boolean
+}
+
 export type Model = {
   id: string
   providerID: string
@@ -2311,28 +2258,6 @@ export type FormatterStatus = {
   enabled: boolean
 }
 
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-  enterpriseUrl?: string
-}
-
-export type ApiAuth = {
-  type: "api"
-  key: string
-}
-
-export type WellKnownAuth = {
-  type: "wellknown"
-  key: string
-  token: string
-}
-
-export type Auth = OAuth | ApiAuth | WellKnownAuth
-
 export type GlobalHealthData = {
   body?: never
   path?: never
@@ -2368,6 +2293,47 @@ export type GlobalEventResponses = {
 
 export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
 
+export type GlobalConfigGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigGetResponses = {
+  /**
+   * Get global config info
+   */
+  200: Config
+}
+
+export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
+
+export type GlobalConfigUpdateData = {
+  body?: Config
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
+
+export type GlobalConfigUpdateResponses = {
+  /**
+   * Successfully updated global config
+   */
+  200: Config
+}
+
+export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
+
 export type GlobalDisposeData = {
   body?: never
   path?: never
@@ -2383,6 +2349,60 @@ export type GlobalDisposeResponses = {
 }
 
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type AuthRemoveData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
+
+export type AuthRemoveResponses = {
+  /**
+   * Successfully removed authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
+
+export type AuthSetData = {
+  body?: Auth
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthSetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
+
+export type AuthSetResponses = {
+  /**
+   * Successfully set authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
 export type ProjectListData = {
   body?: never
@@ -5146,64 +5166,6 @@ export type FormatterStatusResponses = {
 }
 
 export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
-
-export type AuthRemoveData = {
-  body?: never
-  path: {
-    providerID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/auth/{providerID}"
-}
-
-export type AuthRemoveErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
-
-export type AuthRemoveResponses = {
-  /**
-   * Successfully removed authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
-
-export type AuthSetData = {
-  body?: Auth
-  path: {
-    providerID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/auth/{providerID}"
-}
-
-export type AuthSetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
-
-export type AuthSetResponses = {
-  /**
-   * Successfully set authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
 
 export type EventSubscribeData = {
   body?: never

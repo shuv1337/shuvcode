@@ -183,6 +183,8 @@ export namespace MessageV2 {
         modelID: z.string(),
       })
       .optional(),
+  }).meta({
+    ref: "SubtaskPart",
   })
   export type SubtaskPart = z.infer<typeof SubtaskPart>
 

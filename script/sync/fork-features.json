@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Fork-specific features from upstream PRs that must be preserved during merges",
-  "lastUpdated": "2026-01-28",
-  "lastChange": "Restore double Ctrl+C exit guard in prompt and refresh fork feature markers.",
+  "lastUpdated": "2026-01-29",
+  "lastChange": "Remove legacy AskQuestion tool entry; rely on native question tool.",
   "note": "v1.1.25 sync. CLI --help now shows 'shuvcode' instead of 'opencode' for all command names and help text.",
   "forkDependencies": {
     "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
@@ -183,6 +183,7 @@
       "files": ["packages/opencode/src/file/ripgrep.ts", "packages/opencode/test/file/ripgrep.test.ts"]
     },
     {
+<<<<<<< HEAD
       "pr": 5958,
       "title": "AskQuestion tool for user input",
       "author": "iljod",
@@ -257,6 +258,8 @@
       ]
     },
     {
+=======
+>>>>>>> shuvcode-dev
       "pr": 5917,
       "title": "Draggable sidebar resize",
       "author": "agustif",

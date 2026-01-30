@@ -48,15 +48,6 @@ export function SessionHeader() {
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const view = createMemo(() => layout.view(sessionKey))
 
-  const toggleFileTree = () => {
-    if (!view().reviewPanel.opened()) {
-      view().reviewPanel.open()
-      layout.fileTree.open()
-      return
-    }
-    layout.fileTree.toggle()
-  }
-
   const [state, setState] = createStore({
     share: false,
     unshare: false,
@@ -289,17 +280,14 @@ export function SessionHeader() {
                 </TooltipKeybind>
               </div>
               <div class="hidden md:block shrink-0">
-                <TooltipKeybind
-                  title={language.t("command.fileTree.toggle")}
-                  keybind={command.keybind("fileTree.toggle")}
-                >
+                <TooltipKeybind title={language.t("command.review.toggle")} keybind={command.keybind("review.toggle")}>
                   <Button
                     variant="ghost"
                     class="group/file-tree-toggle size-6 p-0"
-                    onClick={toggleFileTree}
-                    aria-label={language.t("command.fileTree.toggle")}
+                    onClick={() => layout.fileTree.toggle()}
+                    aria-label={language.t("command.review.toggle")}
                     aria-expanded={layout.fileTree.opened()}
-                    aria-controls="file-tree-panel"
+                    aria-controls="review-panel"
                   >
                     <div class="relative flex items-center justify-center size-4 [&>*]:absolute [&>*]:inset-0">
                       <Icon

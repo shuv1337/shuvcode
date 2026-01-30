@@ -200,7 +200,74 @@ function createGlobalSync() {
     config: {},
     reload: undefined,
   })
-  let bootstrapQueue: string[] = []
+
+  const queued = new Set<string>()
+  let root = false
+  let running = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const paused = () => untrack(() => globalStore.reload) !== undefined
+
+  const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+  const take = (count: number) => {
+    if (queued.size === 0) return [] as string[]
+    const items: string[] = []
+    for (const item of queued) {
+      queued.delete(item)
+      items.push(item)
+      if (items.length >= count) break
+    }
+    return items
+  }
+
+  const schedule = () => {
+    if (timer) return
+    timer = setTimeout(() => {
+      timer = undefined
+      void drain()
+    }, 0)
+  }
+
+  const push = (directory: string) => {
+    if (!directory) return
+    queued.add(directory)
+    if (paused()) return
+    schedule()
+  }
+
+  const refresh = () => {
+    root = true
+    if (paused()) return
+    schedule()
+  }
+
+  async function drain() {
+    if (running) return
+    running = true
+    try {
+      while (true) {
+        if (paused()) return
+
+        if (root) {
+          root = false
+          await bootstrap()
+          await tick()
+          continue
+        }
+
+        const dirs = take(2)
+        if (dirs.length === 0) return
+
+        await Promise.all(dirs.map((dir) => bootstrapInstance(dir)))
+        await tick()
+      }
+    } finally {
+      running = false
+      if (paused()) return
+      if (root || queued.size) schedule()
+    }
+  }
 
   createEffect(() => {
     if (!projectCacheReady()) return
@@ -222,14 +289,8 @@ function createGlobalSync() {
 
   createEffect(() => {
     if (globalStore.reload !== "complete") return
-    if (bootstrapQueue.length) {
-      for (const directory of bootstrapQueue) {
-        bootstrapInstance(directory)
-      }
-      bootstrap()
-    }
-    bootstrapQueue = []
     setGlobalStore("reload", undefined)
+    refresh()
   })
 
   const children: Record<string, [Store<State>, SetStoreFunction<State>]> = {}
@@ -605,9 +666,8 @@ function createGlobalSync() {
     if (directory === "global") {
       switch (event?.type) {
         case "global.disposed": {
-          if (globalStore.reload) return
-          bootstrap()
-          break
+          refresh()
+          return
         }
         case "project.updated": {
           const result = Binary.search(globalStore.project, event.properties.id, (s) => s.id)
@@ -668,12 +728,8 @@ function createGlobalSync() {
 
     switch (event.type) {
       case "server.instance.disposed": {
-        if (globalStore.reload) {
-          bootstrapQueue.push(directory)
-          return
-        }
-        bootstrapInstance(directory)
-        break
+        push(directory)
+        return
       }
       case "session.created": {
         const info = event.properties.info
@@ -914,6 +970,10 @@ function createGlobalSync() {
     }
   })
   onCleanup(unsub)
+  onCleanup(() => {
+    if (!timer) return
+    clearTimeout(timer)
+  })
 
   /**
    * Probes the server health with a short timeout (2 seconds).
@@ -962,7 +1022,7 @@ function createGlobalSync() {
         }),
       ),
       retry(() =>
-        globalSDK.client.config.get().then((x) => {
+        globalSDK.client.global.config.get().then((x) => {
           setGlobalStore("config", x.data!)
         }),
       ),
@@ -1049,13 +1109,13 @@ function createGlobalSync() {
     },
     child,
     bootstrap,
-    updateConfig: async (config: Config) => {
+    updateConfig: (config: Config) => {
       setGlobalStore("reload", "pending")
-      const response = await globalSDK.client.config.update({ config })
-      setTimeout(() => {
-        setGlobalStore("reload", "complete")
-      }, 1000)
-      return response
+      return globalSDK.client.global.config.update({ config }).finally(() => {
+        setTimeout(() => {
+          setGlobalStore("reload", "complete")
+        }, 1000)
+      })
     },
     project: {
       loadSessions,
