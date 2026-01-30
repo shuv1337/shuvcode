@@ -1031,9 +1031,9 @@
           "file": "packages/app/src/pages/session.tsx",
           "description": "Mobile tab bar toggles review panel",
           "markers": [
-            "mobileTab: \"session\" as \"session\" | \"review\"",
-            "setStore(\"mobileTab\", \"review\")",
-            "store.mobileTab === \"review\""
+            "mobileTab: \"session\" as \"session\" | \"changes\"",
+            "setStore(\"mobileTab\", \"changes\")",
+            "store.mobileTab === \"changes\""
           ]
         }
       ]
