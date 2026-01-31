@@ -20,6 +20,7 @@ const env = {
   OPENCODE_CHANNEL: process.env["OPENCODE_CHANNEL"],
   OPENCODE_BUMP: process.env["OPENCODE_BUMP"],
   OPENCODE_VERSION: process.env["OPENCODE_VERSION"],
+  OPENCODE_RELEASE: process.env["OPENCODE_RELEASE"],
 }
 const CHANNEL = await (async () => {
   if (env.OPENCODE_CHANNEL) return env.OPENCODE_CHANNEL
@@ -91,7 +92,10 @@ const VERSION = await (async () => {
   return BASE_VERSION
 })()
 
-const COMMIT_HASH = await $`git rev-parse --short HEAD`.text().then((x) => x.trim()).catch(() => "unknown")
+const COMMIT_HASH = await $`git rev-parse --short HEAD`
+  .text()
+  .then((x) => x.trim())
+  .catch(() => "unknown")
 
 export const Script = {
   get channel() {
@@ -108,6 +112,9 @@ export const Script = {
   },
   get commitHash() {
     return COMMIT_HASH
+  },
+  get release() {
+    return env.OPENCODE_RELEASE
   },
 }
 console.log(`opencode script`, JSON.stringify(Script, null, 2))

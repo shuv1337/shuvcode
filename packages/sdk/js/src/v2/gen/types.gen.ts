@@ -1428,6 +1428,7 @@ export type PermissionConfig =
       codesearch?: PermissionActionConfig
       lsp?: PermissionRuleConfig
       doom_loop?: PermissionActionConfig
+      skill?: PermissionRuleConfig
       [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
     }
   | PermissionActionConfig
@@ -1702,6 +1703,15 @@ export type Config = {
       subtask?: boolean
     }
   }
+  /**
+   * Additional skill folder paths
+   */
+  skills?: {
+    /**
+     * Additional paths to skill folders
+     */
+    paths?: Array<string>
+  }
   watcher?: {
     ignore?: Array<string>
   }
@@ -1838,26 +1848,6 @@ export type Config = {
     prune?: boolean
   }
   experimental?: {
-    hook?: {
-      file_edited?: {
-        [key: string]: Array<{
-          command: Array<string>
-          environment?: {
-            [key: string]: string
-          }
-        }>
-      }
-      session_completed?: Array<{
-        command: Array<string>
-        environment?: {
-          [key: string]: string
-        }
-      }>
-    }
-    /**
-     * Number of retries for chat completions on failure
-     */
-    chatMaxRetries?: number
     disable_paste_summary?: boolean
     /**
      * Enable the batch tool
@@ -2215,7 +2205,7 @@ export type Command = {
   description?: string
   agent?: string
   model?: string
-  mcp?: boolean
+  source?: "command" | "mcp" | "skill"
   template: string
   type?: "template" | "plugin"
   subtask?: boolean
@@ -5126,6 +5116,7 @@ export type AppSkillsResponses = {
     name: string
     description: string
     location: string
+    content: string
   }>
 }
 
