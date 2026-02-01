@@ -1,28 +1,38 @@
 name: nix-hashes
 
+# Disabled in fork - requires GitHub App credentials not available in Latitudes-Dev/shuvcode
+# To re-enable, set up OPENCODE_APP_ID and OPENCODE_APP_SECRET secrets
+
 permissions:
   contents: write
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "bun.lock"
-      - "package.json"
-      - "packages/*/package.json"
-      - "flake.lock"
-      - ".github/workflows/nix-hashes.yml"
-  pull_request:
-    paths:
-      - "bun.lock"
-      - "package.json"
-      - "packages/*/package.json"
-      - "flake.lock"
-      - ".github/workflows/nix-hashes.yml"
+    inputs:
+      force:
+        description: "Force run (disabled in fork)"
+        required: false
+        default: "false"
+  # Disabled triggers - uncomment to re-enable
+  # push:
+  #   paths:
+  #     - "bun.lock"
+  #     - "package.json"
+  #     - "packages/*/package.json"
+  #     - "flake.lock"
+  #     - ".github/workflows/nix-hashes.yml"
+  # pull_request:
+  #   paths:
+  #     - "bun.lock"
+  #     - "package.json"
+  #     - "packages/*/package.json"
+  #     - "flake.lock"
+  #     - ".github/workflows/nix-hashes.yml"
 
 jobs:
   nix-hashes:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Disabled in fork - always skip unless manually triggered with force=true
+    if: github.event.inputs.force == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       TITLE: node_modules hashes

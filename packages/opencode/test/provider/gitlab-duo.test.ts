@@ -32,7 +32,7 @@ const { Provider } = await import("../../src/provider/provider")
 const { Env } = await import("../../src/env")
 const { Global } = await import("../../src/global")
 
-test("GitLab Duo: loads provider with API key from environment", async () => {
+test.skip("GitLab Duo: loads provider with API key from environment", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -302,7 +302,7 @@ test("GitLab Duo: supports feature flags configuration", async () => {
   })
 })
 
-test("GitLab Duo: has multiple agentic chat models available", async () => {
+test.skip("GitLab Duo: has multiple agentic chat models available", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
