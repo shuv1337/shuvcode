@@ -7,6 +7,7 @@ import { Plugin } from "../plugin"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import { MCP } from "../mcp"
+import { Skill } from "../skill"
 import type { Hooks } from "@opencode-ai/plugin"
 
 export namespace Command {
@@ -28,7 +29,7 @@ export namespace Command {
       description: z.string().optional(),
       agent: z.string().optional(),
       model: z.string().optional(),
-      mcp: z.boolean().optional(),
+      source: z.enum(["command", "mcp", "skill"]).optional(),
       // workaround for zod not supporting async functions natively so we use getters
       // https://zod.dev/v4/changelog?id=zfunction
       template: z.promise(z.string()).or(z.string()),
@@ -103,7 +104,7 @@ export namespace Command {
       result[name] = {
         name,
         type: "template",
-        mcp: true,
+        source: "mcp",
         description: prompt.description,
         get template() {
           // since a getter can't be async we need to manually return a promise here
@@ -127,7 +128,23 @@ export namespace Command {
       }
     }
 
-    // Plugin commands
+    // Add skills as invokable commands (upstream feature)
+    for (const skill of await Skill.all()) {
+      // Skip if a command with this name already exists
+      if (result[skill.name]) continue
+      result[skill.name] = {
+        name: skill.name,
+        type: "template",
+        description: skill.description,
+        source: "skill",
+        get template() {
+          return skill.content
+        },
+        hints: [],
+      }
+    }
+
+    // Plugin commands (fork feature)
     const plugins = await Plugin.list()
     for (const plugin of plugins) {
       const commands: NonNullable<Hooks["plugin.command"]> | undefined = plugin["plugin.command"]

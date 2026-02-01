@@ -51,6 +51,7 @@ declare global {
       serverReady?: boolean
       serverUrl?: string
       serverPassword?: string
+      deepLinks?: string[]
     }
   }
 }
