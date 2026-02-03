@@ -11,7 +11,7 @@ import { DialogSessionRename } from "./dialog-session-rename"
 import { useKV } from "../context/kv"
 import { getSpinnerFrame } from "../util/spinners"
 import { createDebouncedSignal } from "../util/signal"
-import "opentui-spinner/solid"
+import { Spinner } from "./spinner"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -57,7 +57,7 @@ export function DialogSessionList() {
           footer: Locale.time(x.time.updated),
           gutter: isWorking ? (
             <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
-              <text fg={theme.primary}>{getSpinnerFrame()}</text>
+              <Spinner />
             </Show>
           ) : undefined,
         }
