@@ -97,6 +97,20 @@ const COMMIT_HASH = await $`git rev-parse --short HEAD`
   .then((x) => x.trim())
   .catch(() => "unknown")
 
+const team = [
+  "actions-user",
+  "opencode",
+  "rekram1-node",
+  "thdxr",
+  "kommander",
+  "jayair",
+  "fwang",
+  "adamdotdevin",
+  "iamdavidhill",
+  "opencode-agent[bot]",
+  "R44VC0RP",
+]
+
 export const Script = {
   get channel() {
     return CHANNEL
@@ -115,6 +129,9 @@ export const Script = {
   },
   get release() {
     return env.OPENCODE_RELEASE
+  },
+  get team() {
+    return team
   },
 }
 console.log(`opencode script`, JSON.stringify(Script, null, 2))
