@@ -2809,7 +2809,7 @@ export default function Page() {
                                 </Match>
                                 <Match when={state()?.loaded && isBinary()}>
                                   <div class="h-full px-6 pb-42 flex flex-col items-center justify-center text-center gap-6">
-                                    <Mark class="w-14 opacity-10" />
+                                    <AsciiMark scale={0.7} />
                                     <div class="flex flex-col gap-2 max-w-md">
                                       <div class="text-14-semibold text-text-strong truncate">
                                         {path()?.split("/").pop()}
