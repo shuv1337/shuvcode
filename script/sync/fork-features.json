@@ -1546,17 +1546,11 @@
       "pr": 283,
       "title": "Attach command auto-pass cwd",
       "author": "fork",
-      "status": "fork-only",
-      "description": "The attach command always passes client's cwd to server via x-opencode-directory header. This ensures file autocomplete, theme discovery, and exports use the client's directory when attaching to a remote server.",
+      "status": "merged-upstream",
+      "description": "Upstream v1.1.49 replaced our fork's unconditional process.cwd() approach with a cleaner IIFE pattern and added basic auth header support. The feature is now superseded by upstream's --dir flag and --password option.",
       "files": ["packages/opencode/src/cli/cmd/tui/attach.ts"],
-      "criticalCode": [
-        {
-          "file": "packages/opencode/src/cli/cmd/tui/attach.ts",
-          "description": "Always capture and pass process.cwd() to tui()",
-          "markers": ["directory: process.cwd()", "Always pass client's cwd"]
-        }
-      ],
-      "note": "Original fix was in commit 401b498c7. Regressed in upstream PR #7150 (commit dee022674) which made directory conditional on --dir flag."
+      "criticalCode": [],
+      "note": "Original fork fix was in commit 401b498c7. Upstream v1.1.49 changed behavior: directory is now only passed when --dir is specified, and added --password for basic auth. Feature removed during v1.1.49 sync."
     },
     {
       "pr": 285,
