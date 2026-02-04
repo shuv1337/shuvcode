@@ -24,6 +24,8 @@ for (const name of Object.keys(binaries)) {
 
 await $`mkdir -p ./dist/${pkg.name}`
 await $`cp -r ./bin ./dist/${pkg.name}/bin`
+await $`cp ./script/postinstall.mjs ./dist/${pkg.name}/postinstall.mjs`
+await Bun.file(`./dist/${pkg.name}/LICENSE`).write(await Bun.file("../../LICENSE").text())
 
 await Bun.file(`./dist/${pkg.name}/package.json`).write(
   JSON.stringify(
@@ -32,7 +34,11 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       bin: {
         shuvcode: "./bin/shuvcode",
       },
+      scripts: {
+        postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",
+      },
       version: Script.version,
+      license: pkg.license,
       // Reference our own binary packages (shuvcode-linux-x64, etc.)
       optionalDependencies: binaries,
       repository: {

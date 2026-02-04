@@ -112,7 +112,7 @@ export namespace ToolRegistry {
       TaskTool,
       WebFetchTool,
       TodoWriteTool,
-      TodoReadTool,
+      // TodoReadTool,
       WebSearchTool,
       CodeSearchTool,
       SkillTool,
