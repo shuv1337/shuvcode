@@ -9,7 +9,7 @@ import { SessionRevert } from "./revert"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions } from "ai"
+import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
@@ -749,6 +749,8 @@ export namespace SessionPrompt {
       const execute = item.execute
       if (!execute) continue
 
+      const transformed = ProviderTransform.schema(input.model, asSchema(item.inputSchema).jsonSchema)
+      item.inputSchema = jsonSchema(transformed)
       // Wrap execute to add plugin hooks and format output
       item.execute = async (args, opts) => {
         const ctx = context(args, opts)
@@ -1530,12 +1532,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     const matchingInvocation = invocations[shellName] ?? invocations[""]
     const args = matchingInvocation?.args
 
+    // Use session.directory as the authoritative source for cwd (fork feature: shell command cwd fix)
+    const cwd = session.directory ?? Instance.directory
+    const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const proc = spawn(shell, args, {
-      cwd: session.directory ?? Instance.directory,
+      cwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
+        ...shellEnv.env,
         TERM: "dumb",
       },
     })

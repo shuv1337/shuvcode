@@ -1467,9 +1467,9 @@ export type AgentConfig = {
     [key: string]: unknown
   }
   /**
-   * Hex color code for the agent (e.g., #FF5733)
+   * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
    */
-  color?: string
+  color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
   /**
    * Maximum number of agentic iterations before forcing text-only response
    */
@@ -1494,6 +1494,13 @@ export type AgentConfig = {
         [key: string]: unknown
       }
     | string
+    | "primary"
+    | "secondary"
+    | "accent"
+    | "success"
+    | "warning"
+    | "error"
+    | "info"
     | number
     | PermissionConfig
     | undefined

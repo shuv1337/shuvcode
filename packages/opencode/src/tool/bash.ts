@@ -17,8 +17,9 @@ import { Shell } from "@/shell/shell"
 import { ptyToText } from "ghostty-opentui"
 
 import { BashArity } from "@/permission/arity"
+import { Plugin } from "@/plugin"
 
-const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH ?? (Truncate.MAX_BYTES + 1)
+const MAX_OUTPUT_LENGTH = Flag.OPENCODE_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH ?? Truncate.MAX_BYTES + 1
 
 /**
  * Process carriage returns in output text.
@@ -187,11 +188,13 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }
 
+      const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
       const proc = spawn(params.command, {
         shell,
         cwd,
         env: {
           ...process.env,
+          ...shellEnv.env,
           FORCE_COLOR: "3",
           CLICOLOR: "1",
           CLICOLOR_FORCE: "1",
