@@ -792,7 +792,7 @@
         {
           "file": "packages/opencode/src/session/prompt.ts",
           "description": "Use session.directory as authoritative cwd source in shell function",
-          "markers": ["cwd: session.directory ?? Instance.directory"]
+          "markers": ["const cwd = session.directory ?? Instance.directory"]
         }
       ]
     },
