@@ -588,6 +588,7 @@ export function Session() {
     {
       title: showThinking() ? "Hide thinking" : "Show thinking",
       value: "session.toggle.thinking",
+      keybind: "display_thinking",
       category: "Session",
       slash: {
         name: "thinking",
@@ -1753,7 +1754,13 @@ function InlineTool(props: {
   )
 }
 
-function BlockTool(props: { title: string; children: JSX.Element; onClick?: () => void; part?: ToolPart }) {
+function BlockTool(props: {
+  title: string
+  children: JSX.Element
+  onClick?: () => void
+  part?: ToolPart
+  spinner?: boolean
+}) {
   const { theme } = useTheme()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
@@ -1776,9 +1783,16 @@ function BlockTool(props: { title: string; children: JSX.Element; onClick?: () =
         props.onClick?.()
       }}
     >
-      <text paddingLeft={3} fg={theme.textMuted}>
-        {props.title}
-      </text>
+      <Show
+        when={props.spinner}
+        fallback={
+          <text paddingLeft={3} fg={theme.textMuted}>
+            {props.title}
+          </text>
+        }
+      >
+        <Spinner color={theme.textMuted}>{props.title.replace(/^# /, "")}</Spinner>
+      </Show>
       {props.children}
       <Show when={error()}>
         <text fg={theme.error}>{error()}</text>
@@ -1791,6 +1805,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
   const ctx = use()
   const { theme } = useTheme()
   const sync = useSync()
+  const isRunning = createMemo(() => props.part.state.status === "running")
   const output = createMemo(() => props.metadata.output?.trim() ?? "")
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
@@ -1834,6 +1849,7 @@ function Bash(props: ToolProps<typeof BashTool>) {
         <BlockTool
           title={title()}
           part={props.part}
+          spinner={isRunning()}
           onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
         >
           <box gap={1}>

@@ -127,8 +127,8 @@ export const Script = {
   get commitHash() {
     return COMMIT_HASH
   },
-  get release() {
-    return env.OPENCODE_RELEASE
+  get release(): boolean {
+    return !!env.OPENCODE_RELEASE
   },
   get team() {
     return team
