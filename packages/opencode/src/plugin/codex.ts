@@ -9,7 +9,6 @@ import { TuiEvent } from "../cli/cmd/tui/event"
 import { Session } from "../session"
 import { Usage, type PlanType, type Snapshot } from "../usage"
 import os from "os"
-import { ProviderTransform } from "@/provider/transform"
 
 const log = Log.create({ service: "plugin.codex" })
 
