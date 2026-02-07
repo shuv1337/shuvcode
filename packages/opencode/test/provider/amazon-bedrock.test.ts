@@ -1,12 +1,44 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe, mock } from "bun:test"
 import path from "path"
 import { unlink } from "fs/promises"
 
-import { tmpdir } from "../fixture/fixture"
-import { Instance } from "../../src/project/instance"
-import { Provider } from "../../src/provider/provider"
-import { Env } from "../../src/env"
-import { Global } from "../../src/global"
+// === Mocks ===
+// These mocks are required because Provider.list() triggers BunProc.install()
+// for default plugins. Without mocks, tests fail in CI with missing modules.
+
+mock.module("../../src/bun/index", () => ({
+  BunProc: {
+    install: async (pkg: string, _version?: string) => {
+      const lastAtIndex = pkg.lastIndexOf("@")
+      return lastAtIndex > 0 ? pkg.substring(0, lastAtIndex) : pkg
+    },
+    run: async () => {
+      throw new Error("BunProc.run should not be called in tests")
+    },
+    which: () => process.execPath,
+    InstallFailedError: class extends Error {},
+  },
+}))
+
+const mockPlugin = () => ({})
+mock.module("opencode-copilot-auth", () => ({ default: mockPlugin }))
+mock.module("opencode-anthropic-auth", () => ({ default: mockPlugin }))
+mock.module("@gitlab/opencode-gitlab-auth", () => ({ default: mockPlugin, gitlabAuthPlugin: mockPlugin }))
+
+// Mock AWS credential providers so Provider.list() doesn't fail when @aws-sdk/credential-providers isn't installed
+mock.module("@aws-sdk/credential-providers", () => ({
+  fromNodeProviderChain: (_opts?: any) => async () => ({
+    accessKeyId: "mock-key",
+    secretAccessKey: "mock-secret",
+  }),
+}))
+
+// Import after mocks are set up
+const { tmpdir } = await import("../fixture/fixture")
+const { Instance } = await import("../../src/project/instance")
+const { Provider } = await import("../../src/provider/provider")
+const { Env } = await import("../../src/env")
+const { Global } = await import("../../src/global")
 
 test("Bedrock: config region takes precedence over AWS_REGION env var", async () => {
   await using tmp = await tmpdir({
