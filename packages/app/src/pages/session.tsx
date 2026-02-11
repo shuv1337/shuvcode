@@ -18,6 +18,8 @@ import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { AsciiMark } from "@opencode-ai/ui/logo"
 import { QuestionDock } from "@/components/question-dock"
+import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
+import { decode64 } from "@/utils/base64"
 
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"

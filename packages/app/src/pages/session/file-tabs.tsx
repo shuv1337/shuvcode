@@ -5,7 +5,7 @@ import { checksum } from "@opencode-ai/util/encode"
 import { decode64 } from "@/utils/base64"
 import { showToast } from "@opencode-ai/ui/toast"
 import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiMark } from "@opencode-ai/ui/logo"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { useLayout } from "@/context/layout"
 import { useFile, type SelectedLineRange } from "@/context/file"
@@ -498,7 +498,7 @@ export function FileTabContent(props: {
         </Match>
         <Match when={state()?.loaded && isBinary()}>
           <div class="h-full px-6 pb-42 flex flex-col items-center justify-center text-center gap-6">
-            <Mark class="w-14 opacity-10" />
+            <AsciiMark class="w-14 opacity-10" />
             <div class="flex flex-col gap-2 max-w-md">
               <div class="text-14-semibold text-text-strong truncate">{path()?.split("/").pop()}</div>
               <div class="text-14-regular text-text-weak">{props.language.t("session.files.binaryContent")}</div>
