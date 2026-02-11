@@ -31,7 +31,7 @@ import { iife } from "@opencode-ai/util/iife"
 import Layout from "@/pages/layout"
 import DirectoryLayout from "@/pages/directory-layout"
 import { ErrorPage } from "./pages/error"
-import { Suspense } from "solid-js"
+import { Suspense, JSX } from "solid-js"
 
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
@@ -116,20 +116,29 @@ function ServerKey(props: ParentProps) {
   )
 }
 
-export function AppInterface(props: { defaultUrl?: string }) {
+export function AppInterface(props: { defaultUrl?: string; children?: JSX.Element; isSidecar?: boolean }) {
+  const platform = usePlatform()
+
+  const stored = (() => {
+    if (platform.platform !== "web") return
+    const result = platform.getDefaultServerUrl?.()
+    if (result instanceof Promise) return
+    if (!result) return
+    return normalizeServerUrl(result)
+  })()
+
   const getDefaultServerUrl = () => {
-    // Use props if provided, otherwise use module-level defaultServerUrl
     if (props.defaultUrl) return props.defaultUrl
     return defaultServerUrl
   }
 
   return (
-    <ServerProvider defaultUrl={getDefaultServerUrl()}>
+    <ServerProvider defaultUrl={getDefaultServerUrl()} isSidecar={props.isSidecar}>
       <ServerKey>
         <GlobalSDKProvider>
           <GlobalSyncProvider>
             <Router
-              root={(props) => (
+              root={(routerProps) => (
                 <SettingsProvider>
                   <PermissionProvider>
                     <LayoutProvider>
@@ -137,7 +146,10 @@ export function AppInterface(props: { defaultUrl?: string }) {
                         <ModelsProvider>
                           <CommandProvider>
                             <HighlightsProvider>
-                              <Layout>{props.children}</Layout>
+                              <Layout>
+                                {props.children}
+                                {routerProps.children}
+                              </Layout>
                             </HighlightsProvider>
                           </CommandProvider>
                         </ModelsProvider>
