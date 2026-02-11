@@ -556,12 +556,8 @@
         },
         {
           "file": "packages/opencode/src/cli/cmd/import.ts",
-          "description": "Dual API format support for legacy opencode.ai and enterprise shuv.ai URLs",
-          "markers": [
-            "const legacyMatch = args.file.match",
-            "const enterpriseMatch = args.file.match",
-            "share.shuv.ai/api/share"
-          ]
+          "description": "Import command uses ShareNext.url() for dynamic share URL and parseShareUrl/transformShareData helpers",
+          "markers": ["parseShareUrl", "transformShareData", "ShareNext.url()"]
         },
         {
           "file": "sst.share.config.ts",
@@ -655,9 +651,9 @@
           "markers": ["flex items-center gap-2 min-w-0"]
         },
         {
-          "file": "packages/app/src/components/prompt-input.tsx",
-          "description": "Model button with truncation and responsive provider name visibility",
-          "markers": ["truncate min-w-0", "text-text-weak whitespace-nowrap truncate min-w-0"]
+          "file": "packages/app/src/components/prompt-input/slash-popover.tsx",
+          "description": "Slash command popover with truncated text styling",
+          "markers": ["text-text-weak whitespace-nowrap truncate min-w-0"]
         }
       ]
     },
@@ -687,7 +683,11 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing",
-      "files": ["packages/app/src/context/layout.tsx", "packages/app/src/pages/session.tsx"],
+      "files": [
+        "packages/app/src/context/layout.tsx",
+        "packages/app/src/pages/session.tsx",
+        "packages/app/src/pages/session/use-session-commands.tsx"
+      ],
       "criticalCode": [
         {
           "file": "packages/app/src/context/layout.tsx",
@@ -700,14 +700,14 @@
           "markers": ["<ResizeHandle", "edge=\"start\"", "layout.fileTree.width()"]
         },
         {
-          "file": "packages/app/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session/use-session-commands.tsx",
           "description": "/share slash command for session sharing",
-          "markers": ["id: \"session.share\"", "slash: \"share\"", "sdk.client.session.share"]
+          "markers": ["id: \"session.share\"", "slash: \"share\"", "sdk.client.session"]
         },
         {
-          "file": "packages/app/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session/use-session-commands.tsx",
           "description": "/unshare slash command to remove shareable link",
-          "markers": ["id: \"session.unshare\"", "slash: \"unshare\"", "sdk.client.session.unshare"]
+          "markers": ["id: \"session.unshare\"", "slash: \"unshare\"", "sdk.client.session"]
         },
         {
           "file": "packages/ui/src/components/resize-handle.tsx",
@@ -857,7 +857,10 @@
         {
           "file": "packages/app/src/pages/layout.tsx",
           "description": "Guard sessions memo to return empty array when no directory",
-          "markers": ["const currentDir = decode64(params.dir)", "if (!currentDir || !currentSession) return"]
+          "markers": [
+            "const currentDir = createMemo(() => decode64(params.dir)",
+            "if (!currentDir() || !currentSession) return"
+          ]
         }
       ]
     },
@@ -1250,6 +1253,7 @@
         "packages/desktop/src-tauri/Cargo.toml",
         "packages/desktop/src-tauri/Cargo.lock",
         "packages/desktop/src-tauri/src/lib.rs",
+        "packages/desktop/src-tauri/src/windows.rs",
         "packages/desktop/src-tauri/src/main.rs",
         "packages/desktop/src/updater.ts",
         "packages/app/src/app.tsx"
@@ -1261,7 +1265,7 @@
           "markers": ["name = \"shuvcode-desktop\"", "name = \"shuvcode_lib\""]
         },
         {
-          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "file": "packages/desktop/src-tauri/src/windows.rs",
           "description": "Window API initialization with __SHUVCODE__ and __OPENCODE__ fallback",
           "markers": ["window.__SHUVCODE__", "window.__OPENCODE__ ??= window.__SHUVCODE__"]
         },
@@ -1679,12 +1683,12 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Desktop app uses custom WebviewWindow builder with Shuvcode title, __SHUVCODE__ init object, and tauri.prod.conf.json app.windows config with Shuvcode identifiers.",
-      "files": ["packages/desktop/src-tauri/src/lib.rs", "packages/desktop/src-tauri/tauri.prod.conf.json"],
+      "files": ["packages/desktop/src-tauri/src/windows.rs", "packages/desktop/src-tauri/tauri.prod.conf.json"],
       "criticalCode": [
         {
-          "file": "packages/desktop/src-tauri/src/lib.rs",
-          "description": "Manual window builder and __SHUVCODE__ initialization",
-          "markers": ["WebviewWindow::builder", "window.__SHUVCODE__", "title(\"Shuvcode\")"]
+          "file": "packages/desktop/src-tauri/src/windows.rs",
+          "description": "Window builder with __SHUVCODE__ initialization and Shuvcode title",
+          "markers": ["WebviewWindowBuilder::new", "window.__SHUVCODE__", "title(\"Shuvcode\")"]
         },
         {
           "file": "packages/desktop/src-tauri/tauri.prod.conf.json",
@@ -1692,7 +1696,7 @@
           "markers": ["productName", "identifier", "\"title\": \"Shuvcode\""]
         }
       ],
-      "note": "Upstream uses WebviewWindowBuilder::from_config and OpenCode identifiers."
+      "note": "Upstream uses WebviewWindowBuilder::from_config and OpenCode identifiers. Window creation moved from lib.rs to windows.rs."
     },
     {
       "pr": 0,

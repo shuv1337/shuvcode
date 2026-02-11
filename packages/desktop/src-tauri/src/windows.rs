@@ -26,7 +26,7 @@ impl MainWindow {
             WebviewWindowBuilder::new(app, Self::LABEL, WebviewUrl::App("/".into())),
             app,
         )
-        .title("OpenCode")
+        .title("Shuvcode")
         .decorations(true)
         .disable_drag_drop_handler()
         .zoom_hotkeys_enabled(false)
@@ -34,8 +34,9 @@ impl MainWindow {
         .maximized(true)
         .initialization_script(format!(
             r#"
-            window.__OPENCODE__ ??= {{}};
-            window.__OPENCODE__.updaterEnabled = {UPDATER_ENABLED};
+            window.__SHUVCODE__ ??= {{}};
+            window.__SHUVCODE__.updaterEnabled = {UPDATER_ENABLED};
+            window.__OPENCODE__ ??= window.__SHUVCODE__;
           "#
         ));
 
