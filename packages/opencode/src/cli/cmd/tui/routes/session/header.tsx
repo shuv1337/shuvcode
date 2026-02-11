@@ -7,8 +7,8 @@ import { EmptyBorder } from "@tui/component/border"
 import type { AssistantMessage, Session } from "@opencode-ai/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
-import { Installation } from "@/installation"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Installation } from "@/installation"
 
 const Title = (props: { session: Accessor<Session>; truncate?: boolean }) => {
   const { theme } = useTheme()
