@@ -48,10 +48,10 @@ declare global {
     __OPENCODE__?: {
       updaterEnabled?: boolean
       port?: number
-      serverReady?: boolean
       serverUrl?: string
       serverPassword?: string
       deepLinks?: string[]
+      wsl?: boolean
     }
   }
 }

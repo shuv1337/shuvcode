@@ -45,7 +45,7 @@ fn configure_display_backend() -> Option<String> {
         set_env_if_absent("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         return Some(
             "Wayland session detected; forcing X11 backend to avoid compositor protocol errors. \
-               Set SHUVCODE_ALLOW_WAYLAND=1 to keep native Wayland."
+                Set SHUVCODE_ALLOW_WAYLAND=1 or OC_ALLOW_WAYLAND=1 to keep native Wayland."
                 .into(),
         );
     }
@@ -88,7 +88,7 @@ fn main() {
     #[cfg(target_os = "linux")]
     {
         if let Some(backend_note) = configure_display_backend() {
-            eprintln!("{backend_note:?}");
+            eprintln!("{backend_note}");
         }
     }
 
