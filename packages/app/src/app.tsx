@@ -45,14 +45,7 @@ function UiI18nBridge(props: ParentProps) {
 declare global {
   interface Window {
     __SHUVCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }
-    __OPENCODE__?: {
-      updaterEnabled?: boolean
-      port?: number
-      serverReady?: boolean
-      serverUrl?: string
-      serverPassword?: string
-      deepLinks?: string[]
-    }
+    __OPENCODE__?: { updaterEnabled?: boolean; serverPassword?: string; deepLinks?: string[]; wsl?: boolean }
   }
 }
 
