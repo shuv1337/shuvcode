@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import {
-  canDisposeDirectory,
-  estimateRootSessionTotal,
-  loadRootSessionsWithFallback,
-  pickDirectoriesToEvict,
-} from "./global-sync"
+// Import from sub-modules directly to avoid SolidJS client-side-only side effects
+// from the barrel re-export in global-sync.tsx (which imports Kobalte UI components)
+import { canDisposeDirectory, pickDirectoriesToEvict } from "./global-sync/eviction"
+import { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global-sync/session-load"
 
 describe("pickDirectoriesToEvict", () => {
   test("keeps pinned stores and evicts idle stores", () => {
