@@ -1,12 +1,13 @@
-import { Bus } from "@/bus";
-import { Config } from "@/config/config";
-import { ulid } from "ulid";
-import { Provider } from "@/provider/provider";
-import { Session } from "@/session";
-import { MessageV2 } from "@/session/message-v2";
-import { Storage } from "@/storage/storage";
-import { Log } from "@/util/log";
-import type * as SDK from "@opencode-ai/sdk/v2";
+import { Bus } from "@/bus"
+import { Config } from "@/config/config"
+import { ulid } from "ulid"
+import { Provider } from "@/provider/provider"
+import { Session } from "@/session"
+import { MessageV2 } from "@/session/message-v2"
+import { Database, eq } from "@/storage/db"
+import { SessionShareTable } from "./share.sql"
+import { Log } from "@/util/log"
+import type * as SDK from "@opencode-ai/sdk/v2"
 
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" });
@@ -84,18 +85,27 @@ export namespace ShareNext {
       body: JSON.stringify({ sessionID: sessionID }),
     })
       .then((x) => x.json())
-      .then((x) => x as { id: string; url: string; secret: string });
-    await Storage.write(["session_share", sessionID], result);
-    fullSync(sessionID);
-    return result;
+      .then((x) => x as { id: string; url: string; secret: string })
+    Database.use((db) =>
+      db
+        .insert(SessionShareTable)
+        .values({ session_id: sessionID, id: result.id, secret: result.secret, url: result.url })
+        .onConflictDoUpdate({
+          target: SessionShareTable.session_id,
+          set: { id: result.id, secret: result.secret, url: result.url },
+        })
+        .run(),
+    )
+    fullSync(sessionID)
+    return result
   }
 
   function get(sessionID: string) {
-    return Storage.read<{
-      id: string;
-      secret: string;
-      url: string;
-    }>(["session_share", sessionID]);
+    const row = Database.use((db) =>
+      db.select().from(SessionShareTable).where(eq(SessionShareTable.session_id, sessionID)).get(),
+    )
+    if (!row) return
+    return { id: row.id, secret: row.secret, url: row.url }
   }
 
   type Data =
@@ -140,11 +150,11 @@ export namespace ShareNext {
     }
 
     const timeout = setTimeout(async () => {
-      const queued = queue.get(sessionID);
-      if (!queued) return;
-      queue.delete(sessionID);
-      const share = await get(sessionID).catch(() => undefined);
-      if (!share) return;
+      const queued = queue.get(sessionID)
+      if (!queued) return
+      queue.delete(sessionID)
+      const share = get(sessionID)
+      if (!share) return
 
       await fetch(`${await url()}/api/share/${share.id}/sync`, {
         method: "POST",
@@ -161,14 +171,11 @@ export namespace ShareNext {
   }
 
   export async function remove(sessionID: string) {
-    if (disabled) return;
-    log.info("removing share", { sessionID });
-    const share = await get(sessionID);
-    if (!share) {
-      log.info("no share found to remove", { sessionID });
-      return;
-    }
-    const response = await fetch(`${await url()}/api/share/${share.id}`, {
+    if (disabled) return
+    log.info("removing share", { sessionID })
+    const share = get(sessionID)
+    if (!share) return
+    await fetch(`${await url()}/api/share/${share.id}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
@@ -176,15 +183,8 @@ export namespace ShareNext {
       body: JSON.stringify({
         secret: share.secret,
       }),
-    });
-    if (!response.ok) {
-      log.error("failed to remove share from server", {
-        sessionID,
-        status: response.status,
-      });
-    }
-    await Storage.remove(["session_share", sessionID]);
-    log.info("share removed", { sessionID });
+    })
+    Database.use((db) => db.delete(SessionShareTable).where(eq(SessionShareTable.session_id, sessionID)).run())
   }
 
   async function fullSync(sessionID: string) {

@@ -6,6 +6,7 @@
   <a href="https://github.com/Latitudes-Dev/shuvcode/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/Latitudes-Dev/shuvcode?style=flat-square" /></a>
 </p>
 
+
 ---
 
 ## Screenshots

@@ -159,7 +159,8 @@ export function Session() {
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", false)
-  const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
+  const [showHeader, setShowHeader] = kv.signal("header_visible", true)
+  const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [headerVisible, setHeaderVisible] = kv.signal("header_visible", true)
   const [draggingSidebar, setDraggingSidebar] = createSignal(false)
@@ -646,12 +647,11 @@ export function Session() {
       },
     },
     {
-      title: headerVisible() ? "Hide session header" : "Show session header",
-      value: "session.header.toggle",
-      keybind: "header_toggle",
+      title: showHeader() ? "Hide header" : "Show header",
+      value: "session.toggle.header",
       category: "Session",
       onSelect: (dialog) => {
-        setHeaderVisible((prev) => !prev)
+        setShowHeader((prev) => !prev)
         dialog.clear()
       },
     },
@@ -1047,7 +1047,7 @@ export function Session() {
       >
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
-            <Show when={(!sidebarVisible() || !wide()) && headerVisible()}>
+            <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
             </Show>
             <scrollbox
@@ -2184,8 +2184,8 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
         </For>
       </Match>
       <Match when={true}>
-        <InlineTool icon="%" pending="Preparing apply_patch..." complete={false} part={props.part}>
-          apply_patch
+        <InlineTool icon="%" pending="Preparing patch..." complete={false} part={props.part}>
+          Patch
         </InlineTool>
       </Match>
     </Switch>

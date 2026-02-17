@@ -27,6 +27,13 @@ export default function Home() {
       .slice(0, 5)
   })
 
+  const serverDotClass = createMemo(() => {
+    const healthy = server.healthy()
+    if (healthy === true) return "bg-icon-success-base"
+    if (healthy === false) return "bg-icon-critical-base"
+    return "bg-border-weak-base"
+  })
+
   function openProject(directory: string) {
     layout.projects.open(directory)
     server.projects.touch(directory)
@@ -52,9 +59,7 @@ export default function Home() {
         <div
           classList={{
             "size-2 rounded-full": true,
-            "bg-icon-success-base": server.healthy() === true,
-            "bg-icon-critical-base": server.healthy() === false,
-            "bg-border-weak-base": server.healthy() === undefined,
+            [serverDotClass()]: true,
           }}
         />
         {server.name}

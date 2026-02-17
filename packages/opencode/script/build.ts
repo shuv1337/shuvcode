@@ -31,6 +31,32 @@ await Bun.write(
 )
 console.log("Generated models-snapshot.ts")
 
+// Load migrations from migration directories
+const migrationDirs = (await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true }))
+  .filter((entry) => entry.isDirectory() && /^\d{4}\d{2}\d{2}\d{2}\d{2}\d{2}/.test(entry.name))
+  .map((entry) => entry.name)
+  .sort()
+
+const migrations = await Promise.all(
+  migrationDirs.map(async (name) => {
+    const file = path.join(dir, "migration", name, "migration.sql")
+    const sql = await Bun.file(file).text()
+    const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(name)
+    const timestamp = match
+      ? Date.UTC(
+          Number(match[1]),
+          Number(match[2]) - 1,
+          Number(match[3]),
+          Number(match[4]),
+          Number(match[5]),
+          Number(match[6]),
+        )
+      : 0
+    return { sql, timestamp }
+  }),
+)
+console.log(`Loaded ${migrations.length} migrations`)
+
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
@@ -168,6 +194,7 @@ for (const item of targets) {
       OPENCODE_VERSION: `'${Script.version}'`,
       OPENCODE_BASE_VERSION: `'${Script.baseVersion}'`,
       OPENCODE_COMMIT_HASH: `'${Script.commitHash}'`,
+      OPENCODE_MIGRATIONS: JSON.stringify(migrations),
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
       OPENCODE_WORKER_PATH: workerPath,
       OPENCODE_CHANNEL: `'${publishChannel}'`,

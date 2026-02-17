@@ -27,7 +27,6 @@ import { useSync } from "@/context/sync"
 import { useTerminal, type LocalPTY } from "@/context/terminal"
 import { useLayout } from "@/context/layout"
 import { checksum, base64Encode } from "@opencode-ai/util/encode"
-import { findLast } from "@opencode-ai/util/array"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogSelectFile } from "@/components/dialog-select-file"
 import FileTree from "@/components/file-tree"
@@ -39,7 +38,6 @@ import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { useComments } from "@/context/comments"
 import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
-import { usePermission } from "@/context/permission"
 import { showToast } from "@opencode-ai/ui/toast"
 import { SessionHeader, SessionContextTab, SortableTab, FileVisual, NewSessionView } from "@/components/session"
 import { navMark, navParams } from "@/utils/perf"
@@ -105,7 +103,6 @@ export default function Page() {
   const sdk = useSDK()
   const prompt = usePrompt()
   const comments = useComments()
-  const permission = usePermission()
 
   const permRequest = createMemo(() => {
     const sessionID = params.id
@@ -236,7 +233,7 @@ export default function Page() {
     })
   }
 
-  const isDesktop = createMediaQuery("(min-width: 768px)")
+  const isDesktop = createMediaQuery("(min-width: 1024px)")
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
   const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
   const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
@@ -276,6 +273,7 @@ export default function Page() {
     if (!path) return
     file.load(path)
     openReviewPanel()
+    tabs().setActive(next)
   }
 
   createEffect(() => {
@@ -398,6 +396,19 @@ export default function Page() {
       })
   }
 
+  const navigateAfterSessionRemoval = (sessionID: string, parentID?: string, nextSessionID?: string) => {
+    if (params.id !== sessionID) return
+    if (parentID) {
+      navigate(`/${params.dir}/session/${parentID}`)
+      return
+    }
+    if (nextSessionID) {
+      navigate(`/${params.dir}/session/${nextSessionID}`)
+      return
+    }
+    navigate(`/${params.dir}/session`)
+  }
+
   async function archiveSession(sessionID: string) {
     const session = sync.session.get(sessionID)
     if (!session) return
@@ -415,17 +426,7 @@ export default function Page() {
             if (index !== -1) draft.session.splice(index, 1)
           }),
         )
-
-        if (params.id !== sessionID) return
-        if (session.parentID) {
-          navigate(`/${params.dir}/session/${session.parentID}`)
-          return
-        }
-        if (nextSession) {
-          navigate(`/${params.dir}/session/${nextSession.id}`)
-          return
-        }
-        navigate(`/${params.dir}/session`)
+        navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
       })
       .catch((err) => {
         showToast({
@@ -491,16 +492,7 @@ export default function Page() {
       }),
     )
 
-    if (params.id !== sessionID) return true
-    if (session.parentID) {
-      navigate(`/${params.dir}/session/${session.parentID}`)
-      return true
-    }
-    if (nextSession) {
-      navigate(`/${params.dir}/session/${nextSession.id}`)
-      return true
-    }
-    navigate(`/${params.dir}/session`)
+    navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
     return true
   }
 
@@ -779,11 +771,6 @@ export default function Page() {
     return lines.slice(0, 2).join("\n")
   }
 
-  const addSelectionToContext = (path: string, selection: FileSelection) => {
-    const preview = selectionPreview(path, selection)
-    prompt.context.add({ type: "file", path, selection, preview })
-  }
-
   const addCommentToContext = (input: {
     file: string
     selection: SelectedLineRange
@@ -922,31 +909,11 @@ export default function Page() {
   const focusInput = () => inputRef?.focus()
 
   useSessionCommands({
-    command,
-    dialog,
-    file,
-    language,
-    local,
-    permission,
-    prompt,
-    sdk,
-    sync,
-    terminal,
-    layout,
-    params,
-    navigate,
-    tabs,
-    view,
-    info,
-    status,
-    userMessages,
-    visibleUserMessages,
     activeMessage,
     showAllFiles,
     navigateMessageByOffset,
     setExpanded: (id, fn) => setStore("expanded", id, fn),
     setActiveMessage,
-    addSelectionToContext,
     focusInput,
   })
 
@@ -1586,15 +1553,18 @@ export default function Page() {
   createEffect(() => {
     if (!file.ready()) return
     setSessionHandoff(sessionKey(), {
-      files: Object.fromEntries(
-        tabs()
-          .all()
-          .flatMap((tab) => {
-            const path = file.pathFromTab(tab)
-            if (!path) return []
-            return [[path, file.selectedLines(path) ?? null] as const]
-          }),
-      ),
+      files: tabs()
+        .all()
+        .reduce<Record<string, SelectedLineRange | null>>((acc, tab) => {
+          const path = file.pathFromTab(tab)
+          if (!path) return acc
+          const selected = file.selectedLines(path)
+          acc[path] =
+            selected && typeof selected === "object" && "start" in selected && "end" in selected
+              ? (selected as SelectedLineRange)
+              : null
+          return acc
+        }, {}),
     })
   })
 
@@ -1608,9 +1578,16 @@ export default function Page() {
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
       <SessionHeader />
-      <div class="flex-1 min-h-0 flex flex-col md:flex-row">
+      <div
+        class="flex-1 min-h-0 flex"
+        classList={{
+          "flex-col": !isDesktop(),
+          "flex-row": isDesktop(),
+        }}
+      >
         <SessionMobileTabs
           open={!isDesktop() && !!params.id}
+          mobileTab={store.mobileTab}
           hasReview={hasReview()}
           reviewCount={reviewCount()}
           onSession={() => setStore("mobileTab", "session")}
@@ -2539,7 +2516,7 @@ export default function Page() {
       </div>
 
       <TerminalPanel
-        open={isDesktop() && view().terminal.opened()}
+        open={view().terminal.opened()}
         height={layout.terminal.height()}
         resize={layout.terminal.resize}
         close={view().terminal.close}

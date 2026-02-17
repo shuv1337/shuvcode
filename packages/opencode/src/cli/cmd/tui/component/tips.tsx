@@ -1,5 +1,8 @@
 import { createMemo, createSignal, For } from "solid-js"
-import { useTheme } from "@tui/context/theme"
+import { DEFAULT_THEMES, useTheme } from "@tui/context/theme"
+
+const themeCount = Object.keys(DEFAULT_THEMES).length
+const themeTip = `Use {highlight}/themes{/highlight} or {highlight}Ctrl+X T{/highlight} to switch between ${themeCount} built-in themes`
 
 type TipPart = { text: string; highlight: boolean }
 
@@ -57,7 +60,7 @@ const TIPS = [
   "Press {highlight}Ctrl+X E{/highlight} or {highlight}/editor{/highlight} to compose messages in your external editor.",
   "Run {highlight}/init{/highlight} to auto-generate project rules based on your codebase structure.",
   "Run {highlight}/models{/highlight} or {highlight}Ctrl+X M{/highlight} to see and switch between available AI models.",
-  "Use {highlight}/theme{/highlight} or {highlight}Ctrl+X T{/highlight} to preview and switch between 50+ built-in themes.",
+  themeTip,
   "Press {highlight}Ctrl+X N{/highlight} or {highlight}/new{/highlight} to start a fresh conversation session.",
   "Use {highlight}/sessions{/highlight} or {highlight}Ctrl+X L{/highlight} to list and continue previous conversations.",
   "Run {highlight}/compact{/highlight} to summarize long sessions when approaching context limits.",
@@ -103,7 +106,7 @@ const TIPS = [
   "Use plugins to send OS notifications when sessions complete.",
   "Create a plugin to prevent OpenCode from reading sensitive files.",
   "Use {highlight}opencode run{/highlight} for non-interactive scripting.",
-  "Use {highlight}opencode run --continue{/highlight} to resume the last session.",
+  "Use {highlight}opencode --continue{/highlight} to resume the last session.",
   "Use {highlight}opencode run -f file.ts{/highlight} to attach files via CLI.",
   "Use {highlight}--format json{/highlight} for machine-readable output in scripts.",
   "Run {highlight}opencode serve{/highlight} for headless API access to OpenCode.",
@@ -123,7 +126,7 @@ const TIPS = [
   "Use {highlight}{file:path}{/highlight} to include file contents in config values.",
   "Use {highlight}instructions{/highlight} in config to load additional rules files.",
   "Set agent {highlight}temperature{/highlight} from 0.0 (focused) to 1.0 (creative).",
-  "Configure {highlight}maxSteps{/highlight} to limit agentic iterations per request.",
+  "Configure {highlight}steps{/highlight} to limit agentic iterations per request.",
   'Set {highlight}"tools": {"bash": false}{/highlight} to disable specific tools.',
   'Use {highlight}"mcp_*": false{/highlight} to disable all tools from an MCP server.',
   "Override global tool settings per agent configuration.",
