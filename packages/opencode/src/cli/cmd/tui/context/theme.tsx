@@ -18,7 +18,7 @@ import {
   type ThemeJson,
 } from "./theme-utils"
 
-export { selectedForeground } from "./theme-utils"
+export { DEFAULT_THEMES, selectedForeground } from "./theme-utils"
 export type { Theme, ThemeColors, ThemeJson } from "./theme-utils"
 
 export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
