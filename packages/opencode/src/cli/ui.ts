@@ -2,14 +2,10 @@ import z from "zod"
 import { EOL } from "os"
 import { NamedError } from "@opencode-ai/util/error"
 import { renderMarkdown, type MarkdownTheme } from "./markdown-renderer"
+import { logo as shuvLogo } from "./logo"
 
 export namespace UI {
-  const LOGO = [
-    [`                    `, `             ▄     `],
-    [`█▀▀█ █▀▀█ █▀▀█ █▀▀▄ `, `█▀▀▀ █▀▀█ █▀▀█ █▀▀█`],
-    [`█░░█ █░░█ █▀▀▀ █░░█ `, `█░░░ █░░█ █░░█ █▀▀▀`],
-    [`▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ `, `▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀`],
-  ]
+  const LOGO = shuvLogo.left.map((l, i) => [l, shuvLogo.right[i]])
 
   export const CancelledError = NamedError.create("UICancelledError", z.void())
 
