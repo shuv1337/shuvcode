@@ -646,6 +646,30 @@ export namespace Session {
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
+
+    // Prevent status downgrade: completed/error -> running
+    if (part.type === "tool") {
+      const existing = Database.use((db) =>
+        db.select().from(PartTable).where(eq(PartTable.id, id)).get(),
+      )
+      if (existing) {
+        const prev = existing.data as MessageV2.ToolPart
+        if (
+          prev.type === "tool" &&
+          (prev.state.status === "completed" || prev.state.status === "error") &&
+          part.state.status === "running"
+        ) {
+          log.warn("updatePart: preventing status downgrade", {
+            from: prev.state.status,
+            to: part.state.status,
+            tool: part.tool,
+            callID: part.callID,
+          })
+          return { ...prev, id, messageID, sessionID } as MessageV2.Part
+        }
+      }
+    }
+
     Database.use((db) => {
       db.insert(PartTable)
         .values({

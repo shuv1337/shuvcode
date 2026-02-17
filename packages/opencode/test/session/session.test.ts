@@ -82,9 +82,7 @@ describe("session.list", () => {
         const session2 = await Session.create({})
 
         // Archive session1
-        await Session.update(session1.id, (s) => {
-          s.time.archived = Date.now()
-        })
+        await Session.setArchived({ sessionID: session1.id, time: Date.now() })
 
         // Verify Session.list returns both (no filtering at source)
         const allSessions = await Array.fromAsync(Session.list())
@@ -123,9 +121,7 @@ describe("session.list", () => {
         expect(sessions.map((s) => s.id)).toContain(session.id)
 
         // Archive the session
-        await Session.update(session.id, (s) => {
-          s.time.archived = Date.now()
-        })
+        await Session.setArchived({ sessionID: session.id, time: Date.now() })
 
         // Verify session is no longer in the filtered list
         sessions = pipe(

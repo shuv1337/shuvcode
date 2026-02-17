@@ -417,18 +417,18 @@
       "criticalCode": [
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "headerVisible signal declaration persisted to KV store",
-          "markers": ["const [headerVisible, setHeaderVisible] = kv.signal(\"header_visible\""]
+          "description": "showHeader signal declaration persisted to KV store",
+          "markers": ["const [showHeader, setShowHeader] = kv.signal(\"header_visible\""]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
           "description": "Command palette entry for toggling header visibility",
-          "markers": ["Hide session header", "Show session header", "session.header.toggle", "header_toggle"]
+          "markers": ["Hide header", "Show header", "session.toggle.header"]
         },
         {
           "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
-          "description": "Show condition for Header including headerVisible check",
-          "markers": ["&& headerVisible()"]
+          "description": "Show condition for Header including showHeader check",
+          "markers": ["showHeader()"]
         }
       ]
     },
@@ -1276,8 +1276,8 @@
         },
         {
           "file": "packages/desktop/src-tauri/src/main.rs",
-          "description": "SHUVCODE_ALLOW_WAYLAND env var with OC_ALLOW_WAYLAND fallback",
-          "markers": ["SHUVCODE_ALLOW_WAYLAND", "OC_ALLOW_WAYLAND"]
+          "description": "Wayland backend selection via shuvcode_lib",
+          "markers": ["shuvcode_lib::linux_display::read_wayland"]
         },
         {
           "file": "packages/desktop/src-tauri/src/cli.rs",
