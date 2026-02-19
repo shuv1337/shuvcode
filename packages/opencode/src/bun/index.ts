@@ -66,14 +66,14 @@ export namespace BunProc {
     using _ = await Lock.write("bun-install")
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
-    const pkgjson = Bun.file(path.join(Global.Path.cache, "package.json"))
-    const parsed = await pkgjson.json().catch(async () => {
-      const result = { dependencies: {} }
-      await Bun.write(pkgjson.name!, JSON.stringify(result, null, 2))
+    const pkgjsonPath = path.join(Global.Path.cache, "package.json")
+    const parsed = await Filesystem.readJson<{ dependencies: Record<string, string> }>(pkgjsonPath).catch(async () => {
+      const result = { dependencies: {} as Record<string, string> }
+      await Filesystem.writeJson(pkgjsonPath, result)
       return result
     })
-    const dependencies = parsed.dependencies ?? {}
-    if (!parsed.dependencies) parsed.dependencies = dependencies
+    if (!parsed.dependencies) parsed.dependencies = {} as Record<string, string>
+    const dependencies = parsed.dependencies
     const modExists = await Filesystem.exists(mod)
     const cachedVersion = dependencies[pkg]
 
@@ -124,18 +124,17 @@ export namespace BunProc {
     const installedPkgJson = Bun.file(path.join(mod, "package.json"))
     const installedPkg = await installedPkgJson.json().catch(() => null)
     let resolvedVersion = version
-    if (version === "latest" && installedPkg?.version) {
-      resolvedVersion = installedPkg.version
+    if (version === "latest") {
+      const installedPkg = await Filesystem.readJson<{ version?: string }>(path.join(mod, "package.json")).catch(
+        () => null,
+      )
+      if (installedPkg?.version) {
+        resolvedVersion = installedPkg.version
+      }
     }
 
     parsed.dependencies[pkg] = resolvedVersion
-    await Bun.write(pkgjson.name!, JSON.stringify(parsed, null, 2))
-
-    log.info("successfully installed plugin", {
-      pkg,
-      path: mod,
-    })
-
+    await Filesystem.writeJson(pkgjsonPath, parsed)
     return mod
   }
 }

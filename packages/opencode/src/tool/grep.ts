@@ -1,5 +1,6 @@
 import z from "zod"
 import { Tool } from "./tool"
+import { Filesystem } from "../util/filesystem"
 import { Ripgrep } from "../file/ripgrep"
 
 import DESCRIPTION from "./grep.txt"
@@ -137,7 +138,7 @@ export const GrepTool = Tool.define("grep", {
     }
 
     const totalMatches = matches.length
-    const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${limit})` : ""}`]
+    const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${MATCH_LIMIT})` : ""}`]
 
     let currentFile = ""
     for (const match of matches) {
@@ -156,7 +157,7 @@ export const GrepTool = Tool.define("grep", {
     if (truncated) {
       outputLines.push("")
       outputLines.push(
-        `(Results truncated: showing ${limit} of ${totalMatches} matches (${totalMatches - limit} hidden). Consider using a more specific path or pattern.)`,
+        `(Results truncated: showing ${MATCH_LIMIT} of ${totalMatches} matches (${totalMatches - MATCH_LIMIT} hidden). Consider using a more specific path or pattern.)`,
       )
     }
 

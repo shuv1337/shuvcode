@@ -1,36 +1,37 @@
 import "@/index.css"
-import { ErrorBoundary, Show, Suspense, lazy, type JSX, type ParentProps } from "solid-js"
-import { Router, Route, Navigate } from "@solidjs/router"
-import { MetaProvider } from "@solidjs/meta"
-import { Font } from "@opencode-ai/ui/font"
-import { MarkedProvider } from "@opencode-ai/ui/context/marked"
-import { DiffComponentProvider } from "@opencode-ai/ui/context/diff"
-import { CodeComponentProvider } from "@opencode-ai/ui/context/code"
-import { I18nProvider } from "@opencode-ai/ui/context"
-import { Diff } from "@opencode-ai/ui/diff"
 import { Code } from "@opencode-ai/ui/code"
+import { I18nProvider } from "@opencode-ai/ui/context"
+import { CodeComponentProvider } from "@opencode-ai/ui/context/code"
+import { DialogProvider } from "@opencode-ai/ui/context/dialog"
+import { DiffComponentProvider } from "@opencode-ai/ui/context/diff"
+import { MarkedProvider } from "@opencode-ai/ui/context/marked"
+import { Diff } from "@opencode-ai/ui/diff"
+import { Font } from "@opencode-ai/ui/font"
 import { ThemeProvider } from "@opencode-ai/ui/theme"
-import { GlobalSyncProvider } from "@/context/global-sync"
-import { PermissionProvider } from "@/context/permission"
-import { LayoutProvider } from "@/context/layout"
+import { MetaProvider } from "@solidjs/meta"
+import { Navigate, Route, Router } from "@solidjs/router"
+import { ErrorBoundary, type JSX, lazy, type ParentProps, Show, Suspense } from "solid-js"
+import { CommandProvider } from "@/context/command"
+import { CommentsProvider } from "@/context/comments"
+import { FileProvider } from "@/context/file"
 import { GlobalSDKProvider } from "@/context/global-sdk"
-import { normalizeServerUrl, ServerProvider, useServer } from "@/context/server"
+import { GlobalSyncProvider } from "@/context/global-sync"
+import { HighlightsProvider } from "@/context/highlights"
+import { LanguageProvider, useLanguage } from "@/context/language"
+import { LayoutProvider } from "@/context/layout"
+import { ModelsProvider } from "@/context/models"
+import { NotificationProvider } from "@/context/notification"
+import { PermissionProvider } from "@/context/permission"
+import { usePlatform } from "@/context/platform"
+import { PromptProvider } from "@/context/prompt"
+import { type ServerConnection, ServerProvider, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
-import { PromptProvider } from "@/context/prompt"
-import { FileProvider } from "@/context/file"
-import { CommentsProvider } from "@/context/comments"
-import { NotificationProvider } from "@/context/notification"
-import { ModelsProvider } from "@/context/models"
-import { DialogProvider } from "@opencode-ai/ui/context/dialog"
-import { CommandProvider } from "@/context/command"
-import { LanguageProvider, useLanguage } from "@/context/language"
-import { usePlatform } from "@/context/platform"
-import { HighlightsProvider } from "@/context/highlights"
-import { iife } from "@opencode-ai/util/iife"
-import Layout from "@/pages/layout"
+
 import DirectoryLayout from "@/pages/directory-layout"
+import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
+
 const Home = lazy(() => import("@/pages/home"))
 const Session = lazy(() => import("@/pages/session"))
 const Loading = () => <div class="size-full" />
@@ -61,37 +62,11 @@ declare global {
     __SHUVCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }
     __OPENCODE__?: {
       updaterEnabled?: boolean
-      port?: number
-      serverUrl?: string
-      serverPassword?: string
       deepLinks?: string[]
       wsl?: boolean
     }
   }
 }
-
-const defaultServerUrl = iife(() => {
-  // NOTE: The ?url= query parameter was intentionally removed due to CVE-2026-22813 (GHSA-c83v-7274-4vgp)
-  // Allowing arbitrary server URLs via query params enables XSS attacks on localhost:4096
-
-  // 1. Configured server URL (from desktop settings)
-  if (window.__OPENCODE__?.serverUrl) return window.__OPENCODE__.serverUrl
-
-  // 2. Known production hosts -> localhost (same as upstream + shuv.ai)
-  if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai")) return "http://localhost:4096"
-
-  // 3. Desktop app (Tauri) with injected port
-  if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
-  if (window.__OPENCODE__?.port) return `http://127.0.0.1:${window.__OPENCODE__.port}`
-
-  // 4. Dev mode -> same-origin so Vite proxy handles LAN access + CORS
-  if (import.meta.env.DEV) {
-    return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
-  }
-
-  // 5. Default -> same origin (production web command)
-  return window.location.origin
-})
 
 function MarkedProviderWithNativeParser(props: ParentProps) {
   const platform = usePlatform()
@@ -139,30 +114,6 @@ function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
   )
 }
 
-const getStoredDefaultServerUrl = (platform: ReturnType<typeof usePlatform>) => {
-  if (platform.platform !== "web") return
-  const result = platform.getDefaultServerUrl?.()
-  if (result instanceof Promise) return
-  if (!result) return
-  return normalizeServerUrl(result)
-}
-
-const resolveDefaultServerUrl = (props: {
-  defaultUrl?: string
-  storedDefaultServerUrl?: string
-  hostname: string
-  origin: string
-  isDev: boolean
-  devHost?: string
-  devPort?: string
-}) => {
-  if (props.defaultUrl) return props.defaultUrl
-  if (props.storedDefaultServerUrl) return props.storedDefaultServerUrl
-  if (props.hostname.includes("opencode.ai")) return "http://localhost:4096"
-  if (props.isDev) return `http://${props.devHost ?? "localhost"}:${props.devPort ?? "4096"}`
-  return props.origin
-}
-
 export function AppBaseProviders(props: ParentProps) {
   return (
     <MetaProvider>
@@ -189,27 +140,19 @@ export function AppBaseProviders(props: ParentProps) {
 function ServerKey(props: ParentProps) {
   const server = useServer()
   return (
-    <Show when={server.url} keyed>
+    <Show when={server.key} keyed>
       {props.children}
     </Show>
   )
 }
 
-export function AppInterface(props: { defaultUrl?: string; children?: JSX.Element; isSidecar?: boolean }) {
-  const platform = usePlatform()
-  const storedDefaultServerUrl = getStoredDefaultServerUrl(platform)
-  const defaultServerUrl = resolveDefaultServerUrl({
-    defaultUrl: props.defaultUrl,
-    storedDefaultServerUrl,
-    hostname: location.hostname,
-    origin: window.location.origin,
-    isDev: import.meta.env.DEV,
-    devHost: import.meta.env.VITE_OPENCODE_SERVER_HOST,
-    devPort: import.meta.env.VITE_OPENCODE_SERVER_PORT,
-  })
-
+export function AppInterface(props: {
+  children?: JSX.Element
+  defaultServer: ServerConnection.Key
+  servers?: Array<ServerConnection.Any>
+}) {
   return (
-    <ServerProvider defaultUrl={defaultServerUrl} isSidecar={props.isSidecar}>
+    <ServerProvider defaultServer={props.defaultServer} servers={props.servers}>
       <ServerKey>
         <GlobalSDKProvider>
           <GlobalSyncProvider>

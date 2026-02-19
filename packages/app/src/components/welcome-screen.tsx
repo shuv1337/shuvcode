@@ -4,7 +4,7 @@ import { AsciiLogo } from "@opencode-ai/ui/logo"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Icon } from "@opencode-ai/ui/icon"
-import { normalizeServerUrl, serverDisplayName, useServer } from "@/context/server"
+import { normalizeServerUrl, ServerConnection, serverDisplayName, useServer } from "@/context/server"
 import { usePlatform } from "@/context/platform"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { isHostedEnvironment, hasUrlQueryParam, getUrlQueryParam } from "@/utils/hosted"
@@ -46,14 +46,15 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
 
   const items = createMemo(() => {
     const list = server.list
-    return list.filter((x) => x !== props.attemptedUrl)
+    return list.filter((x) => ServerConnection.key(x) !== props.attemptedUrl)
   })
 
   async function refreshHealth() {
     const results: Record<string, ServerStatus> = {}
     await Promise.all(
-      items().map(async (url) => {
-        results[url] = await checkHealth(url, platform.fetch)
+      items().map(async (conn) => {
+        const key = ServerConnection.key(conn)
+        results[key] = await checkHealth(conn.http.url, platform.fetch)
       }),
     )
     setStore("status", reconcile(results))
@@ -84,7 +85,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
     if (persist) {
       server.add(normalized)
     } else {
-      server.setActive(normalized)
+      server.setActive(ServerConnection.Key.make(normalized))
     }
     props.onRetry?.()
   }
@@ -177,32 +178,35 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
             <h2 class="text-sm font-medium text-text-strong">Saved Servers</h2>
             <div class="flex flex-col gap-2">
               <For each={items()}>
-                {(url) => (
-                  <button
-                    type="button"
-                    class="flex items-center gap-3 p-2 rounded hover:bg-background-base transition-colors text-left"
-                    onClick={() => handleConnect(url)}
-                    disabled={store.status[url]?.healthy === false}
-                  >
-                    <div
-                      classList={{
-                        "size-2 rounded-full shrink-0": true,
-                        "bg-icon-success-base": store.status[url]?.healthy === true,
-                        "bg-icon-critical-base": store.status[url]?.healthy === false,
-                        "bg-border-weak-base": store.status[url] === undefined,
-                      }}
-                    />
-                    <span
-                      class="truncate text-sm"
-                      classList={{ "text-text-weak": store.status[url]?.healthy === false }}
+                {(conn) => {
+                  const key = ServerConnection.key(conn)
+                  return (
+                    <button
+                      type="button"
+                      class="flex items-center gap-3 p-2 rounded hover:bg-background-base transition-colors text-left"
+                      onClick={() => handleConnect(conn.http.url)}
+                      disabled={store.status[key]?.healthy === false}
                     >
-                      {serverDisplayName(url)}
-                    </span>
-                    <Show when={store.status[url]?.version}>
-                      <span class="text-xs text-text-weak ml-auto">{store.status[url]?.version}</span>
-                    </Show>
-                  </button>
-                )}
+                      <div
+                        classList={{
+                          "size-2 rounded-full shrink-0": true,
+                          "bg-icon-success-base": store.status[key]?.healthy === true,
+                          "bg-icon-critical-base": store.status[key]?.healthy === false,
+                          "bg-border-weak-base": store.status[key] === undefined,
+                        }}
+                      />
+                      <span
+                        class="truncate text-sm"
+                        classList={{ "text-text-weak": store.status[key]?.healthy === false }}
+                      >
+                        {serverDisplayName(conn)}
+                      </span>
+                      <Show when={store.status[key]?.version}>
+                        <span class="text-xs text-text-weak ml-auto">{store.status[key]?.version}</span>
+                      </Show>
+                    </button>
+                  )
+                }}
               </For>
             </div>
           </div>
