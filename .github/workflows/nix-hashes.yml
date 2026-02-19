@@ -1,41 +1,39 @@
 name: nix-hashes
 
-# Disabled in fork - requires GitHub App credentials not available in Latitudes-Dev/shuvcode
-# To re-enable, set up OPENCODE_APP_ID and OPENCODE_APP_SECRET secrets
-
 permissions:
   contents: write
 
 on:
   workflow_dispatch:
-    inputs:
-      force:
-        description: "Force run (disabled in fork)"
-        required: false
-        default: "false"
-  # Disabled triggers - uncomment to re-enable
-  # push:
-  #   paths:
-  #     - "bun.lock"
-  #     - "package.json"
-  #     - "packages/*/package.json"
-  #     - "flake.lock"
-  #     - ".github/workflows/nix-hashes.yml"
-  # pull_request:
-  #   paths:
-  #     - "bun.lock"
-  #     - "package.json"
-  #     - "packages/*/package.json"
-  #     - "flake.lock"
-  #     - ".github/workflows/nix-hashes.yml"
+  push:
+    branches: [dev, beta]
+    paths:
+      - "bun.lock"
+      - "package.json"
+      - "packages/*/package.json"
+      - "flake.lock"
+      - "nix/node_modules.nix"
+      - "nix/scripts/**"
+      - "patches/**"
+      - ".github/workflows/nix-hashes.yml"
 
 jobs:
-  nix-hashes:
-    # Disabled in fork - always skip unless manually triggered with force=true
-    if: github.event.inputs.force == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    env:
-      TITLE: node_modules hashes
+  # Native runners required: bun install cross-compilation flags (--os/--cpu)
+  # do not produce byte-identical node_modules as native installs.
+  compute-hash:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: blacksmith-4vcpu-ubuntu-2404
+          - system: aarch64-linux
+            runner: blacksmith-4vcpu-ubuntu-2404-arm
+          - system: x86_64-darwin
+            runner: macos-15-intel
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository

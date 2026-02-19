@@ -1,19 +1,11 @@
-import { For, onCleanup, Show, Match, Switch, createMemo, createEffect, on } from "solid-js"
+import { onCleanup, Show, Match, Switch, createMemo, createEffect, on, onMount } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { Dynamic } from "solid-js/web"
 import { useLocal } from "@/context/local"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
-import { createStore, produce } from "solid-js/store"
-import { SessionContextUsage } from "@/components/session-context-usage"
-import { IconButton } from "@opencode-ai/ui/icon-button"
-import { Button } from "@opencode-ai/ui/button"
-import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
-import { Dialog } from "@opencode-ai/ui/dialog"
+import { createStore } from "solid-js/store"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
-import { Tabs } from "@opencode-ai/ui/tabs"
 import { Select } from "@opencode-ai/ui/select"
-import { useCodeComponent } from "@opencode-ai/ui/context/code"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { AsciiMark } from "@opencode-ai/ui/logo"
@@ -21,82 +13,35 @@ import { QuestionDock } from "@/components/question-dock"
 import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
 import { decode64 } from "@/utils/base64"
 
-import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
-import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { useSync } from "@/context/sync"
-import { useTerminal, type LocalPTY } from "@/context/terminal"
 import { useLayout } from "@/context/layout"
 import { checksum, base64Encode } from "@opencode-ai/util/encode"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { DialogSelectFile } from "@/components/dialog-select-file"
-import FileTree from "@/components/file-tree"
-import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { useNavigate, useParams } from "@solidjs/router"
 import { UserMessage } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { useComments } from "@/context/comments"
-import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
-import { showToast } from "@opencode-ai/ui/toast"
-import { SessionHeader, SessionContextTab, SortableTab, FileVisual, NewSessionView } from "@/components/session"
-import { navMark, navParams } from "@/utils/perf"
+import { SessionHeader, NewSessionView } from "@/components/session"
 import { same } from "@/utils/same"
-import { createOpenReviewFile, focusTerminalById, getTabReorderIndex } from "@/pages/session/helpers"
+import { createOpenReviewFile } from "@/pages/session/helpers"
 import { createScrollSpy } from "@/pages/session/scroll-spy"
-import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
-import { FileTabContent } from "@/pages/session/file-tabs"
-import {
-  SessionReviewTab,
-  StickyAddButton,
-  type DiffStyle,
-  type SessionReviewTabProps,
-} from "@/pages/session/review-tab"
+import { SessionReviewTab, type DiffStyle, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
-import { terminalTabLabel } from "@/pages/session/terminal-label"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
-import { SessionPromptDock } from "@/pages/session/session-prompt-dock"
+import { SessionComposerRegion, createSessionComposerState } from "@/pages/session/composer"
 import { SessionMobileTabs } from "@/pages/session/session-mobile-tabs"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
-
-type HandoffSession = {
-  prompt: string
-  files: Record<string, SelectedLineRange | null>
-}
-
-const HANDOFF_MAX = 40
-
-const handoff = {
-  session: new Map<string, HandoffSession>(),
-  terminal: new Map<string, string[]>(),
-}
-
-const touch = <K, V>(map: Map<K, V>, key: K, value: V) => {
-  map.delete(key)
-  map.set(key, value)
-  while (map.size > HANDOFF_MAX) {
-    const first = map.keys().next().value
-    if (first === undefined) return
-    map.delete(first)
-  }
-}
-
-const setSessionHandoff = (key: string, patch: Partial<HandoffSession>) => {
-  const prev = handoff.session.get(key) ?? { prompt: "", files: {} }
-  touch(handoff.session, key, { ...prev, ...patch })
-}
 
 export default function Page() {
   const layout = useLayout()
   const local = useLocal()
   const file = useFile()
   const sync = useSync()
-  const terminal = useTerminal()
   const dialog = useDialog()
-  const codeComponent = useCodeComponent()
-  const command = useCommand()
   const language = useLanguage()
   const params = useParams()
   const navigate = useNavigate()
@@ -104,53 +49,17 @@ export default function Page() {
   const prompt = usePrompt()
   const comments = useComments()
 
-  const permRequest = createMemo(() => {
-    const sessionID = params.id
-    if (!sessionID) return
-    return sync.data.permission[sessionID]?.[0]
-  })
-
-  const questionRequest = createMemo(() => {
-    const sessionID = params.id
-    if (!sessionID) return
-    return sync.data.question[sessionID]?.[0]
-  })
-
-  const blocked = createMemo(() => !!permRequest() || !!questionRequest())
-
   const [ui, setUi] = createStore({
-    responding: false,
     pendingMessage: undefined as string | undefined,
     scrollGesture: 0,
-    autoCreated: false,
     scroll: {
       overflow: false,
       bottom: true,
     },
   })
 
-  createEffect(
-    on(
-      () => permRequest()?.id,
-      () => setUi("responding", false),
-      { defer: true },
-    ),
-  )
+  const composer = createSessionComposerState()
 
-  const decide = (response: "once" | "always" | "reject") => {
-    const perm = permRequest()
-    if (!perm) return
-    if (ui.responding) return
-
-    setUi("responding", true)
-    sdk.client.permission
-      .respond({ sessionID: perm.sessionID, permissionID: perm.id, response })
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description: message })
-      })
-      .finally(() => setUi("responding", false))
-  }
   const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
   const workspaceKey = createMemo(() => params.dir ?? "")
   const workspaceTabs = createMemo(() => layout.tabs(workspaceKey))
@@ -193,47 +102,7 @@ export default function Page() {
     ),
   )
 
-  if (import.meta.env.DEV) {
-    createEffect(
-      on(
-        () => [params.dir, params.id] as const,
-        ([dir, id], prev) => {
-          if (!id) return
-          navParams({ dir, from: prev?.[1], to: id })
-        },
-      ),
-    )
-
-    createEffect(() => {
-      const id = params.id
-      if (!id) return
-      if (!prompt.ready()) return
-      navMark({ dir: params.dir, to: id, name: "storage:prompt-ready" })
-    })
-
-    createEffect(() => {
-      const id = params.id
-      if (!id) return
-      if (!terminal.ready()) return
-      navMark({ dir: params.dir, to: id, name: "storage:terminal-ready" })
-    })
-
-    createEffect(() => {
-      const id = params.id
-      if (!id) return
-      if (!file.ready()) return
-      navMark({ dir: params.dir, to: id, name: "storage:file-view-ready" })
-    })
-
-    createEffect(() => {
-      const id = params.id
-      if (!id) return
-      if (sync.data.message[id] === undefined) return
-      navMark({ dir: params.dir, to: id, name: "session:data-ready" })
-    })
-  }
-
-  const isDesktop = createMediaQuery("(min-width: 1024px)")
+  const isDesktop = createMediaQuery("(min-width: 768px)")
   const desktopReviewOpen = createMemo(() => isDesktop() && view().reviewPanel.opened())
   const desktopFileTreeOpen = createMemo(() => isDesktop() && layout.fileTree.opened())
   const desktopSidePanelOpen = createMemo(() => desktopReviewOpen() || desktopFileTreeOpen())
@@ -263,17 +132,6 @@ export default function Page() {
 
   const openReviewPanel = () => {
     if (!view().reviewPanel.opened()) view().reviewPanel.open()
-  }
-
-  const openTab = (value: string) => {
-    const next = normalizeTab(value)
-    tabs().open(next)
-
-    const path = file.pathFromTab(next)
-    if (!path) return
-    file.load(path)
-    openReviewPanel()
-    tabs().setActive(next)
   }
 
   createEffect(() => {
@@ -324,206 +182,6 @@ export default function Page() {
     return sync.session.history.loading(id)
   })
 
-  const [title, setTitle] = createStore({
-    draft: "",
-    editing: false,
-    saving: false,
-    menuOpen: false,
-    pendingRename: false,
-  })
-  let titleRef: HTMLInputElement | undefined
-
-  const errorMessage = (err: unknown) => {
-    if (err && typeof err === "object" && "data" in err) {
-      const data = (err as { data?: { message?: string } }).data
-      if (data?.message) return data.message
-    }
-    if (err instanceof Error) return err.message
-    return language.t("common.requestFailed")
-  }
-
-  createEffect(
-    on(
-      sessionKey,
-      () => setTitle({ draft: "", editing: false, saving: false, menuOpen: false, pendingRename: false }),
-      { defer: true },
-    ),
-  )
-
-  const openTitleEditor = () => {
-    if (!params.id) return
-    setTitle({ editing: true, draft: info()?.title ?? "" })
-    requestAnimationFrame(() => {
-      titleRef?.focus()
-      titleRef?.select()
-    })
-  }
-
-  const closeTitleEditor = () => {
-    if (title.saving) return
-    setTitle({ editing: false, saving: false })
-  }
-
-  const saveTitleEditor = async () => {
-    const sessionID = params.id
-    if (!sessionID) return
-    if (title.saving) return
-
-    const next = title.draft.trim()
-    if (!next || next === (info()?.title ?? "")) {
-      setTitle({ editing: false, saving: false })
-      return
-    }
-
-    setTitle("saving", true)
-    await sdk.client.session
-      .update({ sessionID, title: next })
-      .then(() => {
-        sync.set(
-          produce((draft) => {
-            const index = draft.session.findIndex((s) => s.id === sessionID)
-            if (index !== -1) draft.session[index].title = next
-          }),
-        )
-        setTitle({ editing: false, saving: false })
-      })
-      .catch((err) => {
-        setTitle("saving", false)
-        showToast({
-          title: language.t("common.requestFailed"),
-          description: errorMessage(err),
-        })
-      })
-  }
-
-  const navigateAfterSessionRemoval = (sessionID: string, parentID?: string, nextSessionID?: string) => {
-    if (params.id !== sessionID) return
-    if (parentID) {
-      navigate(`/${params.dir}/session/${parentID}`)
-      return
-    }
-    if (nextSessionID) {
-      navigate(`/${params.dir}/session/${nextSessionID}`)
-      return
-    }
-    navigate(`/${params.dir}/session`)
-  }
-
-  async function archiveSession(sessionID: string) {
-    const session = sync.session.get(sessionID)
-    if (!session) return
-
-    const sessions = sync.data.session ?? []
-    const index = sessions.findIndex((s) => s.id === sessionID)
-    const nextSession = index === -1 ? undefined : (sessions[index + 1] ?? sessions[index - 1])
-
-    await sdk.client.session
-      .update({ sessionID, time: { archived: Date.now() } })
-      .then(() => {
-        sync.set(
-          produce((draft) => {
-            const index = draft.session.findIndex((s) => s.id === sessionID)
-            if (index !== -1) draft.session.splice(index, 1)
-          }),
-        )
-        navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
-      })
-      .catch((err) => {
-        showToast({
-          title: language.t("common.requestFailed"),
-          description: errorMessage(err),
-        })
-      })
-  }
-
-  async function deleteSession(sessionID: string) {
-    const session = sync.session.get(sessionID)
-    if (!session) return false
-
-    const sessions = (sync.data.session ?? []).filter((s) => !s.parentID && !s.time?.archived)
-    const index = sessions.findIndex((s) => s.id === sessionID)
-    const nextSession = index === -1 ? undefined : (sessions[index + 1] ?? sessions[index - 1])
-
-    const result = await sdk.client.session
-      .delete({ sessionID })
-      .then((x) => x.data)
-      .catch((err) => {
-        showToast({
-          title: language.t("session.delete.failed.title"),
-          description: errorMessage(err),
-        })
-        return false
-      })
-
-    if (!result) return false
-
-    sync.set(
-      produce((draft) => {
-        const removed = new Set<string>([sessionID])
-
-        const byParent = new Map<string, string[]>()
-        for (const item of draft.session) {
-          const parentID = item.parentID
-          if (!parentID) continue
-          const existing = byParent.get(parentID)
-          if (existing) {
-            existing.push(item.id)
-            continue
-          }
-          byParent.set(parentID, [item.id])
-        }
-
-        const stack = [sessionID]
-        while (stack.length) {
-          const parentID = stack.pop()
-          if (!parentID) continue
-
-          const children = byParent.get(parentID)
-          if (!children) continue
-
-          for (const child of children) {
-            if (removed.has(child)) continue
-            removed.add(child)
-            stack.push(child)
-          }
-        }
-
-        draft.session = draft.session.filter((s) => !removed.has(s.id))
-      }),
-    )
-
-    navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
-    return true
-  }
-
-  function DialogDeleteSession(props: { sessionID: string }) {
-    const title = createMemo(() => sync.session.get(props.sessionID)?.title ?? language.t("command.session.new"))
-    const handleDelete = async () => {
-      await deleteSession(props.sessionID)
-      dialog.close()
-    }
-
-    return (
-      <Dialog title={language.t("session.delete.title")} fit>
-        <div class="flex flex-col gap-4 pl-6 pr-2.5 pb-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-14-regular text-text-strong">
-              {language.t("session.delete.confirm", { name: title() })}
-            </span>
-          </div>
-          <div class="flex justify-end gap-2">
-            <Button variant="ghost" size="large" onClick={() => dialog.close()}>
-              {language.t("common.cancel")}
-            </Button>
-            <Button variant="primary" size="large" onClick={handleDelete}>
-              {language.t("session.delete.button")}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    )
-  }
-
   const emptyUserMessages: UserMessage[] = []
   const userMessages = createMemo(
     () => messages().filter((m) => m.role === "user") as UserMessage[],
@@ -556,15 +214,11 @@ export default function Page() {
   )
 
   const [store, setStore] = createStore({
-    activeDraggable: undefined as string | undefined,
-    activeTerminalDraggable: undefined as string | undefined,
-    expanded: {} as Record<string, boolean>,
     messageId: undefined as string | undefined,
     turnStart: 0,
     mobileTab: "session" as "session" | "changes",
     changes: "session" as "session" | "turn",
     newSessionWorktree: "main",
-    promptHeight: 0,
   })
 
   const turnDiffs = createMemo(() => lastUserMessage()?.summary?.diffs ?? [])
@@ -618,33 +272,6 @@ export default function Page() {
     scrollToMessage(msgs[targetIndex], "auto")
   }
 
-  const kinds = createMemo(() => {
-    const merge = (a: "add" | "del" | "mix" | undefined, b: "add" | "del" | "mix") => {
-      if (!a) return b
-      if (a === b) return a
-      return "mix" as const
-    }
-
-    const normalize = (p: string) => p.replaceAll("\\\\", "/").replace(/\/+$/, "")
-
-    const out = new Map<string, "add" | "del" | "mix">()
-    for (const diff of diffs()) {
-      const file = normalize(diff.file)
-      const kind = diff.status === "added" ? "add" : diff.status === "deleted" ? "del" : "mix"
-
-      out.set(file, kind)
-
-      const parts = file.split("/")
-      for (const [idx] of parts.slice(0, -1).entries()) {
-        const dir = parts.slice(0, idx + 1).join("/")
-        if (!dir) continue
-        out.set(dir, merge(out.get(dir), kind))
-      }
-    }
-    return out
-  })
-  const emptyDiffFiles: string[] = []
-  const diffFiles = createMemo(() => diffs().map((d) => d.file), emptyDiffFiles, { equals: same })
   const diffsReady = createMemo(() => {
     const id = params.id
     if (!id) return true
@@ -652,9 +279,9 @@ export default function Page() {
     return sync.data.session_diff[id] !== undefined
   })
 
-  const idle = { type: "idle" as const }
   let inputRef!: HTMLDivElement
   let promptDock: HTMLDivElement | undefined
+  let dockHeight = 0
   let scroller: HTMLDivElement | undefined
   let content: HTMLDivElement | undefined
 
@@ -677,45 +304,9 @@ export default function Page() {
     sdk.directory
     const id = params.id
     if (!id) return
-    sync.session.sync(id)
+    void sync.session.sync(id)
+    void sync.session.todo(id)
   })
-
-  createEffect(() => {
-    if (!view().terminal.opened()) {
-      setUi("autoCreated", false)
-      return
-    }
-    if (!terminal.ready() || terminal.all().length !== 0 || ui.autoCreated) return
-    terminal.new()
-    setUi("autoCreated", true)
-  })
-
-  createEffect(
-    on(
-      () => terminal.all().length,
-      (count, prevCount) => {
-        if (prevCount !== undefined && prevCount > 0 && count === 0) {
-          if (view().terminal.opened()) {
-            view().terminal.toggle()
-          }
-        }
-      },
-    ),
-  )
-
-  createEffect(
-    on(
-      () => terminal.active(),
-      (activeId) => {
-        if (!activeId || !view().terminal.opened()) return
-        // Immediately remove focus
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur()
-        }
-        focusTerminalById(activeId)
-      },
-    ),
-  )
 
   createEffect(
     on(
@@ -729,16 +320,12 @@ export default function Page() {
     ),
   )
 
-  const status = createMemo(() => sync.data.session_status[params.id ?? ""] ?? idle)
-
   createEffect(
     on(
       sessionKey,
       () => {
         setStore("messageId", undefined)
-        setStore("expanded", {})
         setStore("changes", "session")
-        setUi("autoCreated", false)
       },
       { defer: true },
     ),
@@ -754,12 +341,6 @@ export default function Page() {
       { defer: true },
     ),
   )
-
-  createEffect(() => {
-    const id = lastUserMessage()?.id
-    if (!id) return
-    setStore("expanded", id, status().type !== "idle")
-  })
 
   const selectionPreview = (path: string, selection: FileSelection) => {
     const content = file.get(path)?.content?.content
@@ -810,8 +391,8 @@ export default function Page() {
       return
     }
 
-    // Don't autofocus chat if terminal panel is open
-    if (view().terminal.opened()) return
+    // Don't autofocus chat if desktop terminal panel is open
+    if (isDesktop() && view().terminal.opened()) return
 
     // Only treat explicit scroll keys as potential "user scroll" gestures.
     if (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End") {
@@ -820,56 +401,9 @@ export default function Page() {
     }
 
     if (event.key.length === 1 && event.key !== "Unidentified" && !(event.ctrlKey || event.metaKey)) {
-      if (blocked()) return
+      if (composer.blocked()) return
       inputRef?.focus()
     }
-  }
-
-  const handleDragStart = (event: unknown) => {
-    const id = getDraggableId(event)
-    if (!id) return
-    setStore("activeDraggable", id)
-  }
-
-  const handleDragOver = (event: DragEvent) => {
-    const { draggable, droppable } = event
-    if (draggable && droppable) {
-      const currentTabs = tabs().all()
-      const toIndex = getTabReorderIndex(currentTabs, draggable.id.toString(), droppable.id.toString())
-      if (toIndex === undefined) return
-      tabs().move(draggable.id.toString(), toIndex)
-    }
-  }
-
-  const handleDragEnd = () => {
-    setStore("activeDraggable", undefined)
-  }
-
-  const handleTerminalDragStart = (event: unknown) => {
-    const id = getDraggableId(event)
-    if (!id) return
-    setStore("activeTerminalDraggable", id)
-  }
-
-  const handleTerminalDragOver = (event: DragEvent) => {
-    const { draggable, droppable } = event
-    if (draggable && droppable) {
-      const terminals = terminal.all()
-      const fromIndex = terminals.findIndex((t: LocalPTY) => t.id === draggable.id.toString())
-      const toIndex = terminals.findIndex((t: LocalPTY) => t.id === droppable.id.toString())
-      if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-        terminal.move(draggable.id.toString(), toIndex)
-      }
-    }
-  }
-
-  const handleTerminalDragEnd = () => {
-    setStore("activeTerminalDraggable", undefined)
-    const activeId = terminal.active()
-    if (!activeId) return
-    setTimeout(() => {
-      focusTerminalById(activeId)
-    }, 0)
   }
 
   const contextOpen = createMemo(() => tabs().active() === "context" || tabs().all().includes("context"))
@@ -909,10 +443,7 @@ export default function Page() {
   const focusInput = () => inputRef?.focus()
 
   useSessionCommands({
-    activeMessage,
-    showAllFiles,
     navigateMessageByOffset,
-    setExpanded: (id, fn) => setStore("expanded", id, fn),
     setActiveMessage,
     focusInput,
   })
@@ -937,7 +468,6 @@ export default function Page() {
       onSelect={(option) => option && setStore("changes", option)}
       variant="ghost"
       size="large"
-      triggerStyle={{ "font-size": "var(--font-size-large)" }}
     />
   )
 
@@ -1102,11 +632,6 @@ export default function Page() {
     ),
   )
 
-  const setFileTreeTabValue = (value: string) => {
-    if (value !== "changes" && value !== "all") return
-    setFileTreeTab(value)
-  }
-
   const reviewDiffId = (path: string) => {
     const sum = checksum(path)
     if (!sum) return
@@ -1200,12 +725,6 @@ export default function Page() {
     if (contextOpen()) return "context"
     if (reviewTab() && hasReview()) return "review"
     return "empty"
-  })
-
-  const activeFileTab = createMemo(() => {
-    const active = activeTab()
-    if (!openedTabs().includes(active)) return
-    return active
   })
 
   createEffect(() => {
@@ -1475,12 +994,12 @@ export default function Page() {
     ({ height }) => {
       const next = Math.ceil(height)
 
-      if (next === store.promptHeight) return
+      if (next === dockHeight) return
 
       const el = scroller
       const stick = el ? el.scrollHeight - el.clientHeight - el.scrollTop < 10 : false
 
-      setStore("promptHeight", next)
+      dockHeight = next
 
       if (stick && el) {
         requestAnimationFrame(() => {
@@ -1512,60 +1031,8 @@ export default function Page() {
     consumePendingMessage: layout.pendingMessage.consume,
   })
 
-  createEffect(() => {
+  onMount(() => {
     document.addEventListener("keydown", handleKeyDown)
-  })
-
-  const previewPrompt = () =>
-    prompt
-      .current()
-      .map((part) => {
-        if (part.type === "file") return `[file:${part.path}]`
-        if (part.type === "agent") return `@${part.name}`
-        if (part.type === "image") return `[image:${part.filename}]`
-        return part.content
-      })
-      .join("")
-      .trim()
-
-  createEffect(() => {
-    if (!prompt.ready()) return
-    setSessionHandoff(sessionKey(), { prompt: previewPrompt() })
-  })
-
-  createEffect(() => {
-    if (!terminal.ready()) return
-    language.locale()
-
-    touch(
-      handoff.terminal,
-      params.dir!,
-      terminal.all().map((pty) =>
-        terminalTabLabel({
-          title: pty.title,
-          titleNumber: pty.titleNumber,
-          t: language.t as (key: string, vars?: Record<string, string | number | boolean>) => string,
-        }),
-      ),
-    )
-  })
-
-  createEffect(() => {
-    if (!file.ready()) return
-    setSessionHandoff(sessionKey(), {
-      files: tabs()
-        .all()
-        .reduce<Record<string, SelectedLineRange | null>>((acc, tab) => {
-          const path = file.pathFromTab(tab)
-          if (!path) return acc
-          const selected = file.selectedLines(path)
-          acc[path] =
-            selected && typeof selected === "object" && "start" in selected && "end" in selected
-              ? (selected as SelectedLineRange)
-              : null
-          return acc
-        }, {}),
-    })
   })
 
   onCleanup(() => {
@@ -1578,13 +1045,7 @@ export default function Page() {
   return (
     <div class="relative bg-background-base size-full overflow-hidden flex flex-col">
       <SessionHeader />
-      <div
-        class="flex-1 min-h-0 flex"
-        classList={{
-          "flex-col": !isDesktop(),
-          "flex-row": isDesktop(),
-        }}
-      >
+      <div class="flex-1 min-h-0 flex flex-col md:flex-row">
         <SessionMobileTabs
           open={!isDesktop() && !!params.id}
           mobileTab={store.mobileTab}
@@ -1592,19 +1053,17 @@ export default function Page() {
           reviewCount={reviewCount()}
           onSession={() => setStore("mobileTab", "session")}
           onChanges={() => setStore("mobileTab", "changes")}
-          t={language.t as (key: string, vars?: Record<string, string | number | boolean>) => string}
         />
 
         {/* Session panel */}
         <div
           classList={{
             "@container relative shrink-0 flex flex-col min-h-0 h-full bg-background-stronger": true,
-            "flex-1 pt-2 md:pt-3": true,
+            "flex-1": true,
             "md:flex-none": desktopSidePanelOpen(),
           }}
           style={{
             width: sessionPanelWidth(),
-            "--prompt-height": store.promptHeight ? `${store.promptHeight}px` : undefined,
           }}
         >
           <div class="flex-1 min-h-0 overflow-hidden">
@@ -1616,7 +1075,7 @@ export default function Page() {
                     mobileFallback={reviewContent({
                       diffStyle: "unified",
                       classes: {
-                        root: "pb-[calc(var(--prompt-height,8rem)+32px)]",
+                        root: "pb-8",
                         header: "px-4",
                         container: "px-4",
                       },
@@ -1633,27 +1092,7 @@ export default function Page() {
                     isDesktop={isDesktop()}
                     onScrollSpyScroll={scrollSpy.onScroll}
                     onAutoScrollInteraction={autoScroll.handleInteraction}
-                    showHeader={!!(info()?.title || info()?.parentID)}
                     centered={centered()}
-                    title={info()?.title}
-                    parentID={info()?.parentID}
-                    openTitleEditor={openTitleEditor}
-                    closeTitleEditor={closeTitleEditor}
-                    saveTitleEditor={saveTitleEditor}
-                    titleRef={(el) => {
-                      titleRef = el
-                    }}
-                    titleState={title}
-                    onTitleDraft={(value) => setTitle("draft", value)}
-                    onTitleMenuOpen={(open) => setTitle("menuOpen", open)}
-                    onTitlePendingRename={(value) => setTitle("pendingRename", value)}
-                    onNavigateParent={() => {
-                      navigate(`/${params.dir}/session/${info()?.parentID}`)
-                    }}
-                    sessionID={params.id!}
-                    onArchiveSession={(sessionID) => void archiveSession(sessionID)}
-                    onDeleteSession={(sessionID) => dialog.show(() => <DialogDeleteSession sessionID={sessionID} />)}
-                    t={language.t as (key: string, vars?: Record<string, string | number | boolean>) => string}
                     setContentRef={(el) => {
                       content = el
                       autoScroll.contentRef(el)
@@ -1675,14 +1114,7 @@ export default function Page() {
                     anchor={anchor}
                     onRegisterMessage={scrollSpy.register}
                     onUnregisterMessage={scrollSpy.unregister}
-                    onFirstTurnMount={() => {
-                      const id = params.id
-                      if (!id) return
-                      navMark({ dir: params.dir, to: id, name: "session:first-turn-mounted" })
-                    }}
                     lastUserMessageID={lastUserMessage()?.id}
-                    expanded={store.expanded}
-                    onToggleExpanded={(id) => setStore("expanded", id, (open: boolean | undefined) => !open)}
                   />
                 </Show>
               </Match>
@@ -1708,16 +1140,9 @@ export default function Page() {
             </Switch>
           </div>
 
-          <SessionPromptDock
+          <SessionComposerRegion
+            state={composer}
             centered={centered()}
-            questionRequest={questionRequest}
-            permissionRequest={permRequest}
-            blocked={blocked()}
-            promptReady={prompt.ready()}
-            handoffPrompt={handoff.session.get(sessionKey())?.prompt}
-            t={language.t as (key: string, vars?: Record<string, string | number | boolean>) => string}
-            responding={ui.responding}
-            onDecide={decide}
             inputRef={(el) => {
               inputRef = el
             }}
@@ -1727,7 +1152,9 @@ export default function Page() {
               comments.clear()
               resumeScroll()
             }}
-            setPromptDockRef={(el) => (promptDock = el)}
+            setPromptDockRef={(el) => {
+              promptDock = el
+            }}
           />
 
           <Show when={desktopReviewOpen()}>
@@ -1741,795 +1168,10 @@ export default function Page() {
           </Show>
         </div>
 
-        {/* Desktop side panel - hidden on mobile */}
-        <Show when={isDesktop() && view().reviewPanel.opened()}>
-          <aside
-            id="review-panel"
-            aria-label={language.t("session.panel.reviewAndFiles")}
-            class="relative flex-1 min-w-0 h-full border-l border-border-weak-base flex"
-          >
-            <div class="flex-1 min-w-0 h-full">
-              <Show
-                when={layout.fileTree.opened() && fileTreeTab() === "changes"}
-                fallback={
-                  <DragDropProvider
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={handleDragOver}
-                    collisionDetector={closestCenter}
-                  >
-                    <DragDropSensors />
-                    <ConstrainDragYAxis />
-                    <Tabs value={activeTab()} onChange={openTab}>
-                      <div class="sticky top-0 shrink-0 flex">
-                        <Tabs.List
-                          ref={(el: HTMLDivElement) => {
-                            let scrollTimeout: number | undefined
-                            let prevScrollWidth = el.scrollWidth
-                            let prevContextOpen = contextOpen()
-
-                            const handler = () => {
-                              if (scrollTimeout !== undefined) clearTimeout(scrollTimeout)
-                              scrollTimeout = window.setTimeout(() => {
-                                const scrollWidth = el.scrollWidth
-                                const clientWidth = el.clientWidth
-                                const currentContextOpen = contextOpen()
-
-                                // Only scroll when a tab is added (width increased), not on removal
-                                if (scrollWidth > prevScrollWidth) {
-                                  if (!prevContextOpen && currentContextOpen) {
-                                    // Context tab was opened, scroll to first
-                                    el.scrollTo({
-                                      left: 0,
-                                      behavior: "smooth",
-                                    })
-                                  } else if (scrollWidth > clientWidth) {
-                                    // File tab was added, scroll to rightmost
-                                    el.scrollTo({
-                                      left: scrollWidth - clientWidth,
-                                      behavior: "smooth",
-                                    })
-                                  }
-                                }
-                                // When width decreases (tab removed), don't scroll - let browser handle it naturally
-
-                                prevScrollWidth = scrollWidth
-                                prevContextOpen = currentContextOpen
-                              }, 0)
-                            }
-
-                            const wheelHandler = (e: WheelEvent) => {
-                              // Enable horizontal scrolling with mouse wheel
-                              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                                el.scrollLeft += e.deltaY > 0 ? 50 : -50
-                                e.preventDefault()
-                              }
-                            }
-
-                            el.addEventListener("wheel", wheelHandler, { passive: false })
-
-                            const observer = new MutationObserver(handler)
-                            observer.observe(el, { childList: true })
-
-                            onCleanup(() => {
-                              el.removeEventListener("wheel", wheelHandler)
-                              observer.disconnect()
-                              if (scrollTimeout !== undefined) clearTimeout(scrollTimeout)
-                            })
-                          }}
-                        >
-                          <Show when={reviewTab()}>
-                            <Tabs.Trigger value="review" classes={{ button: "!pl-6" }}>
-                              <div class="flex items-center gap-1.5">
-                                <div>{language.t("session.tab.review")}</div>
-                                <Show when={hasReview()}>
-                                  <div class="text-12-medium text-text-strong h-4 px-2 flex flex-col items-center justify-center rounded-full bg-surface-base">
-                                    {reviewCount()}
-                                  </div>
-                                </Show>
-                              </div>
-                            </Tabs.Trigger>
-                          </Show>
-                          <Show when={contextOpen()}>
-                            <Tabs.Trigger
-                              value="context"
-                              closeButton={
-                                <Tooltip value={language.t("common.closeTab")} placement="bottom">
-                                  <IconButton
-                                    icon="close-small"
-                                    variant="ghost"
-                                    class="h-5 w-5"
-                                    onClick={() => tabs().close("context")}
-                                    aria-label={language.t("common.closeTab")}
-                                  />
-                                </Tooltip>
-                              }
-                              hideCloseButton
-                              onMiddleClick={() => tabs().close("context")}
-                            >
-                              <div class="flex items-center gap-2">
-                                <SessionContextUsage variant="indicator" />
-                                <div>{language.t("session.tab.context")}</div>
-                              </div>
-                            </Tabs.Trigger>
-                          </Show>
-                          <SortableProvider ids={openedTabs()}>
-                            <For each={openedTabs()}>
-                              {(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}
-                            </For>
-                          </SortableProvider>
-                          <StickyAddButton>
-                            <TooltipKeybind
-                              title={language.t("command.file.open")}
-                              keybind={command.keybind("file.open")}
-                              class="flex items-center"
-                            >
-                              <IconButton
-                                icon="plus-small"
-                                variant="ghost"
-                                iconSize="large"
-                                onClick={() =>
-                                  dialog.show(() => <DialogSelectFile mode="files" onOpenFile={() => showAllFiles()} />)
-                                }
-                                aria-label={language.t("command.file.open")}
-                              />
-                            </TooltipKeybind>
-                          </StickyAddButton>
-                        </Tabs.List>
-                      </div>
-
-                      <Show when={reviewTab()}>
-                        <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden contain-strict">
-                          <Show when={activeTab() === "review"}>{reviewPanel()}</Show>
-                        </Tabs.Content>
-                      </Show>
-
-                      <Tabs.Content value="empty" class="flex flex-col h-full overflow-hidden contain-strict">
-                        <Show when={activeTab() === "empty"}>
-                          <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
-                            <div class="h-full px-6 pb-42 flex flex-col items-center justify-center text-center gap-6">
-                              <AsciiMark class="w-14 opacity-10" />
-                              <div class="text-14-regular text-text-weak max-w-56">
-                                {language.t("session.files.selectToOpen")}
-                              </div>
-                            </div>
-                          </div>
-                        </Show>
-                      </Tabs.Content>
-
-                      <Show when={contextOpen()}>
-                        <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
-                          <Show when={activeTab() === "context"}>
-                            <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
-                              <SessionContextTab
-                                messages={messages}
-                                visibleUserMessages={visibleUserMessages}
-                                view={view}
-                                info={info}
-                              />
-                            </div>
-                          </Show>
-                        </Tabs.Content>
-                      </Show>
-
-                      <For each={openedTabs()}>
-                        {(tab) => {
-                          let scroll: HTMLDivElement | undefined
-                          let scrollFrame: number | undefined
-                          let pending: { x: number; y: number } | undefined
-                          let codeScroll: HTMLElement[] = []
-
-                          const path = createMemo(() => file.pathFromTab(tab))
-                          const state = createMemo(() => {
-                            const p = path()
-                            if (!p) return
-                            return file.get(p)
-                          })
-                          const contents = createMemo(() => state()?.content?.content ?? "")
-                          const cacheKey = createMemo(() => checksum(contents()))
-                          const isImage = createMemo(() => {
-                            const c = state()?.content
-                            return (
-                              c?.encoding === "base64" &&
-                              c?.mimeType?.startsWith("image/") &&
-                              c?.mimeType !== "image/svg+xml"
-                            )
-                          })
-                          const isSvg = createMemo(() => {
-                            const c = state()?.content
-                            return c?.mimeType === "image/svg+xml"
-                          })
-                          const isBinary = createMemo(() => state()?.content?.type === "binary")
-                          const svgContent = createMemo(() => {
-                            if (!isSvg()) return
-                            const c = state()?.content
-                            if (!c) return
-                            if (c.encoding !== "base64") return c.content
-                            return decode64(c.content)
-                          })
-
-                          const svgDecodeFailed = createMemo(() => {
-                            if (!isSvg()) return false
-                            const c = state()?.content
-                            if (!c) return false
-                            if (c.encoding !== "base64") return false
-                            return svgContent() === undefined
-                          })
-
-                          const svgToast = { shown: false }
-                          createEffect(() => {
-                            if (!svgDecodeFailed()) return
-                            if (svgToast.shown) return
-                            svgToast.shown = true
-                            showToast({
-                              variant: "error",
-                              title: language.t("toast.file.loadFailed.title"),
-                              description: "Invalid base64 content.",
-                            })
-                          })
-                          const svgPreviewUrl = createMemo(() => {
-                            if (!isSvg()) return
-                            const c = state()?.content
-                            if (!c) return
-                            if (c.encoding === "base64") return `data:image/svg+xml;base64,${c.content}`
-                            return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(c.content)}`
-                          })
-                          const imageDataUrl = createMemo(() => {
-                            if (!isImage()) return
-                            const c = state()?.content
-                            return `data:${c?.mimeType};base64,${c?.content}`
-                          })
-                          const selectedLines = createMemo(() => {
-                            const p = path()
-                            if (!p) return null
-                            if (file.ready()) return file.selectedLines(p) ?? null
-                            return handoff.session.get(sessionKey())?.files[p] ?? null
-                          })
-
-                          let wrap: HTMLDivElement | undefined
-
-                          const fileComments = createMemo(() => {
-                            const p = path()
-                            if (!p) return []
-                            return comments.list(p)
-                          })
-
-                          const commentedLines = createMemo(() => fileComments().map((comment) => comment.selection))
-
-                          const [note, setNote] = createStore({
-                            openedComment: null as string | null,
-                            commenting: null as SelectedLineRange | null,
-                            draft: "",
-                            positions: {} as Record<string, number>,
-                            draftTop: undefined as number | undefined,
-                          })
-
-                          const openedComment = () => note.openedComment
-                          const setOpenedComment = (
-                            value:
-                              | typeof note.openedComment
-                              | ((value: typeof note.openedComment) => typeof note.openedComment),
-                          ) => setNote("openedComment", value)
-
-                          const commenting = () => note.commenting
-                          const setCommenting = (
-                            value: typeof note.commenting | ((value: typeof note.commenting) => typeof note.commenting),
-                          ) => setNote("commenting", value)
-
-                          const draft = () => note.draft
-                          const setDraft = (
-                            value: typeof note.draft | ((value: typeof note.draft) => typeof note.draft),
-                          ) => setNote("draft", value)
-
-                          const positions = () => note.positions
-                          const setPositions = (
-                            value: typeof note.positions | ((value: typeof note.positions) => typeof note.positions),
-                          ) => setNote("positions", value)
-
-                          const draftTop = () => note.draftTop
-                          const setDraftTop = (
-                            value: typeof note.draftTop | ((value: typeof note.draftTop) => typeof note.draftTop),
-                          ) => setNote("draftTop", value)
-
-                          const commentLabel = (range: SelectedLineRange) => {
-                            const start = Math.min(range.start, range.end)
-                            const end = Math.max(range.start, range.end)
-                            if (start === end) return `line ${start}`
-                            return `lines ${start}-${end}`
-                          }
-
-                          const getRoot = () => {
-                            const el = wrap
-                            if (!el) return
-
-                            const host = el.querySelector("diffs-container")
-                            if (!(host instanceof HTMLElement)) return
-
-                            const root = host.shadowRoot
-                            if (!root) return
-
-                            return root
-                          }
-
-                          const findMarker = (root: ShadowRoot, range: SelectedLineRange) => {
-                            const line = Math.max(range.start, range.end)
-                            const node = root.querySelector(`[data-line="${line}"]`)
-                            if (!(node instanceof HTMLElement)) return
-                            return node
-                          }
-
-                          const markerTop = (wrapper: HTMLElement, marker: HTMLElement) => {
-                            const wrapperRect = wrapper.getBoundingClientRect()
-                            const rect = marker.getBoundingClientRect()
-                            return rect.top - wrapperRect.top + Math.max(0, (rect.height - 20) / 2)
-                          }
-
-                          const updateComments = () => {
-                            const el = wrap
-                            const root = getRoot()
-                            if (!el || !root) {
-                              setPositions({})
-                              setDraftTop(undefined)
-                              return
-                            }
-
-                            const next: Record<string, number> = {}
-                            for (const comment of fileComments()) {
-                              const marker = findMarker(root, comment.selection)
-                              if (!marker) continue
-                              next[comment.id] = markerTop(el, marker)
-                            }
-
-                            setPositions(next)
-
-                            const range = commenting()
-                            if (!range) {
-                              setDraftTop(undefined)
-                              return
-                            }
-
-                            const marker = findMarker(root, range)
-                            if (!marker) {
-                              setDraftTop(undefined)
-                              return
-                            }
-
-                            setDraftTop(markerTop(el, marker))
-                          }
-
-                          const scheduleComments = () => {
-                            requestAnimationFrame(updateComments)
-                          }
-
-                          createEffect(() => {
-                            fileComments()
-                            scheduleComments()
-                          })
-
-                          createEffect(() => {
-                            const range = commenting()
-                            scheduleComments()
-                            if (!range) return
-                            setDraft("")
-                          })
-
-                          createEffect(() => {
-                            const focus = comments.focus()
-                            const p = path()
-                            if (!focus || !p) return
-                            if (focus.file !== p) return
-                            if (activeTab() !== tab) return
-
-                            const target = fileComments().find((comment) => comment.id === focus.id)
-                            if (!target) return
-
-                            setOpenedComment(target.id)
-                            setCommenting(null)
-                            file.setSelectedLines(p, target.selection)
-                            requestAnimationFrame(() => comments.clearFocus())
-                          })
-
-                          const renderCode = (source: string, wrapperClass: string) => (
-                            <div
-                              ref={(el) => {
-                                wrap = el
-                                scheduleComments()
-                              }}
-                              class={`relative overflow-hidden ${wrapperClass}`}
-                            >
-                              <Dynamic
-                                component={codeComponent}
-                                file={{
-                                  name: path() ?? "",
-                                  contents: source,
-                                  cacheKey: cacheKey(),
-                                }}
-                                enableLineSelection
-                                selectedLines={selectedLines()}
-                                commentedLines={commentedLines()}
-                                onRendered={() => {
-                                  requestAnimationFrame(restoreScroll)
-                                  requestAnimationFrame(scheduleComments)
-                                }}
-                                onLineSelected={(range: SelectedLineRange | null) => {
-                                  const p = path()
-                                  if (!p) return
-                                  file.setSelectedLines(p, range)
-                                  if (!range) setCommenting(null)
-                                }}
-                                onLineSelectionEnd={(range: SelectedLineRange | null) => {
-                                  if (!range) {
-                                    setCommenting(null)
-                                    return
-                                  }
-
-                                  setOpenedComment(null)
-                                  setCommenting(range)
-                                }}
-                                overflow="scroll"
-                                class="select-text"
-                              />
-                              <For each={fileComments()}>
-                                {(comment) => (
-                                  <LineCommentView
-                                    id={comment.id}
-                                    top={positions()[comment.id]}
-                                    open={openedComment() === comment.id}
-                                    comment={comment.comment}
-                                    selection={commentLabel(comment.selection)}
-                                    onMouseEnter={() => {
-                                      const p = path()
-                                      if (!p) return
-                                      file.setSelectedLines(p, comment.selection)
-                                    }}
-                                    onClick={() => {
-                                      const p = path()
-                                      if (!p) return
-                                      setCommenting(null)
-                                      setOpenedComment((current) => (current === comment.id ? null : comment.id))
-                                      file.setSelectedLines(p, comment.selection)
-                                    }}
-                                  />
-                                )}
-                              </For>
-                              <Show when={commenting()}>
-                                {(range) => (
-                                  <Show when={draftTop() !== undefined}>
-                                    <LineCommentEditor
-                                      top={draftTop()}
-                                      value={draft()}
-                                      selection={commentLabel(range())}
-                                      onInput={(value) => setDraft(value)}
-                                      onCancel={() => setCommenting(null)}
-                                      onSubmit={(value) => {
-                                        const p = path()
-                                        if (!p) return
-                                        addCommentToContext({
-                                          file: p,
-                                          selection: range(),
-                                          comment: value,
-                                          origin: "file",
-                                        })
-                                        setCommenting(null)
-                                      }}
-                                      onPopoverFocusOut={(e: FocusEvent) => {
-                                        const current = e.currentTarget as HTMLDivElement
-                                        const target = e.relatedTarget
-                                        if (target instanceof Node && current.contains(target)) return
-
-                                        setTimeout(() => {
-                                          if (!document.activeElement || !current.contains(document.activeElement)) {
-                                            setCommenting(null)
-                                          }
-                                        }, 0)
-                                      }}
-                                    />
-                                  </Show>
-                                )}
-                              </Show>
-                            </div>
-                          )
-
-                          const getCodeScroll = () => {
-                            const el = scroll
-                            if (!el) return []
-
-                            const host = el.querySelector("diffs-container")
-                            if (!(host instanceof HTMLElement)) return []
-
-                            const root = host.shadowRoot
-                            if (!root) return []
-
-                            return Array.from(root.querySelectorAll("[data-code]")).filter(
-                              (node): node is HTMLElement => node instanceof HTMLElement && node.clientWidth > 0,
-                            )
-                          }
-
-                          const queueScrollUpdate = (next: { x: number; y: number }) => {
-                            pending = next
-                            if (scrollFrame !== undefined) return
-
-                            scrollFrame = requestAnimationFrame(() => {
-                              scrollFrame = undefined
-
-                              const next = pending
-                              pending = undefined
-                              if (!next) return
-
-                              view().setScroll(tab, next)
-                            })
-                          }
-
-                          const handleCodeScroll = (event: Event) => {
-                            const el = scroll
-                            if (!el) return
-
-                            const target = event.currentTarget
-                            if (!(target instanceof HTMLElement)) return
-
-                            queueScrollUpdate({
-                              x: target.scrollLeft,
-                              y: el.scrollTop,
-                            })
-                          }
-
-                          const syncCodeScroll = () => {
-                            const next = getCodeScroll()
-                            if (next.length === codeScroll.length && next.every((el, i) => el === codeScroll[i])) return
-
-                            for (const item of codeScroll) {
-                              item.removeEventListener("scroll", handleCodeScroll)
-                            }
-
-                            codeScroll = next
-
-                            for (const item of codeScroll) {
-                              item.addEventListener("scroll", handleCodeScroll)
-                            }
-                          }
-
-                          const restoreScroll = () => {
-                            const el = scroll
-                            if (!el) return
-
-                            const s = view()?.scroll(tab)
-                            if (!s) return
-
-                            syncCodeScroll()
-
-                            if (codeScroll.length > 0) {
-                              for (const item of codeScroll) {
-                                if (item.scrollLeft !== s.x) item.scrollLeft = s.x
-                              }
-                            }
-
-                            if (el.scrollTop !== s.y) el.scrollTop = s.y
-
-                            if (codeScroll.length > 0) return
-
-                            if (el.scrollLeft !== s.x) el.scrollLeft = s.x
-                          }
-
-                          const handleScroll = (event: Event & { currentTarget: HTMLDivElement }) => {
-                            if (codeScroll.length === 0) syncCodeScroll()
-
-                            queueScrollUpdate({
-                              x: codeScroll[0]?.scrollLeft ?? event.currentTarget.scrollLeft,
-                              y: event.currentTarget.scrollTop,
-                            })
-                          }
-
-                          createEffect(
-                            on(
-                              () => state()?.loaded,
-                              (loaded) => {
-                                if (!loaded) return
-                                requestAnimationFrame(restoreScroll)
-                              },
-                              { defer: true },
-                            ),
-                          )
-
-                          createEffect(
-                            on(
-                              () => file.ready(),
-                              (ready) => {
-                                if (!ready) return
-                                requestAnimationFrame(restoreScroll)
-                              },
-                              { defer: true },
-                            ),
-                          )
-
-                          createEffect(
-                            on(
-                              () => tabs().active() === tab,
-                              (active) => {
-                                if (!active) return
-                                if (!state()?.loaded) return
-                                requestAnimationFrame(restoreScroll)
-                              },
-                            ),
-                          )
-
-                          onCleanup(() => {
-                            for (const item of codeScroll) {
-                              item.removeEventListener("scroll", handleCodeScroll)
-                            }
-
-                            if (scrollFrame === undefined) return
-                            cancelAnimationFrame(scrollFrame)
-                          })
-
-                          return (
-                            <Tabs.Content
-                              value={tab}
-                              class="mt-3 relative"
-                              ref={(el: HTMLDivElement) => {
-                                scroll = el
-                                restoreScroll()
-                              }}
-                              onScroll={handleScroll}
-                            >
-                              <Switch>
-                                <Match when={state()?.loaded && isImage()}>
-                                  <div class="px-6 py-4 pb-40">
-                                    <img
-                                      src={imageDataUrl()}
-                                      alt={path()}
-                                      class="max-w-full"
-                                      onLoad={() => requestAnimationFrame(restoreScroll)}
-                                    />
-                                  </div>
-                                </Match>
-                                <Match when={state()?.loaded && isSvg()}>
-                                  <div class="flex flex-col gap-4 px-6 py-4">
-                                    {renderCode(svgContent() ?? "", "")}
-                                    <Show when={svgPreviewUrl()}>
-                                      <div class="flex justify-center pb-40">
-                                        <img src={svgPreviewUrl()} alt={path()} class="max-w-full max-h-96" />
-                                      </div>
-                                    </Show>
-                                  </div>
-                                </Match>
-                                <Match when={state()?.loaded && isBinary()}>
-                                  <div class="h-full px-6 pb-42 flex flex-col items-center justify-center text-center gap-6">
-                                    <AsciiMark scale={0.7} />
-                                    <div class="flex flex-col gap-2 max-w-md">
-                                      <div class="text-14-semibold text-text-strong truncate">
-                                        {path()?.split("/").pop()}
-                                      </div>
-                                      <div class="text-14-regular text-text-weak">
-                                        {language.t("session.files.binaryContent")}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </Match>
-                                <Match when={state()?.loaded}>{renderCode(contents(), "pb-40")}</Match>
-                                <Match when={state()?.loading}>
-                                  <div class="px-6 py-4 text-text-weak">{language.t("common.loading")}...</div>
-                                </Match>
-                                <Match when={state()?.error}>
-                                  {(err) => <div class="px-6 py-4 text-text-weak">{err()}</div>}
-                                </Match>
-                              </Switch>
-                            </Tabs.Content>
-                          )
-                        }}
-                      </For>
-                    </Tabs>
-                    <DragOverlay>
-                      <Show when={store.activeDraggable}>
-                        {(tab) => {
-                          const path = createMemo(() => file.pathFromTab(tab()))
-                          return (
-                            <div class="relative px-6 h-12 flex items-center bg-background-stronger border-x border-border-weak-base border-b border-b-transparent">
-                              <Show when={path()}>{(p) => <FileVisual active path={p()} />}</Show>
-                            </div>
-                          )
-                        }}
-                      </Show>
-                    </DragOverlay>
-                  </DragDropProvider>
-                }
-              >
-                {reviewPanel()}
-              </Show>
-            </div>
-
-            <Show when={layout.fileTree.opened()}>
-              <div
-                id="file-tree-panel"
-                class="relative shrink-0 h-full"
-                style={{ width: `${layout.fileTree.width()}px` }}
-              >
-                <div class="h-full border-l border-border-weak-base flex flex-col overflow-hidden group/filetree">
-                  <Tabs
-                    variant="pill"
-                    value={fileTreeTab()}
-                    onChange={setFileTreeTabValue}
-                    class="h-full"
-                    data-scope="filetree"
-                  >
-                    <Tabs.List>
-                      <Tabs.Trigger value="changes" class="flex-1" classes={{ button: "w-full" }}>
-                        {reviewCount()}{" "}
-                        {language.t(reviewCount() === 1 ? "session.review.change.one" : "session.review.change.other")}
-                      </Tabs.Trigger>
-                      <Tabs.Trigger value="all" class="flex-1" classes={{ button: "w-full" }}>
-                        {language.t("session.files.all")}
-                      </Tabs.Trigger>
-                    </Tabs.List>
-                    <Tabs.Content value="changes" class="bg-background-base px-3 py-0">
-                      <Switch>
-                        <Match when={hasReview()}>
-                          <Show
-                            when={diffsReady()}
-                            fallback={
-                              <div class="px-2 py-2 text-12-regular text-text-weak">
-                                {language.t("common.loading")}
-                                {language.t("common.loading.ellipsis")}
-                              </div>
-                            }
-                          >
-                            <FileTree
-                              path=""
-                              allowed={diffFiles()}
-                              kinds={kinds()}
-                              draggable={false}
-                              active={tree.activeDiff}
-                              onFileClick={(node) => focusReviewDiff(node.path)}
-                            />
-                          </Show>
-                        </Match>
-                        <Match when={true}>
-                          <div class="mt-8 text-center text-12-regular text-text-weak">
-                            {language.t("session.review.noChanges")}
-                          </div>
-                        </Match>
-                      </Switch>
-                    </Tabs.Content>
-                    <Tabs.Content value="all" class="bg-background-base px-3 py-0">
-                      <FileTree
-                        path=""
-                        modified={diffFiles()}
-                        kinds={kinds()}
-                        onFileClick={(node) => openTab(file.tab(node.path))}
-                      />
-                    </Tabs.Content>
-                  </Tabs>
-                </div>
-                <ResizeHandle
-                  direction="horizontal"
-                  edge="start"
-                  size={layout.fileTree.width()}
-                  min={200}
-                  max={480}
-                  collapseThreshold={160}
-                  onResize={layout.fileTree.resize}
-                  onCollapse={layout.fileTree.close}
-                />
-              </div>
-            </Show>
-          </aside>
-        </Show>
+        <SessionSidePanel reviewPanel={reviewPanel} activeDiff={tree.activeDiff} focusReviewDiff={focusReviewDiff} />
       </div>
 
-      <TerminalPanel
-        open={view().terminal.opened()}
-        height={layout.terminal.height()}
-        resize={layout.terminal.resize}
-        close={view().terminal.close}
-        terminal={terminal}
-        language={language}
-        command={command}
-        handoff={() => handoff.terminal.get(params.dir!) ?? []}
-        activeTerminalDraggable={() => store.activeTerminalDraggable}
-        handleTerminalDragStart={handleTerminalDragStart}
-        handleTerminalDragOver={handleTerminalDragOver}
-        handleTerminalDragEnd={handleTerminalDragEnd}
-        onCloseTab={() => setUi("autoCreated", false)}
-      />
+      <TerminalPanel />
     </div>
   )
 }

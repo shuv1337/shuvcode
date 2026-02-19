@@ -1,7 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
 import z from "zod"
 import { $ } from "bun"
-import type { BunFile } from "bun"
 import { formatPatch, structuredPatch } from "diff"
 import path from "path"
 import fs from "fs"
@@ -73,39 +72,232 @@ export namespace File {
     })
   export type Content = z.infer<typeof Content>
 
-  /**
-   * Check if a buffer contains binary content by looking for null bytes
-   * or a high ratio of non-printable characters in the first chunk
-   */
-  function isBinaryContent(buffer: ArrayBuffer): boolean {
-    const bytes = new Uint8Array(buffer)
-    const checkLength = Math.min(bytes.length, 8192) // Check first 8KB
+  const imageExtensions = new Set([
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "bmp",
+    "webp",
+    "ico",
+    "tif",
+    "tiff",
+    "svg",
+    "svgz",
+    "avif",
+    "apng",
+    "jxl",
+    "heic",
+    "heif",
+  ])
 
-    if (checkLength === 0) return false
+  const binaryExtensions = new Set([
+    "exe",
+    "dll",
+    "pdb",
+    "bin",
+    "so",
+    "dylib",
+    "o",
+    "a",
+    "lib",
+    "wav",
+    "mp3",
+    "ogg",
+    "oga",
+    "ogv",
+    "ogx",
+    "flac",
+    "aac",
+    "wma",
+    "m4a",
+    "weba",
+    "mp4",
+    "avi",
+    "mov",
+    "wmv",
+    "flv",
+    "webm",
+    "mkv",
+    "zip",
+    "tar",
+    "gz",
+    "gzip",
+    "bz",
+    "bz2",
+    "bzip",
+    "bzip2",
+    "7z",
+    "rar",
+    "xz",
+    "lz",
+    "z",
+    "pdf",
+    "doc",
+    "docx",
+    "ppt",
+    "pptx",
+    "xls",
+    "xlsx",
+    "dmg",
+    "iso",
+    "img",
+    "vmdk",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "eot",
+    "sqlite",
+    "db",
+    "mdb",
+    "apk",
+    "ipa",
+    "aab",
+    "xapk",
+    "app",
+    "pkg",
+    "deb",
+    "rpm",
+    "snap",
+    "flatpak",
+    "appimage",
+    "msi",
+    "msp",
+    "jar",
+    "war",
+    "ear",
+    "class",
+    "kotlin_module",
+    "dex",
+    "vdex",
+    "odex",
+    "oat",
+    "art",
+    "wasm",
+    "wat",
+    "bc",
+    "ll",
+    "s",
+    "ko",
+    "sys",
+    "drv",
+    "efi",
+    "rom",
+    "com",
+    "cmd",
+    "ps1",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+  ])
 
-    let nullBytes = 0
-    let nonPrintable = 0
+  const textExtensions = new Set([
+    "ts",
+    "tsx",
+    "mts",
+    "cts",
+    "mtsx",
+    "ctsx",
+    "js",
+    "jsx",
+    "mjs",
+    "cjs",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "ps1",
+    "psm1",
+    "cmd",
+    "bat",
+    "json",
+    "jsonc",
+    "json5",
+    "yaml",
+    "yml",
+    "toml",
+    "md",
+    "mdx",
+    "txt",
+    "xml",
+    "html",
+    "htm",
+    "css",
+    "scss",
+    "sass",
+    "less",
+    "graphql",
+    "gql",
+    "sql",
+    "ini",
+    "cfg",
+    "conf",
+    "env",
+  ])
 
-    for (let i = 0; i < checkLength; i++) {
-      const byte = bytes[i]
-      if (byte === 0) {
-        nullBytes++
-        // A single null byte is a strong binary indicator
-        if (nullBytes > 0) return true
-      }
-      // Count non-printable, non-whitespace bytes (excluding common control chars)
-      // Printable ASCII: 32-126, plus tab(9), newline(10), carriage return(13)
-      if (byte < 9 || (byte > 13 && byte < 32) || byte === 127) {
-        nonPrintable++
-      }
-    }
+  const textNames = new Set([
+    "dockerfile",
+    "makefile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".npmrc",
+    ".nvmrc",
+    ".prettierrc",
+    ".eslintrc",
+  ])
 
-    // If more than 10% non-printable characters, likely binary
-    return nonPrintable / checkLength > 0.1
+  function isImageByExtension(filepath: string): boolean {
+    const ext = path.extname(filepath).toLowerCase().slice(1)
+    return imageExtensions.has(ext)
   }
 
-  async function shouldEncode(file: BunFile): Promise<boolean | "check"> {
-    const type = file.type?.toLowerCase()
+  function isTextByExtension(filepath: string): boolean {
+    const ext = path.extname(filepath).toLowerCase().slice(1)
+    return textExtensions.has(ext)
+  }
+
+  function isTextByName(filepath: string): boolean {
+    const name = path.basename(filepath).toLowerCase()
+    return textNames.has(name)
+  }
+
+  function getImageMimeType(filepath: string): string {
+    const ext = path.extname(filepath).toLowerCase().slice(1)
+    const mimeTypes: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      gif: "image/gif",
+      bmp: "image/bmp",
+      webp: "image/webp",
+      ico: "image/x-icon",
+      tif: "image/tiff",
+      tiff: "image/tiff",
+      svg: "image/svg+xml",
+      svgz: "image/svg+xml",
+      avif: "image/avif",
+      apng: "image/apng",
+      jxl: "image/jxl",
+      heic: "image/heic",
+      heif: "image/heif",
+    }
+    return mimeTypes[ext] || Filesystem.mimeType(filepath)
+  }
+
+  function isBinaryByExtension(filepath: string): boolean {
+    const ext = path.extname(filepath).toLowerCase().slice(1)
+    return binaryExtensions.has(ext)
+  }
+
+  function isImage(mimeType: string): boolean {
+    return mimeType.startsWith("image/")
+  }
+
+  async function shouldEncode(mimeType: string): Promise<boolean | "check"> {
+    const type = mimeType.toLowerCase()
     log.info("shouldEncode", { type })
     if (!type) return false
 
@@ -275,7 +467,7 @@ export namespace File {
       const untrackedFiles = untrackedOutput.trim().split("\n")
       for (const filepath of untrackedFiles) {
         try {
-          const content = await Bun.file(path.join(Instance.directory, filepath)).text()
+          const content = await Filesystem.readText(path.join(Instance.directory, filepath))
           const lines = content.split("\n").length
           changedFiles.push({
             path: filepath,
@@ -308,10 +500,13 @@ export namespace File {
       }
     }
 
-    return changedFiles.map((x) => ({
-      ...x,
-      path: path.relative(Instance.directory, x.path),
-    }))
+    return changedFiles.map((x) => {
+      const full = path.isAbsolute(x.path) ? x.path : path.join(Instance.directory, x.path)
+      return {
+        ...x,
+        path: path.relative(Instance.directory, full),
+      }
+    })
   }
 
   export async function read(file: string): Promise<Content> {
@@ -325,21 +520,45 @@ export namespace File {
       throw new Error(`Access denied: path escapes project directory`)
     }
 
-    const bunFile = Bun.file(full)
-
-    if (!(await bunFile.exists())) {
+    // Fast path: check extension before any filesystem operations
+    if (isImageByExtension(file)) {
+      if (await Filesystem.exists(full)) {
+        const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
+        const content = buffer.toString("base64")
+        const mimeType = getImageMimeType(file)
+        return { type: "text", content, mimeType, encoding: "base64" }
+      }
       return { type: "text", content: "" }
     }
 
-    const encode = await shouldEncode(bunFile)
+    const text = isTextByExtension(file) || isTextByName(file)
+
+    if (isBinaryByExtension(file) && !text) {
+      return { type: "binary", content: "" }
+    }
+
+    if (!(await Filesystem.exists(full))) {
+      return { type: "text", content: "" }
+    }
+
+    const mimeType = Filesystem.mimeType(full)
+    const encode = text ? false : await shouldEncode(mimeType)
 
     // For "check" case (application/octet-stream), read the buffer and check if binary
     if (encode === "check") {
-      const buffer = await bunFile.arrayBuffer().catch(() => new ArrayBuffer(0))
-      if (isBinaryContent(buffer)) {
+      const buffer = await Filesystem.readArrayBuffer(full).catch(() => new ArrayBuffer(0))
+      const bytes = new Uint8Array(buffer)
+      const checkLen = Math.min(bytes.length, 8192)
+      let hasBinary = false
+      for (let i = 0; i < checkLen; i++) {
+        if (bytes[i] === 0) {
+          hasBinary = true
+          break
+        }
+      }
+      if (hasBinary) {
         const content = Buffer.from(buffer).toString("base64")
-        const mimeType = bunFile.type || "application/octet-stream"
-        return { type: "text", content, mimeType, encoding: "base64" }
+        return { type: "text", content, mimeType: mimeType || "application/octet-stream", encoding: "base64" }
       }
       // It's actually text, decode and continue with normal text handling
       const content = new TextDecoder().decode(buffer).trim()
@@ -361,16 +580,12 @@ export namespace File {
     }
 
     if (encode) {
-      const buffer = await bunFile.arrayBuffer().catch(() => new ArrayBuffer(0))
-      const content = Buffer.from(buffer).toString("base64")
-      const mimeType = bunFile.type || "application/octet-stream"
+      const buffer = await Filesystem.readBytes(full).catch(() => Buffer.from([]))
+      const content = buffer.toString("base64")
       return { type: "text", content, mimeType, encoding: "base64" }
     }
 
-    const content = await bunFile
-      .text()
-      .catch(() => "")
-      .then((x) => x.trim())
+    const content = (await Filesystem.readText(full).catch(() => "")).trim()
 
     if (project.vcs === "git") {
       let diff = await $`git diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
@@ -394,13 +609,13 @@ export namespace File {
     let ignored = (_: string) => false
     if (project.vcs === "git") {
       const ig = ignore()
-      const gitignore = Bun.file(path.join(Instance.worktree, ".gitignore"))
-      if (await gitignore.exists()) {
-        ig.add(await gitignore.text())
+      const gitignorePath = path.join(Instance.worktree, ".gitignore")
+      if (await Filesystem.exists(gitignorePath)) {
+        ig.add(await Filesystem.readText(gitignorePath))
       }
-      const ignoreFile = Bun.file(path.join(Instance.worktree, ".ignore"))
-      if (await ignoreFile.exists()) {
-        ig.add(await ignoreFile.text())
+      const ignorePath = path.join(Instance.worktree, ".ignore")
+      if (await Filesystem.exists(ignorePath)) {
+        ig.add(await Filesystem.readText(ignorePath))
       }
       ignored = ig.ignores.bind(ig)
     }
