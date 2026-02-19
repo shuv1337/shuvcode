@@ -595,7 +595,7 @@
       "description": "Responsive layout via matchMedia, improved API URL resolution defaults, Vite proxy for API routes, and defensive array handling in global-sync",
       "files": [
         "packages/app/src/pages/layout.tsx",
-        "packages/app/src/app.tsx",
+        "packages/app/src/entry.tsx",
         "packages/app/src/context/global-sync.tsx",
         "packages/app/vite.config.ts"
       ],
@@ -606,7 +606,7 @@
           "markers": ["const smQuery = window.matchMedia(\"(min-width: 640px)\")", "setIsSmallViewport"]
         },
         {
-          "file": "packages/app/src/app.tsx",
+          "file": "packages/app/src/entry.tsx",
           "description": "Smart API URL resolution based on protocol and environment",
           "markers": ["location.hostname.includes(\"opencode.ai\")", "import.meta.env.VITE_OPENCODE_SERVER_HOST"]
         },
@@ -632,11 +632,6 @@
       "criticalCode": [
         {
           "file": "packages/app/src/pages/session.tsx",
-          "description": "Tabs/content containers prevent horizontal overflow",
-          "markers": ["min-w-0 w-full max-w-full", "overflow-hidden"]
-        },
-        {
-          "file": "packages/app/src/pages/session.tsx",
           "description": "Session root uses overflow hidden on mobile",
           "markers": ["size-full overflow-hidden"]
         },
@@ -649,11 +644,6 @@
           "file": "packages/app/src/components/prompt-input.tsx",
           "description": "Bottom bar with min-w-0 overflow-hidden for proper flex shrinking",
           "markers": ["flex items-center gap-2 min-w-0"]
-        },
-        {
-          "file": "packages/app/src/components/prompt-input/slash-popover.tsx",
-          "description": "Slash command popover with truncated text styling",
-          "markers": ["text-text-weak whitespace-nowrap truncate min-w-0"]
         }
       ]
     },
@@ -731,8 +721,8 @@
       "criticalCode": [
         {
           "file": "packages/opencode/src/file/index.ts",
-          "description": "isBinaryContent() function to detect actual binary content via null bytes",
-          "markers": ["function isBinaryContent(buffer: ArrayBuffer)", "nullBytes", "nonPrintable"]
+          "description": "Binary content detection via null byte scanning for octet-stream files",
+          "markers": ["isBinaryByExtension(file)", "bytes[i] === 0", "hasBinary"]
         },
         {
           "file": "packages/opencode/src/file/index.ts",
@@ -752,10 +742,10 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Display actual image previews for PNG, JPG, GIF, WEBP files in file viewer tabs. Images are centered and scaled to fit with scroll support for large images. SVG renders as syntax-highlighted code.",
-      "files": ["packages/app/src/pages/session.tsx"],
+      "files": ["packages/app/src/pages/session/file-tabs.tsx"],
       "criticalCode": [
         {
-          "file": "packages/app/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
           "description": "Image preview detection logic excluding SVG",
           "markers": [
             "c?.encoding === \"base64\"",
@@ -764,19 +754,16 @@
           ]
         },
         {
-          "file": "packages/app/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
           "description": "Image rendering with data URL and centered container",
-          "markers": [
-            "const imageDataUrl = createMemo(() =>",
-            "<img src={imageDataUrl()} alt={path()} class=\"max-w-full\" />"
-          ]
+          "markers": ["const imageDataUrl = createMemo(() =>", "src={imageDataUrl()}"]
         },
         {
-          "file": "packages/app/src/pages/session.tsx",
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
           "description": "Wait for file content to load before rendering to prevent blank pages",
           "markers": [
             "const contents = createMemo(() => state()?.content?.content ?? \"\")",
-            "const cacheKey = createMemo(() => checksum(contents()))"
+            "const cacheKey = createMemo(() => sampledChecksum(contents()))"
           ]
         }
       ]
@@ -1047,12 +1034,12 @@
       "author": "fork",
       "status": "fork-only",
       "description": "Fix scrolling in desktop file viewer tabs by adding proper flex and overflow constraints",
-      "files": ["packages/app/src/pages/session.tsx"],
+      "files": ["packages/app/src/pages/session/file-tabs.tsx"],
       "criticalCode": [
         {
-          "file": "packages/app/src/pages/session.tsx",
-          "description": "Scrollable wrapper for code component with flex constraints",
-          "markers": ["flex-1 min-h-0 overflow-auto", "overflow=\"scroll\""]
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
+          "description": "Scrollable wrapper for code component with scroll overflow",
+          "markers": ["overflow=\"scroll\""]
         }
       ]
     },
@@ -1256,7 +1243,8 @@
         "packages/desktop/src-tauri/src/windows.rs",
         "packages/desktop/src-tauri/src/main.rs",
         "packages/desktop/src/updater.ts",
-        "packages/app/src/app.tsx"
+        "packages/app/src/app.tsx",
+        "packages/app/src/entry.tsx"
       ],
       "criticalCode": [
         {
@@ -1290,9 +1278,9 @@
           "markers": ["__SHUVCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }"]
         },
         {
-          "file": "packages/app/src/app.tsx",
-          "description": "Port resolution chain: __SHUVCODE__ -> __OPENCODE__ -> env -> location",
-          "markers": ["window.__SHUVCODE__?.port", "window.__OPENCODE__?.port"]
+          "file": "packages/app/src/entry.tsx",
+          "description": "Port resolution chain: __SHUVCODE__ -> env -> location",
+          "markers": ["window.__SHUVCODE__?.port", "import.meta.env.VITE_OPENCODE_SERVER_HOST"]
         },
         {
           "file": "packages/desktop/src/updater.ts",
@@ -1702,17 +1690,17 @@
       "pr": 0,
       "title": "Publish workflow skips desktop release by default",
       "author": "fork",
-      "status": "fork-only",
+      "status": "reverted-upstream",
       "description": "The publish workflow only runs the desktop (tauri) release job when explicitly requested, avoiding unnecessary tauri-cli installs and platform downloads when no desktop app is shipped.",
       "files": [".github/workflows/publish.yml"],
       "criticalCode": [
         {
           "file": ".github/workflows/publish.yml",
-          "description": "publishDesktop input and publish-tauri job guard",
-          "markers": ["publishDesktop", "if: inputs.publishDesktop == 'true'"]
+          "description": "Desktop build job exists and runs unconditionally (upstream v1.2.7 removed skip toggle)",
+          "markers": ["build-tauri"]
         }
       ],
-      "note": "Triggered by publish failure from @tauri-apps/cli-win32-ia32-msvc integrity errors; publish desktop artifacts only when needed."
+      "note": "Upstream v1.2.7 removed the publishDesktop input toggle and runs build-tauri unconditionally. Feature no longer needed."
     }
   ]
 }
