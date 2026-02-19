@@ -43,7 +43,7 @@ export namespace File {
 
   export const Content = z
     .object({
-      type: z.literal("text"),
+      type: z.enum(["text", "binary"]),
       content: z.string(),
       diff: z.string().optional(),
       patch: z

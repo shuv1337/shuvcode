@@ -68,29 +68,6 @@ declare global {
   }
 }
 
-const defaultServerUrl = iife(() => {
-  // NOTE: The ?url= query parameter was intentionally removed due to CVE-2026-22813 (GHSA-c83v-7274-4vgp)
-  // Allowing arbitrary server URLs via query params enables XSS attacks on localhost:4096
-
-  // 1. Configured server URL (from desktop settings)
-  if (window.__OPENCODE__?.serverUrl) return window.__OPENCODE__.serverUrl
-
-  // 2. Known production hosts -> localhost (same as upstream + shuv.ai)
-  if (location.hostname.includes("opencode.ai") || location.hostname.includes("shuv.ai")) return "http://localhost:4096"
-
-  // 3. Desktop app (Tauri) with injected port
-  if (window.__SHUVCODE__?.port) return `http://127.0.0.1:${window.__SHUVCODE__.port}`
-  if (window.__OPENCODE__?.port) return `http://127.0.0.1:${window.__OPENCODE__.port}`
-
-  // 4. Dev mode -> same-origin so Vite proxy handles LAN access + CORS
-  if (import.meta.env.DEV) {
-    return `http://${import.meta.env.VITE_OPENCODE_SERVER_HOST ?? "localhost"}:${import.meta.env.VITE_OPENCODE_SERVER_PORT ?? "4096"}`
-  }
-
-  // 5. Default -> same origin (production web command)
-  return window.location.origin
-})
-
 function MarkedProviderWithNativeParser(props: ParentProps) {
   const platform = usePlatform()
   return <MarkedProvider nativeParser={platform.parseMarkdown}>{props.children}</MarkedProvider>

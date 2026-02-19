@@ -396,54 +396,6 @@ function createGlobalSync() {
         setGlobalStore("connectionState", "error")
       })
   }
-      // For non-hosted environments, show the error page
-      setGlobalStore("error", new Error(language.t("error.globalSync.connectFailed", { url: globalSDK.url })))
-      setGlobalStore("connectionState", "error")
-      return
-    }
-
-    return Promise.all([
-      retry(() =>
-        globalSDK.client.path.get().then((x) => {
-          setGlobalStore("path", x.data!)
-        }),
-      ),
-      retry(() =>
-        globalSDK.client.global.config.get().then((x) => {
-          setGlobalStore("config", x.data!)
-        }),
-      ),
-      retry(() =>
-        globalSDK.client.project.list().then(async (x) => {
-          const data = Array.isArray(x.data) ? x.data : []
-          const projects = data
-            .filter((p) => !!p?.id)
-            .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
-            .slice()
-            .sort((a, b) => cmp(a.id, b.id))
-          setGlobalStore("project", projects)
-        }),
-      ),
-      retry(() =>
-        globalSDK.client.provider.list().then((x) => {
-          setGlobalStore("provider", normalizeProviderList(x.data!))
-        }),
-      ),
-      retry(() =>
-        globalSDK.client.provider.auth().then((x) => {
-          setGlobalStore("provider_auth", x.data ?? {})
-        }),
-      ),
-    ])
-      .then(() => {
-        setGlobalStore("ready", true)
-        setGlobalStore("connectionState", "ready")
-      })
-      .catch((e) => {
-        setGlobalStore("error", e)
-        setGlobalStore("connectionState", "error")
-      })
-  }
 
   onMount(() => {
     void bootstrap()

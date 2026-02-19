@@ -13,6 +13,8 @@ import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
+import fs from "fs/promises"
+import { $ } from "bun"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
 
