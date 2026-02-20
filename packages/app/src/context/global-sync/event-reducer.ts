@@ -11,6 +11,7 @@ import type {
   SessionStatus,
   Todo,
 } from "@opencode-ai/sdk/v2/client"
+import { applyMessageEvent, type MessageStore } from "@opencode-ai/sdk/event-reducer"
 import type { State, VcsCache } from "./types"
 import { trimSessions } from "./session-trim"
 
@@ -164,97 +165,39 @@ export function applyDirectoryEvent(input: {
       input.setStore("session_status", props.sessionID, reconcile(props.status))
       break
     }
-    case "message.updated": {
-      const info = (event.properties as { info: Message }).info
-      const messages = input.store.message[info.sessionID]
-      if (!messages) {
-        input.setStore("message", info.sessionID, [info])
-        break
-      }
-      const result = Binary.search(messages, info.id, (m) => m.id)
-      if (result.found) {
-        input.setStore("message", info.sessionID, result.index, reconcile(info))
-        break
-      }
-      input.setStore(
-        "message",
-        info.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, info)
-        }),
-      )
-      break
-    }
-    case "message.removed": {
-      const props = event.properties as { sessionID: string; messageID: string }
-      input.setStore(
-        produce((draft) => {
-          const messages = draft.message[props.sessionID]
-          if (messages) {
-            const result = Binary.search(messages, props.messageID, (m) => m.id)
-            if (result.found) messages.splice(result.index, 1)
-          }
-          delete draft.part[props.messageID]
-        }),
-      )
-      break
-    }
-    case "message.part.updated": {
-      const part = (event.properties as { part: Part }).part
-      const parts = input.store.part[part.messageID]
-      if (!parts) {
-        input.setStore("part", part.messageID, [part])
-        break
-      }
-      const result = Binary.search(parts, part.id, (p) => p.id)
-      if (result.found) {
-        input.setStore("part", part.messageID, result.index, reconcile(part))
-        break
-      }
-      input.setStore(
-        "part",
-        part.messageID,
-        produce((draft) => {
-          draft.splice(result.index, 0, part)
-        }),
-      )
-      break
-    }
-    case "message.part.removed": {
-      const props = event.properties as { messageID: string; partID: string }
-      const parts = input.store.part[props.messageID]
-      if (!parts) break
-      const result = Binary.search(parts, props.partID, (p) => p.id)
-      if (result.found) {
-        input.setStore(
-          produce((draft) => {
-            const list = draft.part[props.messageID]
-            if (!list) return
-            const next = Binary.search(list, props.partID, (p) => p.id)
-            if (!next.found) return
-            list.splice(next.index, 1)
-            if (list.length === 0) delete draft.part[props.messageID]
-          }),
-        )
-      }
-      break
-    }
+    case "message.updated":
+    case "message.removed":
+    case "message.part.updated":
+    case "message.part.removed":
     case "message.part.delta": {
-      const props = event.properties as { messageID: string; partID: string; field: string; delta: string }
-      const parts = input.store.part[props.messageID]
-      if (!parts) break
-      const result = Binary.search(parts, props.partID, (p) => p.id)
-      if (!result.found) break
-      input.setStore(
-        "part",
-        props.messageID,
-        produce((draft) => {
-          const part = draft[result.index]
-          const field = props.field as keyof typeof part
-          const existing = part[field] as string | undefined
-          ;(part[field] as string) = (existing ?? "") + props.delta
-        }),
-      )
+      const currentStore: MessageStore = {
+        messages: input.store.message as Record<string, Message[]>,
+        parts: input.store.part as Record<string, Part[]>,
+      }
+      const next = applyMessageEvent(currentStore, event)
+      if (!next) break
+      // Apply changed message lists to Solid store
+      for (const sessionID of Object.keys(next.messages) as string[]) {
+        if (next.messages[sessionID] !== currentStore.messages[sessionID]) {
+          input.setStore("message", sessionID, reconcile(next.messages[sessionID], { key: "id" }))
+        }
+      }
+      for (const sessionID of Object.keys(currentStore.messages) as string[]) {
+        if (!(sessionID in next.messages)) {
+          input.setStore(produce((draft) => { delete draft.message[sessionID] }))
+        }
+      }
+      // Apply changed part lists to Solid store
+      for (const messageID of Object.keys(next.parts) as string[]) {
+        if (next.parts[messageID] !== currentStore.parts[messageID]) {
+          input.setStore("part", messageID, reconcile(next.parts[messageID], { key: "id" }))
+        }
+      }
+      for (const messageID of Object.keys(currentStore.parts) as string[]) {
+        if (!(messageID in next.parts)) {
+          input.setStore(produce((draft) => { delete draft.part[messageID] }))
+        }
+      }
       break
     }
     case "vcs.branch.updated": {

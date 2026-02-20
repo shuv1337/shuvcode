@@ -24,7 +24,8 @@
       "types": "./dist/v2/gen/client/index.d.ts",
       "default": "./src/v2/gen/client/index.ts"
     },
-    "./v2/server": "./src/v2/server.ts"
+    "./v2/server": "./src/v2/server.ts",
+    "./event-reducer": "./src/event-reducer.ts"
   },
   "files": [
     "dist"
@@ -36,7 +37,9 @@
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@opencode-ai/util": "workspace:*"
+  },
   "publishConfig": {
     "directory": "dist"
   }
