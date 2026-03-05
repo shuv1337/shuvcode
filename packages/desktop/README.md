@@ -1,21 +1,32 @@
-# Shuvcode Desktop (Tauri)
+# OpenCode Desktop
 
-This package bundles the Shuvcode desktop app and ships the CLI sidecar.
+Native OpenCode desktop app, built with Tauri v2.
+
+## Prerequisites
+
+Building the desktop app requires additional Tauri dependencies (Rust toolchain, platform-specific libraries). See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for setup instructions.
 
 ## Development
 
-1. Build the sidecar CLI for your target:
-   `bun run predev`
-2. Start the desktop app:
-   `bun run tauri dev`
+From the repo root:
+
+```bash
+bun install
+bun run --cwd packages/desktop tauri dev
+```
 
 ## Build
 
-1. Ensure the sidecar is present:
-   `bun run predev`
-2. Build the Tauri bundles:
-   `bun run tauri build`
+```bash
+bun run --cwd packages/desktop tauri build
+```
 
-## Recommended IDE Setup
+## Troubleshooting
 
-- VS Code + Tauri + rust-analyzer
+### Rust compiler not found
+
+If you see errors about Rust not being found, install it via [rustup](https://rustup.rs/):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```

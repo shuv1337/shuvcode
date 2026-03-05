@@ -4,8 +4,8 @@ import { Session } from "../../src/session"
 import { Bus } from "../../src/bus"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
-import { Server } from "../../src/server/server"
-import { pipe, filter, sortBy } from "remeda"
+import { MessageV2 } from "../../src/session/message-v2"
+import { Identifier } from "../../src/id/id"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -72,67 +72,71 @@ describe("session.started event", () => {
   })
 })
 
-describe("session.list", () => {
-  test("archived sessions should be excluded from the list API endpoint", async () => {
-    await Instance.provide({
-      directory: projectRoot,
-      fn: async () => {
-        // Create two sessions
-        const session1 = await Session.create({})
-        const session2 = await Session.create({})
+describe("step-finish token propagation via Bus event", () => {
+  test(
+    "non-zero tokens propagate through PartUpdated event",
+    async () => {
+      await Instance.provide({
+        directory: projectRoot,
+        fn: async () => {
+          const session = await Session.create({})
 
-        // Archive session1
-        await Session.setArchived({ sessionID: session1.id, time: Date.now() })
+          const messageID = Identifier.ascending("message")
+          await Session.updateMessage({
+            id: messageID,
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "user",
+            model: { providerID: "test", modelID: "test" },
+            tools: {},
+            mode: "",
+          } as unknown as MessageV2.Info)
 
-        // Verify Session.list returns both (no filtering at source)
-        const allSessions = await Array.fromAsync(Session.list())
-        const ids = allSessions.map((s) => s.id)
-        expect(ids).toContain(session1.id)
-        expect(ids).toContain(session2.id)
+          let received: MessageV2.Part | undefined
+          const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+            received = event.properties.part
+          })
 
-        // Verify that filtering works as expected (simulating endpoint behavior)
-        const filteredSessions = pipe(
-          allSessions,
-          filter((s) => !s.time.archived),
-          sortBy((s) => s.time.updated),
-        )
-        const filteredIds = filteredSessions.map((s) => s.id)
-        expect(filteredIds).not.toContain(session1.id)
-        expect(filteredIds).toContain(session2.id)
+          const tokens = {
+            total: 1500,
+            input: 500,
+            output: 800,
+            reasoning: 200,
+            cache: { read: 100, write: 50 },
+          }
 
-        // Cleanup
-        await Session.remove(session1.id)
-        await Session.remove(session2.id)
-      },
-    })
-  })
+          const partInput = {
+            id: Identifier.ascending("part"),
+            messageID,
+            sessionID: session.id,
+            type: "step-finish" as const,
+            reason: "stop",
+            cost: 0.005,
+            tokens,
+          }
 
-  test("archived sessions should be removed from list when archiving via update", async () => {
-    await Instance.provide({
-      directory: projectRoot,
-      fn: async () => {
-        const session = await Session.create({})
+          await Session.updatePart(partInput)
 
-        // Verify session is in the filtered list initially
-        let sessions = pipe(
-          await Array.fromAsync(Session.list()),
-          filter((s) => !s.time.archived),
-        )
-        expect(sessions.map((s) => s.id)).toContain(session.id)
+          await new Promise((resolve) => setTimeout(resolve, 100))
 
-        // Archive the session
-        await Session.setArchived({ sessionID: session.id, time: Date.now() })
+          expect(received).toBeDefined()
+          expect(received!.type).toBe("step-finish")
+          const finish = received as MessageV2.StepFinishPart
+          expect(finish.tokens.input).toBe(500)
+          expect(finish.tokens.output).toBe(800)
+          expect(finish.tokens.reasoning).toBe(200)
+          expect(finish.tokens.total).toBe(1500)
+          expect(finish.tokens.cache.read).toBe(100)
+          expect(finish.tokens.cache.write).toBe(50)
+          expect(finish.cost).toBe(0.005)
+          expect(received).not.toBe(partInput)
 
-        // Verify session is no longer in the filtered list
-        sessions = pipe(
-          await Array.fromAsync(Session.list()),
-          filter((s) => !s.time.archived),
-        )
-        expect(sessions.map((s) => s.id)).not.toContain(session.id)
-
-        // Cleanup
-        await Session.remove(session.id)
-      },
-    })
-  })
+          unsub()
+          await Session.remove(session.id)
+        },
+      })
+    },
+    { timeout: 30000 },
+  )
 })

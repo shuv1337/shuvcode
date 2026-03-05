@@ -4,39 +4,21 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliRenderer } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
+import { Process } from "@/util/process"
 
 export namespace Editor {
-  export type Result = { ok: true; content: string } | { ok: false; reason: "no-editor" | "cancelled" }
-
-  export async function open(opts: {
-    value: string
-    renderer: CliRenderer
-    extension?: string
-    line?: number
-  }): Promise<Result> {
+  export async function open(opts: { value: string; renderer: CliRenderer }): Promise<string | undefined> {
     const editor = process.env["VISUAL"] || process.env["EDITOR"]
-    if (!editor) {
-      return { ok: false, reason: "no-editor" }
-    }
+    if (!editor) return
 
-    const ext = opts.extension ?? ".md"
-    const filepath = join(tmpdir(), `${Date.now()}${ext}`)
+    const filepath = join(tmpdir(), `${Date.now()}.md`)
     await using _ = defer(async () => rm(filepath, { force: true }))
 
     await Filesystem.write(filepath, opts.value)
     opts.renderer.suspend()
     opts.renderer.currentRenderBuffer.clear()
     const parts = editor.split(" ")
-    const cmd = [...parts]
-
-    // Common editors support +line syntax: vim, nvim, nano, code, emacs, etc.
-    if (opts.line && opts.line > 0) {
-      cmd.push(`+${opts.line}`)
-    }
-    cmd.push(filepath)
-
-    const proc = Bun.spawn({
-      cmd,
+    const proc = Process.spawn([...parts, filepath], {
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
@@ -46,10 +28,6 @@ export namespace Editor {
     opts.renderer.currentRenderBuffer.clear()
     opts.renderer.resume()
     opts.renderer.requestRender()
-
-    if (!content) {
-      return { ok: false, reason: "cancelled" }
-    }
-    return { ok: true, content }
+    return content || undefined
   }
 }

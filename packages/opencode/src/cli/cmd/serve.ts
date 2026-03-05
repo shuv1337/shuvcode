@@ -2,6 +2,9 @@ import { Server } from "../../server/server"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
+import { Workspace } from "../../control-plane/workspace"
+import { Project } from "../../project/project"
+import { Installation } from "../../installation"
 
 export const ServeCommand = cmd({
   command: "serve",
@@ -15,15 +18,7 @@ export const ServeCommand = cmd({
     const server = Server.listen(opts)
     console.log(`opencode server listening on http://${server.hostname}:${server.port}`)
 
-    const stop = async () => {
-      console.log("stopping server...")
-      await server.stop()
-      process.exit(0)
-    }
-
-    process.on("SIGTERM", stop)
-    process.on("SIGINT", stop)
-
     await new Promise(() => {})
+    await server.stop()
   },
 })
