@@ -407,6 +407,7 @@ export class Project extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      workspace?: string
       path?: string
       name?: string
       repo?: string
@@ -420,6 +421,7 @@ export class Project extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
             { in: "body", key: "path" },
             { in: "body", key: "name" },
             { in: "body", key: "repo" },
@@ -530,6 +532,7 @@ export class Project extends HeyApiClient {
   public browse<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      workspace?: string
       query?: string
       limit?: number
     },
@@ -541,6 +544,7 @@ export class Project extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
             { in: "query", key: "query" },
             { in: "query", key: "limit" },
           ],
@@ -3742,6 +3746,7 @@ export class Usage extends HeyApiClient {
   public get<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      workspace?: string
       provider?: string
       refresh?: boolean
     },
@@ -3753,6 +3758,7 @@ export class Usage extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
             { in: "query", key: "provider" },
             { in: "query", key: "refresh" },
           ],

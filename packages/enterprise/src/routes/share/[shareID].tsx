@@ -2,8 +2,7 @@ import { FileDiff, Message, Model, Part, Session, SessionStatus, UserMessage } f
 import { SessionTurn } from "@opencode-ai/ui/session-turn"
 import { SessionReview } from "@opencode-ai/ui/session-review"
 import { DataProvider } from "@opencode-ai/ui/context"
-import { DiffComponentProvider } from "@opencode-ai/ui/context/diff"
-import { CodeComponentProvider } from "@opencode-ai/ui/context/code"
+import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { WorkerPoolProvider } from "@opencode-ai/ui/context/worker-pool"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createEffect, createMemo, ErrorBoundary, For, Match, Show, Switch } from "solid-js"
@@ -22,14 +21,12 @@ import NotFound from "../[...404]"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { MessageNav } from "@opencode-ai/ui/message-nav"
 import { preloadMultiFileDiff, PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
-import { Diff as SSRDiff } from "@opencode-ai/ui/diff-ssr"
+import { FileSSR } from "@opencode-ai/ui/file-ssr"
 import { clientOnly } from "@solidjs/start"
 import { type IconName } from "@opencode-ai/ui/icons/provider"
 import { Meta, Title } from "@solidjs/meta"
 import { Base64 } from "js-base64"
 
-const ClientOnlyDiff = clientOnly(() => import("@opencode-ai/ui/diff").then((m) => ({ default: m.Diff })))
-const ClientOnlyCode = clientOnly(() => import("@opencode-ai/ui/code").then((m) => ({ default: m.Code })))
 const ClientOnlyWorkerPoolProvider = clientOnly(() =>
   import("@opencode-ai/ui/pierre/worker").then((m) => ({
     default: (props: { children: any }) => (
@@ -218,9 +215,8 @@ export default function () {
               <Meta property="og:image" content={ogImage()} />
               <Meta name="twitter:image" content={ogImage()} />
               <ClientOnlyWorkerPoolProvider>
-                <DiffComponentProvider component={ClientOnlyDiff}>
-                  <CodeComponentProvider component={ClientOnlyCode}>
-                    <DataProvider data={data()} directory={info().directory}>
+                <FileComponentProvider component={FileSSR}>
+                  <DataProvider data={data()} directory={info().directory}>
                       {iife(() => {
                         const [store, setStore] = createStore({
                           messageId: undefined as string | undefined,
@@ -386,7 +382,7 @@ export default function () {
                                   </div>
                                 </div>
                                 <Show when={diffs().length > 0}>
-                                  <DiffComponentProvider component={SSRDiff}>
+                                  <FileComponentProvider component={FileSSR}>
                                     <div class="@container relative grow pt-14 flex-1 min-h-0 border-l border-border-weak-base">
                                       <SessionReview
                                         class="@4xl:hidden"
@@ -408,7 +404,7 @@ export default function () {
                                         }}
                                       />
                                     </div>
-                                  </DiffComponentProvider>
+                                  </FileComponentProvider>
                                 </Show>
                               </div>
                               <Switch>
@@ -435,7 +431,7 @@ export default function () {
                                       class="!overflow-hidden hidden data-[selected]:block"
                                     >
                                       <div class="relative h-full pt-8 overflow-y-auto no-scrollbar">
-                                        <DiffComponentProvider component={SSRDiff}>
+                                        <FileComponentProvider component={FileSSR}>
                                           <SessionReview
                                             diffs={diffs()}
                                             classes={{
@@ -444,7 +440,7 @@ export default function () {
                                               container: "px-4",
                                             }}
                                           />
-                                        </DiffComponentProvider>
+                                        </FileComponentProvider>
                                       </div>
                                     </Tabs.Content>
                                   </Tabs>
@@ -462,8 +458,7 @@ export default function () {
                         )
                       })}
                     </DataProvider>
-                  </CodeComponentProvider>
-                </DiffComponentProvider>
+                </FileComponentProvider>
               </ClientOnlyWorkerPoolProvider>
             </>
           )

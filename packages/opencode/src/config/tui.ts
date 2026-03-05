@@ -31,7 +31,13 @@ export namespace TuiConfig {
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
     const custom = customPath()
-    const managed = Config.managedConfigDir()
+    const managed =
+      process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR ||
+      (process.platform === "darwin"
+        ? "/Library/Application Support/opencode"
+        : process.platform === "win32"
+          ? `${process.env.ProgramData || "C:\\ProgramData"}\\opencode`
+          : "/etc/opencode")
     await migrateTuiConfig({ directories, custom, managed })
     // Re-compute after migration since migrateTuiConfig may have created new tui.json files
     projectFiles = Flag.OPENCODE_DISABLE_PROJECT_CONFIG

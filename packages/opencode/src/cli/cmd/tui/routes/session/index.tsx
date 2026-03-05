@@ -942,9 +942,9 @@ export function Session() {
             await Bun.write(filepath, transcript)
 
             // Open with EDITOR if available
-            const result = await Editor.open({ value: transcript, renderer })
-            if (result?.ok) {
-              await Bun.write(filepath, result.content)
+            const content = await Editor.open({ value: transcript, renderer })
+            if (content) {
+              await Bun.write(filepath, content)
             }
 
             toast.show({ message: `Session exported to ${filename}`, variant: "success" })

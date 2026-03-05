@@ -265,10 +265,8 @@ export function Prompt(props: PromptProps) {
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
           const value = text
-          const result = await Editor.open({ value, renderer })
-          if (!result?.ok) return
-
-          const content = result.content
+          const content = await Editor.open({ value, renderer })
+          if (!content) return
           input.setText(content)
 
           // Update positions for nonTextParts based on their location in new content

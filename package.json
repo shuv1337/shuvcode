@@ -10,7 +10,7 @@
     "dev:desktop": "bun --cwd packages/desktop tauri dev",
     "dev:web": "bun --cwd packages/app dev",
     "dev:storybook": "bun --cwd packages/storybook storybook",
-    "typecheck": "bun turbo typecheck",
+    "typecheck": "bunx turbo typecheck",
     "prepare": "husky",
     "generate": "bun run --cwd packages/sdk/js build",
     "random": "echo 'Random script'",

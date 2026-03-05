@@ -6,7 +6,7 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
-import { Mark } from "@opencode-ai/ui/logo"
+import { AsciiMark } from "@opencode-ai/ui/logo"
 import { DragDropProvider, DragDropSensors, DragOverlay, SortableProvider, closestCenter } from "@thisbeyond/solid-dnd"
 import type { DragEvent } from "@thisbeyond/solid-dnd"
 import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
@@ -302,7 +302,7 @@ export function SessionSidePanel(props: {
                   <Show when={activeTab() === "empty"}>
                     <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                       <div class="h-full px-6 pb-42 flex flex-col items-center justify-center text-center gap-6">
-                        <Mark class="w-14 opacity-10" />
+                        <AsciiMark class="w-14 opacity-10" />
                         <div class="text-14-regular text-text-weak max-w-56">
                           {language.t("session.files.selectToOpen")}
                         </div>
