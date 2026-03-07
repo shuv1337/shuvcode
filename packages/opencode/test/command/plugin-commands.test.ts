@@ -1,7 +1,8 @@
 import { test, expect, mock } from "bun:test"
+import { fileURLToPath } from "url"
 import { tmpdir } from "../fixture/fixture"
 
-const pluginModulePath = new URL("../../src/plugin/index.ts", import.meta.url).pathname
+const pluginModulePath = fileURLToPath(new URL("../../src/plugin/index.ts", import.meta.url))
 
 let pluginHook: Record<string, any> = {}
 const executeCalls: Array<Record<string, unknown>> = []

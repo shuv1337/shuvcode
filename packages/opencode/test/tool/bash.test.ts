@@ -386,8 +386,7 @@ describe("tool.bash truncation", () => {
           ctx,
         )
         expect((result.metadata as any).truncated).toBe(false)
-        const eol = process.platform === "win32" ? "\r\n" : "\n"
-        expect(result.output).toBe(`hello${eol}`)
+        expect(result.output.replace(/\r\n/g, "\n")).toBe("hello\n")
       },
     })
   })

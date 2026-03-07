@@ -341,10 +341,11 @@ export namespace Config {
   }
 
   function rel(item: string, patterns: string[]) {
+    const file = item.replaceAll("\\", "/")
     for (const pattern of patterns) {
-      const index = item.indexOf(pattern)
+      const index = file.indexOf(pattern)
       if (index === -1) continue
-      return item.slice(index + pattern.length)
+      return file.slice(index + pattern.length)
     }
   }
 
