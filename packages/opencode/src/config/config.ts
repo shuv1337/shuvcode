@@ -81,8 +81,9 @@ export namespace Config {
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
         process.env[value.key] = value.token
-        log.debug("fetching remote config", { url: `${key}/.well-known/opencode` })
-        const response = await fetch(`${key}/.well-known/opencode`)
+        const url = `${key.replace(/\/+$/, "")}/.well-known/opencode`
+        log.debug("fetching remote config", { url })
+        const response = await fetch(url)
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${key}: ${response.status}`)
         }
@@ -93,8 +94,8 @@ export namespace Config {
         result = merge(
           result,
           await load(JSON.stringify(remoteConfig), {
-            dir: path.dirname(`${key}/.well-known/opencode`),
-            source: `${key}/.well-known/opencode`,
+            dir: path.dirname(url),
+            source: url,
           }),
         )
         log.debug("loaded remote config from well-known", { url: key })
@@ -1344,16 +1345,20 @@ export namespace Config {
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencode.ai/config.json",')
         await Bun.write(options.path, updated).catch(() => {})
       }
-      const data = parsed.data
-      if (data.plugin && isFile) {
+      const data = parsed.data as Record<string, unknown>
+      delete data.theme
+      delete data.keybinds
+      delete data.tui
+      if (Array.isArray(data.plugin) && isFile) {
         for (let i = 0; i < data.plugin.length; i++) {
           const plugin = data.plugin[i]
+          if (typeof plugin !== "string") continue
           try {
             data.plugin[i] = import.meta.resolve!(plugin, options.path)
           } catch (err) {}
         }
       }
-      return data
+      return data as Info
     }
 
     throw new InvalidError({

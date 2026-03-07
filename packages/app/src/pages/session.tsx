@@ -1021,7 +1021,6 @@ export default function Page() {
     setPendingMessage: (value) => setUi("pendingMessage", value),
     setActiveMessage,
     setTurnStart: (value) => setStore("turnStart", value),
-    scheduleTurnBackfill,
     autoScroll,
     scroller: () => scroller,
     anchor,
@@ -1089,6 +1088,7 @@ export default function Page() {
                     hasScrollGesture={hasScrollGesture}
                     isDesktop={isDesktop()}
                     onScrollSpyScroll={scrollSpy.onScroll}
+                    onTurnBackfillScroll={scheduleTurnBackfill}
                     onAutoScrollInteraction={autoScroll.handleInteraction}
                     centered={centered()}
                     setContentRef={(el) => {
@@ -1099,7 +1099,6 @@ export default function Page() {
                       if (root) scheduleScrollState(root)
                     }}
                     turnStart={store.turnStart}
-                    onRenderEarlier={() => setStore("turnStart", 0)}
                     historyMore={historyMore()}
                     historyLoading={historyLoading()}
                     onLoadEarlier={() => {
@@ -1112,7 +1111,6 @@ export default function Page() {
                     anchor={anchor}
                     onRegisterMessage={scrollSpy.register}
                     onUnregisterMessage={scrollSpy.unregister}
-                    lastUserMessageID={lastUserMessage()?.id}
                   />
                 </Show>
               </Match>
@@ -1140,6 +1138,7 @@ export default function Page() {
 
           <SessionComposerRegion
             state={composer}
+            ready={messagesReady()}
             centered={centered()}
             inputRef={(el) => {
               inputRef = el

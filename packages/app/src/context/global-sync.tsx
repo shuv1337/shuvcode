@@ -248,6 +248,8 @@ function createGlobalSync() {
         setStore: child[1],
         vcsCache: cache,
         loadSessions,
+        unknownError: language.t("common.error.unknown"),
+        invalidConfigurationError: language.t("common.error.invalidConfiguration"),
       })
     })()
 

@@ -22,6 +22,12 @@ export function serverName(conn?: ServerConnection.Any, ignoreDisplayName = fals
   return conn.http.url.replace(/^https?:\/\//, "").replace(/\/+$/, "")
 }
 
+export function serverDisplayName(input?: ServerConnection.Any | string) {
+  if (!input) return ""
+  if (typeof input === "string") return input.replace(/^https?:\/\//, "").replace(/\/+$/, "").split("/")[0]
+  return serverName(input)
+}
+
 function projectsKey(key: ServerConnection.Key) {
   if (!key) return ""
   if (key === "sidecar") return "local"

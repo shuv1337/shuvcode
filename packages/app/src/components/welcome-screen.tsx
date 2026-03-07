@@ -83,7 +83,10 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
     }
 
     if (persist) {
-      server.add(normalized)
+      server.add({
+        type: "http",
+        http: { url: normalized },
+      })
     } else {
       server.setActive(ServerConnection.Key.make(normalized))
     }

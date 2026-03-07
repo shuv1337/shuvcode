@@ -1,4 +1,3 @@
-import { Plugin } from "../plugin"
 import { Format } from "../format"
 import { LSP } from "../lsp"
 import { FileWatcher } from "../file/watcher"
@@ -15,7 +14,8 @@ import { Truncate } from "../tool/truncation"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
-  await Plugin.init()
+  const plugin = await import("../plugin").then((x) => x.Plugin)
+  await plugin.init?.()
   ShareNext.init()
   Format.init()
   await LSP.init()
