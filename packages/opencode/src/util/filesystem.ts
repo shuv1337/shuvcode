@@ -3,7 +3,7 @@ import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
 import { homedir } from "os"
-import { dirname, join, relative } from "path"
+import { dirname, join, relative, resolve as pathResolve } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
@@ -120,16 +120,23 @@ export namespace Filesystem {
     }
   }
 
+  // We cannot rely on path.resolve() here because git.exe may come from Git Bash, Cygwin, or MSYS2,
+  // so we need to translate these paths at the boundary.
+  export function resolve(p: string): string {
+    return normalizePath(pathResolve(windowsPath(p)))
+  }
+
   export function windowsPath(p: string): string {
     if (process.platform !== "win32") return p
     return (
       p
+        .replace(/^\/([a-zA-Z]):(?:[\\/]|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
         // Git Bash for Windows paths are typically /<drive>/...
-        .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
+        .replace(/^\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
         // Cygwin git paths are typically /cygdrive/<drive>/...
-        .replace(/^\/cygdrive\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
+        .replace(/^\/cygdrive\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
         // WSL paths are typically /mnt/<drive>/...
-        .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
+        .replace(/^\/mnt\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
     )
   }
   export function overlaps(a: string, b: string) {

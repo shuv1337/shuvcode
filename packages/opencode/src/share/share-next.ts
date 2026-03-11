@@ -1,6 +1,5 @@
 import { Bus } from "@/bus"
 import { Config } from "@/config/config"
-import { ulid } from "ulid"
 import { Provider } from "@/provider/provider"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
@@ -130,23 +129,35 @@ export namespace ShareNext {
         data: SDK.Model[];
       };
 
-  const queue = new Map<
-    string,
-    { timeout: NodeJS.Timeout; data: Map<string, Data> }
-  >();
+  function key(item: Data) {
+    switch (item.type) {
+      case "session":
+        return "session"
+      case "message":
+        return `message/${item.data.id}`
+      case "part":
+        return `part/${item.data.messageID}/${item.data.id}`
+      case "session_diff":
+        return "session_diff"
+      case "model":
+        return "model"
+    }
+  }
+
+  const queue = new Map<string, { timeout: NodeJS.Timeout; data: Map<string, Data> }>()
   async function sync(sessionID: string, data: Data[]) {
-    if (disabled) return;
-    const existing = queue.get(sessionID);
+    if (disabled) return
+    const existing = queue.get(sessionID)
     if (existing) {
       for (const item of data) {
-        existing.data.set("id" in item ? (item.id as string) : ulid(), item);
+        existing.data.set(key(item), item)
       }
-      return;
+      return
     }
 
-    const dataMap = new Map<string, Data>();
+    const dataMap = new Map<string, Data>()
     for (const item of data) {
-      dataMap.set("id" in item ? (item.id as string) : ulid(), item);
+      dataMap.set(key(item), item)
     }
 
     const timeout = setTimeout(async () => {
@@ -193,11 +204,15 @@ export namespace ShareNext {
     const diffs = await Session.diff(sessionID);
     const messages = await Array.fromAsync(MessageV2.stream(sessionID));
     const models = await Promise.all(
-      messages
-        .filter((m) => m.info.role === "user")
-        .map((m) => (m.info as SDK.UserMessage).model)
-        .map((m) => Provider.getModel(m.providerID, m.modelID).then((m) => m)),
-    );
+      Array.from(
+        new Map(
+          messages
+            .filter((m) => m.info.role === "user")
+            .map((m) => (m.info as SDK.UserMessage).model)
+            .map((m) => [`${m.providerID}/${m.modelID}`, m] as const),
+        ).values(),
+      ).map((m) => Provider.getModel(m.providerID, m.modelID).then((item) => item)),
+    )
     await sync(sessionID, [
       {
         type: "session",

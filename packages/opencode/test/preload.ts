@@ -3,6 +3,7 @@
 import os from "os"
 import path from "path"
 import fs from "fs/promises"
+import { setTimeout as sleep } from "node:timers/promises"
 import { afterAll } from "bun:test"
 
 // Set XDG env vars FIRST, before any src/ imports
@@ -15,7 +16,7 @@ afterAll(async () => {
     typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
   const rm = async (left: number): Promise<void> => {
     Bun.gc(true)
-    await Bun.sleep(100)
+    await sleep(100)
     return fs.rm(dir, { recursive: true, force: true }).catch((error) => {
       if (!busy(error)) throw error
       if (left <= 1) throw error
@@ -82,7 +83,7 @@ process.env["OPENCODE_DISABLE_MODELS_FETCH"] = "true"
 // Clear config-related env vars to ensure project configs are loaded in tests
 delete process.env["OPENCODE_DISABLE_PROJECT_CONFIG"]
 
-// Clear provider env vars to ensure clean test state
+// Clear provider and server auth env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
 delete process.env["OPENAI_API_KEY"]
 delete process.env["GOOGLE_API_KEY"]
@@ -102,6 +103,8 @@ delete process.env["DEEPSEEK_API_KEY"]
 delete process.env["FIREWORKS_API_KEY"]
 delete process.env["CEREBRAS_API_KEY"]
 delete process.env["SAMBANOVA_API_KEY"]
+delete process.env["OPENCODE_SERVER_PASSWORD"]
+delete process.env["OPENCODE_SERVER_USERNAME"]
 
 const { Log } = await import("../src/util/log")
 

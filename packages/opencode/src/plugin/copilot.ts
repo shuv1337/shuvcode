@@ -2,6 +2,7 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { Installation } from "@/installation"
 import { iife } from "@/util/iife"
 import { Usage } from "../usage"
+import { setTimeout as sleep } from "node:timers/promises"
 
 const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 // Add a small safety buffer when polling to avoid hitting the server

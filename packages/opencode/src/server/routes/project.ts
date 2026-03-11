@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
 import { Instance } from "../../project/instance"
+import { InstanceBootstrap } from "../../project/bootstrap"
 import { Project } from "../../project/project"
 import z from "zod"
 import { errors } from "../error"
@@ -140,6 +141,40 @@ export const ProjectRoutes = lazy(() =>
         const body = c.req.valid("json")
         const result = await Project.create(body)
         return c.json(result)
+      },
+    )
+    .post(
+      "/git/init",
+      describeRoute({
+        summary: "Initialize git repository",
+        description: "Create a git repository for the current project and return the refreshed project info.",
+        operationId: "project.initGit",
+        responses: {
+          200: {
+            description: "Project information after git initialization",
+            content: {
+              "application/json": {
+                schema: resolver(Project.Info),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const dir = Instance.directory
+        const prev = Instance.project
+        const next = await Project.initGit({
+          directory: dir,
+          project: prev,
+        })
+        if (next.id === prev.id && next.vcs === prev.vcs && next.worktree === prev.worktree) return c.json(next)
+        await Instance.reload({
+          directory: dir,
+          worktree: dir,
+          project: next,
+          init: InstanceBootstrap,
+        })
+        return c.json(next)
       },
     )
     .patch(

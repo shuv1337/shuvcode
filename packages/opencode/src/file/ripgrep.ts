@@ -8,6 +8,7 @@ import { lazy } from "../util/lazy"
 import { $ } from "bun"
 import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
+import { which } from "../util/which"
 import { text } from "node:stream/consumers"
 
 import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
@@ -126,7 +127,7 @@ export namespace Ripgrep {
   )
 
   const state = lazy(async () => {
-    const system = Bun.which("rg")
+    const system = which("rg")
     if (system) {
       const stat = await fs.stat(system).catch(() => undefined)
       if (stat?.isFile()) return { filepath: system }
@@ -223,7 +224,7 @@ export namespace Ripgrep {
 
     const args = [await filepath(), "--files", "--glob=!.git/*"]
     if (input.follow) args.push("--follow")
-    if (input.hidden) args.push("--hidden")
+    if (input.hidden !== false) args.push("--hidden")
     if (input.maxDepth !== undefined) args.push(`--max-depth=${input.maxDepth}`)
     if (input.glob) {
       for (const g of input.glob) {

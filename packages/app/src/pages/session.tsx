@@ -450,6 +450,7 @@ export default function Page() {
     showAllFiles,
     tabForPath: file.tab,
     openTab: tabs().open,
+    setActive: tabs().setActive,
     loadFile: file.load,
   })
 
@@ -824,7 +825,7 @@ export default function Page() {
   let scrollStateFrame: number | undefined
   let scrollStateTarget: HTMLDivElement | undefined
   const scrollSpy = createScrollSpy({
-    onActive: (id) => {
+    onActive: (id: string) => {
       if (id === store.messageId) return
       setStore("messageId", id)
     },

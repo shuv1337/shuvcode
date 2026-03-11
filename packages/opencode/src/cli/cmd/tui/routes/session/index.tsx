@@ -7,6 +7,7 @@ import {
   For,
   Match,
   on,
+  onMount,
   Show,
   Switch,
   useContext,
@@ -1995,10 +1996,30 @@ function Glob(props: ToolProps<typeof GlobTool>) {
 }
 
 function Read(props: ToolProps<typeof ReadTool>) {
+  const { theme } = useTheme()
+  const isRunning = createMemo(() => props.part.state.status === "running")
+  const loaded = createMemo(() => {
+    if (props.part.state.status !== "completed") return []
+    if (props.part.state.time.compacted) return []
+    const value = props.metadata.loaded
+    if (!value || !Array.isArray(value)) return []
+    return value.filter((p): p is string => typeof p === "string")
+  })
   return (
-    <InlineTool icon="→" pending="Reading file..." complete={props.input.filePath} part={props.part}>
-      Read {normalizePath(props.input.filePath!)} {input(props.input, ["filePath"])}
-    </InlineTool>
+    <>
+      <InlineTool icon="→" pending="Reading file..." complete={props.input.filePath} part={props.part}>
+        Read {normalizePath(props.input.filePath!)} {input(props.input, ["filePath"])}
+      </InlineTool>
+      <For each={loaded()}>
+        {(filepath) => (
+          <box paddingLeft={3}>
+            <text paddingLeft={3} fg={theme.textMuted}>
+              ↳ Loaded {normalizePath(filepath)}
+            </text>
+          </box>
+        )}
+      </For>
+    </>
   )
 }
 
@@ -2054,60 +2075,55 @@ function WebSearch(props: ToolProps<any>) {
 }
 
 function Task(props: ToolProps<typeof TaskTool>) {
-  const { theme } = useTheme()
-  const keybind = useKeybind()
   const { navigate } = useRoute()
-  const local = useLocal()
+  const sync = useSync()
 
-  const meta = () =>
-    props.metadata as Partial<Tool.InferMetadata<typeof TaskTool>> & {
-      summary?: Array<{ tool: string; state: { status: string; title?: string } }>
+  onMount(() => {
+    if (props.metadata.sessionId && !sync.data.message[props.metadata.sessionId]?.length) {
+      sync.session.sync(props.metadata.sessionId)
     }
-  const current = createMemo(() => meta().summary?.findLast((x: any) => x.state.status !== "pending"))
-  const color = createMemo(() => local.agent.color(props.input.subagent_type ?? "unknown"))
+  })
+
+  const messages = createMemo(() => sync.data.message[props.metadata.sessionId ?? ""] ?? [])
+
+  const tools = createMemo(() => {
+    return messages().flatMap((msg) =>
+      (sync.data.part[msg.id] ?? [])
+        .filter((part): part is ToolPart => part.type === "tool")
+        .map((part) => ({ tool: part.tool, state: part.state })),
+    )
+  })
+
+  const current = createMemo(() => tools().findLast((x) => (x.state as any).title))
+  const isRunning = createMemo(() => props.part.state.status === "running")
+
+  const duration = createMemo(() => {
+    const first = messages().find((x) => x.role === "user")?.time.created
+    const assistant = messages().findLast((x) => x.role === "assistant")?.time.completed
+    if (!first || !assistant) return 0
+    return assistant - first
+  })
+
+  const content = createMemo(() => {
+    if (!props.input.description) return ""
+    const out = [`Task ${props.input.description}`]
+
+    if (isRunning() && tools().length > 0) {
+      if (current()) out.push(`↳ ${Locale.titlecase(current()!.tool)} ${(current()!.state as any).title}`)
+      else out.push(`↳ ${tools().length} toolcalls`)
+    }
+
+    if (props.part.state.status === "completed") {
+      out.push(`└ ${tools().length} toolcalls · ${Locale.duration(duration())}`)
+    }
+
+    return out.join("\n")
+  })
 
   return (
-    <Switch>
-      <Match when={meta().summary?.length}>
-        <BlockTool
-          title={"# " + Locale.titlecase(props.input.subagent_type ?? "unknown") + " Task"}
-          onClick={
-            props.metadata.sessionId
-              ? () => navigate({ type: "session", sessionID: props.metadata.sessionId! })
-              : undefined
-          }
-          part={props.part}
-        >
-          <box>
-            <text style={{ fg: theme.textMuted }}>
-              {props.input.description} ({meta().summary?.length} toolcalls)
-            </text>
-            <Show when={current()}>
-              <text style={{ fg: current()!.state.status === "error" ? theme.error : theme.textMuted }}>
-                └ {Locale.titlecase(current()!.tool)}{" "}
-                {current()!.state.status === "completed" ? current()!.state.title : ""}
-              </text>
-            </Show>
-          </box>
-          <text fg={theme.text}>
-            {keybind.print("session_child_cycle")}
-            <span style={{ fg: theme.textMuted }}> view subagents</span>
-          </text>
-        </BlockTool>
-      </Match>
-      <Match when={true}>
-        <InlineTool
-          icon="◉"
-          iconColor={color()}
-          pending="Delegating..."
-          complete={props.input.subagent_type ?? props.input.description}
-          part={props.part}
-        >
-          <span style={{ fg: theme.text }}>{Locale.titlecase(props.input.subagent_type ?? "unknown")}</span> Task "
-          {props.input.description}"
-        </InlineTool>
-      </Match>
-    </Switch>
+    <InlineTool icon="│" complete={props.input.description} pending="Delegating..." part={props.part}>
+      {content()}
+    </InlineTool>
   )
 }
 
