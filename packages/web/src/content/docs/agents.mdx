@@ -120,12 +120,16 @@ Hidden system agent that creates session summaries. It runs automatically and is
      @general help me search for this function
      ```
 
-3. **Navigation between sessions**: When subagents create their own child sessions, you can navigate between the parent session and all child sessions using:
-   - **\<Leader>+Up** (or your configured `session_parent` keybind) to go directly to the parent session
-   - **\<Leader>+Right** (or your configured `session_child_cycle` keybind) to cycle forward through parent → child1 → child2 → ... → parent
-   - **\<Leader>+Left** (or your configured `session_child_cycle_reverse` keybind) to cycle backward through parent ← child1 ← child2 ← ... ← parent
+3. **Navigation between sessions**: When subagents create child sessions, use `session_child_first` (default: **\<Leader>+Down**) to enter the first child session from the parent.
+
+4. Once you are in a child session, use:
+   - `session_child_cycle` (default: **Right**) to cycle to the next child session
+   - `session_child_cycle_reverse` (default: **Left**) to cycle to the previous child session
+   - `session_parent` (default: **Up**) to return to the parent session
 
    You can also click on any subagent task in the sidebar to navigate directly to that subagent's session.
+
+   This lets you switch between the main conversation and specialized subagent work.
 
 ---
 

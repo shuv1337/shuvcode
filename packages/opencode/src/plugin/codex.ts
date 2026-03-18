@@ -9,6 +9,7 @@ import { TuiEvent } from "../cli/cmd/tui/event"
 import { Session } from "../session"
 import { Usage, type PlanType, type Snapshot } from "../usage"
 import os from "os"
+import { ModelID, ProviderID } from "@/provider/schema"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const log = Log.create({ service: "plugin.codex" })
@@ -453,8 +454,8 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
 
         if (!provider.models["gpt-5.3-codex"]) {
           const model = {
-            id: "gpt-5.3-codex",
-            providerID: "openai",
+            id: ModelID.make("gpt-5.3-codex"),
+            providerID: ProviderID.openai,
             api: {
               id: "gpt-5.3-codex",
               url: "https://chatgpt.com/backend-api/codex",

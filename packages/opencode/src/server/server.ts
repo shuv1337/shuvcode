@@ -26,6 +26,8 @@ import type { Snapshot as UsageSnapshot } from "../usage"
 import { Command } from "../command"
 import { Global } from "../global"
 import { WorkspaceContext } from "../control-plane/workspace-context"
+import { WorkspaceID } from "../control-plane/schema"
+import { ProviderID } from "../provider/schema"
 import { WorkspaceRouterMiddleware } from "../control-plane/workspace-router-middleware"
 import { ProjectRoutes } from "./routes/project"
 import { SessionRoutes } from "./routes/session"
@@ -35,7 +37,6 @@ import { FileRoutes } from "./routes/file"
 import { ConfigRoutes } from "./routes/config"
 import { ExperimentalRoutes } from "./routes/experimental"
 import { ProviderRoutes } from "./routes/provider"
-import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
@@ -47,6 +48,7 @@ import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { lazy } from "@/util/lazy"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -54,17 +56,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 export namespace Server {
   const log = Log.create({ service: "server" })
 
-  let _url: URL | undefined
-  let _corsWhitelist: string[] = []
-
-  export function url(): URL {
-    return _url ?? new URL("http://localhost:4096")
-  }
-
-  export const Event = {
-    Connected: BusEvent.define("server.connected", z.object({})),
-    Disposed: BusEvent.define("global.disposed", z.object({})),
-  }
+  export const Default = lazy(() => createApp({}))
 
   const usageResponseSchema = z.object({
     entries: z.array(
@@ -187,521 +179,511 @@ export namespace Server {
     },
   )
 
-  const app = new Hono()
-
-  export const App: () => Hono = lazy(
-    () =>
-      // TODO: Break server.ts into smaller route files to fix type inference
-      app
-        .onError((err, c) => {
-          log.error("failed", {
-            error: err,
+  export const createApp = (opts: { cors?: string[] }): Hono => {
+    const app = new Hono()
+    return app
+      .onError((err, c) => {
+        log.error("failed", {
+          error: err,
+        })
+        if (err instanceof NamedError) {
+          let status: ContentfulStatusCode
+          if (err instanceof NotFoundError) status = 404
+          else if (err instanceof Provider.ModelNotFoundError) status = 400
+          else if (err.name.startsWith("Worktree")) status = 400
+          else status = 500
+          return c.json(err.toObject(), { status })
+        }
+        if (err instanceof HTTPException) return err.getResponse()
+        const message = err instanceof Error && err.stack ? err.stack : err.toString()
+        return c.json(new NamedError.Unknown({ message }).toObject(), {
+          status: 500,
+        })
+      })
+      .use((c, next) => {
+        // Allow CORS preflight requests to succeed without auth.
+        // Browser clients sending Authorization headers will preflight with OPTIONS.
+        if (c.req.method === "OPTIONS") return next()
+        const password = Flag.OPENCODE_SERVER_PASSWORD
+        if (!password) return next()
+        const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
+        return basicAuth({ username, password })(c, next)
+      })
+      .use(async (c, next) => {
+        const skipLogging = c.req.path === "/log"
+        if (!skipLogging) {
+          log.info("request", {
+            method: c.req.method,
+            path: c.req.path,
           })
-          if (err instanceof NamedError) {
-            let status: ContentfulStatusCode
-            if (err instanceof NotFoundError) status = 404
-            else if (err instanceof Provider.ModelNotFoundError) status = 400
-            else if (err instanceof Project.CreateError) status = 400
-            else if (err.name.startsWith("Worktree")) status = 400
-            else status = 500
-            return c.json(err.toObject(), { status })
-          }
-          if (err instanceof HTTPException) return err.getResponse()
-          const message = err instanceof Error && err.stack ? err.stack : err.toString()
-          return c.json(new NamedError.Unknown({ message }).toObject(), {
-            status: 500,
-          })
+        }
+        const timer = log.time("request", {
+          method: c.req.method,
+          path: c.req.path,
         })
-        .use((c, next) => {
-          // Allow CORS preflight requests to succeed without auth.
-          // Browser clients sending Authorization headers will preflight with OPTIONS.
-          if (c.req.method === "OPTIONS") return next()
-          const password = Flag.OPENCODE_SERVER_PASSWORD
-          if (!password) return next()
-          const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
-          return basicAuth({ username, password })(c, next)
-        })
-        .use(async (c, next) => {
-          const skipLogging = c.req.path === "/log" || c.req.path.startsWith("/assets/")
-          if (!skipLogging) {
-            log.info("request", {
-              method: c.req.method,
-              path: c.req.path,
-            })
-          }
-          const timer = skipLogging
-            ? undefined
-            : log.time("request", {
-                method: c.req.method,
-                path: c.req.path,
-              })
-          await next()
-          if (timer) {
-            timer.stop()
-          }
-        })
-        .use(
-          cors({
-            origin(input) {
-              const allowed = isOriginAllowed(input)
-              if (allowed) return allowed
-              if (input && _corsWhitelist.includes(input)) {
-                return input
-              }
-              return
-            },
-          }),
-        )
-        .route("/global", GlobalRoutes())
-        .put(
-          "/auth/:providerID",
-          describeRoute({
-            summary: "Set auth credentials",
-            description: "Set authentication credentials",
-            operationId: "auth.set",
-            responses: {
-              200: {
-                description: "Successfully set authentication credentials",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
-                },
-              },
-              ...errors(400),
-            },
-          }),
-          validator(
-            "param",
-            z.object({
-              providerID: z.string(),
-            }),
-          ),
-          validator("json", Auth.Info),
-          async (c) => {
-            const providerID = c.req.valid("param").providerID
-            const info = c.req.valid("json")
-            await Auth.set(providerID, info)
-            return c.json(true)
+        await next()
+        if (!skipLogging) {
+          timer.stop()
+        }
+      })
+      .use(
+        cors({
+          origin(input) {
+            const allowed = isOriginAllowed(input)
+            if (allowed) return allowed
+            if (opts?.cors?.includes(input)) return input
+            return
           },
-        )
-        .delete(
-          "/auth/:providerID",
-          describeRoute({
-            summary: "Remove auth credentials",
-            description: "Remove authentication credentials",
-            operationId: "auth.remove",
-            responses: {
-              200: {
-                description: "Successfully removed authentication credentials",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
+        }),
+      )
+      .route("/global", GlobalRoutes())
+      .put(
+        "/auth/:providerID",
+        describeRoute({
+          summary: "Set auth credentials",
+          description: "Set authentication credentials",
+          operationId: "auth.set",
+          responses: {
+            200: {
+              description: "Successfully set authentication credentials",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
                 },
               },
-              ...errors(400),
             },
-          }),
-          validator(
-            "param",
-            z.object({
-              providerID: z.string(),
-            }),
-          ),
-          async (c) => {
-            const providerID = c.req.valid("param").providerID
-            await Auth.remove(providerID)
-            return c.json(true)
+            ...errors(400),
           },
-        )
-        .use(async (c, next) => {
-          if (c.req.path === "/log") return next()
-          const workspaceID = c.req.query("workspace") || c.req.header("x-opencode-workspace")
-          const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
-          const directory = Filesystem.resolve(
-            (() => {
-              try {
-                return decodeURIComponent(raw)
-              } catch {
-                return raw
-              }
-            })(),
-          )
-
-          return WorkspaceContext.provide({
-            workspaceID,
-            async fn() {
-              return Instance.provide({
-                directory,
-                init: InstanceBootstrap,
-                async fn() {
-                  return next()
-                },
-              })
-            },
-          })
-        })
-        .use(WorkspaceRouterMiddleware)
-        .get(
-          "/doc",
-          openAPIRouteHandler(app, {
-            documentation: {
-              info: {
-                title: "opencode",
-                version: "0.0.3",
-                description: "opencode api",
-              },
-              openapi: "3.1.1",
-            },
+        }),
+        validator(
+          "param",
+          z.object({
+            providerID: ProviderID.zod,
           }),
-        )
-        .use(
-          validator(
-            "query",
-            z.object({
-              directory: z.string().optional(),
-              workspace: z.string().optional(),
-            }),
-          ),
-        )
-        .route("/project", ProjectRoutes())
-        .route("/pty", PtyRoutes())
-        .route("/config", ConfigRoutes())
-        .route("/experimental", ExperimentalRoutes())
-        .route("/session", SessionRoutes())
-        .route("/permission", PermissionRoutes())
-        .route("/question", QuestionRoutes())
-        .route("/provider", ProviderRoutes())
-        .route("/", FileRoutes())
-        .route("/mcp", McpRoutes())
-        .route("/tui", TuiRoutes())
-        .post(
-          "/instance/dispose",
-          describeRoute({
-            summary: "Dispose instance",
-            description: "Clean up and dispose the current OpenCode instance, releasing all resources.",
-            operationId: "instance.dispose",
-            responses: {
-              200: {
-                description: "Instance disposed",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
+        ),
+        validator("json", Auth.Info),
+        async (c) => {
+          const providerID = c.req.valid("param").providerID
+          const info = c.req.valid("json")
+          await Auth.set(providerID, info)
+          return c.json(true)
+        },
+      )
+      .delete(
+        "/auth/:providerID",
+        describeRoute({
+          summary: "Remove auth credentials",
+          description: "Remove authentication credentials",
+          operationId: "auth.remove",
+          responses: {
+            200: {
+              description: "Successfully removed authentication credentials",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
                 },
               },
             },
-          }),
-          async (c) => {
-            await Instance.dispose()
-            return c.json(true)
+            ...errors(400),
           },
-        )
-        .get(
-          "/path",
-          describeRoute({
-            summary: "Get paths",
-            description:
-              "Retrieve the current working directory and related path information for the OpenCode instance.",
-            operationId: "path.get",
-            responses: {
-              200: {
-                description: "Path",
-                content: {
-                  "application/json": {
-                    schema: resolver(
-                      z
-                        .object({
-                          home: z.string(),
-                          state: z.string(),
-                          config: z.string(),
-                          worktree: z.string(),
-                          directory: z.string(),
-                        })
-                        .meta({
-                          ref: "Path",
-                        }),
-                    ),
-                  },
-                },
-              },
-            },
+        }),
+        validator(
+          "param",
+          z.object({
+            providerID: ProviderID.zod,
           }),
-          async (c) => {
-            return c.json({
-              home: Global.Path.home,
-              state: Global.Path.state,
-              config: Global.Path.config,
-              worktree: Instance.worktree,
-              directory: Instance.directory,
-            })
-          },
-        )
-        .get(
-          "/vcs",
-          describeRoute({
-            summary: "Get VCS info",
-            description:
-              "Retrieve version control system (VCS) information for the current project, such as git branch.",
-            operationId: "vcs.get",
-            responses: {
-              200: {
-                description: "VCS info",
-                content: {
-                  "application/json": {
-                    schema: resolver(Vcs.Info),
-                  },
-                },
-              },
-            },
-          }),
-          async (c) => {
-            const branch = await Vcs.branch()
-            return c.json({
-              branch,
-            })
-          },
-        )
-        .get(
-          "/command",
-          describeRoute({
-            summary: "List commands",
-            description: "Get a list of all available commands in the OpenCode system.",
-            operationId: "command.list",
-            responses: {
-              200: {
-                description: "List of commands",
-                content: {
-                  "application/json": {
-                    schema: resolver(Command.Info.array()),
-                  },
-                },
-              },
-            },
-          }),
-          async (c) => {
-            const commands = await Command.list()
-            return c.json(commands)
-          },
-        )
-        .route("/usage", UsageRoute)
-        .post(
-          "/log",
-          describeRoute({
-            summary: "Write log",
-            description: "Write a log entry to the server logs with specified level and metadata.",
-            operationId: "app.log",
-            responses: {
-              200: {
-                description: "Log entry written successfully",
-                content: {
-                  "application/json": {
-                    schema: resolver(z.boolean()),
-                  },
-                },
-              },
-              ...errors(400),
-            },
-          }),
-          validator(
-            "json",
-            z.object({
-              service: z.string().meta({ description: "Service name for the log entry" }),
-              level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
-              message: z.string().meta({ description: "Log message" }),
-              extra: z
-                .record(z.string(), z.any())
-                .optional()
-                .meta({ description: "Additional metadata for the log entry" }),
-            }),
-          ),
-          async (c) => {
-            const { service, level, message, extra } = c.req.valid("json")
-            const logger = Log.create({ service })
-
-            switch (level) {
-              case "debug":
-                logger.debug(message, extra)
-                break
-              case "info":
-                logger.info(message, extra)
-                break
-              case "error":
-                logger.error(message, extra)
-                break
-              case "warn":
-                logger.warn(message, extra)
-                break
+        ),
+        async (c) => {
+          const providerID = c.req.valid("param").providerID
+          await Auth.remove(providerID)
+          return c.json(true)
+        },
+      )
+      .use(async (c, next) => {
+        if (c.req.path === "/log") return next()
+        const rawWorkspaceID = c.req.query("workspace") || c.req.header("x-opencode-workspace")
+        const raw = c.req.query("directory") || c.req.header("x-opencode-directory") || process.cwd()
+        const directory = Filesystem.resolve(
+          (() => {
+            try {
+              return decodeURIComponent(raw)
+            } catch {
+              return raw
             }
+          })(),
+        )
 
-            return c.json(true)
+        return WorkspaceContext.provide({
+          workspaceID: rawWorkspaceID ? WorkspaceID.make(rawWorkspaceID) : undefined,
+          async fn() {
+            return Instance.provide({
+              directory,
+              init: InstanceBootstrap,
+              async fn() {
+                return next()
+              },
+            })
           },
-        )
-        .get(
-          "/agent",
-          describeRoute({
-            summary: "List agents",
-            description: "Get a list of all available AI agents in the OpenCode system.",
-            operationId: "app.agents",
-            responses: {
-              200: {
-                description: "List of agents",
-                content: {
-                  "application/json": {
-                    schema: resolver(Agent.Info.array()),
-                  },
+        })
+      })
+      .use(WorkspaceRouterMiddleware)
+      .get(
+        "/doc",
+        openAPIRouteHandler(app, {
+          documentation: {
+            info: {
+              title: "opencode",
+              version: "0.0.3",
+              description: "opencode api",
+            },
+            openapi: "3.1.1",
+          },
+        }),
+      )
+      .use(
+        validator(
+          "query",
+          z.object({
+            directory: z.string().optional(),
+            workspace: z.string().optional(),
+          }),
+        ),
+      )
+      .route("/project", ProjectRoutes())
+      .route("/pty", PtyRoutes())
+      .route("/config", ConfigRoutes())
+      .route("/experimental", ExperimentalRoutes())
+      .route("/session", SessionRoutes())
+      .route("/permission", PermissionRoutes())
+      .route("/question", QuestionRoutes())
+      .route("/provider", ProviderRoutes())
+      .route("/", FileRoutes())
+      .route("/mcp", McpRoutes())
+      .route("/tui", TuiRoutes())
+      .post(
+        "/instance/dispose",
+        describeRoute({
+          summary: "Dispose instance",
+          description: "Clean up and dispose the current OpenCode instance, releasing all resources.",
+          operationId: "instance.dispose",
+          responses: {
+            200: {
+              description: "Instance disposed",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
                 },
               },
             },
-          }),
-          async (c) => {
-            const modes = await Agent.list()
-            return c.json(modes)
           },
-        )
-        .get(
-          "/skill",
-          describeRoute({
-            summary: "List skills",
-            description: "Get a list of all available skills in the OpenCode system.",
-            operationId: "app.skills",
-            responses: {
-              200: {
-                description: "List of skills",
-                content: {
-                  "application/json": {
-                    schema: resolver(Skill.Info.array()),
-                  },
+        }),
+        async (c) => {
+          await Instance.dispose()
+          return c.json(true)
+        },
+      )
+      .get(
+        "/path",
+        describeRoute({
+          summary: "Get paths",
+          description: "Retrieve the current working directory and related path information for the OpenCode instance.",
+          operationId: "path.get",
+          responses: {
+            200: {
+              description: "Path",
+              content: {
+                "application/json": {
+                  schema: resolver(
+                    z
+                      .object({
+                        home: z.string(),
+                        state: z.string(),
+                        config: z.string(),
+                        worktree: z.string(),
+                        directory: z.string(),
+                      })
+                      .meta({
+                        ref: "Path",
+                      }),
+                  ),
                 },
               },
             },
-          }),
-          async (c) => {
-            const skills = await Skill.all()
-            return c.json(skills)
           },
-        )
-        .get(
-          "/lsp",
-          describeRoute({
-            summary: "Get LSP status",
-            description: "Get LSP server status",
-            operationId: "lsp.status",
-            responses: {
-              200: {
-                description: "LSP server status",
-                content: {
-                  "application/json": {
-                    schema: resolver(LSP.Status.array()),
-                  },
+        }),
+        async (c) => {
+          return c.json({
+            home: Global.Path.home,
+            state: Global.Path.state,
+            config: Global.Path.config,
+            worktree: Instance.worktree,
+            directory: Instance.directory,
+          })
+        },
+      )
+      .get(
+        "/vcs",
+        describeRoute({
+          summary: "Get VCS info",
+          description: "Retrieve version control system (VCS) information for the current project, such as git branch.",
+          operationId: "vcs.get",
+          responses: {
+            200: {
+              description: "VCS info",
+              content: {
+                "application/json": {
+                  schema: resolver(Vcs.Info),
                 },
               },
             },
-          }),
-          async (c) => {
-            return c.json(await LSP.status())
           },
-        )
-        .get(
-          "/formatter",
-          describeRoute({
-            summary: "Get formatter status",
-            description: "Get formatter status",
-            operationId: "formatter.status",
-            responses: {
-              200: {
-                description: "Formatter status",
-                content: {
-                  "application/json": {
-                    schema: resolver(Format.Status.array()),
-                  },
+        }),
+        async (c) => {
+          const branch = await Vcs.branch()
+          return c.json({
+            branch,
+          })
+        },
+      )
+      .get(
+        "/command",
+        describeRoute({
+          summary: "List commands",
+          description: "Get a list of all available commands in the OpenCode system.",
+          operationId: "command.list",
+          responses: {
+            200: {
+              description: "List of commands",
+              content: {
+                "application/json": {
+                  schema: resolver(Command.Info.array()),
                 },
               },
             },
-          }),
-          async (c) => {
-            return c.json(await Format.status())
           },
-        )
-        .get(
-          "/event",
-          describeRoute({
-            summary: "Subscribe to events",
-            description: "Get events",
-            operationId: "event.subscribe",
-            responses: {
-              200: {
-                description: "Event stream",
-                content: {
-                  "text/event-stream": {
-                    schema: resolver(BusEvent.payloads()),
-                  },
+        }),
+        async (c) => {
+          const commands = await Command.list()
+          return c.json(commands)
+        },
+      )
+      .post(
+        "/log",
+        describeRoute({
+          summary: "Write log",
+          description: "Write a log entry to the server logs with specified level and metadata.",
+          operationId: "app.log",
+          responses: {
+            200: {
+              description: "Log entry written successfully",
+              content: {
+                "application/json": {
+                  schema: resolver(z.boolean()),
                 },
               },
             },
+            ...errors(400),
+          },
+        }),
+        validator(
+          "json",
+          z.object({
+            service: z.string().meta({ description: "Service name for the log entry" }),
+            level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
+            message: z.string().meta({ description: "Log message" }),
+            extra: z
+              .record(z.string(), z.any())
+              .optional()
+              .meta({ description: "Additional metadata for the log entry" }),
           }),
-          async (c) => {
-            log.info("event connected")
-            c.header("X-Accel-Buffering", "no")
-            c.header("X-Content-Type-Options", "nosniff")
-            return streamSSE(c, async (stream) => {
+        ),
+        async (c) => {
+          const { service, level, message, extra } = c.req.valid("json")
+          const logger = Log.create({ service })
+
+          switch (level) {
+            case "debug":
+              logger.debug(message, extra)
+              break
+            case "info":
+              logger.info(message, extra)
+              break
+            case "error":
+              logger.error(message, extra)
+              break
+            case "warn":
+              logger.warn(message, extra)
+              break
+          }
+
+          return c.json(true)
+        },
+      )
+      .get(
+        "/agent",
+        describeRoute({
+          summary: "List agents",
+          description: "Get a list of all available AI agents in the OpenCode system.",
+          operationId: "app.agents",
+          responses: {
+            200: {
+              description: "List of agents",
+              content: {
+                "application/json": {
+                  schema: resolver(Agent.Info.array()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const modes = await Agent.list()
+          return c.json(modes)
+        },
+      )
+      .get(
+        "/skill",
+        describeRoute({
+          summary: "List skills",
+          description: "Get a list of all available skills in the OpenCode system.",
+          operationId: "app.skills",
+          responses: {
+            200: {
+              description: "List of skills",
+              content: {
+                "application/json": {
+                  schema: resolver(Skill.Info.array()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const skills = await Skill.all()
+          return c.json(skills)
+        },
+      )
+      .get(
+        "/lsp",
+        describeRoute({
+          summary: "Get LSP status",
+          description: "Get LSP server status",
+          operationId: "lsp.status",
+          responses: {
+            200: {
+              description: "LSP server status",
+              content: {
+                "application/json": {
+                  schema: resolver(LSP.Status.array()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          return c.json(await LSP.status())
+        },
+      )
+      .get(
+        "/formatter",
+        describeRoute({
+          summary: "Get formatter status",
+          description: "Get formatter status",
+          operationId: "formatter.status",
+          responses: {
+            200: {
+              description: "Formatter status",
+              content: {
+                "application/json": {
+                  schema: resolver(Format.Status.array()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          return c.json(await Format.status())
+        },
+      )
+      .get(
+        "/event",
+        describeRoute({
+          summary: "Subscribe to events",
+          description: "Get events",
+          operationId: "event.subscribe",
+          responses: {
+            200: {
+              description: "Event stream",
+              content: {
+                "text/event-stream": {
+                  schema: resolver(BusEvent.payloads()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          log.info("event connected")
+          c.header("X-Accel-Buffering", "no")
+          c.header("X-Content-Type-Options", "nosniff")
+          return streamSSE(c, async (stream) => {
+            stream.writeSSE({
+              data: JSON.stringify({
+                type: "server.connected",
+                properties: {},
+              }),
+            })
+            const unsub = Bus.subscribeAll(async (event) => {
+              await stream.writeSSE({
+                data: JSON.stringify(event),
+              })
+              if (event.type === Bus.InstanceDisposed.type) {
+                stream.close()
+              }
+            })
+
+            // Send heartbeat every 10s to prevent stalled proxy streams.
+            const heartbeat = setInterval(() => {
               stream.writeSSE({
                 data: JSON.stringify({
-                  type: "server.connected",
+                  type: "server.heartbeat",
                   properties: {},
                 }),
               })
-              const unsub = Bus.subscribeAll(async (event) => {
-                await stream.writeSSE({
-                  data: JSON.stringify(event),
-                })
-                if (event.type === Bus.InstanceDisposed.type) {
-                  stream.close()
-                }
-              })
+            }, 10_000)
 
-              // Send heartbeat every 10s to prevent stalled proxy streams.
-              const heartbeat = setInterval(() => {
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "server.heartbeat",
-                    properties: {},
-                  }),
-                })
-              }, 10_000)
-
-              await new Promise<void>((resolve) => {
-                stream.onAbort(() => {
-                  clearInterval(heartbeat)
-                  unsub()
-                  resolve()
-                  log.info("event disconnected")
-                })
+            await new Promise<void>((resolve) => {
+              stream.onAbort(() => {
+                clearInterval(heartbeat)
+                unsub()
+                resolve()
+                log.info("event disconnected")
               })
             })
-          },
-        )
-        .all("/*", async (c) => {
-          const path = c.req.path
-          const response = await proxy(`https://app.shuv.ai${path}`, {
-            ...c.req,
-            headers: {
-              ...c.req.raw.headers,
-              host: "app.shuv.ai",
-            },
           })
-          response.headers.set(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
-          )
-          return response
-        }) as unknown as Hono,
-  )
+        },
+      )
+      .all("/*", async (c) => {
+        const path = c.req.path
+
+        const response = await proxy(`https://app.shuv.ai${path}`, {
+          ...c.req,
+          headers: {
+            ...c.req.raw.headers,
+            host: "app.shuv.ai",
+          },
+        })
+        response.headers.set(
+          "Content-Security-Policy",
+          "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:",
+        )
+        return response
+      })
+  }
 
   export async function openapi() {
     // Cast to break excessive type recursion from long route chains
-    const result = await generateSpecs(App() as Hono, {
+    const result = await generateSpecs(Default(), {
       documentation: {
         info: {
           title: "opencode",
@@ -714,6 +696,9 @@ export namespace Server {
     return result
   }
 
+  /** @deprecated do not use this dumb shit */
+  export let url: URL
+
   export function listen(opts: {
     port: number
     hostname: string
@@ -721,12 +706,12 @@ export namespace Server {
     mdnsDomain?: string
     cors?: string[]
   }) {
-    _corsWhitelist = opts.cors ?? []
-
+    url = new URL(`http://${opts.hostname}:${opts.port}`)
+    const app = createApp(opts)
     const args = {
       hostname: opts.hostname,
       idleTimeout: 0,
-      fetch: App().fetch,
+      fetch: app.fetch,
       websocket: websocket,
     } as const
     const tryServe = (port: number) => {
@@ -738,8 +723,6 @@ export namespace Server {
     }
     const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
     if (!server) throw new Error(`Failed to start server on port ${opts.port}`)
-
-    _url = server.url
 
     const shouldPublishMDNS =
       opts.mdns &&

@@ -23,8 +23,7 @@ import { useLayout } from "@/context/layout"
 import { useSync } from "@/context/sync"
 import { createFileTabListSync } from "@/pages/session/file-tab-scroll"
 import { FileTabContent } from "@/pages/session/file-tabs"
-import { createOpenSessionFileTab, getTabReorderIndex } from "@/pages/session/helpers"
-import { StickyAddButton } from "@/pages/session/review-tab"
+import { createOpenSessionFileTab, createSessionTabs, getTabReorderIndex } from "@/pages/session/helpers"
 import { setSessionHandoff } from "@/pages/session/handoff"
 
 export function SessionSidePanel(props: {
@@ -273,7 +272,7 @@ export function SessionSidePanel(props: {
                     <SortableProvider ids={openedTabs()}>
                       <For each={openedTabs()}>{(tab) => <SortableTab tab={tab} onTabClose={tabs().close} />}</For>
                     </SortableProvider>
-                    <StickyAddButton>
+                    <div class="bg-background-stronger h-full shrink-0 sticky right-0 z-10 flex items-center justify-center pr-3">
                       <TooltipKeybind
                         title={language.t("command.file.open")}
                         keybind={command.keybind("file.open")}
@@ -288,7 +287,7 @@ export function SessionSidePanel(props: {
                           aria-label={language.t("command.file.open")}
                         />
                       </TooltipKeybind>
-                    </StickyAddButton>
+                    </div>
                   </Tabs.List>
                 </div>
 

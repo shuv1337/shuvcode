@@ -34,6 +34,7 @@ import { cmp, normalizeProviderList, sanitizeProject } from "./global-sync/utils
 import { createChildStoreManager } from "./global-sync/child-store"
 import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
 import { createRefreshQueue } from "./global-sync/queue"
+import { clearSessionPrefetchDirectory } from "./global-sync/session-prefetch"
 import { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global-sync/session-load"
 import { trimSessions } from "./global-sync/session-trim"
 import type { ProjectMeta } from "./global-sync/types"
@@ -127,7 +128,9 @@ function createGlobalSync() {
       queue.clear(directory)
       sessionMeta.delete(directory)
       sdkCache.delete(directory)
+      clearSessionPrefetchDirectory(directory)
     },
+    translate: language.t,
   })
 
   const sdkFor = (directory: string) => {
@@ -480,6 +483,3 @@ export function useGlobalSync() {
   if (!context) throw new Error("useGlobalSync must be used within GlobalSyncProvider")
   return context
 }
-
-export { canDisposeDirectory, pickDirectoriesToEvict } from "./global-sync/eviction"
-export { estimateRootSessionTotal, loadRootSessionsWithFallback } from "./global-sync/session-load"

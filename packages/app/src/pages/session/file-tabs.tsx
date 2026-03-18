@@ -1,7 +1,7 @@
 import { createEffect, createMemo, For, Match, on, onCleanup, Show, Switch } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
-import { useParams } from "@solidjs/router"
+import type { FileSearchHandle } from "@opencode-ai/ui/file"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { sampledChecksum } from "@opencode-ai/util/encode"
 import { decode64 } from "@/utils/base64"
@@ -9,12 +9,13 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { LineComment as LineCommentView, LineCommentEditor } from "@opencode-ai/ui/line-comment"
 import { AsciiMark } from "@opencode-ai/ui/logo"
 import { Tabs } from "@opencode-ai/ui/tabs"
-import { useLayout } from "@/context/layout"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
 import { getSessionHandoff } from "@/pages/session/handoff"
+import { useSessionLayout } from "@/pages/session/session-layout"
+import { createSessionTabs } from "@/pages/session/helpers"
 
 const formatCommentLabel = (range: SelectedLineRange) => {
   const start = Math.min(range.start, range.end)
@@ -24,17 +25,17 @@ const formatCommentLabel = (range: SelectedLineRange) => {
 }
 
 export function FileTabContent(props: { tab: string }) {
-  const params = useParams()
-  const layout = useLayout()
   const file = useFile()
   const comments = useComments()
   const language = useLanguage()
   const prompt = usePrompt()
   const fileComponent = useFileComponent()
-
-  const sessionKey = createMemo(() => `${params.dir}${params.id ? "/" + params.id : ""}`)
-  const tabs = createMemo(() => layout.tabs(sessionKey))
-  const view = createMemo(() => layout.view(sessionKey))
+  const { sessionKey, tabs, view } = useSessionLayout()
+  const activeFileTab = createSessionTabs({
+    tabs,
+    pathFromTab: file.pathFromTab,
+    normalizeTab: (tab) => (tab.startsWith("file://") ? file.tab(tab) : tab),
+  }).activeFileTab
 
   let scroll: HTMLDivElement | undefined
   let scrollFrame: number | undefined
@@ -272,7 +273,7 @@ export function FileTabContent(props: { tab: string }) {
     const p = path()
     if (!focus || !p) return
     if (focus.file !== p) return
-    if (tabs().active() !== props.tab) return
+    if (activeFileTab() !== props.tab) return
 
     const target = fileComments().find((comment) => comment.id === focus.id)
     if (!target) return
