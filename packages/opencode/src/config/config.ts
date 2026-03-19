@@ -209,7 +209,7 @@ export namespace Config {
         }
 
         if (config) {
-          result = mergeConfigConcatArrays(
+          result = merge(
             result,
             await load(JSON.stringify(config), {
               dir: path.dirname(`${active.url}/api/config`),
