@@ -4,3 +4,4 @@ gen
 app.log
 static
 src/provider/models-snapshot.ts
+.*.bun-build
