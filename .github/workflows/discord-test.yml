@@ -68,7 +68,7 @@ jobs:
               code="${out[0]}"
               body="$(printf '%s\n' "${out[@]:1}")"
               echo "probe $label: $code" >&2
-              { printf '%s\n' "$body" | head -c 300; echo; } >&2
+              { printf '%s\n' "$body" | head -c 200; echo; } >&2
               if [ "$code" = "200" ]; then
                 echo "selected auth: $label" >&2
                 printf '%s' "$auth"
@@ -84,53 +84,24 @@ jobs:
           code="${out[0]}"
           body="$(printf '%s\n' "${out[@]:1}")"
           echo "channel lookup: $code"
-          printf '%s\n' "$body" | head -c 500; echo
+          printf '%s\n' "$body" | head -c 300; echo
           [ "$code" = "200" ] || { echo "could not access target channel"; exit 1; }
 
-          export RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo Latitudes-Dev/shuvcode --json tagName,body,url)"
-          python - <<'PY' > /tmp/discord-msgs.txt
-          import json
-          import os
+          rel=$(gh release view "$RELEASE_TAG" --repo Latitudes-Dev/shuvcode --json tagName,body,url)
+          tag=$(jq -r .tagName <<< "$rel")
+          url=$(jq -r .url <<< "$rel")
+          notes=$(jq -r .body <<< "$rel")
+          npm="https://www.npmjs.com/package/shuvcode/v/${tag#v}"
+          head="**shuvcode ${tag}** release notes"
+          foot="\n\n[GitHub Release](<${url}>) | [npm](<${npm}>)"
+          room=$((1900 - ${#head} - ${#foot} - 4))
+          body=$(printf '%s' "$notes" | head -c "$room")
+          msg=$(printf '%b' "$head\n\n$body$foot")
+          payload=$(jq -Rn --arg content "$msg" '{content:$content}')
 
-          data = json.loads(os.environ["RELEASE_JSON"])
-          tag = data["tagName"]
-          body = data.get("body") or ""
-          url = data["url"]
-          npm = f"https://www.npmjs.com/package/shuvcode/v/{tag.removeprefix('v')}"
-          head = f"**shuvcode {tag}** release notes\n\n[GitHub Release](<{url}>) | [npm](<{npm}>)"
-          parts = [head]
-          buf = ""
-          limit = 1900
-
-          for line in body.splitlines():
-            chunk = line if line else ""
-            add = chunk + "\n"
-            if len(buf) + len(add) > limit:
-              if buf.strip():
-                parts.append(buf.rstrip())
-              buf = add
-              continue
-            buf += add
-
-          if buf.strip():
-            parts.append(buf.rstrip())
-
-          with open('/tmp/discord-msgs.txt', 'w', encoding='utf-8') as f:
-            for part in parts:
-              f.write(part)
-              f.write('\0')
-          PY
-
-          while IFS= read -r -d '' msg; do
-            payload=$(python - <<'PY' "$msg"
-import json, sys
-print(json.dumps({"content": sys.argv[1]}))
-PY
-)
-            mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID/messages" POST "$payload")
-            code="${out[0]}"
-            body="$(printf '%s\n' "${out[@]:1}")"
-            echo "post: $code"
-            printf '%s\n' "$body" | head -c 500; echo
-            [[ "$code" = "200" || "$code" = "201" ]] || { echo "post failed"; exit 1; }
-          done < /tmp/discord-msgs.txt
+          mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID/messages" POST "$payload")
+          code="${out[0]}"
+          body="$(printf '%s\n' "${out[@]:1}")"
+          echo "post: $code"
+          printf '%s\n' "$body" | head -c 300; echo
+          [[ "$code" = "200" || "$code" = "201" ]] || { echo "post failed"; exit 1; }
