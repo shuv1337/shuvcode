@@ -2,6 +2,11 @@ name: discord-test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - integration
+    paths:
+      - .github/workflows/discord-test.yml
 
 permissions:
   contents: read
