@@ -10,28 +10,62 @@ jobs:
       - name: Post test message to Discord
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          DISCORD_CHANNEL_ID: "1473184731037433929"
+          DISCORD_CHANNEL_ID: "1483655502251688027"
         run: |
           python - <<'PY'
           import json
           import os
+          import urllib.error
           import urllib.request
 
-          body = {
-            "content": "**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1473184731037433929\n- if you can read this, the posting flow still works"
+          token = os.environ["DISCORD_TOKEN"]
+          channel = os.environ["DISCORD_CHANNEL_ID"]
+
+          def auths(token: str):
+            if token.startswith("Bot ") or token.startswith("Bearer "):
+              return [("provided", token)]
+            return [("user", token), ("bot", f"Bot {token}")]
+
+          def call(path: str, auth: str, method="GET", body=None):
+            req = urllib.request.Request(
+              f"https://discord.com/api/v10{path}",
+              data=None if body is None else json.dumps(body).encode(),
+              headers={
+                "Authorization": auth,
+                "Content-Type": "application/json",
+              },
+              method=method,
+            )
+            try:
+              with urllib.request.urlopen(req) as res:
+                return res.status, res.read().decode()
+            except urllib.error.HTTPError as err:
+              return err.code, err.read().decode()
+
+          auth = None
+          for name, value in auths(token):
+            status, body = call("/users/@me", value)
+            print(f"probe {name}: {status}")
+            print(body[:300])
+            if status == 200:
+              auth = value
+              break
+
+          if not auth:
+            raise SystemExit("could not authenticate to Discord")
+
+          status, body = call(f"/channels/{channel}", auth)
+          print(f"channel lookup: {status}")
+          print(body[:500])
+          if status != 200:
+            raise SystemExit("could not access target channel")
+
+          msg = {
+            "content": "**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1483655502251688027\n- if you can read this, the posting flow still works"
           }
-
-          req = urllib.request.Request(
-            f"https://discord.com/api/v10/channels/{os.environ['DISCORD_CHANNEL_ID']}/messages",
-            data=json.dumps(body).encode(),
-            headers={
-              "Authorization": os.environ["DISCORD_TOKEN"],
-              "Content-Type": "application/json",
-            },
-            method="POST",
-          )
-
-          with urllib.request.urlopen(req) as res:
-            print(res.status)
-            print(res.read().decode())
+          status, body = call(f"/channels/{channel}/messages", auth, method="POST", body=msg)
+          print(f"post: {status}")
+          print(body[:500])
+          if status not in (200, 201):
+            raise SystemExit("post failed")
           PY
