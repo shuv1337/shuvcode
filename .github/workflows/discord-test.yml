@@ -3,14 +3,19 @@ name: discord-test
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - name: Post test message to Discord
+      - name: Post latest shuvcode release notes to Discord
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          DISCORD_CHANNEL_ID: "1483655502251688027"
+          DISCORD_CHANNEL_ID: "1473184731037433929"
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: "v1.2.27"
         run: |
           set -euo pipefail
 
@@ -77,10 +82,50 @@ jobs:
           printf '%s\n' "$body" | head -c 500; echo
           [ "$code" = "200" ] || { echo "could not access target channel"; exit 1; }
 
-          msg='{"content":"**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1483655502251688027\n- if you can read this, the posting flow still works"}'
-          mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID/messages" POST "$msg")
-          code="${out[0]}"
-          body="$(printf '%s\n' "${out[@]:1}")"
-          echo "post: $code"
-          printf '%s\n' "$body" | head -c 500; echo
-          [[ "$code" = "200" || "$code" = "201" ]] || { echo "post failed"; exit 1; }
+          export RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo Latitudes-Dev/shuvcode --json tagName,body,url)"
+          python - <<'PY' > /tmp/discord-msgs.txt
+          import json
+          import os
+
+          data = json.loads(os.environ["RELEASE_JSON"])
+          tag = data["tagName"]
+          body = data.get("body") or ""
+          url = data["url"]
+          npm = f"https://www.npmjs.com/package/shuvcode/v/{tag.removeprefix('v')}"
+          head = f"**shuvcode {tag}** release notes\n\n[GitHub Release](<{url}>) | [npm](<{npm}>)"
+          parts = [head]
+          buf = ""
+          limit = 1900
+
+          for line in body.splitlines():
+            chunk = line if line else ""
+            add = chunk + "\n"
+            if len(buf) + len(add) > limit:
+              if buf.strip():
+                parts.append(buf.rstrip())
+              buf = add
+              continue
+            buf += add
+
+          if buf.strip():
+            parts.append(buf.rstrip())
+
+          with open('/tmp/discord-msgs.txt', 'w', encoding='utf-8') as f:
+            for part in parts:
+              f.write(part)
+              f.write('\0')
+          PY
+
+          while IFS= read -r -d '' msg; do
+            payload=$(python - <<'PY' "$msg"
+import json, sys
+print(json.dumps({"content": sys.argv[1]}))
+PY
+)
+            mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID/messages" POST "$payload")
+            code="${out[0]}"
+            body="$(printf '%s\n' "${out[@]:1}")"
+            echo "post: $code"
+            printf '%s\n' "$body" | head -c 500; echo
+            [[ "$code" = "200" || "$code" = "201" ]] || { echo "post failed"; exit 1; }
+          done < /tmp/discord-msgs.txt
