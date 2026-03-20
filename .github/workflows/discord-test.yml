@@ -22,7 +22,7 @@ jobs:
             local path="$2"
             local method="${3:-GET}"
             local body="${4:-}"
-            local out bodyf code
+            local bodyf code
             bodyf=$(mktemp)
             if [ -n "$body" ]; then
               code=$(curl -sS --http1.1 -o "$bodyf" -w '%{http_code}' \
@@ -46,8 +46,14 @@ jobs:
           }
 
           pick() {
-            local body code auth label
-            while IFS='|' read -r label auth; do
+            local body code auth label entry
+            local pairs=(
+              "user|$DISCORD_TOKEN"
+              "bot|Bot $DISCORD_TOKEN"
+              "bearer|Bearer $DISCORD_TOKEN"
+            )
+            for entry in "${pairs[@]}"; do
+              IFS='|' read -r label auth <<< "$entry"
               mapfile -t out < <(call "$auth" /users/@me)
               code="${out[0]}"
               body="$(printf '%s\n' "${out[@]:1}")"
@@ -57,11 +63,7 @@ jobs:
                 printf '%s' "$auth"
                 return 0
               fi
-            done <<EOF
-user|$DISCORD_TOKEN
-bot|Bot $DISCORD_TOKEN
-bearer|Bearer $DISCORD_TOKEN
-EOF
+            done
             return 1
           }
 
