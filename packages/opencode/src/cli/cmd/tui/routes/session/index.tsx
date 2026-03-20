@@ -537,10 +537,8 @@ export function Session() {
         const message = messages().findLast((x) => {
           if (x.role !== "user") return false
           if (revert && x.id >= revert) return false
-          // Skip messages where all text parts are ignored
           const parts = sync.data.part[x.id]
-          const hasNonIgnoredText = parts?.some((p) => p.type === "text" && !p.ignored)
-          return hasNonIgnoredText
+          return parts?.some((p) => p.type === "text" && !p.synthetic && !p.ignored)
         })
         if (!message) return
         sdk.client.session
@@ -556,7 +554,7 @@ export function Session() {
           parts.reduce(
             (agg, part) => {
               if (part.type === "text") {
-                if (!part.synthetic) agg.input += part.text
+                if (!part.synthetic && !part.ignored) agg.input += part.text
               }
               if (part.type === "file") agg.parts.push(part)
               return agg
