@@ -32,8 +32,8 @@ export interface MessageStore {
 }
 
 function upsertSorted<T>(array: T[], item: T, id: string, getId: (item: T) => string): T[] {
-  const result = search(array, id, getId)
-  const next = [...array]
+  const next = array.filter((x): x is T => x !== undefined && x !== null)
+  const result = search(next, id, getId)
   if (result.found) {
     next[result.index] = item
   } else {
@@ -43,9 +43,9 @@ function upsertSorted<T>(array: T[], item: T, id: string, getId: (item: T) => st
 }
 
 function removeSorted<T>(array: T[], id: string, getId: (item: T) => string): T[] | null {
-  const result = search(array, id, getId)
+  const next = array.filter((x): x is T => x !== undefined && x !== null)
+  const result = search(next, id, getId)
   if (!result.found) return null
-  const next = [...array]
   next.splice(result.index, 1)
   return next
 }
@@ -118,7 +118,9 @@ export function applyMessageEvent(
       if (!parts) return null
       const next = removeSorted(parts, partID, (p) => (p as any).id)
       if (!next) return null
-      return { ...store, parts: { ...store.parts, [messageID]: next } }
+      if (next.length > 0) return { ...store, parts: { ...store.parts, [messageID]: next } }
+      const { [messageID]: _, ...rest } = store.parts
+      return { ...store, parts: rest }
     }
 
     default:
