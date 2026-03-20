@@ -57,9 +57,10 @@ jobs:
               mapfile -t out < <(call "$auth" /users/@me)
               code="${out[0]}"
               body="$(printf '%s\n' "${out[@]:1}")"
-              echo "probe $label: $code"
-              printf '%s\n' "$body" | head -c 300; echo
+              echo "probe $label: $code" >&2
+              { printf '%s\n' "$body" | head -c 300; echo; } >&2
               if [ "$code" = "200" ]; then
+                echo "selected auth: $label" >&2
                 printf '%s' "$auth"
                 return 0
               fi
