@@ -2,6 +2,11 @@ name: discord-release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - integration
+    paths:
+      - .github/workflows/discord-release.yml
 
 permissions:
   contents: read
