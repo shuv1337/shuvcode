@@ -1,6 +1,6 @@
 {
   "name": "@opencode-ai/mobile",
-  "version": "1.0.0",
+  "version": "1.2.27-4",
   "main": "expo-router/entry",
   "scripts": {
     "start": "bunx expo start",
