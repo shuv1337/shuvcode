@@ -1,0 +1,37 @@
+name: discord-test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post test message to Discord
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CHANNEL_ID: "1473184731037433929"
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          body = {
+            "content": "**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1473184731037433929\n- if you can read this, the posting flow still works"
+          }
+
+          req = urllib.request.Request(
+            f"https://discord.com/api/v10/channels/{os.environ['DISCORD_CHANNEL_ID']}/messages",
+            data=json.dumps(body).encode(),
+            headers={
+              "Authorization": os.environ["DISCORD_TOKEN"],
+              "Content-Type": "application/json",
+            },
+            method="POST",
+          )
+
+          with urllib.request.urlopen(req) as res:
+            print(res.status)
+            print(res.read().decode())
+          PY
