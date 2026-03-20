@@ -5,7 +5,8 @@
  *
  * Supports posting to any existing Discord text channel or thread by ID.
  * Auth mode is auto-detected so the same script can work with either a raw
- * user token or a standard bot token stored without the `Bot ` prefix.
+ * user token, a standard bot token stored without the `Bot ` prefix, or a
+ * bearer token.
  *
  * Inputs:
  * - DISCORD_TOKEN               required
@@ -18,6 +19,9 @@
 
 const api = "https://discord.com/api/v10"
 const max = 2000
+const agent =
+  process.env.DISCORD_USER_AGENT ||
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
 
 function trim(text: string) {
   return text.length <= max ? text : text.slice(0, max)
@@ -63,7 +67,9 @@ async function req(path: string, init: RequestInit, auth: string) {
     ...init,
     headers: {
       Authorization: auth,
+      Accept: "application/json",
       "Content-Type": "application/json",
+      "User-Agent": agent,
       ...(init.headers || {}),
     },
   })
@@ -73,22 +79,25 @@ async function req(path: string, init: RequestInit, auth: string) {
 
 function auths(token: string) {
   if (token.startsWith("Bot ") || token.startsWith("Bearer ")) return [token]
-  return [token, `Bot ${token}`]
+  return [token, `Bot ${token}`, `Bearer ${token}`]
 }
 
 async function pick(token: string) {
   for (const auth of auths(token)) {
-    const mode = auth.startsWith("Bot ") ? "bot" : "user"
+    const mode = auth.startsWith("Bot ") ? "bot" : auth.startsWith("Bearer ") ? "bearer" : "user"
     const out = await req("/users/@me", { method: "GET" }, auth)
     console.log(`Discord auth probe (${mode}) -> ${out.res.status}`)
-    if (!out.res.ok) continue
+    if (!out.res.ok) {
+      console.log(out.text.slice(0, 300))
+      continue
+    }
     const info = JSON.parse(out.text) as { username?: string; discriminator?: string; id?: string; bot?: boolean }
     console.log(
       `Using Discord auth (${mode}) as ${info.username || "unknown"}${info.discriminator ? `#${info.discriminator}` : ""} (${info.id || "unknown"})`,
     )
     return auth
   }
-  throw new Error("Could not authenticate with Discord using either raw or bot token style")
+  throw new Error("Could not authenticate with Discord using user, bot, or bearer token style")
 }
 
 async function inspect(id: string, auth: string) {

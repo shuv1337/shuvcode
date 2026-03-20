@@ -12,60 +12,72 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_CHANNEL_ID: "1483655502251688027"
         run: |
-          python - <<'PY'
-          import json
-          import os
-          import urllib.error
-          import urllib.request
+          set -euo pipefail
 
-          token = os.environ["DISCORD_TOKEN"]
-          channel = os.environ["DISCORD_CHANNEL_ID"]
+          api="https://discord.com/api/v10"
+          ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 
-          def auths(token: str):
-            if token.startswith("Bot ") or token.startswith("Bearer "):
-              return [("provided", token)]
-            return [("user", token), ("bot", f"Bot {token}")]
-
-          def call(path: str, auth: str, method="GET", body=None):
-            req = urllib.request.Request(
-              f"https://discord.com/api/v10{path}",
-              data=None if body is None else json.dumps(body).encode(),
-              headers={
-                "Authorization": auth,
-                "Content-Type": "application/json",
-              },
-              method=method,
-            )
-            try:
-              with urllib.request.urlopen(req) as res:
-                return res.status, res.read().decode()
-            except urllib.error.HTTPError as err:
-              return err.code, err.read().decode()
-
-          auth = None
-          for name, value in auths(token):
-            status, body = call("/users/@me", value)
-            print(f"probe {name}: {status}")
-            print(body[:300])
-            if status == 200:
-              auth = value
-              break
-
-          if not auth:
-            raise SystemExit("could not authenticate to Discord")
-
-          status, body = call(f"/channels/{channel}", auth)
-          print(f"channel lookup: {status}")
-          print(body[:500])
-          if status != 200:
-            raise SystemExit("could not access target channel")
-
-          msg = {
-            "content": "**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1483655502251688027\n- if you can read this, the posting flow still works"
+          call() {
+            local auth="$1"
+            local path="$2"
+            local method="${3:-GET}"
+            local body="${4:-}"
+            local out bodyf code
+            bodyf=$(mktemp)
+            if [ -n "$body" ]; then
+              code=$(curl -sS --http1.1 -o "$bodyf" -w '%{http_code}' \
+                -X "$method" "$api$path" \
+                -H "Authorization: $auth" \
+                -H 'Accept: application/json' \
+                -H 'Content-Type: application/json' \
+                -H "User-Agent: $ua" \
+                --data "$body")
+            else
+              code=$(curl -sS --http1.1 -o "$bodyf" -w '%{http_code}' \
+                -X "$method" "$api$path" \
+                -H "Authorization: $auth" \
+                -H 'Accept: application/json' \
+                -H 'Content-Type: application/json' \
+                -H "User-Agent: $ua")
+            fi
+            printf '%s\n' "$code"
+            cat "$bodyf"
+            rm -f "$bodyf"
           }
-          status, body = call(f"/channels/{channel}/messages", auth, method="POST", body=msg)
-          print(f"post: {status}")
-          print(body[:500])
-          if status not in (200, 201):
-            raise SystemExit("post failed")
-          PY
+
+          pick() {
+            local body code auth label
+            while IFS='|' read -r label auth; do
+              mapfile -t out < <(call "$auth" /users/@me)
+              code="${out[0]}"
+              body="$(printf '%s\n' "${out[@]:1}")"
+              echo "probe $label: $code"
+              printf '%s\n' "$body" | head -c 300; echo
+              if [ "$code" = "200" ]; then
+                printf '%s' "$auth"
+                return 0
+              fi
+            done <<EOF
+user|$DISCORD_TOKEN
+bot|Bot $DISCORD_TOKEN
+bearer|Bearer $DISCORD_TOKEN
+EOF
+            return 1
+          }
+
+          auth="$(pick)" || { echo "could not authenticate to Discord"; exit 1; }
+
+          mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID")
+          code="${out[0]}"
+          body="$(printf '%s\n' "${out[@]:1}")"
+          echo "channel lookup: $code"
+          printf '%s\n' "$body" | head -c 500; echo
+          [ "$code" = "200" ] || { echo "could not access target channel"; exit 1; }
+
+          msg='{"content":"**shuvcode Discord test**\n\n- workflow_dispatch smoke test\n- target channel: 1483655502251688027\n- if you can read this, the posting flow still works"}'
+          mapfile -t out < <(call "$auth" "/channels/$DISCORD_CHANNEL_ID/messages" POST "$msg")
+          code="${out[0]}"
+          body="$(printf '%s\n' "${out[@]:1}")"
+          echo "post: $code"
+          printf '%s\n' "$body" | head -c 500; echo
+          [[ "$code" = "200" || "$code" = "201" ]] || { echo "post failed"; exit 1; }
