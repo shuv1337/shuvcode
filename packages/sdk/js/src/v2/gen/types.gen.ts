@@ -54,6 +54,13 @@ export type EventServerInstanceDisposed = {
   }
 }
 
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
 export type PermissionRequest = {
   id: string
   sessionID: string
@@ -183,10 +190,11 @@ export type EventLspUpdated = {
   }
 }
 
-export type EventFileEdited = {
-  type: "file.edited"
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
   properties: {
     file: string
+    event: "add" | "change" | "unlink"
   }
 }
 
@@ -690,14 +698,6 @@ export type EventSessionCompacted = {
   }
 }
 
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
 export type Todo = {
   /**
    * Brief description of the task
@@ -787,16 +787,6 @@ export type EventMcpBrowserOpenFailed = {
   properties: {
     mcpName: string
     url: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
   }
 }
 
@@ -1002,11 +992,22 @@ export type EventWorktreeFailed = {
   }
 }
 
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventProjectUpdated
   | EventServerInstanceDisposed
+  | EventFileEdited
   | EventPermissionAsked
   | EventPermissionReplied
   | EventQuestionAsked
@@ -1016,7 +1017,7 @@ export type Event =
   | EventGlobalDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
-  | EventFileEdited
+  | EventFileWatcherUpdated
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
@@ -1025,7 +1026,6 @@ export type Event =
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionCompacted
-  | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
@@ -1033,7 +1033,6 @@ export type Event =
   | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
-  | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -1049,6 +1048,7 @@ export type Event =
   | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventCommandExecuted
 
 export type GlobalEvent = {
   directory: string
@@ -1958,6 +1958,10 @@ export type Config = {
   }
   experimental?: {
     disable_paste_summary?: boolean
+    /**
+     * Enable backslash+enter to insert newline instead of submitting (default: true)
+     */
+    backslash_newline?: boolean
     /**
      * Enable the batch tool
      */
@@ -5369,66 +5373,6 @@ export type CommandListResponses = {
 }
 
 export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
-
-export type UsageGetData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-    provider?: string
-    refresh?: boolean
-  }
-  url: "/usage"
-}
-
-export type UsageGetResponses = {
-  /**
-   * Usage response
-   */
-  200: {
-    entries: Array<{
-      provider: string
-      displayName: string
-      snapshot: {
-        primary: {
-          usedPercent: number
-          windowMinutes: number | null
-          resetsAt: number | null
-        } | null
-        secondary: {
-          usedPercent: number
-          windowMinutes: number | null
-          resetsAt: number | null
-        } | null
-        credits: {
-          hasCredits: boolean
-          unlimited: boolean
-          balance: string | null
-        } | null
-        planType:
-          | "guest"
-          | "free"
-          | "go"
-          | "plus"
-          | "pro"
-          | "free_workspace"
-          | "team"
-          | "business"
-          | "education"
-          | "quorum"
-          | "k12"
-          | "enterprise"
-          | "edu"
-          | null
-        updatedAt: number
-      }
-    }>
-    error?: string
-  }
-}
-
-export type UsageGetResponse = UsageGetResponses[keyof UsageGetResponses]
 
 export type AppLogData = {
   body?: {

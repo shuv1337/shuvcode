@@ -1,169 +1,164 @@
 #!/usr/bin/env bun
 
 /**
- * Discord Release Notes Notifier
+ * Discord notifier.
  *
- * Posts release notes to a Discord forum thread as plain markdown.
- * Uses Discord REST API directly (no library dependencies).
+ * Supports posting to any existing Discord text channel or thread by ID.
+ * Auth mode is auto-detected so the same script can work with either a raw
+ * user token, a standard bot token stored without the `Bot ` prefix, or a
+ * bearer token.
  *
- * Changelog format from publish.ts:
- *   - Bullet point changes
- *   - More changes
- *
- *   **Thank you to N community contributors:**
- *   - @user: commit message
- *
- * Discord priority: Changelog > Thank Yous (truncated first when exceeding limit)
+ * Inputs:
+ * - DISCORD_TOKEN               required
+ * - DISCORD_CHANNEL_ID          preferred target ID
+ * - DISCORD_THREAD_ID           legacy fallback target ID
+ * - DISCORD_MESSAGE             optional direct message body
+ * - RELEASE_VERSION             required when DISCORD_MESSAGE is not provided
+ * - RELEASE_CHANGELOG           optional changelog used when formatting release message
  */
 
-const DISCORD_API = "https://discord.com/api/v10"
-const MAX_CONTENT_LENGTH = 2000
+const api = "https://discord.com/api/v10"
+const max = 2000
+const agent =
+  process.env.DISCORD_USER_AGENT ||
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
 
-async function postToDiscord(threadId: string, token: string, content: string): Promise<void> {
-  console.log("Request body:", JSON.stringify({ content }, null, 2).slice(0, 500) + "...")
+function trim(text: string) {
+  return text.length <= max ? text : text.slice(0, max)
+}
 
-  const response = await fetch(`${DISCORD_API}/channels/${threadId}/messages`, {
-    method: "POST",
+function cut(text: string, limit: number) {
+  if (text.length <= limit) return text
+  const slice = text.slice(0, limit)
+  const idx = slice.lastIndexOf("\n")
+  if (idx > limit * 0.5) return slice.slice(0, idx)
+  return slice
+}
+
+function changelogPart(text: string) {
+  const idx = text.indexOf("**Thank you to")
+  if (idx > 0) return text.slice(0, idx).trim()
+  return text.trim()
+}
+
+function thanksPart(text: string) {
+  const match = text.match(/\*\*Thank you to \d+ community contributors?:\*\*[\s\S]*$/)
+  return match ? match[0].trim() : null
+}
+
+function releaseMsg(changelog: string | undefined, version: string, release: string, npm: string) {
+  const head = `**shuvcode ${version}** has been released!\n\n`
+  const tail = `\n\n[GitHub Release](<${release}>) | [npm](<${npm}>)`
+  const note = "\n\n*...see GitHub for full details.*"
+  if (!changelog?.trim()) return trim(head.trim() + tail)
+
+  const body = changelogPart(changelog)
+  const thanks = thanksPart(changelog)
+  const full = thanks ? `${body}\n\n${thanks}` : body
+  const room = max - head.length - tail.length
+
+  if (full.length <= room) return head + full + tail
+  if ((body + note).length <= room) return head + body + note + tail
+  return head + cut(body, room - note.length) + note + tail
+}
+
+async function req(path: string, init: RequestInit, auth: string) {
+  const res = await fetch(`${api}${path}`, {
+    ...init,
     headers: {
-      Authorization: token,
+      Authorization: auth,
+      Accept: "application/json",
       "Content-Type": "application/json",
+      "User-Agent": agent,
+      ...(init.headers || {}),
     },
-    body: JSON.stringify({ content }),
   })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Discord API error (${response.status}): ${error}`)
-  }
-
-  console.log("Successfully posted release notes to Discord")
+  const text = await res.text()
+  return { res, text }
 }
 
-/**
- * Extract the changelog portion (everything before the thank you section)
- */
-function extractChangelogSection(changelog: string): string {
-  const thankYouIndex = changelog.indexOf("**Thank you to")
-  if (thankYouIndex > 0) {
-    return changelog.slice(0, thankYouIndex).trim()
-  }
-  return changelog.trim()
+function auths(token: string) {
+  if (token.startsWith("Bot ") || token.startsWith("Bearer ")) return [token]
+  return [token, `Bot ${token}`, `Bearer ${token}`]
 }
 
-/**
- * Extract the contributor thank you section
- */
-function extractContributorSection(changelog: string): string | null {
-  const thankYouMatch = changelog.match(/\*\*Thank you to \d+ community contributors?:\*\*[\s\S]*$/)
-  return thankYouMatch ? thankYouMatch[0].trim() : null
+async function pick(token: string) {
+  for (const auth of auths(token)) {
+    const mode = auth.startsWith("Bot ") ? "bot" : auth.startsWith("Bearer ") ? "bearer" : "user"
+    const out = await req("/users/@me", { method: "GET" }, auth)
+    console.log(`Discord auth probe (${mode}) -> ${out.res.status}`)
+    if (!out.res.ok) {
+      console.log(out.text.slice(0, 300))
+      continue
+    }
+    const info = JSON.parse(out.text) as { username?: string; discriminator?: string; id?: string; bot?: boolean }
+    console.log(
+      `Using Discord auth (${mode}) as ${info.username || "unknown"}${info.discriminator ? `#${info.discriminator}` : ""} (${info.id || "unknown"})`,
+    )
+    return auth
+  }
+  throw new Error("Could not authenticate with Discord using user, bot, or bearer token style")
 }
 
-/**
- * Truncate text at the last newline before maxLength
- */
-function truncateAtNewline(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text
-
-  const truncated = text.slice(0, maxLength)
-  const lastNewline = truncated.lastIndexOf("\n")
-
-  // Use the newline if it's in a reasonable position (>50% of max)
-  if (lastNewline > maxLength * 0.5) {
-    return truncated.slice(0, lastNewline)
-  }
-
-  return truncated
+async function inspect(id: string, auth: string) {
+  const out = await req(`/channels/${id}`, { method: "GET" }, auth)
+  if (!out.res.ok) throw new Error(`Discord channel lookup error (${out.res.status}): ${out.text}`)
+  const info = JSON.parse(out.text) as { id: string; type?: number; name?: string; guild_id?: string; parent_id?: string }
+  console.log(
+    `Target channel ${info.id}: type=${info.type ?? "unknown"} name=${info.name || "(unnamed)"} guild=${info.guild_id || "n/a"} parent=${info.parent_id || "n/a"}`,
+  )
 }
 
-/**
- * Build Discord content with smart truncation
- * Priority: Header > Changelog > Footer > Thank Yous (truncated first)
- */
-function formatDiscordContent(
-  changelog: string | undefined,
-  version: string,
-  releaseUrl: string,
-  npmUrl: string,
-): string {
-  const header = `**shuvcode ${version}** has been released!\n\n`
-  const footer = `\n\n[GitHub Release](<${releaseUrl}>) | [npm](<${npmUrl}>)`
-  const truncationNote = "\n\n*...see GitHub for full details.*"
-
-  // If no changelog, just return header + footer
-  if (!changelog?.trim()) {
-    return header.trim() + footer
-  }
-
-  // Fixed overhead
-  const fixedOverhead = header.length + footer.length
-
-  // Extract sections
-  const changelogPart = extractChangelogSection(changelog)
-  const thankYouPart = extractContributorSection(changelog)
-
-  // Calculate available space for content
-  const availableForContent = MAX_CONTENT_LENGTH - fixedOverhead
-
-  // Build full content to check length
-  const fullContent = thankYouPart ? `${changelogPart}\n\n${thankYouPart}` : changelogPart
-
-  // Case 1: Everything fits
-  if (fullContent.length <= availableForContent) {
-    return header + fullContent + footer
-  }
-
-  // Case 2: Changelog fits, but not with thank yous
-  const changelogWithNote = changelogPart + truncationNote
-  if (changelogWithNote.length <= availableForContent) {
-    return header + changelogPart + truncationNote + footer
-  }
-
-  // Case 3: Changelog itself needs truncation
-  const maxChangelogLength = availableForContent - truncationNote.length
-  const truncatedChangelog = truncateAtNewline(changelogPart, maxChangelogLength)
-
-  return header + truncatedChangelog + truncationNote + footer
+async function post(id: string, auth: string, content: string) {
+  const out = await req(
+    `/channels/${id}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    },
+    auth,
+  )
+  if (!out.res.ok) throw new Error(`Discord post error (${out.res.status}): ${out.text}`)
+  console.log("Successfully posted to Discord")
 }
 
-async function main(): Promise<void> {
+async function main() {
   const token = process.env.DISCORD_TOKEN
-  const threadId = process.env.DISCORD_THREAD_ID
+  const id = process.env.DISCORD_CHANNEL_ID || process.env.DISCORD_THREAD_ID
+  const msg = process.env.DISCORD_MESSAGE
   const version = process.env.RELEASE_VERSION
   const changelog = process.env.RELEASE_CHANGELOG
 
-  if (!token) {
-    console.error("Error: DISCORD_TOKEN environment variable is required")
-    process.exit(1)
-  }
+  if (!token) throw new Error("DISCORD_TOKEN environment variable is required")
+  if (!id) throw new Error("DISCORD_CHANNEL_ID or DISCORD_THREAD_ID environment variable is required")
 
-  if (!threadId) {
-    console.error("Error: DISCORD_THREAD_ID environment variable is required")
-    process.exit(1)
-  }
+  const auth = await pick(token)
+  await inspect(id, auth)
 
-  if (!version) {
-    console.error("Error: RELEASE_VERSION environment variable is required")
-    process.exit(1)
-  }
+  const clean = version?.startsWith("v") ? version : version ? `v${version}` : undefined
+  const content =
+    msg ||
+    (clean
+      ? releaseMsg(
+          changelog,
+          clean,
+          `https://github.com/Latitudes-Dev/shuvcode/releases/tag/${clean}`,
+          `https://www.npmjs.com/package/shuvcode/v/${clean.slice(1)}`,
+        )
+      : undefined)
 
-  const cleanVersion = version.startsWith("v") ? version : `v${version}`
-  const releaseUrl = `https://github.com/Latitudes-Dev/shuvcode/releases/tag/${cleanVersion}`
-  const npmUrl = `https://www.npmjs.com/package/shuvcode/v/${cleanVersion.slice(1)}`
+  if (!content) throw new Error("DISCORD_MESSAGE or RELEASE_VERSION environment variable is required")
 
-  // Build content with changelog prioritized over thank yous
-  const content = formatDiscordContent(changelog, cleanVersion, releaseUrl, npmUrl)
-
-  console.log(`Posting release notes for ${cleanVersion} to Discord...`)
-  console.log(`Content length: ${content.length} characters`)
-  console.log("Content preview:")
+  console.log(`Content length: ${content.length}`)
+  console.log("Preview:")
   console.log("---")
   console.log(content.slice(0, 500) + (content.length > 500 ? "..." : ""))
   console.log("---")
 
-  await postToDiscord(threadId, token, content)
+  await post(id, auth, content)
 }
 
-main().catch((error) => {
-  console.error("Failed to post to Discord:", error.message)
+main().catch((err) => {
+  console.error("Failed to post to Discord:", err instanceof Error ? err.message : String(err))
   process.exit(1)
 })

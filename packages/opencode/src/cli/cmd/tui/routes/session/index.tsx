@@ -534,7 +534,12 @@ export function Session() {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         const revert = session()?.revert?.messageID
-        const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
+        const message = messages().findLast((x) => {
+          if (x.role !== "user") return false
+          if (revert && x.id >= revert) return false
+          const parts = sync.data.part[x.id]
+          return parts?.some((p) => p.type === "text" && !p.synthetic && !p.ignored)
+        })
         if (!message) return
         sdk.client.session
           .revert({
@@ -549,7 +554,7 @@ export function Session() {
           parts.reduce(
             (agg, part) => {
               if (part.type === "text") {
-                if (!part.synthetic) agg.input += part.text
+                if (!part.synthetic && !part.ignored) agg.input += part.text
               }
               if (part.type === "file") agg.parts.push(part)
               return agg

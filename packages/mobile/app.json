@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "OpenPad",
+    "slug": "openpad",
+    "version": "1.0.0",
+    "scheme": "openpad",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.openpad.app"
+    },
+    "android": {
+      "package": "com.openpad.app",
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#131010"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow OpenPad to access your photos so you can attach images to chats.",
+          "cameraPermission": "Allow OpenPad to use your camera so you can capture images to attach to chats."
+        }
+      ]
+    ]
+  }
+}
