@@ -3,15 +3,17 @@ import { Session } from "@/session"
 import { MessageV2 } from "@/session/message-v2"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
+import { ProviderID, ModelID } from "@/provider/schema"
+import { MessageID, PartID, type SessionID } from "@/session/schema"
 import { ulid } from "ulid"
 import os from "os"
 import path from "path"
 import fs from "fs/promises"
 
 describe("Session Status Downgrade Guard", () => {
-  let sessionID: string
-  let messageID: string
-  let partID: string
+  let sessionID: SessionID
+  let messageID: MessageID
+  let partID: PartID
   let testDir: string
 
   beforeEach(async () => {
@@ -26,17 +28,17 @@ describe("Session Status Downgrade Guard", () => {
           title: "Test Session",
         })
         sessionID = session.id
-        messageID = Identifier.ascending("message")
-        partID = Identifier.ascending("part")
+        messageID = MessageID.ascending()
+        partID = PartID.ascending()
 
         await Session.updateMessage({
           id: messageID,
           role: "assistant",
           sessionID: sessionID,
-          parentID: Identifier.ascending("message"),
+          parentID: MessageID.ascending(),
           agent: "build",
-          modelID: "gpt-4",
-          providerID: "openai",
+          modelID: ModelID.make("gpt-4"),
+          providerID: ProviderID.openai,
           mode: "build",
           path: { cwd: testDir, root: testDir },
           cost: 0,

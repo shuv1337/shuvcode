@@ -25,7 +25,7 @@ const { Session } = await import("../../src/session")
 const { SessionPrompt } = await import("../../src/session/prompt")
 const { Command } = await import("../../src/command")
 const { Bus } = await import("../../src/bus")
-const { Identifier } = await import("../../src/id/id")
+const { SessionID } = await import("../../src/session/schema")
 
 async function withInstance(fn: () => Promise<void>) {
   await using tmp = await tmpdir()
@@ -134,7 +134,7 @@ test("SessionPrompt.command blocks session-only commands for missing sessions", 
   }
 
   await withInstance(async () => {
-    const missingSessionID = Identifier.ascending("session")
+    const missingSessionID = SessionID.descending()
     const errors: Array<{ type: string; properties: any }> = []
     const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => {
       errors.push(event)
