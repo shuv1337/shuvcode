@@ -1,5 +1,5 @@
 import { Prompt, type PromptRef } from "../component/prompt"
-import { createEffect, createMemo, createSignal, onMount } from "solid-js"
+import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Logo } from "../component/logo"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
@@ -31,10 +31,12 @@ export function Home() {
   const dimensions = useTerminalDimensions()
   const tuiConfig = useTuiConfig()
   const promptMaxWidth = createMemo(() => {
+    const available = Math.max(1, dimensions().width - 4)
     const configured = tuiConfig.prompt?.max_width
-    if (configured === "auto") return Math.max(75, Math.floor(dimensions().width * 0.7))
-    return configured ?? 75
+    if (configured === "auto") return Math.min(available, Math.max(40, Math.floor(dimensions().width * 0.7)))
+    return Math.min(available, configured ?? 75)
   })
+  const showLogo = createMemo(() => dimensions().width >= 80 && dimensions().height >= 24)
   let sent = false
 
   onMount(() => {
@@ -72,12 +74,14 @@ export function Home() {
       <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
-        <box flexShrink={0}>
-          <pluginRuntime.Slot name="home_logo" mode="replace">
-            <Logo />
-          </pluginRuntime.Slot>
-        </box>
-        <box height={1} minHeight={0} flexShrink={1} />
+        <Show when={showLogo()}>
+          <box flexShrink={0}>
+            <pluginRuntime.Slot name="home_logo" mode="replace">
+              <Logo />
+            </pluginRuntime.Slot>
+          </box>
+          <box height={1} minHeight={0} flexShrink={1} />
+        </Show>
         <box width="100%" maxWidth={promptMaxWidth()} zIndex={1000} paddingTop={1} flexShrink={0}>
           <pluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
             <Prompt ref={bind} right={<pluginRuntime.Slot name="home_prompt_right" />} placeholders={placeholder} />
