@@ -161,3 +161,12 @@ const table = sqliteTable("session", {
 - Keep EventV2 replay owner claims separate from clustered Session execution ownership.
 - Keep the System Context algebra and built-ins in `src/system-context`; keep Context Source producers with their observed domains, and keep Session History selection plus Context Checkpoint persistence Session-owned. The runner composes all context producers explicitly in `loadSystemContext`; there is no context registry.
 - The durable Applied record is what the model was last told, per source. Reconcile narrates drift as chronological System updates and never rewrites the baseline; only completed compaction rebaselines, and move or committed revert resets the checkpoint. Unavailable sources keep the model's prior belief, blocking only a session's first baseline.
+
+## Fork: shuvcode (Latitudes-Dev/shuvcode)
+
+- This workspace is a fork of `anomalyco/opencode`. Never open PRs against upstream.
+- Default port branch: `integration-v2` (re-based on `upstream/v2`). Frozen v1 rollback: `integration` @ tag `fork-v1-final`.
+- Record upstream sync state in `.github/last-synced-tag` as a **v2 commit SHA** (no v2 release tags yet).
+- Merge upstream: `git fetch upstream v2 && git merge upstream/v2` on `integration-v2`; prefer TUI plugins in `packages/tui/src/feature-plugins/` over patching components.
+- Sync automation: `.github/workflows/upstream-sync.yml` + `script/sync/release-watcher.sh` watch `anomalyco/opencode` branch `v2`.
+- CLI binary name: `shuvcode`. Keep `packages/core/src/global.ts` `app = "opencode"` for XDG path compatibility.

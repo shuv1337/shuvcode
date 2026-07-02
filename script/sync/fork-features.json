@@ -1,0 +1,1733 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Fork-specific features from upstream PRs that must be preserved during merges",
+  "lastUpdated": "2026-07-02",
+  "lastChange": "v2 port on integration-v2: branding, TUI plugins, L-1 plugin logging, sync retarget to upstream/v2.",
+  "note": "v2 baseline @ upstream/v2. Binary=shuvcode, npm=shuvcode, version scheme 1.17.13-1. XDG paths unchanged (core global app=opencode).",
+  "v2ForkPatches": [
+    {
+      "id": "L-1",
+      "title": "Plugin load failure logging",
+      "files": ["packages/core/src/config/plugin/external.ts"],
+      "note": "Effect.tapErrorCause before Effect.ignoreCause"
+    },
+    {
+      "id": "L-2",
+      "title": "Per-request LLM route hook",
+      "decision": "interim-wrapper",
+      "note": "Defer aisdk.language wrapper until routing needed; watch upstream #34765"
+    },
+    {
+      "id": "branding-v2",
+      "title": "CLI/TUI shuvcode branding",
+      "files": [
+        "packages/cli/script/build.ts",
+        "packages/cli/src/commands/commands.ts",
+        "packages/cli/src/services/updater.ts",
+        "packages/opencode/src/index.ts",
+        "packages/opencode/src/installation/index.ts",
+        "packages/script/src/index.ts",
+        "packages/tui/src/feature-plugins/home/logo.tsx"
+      ]
+    }
+  ],
+  "forkDependencies": {
+    "description": "NPM dependencies added by fork features that MUST be preserved during package.json merges. These are frequently lost when accepting upstream version bumps.",
+    "packages/opencode/package.json": [
+      {
+        "name": "ghostty-opentui",
+        "version": "1.3.7",
+        "reason": "Required for PR 4791 - Bash output with ANSI terminal emulation",
+        "usedBy": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx", "packages/opencode/src/tool/bash.ts"]
+      }
+    ],
+    "packages/app/package.json": [
+      {
+        "name": "vite-plugin-pwa",
+        "version": "1.2.0",
+        "reason": "Required for Desktop PWA service worker and offline support",
+        "usedBy": ["packages/app/vite.config.ts"]
+      }
+    ]
+  },
+  "mergeNotes": [
+    {
+      "date": "2026-01-15",
+      "note": "Husky pre-push runs `bun turbo typecheck`. Ensure `package.json` packageManager matches installed Bun (currently bun@1.3.6) or push will fail."
+    },
+    {
+      "date": "2026-01-15",
+      "note": "Console app WebGPU/Stripe additions required ambient type shims in packages/console/app/src/global.d.ts during v1.1.23 sync."
+    }
+  ],
+  "removedFeatures": [
+    {
+      "pr": 5568,
+      "title": "Sessions sidebar view",
+      "author": "hashcacher",
+      "removedDate": "2025-12-22",
+      "reason": "Buggy implementation - removed from fork",
+      "filesRemoved": ["packages/opencode/src/cli/cmd/tui/routes/session/sidebar-sessions.tsx"],
+      "configRemoved": ["sessions_sidebar_toggle keybind"]
+    },
+    {
+      "pr": "upstream",
+      "title": "Custom server URL settings dialog",
+      "author": "fork",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream now provides DialogSelectServer with equivalent functionality. Simplified to align with upstream while maintaining shuv.ai domain support.",
+      "filesRemoved": ["packages/app/src/components/dialog-server-settings.tsx", "packages/app/src/lib/server-url.ts"],
+      "note": "Server URL handling simplified in app.tsx to match upstream. shuv.ai domains are supported alongside opencode.ai."
+    },
+    {
+      "pr": "upstream",
+      "title": "Open Project button and command",
+      "author": "upstream",
+      "removedDate": "2025-12-30",
+      "reason": "Upstream's Open Project uses native file picker which doesn't work in web browsers. Our Add Project dialog (DialogCreateProject) with folder browser provides better web app experience.",
+      "filesRemoved": ["packages/app/src/components/dialog-select-directory.tsx"],
+      "codeRemoved": [
+        "chooseProject() function in layout.tsx and home.tsx",
+        "project.open command with mod+o keybind",
+        "Open project sidebar button"
+      ],
+      "note": "Users should use Add Project button which opens DialogCreateProject with folder browser, git clone, and create new project tabs."
+    },
+    {
+      "pr": 234,
+      "title": "Remove OpenCode Mark logo component entirely",
+      "author": "fork",
+      "removedDate": "2026-01-01",
+      "reason": "The OpenCode 'O' Mark SVG logo component is removed from the UI package. Fork uses shuvcode ASCII branding (AsciiLogo/AsciiMark) instead.",
+      "filesModified": [
+        "packages/ui/src/components/logo.tsx",
+        "packages/ui/src/components/logo.css",
+        "packages/app/src/pages/session.tsx"
+      ],
+      "codeRemoved": [
+        "Mark component export from logo.tsx",
+        "[data-component=\"logo-mark\"] CSS styles",
+        "Duplicate Header function in session.tsx (upstream moved status bar to header, we keep StatusBar)"
+      ],
+      "note": "Issue #234 - Fork removes upstream's OpenCode Mark logo. Uses AsciiLogo/AsciiMark for shuvcode branding. Also removed duplicate Header from session.tsx to rely on layout.tsx header."
+    },
+    {
+      "pr": 0,
+      "title": "Hide StatusBar in PWA mode",
+      "author": "fork",
+      "removedDate": "2026-01-01",
+      "reason": "StatusBar at bottom conflicts with iPhone dynamic island and home indicator in PWA standalone mode. Hidden in PWA while kept for browser use.",
+      "filesModified": ["packages/app/src/context/platform.tsx", "packages/app/src/pages/session.tsx"],
+      "codeAdded": [
+        "isPWA() function in platform.tsx for PWA detection",
+        "Show when={!isPWA()} wrapper around StatusBar"
+      ],
+      "note": "PWA users get clean full-screen experience without StatusBar. Browser users still see StatusBar with server status, path, LSP/MCP indicators."
+    },
+    {
+      "pr": "ariane-emory/glob-permissions",
+      "title": "Granular File Permissions with glob patterns",
+      "author": "ariane-emory",
+      "removedDate": "2026-01-04",
+      "reason": "Upstream v1.1.1 introduced PermissionNext with Wildcard pattern matching which provides similar functionality. Abandoned our minimatch-based resolveFilePermission() in favor of upstream's implementation.",
+      "filesModified": [
+        "packages/opencode/src/agent/agent.ts",
+        "packages/opencode/src/config/config.ts",
+        "packages/opencode/src/tool/edit.ts",
+        "packages/opencode/src/tool/write.ts",
+        "packages/opencode/src/tool/patch.ts"
+      ],
+      "codeRemoved": [
+        "resolveFilePermission() function in agent.ts",
+        "minimatch import and glob pattern matching logic",
+        "Agent.resolveFilePermission calls in edit/write/patch tools"
+      ],
+      "note": "Upstream's PermissionNext uses Wildcard.match for pattern matching. Config format remains compatible."
+    },
+    {
+      "pr": 0,
+      "title": "Fork worktree ID differentiation",
+      "author": "fork",
+      "removedDate": "2026-01-04",
+      "reason": "Upstream v1.1.1 introduced proper sandbox/worktree support with Instance.worktree and Project.sandboxes. Our linked worktree ID scheme ({rootCommit}-{hash}) replaced by upstream's simpler approach.",
+      "filesModified": ["packages/opencode/src/project/project.ts", "packages/opencode/test/project/project.test.ts"],
+      "codeRemoved": [
+        "Linked worktree ID generation with separator",
+        "opencode-worktree hash file creation",
+        "Session migration for linked worktrees"
+      ],
+      "note": "Upstream uses Project.sandboxes array to track worktrees. Main worktree is always Project.worktree."
+    },
+    {
+      "pr": "CVE-2026-22813",
+      "title": "Query parameter server URL override",
+      "author": "fork",
+      "removedDate": "2026-01-12",
+      "reason": "Critical XSS vulnerability (GHSA-c83v-7274-4vgp, CVE-2026-22813) - malicious websites could execute commands via ?url= parameter. Upstream fixed in v1.1.10 by removing this feature.",
+      "filesModified": ["packages/app/src/app.tsx"],
+      "codeRemoved": [
+        "const param = new URLSearchParams(document.location.search).get('url')",
+        "if (param) return param"
+      ],
+      "note": "The ?url= query parameter allowed arbitrary server URL override, enabling XSS on localhost:4096. Attackers could inject malicious server URLs that return XSS payloads, then use /pty/ API to execute arbitrary commands."
+    }
+  ],
+  "apiDependencies": [],
+  "features": [
+    {
+      "pr": 6476,
+      "title": "Allow users to edit suggested changes before applying",
+      "author": "dmmulroy",
+      "status": "open",
+      "description": "When permission is set to ask, users can press 'e' to open their editor and modify the suggested changes before accepting. Changes are tracked and the model is informed that user modified the edit.",
+      "files": [
+        "packages/opencode/src/permission/editor.ts",
+        "packages/opencode/src/permission/index.ts",
+        "packages/opencode/src/tool/edit.ts",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/util/text.ts",
+        "packages/opencode/src/config/config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/permission/editor.ts",
+          "description": "PermissionEditor namespace with canEdit, getContent, getExtension, getStartLine, hasChanges, computeDiff",
+          "markers": ["export namespace PermissionEditor", "SingleFileMetadata", "SingleFileModifyData"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "handleEditPermission function and permission_edit keybind handler",
+          "markers": ["handleEditPermission", "permission_edit", "PermissionEditor.canEdit"]
+        }
+      ]
+    },
+    {
+      "pr": 6507,
+      "title": "Optimize Ripgrep.tree() for large repositories",
+      "author": "Karavil",
+      "status": "open",
+      "description": "109x performance improvement for Ripgrep.tree() in large repositories by processing ripgrep output line-by-line instead of accumulating in memory",
+      "files": ["packages/opencode/src/file/ripgrep.ts", "packages/opencode/test/file/ripgrep.test.ts"]
+    },
+    {
+      "pr": 5917,
+      "title": "Draggable sidebar resize",
+      "author": "agustif",
+      "status": "open",
+      "description": "Click and drag the sidebar edge to resize width, persisted to KV store. Handle is only visible on hover/drag with a wider hit area.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Drag state signals, width persistence, and mouse event handlers for sidebar resize",
+          "markers": [
+            "sidebar_width",
+            "setSidebarWidth",
+            "clampSidebarWidth",
+            "saveSidebarWidth",
+            "startSidebarDrag",
+            "updateSidebarDrag",
+            "endSidebarDrag",
+            "onMouseDrag",
+            "onMouseUp",
+            "onMouseDragEnd"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Hover-only resize handle with widened hit area",
+          "markers": [
+            "sidebarHandleWidth",
+            "sidebarHandleHover",
+            "showSidebarHandle",
+            "onMouseDown",
+            "onMouseOver",
+            "onMouseOut",
+            "borderColor={draggingSidebar()",
+            "backgroundColor={showSidebarHandle()"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+          "description": "Dynamic width from props instead of fixed 42",
+          "markers": ["width={props.width}"]
+        }
+      ]
+    },
+    {
+      "pr": 5968,
+      "title": "Better styling for small screens",
+      "author": "rekram1-node",
+      "status": "reverted-upstream",
+      "description": "Responsive TUI layout that conditionally hides elements on short (<40 rows) or narrow (<120 cols) terminals. Uses useTerminalDimensions hook for reactive sizing. Upstream reverted this in 99633cb but we preserve it for better small screen UX.",
+      "upstreamRevertCommit": "99633cb2996e7b99c4e3a9bfa3f95cbd97f9f8c5",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+          "description": "Terminal dimension hooks and tall layout adjustments",
+          "markers": ["useTerminalDimensions", "const tall = createMemo(() => dimensions().height > 40)"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+          "description": "Truncate title on short terminals",
+          "markers": ["truncate={!tall()}"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Wide layout guard for responsive sidebar",
+          "markers": ["const wide = createMemo(() => dimensions().width > 120)", "Match when={!wide()}"]
+        }
+      ]
+    },
+    {
+      "pr": 4898,
+      "title": "Search in messages",
+      "author": "OpeOginni",
+      "status": "open",
+      "description": "Ctrl+F to search through session messages with highlighting",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/prompt/search.tsx",
+        "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"
+      ]
+    },
+    {
+      "pr": 4791,
+      "title": "Bash output with ANSI",
+      "author": "remorses",
+      "status": "open",
+      "description": "Full terminal emulation for bash output with color support",
+      "files": [
+        "packages/opencode/package.json",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/tool/bash.ts",
+        "packages/opencode/script/build.ts"
+      ],
+      "requiredDependencies": [
+        {
+          "package": "packages/opencode/package.json",
+          "dependency": "ghostty-opentui",
+          "version": "1.3.7",
+          "note": "CRITICAL: This dep is frequently lost during merges. Always verify it exists after accepting upstream package.json changes."
+        }
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/script/build.ts",
+          "description": "Cross-platform install for ghostty-opentui native bindings required for build",
+          "markers": ["bun install --os=\"*\" --cpu=\"*\" ghostty-opentui"]
+        }
+      ]
+    },
+    {
+      "pr": 4900,
+      "title": "Double Ctrl+C to exit",
+      "author": "AmineGuitouni",
+      "status": "fork-only",
+      "description": "Require double Ctrl+C within 2 seconds to prevent accidental exits, with toast warning",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/search.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Double-press exit guard in main prompt",
+          "markers": ["lastExitAttempt", "now - lastExitAttempt < 2000", "Press again to exit"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/search.tsx",
+          "description": "Double-press exit guard in search prompt",
+          "markers": ["lastExitAttempt", "now - lastExitAttempt < 2000", "Press again to exit"]
+        }
+      ]
+    },
+    {
+      "pr": 4709,
+      "title": "Live token usage during streaming",
+      "author": "arsham",
+      "status": "open",
+      "description": "Real-time token tracking and display during model responses",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/session/compaction.ts",
+        "packages/opencode/src/session/message-v2.ts",
+        "packages/opencode/src/session/processor.ts",
+        "packages/opencode/src/session/prompt.ts",
+        "packages/opencode/src/util/token.ts",
+        "packages/sdk/js/src/gen/types.gen.ts"
+      ]
+    },
+    {
+      "pr": 4865,
+      "title": "Subagents sidebar with clickable navigation",
+      "author": "franlol",
+      "status": "open",
+      "description": "Show subagents in sidebar with click-to-navigate and parent keybind",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/routes/session/header.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx",
+        "packages/opencode/src/config/config.ts",
+        "packages/sdk/js/src/gen/types.gen.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "goToParent() function and session_parent command registration",
+          "markers": ["function goToParent()", "keybind: \"session_parent\""]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "session_parent keybind in Keybinds schema",
+          "markers": ["session_parent: z.string()"]
+        }
+      ]
+    },
+    {
+      "pr": 4515,
+      "title": "Show plugins in /status",
+      "author": "spoons-and-mirrors",
+      "status": "merged",
+      "description": "Display configured plugins in /status dialog alongside MCP/LSP servers",
+      "files": ["packages/opencode/src/cli/cmd/tui/component/dialog-status.tsx"]
+    },
+    {
+      "pr": 5508,
+      "title": "Cache management command",
+      "author": "JosXa",
+      "status": "open",
+      "description": "Add opencode cache info and opencode cache clean commands for plugin cache management",
+      "files": [
+        "packages/opencode/src/cli/cmd/cache.ts",
+        "packages/opencode/src/cli/cmd/uninstall.ts",
+        "packages/opencode/src/cli/util.ts",
+        "packages/opencode/src/index.ts"
+      ]
+    },
+    {
+      "pr": "fork-140",
+      "title": "Toggle transparent background",
+      "author": "JosXa",
+      "status": "open",
+      "description": "Command palette toggle for transparent TUI background, works with any theme. v1.1.4 fix: normalizeBackgrounds() ensures opaque fallbacks for transparent themes (like lucent-orng) when toggle is off.",
+      "files": ["packages/opencode/src/cli/cmd/tui/app.tsx", "packages/opencode/src/cli/cmd/tui/context/theme.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+          "description": "Transparent state, resolveTheme, and normalizeBackgrounds for opaque fallbacks",
+          "markers": ["transparent", "setTransparent", "resolveTheme", "normalizeBackgrounds"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
+          "description": "Toggle transparency command in command palette",
+          "markers": ["Toggle transparency", "setTransparent"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Toggle session header visibility",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Command palette option to hide/show the session header when sidebar is hidden. Persists preference via KV store.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "showHeader signal declaration persisted to KV store",
+          "markers": ["const [showHeader, setShowHeader] = kv.signal(\"header_visible\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Command palette entry for toggling header visibility",
+          "markers": ["Hide header", "Show header", "session.toggle.header"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Show condition for Header including showHeader check",
+          "markers": ["showHeader()"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop slash commands and shell input mode",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Desktop app support for slash commands with autocomplete (type / to see commands) and shell input mode (type ! to enter shell mode)",
+      "files": ["packages/app/src/components/prompt-input.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "Prompt state includes slash popover and shell mode",
+          "markers": ["popover: \"at\" | \"slash\"", "mode: \"normal\" | \"shell\""]
+        },
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "Slash command list and popover activation",
+          "markers": ["const slashCommands = createMemo<SlashCommand[]>", "setStore(\"popover\", \"slash\")"]
+        },
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "Shell mode detection",
+          "markers": ["setStore(\"mode\", \"shell\")", "store.mode === \"shell\""]
+        },
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "SDK command execution",
+          "markers": ["command.trigger(cmd.id, \"slash\")", "sync.data.command.find((c) => c.name === commandName)"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop Night Owl theme",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Night Owl theme for desktop app with default theme set to nightowl",
+      "files": [
+        "packages/ui/src/theme/themes/nightowl.json",
+        "packages/ui/src/theme/default-themes.ts",
+        "packages/app/src/app.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/ui/src/theme/themes/nightowl.json",
+          "description": "Night Owl theme definition",
+          "markers": ["\"id\": \"nightowl\"", "\"name\": \"Night Owl\""]
+        },
+        {
+          "file": "packages/ui/src/theme/default-themes.ts",
+          "description": "Night Owl theme registered in defaults",
+          "markers": ["import nightowlThemeJson", "nightowl: nightowlTheme"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Night Owl theme set as default",
+          "markers": ["ThemeProvider defaultTheme=\"nightowl\""]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop header font size and mobile dropdown fixes",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Consistent font sizes for project/session selects in header and mobile dropdown width constraints",
+      "files": ["packages/app/src/components/header.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/components/header.tsx",
+          "description": "Project/session Select components use 14px text styling",
+          "markers": ["class=\"text-14-regular text-text-base\""]
+        },
+        {
+          "file": "packages/app/src/components/header.tsx",
+          "description": "Mobile session dropdown constrained to viewport",
+          "markers": ["max-w-[calc(100vw-180px)]", "md:max-w-md"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Share functionality for shuv.ai infrastructure",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Enable /share functionality for shuvcode by deploying rebranded share infrastructure to share.shuv.ai. Includes CLI defaults, import command dual-API support, and enterprise package rebranding.",
+      "files": [
+        "packages/enterprise/src/routes/share/[shareID].tsx",
+        "packages/enterprise/src/routes/s/[id].ts",
+        "packages/enterprise/src/entry-server.tsx",
+        "packages/enterprise/public/site.webmanifest",
+        "packages/opencode/src/share/share-next.ts",
+        "packages/opencode/src/cli/cmd/github.ts",
+        "packages/opencode/src/cli/cmd/import.ts",
+        "sst.share.config.ts",
+        ".github/workflows/snapshot.yml"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/enterprise/src/routes/share/[shareID].tsx",
+          "description": "Rebranded share page with shuvcode ASCII logo, GitHub link, and static OG image",
+          "markers": [
+            "import { AsciiLogo, AsciiMark } from",
+            "href=\"https://github.com/Latitudes-Dev/shuvcode\"",
+            "return `/social-share.png`",
+            "content=\"shuvcode - AI coding agent"
+          ]
+        },
+        {
+          "file": "packages/enterprise/src/routes/s/[id].ts",
+          "description": "Short URL redirect API route /s/{id} to /share/{id} with HTTP 301",
+          "markers": ["Location: `/share/${id}`", "status: 301"]
+        },
+        {
+          "file": "packages/opencode/src/share/share-next.ts",
+          "description": "Default share URL changed to share.shuv.ai with SHUVCODE_SHARE_URL env var support",
+          "markers": ["process.env.SHUVCODE_SHARE_URL", "https://share.shuv.ai"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/github.ts",
+          "description": "Share base URLs updated to share.shuv.ai / share.dev.shuv.ai",
+          "markers": ["https://share.dev.shuv.ai", "https://share.shuv.ai"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/import.ts",
+          "description": "Import command uses ShareNext.url() for dynamic share URL and parseShareUrl/transformShareData helpers",
+          "markers": ["parseShareUrl", "transformShareData", "ShareNext.url()"]
+        },
+        {
+          "file": "sst.share.config.ts",
+          "description": "SST deployment config for share service to shuv.ai domain",
+          "markers": ["name: \"shuv-share\"", "domain: \"share.\" + domain"]
+        },
+        {
+          "file": ".github/workflows/snapshot.yml",
+          "description": "Share deployment step in CI workflow",
+          "markers": ["Deploy Share to Cloudflare", "sst.share.config.ts"]
+        },
+        {
+          "file": "packages/enterprise/src/entry-server.tsx",
+          "description": "HTML document with Night Owl theme, Meslo font family CSS vars, and shuvcode title",
+          "markers": [
+            "<title>shuvcode</title>",
+            "data-theme=\"nightowl\"",
+            "#011627",
+            "meslo",
+            "--font-family-sans: 'Meslo'"
+          ]
+        },
+        {
+          "file": "packages/enterprise/public/site.webmanifest",
+          "description": "Web app manifest name changed to shuvcode",
+          "markers": ["\"name\": \"shuvcode\""]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop mobile responsiveness and dev server improvements",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Responsive layout via matchMedia, improved API URL resolution defaults, Vite proxy for API routes, and defensive array handling in global-sync",
+      "files": [
+        "packages/app/src/pages/layout.tsx",
+        "packages/app/src/entry.tsx",
+        "packages/app/src/context/global-sync.tsx",
+        "packages/app/vite.config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Responsive layout uses matchMedia for viewport state",
+          "markers": ["const smQuery = window.matchMedia(\"(min-width: 640px)\")", "setIsSmallViewport"]
+        },
+        {
+          "file": "packages/app/src/entry.tsx",
+          "description": "Smart API URL resolution based on protocol and environment",
+          "markers": ["location.hostname.includes(\"opencode.ai\")", "import.meta.env.VITE_OPENCODE_SERVER_HOST"]
+        },
+        {
+          "file": "packages/app/src/context/global-sync.tsx",
+          "description": "Defensive array check for session list API response",
+          "markers": ["const data = Array.isArray(x.data) ? x.data : []"]
+        },
+        {
+          "file": "packages/app/vite.config.ts",
+          "description": "Vite dev server proxy configuration for API routes",
+          "markers": ["const apiRoutes = [", "proxy: Object.fromEntries"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop mobile viewport overflow fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix horizontal overflow on mobile devices when viewing chat sessions. Content, text entry box, and submit button no longer spill outside viewport requiring horizontal scrolling.",
+      "files": ["packages/app/src/pages/session.tsx", "packages/app/src/components/prompt-input.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/pages/session.tsx",
+          "description": "Session root uses overflow hidden on mobile",
+          "markers": ["size-full overflow-hidden"]
+        },
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "Root container max-w-full constraint",
+          "markers": ["_max-h-[320px]"]
+        },
+        {
+          "file": "packages/app/src/components/prompt-input.tsx",
+          "description": "Bottom bar with min-w-0 overflow-hidden for proper flex shrinking",
+          "markers": ["flex items-center gap-2 min-w-0"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop app version constant",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Expose __APP_VERSION__ at build time for UI usage",
+      "files": ["packages/app/vite.config.ts", "packages/app/src/env.d.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/app/vite.config.ts",
+          "description": "Define __APP_VERSION__ from package.json at build time",
+          "markers": ["__APP_VERSION__", "pkg.version"]
+        },
+        {
+          "file": "packages/app/src/env.d.ts",
+          "description": "TypeScript declaration for __APP_VERSION__ global",
+          "markers": ["declare const __APP_VERSION__"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop review pane resizing and share commands",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Resizable session changes panel with persisted width, left padding fix in side-by-side mode, and /share /unshare slash commands for session sharing",
+      "files": [
+        "packages/app/src/context/layout.tsx",
+        "packages/app/src/pages/session.tsx",
+        "packages/app/src/pages/session/use-session-commands.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/context/layout.tsx",
+          "description": "Review pane width state and resize method in layout context",
+          "markers": ["width: createMemo(() => store.review?.width ?? 450)", "resize(width: number)"]
+        },
+        {
+          "file": "packages/app/src/pages/session.tsx",
+          "description": "ResizeHandle for desktop panel sizing",
+          "markers": ["<ResizeHandle", "edge=\"start\"", "layout.fileTree.width()"]
+        },
+        {
+          "file": "packages/app/src/pages/session/use-session-commands.tsx",
+          "description": "/share slash command for session sharing",
+          "markers": ["id: \"session.share\"", "slash: \"share\"", "sdk.client.session"]
+        },
+        {
+          "file": "packages/app/src/pages/session/use-session-commands.tsx",
+          "description": "/unshare slash command to remove shareable link",
+          "markers": ["id: \"session.unshare\"", "slash: \"unshare\"", "sdk.client.session"]
+        },
+        {
+          "file": "packages/ui/src/components/resize-handle.tsx",
+          "description": "Reverse prop for right-side panel resize handles",
+          "markers": ["reverse?: boolean", "data-reverse={local.reverse ? \"true\" : undefined}"]
+        },
+        {
+          "file": "packages/ui/src/components/resize-handle.css",
+          "description": "CSS for reversed horizontal resize handle positioning",
+          "markers": ["data-reverse=\"true\""]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Improved text file detection for SVG and extensionless files",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix SVG and text files (Dockerfile, Makefile, etc.) being incorrectly base64 encoded. Added binary content detection to properly serve text files with syntax highlighting.",
+      "files": ["packages/opencode/src/file/index.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "Binary content detection via null byte scanning for octet-stream files",
+          "markers": ["isBinaryByExtension(file)", "bytes[i] === 0", "hasBinary"]
+        },
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "SVG exclusion from base64 encoding - treat as text",
+          "markers": ["if (type === \"image/svg+xml\") return false"]
+        },
+        {
+          "file": "packages/opencode/src/file/index.ts",
+          "description": "Check application/octet-stream files for binary content before encoding",
+          "markers": ["if (type === \"application/octet-stream\") return \"check\"", "if (encode === \"check\")"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop image preview in file viewer",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Display actual image previews for PNG, JPG, GIF, WEBP files in file viewer tabs. Images are centered and scaled to fit with scroll support for large images. SVG renders as syntax-highlighted code.",
+      "files": ["packages/app/src/pages/session/file-tabs.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
+          "description": "Image preview detection logic excluding SVG",
+          "markers": [
+            "c?.encoding === \"base64\"",
+            "c?.mimeType?.startsWith(\"image/\")",
+            "c?.mimeType !== \"image/svg+xml\""
+          ]
+        },
+        {
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
+          "description": "Image rendering with data URL and centered container",
+          "markers": ["const imageDataUrl = createMemo(() =>", "src={imageDataUrl()}"]
+        },
+        {
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
+          "description": "Wait for file content to load before rendering to prevent blank pages",
+          "markers": [
+            "const contents = createMemo(() => state()?.content?.content ?? \"\")",
+            "const cacheKey = createMemo(() => sampledChecksum(contents()))"
+          ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Shell command cwd fix for new projects",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix shell commands failing on first message in newly created projects by using session.directory instead of Instance.directory for working directory",
+      "files": ["packages/opencode/src/session/prompt.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Use session.directory as authoritative cwd source in shell function",
+          "markers": ["const cwd = session.directory ?? Instance.directory"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Project browse API endpoint",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Add GET /project/browse endpoint for discovering potential projects from $HOME with fuzzy search, git repo detection, and existing project indicators",
+      "files": [
+        "packages/opencode/src/server/project.ts",
+        "packages/sdk/js/src/v2/gen/sdk.gen.ts",
+        "packages/sdk/js/src/v2/gen/types.gen.ts",
+        "packages/sdk/openapi.json"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/server/project.ts",
+          "description": "DirectoryInfo schema and scanDirectories function",
+          "markers": [
+            "const DirectoryInfo = z",
+            "async function scanDirectories(rootPath: string, maxDepth = 2)",
+            "isGitRepo",
+            "isExistingProject"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/server/project.ts",
+          "description": "GET /browse endpoint with fuzzy search via fuzzysort",
+          "markers": ["\"/browse\"", "operationId: \"project.browse\"", "fuzzysort.go(query, allDirs"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Dialog size prop",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Add size prop to Dialog component with sm, md, lg variants for different dialog heights",
+      "files": ["packages/ui/src/components/dialog.tsx", "packages/ui/src/components/dialog.css"],
+      "criticalCode": [
+        {
+          "file": "packages/ui/src/components/dialog.tsx",
+          "description": "Size prop on DialogProps and data-size attribute",
+          "markers": ["size?: \"sm\" | \"md\" | \"lg\"", "data-size={props.size}"]
+        },
+        {
+          "file": "packages/ui/src/components/dialog.css",
+          "description": "Large dialog size variant with 640px height",
+          "markers": ["&[data-size=\"lg\"]", "height: min(calc(100vh - 16px), 640px)"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Prevent globalSync.child error on home page",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Guard against calling globalSync.child() with empty directory when on home page",
+      "files": ["packages/app/src/pages/layout.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Guard sessions memo to return empty array when no directory",
+          "markers": [
+            "const currentDir = createMemo(() => decode64(params.dir)",
+            "if (!currentDir() || !currentSession) return"
+          ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Add project dialog with folder browser (replaces Open Project)",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Redesigned project dialog with tabbed interface: Add Existing tab for browsing/searching folders from $HOME, Create New tab for path input, Git Clone tab for cloning repos. Uses List component for keyboard navigation and shows git/added badges. This replaces upstream's Open Project functionality which uses native file picker (doesn't work in web browsers).",
+      "files": ["packages/app/src/components/dialog-create-project.tsx", "packages/app/src/pages/home.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Tab state and switcher buttons",
+          "markers": [
+            "const [activeTab, setActiveTab] = createSignal<\"create\" | \"existing\">(\"existing\")",
+            "variant={activeTab() === \"existing\" ? \"secondary\" : \"ghost\"}"
+          ]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Fetch directories function for List component",
+          "markers": [
+            "async function fetchDirectories(query: string): Promise<DirectoryInfo[]>",
+            "globalSDK.client.project.browse"
+          ]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "List component with folder browser",
+          "markers": ["<List<DirectoryInfo>", "items={fetchDirectories}", "filterKeys={[\"name\", \"path\"]}"]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Directory item rendering with git/added badges",
+          "markers": ["dir.isGitRepo ? \"github\" : \"folder\"", "dir.isExistingProject"]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Dialog uses lg size for more folder visibility",
+          "markers": ["<Dialog title=\"Add Project\" size=\"lg\">"]
+        },
+        {
+          "file": "packages/app/src/pages/home.tsx",
+          "description": "Single Add project button on home page (replaces Create+Open buttons)",
+          "markers": ["addProject()", "Add project"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI configurable spinner styles",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Choose from 60+ animated spinner styles for tool execution indicators via command palette (available globally, not just in sessions). Selection persisted to KV store.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+        "packages/opencode/src/cli/cmd/tui/app.tsx",
+        "packages/opencode/src/cli/cmd/tui/routes/session/sidebar.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+          "description": "SPINNERS collection and spinner state management functions",
+          "markers": ["export const SPINNERS", "setSpinnerStyle", "getSpinnerStyle", "getSpinnerFrame"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+          "description": "DialogSpinnerList component with live preview animation",
+          "markers": ["export function DialogSpinnerList", "currentFrame", "onMove", "kv.set(\"spinner_style\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
+          "description": "Global command palette action for spinner style selection",
+          "markers": ["Change spinner style", "spinner.style", "DialogSpinnerList"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI layout density for small terminals",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Responsive TUI layout that reduces vertical whitespace on small terminals. Includes tui.density config option (auto/comfortable/compact) and command palette toggles.",
+      "files": ["packages/opencode/src/config/config.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "tui.density config option schema",
+          "markers": ["density: z", ".enum([\"auto\", \"comfortable\", \"compact\"])"]
+        }
+      ],
+      "note": "Most of the layout-density feature was refactored or simplified. Only the config schema remains."
+    },
+    {
+      "pr": 0,
+      "title": "Configurable spinner animation speed",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Adjust spinner animation speed via command palette (20ms-500ms range). Selection persisted to KV store alongside spinner style.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+        "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+        "packages/opencode/src/cli/cmd/tui/app.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/spinners.ts",
+          "description": "Spinner interval constants and interval management functions",
+          "markers": [
+            "DEFAULT_SPINNER_INTERVAL_MS",
+            "MIN_SPINNER_INTERVAL_MS",
+            "MAX_SPINNER_INTERVAL_MS",
+            "SPINNER_INTERVAL_PRESETS",
+            "setSpinnerInterval",
+            "getSpinnerInterval"
+          ]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/dialog-spinner.tsx",
+          "description": "DialogSpinnerInterval component for speed selection",
+          "markers": ["export function DialogSpinnerInterval", "kv.set(\"spinner_interval\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/app.tsx",
+          "description": "Global command palette action for spinner speed selection",
+          "markers": ["Change spinner speed", "spinner.interval", "DialogSpinnerInterval"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop PWA mobile support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Full PWA support for mobile devices with dynamic island handling, mobile menu, review overlay with FAB button in header, and responsive layout. Includes split/inline diff toggle.",
+      "files": [
+        "packages/desktop/index.html",
+        "packages/app/src/index.css",
+        "packages/app/src/context/layout.tsx",
+        "packages/app/src/pages/layout.tsx",
+        "packages/app/src/pages/session.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/index.html",
+          "description": "iOS PWA meta tags and viewport-fit=cover",
+          "markers": ["apple-mobile-web-app-capable", "apple-mobile-web-app-status-bar-style", "viewport-fit=cover"]
+        },
+        {
+          "file": "packages/app/src/index.css",
+          "description": "Safe area insets and PWA standalone mode styles",
+          "markers": [
+            "--safe-area-inset-top",
+            "@media (display-mode: standalone)",
+            "background-color: var(--background-base)"
+          ]
+        },
+        {
+          "file": "packages/app/src/context/layout.tsx",
+          "description": "Mobile review panel state for cross-component communication",
+          "markers": ["reviewPanel:", "reviewPanelOpened", "setReviewPanelOpened"]
+        },
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Mobile sidebar overlay with slide-in panel",
+          "markers": ["layout.mobileSidebar.opened()", "-translate-x-full", "translate-x-0"]
+        },
+        {
+          "file": "packages/app/src/pages/session.tsx",
+          "description": "Mobile tab bar toggles review panel",
+          "markers": [
+            "mobileTab: \"session\" as \"session\" | \"changes\"",
+            "setStore(\"mobileTab\", \"changes\")",
+            "store.mobileTab === \"changes\""
+          ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop file viewer scrolling fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix scrolling in desktop file viewer tabs by adding proper flex and overflow constraints",
+      "files": ["packages/app/src/pages/session/file-tabs.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/pages/session/file-tabs.tsx",
+          "description": "Scrollable wrapper for code component with scroll overflow",
+          "markers": ["overflow=\"scroll\""]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Docker self-hosted deployment",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Multi-stage Dockerfile that builds shuvcode from source with ARM64/AMD64 support. Includes docker-compose.yml for easy deployment with workspace volume mounting, API key injection, and git user configuration. Static desktop UI bundled into container for web access.",
+      "files": ["packages/opencode/Dockerfile", "docker/docker-compose.yml"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Multi-stage build with builder and runtime stages",
+          "markers": ["FROM oven/bun:1 AS builder", "FROM alpine", "ENTRYPOINT [\"shuvcode\"]"]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Desktop UI copied to static directory for web serving",
+          "markers": [
+            "cp -r packages/desktop/dist packages/opencode/static",
+            "COPY --from=builder /app/packages/opencode/static"
+          ]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Multi-arch binary selection (ARM64/AMD64)",
+          "markers": ["TARGETARCH=amd64", "shuvcode-linux-x64-baseline-musl", "shuvcode-linux-arm64-musl"]
+        },
+        {
+          "file": "packages/opencode/Dockerfile",
+          "description": "Git installed and configured in runtime image",
+          "markers": ["apk add --no-cache libgcc libstdc++ ripgrep git", "git config --global init.defaultBranch main"]
+        },
+        {
+          "file": "docker/docker-compose.yml",
+          "description": "Workspace volume mounting and API key environment variables",
+          "markers": ["./workspace:/workspace", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIT_AUTHOR_NAME"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop PWA service worker",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Progressive Web App support via vite-plugin-pwa with offline caching, auto-update, and runtime caching for Google Fonts and jsDelivr CDN. Enables installable web app experience with proper manifest and iOS meta tags.",
+      "files": [
+        "packages/app/vite.config.ts",
+        "packages/desktop/index.html",
+        "packages/app/src/index.css",
+        "packages/app/public/site.webmanifest"
+      ],
+      "requiredDependencies": [
+        {
+          "package": "packages/app/package.json",
+          "dependency": "vite-plugin-pwa",
+          "version": "1.2.0",
+          "note": "CRITICAL: This dep is frequently lost during merges. Always verify it exists after accepting upstream package.json changes."
+        }
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/vite.config.ts",
+          "description": "VitePWA plugin configuration with workbox caching",
+          "markers": [
+            "import { VitePWA }",
+            "VitePWA({",
+            "registerType: \"autoUpdate\"",
+            "workbox:",
+            "maximumFileSizeToCacheInBytes: 5 * 1024 * 1024",
+            "runtimeCaching:"
+          ]
+        },
+        {
+          "file": "packages/app/vite.config.ts",
+          "description": "API route denylist to prevent caching backend calls",
+          "markers": ["navigateFallbackDenylist: apiRoutes.map"]
+        },
+        {
+          "file": "packages/desktop/index.html",
+          "description": "iOS PWA meta tags and viewport-fit=cover for safe areas",
+          "markers": [
+            "viewport-fit=cover",
+            "apple-mobile-web-app-capable",
+            "apple-mobile-web-app-status-bar-style",
+            "apple-mobile-web-app-title"
+          ]
+        },
+        {
+          "file": "packages/app/src/index.css",
+          "description": "Safe area CSS variables for notch/home indicator",
+          "markers": [
+            "--safe-area-inset-top: env(safe-area-inset-top",
+            "--safe-area-inset-bottom: env(safe-area-inset-bottom"
+          ]
+        },
+        {
+          "file": "packages/app/src/index.css",
+          "description": "PWA standalone mode styles for proper viewport sizing",
+          "markers": ["@media (display-mode: standalone)", "--pwa-top-offset", "min-height: 100dvh"]
+        },
+        {
+          "file": "packages/app/public/site.webmanifest",
+          "description": "Web app manifest with shuvcode branding and standalone display",
+          "markers": [
+            "\"name\": \"shuvcode\"",
+            "\"display\": \"standalone\"",
+            "\"display_override\": [\"standalone\", \"fullscreen\"]"
+          ]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Create project dialog with Git Clone tab",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Redesigned Create Project dialog with three tabs: Add Existing (folder browser), Create New (directory picker + project name), and Git Clone (URL input). Includes path validation and directory picker integration.",
+      "files": ["packages/app/src/components/dialog-create-project.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Three-tab interface for different project creation modes",
+          "markers": ["activeTab() === \"existing\"", "activeTab() === \"create\"", "activeTab() === \"clone\""]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Directory picker for Create New tab with parent path selection",
+          "markers": ["parentPath", "projectName", "handleCreateNew"]
+        },
+        {
+          "file": "packages/app/src/components/dialog-create-project.tsx",
+          "description": "Git clone functionality with URL input",
+          "markers": ["cloneUrl", "handleClone"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "shuvcode GitHub App integration",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "GitHub App integration (shuvcode-agent, App ID 2556448) for GitHub Actions workflow automation. Includes CLI commands for installation, API endpoints for token exchange, and workflow configuration.",
+      "files": [
+        "packages/opencode/src/cli/cmd/github.ts",
+        "packages/function/src/api.ts",
+        "github/index.ts",
+        "sst.api.config.ts",
+        ".github/workflows/opencode.yml"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/github.ts",
+          "description": "GitHub install command with shuvcode-agent app installation flow",
+          "markers": ["SHUVCODE_GITHUB_APP_ID", "api.shuv.ai", "shuvcode-agent"]
+        },
+        {
+          "file": "packages/function/src/api.ts",
+          "description": "Token exchange endpoints for GitHub Actions OIDC and PAT authentication",
+          "markers": ["/exchange_github_app_token", "shuvcode-github-action", "GITHUB_APP_ID"]
+        },
+        {
+          "file": "github/index.ts",
+          "description": "GitHub Action entrypoint with shuvcode bot detection",
+          "markers": ["shuvcode-agent[bot]", "api.shuv.ai"]
+        },
+        {
+          "file": "sst.api.config.ts",
+          "description": "SST deployment config for shuv-api with Durable Objects migration",
+          "markers": ["name: \"shuv-api\"", "SyncServer", "newSqliteClasses"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Session list archived filter",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Filter archived sessions from the session list in the desktop app sync context to prevent showing deleted/archived sessions.",
+      "files": ["packages/app/src/context/global-sync.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/context/global-sync.tsx",
+          "description": "Filter out archived sessions from session list",
+          "markers": ["!s.share?.archivedAt", "filter"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop Tauri shuvcode branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand desktop Tauri app to shuvcode. Package renamed to shuvcode-desktop, Rust lib to shuvcode_lib. Window API uses window.__SHUVCODE__ with __OPENCODE__ fallback. Environment variables prioritize SHUVCODE_* prefix (SHUVCODE_PORT, SHUVCODE_ALLOW_WAYLAND, SHUVCODE_CLIENT, SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY) with OPENCODE_* fallback for backwards compatibility.",
+      "files": [
+        "packages/desktop/package.json",
+        "packages/desktop/src-tauri/Cargo.toml",
+        "packages/desktop/src-tauri/Cargo.lock",
+        "packages/desktop/src-tauri/src/lib.rs",
+        "packages/desktop/src-tauri/src/windows.rs",
+        "packages/desktop/src-tauri/src/main.rs",
+        "packages/desktop/src/updater.ts",
+        "packages/app/src/app.tsx",
+        "packages/app/src/entry.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src-tauri/Cargo.toml",
+          "description": "Package and lib renamed to shuvcode-desktop and shuvcode_lib",
+          "markers": ["name = \"shuvcode-desktop\"", "name = \"shuvcode_lib\""]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/windows.rs",
+          "description": "Window API initialization with __SHUVCODE__ and __OPENCODE__ fallback",
+          "markers": ["window.__SHUVCODE__", "window.__OPENCODE__ ??= window.__SHUVCODE__"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/lib.rs",
+          "description": "SHUVCODE_PORT env var with OPENCODE_PORT fallback",
+          "markers": ["option_env!(\"SHUVCODE_PORT\")", "option_env!(\"OPENCODE_PORT\")"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/main.rs",
+          "description": "Wayland backend selection via shuvcode_lib",
+          "markers": ["shuvcode_lib::linux_display::read_wayland"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/src/cli.rs",
+          "description": "Sidecar env vars for shuvcode branding",
+          "markers": ["SHUVCODE_EXPERIMENTAL_ICON_DISCOVERY", "SHUVCODE_CLIENT"]
+        },
+        {
+          "file": "packages/app/src/app.tsx",
+          "description": "Window.__SHUVCODE__ interface with port/updaterEnabled",
+          "markers": ["__SHUVCODE__?: { updaterEnabled?: boolean; port?: number; serverReady?: boolean }"]
+        },
+        {
+          "file": "packages/app/src/entry.tsx",
+          "description": "Port resolution chain: __SHUVCODE__ -> env -> location",
+          "markers": ["window.__SHUVCODE__?.port", "import.meta.env.VITE_OPENCODE_SERVER_HOST"]
+        },
+        {
+          "file": "packages/desktop/src/updater.ts",
+          "description": "Updater enabled flag checks __SHUVCODE__ first",
+          "markers": ["window.__SHUVCODE__?.updaterEnabled ?? window.__OPENCODE__?.updaterEnabled"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "CLI binary name and help text branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Rebrand CLI binary name from 'opencode' to 'shuvcode' in --help output and all user-facing command suggestions. The yargs scriptName is set to 'shuvcode' and all help text references like 'Run: opencode auth add' are changed to 'Run: shuvcode auth add'.",
+      "files": [
+        "packages/opencode/src/index.ts",
+        "packages/opencode/src/server/server.ts",
+        "packages/opencode/src/mcp/index.ts",
+        "packages/opencode/src/acp/agent.ts",
+        "packages/opencode/src/cli/cmd/mcp.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/index.ts",
+          "description": "Yargs scriptName set to shuvcode for --help output",
+          "markers": [".scriptName(\"shuvcode\")"]
+        },
+        {
+          "file": "packages/opencode/src/server/server.ts",
+          "description": "Usage tracking auth error messages reference shuvcode",
+          "markers": ["Run: shuvcode auth add"]
+        },
+        {
+          "file": "packages/opencode/src/mcp/index.ts",
+          "description": "MCP auth required toast message references shuvcode",
+          "markers": ["Run: shuvcode mcp auth"]
+        },
+        {
+          "file": "packages/opencode/src/acp/agent.ts",
+          "description": "ACP auth method description and terminal-auth command use shuvcode",
+          "markers": ["Run `shuvcode auth login`", "command: \"shuvcode\"", "label: \"Shuvcode Login\""]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/mcp.ts",
+          "description": "MCP list command outro references shuvcode",
+          "markers": ["Add servers with: shuvcode mcp add"]
+        }
+      ]
+    },
+    {
+      "pr": 230,
+      "title": "Linux/Ghostty drag-and-drop and clipboard image paste support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Handle file:// URIs and text/uri-list format for Linux drag-and-drop. Added ctrl+shift+v keybind for Linux paste. Supports both Wayland and X11 display servers. Fixes image paste in terminal emulators like Ghostty.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/util/uri.ts",
+        "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+        "packages/opencode/src/config/config.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/util/uri.ts",
+          "description": "parseUriList() helper to parse file:// URIs and text/uri-list format",
+          "markers": ["export function parseUriList", "file://", "decodeURIComponent"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx",
+          "description": "Import parseUriList and handle file:// URIs in onPaste handler",
+          "markers": ["import { parseUriList }", "const uriPaths = parseUriList(pastedContent)"]
+        },
+        {
+          "file": "packages/opencode/src/config/config.ts",
+          "description": "input_paste keybind includes ctrl+shift+v for Linux",
+          "markers": ["input_paste:", "ctrl+v,ctrl+shift+v"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "iOS PWA viewport locking to prevent overscroll bounce",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Lock viewport on iOS PWA to prevent rubber-banding/overscroll bounce. Uses position:fixed on html/body/root, overscroll-behavior:none, and -webkit-overflow-scrolling for scroll containers.",
+      "files": [
+        "packages/app/src/index.css",
+        "packages/app/src/components/pull-to-refresh.tsx",
+        "packages/app/src/pages/layout.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/app/src/index.css",
+          "description": "PWA standalone mode viewport locking rules",
+          "markers": [
+            "@media (display-mode: standalone)",
+            "position: fixed",
+            "overscroll-behavior: none",
+            "-webkit-overflow-scrolling: touch"
+          ]
+        },
+        {
+          "file": "packages/app/src/index.css",
+          "description": "Session scroll container with contained overscroll",
+          "markers": [".session-scroll-container", "overscroll-behavior: contain"]
+        },
+        {
+          "file": "packages/app/src/components/pull-to-refresh.tsx",
+          "description": "Enabled prop to disable pull-to-refresh in PWA mode",
+          "markers": ["enabled", "props.enabled"]
+        },
+        {
+          "file": "packages/app/src/pages/layout.tsx",
+          "description": "Pass enabled={!isPWA()} to PullToRefresh component",
+          "markers": ["isPWA()", "enabled={!isPWA()}"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Plugin asset bundling with audio support",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Unified plugin asset bundling utility that copies static assets (including audio files) while preserving directory structure. Includes symlink/path traversal security checks.",
+      "files": [
+        "packages/opencode/src/util/asset-copy.ts",
+        "packages/opencode/src/bun/index.ts",
+        "packages/opencode/src/plugin/index.ts",
+        "packages/opencode/test/asset-copy.test.ts"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "ASSET_EXTENSIONS constant with audio formats",
+          "markers": ["ASSET_EXTENSIONS", ".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac"]
+        },
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "copyPluginAssets function with directory structure preservation",
+          "markers": ["copyPluginAssets", "realpath", "lstat", "isSymbolicLink"]
+        },
+        {
+          "file": "packages/opencode/src/util/asset-copy.ts",
+          "description": "resolvePluginRoot to find nearest package.json",
+          "markers": ["resolvePluginRoot", "package.json"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI bash spinner reactivity fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix TUI bash spinner not stopping after command completion. Changed isRunning from non-reactive constant to createMemo for proper reactivity.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "Bash component uses createMemo for isRunning state",
+          "markers": ["createMemo", "isRunning", "props.part.state.status"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI transparency normalization fix",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix transparent themes (like lucent-orng) showing invisible backgrounds when transparency toggle is off. normalizeBackgrounds() ensures opaque fallbacks for background colors.",
+      "files": ["packages/opencode/src/cli/cmd/tui/context/theme-utils.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme-utils.ts",
+          "description": "normalizeBackgrounds function with fallback chain",
+          "markers": ["normalizeBackgrounds", "backgroundMenu", "backgroundElement", "backgroundPanel"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Session metadata preservation during streaming",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fix metadata being lost during tool-call stream events. Preserves time.start in ctx.metadata and adds running guard to prevent status regression.",
+      "files": ["packages/opencode/src/session/prompt.ts", "packages/opencode/src/session/message-v2.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Preserve time.start in ctx.metadata updates",
+          "markers": ["time.start", "ctx.metadata"]
+        },
+        {
+          "file": "packages/opencode/src/session/message-v2.ts",
+          "description": "Running guard to prevent completed/error -> running regression",
+          "markers": ["status", "running", "completed", "error"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "TUI spinner for running tool calls and subagent tasks",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Show custom spinner animation for all running tool calls (not just bash) including subagent tasks. Extends InlineTool and BlockTool components to display spinner when tool state is 'running'.",
+      "files": ["packages/opencode/src/cli/cmd/tui/routes/session/index.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "InlineTool component shows spinner when isRunning() is true",
+          "markers": ["isRunning", "getSpinnerFrame", "Show when={isRunning()}", "theme.primary"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/routes/session/index.tsx",
+          "description": "BlockTool component shows spinner next to title when running",
+          "markers": ["isRunning", "getSpinnerFrame", "Show when={isRunning()}", "theme.primary"]
+        }
+      ]
+    },
+    {
+      "pr": 5432,
+      "title": "Stream ripgrep output to prevent memory exhaustion",
+      "author": "Hona",
+      "status": "cherry-picked",
+      "description": "Stream ripgrep output line-by-line instead of buffering all into memory. Kills ripgrep early after 100 matches to prevent memory exhaustion on massive result sets. Removes per-file stat() calls for performance.",
+      "files": ["packages/opencode/src/tool/grep.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/tool/grep.ts",
+          "description": "Stream ripgrep stdout with ReadableStream reader and early termination",
+          "markers": ["MATCH_LIMIT", "reader.read()", "proc.kill()", "truncated"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Plugin command execution and sessionOnly guard",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Execute plugin commands directly via plugin hooks instead of treating them as templates. Includes sessionOnly guard to block commands that require an existing session. Lost during v1.1.6 merge and restored.",
+      "files": ["packages/opencode/src/session/prompt.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "SessionOnly guard checks if session exists before executing command",
+          "markers": ["command.sessionOnly", "Session.get(input.sessionID)", "requires an existing session"]
+        },
+        {
+          "file": "packages/opencode/src/session/prompt.ts",
+          "description": "Plugin command execution via plugin hooks with error handling",
+          "markers": ["command.type === \"plugin\"", "Plugin.list()", "pluginCommand.execute", "Plugin.client()"]
+        }
+      ],
+      "note": "This code was originally added in commit 57ac84410 but lost during v1.1.6 upstream merge. Tests in test/command/plugin-commands.test.ts verify this behavior."
+    },
+    {
+      "pr": 283,
+      "title": "Attach command auto-pass cwd",
+      "author": "fork",
+      "status": "merged-upstream",
+      "description": "Upstream v1.1.49 replaced our fork's unconditional process.cwd() approach with a cleaner IIFE pattern and added basic auth header support. The feature is now superseded by upstream's --dir flag and --password option.",
+      "files": ["packages/opencode/src/cli/cmd/tui/attach.ts"],
+      "criticalCode": [],
+      "note": "Original fork fix was in commit 401b498c7. Upstream v1.1.49 changed behavior: directory is now only passed when --dir is specified, and added --password for basic auth. Feature removed during v1.1.49 sync."
+    },
+    {
+      "pr": 285,
+      "title": "Plugin loading align with upstream",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Removed npm plugin bundling to align with upstream and fix OAuth plugin asset resolution. Fork now imports plugins directly from node_modules like upstream, preserving __dirname-relative asset paths. Local file:// plugins still bundle for compiled binary compatibility.",
+      "files": ["packages/opencode/src/bun/index.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/bun/index.ts",
+          "description": "BunProc.install() returns node_modules path directly, no bundling",
+          "markers": ["return mod", "const mod = path.join(Global.Path.cache, \"node_modules\", pkg)"]
+        }
+      ],
+      "note": "Fork previously bundled npm plugins with Bun.build() which broke __dirname-relative asset paths in OAuth plugins (opencode-openai-codex-auth, opencode-antigravity-auth). Upstream imports directly from node_modules. Local plugins still use bundleLocalPlugin() for file:// paths."
+    },
+    {
+      "pr": 0,
+      "title": "Shuvcode upgrade and auto-update functionality",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Fork-specific package name, npm registry, GitHub releases URL, and install script for shuvcode upgrade command. Uses shuvcode npm package instead of opencode-ai, checks Latitudes-Dev/shuvcode GitHub releases, and uses shuv.ai install script.",
+      "files": ["packages/opencode/src/installation/index.ts", "packages/opencode/src/cli/cmd/tui/component/tips.tsx"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "PACKAGE_NAME constant for shuvcode npm package",
+          "markers": ["const PACKAGE_NAME = \"shuvcode\""]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm/bun/pnpm install commands use shuvcode package",
+          "markers": ["${PACKAGE_NAME}@${target}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "curl install uses shuv.ai install script",
+          "markers": ["https://shuv.ai/install"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "npm registry check uses shuvcode package",
+          "markers": ["${registry}/${PACKAGE_NAME}/${channel}"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "GitHub releases check uses Latitudes-Dev/shuvcode",
+          "markers": ["https://api.github.com/repos/Latitudes-Dev/shuvcode/releases/latest"]
+        },
+        {
+          "file": "packages/opencode/src/installation/index.ts",
+          "description": "USER_AGENT uses shuvcode package name",
+          "markers": ["${PACKAGE_NAME}/${CHANNEL}/${VERSION}"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/tips.tsx",
+          "description": "Tips reference shuvcode command and shuv.ai",
+          "markers": ["shuvcode upgrade", "shuv.ai", "ghcr.io/latitudes-dev/shuvcode"]
+        }
+      ],
+      "note": "CRITICAL: Upstream merges frequently overwrite these with anomalyco/opencode and opencode-ai references. Always verify after merge."
+    },
+    {
+      "pr": 0,
+      "title": "Web command proxies to app.shuv.ai",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "The 'shuvcode web' command proxies to app.shuv.ai instead of upstream's app.opencode.ai. This allows users to access our hosted web app instance.",
+      "files": ["packages/opencode/src/server/server.ts"],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/server/server.ts",
+          "description": "Proxy URL and host header for web command",
+          "markers": ["https://app.shuv.ai", "host: \"app.shuv.ai\""]
+        }
+      ],
+      "note": "CRITICAL: Upstream uses app.opencode.ai. This gets overwritten during merges. Always verify after merge that proxy URL is app.shuv.ai."
+    },
+    {
+      "pr": 0,
+      "title": "TUI shuvcode logo rendering",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "TUI keeps shuvcode ASCII logo strings while retaining the shadow-marker rendering helper. Requires tint helper export for shadow colors.",
+      "files": [
+        "packages/opencode/src/cli/cmd/tui/component/logo.tsx",
+        "packages/opencode/src/cli/cmd/tui/context/theme.tsx"
+      ],
+      "criticalCode": [
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/component/logo.tsx",
+          "description": "Shuvcode LOGO_LEFT/LOGO_RIGHT strings with SHADOW_MARKER rendering",
+          "markers": ["SHADOW_MARKER", "LOGO_LEFT", "LOGO_RIGHT"]
+        },
+        {
+          "file": "packages/opencode/src/cli/cmd/tui/context/theme.tsx",
+          "description": "Tint helper used by logo shadow rendering",
+          "markers": ["export function tint"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Inline theme preload script for app and desktop",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Use inline theme preload script with localStorage `theme` and keep background root classes to avoid FOUC; upstream switched to oc-theme-preload.js and different root classes.",
+      "files": ["packages/app/index.html", "packages/desktop/index.html"],
+      "criticalCode": [
+        {
+          "file": "packages/app/index.html",
+          "description": "Inline theme preload script and bg-background-base root",
+          "markers": ["oc-theme-preload-script", "localStorage.getItem(\"theme\")", "bg-background-base"]
+        },
+        {
+          "file": "packages/desktop/index.html",
+          "description": "Inline theme preload script and bg-background-base root",
+          "markers": ["oc-theme-preload-script", "bg-background-base"]
+        }
+      ]
+    },
+    {
+      "pr": 0,
+      "title": "Desktop window builder and tauri branding",
+      "author": "fork",
+      "status": "fork-only",
+      "description": "Desktop app uses custom WebviewWindow builder with Shuvcode title, __SHUVCODE__ init object, and tauri.prod.conf.json app.windows config with Shuvcode identifiers.",
+      "files": ["packages/desktop/src-tauri/src/windows.rs", "packages/desktop/src-tauri/tauri.prod.conf.json"],
+      "criticalCode": [
+        {
+          "file": "packages/desktop/src-tauri/src/windows.rs",
+          "description": "Window builder with __SHUVCODE__ initialization and Shuvcode title",
+          "markers": ["WebviewWindowBuilder::new", "window.__SHUVCODE__", "title(\"Shuvcode\")"]
+        },
+        {
+          "file": "packages/desktop/src-tauri/tauri.prod.conf.json",
+          "description": "Shuvcode productName/identifier and app.windows config",
+          "markers": ["productName", "identifier", "\"title\": \"Shuvcode\""]
+        }
+      ],
+      "note": "Upstream uses WebviewWindowBuilder::from_config and OpenCode identifiers. Window creation moved from lib.rs to windows.rs."
+    },
+    {
+      "pr": 0,
+      "title": "Publish workflow skips desktop release by default",
+      "author": "fork",
+      "status": "reverted-upstream",
+      "description": "The publish workflow only runs the desktop (tauri) release job when explicitly requested, avoiding unnecessary tauri-cli installs and platform downloads when no desktop app is shipped.",
+      "files": [".github/workflows/publish.yml"],
+      "criticalCode": [
+        {
+          "file": ".github/workflows/publish.yml",
+          "description": "Desktop build job exists and runs unconditionally (upstream v1.2.7 removed skip toggle)",
+          "markers": ["build-tauri"]
+        }
+      ],
+      "note": "Upstream v1.2.7 removed the publishDesktop input toggle and runs build-tauri unconditionally. Feature no longer needed."
+    }
+  ]
+}

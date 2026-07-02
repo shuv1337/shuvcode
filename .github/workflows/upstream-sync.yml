@@ -1,0 +1,79 @@
+# Sync upstream opencode v2 branch into integration-v2
+name: Upstream Sync (v2)
+
+on:
+  repository_dispatch:
+    types: [upstream-v2-update]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Upstream v2 commit SHA (leave empty for upstream/v2 head)"
+        type: string
+        required: false
+
+concurrency:
+  group: upstream-sync-v2
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  resolve:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      latest_sha: ${{ steps.resolve.outputs.latest_sha }}
+      should_sync: ${{ steps.resolve.outputs.should_sync }}
+    steps:
+      - name: Resolve upstream v2 SHA
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          INPUT_SHA: ${{ github.event.client_payload.sha || inputs.sha }}
+        run: |
+          set -euo pipefail
+          api() { curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "$1"; }
+
+          if [ -n "${INPUT_SHA:-}" ]; then
+            LATEST_SHA="$INPUT_SHA"
+          else
+            LATEST_SHA=$(api "https://api.github.com/repos/anomalyco/opencode/commits/v2" | jq -r '.sha')
+          fi
+
+          LAST_SYNCED=$(api "https://api.github.com/repos/${{ github.repository }}/contents/.github/last-synced-tag?ref=integration-v2" | jq -r '.content' | base64 -d | tr -d '\n' || echo "")
+          SHOULD_SYNC=true
+          if [ "$LATEST_SHA" = "$LAST_SYNCED" ]; then
+            SHOULD_SYNC=false
+          fi
+
+          echo "latest_sha=$LATEST_SHA" >> "$GITHUB_OUTPUT"
+          echo "should_sync=$SHOULD_SYNC" >> "$GITHUB_OUTPUT"
+
+  merge-upstream:
+    needs: resolve
+    if: needs.resolve.outputs.should_sync == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration-v2
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge upstream v2
+        run: |
+          git remote add upstream https://github.com/anomalyco/opencode.git 2>/dev/null || true
+          git fetch upstream v2
+          git merge upstream/v2 -m "sync: merge upstream v2 @ ${{ needs.resolve.outputs.latest_sha }}"
+
+      - name: Record synced SHA
+        run: echo -n "${{ needs.resolve.outputs.latest_sha }}" > .github/last-synced-tag
+
+      - name: Push integration-v2
+        run: git push origin integration-v2
