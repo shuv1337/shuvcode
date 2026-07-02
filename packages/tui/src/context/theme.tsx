@@ -9,6 +9,7 @@ import {
   generateSystem,
   hasTheme,
   isTheme,
+  normalizeBackgrounds,
   resolveTheme,
   selectedForeground,
   setCustomThemes,
@@ -254,16 +255,18 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
+      const transparent = kv.get("theme_transparent", false)
+      const resolve = (json: ThemeJson) => normalizeBackgrounds(resolveTheme(json, store.mode), transparent, store.mode)
       const active = store.themes[store.active]
-      if (active) return resolveTheme(active, store.mode)
+      if (active) return resolve(active)
 
       const saved = kv.get("theme")
       if (typeof saved === "string") {
         const theme = store.themes[saved]
-        if (theme) return resolveTheme(theme, store.mode)
+        if (theme) return resolve(theme)
       }
 
-      return resolveTheme(store.themes.opencode, store.mode)
+      return resolve(store.themes.opencode)
     })
 
     createEffect(() => renderer.setBackgroundColor(values().background))

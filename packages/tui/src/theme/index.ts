@@ -298,6 +298,47 @@ export function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   } as Theme
 }
 
+export function normalizeBackgrounds(theme: Theme, transparent: boolean, mode: "dark" | "light"): Theme {
+  if (transparent) {
+    return { ...theme, background: RGBA.fromInts(0, 0, 0, 0) }
+  }
+
+  const opaque = (color?: RGBA) => color && color.a === 1
+  let background = theme.background
+
+  if (!opaque(background)) {
+    const found = [theme.backgroundMenu, theme.backgroundElement, theme.backgroundPanel].find(opaque)
+    if (found) {
+      background = found
+    } else {
+      const primary = theme.primary || RGBA.fromInts(0, 0, 0)
+      if (mode === "dark") {
+        background = RGBA.fromInts(
+          Math.round(primary.r * 255 * 0.1),
+          Math.round(primary.g * 255 * 0.1),
+          Math.round(primary.b * 255 * 0.1),
+        )
+      } else {
+        background = RGBA.fromInts(
+          Math.round(255 - (255 - primary.r * 255) * 0.05),
+          Math.round(255 - (255 - primary.g * 255) * 0.05),
+          Math.round(255 - (255 - primary.b * 255) * 0.05),
+        )
+      }
+    }
+  }
+
+  const force = (color: RGBA) => RGBA.fromInts(Math.round(color.r * 255), Math.round(color.g * 255), Math.round(color.b * 255), 255)
+
+  return {
+    ...theme,
+    background: force(background),
+    backgroundPanel: force(theme.backgroundPanel || background),
+    backgroundElement: force(theme.backgroundElement || background),
+    backgroundMenu: force(theme.backgroundMenu || background),
+  }
+}
+
 function ansiToRgba(code: number): RGBA {
   // Standard ANSI colors (0-15)
   if (code < 16) {

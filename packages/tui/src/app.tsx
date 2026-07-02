@@ -354,6 +354,8 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
+const exitGuard = { last: 0 }
+
 function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPluginHost }) {
   const startup = useTuiStartup()
   const tuiConfig = useTuiConfig()
@@ -861,7 +863,20 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         title: "Exit the app",
         slashName: "exit",
         slashAliases: ["quit", "q"],
-        run: () => exit(),
+        run: () => {
+          const now = Date.now()
+          const last = exitGuard.last
+          if (now - last < 2000) {
+            exit()
+            return
+          }
+          exitGuard.last = now
+          toast.show({
+            variant: "warning",
+            message: "Press again to exit",
+            duration: 2000,
+          })
+        },
         category: "System",
       },
       {

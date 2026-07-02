@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { PluginRuntime } from "../plugin/runtime"
 import HomeFooter from "./home/footer"
+import HomeLogo from "./home/logo"
 import HomeTips from "./home/tips"
 import SidebarContext from "./sidebar/context"
 import SidebarFiles from "./sidebar/files"
@@ -13,6 +14,8 @@ import Notifications from "./system/notifications"
 import PluginManager from "./system/plugins"
 import WhichKey from "./system/which-key"
 import Scrap from "./system/scrap"
+import SpinnerStyle from "./system/spinner-style"
+import Transparency from "./system/transparency"
 
 export type BuiltinTuiPlugin = Omit<TuiPluginModule, "id"> & {
   id: string
@@ -22,6 +25,7 @@ export type BuiltinTuiPlugin = Omit<TuiPluginModule, "id"> & {
 
 export function createBuiltinPlugins(): BuiltinTuiPlugin[] {
   return [
+    HomeLogo,
     HomeFooter,
     HomeTips,
     SidebarContext,
@@ -34,6 +38,8 @@ export function createBuiltinPlugins(): BuiltinTuiPlugin[] {
     PluginManager,
     WhichKey,
     Scrap,
+    SpinnerStyle,
+    Transparency,
     DiffViewer,
   ]
 }

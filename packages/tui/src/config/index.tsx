@@ -43,6 +43,10 @@ export const Attention = Schema.Struct({
 }).annotate({ description: "Attention notification and sound settings" })
 
 const PromptSize = Schema.Int.check(Schema.isGreaterThan(0))
+export const Density = Schema.Literals(["auto", "comfortable", "compact"]).annotate({
+  description: "TUI layout density for small terminals",
+})
+
 export const Prompt = Schema.Struct({
   max_height: Schema.optional(PromptSize).annotate({ description: "Prompt textarea max height" }),
   max_width: Schema.optional(Schema.Union([PromptSize, Schema.Literal("auto")])).annotate({
@@ -58,6 +62,7 @@ export const Info = Schema.Struct({
   plugin_enabled: Schema.optional(Schema.Record(Schema.String, Schema.Boolean)),
   leader_timeout: Schema.optional(LeaderTimeout),
   attention: Schema.optional(Attention),
+  density: Schema.optional(Density),
   prompt: Schema.optional(Prompt),
   scroll_speed: Schema.optional(ScrollSpeed).annotate({ description: "TUI scroll speed" }),
   scroll_acceleration: Schema.optional(ScrollAcceleration),
