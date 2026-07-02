@@ -1,13 +1,15 @@
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
 import type { BuiltinTuiPlugin } from "../builtins"
 import { createMemo, Match, Show, Switch } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { abbreviateHome } from "../../runtime"
+import { Locale } from "../../util/locale"
 import { useTuiPaths } from "../../context/runtime"
 import { useHomeSessionDestination } from "../../routes/home/session-destination"
 
 const id = "internal:home-footer"
 
-function Directory(props: { api: TuiPluginApi }) {
+function Directory(props: { api: TuiPluginApi; width: number }) {
   const theme = () => props.api.theme.current
   const destination = useHomeSessionDestination()
   const paths = useTuiPaths()
@@ -20,8 +22,15 @@ function Directory(props: { api: TuiPluginApi }) {
     if (branch) return out + ":" + branch
     return out
   })
+  const label = createMemo(() => Locale.truncateLeft(dir() ?? "", Math.max(1, props.width)))
 
-  return <Show when={dir()}>{(value) => <text fg={theme().textMuted}>{value()}</text>}</Show>
+  return (
+    <Show when={dir()}>
+      <text fg={theme().textMuted} wrapMode="none" width={props.width} truncate>
+        {label()}
+      </text>
+    </Show>
+  )
 }
 
 function Mcp(props: { api: TuiPluginApi }) {
@@ -56,12 +65,20 @@ function Version(props: { api: TuiPluginApi }) {
 
   return (
     <box flexShrink={0}>
-      <text fg={theme().textMuted}>{props.api.app.version}</text>
+      <text fg={theme().textMuted} wrapMode="none">
+        {props.api.app.version}
+      </text>
     </box>
   )
 }
 
 function View(props: { api: TuiPluginApi }) {
+  const dimensions = useTerminalDimensions()
+  const versionWidth = createMemo(() => props.api.app.version.length)
+  const compact = createMemo(() => dimensions().width < 70)
+  const directoryWidth = createMemo(() =>
+    Math.max(1, dimensions().width - 4 - versionWidth() - (compact() ? 1 : 18)),
+  )
   return (
     <box
       width="100%"
@@ -71,10 +88,12 @@ function View(props: { api: TuiPluginApi }) {
       paddingRight={2}
       flexDirection="row"
       flexShrink={0}
-      gap={2}
+      gap={compact() ? 1 : 2}
     >
-      <Directory api={props.api} />
-      <Mcp api={props.api} />
+      <Directory api={props.api} width={directoryWidth()} />
+      <Show when={!compact()}>
+        <Mcp api={props.api} />
+      </Show>
       <box flexGrow={1} />
       <Version api={props.api} />
     </box>
