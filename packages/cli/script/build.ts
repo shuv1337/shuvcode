@@ -10,7 +10,7 @@ import pkg from "../package.json"
 import { modelsData } from "./generate"
 
 const dir = path.resolve(import.meta.dirname, "..")
-const binary = "opencode2"
+const binary = "shuvcode"
 process.chdir(dir)
 
 await rm("dist", { recursive: true, force: true })

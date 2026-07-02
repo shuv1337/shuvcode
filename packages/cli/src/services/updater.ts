@@ -16,7 +16,7 @@ export type Policy = boolean | "notify"
 export type Action = "none" | "upgrade"
 type Method = "npm" | "pnpm" | "bun" | "yarn"
 
-const packageName = "@opencode-ai/cli"
+const packageName = "shuvcode"
 
 export interface Interface {
   readonly check: () => Effect.Effect<void>

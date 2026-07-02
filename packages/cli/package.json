@@ -1,11 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@opencode-ai/cli",
-  "version": "1.17.13",
+  "version": "1.17.13-1",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "opencode2": "./bin/opencode2.cjs"
+    "shuvcode": "./bin/shuvcode.cjs"
   },
   "files": [
     "bin"
