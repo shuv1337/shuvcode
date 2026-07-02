@@ -1,0 +1,57 @@
+name: snapshot
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["test"]
+    types:
+      - completed
+    branches:
+      - integration-v2
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/integration-v2') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       !startsWith(github.event.workflow_run.head_commit.message, 'release:') &&
+       !startsWith(github.event.workflow_run.head_commit.message, 'chore:'))
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+
+      - run: git fetch --force --tags
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "shuvcode@latitudes.dev"
+          git config --global user.name "shuvcode"
+
+      - name: Build CLI
+        run: bun ./packages/cli/script/build.ts
+
+      - name: Publish
+        run: bun ./packages/cli/script/publish.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

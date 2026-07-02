@@ -5,6 +5,7 @@ on:
     branches:
       - dev
       - v2
+      - integration-v2
   pull_request:
   workflow_dispatch:
 

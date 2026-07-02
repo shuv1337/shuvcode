@@ -173,11 +173,11 @@ Do **not** resurrect anything in `fork-features.json` → `removedFeatures` — 
 
 Not full infra (that's backlog) — just enough to ship and to keep syncing:
 
-- [ ] **CI:** get `test`/typecheck workflows green on `integration-v2`; note upstream `publish.yml` is guarded `if: github.repository == 'anomalyco/opencode'` (inert on the fork — decide whether to adapt it or keep the fork's `snapshot.yml` path)
-- [ ] **Fork release path:** rework `snapshot.yml` + `script/publish.ts` expectations against v2's build (`packages/cli/script/{build,publish}.ts`, per-platform `@opencode-ai/cli-<target>` packages → fork-scoped names)
+- [x] **CI:** get `test`/typecheck workflows green on `integration-v2`; note upstream `publish.yml` is guarded `if: github.repository == 'anomalyco/opencode'` (inert on the fork — fork uses `snapshot.yml` path)
+- [x] **Fork release path:** rework `snapshot.yml` + `script/publish.ts` expectations against v2's build (`packages/cli/script/{build,publish}.ts`, per-platform `shuvcode-<platform>-<arch>` packages)
 - [x] **Retarget sync tooling to v2:** `upstream-sync.yml` (track `upstream/v2` instead of release tags), `script/sync/release-watcher.sh` (v2 has no tag cadence yet — switch to watching the `v2` branch or disable until upstream tags v2 releases), `detect-conflicts.ts` + `fork-features.json` (update all file paths: `packages/opencode/src/cli/cmd/tui/*` → `packages/tui/*`, etc.)
 - [x] **Fix stale upstream org while in there:** the sync tooling still points at `sst/opencode` — `script/sync/release-watcher.sh:13` (releases.atom feed) and `upstream-sync.yml` in ≥6 places (lines 45, 65, 70, 103, 315, 501). GitHub's org redirect masks it today, but redirects can break (esp. the API endpoints) — retarget all to `anomalyco/opencode`
-- [ ] **Fix while in there:** `discord-release.yml` has `RELEASE_TAG` hardcoded to stale `v1.2.27`
+- [x] **Fix while in there:** `discord-release.yml` reads `RELEASE_TAG` from `packages/cli/package.json`; auto-triggers on release publish and snapshot workflow completion
 - [x] Update `.github/last-synced-tag` semantics: record the synced **v2 commit SHA** (there are no v2 tags yet), and document the new flow in `AGENTS.md` §"Upstream Merge Operations"
 - [ ] **Cutover:** when Tier 1 is validated, decide branch endgame — recommended: keep `integration` frozen as v1 archive, make `integration-v2` the default branch on `Latitudes-Dev/shuvcode` (or rename to `integration` after a final backup tag)
 

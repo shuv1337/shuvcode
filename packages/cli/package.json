@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/cli",
+  "name": "shuvcode",
   "version": "1.17.13-1",
   "type": "module",
   "license": "MIT",

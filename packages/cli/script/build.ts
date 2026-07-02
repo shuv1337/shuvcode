@@ -65,7 +65,7 @@ for (const item of targets) {
   ]
     .filter(Boolean)
     .join("-")
-  const name = target.replace(binary, "cli")
+  const name = target
   console.log(`building ${name}`)
   const result = await Bun.build({
     entrypoints: ["./src/index.ts", parserWorker],
@@ -111,10 +111,10 @@ for (const item of targets) {
     `./dist/${name}/package.json`,
     JSON.stringify(
       {
-        name: `@opencode-ai/${name}`,
+        name,
         version: Script.version,
         license: "MIT",
-        repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },
+        repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
         os: [item.os],
         cpu: [item.arch],
       },

@@ -5,6 +5,7 @@ import {
   InstallationChannel,
   InstallationLocal,
   InstallationVersion,
+  parseForkVersion,
 } from "@opencode-ai/core/installation/version"
 import { Context, Duration, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess } from "effect/unstable/process"
@@ -34,20 +35,14 @@ export function decodePolicy(text: string): Policy | undefined {
   if (typeof value === "boolean" || value === "notify") return value
 }
 
-const fork = (version: string) => {
-  const match = version.match(/^(\d+\.\d+\.\d+)-(\d+)$/)
-  if (!match) return
-  return { base: match[1], iteration: Number(match[2]) }
-}
-
 export function action(current: string, latest: string, policy: Policy): Action {
   if (policy === false) return "none"
   if (!semver.valid(current) || !semver.valid(latest) || semver.eq(latest, current)) return "none"
   // Major upgrades are never installed automatically.
   if (semver.major(latest) !== semver.major(current)) return "none"
 
-  const currentFork = fork(current)
-  const latestFork = fork(latest)
+  const currentFork = parseForkVersion(current)
+  const latestFork = parseForkVersion(latest)
   if (currentFork) {
     if (!latestFork) return "none"
     if (currentFork.base === latestFork.base) return latestFork.iteration > currentFork.iteration ? "upgrade" : "none"

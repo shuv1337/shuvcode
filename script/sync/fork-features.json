@@ -70,7 +70,8 @@
     {
       "id": "tui-double-exit",
       "title": "Double Ctrl+C to exit",
-      "files": ["packages/tui/src/util/exit-guard.ts", "packages/tui/src/app.tsx", "packages/tui/src/component/prompt/index.tsx"]
+      "files": ["packages/tui/src/util/exit-guard.ts", "packages/tui/src/app.tsx", "packages/tui/src/component/prompt/index.tsx"],
+      "note": "Permission and question overlays intentionally override app.exit; only the main prompt and global app.exit use guardedExit() so users confirm before quitting during active dialogs."
     }
   ],
   "forkDependencies": {
