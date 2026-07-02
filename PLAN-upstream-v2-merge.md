@@ -1,6 +1,6 @@
 # PLAN: Merge upstream opencode `v2` into the shuvcode fork
 
-**Status:** Reviewed — approved strategy, not yet started
+**Status:** In progress — Phases 0–3 complete, Phase 4 partial, Phase 5 partial (2026-07-02)
 **Created:** 2026-07-02
 **Reviewed:** 2026-07-02 (plan review vs codebase: ~25 claims verified against `upstream/v2` @ `140224b0f`; verdict READY TO IMPLEMENT; findings folded in below)
 **Strategy (decided):** Re-base onto v2 — new branch from `upstream/v2`, tie fork history with a `-s ours` merge, port fork features on top.
@@ -52,7 +52,7 @@ Both directly caused pain on 2026-07-01/02. They are filed here (and optionally 
   ),
   Effect.ignoreCause,
   ```
-- [ ] Apply as an early commit on the port branch (§7)
+- [x] Apply as an early commit on the port branch (§7)
 - [ ] Optional: mirror as a `Latitudes-Dev/shuvcode` issue for tracking
 
 ### L-2: No per-request LLM-route plugin hook (upstream #34765)
@@ -60,7 +60,7 @@ Both directly caused pain on 2026-07-01/02. They are filed here (and optionally 
 - **Where:** `core/src/aisdk.ts` — resolved language models are cached per `${providerID}/${model.id}/${variant}`; the only hooks (`aisdk.sdk`, `aisdk.language`, wired in `core/src/plugin/host.ts:76`) fire at **model construction time**, not per message. No hook receives an in-flight request and can re-target provider/model.
 - **Interim (plugin-level, no core patch):** register an `aisdk.language` hook returning a wrapping `LanguageModelV3` that routes internally per call.
 - **Proper fix (fork patch, candidate):** a route hook in the prompt loop (`core/src/session/runner/llm.ts`) invoked before model resolution. Keep the patch small and rebase-friendly since upstream may land their own version of #34765.
-- [ ] Decide interim-wrapper vs fork-patch during Phase 3 (§7)
+- [x] Decide interim-wrapper vs fork-patch during Phase 3 (§7) — **decision: interim-wrapper, deferred until needed**
 - [ ] Optional: mirror as a `Latitudes-Dev/shuvcode` issue for tracking
 
 ---
@@ -213,8 +213,8 @@ From the fork inventory (full detail in `script/sync/fork-features.json`; portab
 
 ## 12. Milestones
 
-- [ ] **M0** — Phase 0 complete: automation frozen, `integration-v2` exists, baseline builds green
-- [ ] **M1** — Phases 1–3: patched daily driver builds from the fork repo (TUI patches + L-1 + branding); this replaces the `~/repos/opencode` build
-- [ ] **M2** — Phase 4: Tier-1 TUI features ported, dogfood pass clean
-- [ ] **M3** — Phase 5: first fork v2 release (`1.17.13-1`) shipped end-to-end; sync tooling retargeted; branch cutover done
+- [x] **M0** — Phase 0 complete: automation frozen, `integration-v2` exists, baseline builds green
+- [x] **M1** — Phases 1–3: patched daily driver builds from the fork repo (TUI patches + L-1 + branding); this replaces the `~/repos/opencode` build
+- [ ] **M2** — Phase 4: Tier-1 TUI features ported, dogfood pass clean (partial — core features done)
+- [ ] **M3** — Phase 5: first fork v2 release (`1.17.13-1`) shipped end-to-end; sync tooling retargeted; branch cutover done (sync retargeted; release path deferred)
 - [ ] **M4** — Backlog triage: §10 converted to issues, Tier-2 scheduled
