@@ -2,7 +2,7 @@ export * as ConfigExternalPlugin from "./external"
 
 import type { Plugin as EffectPlugin } from "@opencode-ai/plugin/v2/effect"
 import type { Plugin as PromisePlugin } from "@opencode-ai/plugin/v2/promise"
-import { Effect, Schema } from "effect"
+import { Cause, Effect, Schema } from "effect"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Config } from "../../config"
@@ -112,7 +112,11 @@ export const Plugin = define({
             id: plugin.id,
             effect: (host) => plugin.effect({ ...host, options: ref.options ?? {} }),
           })
-        }).pipe(Effect.ignoreCause)
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("failed to load plugin", { id: ref.package, cause: Cause.pretty(cause) }),
+          ),
+        )
       }
     })
   }),
