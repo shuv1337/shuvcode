@@ -9,7 +9,7 @@
       "id": "L-1",
       "title": "Plugin load failure logging",
       "files": ["packages/core/src/config/plugin/external.ts"],
-      "note": "Effect.tapErrorCause before Effect.ignoreCause"
+      "note": "Effect.catchCause + logError (Effect v4; replaces ignoreCause)"
     },
     {
       "id": "L-2",
@@ -22,13 +22,55 @@
       "title": "CLI/TUI shuvcode branding",
       "files": [
         "packages/cli/script/build.ts",
+        "packages/cli/script/publish.ts",
+        "packages/cli/bin/shuvcode.cjs",
+        "packages/cli/package.json",
         "packages/cli/src/commands/commands.ts",
         "packages/cli/src/services/updater.ts",
         "packages/opencode/src/index.ts",
         "packages/opencode/src/installation/index.ts",
         "packages/script/src/index.ts",
-        "packages/tui/src/feature-plugins/home/logo.tsx"
+        "packages/tui/src/feature-plugins/home/logo.tsx",
+        "packages/tui/src/shuv-logo.ts",
+        "packages/tui/src/app.tsx"
       ]
+    },
+    {
+      "id": "tui-narrow-terminal",
+      "title": "Narrow-terminal responsive layout",
+      "files": [
+        "packages/tui/src/component/prompt/index.tsx",
+        "packages/tui/src/feature-plugins/home/footer.tsx",
+        "packages/tui/src/routes/home.tsx"
+      ]
+    },
+    {
+      "id": "tui-density",
+      "title": "TUI layout density config",
+      "files": ["packages/tui/src/config/index.tsx", "packages/tui/src/util/density.ts"]
+    },
+    {
+      "id": "tui-spinners",
+      "title": "Configurable spinner styles and speed",
+      "files": [
+        "packages/tui/src/util/spinners.ts",
+        "packages/tui/src/feature-plugins/system/spinner-style.tsx",
+        "packages/tui/src/component/spinner.tsx"
+      ]
+    },
+    {
+      "id": "tui-transparency",
+      "title": "Transparent background toggle",
+      "files": [
+        "packages/tui/src/feature-plugins/system/transparency.tsx",
+        "packages/tui/src/context/theme.tsx",
+        "packages/tui/src/theme/index.ts"
+      ]
+    },
+    {
+      "id": "tui-double-exit",
+      "title": "Double Ctrl+C to exit",
+      "files": ["packages/tui/src/util/exit-guard.ts", "packages/tui/src/app.tsx", "packages/tui/src/component/prompt/index.tsx"]
     }
   ],
   "forkDependencies": {

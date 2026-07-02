@@ -28,15 +28,15 @@ const version = Object.values(binaries)[0]
 const name = pkg.name
 
 await $`mkdir -p ./dist/${name}/bin`
-await $`cp ./bin/opencode2.cjs ./dist/${name}/bin/opencode2`
+await $`cp ./bin/shuvcode.cjs ./dist/${name}/bin/shuvcode`
 await Bun.file(`./dist/${name}/package.json`).write(
   JSON.stringify(
     {
       name,
-      bin: { opencode2: "./bin/opencode2" },
+      bin: { shuvcode: "./bin/shuvcode" },
       version,
       license: pkg.license,
-      repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },
+      repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
       os: ["darwin", "linux", "win32"],
       cpu: ["arm64", "x64"],
       optionalDependencies: binaries,

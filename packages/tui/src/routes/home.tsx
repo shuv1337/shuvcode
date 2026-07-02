@@ -11,6 +11,7 @@ import { usePluginRuntime } from "../plugin/runtime"
 import { useEditorContext } from "../context/editor"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useTuiConfig } from "../config"
+import { compactMetadata, showLogo as logoVisible } from "../util/density"
 import { HomeSessionDestinationProvider } from "./home/session-destination"
 
 let once = false
@@ -36,7 +37,7 @@ export function Home() {
     if (configured === "auto") return Math.min(available, Math.max(40, Math.floor(dimensions().width * 0.7)))
     return Math.min(available, configured ?? 75)
   })
-  const showLogo = createMemo(() => dimensions().width >= 80 && dimensions().height >= 24)
+  const showLogo = createMemo(() => logoVisible(tuiConfig.density, dimensions().width, dimensions().height))
   let sent = false
 
   onMount(() => {

@@ -52,6 +52,8 @@ import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "../../context/args"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
 import { useTuiConfig } from "../../config"
+import { compactMetadata as layoutCompact } from "../../util/density"
+import { guardedExit, shared as exitGuard } from "../../util/exit-guard"
 import { usePromptWorkspace } from "./workspace"
 import { usePromptMove } from "./move"
 import { readLocalAttachment } from "./local-attachment"
@@ -218,19 +220,19 @@ export function Prompt(props: PromptProps) {
   const workspace = usePromptWorkspace(props.sessionID)
   const move = usePromptMove({ projectID: project.project, sessionID: () => props.sessionID })
   const [cursorVersion, setCursorVersion] = createSignal(0)
-  const compactMetadata = createMemo(() => dimensions().width < 70)
+  const compact = createMemo(() => layoutCompact(tuiConfig.density, dimensions().width))
   const currentModelLabel = createMemo(() => {
     const label = local.model.parsed().model
-    if (!compactMetadata()) return label
+    if (!compact()) return label
     return Locale.truncate(label, Math.max(8, dimensions().width - 28))
   })
   const currentProviderLabel = createMemo(() => {
     const label = local.model.parsed().provider
-    if (!compactMetadata()) return label
+    if (!compact()) return label
     return Locale.truncate(label, Math.max(6, dimensions().width - 36))
   })
   const connected = useConnected()
-  const hasRightContent = createMemo(() => Boolean(props.right) && !compactMetadata())
+  const hasRightContent = createMemo(() => Boolean(props.right) && !compact())
 
   function promptModelWarning() {
     toast.show({
@@ -1010,7 +1012,7 @@ export function Prompt(props: PromptProps) {
     if (!agent) return false
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
-      void exit()
+      guardedExit(exitGuard, exit, toast.show)
       return true
     }
     const selectedModel = local.model.current()
@@ -1603,12 +1605,12 @@ export function Prompt(props: PromptProps) {
                           >
                             {currentModelLabel()}
                           </text>
-                          <Show when={!compactMetadata()}>
+                          <Show when={!compact()}>
                             <text fg={fadeColor(theme.textMuted, modelMetaAlpha())} wrapMode="none">
                               {currentProviderLabel()}
                             </text>
                           </Show>
-                          <Show when={showVariant() && !compactMetadata()}>
+                          <Show when={showVariant() && !compact()}>
                             <text fg={fadeColor(theme.textMuted, variantMetaAlpha())}>·</text>
                             <text>
                               <span style={{ fg: fadeColor(theme.warning, variantMetaAlpha()), bold: true }}>

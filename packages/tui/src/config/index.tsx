@@ -71,7 +71,8 @@ export const Info = Schema.Struct({
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
-export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | "mouse"> & {
+export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | "mouse" | "density"> & {
+  density: Schema.Schema.Type<typeof Density>
   attention: {
     enabled: boolean
     notifications: boolean
@@ -118,6 +119,7 @@ export function resolve(input: Info, options: ResolveOptions): Resolved {
     }),
     leader_timeout: input.leader_timeout ?? LeaderTimeoutDefault,
     mouse: input.mouse ?? true,
+    density: input.density ?? "auto",
   }
 }
 

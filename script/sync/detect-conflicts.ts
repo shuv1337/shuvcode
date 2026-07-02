@@ -22,17 +22,39 @@ interface ForkFeature {
   files: string[]
 }
 
+interface V2ForkPatch {
+  id: string
+  title: string
+  files?: string[]
+  note?: string
+}
+
 interface ForkFeaturesJson {
   features: ForkFeature[]
+  v2ForkPatches?: V2ForkPatch[]
 }
 
 const forkFeatures = forkFeaturesData as ForkFeaturesJson
 
-// Build a map of file -> PR info for quick lookup
-const forkFeatureFiles = new Map<string, ForkFeature>()
+type ForkEntry = ForkFeature | (V2ForkPatch & { pr: string; author: string; status: string; description: string })
+
+// Build a map of file -> feature info for quick lookup
+const forkFeatureFiles = new Map<string, ForkEntry>()
 for (const feature of forkFeatures.features) {
   for (const file of feature.files) {
     forkFeatureFiles.set(file, feature)
+  }
+}
+for (const patch of forkFeatures.v2ForkPatches ?? []) {
+  const entry: ForkEntry = {
+    ...patch,
+    pr: patch.id,
+    author: "fork",
+    status: "v2-patch",
+    description: patch.note ?? patch.title,
+  }
+  for (const file of patch.files ?? []) {
+    forkFeatureFiles.set(file, entry)
   }
 }
 
@@ -41,7 +63,7 @@ interface ConflictInfo {
   category: "lockfile" | "docs" | "config" | "custom" | "shared" | "fork-feature"
   resolution: "auto-upstream" | "auto-regenerate" | "manual" | "preserve-fork"
   recommendation: string
-  forkFeature?: ForkFeature
+  forkFeature?: ForkEntry
 }
 
 interface DetectionResult {
@@ -51,7 +73,7 @@ interface DetectionResult {
   manualReviewRequired: string[]
 }
 
-function categorizeFile(file: string): { category: ConflictInfo["category"]; forkFeature?: ForkFeature } {
+function categorizeFile(file: string): { category: ConflictInfo["category"]; forkFeature?: ForkEntry } {
   // Check if this file is part of a fork feature PR first
   const forkFeature = forkFeatureFiles.get(file)
   if (forkFeature) {
@@ -67,14 +89,14 @@ function categorizeFile(file: string): { category: ConflictInfo["category"]; for
 
 function getResolution(
   category: ConflictInfo["category"],
-  forkFeature?: ForkFeature,
+  forkFeature?: ForkEntry,
 ): Pick<ConflictInfo, "resolution" | "recommendation"> {
   switch (category) {
     case "fork-feature":
       return {
         resolution: "preserve-fork",
         recommendation: forkFeature
-          ? `PRESERVE FORK FEATURE: PR #${forkFeature.pr} "${forkFeature.title}" - Merge carefully to keep our changes while integrating upstream improvements`
+          ? `PRESERVE FORK FEATURE: ${String(forkFeature.pr).startsWith("L-") || forkFeature.status === "v2-patch" ? `patch ${forkFeature.pr}` : `PR #${forkFeature.pr}`} "${forkFeature.title}" - Merge carefully to keep our changes while integrating upstream improvements`
           : "PRESERVE FORK FEATURE: Keep our fork-specific changes",
       }
     case "lockfile":
@@ -178,7 +200,7 @@ async function main() {
     console.log("They MUST be carefully merged to preserve our fork-specific changes.\n")
 
     // Group by PR
-    const byPr = new Map<number, ConflictInfo[]>()
+    const byPr = new Map<string | number, ConflictInfo[]>()
     for (const conflict of forkFeatureConflicts) {
       if (conflict.forkFeature) {
         const existing = byPr.get(conflict.forkFeature.pr) || []
@@ -190,7 +212,8 @@ async function main() {
     for (const [pr, conflicts] of byPr) {
       const feature = conflicts[0]?.forkFeature
       if (!feature) continue
-      console.log(`  PR #${pr}: ${feature.title}`)
+      const label = feature.status === "v2-patch" ? `patch ${pr}` : `PR #${pr}`
+      console.log(`  ${label}: ${feature.title}`)
       console.log(`    Author: @${feature.author}`)
       console.log(`    Description: ${feature.description}`)
       console.log(`    Files:`)

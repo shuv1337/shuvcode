@@ -66,11 +66,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge upstream v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Fetch upstream v2
         run: |
           git remote add upstream https://github.com/anomalyco/opencode.git 2>/dev/null || true
           git fetch upstream v2
-          git merge upstream/v2 -m "sync: merge upstream v2 @ ${{ needs.resolve.outputs.latest_sha }}"
+
+      - name: Detect fork feature conflicts
+        run: bun install && bun script/sync/detect-conflicts.ts upstream/v2
+
+      - name: Merge upstream v2
+        run: git merge upstream/v2 -m "sync: merge upstream v2 @ ${{ needs.resolve.outputs.latest_sha }}"
+
+      - name: Typecheck
+        run: bun turbo typecheck
 
       - name: Record synced SHA
         run: echo -n "${{ needs.resolve.outputs.latest_sha }}" > .github/last-synced-tag

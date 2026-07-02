@@ -34,11 +34,26 @@ export function decodePolicy(text: string): Policy | undefined {
   if (typeof value === "boolean" || value === "notify") return value
 }
 
+const fork = (version: string) => {
+  const match = version.match(/^(\d+\.\d+\.\d+)-(\d+)$/)
+  if (!match) return
+  return { base: match[1], iteration: Number(match[2]) }
+}
+
 export function action(current: string, latest: string, policy: Policy): Action {
   if (policy === false) return "none"
   if (!semver.valid(current) || !semver.valid(latest) || semver.eq(latest, current)) return "none"
   // Major upgrades are never installed automatically.
   if (semver.major(latest) !== semver.major(current)) return "none"
+
+  const currentFork = fork(current)
+  const latestFork = fork(latest)
+  if (currentFork) {
+    if (!latestFork) return "none"
+    if (currentFork.base === latestFork.base) return latestFork.iteration > currentFork.iteration ? "upgrade" : "none"
+    return semver.gt(latestFork.base, currentFork.base) ? "upgrade" : "none"
+  }
+
   return "upgrade"
 }
 
@@ -96,7 +111,7 @@ export const layer = Layer.effect(
         try: () =>
           fetch(
             `https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(InstallationChannel)}`,
-            { headers: { "User-Agent": `opencode/${InstallationVersion}` }, signal: AbortSignal.timeout(10_000) },
+            { headers: { "User-Agent": `shuvcode/${InstallationVersion}` }, signal: AbortSignal.timeout(10_000) },
           ),
         catch: (cause) => new Error("Failed to check for updates", { cause }),
       })
@@ -145,7 +160,7 @@ export const layer = Layer.effect(
         const detected = yield* method()
         if (!detected) return yield* Effect.logWarning("automatic update skipped: installation method not found")
         yield* upgrade(detected, version)
-        yield* Effect.logInfo("updated OpenCode", { from: InstallationVersion, to: version, method: detected })
+        yield* Effect.logInfo("updated shuvcode", { from: InstallationVersion, to: version, method: detected })
       })
     }, Effect.catchCause((cause) => Effect.logWarning("automatic update failed", { cause })))
 

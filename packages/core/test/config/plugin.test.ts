@@ -1,6 +1,6 @@
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Effect, Schema } from "effect"
+import { Effect, Logger, Schema } from "effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Config } from "@opencode-ai/core/config"
 import { ConfigExternalPlugin } from "@opencode-ai/core/config/plugin/external"
@@ -144,6 +144,55 @@ describe("ConfigExternalPlugin", () => {
 
       expect(yield* waitForAgent(agents, "configured")).toMatchObject({
         description: "Loaded after invalid plugins",
+      })
+    }),
+  )
+
+  it.live("logs failed plugin load and continues loading", () =>
+    Effect.gen(function* () {
+      const plugins = yield* PluginV2.Service
+      const agents = yield* AgentV2.Service
+      const fs = yield* FSUtil.Service
+      const location = yield* Location.Service
+      const npm = yield* Npm.Service
+      const host = yield* PluginHost.make(plugins)
+      const lines: string[] = []
+      const capture = Logger.make((options) => {
+        lines.push(String(options.message))
+      })
+
+      yield* ConfigExternalPlugin.Plugin.effect(host).pipe(
+        Effect.provide(Logger.layer([capture])),
+        Effect.provideService(PluginV2.Service, plugins),
+        Effect.provideService(FSUtil.Service, fs),
+        Effect.provideService(Location.Service, location),
+        Effect.provideService(Npm.Service, npm),
+        Effect.provideService(
+          Config.Service,
+          Config.Service.of({
+            entries: () =>
+              Effect.succeed([
+                new Config.Document({
+                  type: "document",
+                  path: path.join(import.meta.dir, "opencode.json"),
+                  info: decode({
+                    plugins: [
+                      "../plugin/fixtures/invalid-plugin.ts",
+                      {
+                        package: "../plugin/fixtures/config-promise-plugin.ts",
+                        options: { description: "Loaded after logged failure" },
+                      },
+                    ],
+                  }),
+                }),
+              ]),
+          }),
+        ),
+      )
+
+      expect(lines.some((line) => line.includes("failed to load plugin"))).toBe(true)
+      expect(yield* waitForAgent(agents, "configured")).toMatchObject({
+        description: "Loaded after logged failure",
       })
     }),
   )

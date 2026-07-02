@@ -79,19 +79,19 @@ Why not the alternatives (recorded for posterity):
 
 ## 4. Phase 0 — Prep & safety (do first)
 
-- [ ] **Disable the v1 sync automation** so it can't fire mid-port:
-  - [ ] Disable `.github/workflows/upstream-sync.yml` (it merges upstream *v1 tags* into `integration` and auto-PRs). Its trigger is `repository_dispatch: [upstream-release]` fired by the release-watcher, so stopping the container already neutralizes it — disabling the workflow file is belt-and-suspenders
+- [x] **Disable the v1 sync automation** so it can't fire mid-port:
+  - [x] Disable `.github/workflows/upstream-sync.yml` (it merges upstream *v1 tags* into `integration` and auto-PRs). Its trigger is `repository_dispatch: [upstream-release]` fired by the release-watcher, so stopping the container already neutralizes it — disabling the workflow file is belt-and-suspenders
   - [ ] Stop the `release-watcher.sh` container if running (`script/sync/docker-compose.yml`)
-- [ ] Tag the current state: `git tag fork-v1-final integration` (rollback anchor)
-- [ ] `git fetch upstream v2 && git fetch upstream dev` (upstream/v2 already fetched at `140224b0f`)
-- [ ] Create the port branch and tie history:
+- [x] Tag the current state: `git tag fork-v1-final integration` (rollback anchor)
+- [x] `git fetch upstream v2 && git fetch upstream dev` (upstream/v2 already fetched at `140224b0f`)
+- [x] Create the port branch and tie history:
   ```bash
   cd ~/repos/forks/shuvcode
   git checkout -b integration-v2 upstream/v2
   git merge -s ours integration -m "tie: graft shuvcode v1 fork history into the v2 line (content = upstream/v2)"
   ```
-- [ ] Verify toolchain: bun >= 1.3.14 installed; `bun install && bun turbo typecheck` passes clean on the untouched branch (baseline)
-- [ ] Build baseline binary: `cd packages/cli && bun script/build.ts --single` → confirm it matches the daily-driver behavior
+- [x] Verify toolchain: bun >= 1.3.14 installed; `bun install && bun turbo typecheck` passes clean on the untouched branch (baseline)
+- [x] Build baseline binary: `cd packages/cli && bun script/build.ts --single` → confirm it matches the daily-driver behavior
 
 **Validation:** clean typecheck + working `opencode2` binary from the fork repo before any fork commit lands.
 
@@ -101,14 +101,14 @@ Why not the alternatives (recorded for posterity):
 
 ### 5.1 Transfer mechanics
 
-- [ ] `cd ~/repos/opencode && git diff > /tmp/v2-tui-patches.diff`, apply onto `integration-v2`, commit as 2–3 logical commits (see below). The mirror is one fetch behind v2 head (`674d08f9b` vs `140224b0f`), but the 3 patched files have zero upstream changes between those commits (verified 2026-07-02) — the diff applies clean
-- [ ] After the port branch builds, reset `~/repos/opencode` to a clean mirror (`git checkout -- .`) and rebuild the daily driver from the fork repo instead; keep `dogfood-tui-output/` or delete it deliberately
+- [x] `cd ~/repos/opencode && git diff > /tmp/v2-tui-patches.diff`, apply onto `integration-v2`, commit as 2–3 logical commits (see below). The mirror is one fetch behind v2 head (`674d08f9b` vs `140224b0f`), but the 3 patched files have zero upstream changes between those commits (verified 2026-07-02) — the diff applies clean
+- [x] After the port branch builds, reset `~/repos/opencode` to a clean mirror (`git checkout -- .`) and rebuild the daily driver from the fork repo instead; keep `dogfood-tui-output/` or delete it deliberately
 
 ### 5.2 The three patches (narrow-terminal responsive fixes)
 
-- [ ] **`packages/tui/src/component/prompt/index.tsx`** — compact metadata mode below 70 cols: truncate model/provider labels (`Locale.truncate`), hide provider + variant + right-content when compact, `wrapMode="none"` on meta text
-- [ ] **`packages/tui/src/feature-plugins/home/footer.tsx`** — width-budgeted footer: `useTerminalDimensions`, left-truncated directory (`Locale.truncateLeft`), hide MCP segment when compact, version pinned right
-- [ ] **`packages/tui/src/routes/home.tsx`** — clamp `promptMaxWidth` to available width, hide logo below 80×24 (`showLogo`)
+- [x] **`packages/tui/src/component/prompt/index.tsx`** — compact metadata mode below 70 cols: truncate model/provider labels (`Locale.truncate`), hide provider + variant + right-content when compact, `wrapMode="none"` on meta text
+- [x] **`packages/tui/src/feature-plugins/home/footer.tsx`** — width-budgeted footer: `useTerminalDimensions`, left-truncated directory (`Locale.truncateLeft`), hide MCP segment when compact, version pinned right
+- [x] **`packages/tui/src/routes/home.tsx`** — clamp `promptMaxWidth` to available width, hide logo below 80×24 (`showLogo`)
 
 **Validation:** rebuild `opencode2` from the fork repo; check home screen + prompt at 60×20 and 120×40 (the `dogfood-tui` skill can capture evidence).
 
@@ -120,14 +120,14 @@ Principle carried over from v1 fork: rebrand the user-facing surface (name, help
 
 **Coupling note:** in `packages/cli/script/build.ts`, the `OPENCODE_CLI_NAME` define is `'${binary}'` and the user-agent is `--user-agent=${binary}/${Script.version}` (~line 86) — both derive from the `binary` variable at line 13. Setting `binary = "shuvcode"` accomplishes the CLI-name, binary-name, AND user-agent rebrand in one edit; giving them *different* values requires decoupling the define first. The first two checkboxes below are one edit, not two.
 
-- [ ] **New CLI name:** flows from `binary` via the `OPENCODE_CLI_NAME: '${binary}'` define in `packages/cli/script/build.ts:88-92` (see coupling note); root command reads it at `packages/cli/src/commands/commands.ts:4-7`. Update description string ("OpenCode 2.0 preview…" → shuvcode)
-- [ ] **Binary name:** `packages/cli/script/build.ts:13` `binary = "opencode2"` → decide final name (`shuvcode` recommended; keep an `opencode2` symlink locally for muscle memory). Also rebrands the CLI name and user-agent (coupling note above)
-- [ ] **Legacy CLI (if we ship it at all):** `packages/opencode/src/index.ts:47` `.scriptName("shuvcode")` + help text sweep (v1 fork precedent: `server/server.ts`, `mcp/index.ts`, `acp/agent.ts`, `cli/cmd/mcp.ts`)
-- [ ] **Logo/wordmark:** port shuvcode ASCII art into `packages/tui/src/logo.ts` (+ `packages/tui/src/component/logo.tsx` if needed) and legacy `packages/opencode/src/cli/ui.ts:5-10`. Alternative: ship as a `home_logo` slot plugin and leave upstream files untouched (preferred — zero-conflict on future syncs)
-- [ ] **Auto-update source:** `packages/cli/src/services/updater.ts:19` `packageName = "@opencode-ai/cli"` → fork npm package; legacy upgrade path `packages/opencode/src/installation/index.ts` (v1 fork pointed at npm `shuvcode`, `Latitudes-Dev/shuvcode` releases, `shuv.ai/install`)
-- [ ] **Version derivation:** `packages/script/src/index.ts:37` fetches `registry.npmjs.org/opencode-ai/latest` to compute versions — repoint to the fork's npm package or pin via `OPENCODE_VERSION` env in fork CI (the env override already exists upstream at `packages/script/src/index.ts:34`, returned before the npm fetch — no patch needed, just set the var)
-- [ ] **Versioning decision:** continue `<upstream-version>-<fork-iteration>` keyed to the v2 package version (currently `1.17.13`, so first release `1.17.13-1`); record in `fork-features.json` notes. **Prerelease caveat:** in npm semver, `1.17.13-1` sorts *before* `1.17.13` — the scheme works via the `latest` dist-tag (established v1 fork practice), but v2's updater (`packages/cli/src/services/updater.ts`) is a new consumer: Phase 5 validation must confirm its version comparison handles `1.17.13-1` → `1.17.13-2` upgrades correctly (§9)
-- [ ] Record every branding touch-point as entries in `script/sync/fork-features.json` (they're the ones historically "overwritten every merge")
+- [x] **New CLI name:** flows from `binary` via the `OPENCODE_CLI_NAME: '${binary}'` define in `packages/cli/script/build.ts:88-92` (see coupling note); root command reads it at `packages/cli/src/commands/commands.ts:4-7`. Update description string ("OpenCode 2.0 preview…" → shuvcode)
+- [x] **Binary name:** `packages/cli/script/build.ts:13` `binary = "opencode2"` → decide final name (`shuvcode` recommended; keep an `opencode2` symlink locally for muscle memory). Also rebrands the CLI name and user-agent (coupling note above)
+- [x] **Legacy CLI (if we ship it at all):** `packages/opencode/src/index.ts:47` `.scriptName("shuvcode")` + help text sweep (v1 fork precedent: `server/server.ts`, `mcp/index.ts`, `acp/agent.ts`, `cli/cmd/mcp.ts`)
+- [x] **Logo/wordmark:** port shuvcode ASCII art into `packages/tui/src/logo.ts` (+ `packages/tui/src/component/logo.tsx` if needed) and legacy `packages/opencode/src/cli/ui.ts:5-10`. Alternative: ship as a `home_logo` slot plugin and leave upstream files untouched (preferred — zero-conflict on future syncs)
+- [x] **Auto-update source:** `packages/cli/src/services/updater.ts:19` `packageName = "@opencode-ai/cli"` → fork npm package; legacy upgrade path `packages/opencode/src/installation/index.ts` (v1 fork pointed at npm `shuvcode`, `Latitudes-Dev/shuvcode` releases, `shuv.ai/install`)
+- [x] **Version derivation:** `packages/script/src/index.ts:37` fetches `registry.npmjs.org/opencode-ai/latest` to compute versions — repoint to the fork's npm package or pin via `OPENCODE_VERSION` env in fork CI (the env override already exists upstream at `packages/script/src/index.ts:34`, returned before the npm fetch — no patch needed, just set the var)
+- [x] **Versioning decision:** continue `<upstream-version>-<fork-iteration>` keyed to the v2 package version (currently `1.17.13`, so first release `1.17.13-1`); record in `fork-features.json` notes. **Prerelease caveat:** in npm semver, `1.17.13-1` sorts *before* `1.17.13` — the scheme works via the `latest` dist-tag (established v1 fork practice), but v2's updater (`packages/cli/src/services/updater.ts`) is a new consumer: Phase 5 validation must confirm its version comparison handles `1.17.13-1` → `1.17.13-2` upgrades correctly (§9)
+- [x] Record every branding touch-point as entries in `script/sync/fork-features.json` (they're the ones historically "overwritten every merge")
 
 **Validation:** `shuvcode --help` shows shuvcode naming; `--version` reports fork version; update check hits fork registry; config still loads from `~/.config/opencode`.
 
@@ -135,9 +135,9 @@ Principle carried over from v1 fork: rebrand the user-facing surface (name, help
 
 ## 7. Phase 3 — Tier 1b: defect fixes (L-1, L-2)
 
-- [ ] L-1 `ignoreCause` logging fix at `packages/core/src/config/plugin/external.ts:115` (§2). Add a regression test: a plugin that throws on import must produce a visible `logError` and not abort other plugins
-- [ ] L-2 LLM-route: start with the plugin-level `aisdk.language` wrapper; escalate to a fork patch in `core/src/session/runner/llm.ts` only if per-request routing is actually needed. Watch upstream #34765 — if upstream lands a hook, drop ours
-- [ ] Register both in `fork-features.json` as fork patches with upstream-watch notes
+- [x] L-1 `ignoreCause` logging fix at `packages/core/src/config/plugin/external.ts:115` (§2). Add a regression test: a plugin that throws on import must produce a visible `logError` and not abort other plugins
+- [x] L-2 LLM-route: start with the plugin-level `aisdk.language` wrapper; escalate to a fork patch in `core/src/session/runner/llm.ts` only if per-request routing is actually needed. Watch upstream #34765 — if upstream lands a hook, drop ours
+- [x] Register both in `fork-features.json` as fork patches with upstream-watch notes
 
 **Validation:** intentionally-broken plugin in `~/.config/opencode/plugin/` produces a diagnosable error line; routing wrapper demonstrably switches models on a live prompt.
 
@@ -149,11 +149,11 @@ All v1 TUI features lived in `packages/opencode/src/cli/cmd/tui/*`; v2's TUI is 
 
 Port order (dependency/value-sorted). Before porting each, check whether v2 already has an equivalent:
 
-- [ ] **shuvcode TUI logo** — `home_logo` slot plugin (mode `replace`); pairs with §6 branding
-- [ ] **Configurable spinner styles + animation speed** (60+ styles) — port `tui/util/spinners.ts` (pure logic, clean), re-wire selection dialog as plugin route + `api.kv` persistence; config schema entry in `core/src/config/*.ts`
-- [ ] **Toggle transparent background + transparency normalization** — v2 theme system (`api.theme`, `packages/tui/src/` theme context); verify v2 doesn't already normalize
-- [ ] **Double Ctrl+C to exit** (2s window) — `api.keymap.registerLayer`
-- [ ] **TUI layout density (auto/comfortable/compact)** — the §5.2 patches already implement the "auto" behavior; add the config knob in `core/src/config.ts` schema
+- [x] **shuvcode TUI logo** — `home_logo` slot plugin (mode `replace`); pairs with §6 branding
+- [x] **Configurable spinner styles + animation speed** (60+ styles) — port `tui/util/spinners.ts` (pure logic, clean), re-wire selection dialog as plugin route + `api.kv` persistence; config schema entry in `core/src/config/*.ts`
+- [x] **Toggle transparent background + transparency normalization** — v2 theme system (`api.theme`, `packages/tui/src/` theme context); verify v2 doesn't already normalize
+- [x] **Double Ctrl+C to exit** (2s window) — `api.keymap.registerLayer`
+- [x] **TUI layout density (auto/comfortable/compact)** — the §5.2 patches already implement the "auto" behavior; add the config knob in `core/src/config.ts` schema
 - [ ] **Linux/Ghostty drag-drop + clipboard image paste** — port `tui/util/uri.ts` parser (pure logic); wire into v2 prompt component; config entry
 - [ ] **Session header visibility toggle** — check v2 header structure; slot/keymap plugin if feasible
 - [ ] **Search in messages (Ctrl+F)** — `api.route.register` plugin route (use `feature-plugins/system/scrap.tsx` as the pattern)
@@ -175,10 +175,10 @@ Not full infra (that's backlog) — just enough to ship and to keep syncing:
 
 - [ ] **CI:** get `test`/typecheck workflows green on `integration-v2`; note upstream `publish.yml` is guarded `if: github.repository == 'anomalyco/opencode'` (inert on the fork — decide whether to adapt it or keep the fork's `snapshot.yml` path)
 - [ ] **Fork release path:** rework `snapshot.yml` + `script/publish.ts` expectations against v2's build (`packages/cli/script/{build,publish}.ts`, per-platform `@opencode-ai/cli-<target>` packages → fork-scoped names)
-- [ ] **Retarget sync tooling to v2:** `upstream-sync.yml` (track `upstream/v2` instead of release tags), `script/sync/release-watcher.sh` (v2 has no tag cadence yet — switch to watching the `v2` branch or disable until upstream tags v2 releases), `detect-conflicts.ts` + `fork-features.json` (update all file paths: `packages/opencode/src/cli/cmd/tui/*` → `packages/tui/*`, etc.)
-- [ ] **Fix stale upstream org while in there:** the sync tooling still points at `sst/opencode` — `script/sync/release-watcher.sh:13` (releases.atom feed) and `upstream-sync.yml` in ≥6 places (lines 45, 65, 70, 103, 315, 501). GitHub's org redirect masks it today, but redirects can break (esp. the API endpoints) — retarget all to `anomalyco/opencode`
+- [x] **Retarget sync tooling to v2:** `upstream-sync.yml` (track `upstream/v2` instead of release tags), `script/sync/release-watcher.sh` (v2 has no tag cadence yet — switch to watching the `v2` branch or disable until upstream tags v2 releases), `detect-conflicts.ts` + `fork-features.json` (update all file paths: `packages/opencode/src/cli/cmd/tui/*` → `packages/tui/*`, etc.)
+- [x] **Fix stale upstream org while in there:** the sync tooling still points at `sst/opencode` — `script/sync/release-watcher.sh:13` (releases.atom feed) and `upstream-sync.yml` in ≥6 places (lines 45, 65, 70, 103, 315, 501). GitHub's org redirect masks it today, but redirects can break (esp. the API endpoints) — retarget all to `anomalyco/opencode`
 - [ ] **Fix while in there:** `discord-release.yml` has `RELEASE_TAG` hardcoded to stale `v1.2.27`
-- [ ] Update `.github/last-synced-tag` semantics: record the synced **v2 commit SHA** (there are no v2 tags yet), and document the new flow in `AGENTS.md` §"Upstream Merge Operations"
+- [x] Update `.github/last-synced-tag` semantics: record the synced **v2 commit SHA** (there are no v2 tags yet), and document the new flow in `AGENTS.md` §"Upstream Merge Operations"
 - [ ] **Cutover:** when Tier 1 is validated, decide branch endgame — recommended: keep `integration` frozen as v1 archive, make `integration-v2` the default branch on `Latitudes-Dev/shuvcode` (or rename to `integration` after a final backup tag)
 
 **Validation:** one end-to-end fork release (`1.17.13-1`) from CI: npm publish + GH release + binary installs and self-updates. Self-update check must specifically cover prerelease-style fork versions (see §6 versioning caveat): the updater must offer `1.17.13-1` → `1.17.13-2` and must not treat upstream `1.17.13` as newer than the fork build.

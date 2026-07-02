@@ -142,17 +142,12 @@ main() {
     
     if [ "$LATEST" != "$LAST_SEEN" ]; then
       log "New v2 commit detected: $LATEST (was: ${LAST_SEEN:-none})"
-      
-      # Write state BEFORE triggering to prevent duplicate triggers on crash/restart
-      echo "$LATEST" > "$STATE_FILE"
-      log "State updated to $LATEST (pre-trigger)"
-      
+
       if trigger_workflow "$LATEST"; then
+        echo "$LATEST" > "$STATE_FILE"
         log "Successfully processed v2 update $LATEST"
       else
-        log "ERROR: Failed to trigger workflow for $LATEST"
-        # Don't revert state - the workflow concurrency group will handle dedup
-        # and we don't want to keep retrying if there's an auth issue
+        log "ERROR: Failed to trigger workflow for $LATEST (state unchanged; will retry)"
       fi
     else
       log "No new v2 commit (current: $LATEST)"

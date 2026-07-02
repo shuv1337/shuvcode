@@ -113,6 +113,7 @@ export const Plugin = define({
             effect: (host) => plugin.effect({ ...host, options: ref.options ?? {} }),
           })
         }).pipe(
+          // Effect v4: catchCause + logError replaces ignoreCause — failures are logged then swallowed.
           Effect.catchCause((cause) =>
             Effect.logError("failed to load plugin", { id: ref.package, cause: Cause.pretty(cause) }),
           ),

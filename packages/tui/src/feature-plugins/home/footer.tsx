@@ -6,6 +6,8 @@ import { abbreviateHome } from "../../runtime"
 import { Locale } from "../../util/locale"
 import { useTuiPaths } from "../../context/runtime"
 import { useHomeSessionDestination } from "../../routes/home/session-destination"
+import { useTuiConfig } from "../../config"
+import { compactMetadata } from "../../util/density"
 
 const id = "internal:home-footer"
 
@@ -74,8 +76,9 @@ function Version(props: { api: TuiPluginApi }) {
 
 function View(props: { api: TuiPluginApi }) {
   const dimensions = useTerminalDimensions()
+  const tuiConfig = useTuiConfig()
   const versionWidth = createMemo(() => props.api.app.version.length)
-  const compact = createMemo(() => dimensions().width < 70)
+  const compact = createMemo(() => compactMetadata(tuiConfig.density, dimensions().width))
   const directoryWidth = createMemo(() =>
     Math.max(1, dimensions().width - 4 - versionWidth() - (compact() ? 1 : 18)),
   )
