@@ -1,8 +1,7 @@
+# DISABLED during v2 port (PLAN-upstream-v2-merge.md Phase 0). Re-enable in Phase 5.
 name: Upstream Sync
 
 on:
-  repository_dispatch:
-    types: [upstream-release]
   workflow_dispatch:
     inputs:
       tag:
@@ -20,6 +19,7 @@ permissions:
 
 jobs:
   resolve-tag:
+    if: false
     runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       latest_tag: ${{ steps.resolve.outputs.latest_tag }}
