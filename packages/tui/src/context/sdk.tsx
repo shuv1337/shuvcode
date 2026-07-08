@@ -5,7 +5,7 @@ import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 
-export type SDKConnectionStatus = "connected" | "connecting"
+export type SDKConnectionStatus = "connected" | "connecting" | "reconnecting"
 
 type SDKEventMap = { [Type in V2Event["type"]]: Extract<V2Event, { type: Type }> }
 const connectTimeout = 2_000
@@ -27,11 +27,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       status: SDKConnectionStatus
       attempt: number
       error?: string
-      connectedOnce: boolean
     }>({
       status: "connecting",
       attempt: 0,
-      connectedOnce: false,
     })
     let stream: AbortController | undefined
 
@@ -70,7 +68,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             clearTimeout(timeout)
             attempt = 0
             events.emit(first.value.type, first.value)
-            setConnection({ status: "connected", attempt: 0, error: undefined, connectedOnce: true })
+            setConnection({ status: "connected", attempt: 0, error: undefined })
             connected()
             while (!abort.signal.aborted && !controller.signal.aborted) {
               const event = await iterator.next()
@@ -98,7 +96,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             }
           }
           setConnection({
-            status: "connecting",
+            status: "reconnecting",
             attempt,
             error: error instanceof Error ? error.message : String(error),
           })
@@ -135,9 +133,6 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         },
         error() {
           return connection.error
-        },
-        connectedOnce() {
-          return connection.connectedOnce
         },
       },
       reload: props.reload,

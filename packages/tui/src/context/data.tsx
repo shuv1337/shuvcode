@@ -1,3 +1,8 @@
+// Client data layer: apply server events and cache API reads into a Solid store.
+// Prefer straightforward projection. Do not add generation counters, stale-response
+// merges, live/history overlays, or other race machinery here—last write wins.
+// Reconnect may re-bootstrap; that is enough. UI and the server own ordering concerns.
+
 import type {
   AgentInfo,
   CommandInfo,
@@ -106,34 +111,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       directory: process.cwd(),
     })
     const messageIndex = new Map<string, Map<string, number>>()
-    const sessionRefreshGeneration = new Map<string, number>()
-    const sessionRefreshApplied = new Map<string, number>()
-    const sessionUsage = new Map<string, { generation: number; cost: number; tokens: SessionInfo["tokens"] }>()
-    let connectionGeneration = 0
-    let statusChanges: Set<string> | undefined
     let bootstrapping: Promise<void> | undefined
 
     function setSessionStatus(sessionID: string, status: DataSessionStatus) {
-      statusChanges?.add(sessionID)
       setStore("session", "status", sessionID, status)
-    }
-
-    function nextSessionRefresh(sessionID: string) {
-      const generation = (sessionRefreshGeneration.get(sessionID) ?? 0) + 1
-      sessionRefreshGeneration.set(sessionID, generation)
-      return generation
-    }
-
-    function applySessionRefresh(sessionID: string, generation: number) {
-      if ((sessionRefreshApplied.get(sessionID) ?? 0) > generation) return false
-      sessionRefreshApplied.set(sessionID, generation)
-      return true
-    }
-
-    function updateSessionUsage(sessionID: string, cost: number, tokens: SessionInfo["tokens"]) {
-      sessionUsage.set(sessionID, { generation: (sessionUsage.get(sessionID)?.generation ?? 0) + 1, cost, tokens })
-      if (!store.session.info[sessionID]) return
-      setStore("session", "info", sessionID, { cost, tokens })
     }
 
     const message = {
@@ -237,8 +218,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     }
 
     function removeSession(sessionID: string) {
-      sessionRefreshApplied.set(sessionID, nextSessionRefresh(sessionID))
-      sessionUsage.delete(sessionID)
       messageIndex.delete(sessionID)
       setStore(
         "session",
@@ -267,7 +246,11 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           removeSession(event.data.sessionID)
           break
         case "session.usage.updated":
-          updateSessionUsage(event.data.sessionID, event.data.cost, event.data.tokens)
+          if (store.session.info[event.data.sessionID])
+            setStore("session", "info", event.data.sessionID, {
+              cost: event.data.cost,
+              tokens: event.data.tokens,
+            })
           break
         case "catalog.updated":
           void Promise.all([
@@ -807,20 +790,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     const result = {
       on: sdk.event.on,
       listen: sdk.event.listen,
-      connection: {
-        status() {
-          return sdk.connection.status()
-        },
-        attempt() {
-          return sdk.connection.attempt()
-        },
-        error() {
-          return sdk.connection.error()
-        },
-        connectedOnce() {
-          return sdk.connection.connectedOnce()
-        },
-      },
       session: {
         list() {
           return Object.values(store.session.info).toSorted((a, b) => b.time.updated - a.time.updated)
@@ -846,17 +815,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           },
         },
         async refresh(sessionID: string) {
-          const generation = nextSessionRefresh(sessionID)
-          const usageGeneration = sessionUsage.get(sessionID)?.generation ?? 0
-          const info = mutable(await sdk.api.session.get({ sessionID }))
-          if (!applySessionRefresh(sessionID, generation)) return
-          const usage = sessionUsage.get(sessionID)
-          setStore(
-            "session",
-            "info",
-            sessionID,
-            usage && usage.generation !== usageGeneration ? { ...info, cost: usage.cost, tokens: usage.tokens } : info,
-          )
+          setStore("session", "info", sessionID, mutable(await sdk.api.session.get({ sessionID })))
           registerSession(sessionID)
         },
         message: {
@@ -872,21 +831,11 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return position === undefined ? undefined : messages?.[position]
           },
           async refresh(sessionID: string) {
-            const live = [...(store.session.message[sessionID] ?? [])]
             setStore("session", "message", sessionID, [])
             messageIndex.set(sessionID, new Map())
-            const loaded = mutable(
+            const messages = mutable(
               (await sdk.api.message.list({ sessionID, limit: 200, order: "desc" })).data,
             ).toReversed()
-            const loadedIDs = new Set(loaded.map((message) => message.id))
-            const liveByID = new Map(live.map((message) => [message.id, message]))
-            const messages = [
-              ...loaded.map((message) => {
-                if (message.type === "user") return message
-                return liveByID.get(message.id) ?? message
-              }),
-              ...live.filter((message) => !loadedIDs.has(message.id)),
-            ].toSorted((a, b) => a.time.created - b.time.created)
             messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
             setStore("session", "message", sessionID, messages)
           },
@@ -1031,8 +980,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
 
     async function bootstrap() {
       if (bootstrapping) return bootstrapping
-      const generation = new Map(sessionRefreshApplied)
-      const usageGeneration = new Map(Array.from(sessionUsage, ([id, usage]) => [id, usage.generation]))
       bootstrapping = Promise.allSettled([
         sdk.api.session
           .list({
@@ -1046,15 +993,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
               "session",
               "info",
               produce((draft) => {
-                for (const session of response.data) {
-                  if ((sessionRefreshApplied.get(session.id) ?? 0) !== (generation.get(session.id) ?? 0)) continue
-                  const usage = sessionUsage.get(session.id)
-                  draft[session.id] = mutable(
-                    usage && usage.generation !== (usageGeneration.get(session.id) ?? 0)
-                      ? { ...session, cost: usage.cost, tokens: usage.tokens }
-                      : session,
-                  )
-                }
+                for (const session of response.data) draft[session.id] = mutable(session)
               }),
             )
             for (const session of response.data) registerSession(session.id)
@@ -1101,23 +1040,16 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     }
 
     function refreshActive() {
-      const generation = ++connectionGeneration
-      const changed = new Set<string>()
-      statusChanges = changed
       void sdk.api.session
         .active()
         .then((active) => {
-          if (generation !== connectionGeneration) return
-          const status: Record<string, DataSessionStatus> = Object.fromEntries(
-            Object.keys(active).map((sessionID) => [sessionID, "running" as const]),
+          setStore(
+            "session",
+            "status",
+            reconcile(Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, "running" as const]))),
           )
-          for (const sessionID of changed) status[sessionID] = store.session.status[sessionID]
-          setStore("session", "status", reconcile(status))
         })
         .catch(() => undefined)
-        .finally(() => {
-          if (statusChanges === changed) statusChanges = undefined
-        })
     }
 
     onCleanup(

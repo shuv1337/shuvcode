@@ -6,7 +6,7 @@ import { SessionMessage } from "@opencode-ai/core/session/message"
 import { EventV2 } from "@opencode-ai/core/event"
 import { onMount } from "solid-js"
 import { ProjectProvider } from "../../../src/context/project"
-import { SDKProvider } from "../../../src/context/sdk"
+import { SDKProvider, useSDK } from "../../../src/context/sdk"
 import { DataProvider, useData } from "../../../src/context/data"
 import { createSessionRows, type SessionRow } from "../../../src/routes/session/rows"
 import { createApi, createClient, createEventStream, createFetch, directory, json } from "../../fixture/tui-sdk"
@@ -114,24 +114,22 @@ test("refreshes resources into reactive getters", async () => {
   }
 })
 
-test("applies absolute usage events without losing full session updates", async () => {
+test("applies absolute usage events to session info", async () => {
   const events = createEventStream()
   const sessionID = "ses_usage_refresh"
-  let resolveSessions!: (response: Response) => void
-  const resolveSession: Array<(response: Response) => void> = []
-  let sessionsRequested = false
   const calls = createFetch((url) => {
-    if (url.pathname === "/api/session") {
-      sessionsRequested = true
-      return new Promise<Response>((resolve) => {
-        resolveSessions = resolve
+    if (url.pathname === `/api/session/${sessionID}`)
+      return json({
+        data: {
+          id: sessionID,
+          projectID: "proj_test",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          time: { created: 0, updated: 0 },
+          title: "Usage",
+          location: { directory },
+        },
       })
-    }
-    if (url.pathname === `/api/session/${sessionID}`) {
-      return new Promise<Response>((resolve) => {
-        resolveSession.push(resolve)
-      })
-    }
   }, events)
   let data!: ReturnType<typeof useData>
 
@@ -153,7 +151,7 @@ test("applies absolute usage events without losing full session updates", async 
   ))
 
   try {
-    await wait(() => sessionsRequested)
+    await data.session.refresh(sessionID)
     emitEvent(events, {
       id: "evt_usage_2",
       created: 2,
@@ -164,38 +162,6 @@ test("applies absolute usage events without losing full session updates", async 
         tokens: { input: 5, output: 2, reasoning: 1, cache: { read: 1, write: 1 } },
       },
     })
-    const initialRefresh = data.session.refresh(sessionID)
-    await wait(() => resolveSession.length === 1)
-    resolveSessions(
-      json({
-        data: [
-          {
-            id: sessionID,
-            projectID: "proj_test",
-            cost: 0,
-            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-            time: { created: 0, updated: 0 },
-            title: "Stale usage",
-            location: { directory },
-          },
-        ],
-        cursor: {},
-      }),
-    )
-    resolveSession[0](
-      json({
-        data: {
-          id: sessionID,
-          projectID: "proj_test",
-          cost: 0.5,
-          tokens: { input: 5, output: 2, reasoning: 1, cache: { read: 1, write: 1 } },
-          time: { created: 0, updated: 0 },
-          title: "Current usage",
-          location: { directory },
-        },
-      }),
-    )
-    await initialRefresh
     await wait(() => data.session.get(sessionID)?.cost === 0.5)
     expect(data.session.get(sessionID)?.tokens).toEqual({
       input: 5,
@@ -204,7 +170,6 @@ test("applies absolute usage events without losing full session updates", async 
       cache: { read: 1, write: 1 },
     })
 
-    const fullRefresh = data.session.refresh(sessionID)
     emitEvent(events, {
       id: "evt_usage_3",
       created: 3,
@@ -216,57 +181,8 @@ test("applies absolute usage events without losing full session updates", async 
       },
     })
     await wait(() => data.session.get(sessionID)?.cost === 1)
-    resolveSession[1](
-      json({
-        data: {
-          id: sessionID,
-          projectID: "proj_test",
-          cost: 0.75,
-          tokens: { input: 8, output: 3, reasoning: 1, cache: { read: 1, write: 1 } },
-          time: { created: 0, updated: 0 },
-          title: "Older usage",
-          location: { directory },
-        },
-      }),
-    )
-    await fullRefresh
-    await Bun.sleep(20)
-    expect(data.session.get(sessionID)?.cost).toBe(1)
-    expect(data.session.get(sessionID)?.title).toBe("Older usage")
+    expect(data.session.get(sessionID)?.title).toBe("Usage")
 
-    emitEvent(events, {
-      id: "evt_usage_6",
-      created: 6,
-      type: "session.usage.updated",
-      data: {
-        sessionID,
-        cost: 1.25,
-        tokens: { input: 12, output: 5, reasoning: 1, cache: { read: 1, write: 1 } },
-      },
-    })
-    emitEvent(events, {
-      id: "evt_usage_7",
-      created: 7,
-      type: "session.usage.updated",
-      data: {
-        sessionID,
-        cost: 1.25,
-        tokens: { input: 12, output: 5, reasoning: 1, cache: { read: 1, write: 1 } },
-      },
-    })
-    await wait(() => data.session.get(sessionID)?.cost === 1.25)
-    expect(data.session.get(sessionID)?.title).toBe("Older usage")
-
-    emitEvent(events, {
-      id: "evt_usage_8",
-      created: 8,
-      type: "session.usage.updated",
-      data: {
-        sessionID,
-        cost: 1.5,
-        tokens: { input: 14, output: 6, reasoning: 1, cache: { read: 1, write: 1 } },
-      },
-    })
     emitEvent(events, {
       id: "evt_usage_deleted",
       created: 9,
@@ -274,8 +190,7 @@ test("applies absolute usage events without losing full session updates", async 
       durable: durable(sessionID, 9, 2),
       data: { sessionID },
     })
-    await Bun.sleep(20)
-    expect(data.session.get(sessionID)).toBeUndefined()
+    await wait(() => data.session.get(sessionID) === undefined)
   } finally {
     app.renderer.destroy()
   }
@@ -579,9 +494,11 @@ test("reconnects the event stream and bootstraps fresh data", async () => {
     })
   }, events)
   let data!: ReturnType<typeof useData>
+  let sdk!: ReturnType<typeof useSDK>
 
   function Probe() {
     data = useData()
+    sdk = useSDK()
     return <box />
   }
 
@@ -600,32 +517,24 @@ test("reconnects the event stream and bootstraps fresh data", async () => {
   try {
     await wait(() => data.location.model.list()?.[0]?.id === "model-1")
     await wait(() => data.session.status("session-stale") === "running")
-    expect(data.connection.status()).toBe("connected")
-    expect(data.connection.attempt()).toBe(0)
+    expect(sdk.connection.status()).toBe("connected")
+    expect(sdk.connection.attempt()).toBe(0)
 
     events.disconnect()
-    await wait(() => data.connection.status() === "connecting")
-    expect(data.connection.attempt()).toBe(1)
-    expect(data.connection.error()).toBe("Event stream disconnected")
+    await wait(() => sdk.connection.status() === "reconnecting")
+    expect(sdk.connection.attempt()).toBe(1)
+    expect(sdk.connection.error()).toBe("Event stream disconnected")
 
-    await wait(() => requests.active === 2 && data.connection.status() === "connected", 4000)
-    emitEvent(events, {
-      id: "evt_execution_started_after_reconnect",
-      created: 1,
-      type: "session.execution.started",
-      durable: durable("session-new"),
-      data: { sessionID: "session-new" },
-    })
-    await wait(() => data.session.status("session-new") === "running")
-    resolveActive(json({ data: {} }))
+    await wait(() => requests.active === 2 && sdk.connection.status() === "connected", 4000)
+    resolveActive(json({ data: { "session-new": { type: "running" } } }))
 
     await wait(() => data.location.model.list()?.[0]?.id === "model-2", 4000)
     await wait(() => data.session.status("session-stale") === "idle")
     expect(data.session.status("session-new")).toBe("running")
     expect(requests.event).toBe(2)
-    expect(data.connection.status()).toBe("connected")
-    expect(data.connection.attempt()).toBe(0)
-    expect(data.connection.error()).toBeUndefined()
+    expect(sdk.connection.status()).toBe("connected")
+    expect(sdk.connection.attempt()).toBe(0)
+    expect(sdk.connection.error()).toBeUndefined()
   } finally {
     app.renderer.destroy()
   }
@@ -766,7 +675,7 @@ test("removes committed revert messages from local state", async () => {
   }
 })
 
-test("connectedOnce is false until first connect and persists across disconnect", async () => {
+test("distinguishes initial connection from reconnection", async () => {
   const encoder = new TextEncoder()
   let stream: ReadableStreamDefaultController<Uint8Array> | undefined
   const eventResponse = () =>
@@ -792,10 +701,10 @@ test("connectedOnce is false until first connect and persists across disconnect"
   const calls = createFetch((url) => {
     if (url.pathname === "/api/event") return eventResponse()
   })
-  let data!: ReturnType<typeof useData>
+  let sdk!: ReturnType<typeof useSDK>
 
   function Probe() {
-    data = useData()
+    sdk = useSDK()
     return <box />
   }
 
@@ -813,16 +722,13 @@ test("connectedOnce is false until first connect and persists across disconnect"
 
   try {
     await wait(() => stream !== undefined)
-    expect(data.connection.status()).toBe("connecting")
-    expect(data.connection.connectedOnce()).toBe(false)
+    expect(sdk.connection.status()).toBe("connecting")
 
     connect()
-    await wait(() => data.connection.status() === "connected")
-    expect(data.connection.connectedOnce()).toBe(true)
+    await wait(() => sdk.connection.status() === "connected")
 
     disconnect()
-    await wait(() => data.connection.status() === "connecting")
-    expect(data.connection.connectedOnce()).toBe(true)
+    await wait(() => sdk.connection.status() === "reconnecting")
   } finally {
     app.renderer.destroy()
   }
@@ -1462,9 +1368,11 @@ test("adds and dismisses permission requests from live events", async () => {
   const events = createEventStream()
   const calls = createFetch(undefined, events)
   let data!: ReturnType<typeof useData>
+  let sdk!: ReturnType<typeof useSDK>
 
   function Probe() {
     data = useData()
+    sdk = useSDK()
     return <box />
   }
 
@@ -1481,7 +1389,7 @@ test("adds and dismisses permission requests from live events", async () => {
   ))
 
   try {
-    await wait(() => data.connection.status() === "connected")
+    await wait(() => sdk.connection.status() === "connected")
     emitEvent(events, {
       id: "evt_permission_asked_1",
       created: 0,
@@ -1580,9 +1488,11 @@ test("adds, dismisses, and refreshes form requests", async () => {
     return json({ data: [{ id: "frm_remote", sessionID: "ses_1", mode: "form", fields: [] }] })
   }, events)
   let data!: ReturnType<typeof useData>
+  let sdk!: ReturnType<typeof useSDK>
 
   function Probe() {
     data = useData()
+    sdk = useSDK()
     return <box />
   }
 
@@ -1599,7 +1509,7 @@ test("adds, dismisses, and refreshes form requests", async () => {
   ))
 
   try {
-    await wait(() => data.connection.status() === "connected")
+    await wait(() => sdk.connection.status() === "connected")
     emitEvent(events, {
       id: "evt_form_created_1",
       created: 0,
