@@ -823,7 +823,7 @@ function App(props: {
       },
       {
         name: "server.link",
-        title: "Show server connection information",
+        title: "Show server info",
         slashName: "link",
         run: () => {
           dialog.replace(() => <DialogLink credentials={props.link} />)
