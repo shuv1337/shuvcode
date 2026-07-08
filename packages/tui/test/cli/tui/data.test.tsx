@@ -114,92 +114,24 @@ test("refreshes resources into reactive getters", async () => {
   }
 })
 
-test("pages older messages through nested message state", async () => {
-  const events = createEventStream()
-  const sessionID = "ses_message_page"
-  const pages: Array<{ limit?: string | null; order?: string | null; cursor?: string | null }> = []
-  // Full first page (desc) so complete stays false until a short older page arrives.
-  const first = Array.from({ length: 50 }, (_, index) => {
-    const n = 51 - index
-    return { id: `msg_${n}`, type: "user" as const, text: String(n), time: { created: n } }
-  })
-  const calls = createFetch((url) => {
-    if (url.pathname !== `/api/session/${sessionID}/message`) return
-    pages.push({
-      limit: url.searchParams.get("limit"),
-      order: url.searchParams.get("order"),
-      cursor: url.searchParams.get("cursor"),
-    })
-    if (!url.searchParams.get("cursor"))
-      return json({
-        data: first,
-        cursor: { next: "cursor-older" },
-      })
-    return json({
-      data: [{ id: "msg_1", type: "user", text: "one", time: { created: 1 } }],
-      cursor: {},
-    })
-  }, events)
-  let data!: ReturnType<typeof useData>
-
-  function Probe() {
-    data = useData()
-    return <box />
-  }
-
-  const app = await testRender(() => (
-    <TestTuiContexts>
-      <SDKProvider client={createClient(calls.fetch)} api={createApi(calls.fetch)}>
-        <ProjectProvider>
-          <DataProvider>
-            <Probe />
-          </DataProvider>
-        </ProjectProvider>
-      </SDKProvider>
-    </TestTuiContexts>
-  ))
-
-  try {
-    await data.session.message.refresh(sessionID)
-    expect(pages).toEqual([{ limit: "50", order: "desc", cursor: null }])
-    expect(data.session.message.ids(sessionID)).toEqual(first.toReversed().map((message) => message.id))
-    expect(data.session.message.cursor(sessionID)).toBe("cursor-older")
-    expect(data.session.message.complete(sessionID)).toBe(false)
-    expect(data.session.message.loading(sessionID)).toBe(false)
-
-    await data.session.message.more(sessionID)
-    expect(pages).toEqual([
-      { limit: "50", order: "desc", cursor: null },
-      { limit: "50", order: null, cursor: "cursor-older" },
-    ])
-    expect(data.session.message.ids(sessionID)[0]).toBe("msg_1")
-    expect(data.session.message.ids(sessionID)).toHaveLength(51)
-    expect(data.session.message.cursor(sessionID)).toBeUndefined()
-    expect(data.session.message.complete(sessionID)).toBe(true)
-
-    await data.session.message.more(sessionID)
-    expect(pages).toHaveLength(2)
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-test("applies absolute usage events to session info", async () => {
+test("applies absolute usage events without losing full session updates", async () => {
   const events = createEventStream()
   const sessionID = "ses_usage_refresh"
+  let resolveSessions!: (response: Response) => void
+  const resolveSession: Array<(response: Response) => void> = []
+  let sessionsRequested = false
   const calls = createFetch((url) => {
-    if (url.pathname === `/api/session/${sessionID}`)
-      return json({
-        data: {
-          id: sessionID,
-          projectID: "proj_test",
-          cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-          time: { created: 0, updated: 0 },
-          title: "Usage",
-          location: { directory },
-        },
+    if (url.pathname === "/api/session") {
+      sessionsRequested = true
+      return new Promise<Response>((resolve) => {
+        resolveSessions = resolve
       })
+    }
+    if (url.pathname === `/api/session/${sessionID}`) {
+      return new Promise<Response>((resolve) => {
+        resolveSession.push(resolve)
+      })
+    }
   }, events)
   let data!: ReturnType<typeof useData>
 
@@ -221,7 +153,7 @@ test("applies absolute usage events to session info", async () => {
   ))
 
   try {
-    await data.session.refresh(sessionID)
+    await wait(() => sessionsRequested)
     emitEvent(events, {
       id: "evt_usage_2",
       created: 2,
@@ -232,6 +164,38 @@ test("applies absolute usage events to session info", async () => {
         tokens: { input: 5, output: 2, reasoning: 1, cache: { read: 1, write: 1 } },
       },
     })
+    const initialRefresh = data.session.refresh(sessionID)
+    await wait(() => resolveSession.length === 1)
+    resolveSessions(
+      json({
+        data: [
+          {
+            id: sessionID,
+            projectID: "proj_test",
+            cost: 0,
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            time: { created: 0, updated: 0 },
+            title: "Stale usage",
+            location: { directory },
+          },
+        ],
+        cursor: {},
+      }),
+    )
+    resolveSession[0](
+      json({
+        data: {
+          id: sessionID,
+          projectID: "proj_test",
+          cost: 0.5,
+          tokens: { input: 5, output: 2, reasoning: 1, cache: { read: 1, write: 1 } },
+          time: { created: 0, updated: 0 },
+          title: "Current usage",
+          location: { directory },
+        },
+      }),
+    )
+    await initialRefresh
     await wait(() => data.session.get(sessionID)?.cost === 0.5)
     expect(data.session.get(sessionID)?.tokens).toEqual({
       input: 5,
@@ -240,6 +204,7 @@ test("applies absolute usage events to session info", async () => {
       cache: { read: 1, write: 1 },
     })
 
+    const fullRefresh = data.session.refresh(sessionID)
     emitEvent(events, {
       id: "evt_usage_3",
       created: 3,
@@ -251,8 +216,57 @@ test("applies absolute usage events to session info", async () => {
       },
     })
     await wait(() => data.session.get(sessionID)?.cost === 1)
-    expect(data.session.get(sessionID)?.title).toBe("Usage")
+    resolveSession[1](
+      json({
+        data: {
+          id: sessionID,
+          projectID: "proj_test",
+          cost: 0.75,
+          tokens: { input: 8, output: 3, reasoning: 1, cache: { read: 1, write: 1 } },
+          time: { created: 0, updated: 0 },
+          title: "Older usage",
+          location: { directory },
+        },
+      }),
+    )
+    await fullRefresh
+    await Bun.sleep(20)
+    expect(data.session.get(sessionID)?.cost).toBe(1)
+    expect(data.session.get(sessionID)?.title).toBe("Older usage")
 
+    emitEvent(events, {
+      id: "evt_usage_6",
+      created: 6,
+      type: "session.usage.updated",
+      data: {
+        sessionID,
+        cost: 1.25,
+        tokens: { input: 12, output: 5, reasoning: 1, cache: { read: 1, write: 1 } },
+      },
+    })
+    emitEvent(events, {
+      id: "evt_usage_7",
+      created: 7,
+      type: "session.usage.updated",
+      data: {
+        sessionID,
+        cost: 1.25,
+        tokens: { input: 12, output: 5, reasoning: 1, cache: { read: 1, write: 1 } },
+      },
+    })
+    await wait(() => data.session.get(sessionID)?.cost === 1.25)
+    expect(data.session.get(sessionID)?.title).toBe("Older usage")
+
+    emitEvent(events, {
+      id: "evt_usage_8",
+      created: 8,
+      type: "session.usage.updated",
+      data: {
+        sessionID,
+        cost: 1.5,
+        tokens: { input: 14, output: 6, reasoning: 1, cache: { read: 1, write: 1 } },
+      },
+    })
     emitEvent(events, {
       id: "evt_usage_deleted",
       created: 9,
@@ -260,7 +274,8 @@ test("applies absolute usage events to session info", async () => {
       durable: durable(sessionID, 9, 2),
       data: { sessionID },
     })
-    await wait(() => data.session.get(sessionID) === undefined)
+    await Bun.sleep(20)
+    expect(data.session.get(sessionID)).toBeUndefined()
   } finally {
     app.renderer.destroy()
   }
@@ -594,7 +609,15 @@ test("reconnects the event stream and bootstraps fresh data", async () => {
     expect(data.connection.error()).toBe("Event stream disconnected")
 
     await wait(() => requests.active === 2 && data.connection.status() === "connected", 4000)
-    resolveActive(json({ data: { "session-new": { type: "running" } } }))
+    emitEvent(events, {
+      id: "evt_execution_started_after_reconnect",
+      created: 1,
+      type: "session.execution.started",
+      durable: durable("session-new"),
+      data: { sessionID: "session-new" },
+    })
+    await wait(() => data.session.status("session-new") === "running")
+    resolveActive(json({ data: {} }))
 
     await wait(() => data.location.model.list()?.[0]?.id === "model-2", 4000)
     await wait(() => data.session.status("session-stale") === "idle")
@@ -608,18 +631,16 @@ test("reconnects the event stream and bootstraps fresh data", async () => {
   }
 })
 
-test("keeps pending prompts out of history rows until promoted", async () => {
+test("completes exploration when a queued prompt is promoted", async () => {
   const events = createEventStream()
   const sessionID = "session-promotion"
   const calls = createFetch((url) => {
     if (url.pathname === `/api/session/${sessionID}/message`) return json({ data: [], cursor: {} })
   }, events)
   let rows!: ReturnType<typeof createSessionRows>
-  let data!: ReturnType<typeof useData>
 
   function Probe() {
     rows = createSessionRows(() => sessionID)
-    data = useData()
     return <box />
   }
 
@@ -674,8 +695,7 @@ test("keeps pending prompts out of history rows until promoted", async () => {
         delivery: "steer",
       },
     })
-    await wait(() => data.session.input.has(sessionID, "message-user"))
-    expect(rows.some((row) => row.type === "message" && row.messageID === "message-user")).toBe(false)
+    await wait(() => rows.at(-1)?.type === "message")
     expect(rows.find((row) => row.type === "group")?.completed).toBe(false)
 
     emitEvent(events, {
@@ -685,8 +705,7 @@ test("keeps pending prompts out of history rows until promoted", async () => {
       durable: durable(sessionID, 3),
       data: { sessionID, inputID: "message-user" },
     })
-    await wait(() => rows.some((row) => row.type === "message" && row.messageID === "message-user"))
-    expect(data.session.input.has(sessionID, "message-user")).toBe(false)
+    await wait(() => rows.find((row) => row.type === "group")?.completed === true)
     expect(rows.at(-1)).toEqual({ type: "message", messageID: "message-user" })
   } finally {
     app.renderer.destroy()

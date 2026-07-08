@@ -198,16 +198,6 @@ export function Session() {
       ?.id
   })
 
-  // Admitted inputs and in-flight manual compaction sit after history, not in rows.
-  const pendingMessages = createMemo(() => {
-    const boundary = session()?.revert?.messageID
-    return messages().filter((message) => {
-      if (boundary && message.id >= boundary) return false
-      if (data.session.input.has(route.sessionID, message.id)) return true
-      return message.type === "compaction" && (message.status === "queued" || message.status === "running")
-    })
-  })
-
   const lastAssistant = createMemo(() => {
     return messages().findLast((x) => x.type === "assistant")
   })
@@ -251,44 +241,37 @@ export function Session() {
     }),
   )
 
-  createEffect(
-    on(
-      () => route.sessionID,
-      (sessionID) => {
-        void (async () => {
-          if (data.session.message.list(sessionID).length === 0) {
-            await Promise.all([
-              data.session.refresh(sessionID),
-              data.session.message.refresh(sessionID),
-              data.session.permission.refresh(sessionID),
-              data.session.form.refresh(sessionID),
-            ])
-          }
-          const info = data.session.get(sessionID)
-          if (!info) {
-            toast.show({
-              message: `Session not found: ${sessionID}`,
-              variant: "error",
-              duration: 5000,
-            })
-            navigate({ type: "home" })
-            return
-          }
-          project.workspace.set(info.location.workspaceID)
-          editor.reconnect(info.location.directory)
-          if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
-        })().catch((error) => {
-          if (route.sessionID !== sessionID) return
-          toast.show({
-            message: errorMessage(error),
-            variant: "error",
-            duration: 5000,
-          })
-          navigate({ type: "home" })
+  createEffect(() => {
+    const sessionID = route.sessionID
+    void (async () => {
+      await Promise.all([
+        data.session.refresh(sessionID),
+        data.session.permission.refresh(sessionID),
+        data.session.form.refresh(sessionID),
+      ])
+      const info = data.session.get(sessionID)
+      if (!info) {
+        toast.show({
+          message: `Session not found: ${sessionID}`,
+          variant: "error",
+          duration: 5000,
         })
-      },
-    ),
-  )
+        navigate({ type: "home" })
+        return
+      }
+      project.workspace.set(info.location.workspaceID)
+      editor.reconnect(info.location.directory)
+      if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
+    })().catch((error) => {
+      if (route.sessionID !== sessionID) return
+      toast.show({
+        message: errorMessage(error),
+        variant: "error",
+        duration: 5000,
+      })
+      navigate({ type: "home" })
+    })
+  })
 
   let seeded = false
   let scroll: ScrollBoxRenderable
@@ -344,14 +327,12 @@ export function Session() {
 
     if (!targetID) {
       scroll.scrollBy(direction === "next" ? scroll.height : -scroll.height)
-      if (direction === "prev") loadOlder()
       dialog.clear()
       return
     }
 
     const child = scroll.getChildren().find((c) => c.id === targetID)
     if (child) scroll.scrollBy(child.y - scroll.y - 1)
-    if (direction === "prev") loadOlder()
     dialog.clear()
   }
 
@@ -360,24 +341,6 @@ export function Session() {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
     }, 50)
-  }
-
-  let loadingOlder = false
-  function loadOlder() {
-    if (loadingOlder || scroll.scrollTop > 2) return
-    loadingOlder = true
-    const before = scroll.scrollHeight
-    void data.session.message.more(route.sessionID).then(
-      () => {
-        setTimeout(() => {
-          if (!scroll.isDestroyed) scroll.scrollBy(scroll.scrollHeight - before)
-          loadingOlder = false
-        }, 50)
-      },
-      () => {
-        loadingOlder = false
-      },
-    )
   }
 
   const sessionCommandList = createMemo(() => [
@@ -585,7 +548,6 @@ export function Session() {
       hidden: true,
       run: () => {
         scroll.scrollBy(-scroll.height / 2)
-        loadOlder()
         dialog.clear()
       },
     },
@@ -606,7 +568,6 @@ export function Session() {
       hidden: true,
       run: () => {
         scroll.scrollBy(-1)
-        loadOlder()
         dialog.clear()
       },
     },
@@ -627,7 +588,6 @@ export function Session() {
       hidden: true,
       run: () => {
         scroll.scrollBy(-scroll.height / 4)
-        loadOlder()
         dialog.clear()
       },
     },
@@ -648,7 +608,6 @@ export function Session() {
       hidden: true,
       run: () => {
         scroll.scrollTo(0)
-        loadOlder()
         dialog.clear()
       },
     },
@@ -958,9 +917,6 @@ export function Session() {
                 stickyStart="bottom"
                 flexGrow={1}
                 scrollAcceleration={scrollAcceleration()}
-                onMouseScroll={(event) => {
-                  if (event.scroll?.direction === "up") void loadOlder()
-                }}
               >
                 <For each={rows}>
                   {(row) => (
@@ -968,13 +924,6 @@ export function Session() {
                       row={row}
                       message={(messageID) => data.session.message.get(route.sessionID, messageID)}
                     />
-                  )}
-                </For>
-                <For each={pendingMessages()}>
-                  {(message) => (
-                    <box marginTop={1} flexShrink={0}>
-                      <SessionMessageView message={message} />
-                    </box>
                   )}
                 </For>
                 <BackgroundToolHint messages={messages()} />
