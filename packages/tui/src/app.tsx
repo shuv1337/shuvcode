@@ -6,6 +6,7 @@ import { Global } from "@opencode-ai/core/global"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
+import { LogProvider, useLog, type LogSink } from "./context/log"
 import { ExitProvider, useExit } from "./context/exit"
 import { EpilogueProvider } from "./context/epilogue"
 import * as Selection from "./util/selection"
@@ -149,6 +150,7 @@ export type TuiInput = {
   config: TuiConfig.Resolved
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
+  log: LogSink
 }
 
 function errorMessage(error: unknown) {
@@ -230,7 +232,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
           try {
             await input.pluginHost.dispose()
           } catch (error) {
-            console.error("Failed to dispose TUI plugins", error)
+            input.log("error", "Failed to dispose TUI plugins", { error })
           }
         }),
       )
@@ -252,112 +254,116 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
 
         await render(() => {
           return (
-            <ExitProvider
-              exit={(reason) => {
-                if (renderer.isDestroyed) return
-                exit.reason = reason
-                destroyRenderer(renderer)
-              }}
-            >
-              <EpilogueProvider set={(value) => (exit.epilogue = value)}>
-                <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}>
-                  <TuiPathsProvider
-                    value={{
-                      cwd: process.cwd(),
-                      home: global.home,
-                      state: global.state,
-                      worktree: global.data + "/worktree",
-                    }}
+            <LogProvider log={input.log}>
+              <ExitProvider
+                exit={(reason) => {
+                  if (renderer.isDestroyed) return
+                  exit.reason = reason
+                  destroyRenderer(renderer)
+                }}
+              >
+                <EpilogueProvider set={(value) => (exit.epilogue = value)}>
+                  <ErrorBoundary
+                    fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}
                   >
-                    <TuiTerminalEnvironmentProvider
+                    <TuiPathsProvider
                       value={{
-                        platform: process.platform,
-                        multiplexer: process.env.TMUX ? "tmux" : process.env.STY ? "screen" : undefined,
-                        displayServer: process.env.WAYLAND_DISPLAY
-                          ? "wayland"
-                          : process.env.DISPLAY
-                            ? "x11"
-                            : undefined,
+                        cwd: process.cwd(),
+                        home: global.home,
+                        state: global.state,
+                        worktree: global.data + "/worktree",
                       }}
                     >
-                      <TuiStartupProvider
+                      <TuiTerminalEnvironmentProvider
                         value={{
-                          initialRoute: process.env.OPENCODE_SCRAP
-                            ? { type: "plugin", id: "scrap" }
-                            : process.env.OPENCODE_ROUTE
-                              ? JSON.parse(process.env.OPENCODE_ROUTE)
+                          platform: process.platform,
+                          multiplexer: process.env.TMUX ? "tmux" : process.env.STY ? "screen" : undefined,
+                          displayServer: process.env.WAYLAND_DISPLAY
+                            ? "wayland"
+                            : process.env.DISPLAY
+                              ? "x11"
                               : undefined,
-                          skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
                         }}
                       >
-                        <ClipboardProvider>
-                          <OpencodeKeymapProvider keymap={keymap}>
-                            <ArgsProvider {...input.args}>
-                              <KVProvider>
-                                <ToastProvider>
-                                  <RouteProvider
-                                    initialRoute={
-                                      input.args.continue
-                                        ? {
-                                            type: "session",
-                                            sessionID: "dummy",
-                                          }
-                                        : undefined
-                                    }
-                                  >
-                                    <TuiConfigProvider config={input.config}>
-                                      <PluginRuntimeProvider value={pluginRuntime}>
-                                        <SDKProvider
-                                          client={input.client}
-                                          api={input.api}
-                                          discover={input.discover}
-                                          reload={input.reload}
-                                        >
-                                          <PermissionProvider>
-                                            <ProjectProvider>
-                                              <SyncProvider>
-                                                <DataProvider>
-                                                  <ThemeProvider mode={mode}>
-                                                    <LocalProvider>
-                                                      <PromptStashProvider>
-                                                        <DialogProvider>
-                                                          <FrecencyProvider>
-                                                            <PromptHistoryProvider>
-                                                              <PromptRefProvider>
-                                                                <EditorContextProvider>
-                                                                  <LocationProvider>
-                                                                    <App
-                                                                      onSnapshot={input.onSnapshot}
-                                                                      pluginHost={input.pluginHost}
-                                                                    />
-                                                                  </LocationProvider>
-                                                                </EditorContextProvider>
-                                                              </PromptRefProvider>
-                                                            </PromptHistoryProvider>
-                                                          </FrecencyProvider>
-                                                        </DialogProvider>
-                                                      </PromptStashProvider>
-                                                    </LocalProvider>
-                                                  </ThemeProvider>
-                                                </DataProvider>
-                                              </SyncProvider>
-                                            </ProjectProvider>
-                                          </PermissionProvider>
-                                        </SDKProvider>
-                                      </PluginRuntimeProvider>
-                                    </TuiConfigProvider>
-                                  </RouteProvider>
-                                </ToastProvider>
-                              </KVProvider>
-                            </ArgsProvider>
-                          </OpencodeKeymapProvider>
-                        </ClipboardProvider>
-                      </TuiStartupProvider>
-                    </TuiTerminalEnvironmentProvider>
-                  </TuiPathsProvider>
-                </ErrorBoundary>
-              </EpilogueProvider>
-            </ExitProvider>
+                        <TuiStartupProvider
+                          value={{
+                            initialRoute: process.env.OPENCODE_SCRAP
+                              ? { type: "plugin", id: "scrap" }
+                              : process.env.OPENCODE_ROUTE
+                                ? JSON.parse(process.env.OPENCODE_ROUTE)
+                                : undefined,
+                            skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
+                          }}
+                        >
+                          <ClipboardProvider>
+                            <OpencodeKeymapProvider keymap={keymap}>
+                              <ArgsProvider {...input.args}>
+                                <KVProvider>
+                                  <ToastProvider>
+                                    <RouteProvider
+                                      initialRoute={
+                                        input.args.continue
+                                          ? {
+                                              type: "session",
+                                              sessionID: "dummy",
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      <TuiConfigProvider config={input.config}>
+                                        <PluginRuntimeProvider value={pluginRuntime}>
+                                          <SDKProvider
+                                            client={input.client}
+                                            api={input.api}
+                                            discover={input.discover}
+                                            reload={input.reload}
+                                          >
+                                            <PermissionProvider>
+                                              <ProjectProvider>
+                                                <SyncProvider>
+                                                  <DataProvider>
+                                                    <ThemeProvider mode={mode}>
+                                                      <LocalProvider>
+                                                        <PromptStashProvider>
+                                                          <DialogProvider>
+                                                            <FrecencyProvider>
+                                                              <PromptHistoryProvider>
+                                                                <PromptRefProvider>
+                                                                  <EditorContextProvider>
+                                                                    <LocationProvider>
+                                                                      <App
+                                                                        onSnapshot={input.onSnapshot}
+                                                                        pluginHost={input.pluginHost}
+                                                                      />
+                                                                    </LocationProvider>
+                                                                  </EditorContextProvider>
+                                                                </PromptRefProvider>
+                                                              </PromptHistoryProvider>
+                                                            </FrecencyProvider>
+                                                          </DialogProvider>
+                                                        </PromptStashProvider>
+                                                      </LocalProvider>
+                                                    </ThemeProvider>
+                                                  </DataProvider>
+                                                </SyncProvider>
+                                              </ProjectProvider>
+                                            </PermissionProvider>
+                                          </SDKProvider>
+                                        </PluginRuntimeProvider>
+                                      </TuiConfigProvider>
+                                    </RouteProvider>
+                                  </ToastProvider>
+                                </KVProvider>
+                              </ArgsProvider>
+                            </OpencodeKeymapProvider>
+                          </ClipboardProvider>
+                        </TuiStartupProvider>
+                      </TuiTerminalEnvironmentProvider>
+                    </TuiPathsProvider>
+                  </ErrorBoundary>
+                </EpilogueProvider>
+              </ExitProvider>
+            </LogProvider>
           )
         }, renderer)
       })
@@ -374,6 +380,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
 })
 
 function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPluginHost }) {
+  const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const tuiConfig = useTuiConfig()
   const route = useRoute()
@@ -454,7 +461,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       dispose: () => attention.dispose(),
     })
     .catch((error) => {
-      console.error("Failed to load TUI plugins", error)
+      log.error("Failed to load TUI plugins", { error })
     })
     .finally(() => {
       setReady(true)
@@ -816,8 +823,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
                 toast.show({ variant: "info", message: "Reloading server...", duration: 30000 })
                 // reload resolves once the replacement service is healthy; the
                 // event stream reattaches through the reconnect loop.
-                await sdk
-                  .reload!()
+                await sdk.reload!()
                   .then(() => toast.show({ variant: "success", message: "Server reloaded" }))
                   .catch(toast.error)
               },
@@ -1091,7 +1097,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   })
 
   event.on("installation.update-available", async (evt) => {
-    console.log("installation.update-available", evt)
     const version = evt.data.version
 
     const skipped = kv.get("skipped_version")

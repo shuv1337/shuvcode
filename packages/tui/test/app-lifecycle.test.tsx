@@ -34,6 +34,7 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
         api: createApi(calls.fetch),
         config: createTuiResolvedConfig({ plugin_enabled: {} }),
         args: {},
+        log: () => {},
         pluginHost: {
           async start() {
             started()
@@ -115,6 +116,7 @@ test("session lifecycle updates the terminal title and prints the epilogue after
         api: createApi(calls.fetch),
         config: createTuiResolvedConfig({ plugin_enabled: {} }),
         args: { sessionID: "dummy" },
+        log: () => {},
         pluginHost: {
           async start(input) {
             api = input.api

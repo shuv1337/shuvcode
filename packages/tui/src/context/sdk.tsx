@@ -4,6 +4,7 @@ import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
+import { useLog } from "./log"
 
 export type SDKConnectionStatus = "connected" | "connecting" | "reconnecting"
 
@@ -19,6 +20,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     // Stops and starts the managed service; present only in service mode.
     reload?: () => Promise<void>
   }) => {
+    const log = useLog()
     const abort = new AbortController()
     let client = props.client
     let api = props.api
@@ -64,7 +66,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
               return connection.signal.reason instanceof Error
                 ? connection.signal.reason
                 : new Error("Event stream disconnected")
-            if (first.value.type !== "server.connected") return new Error("Event stream did not start with server.connected")
+            if (first.value.type !== "server.connected")
+              return new Error("Event stream did not start with server.connected")
             clearTimeout(timeout)
             attempt = 0
             events.emit(first.value.type, first.value)
@@ -74,6 +77,12 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
               const event = await iterator.next()
               if (abort.signal.aborted || controller.signal.aborted) return
               if (event.done) return new Error("Event stream disconnected")
+              if ("durable" in event.value)
+                log.info("event", {
+                  type: event.value.type,
+                  aggregateID: event.value.durable.aggregateID,
+                  seq: event.value.durable.seq,
+                })
               events.emit(event.value.type, event.value)
             }
           })()

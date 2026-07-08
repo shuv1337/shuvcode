@@ -18,6 +18,7 @@ export function runTui(
   const config = TuiConfig.resolve({}, { terminalSuspend: false })
   let disposeSlots: (() => void) | undefined
   return Effect.gen(function* () {
+    const runFork = Effect.runForkWith(yield* Effect.context())
     const options = { baseUrl: transport.url, headers: transport.headers }
     const api = OpenCode.make(options)
     const directory = yield* Effect.tryPromise(() => api.file.list({ location: { directory: process.cwd() } })).pipe(
@@ -41,6 +42,17 @@ export function runTui(
       reload,
       args,
       config,
+      log: (level, message, tags) => {
+        const effect =
+          level === "debug"
+            ? Effect.logDebug(message, tags)
+            : level === "warn"
+              ? Effect.logWarning(message, tags)
+              : level === "error"
+                ? Effect.logError(message, tags)
+                : Effect.logInfo(message, tags)
+        runFork(effect)
+      },
       pluginHost: {
         async start(input) {
           disposeSlots = await loadBuiltinPlugins(input.api, input.runtime)
