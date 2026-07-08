@@ -150,7 +150,7 @@ export type TuiInput = {
   config: TuiConfig.Resolved
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
-  log: LogSink
+  log?: LogSink
 }
 
 function errorMessage(error: unknown) {
@@ -186,6 +186,7 @@ function isVersionGreater(left: string, right: string) {
 }
 
 export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
+  const log = input.log ?? (() => {})
   const global = yield* Global.Service
   const exit = { epilogue: undefined as string | undefined, reason: undefined as unknown }
   const result = yield* Effect.scoped(
@@ -232,7 +233,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
           try {
             await input.pluginHost.dispose()
           } catch (error) {
-            input.log("error", "Failed to dispose TUI plugins", { error })
+            log("error", "Failed to dispose TUI plugins", { error })
           }
         }),
       )
@@ -254,7 +255,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
 
         await render(() => {
           return (
-            <LogProvider log={input.log}>
+            <LogProvider log={log}>
               <ExitProvider
                 exit={(reason) => {
                   if (renderer.isDestroyed) return
