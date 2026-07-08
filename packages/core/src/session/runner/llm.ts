@@ -48,11 +48,12 @@ import { SessionRunnerSystemPrompt } from "./system-prompt"
 import { Snapshot } from "../../snapshot"
 import { makeLocationNode } from "../../effect/app-node"
 import { llmClient } from "../../effect/app-node-platform"
-import { StepFailedError, UserInterruptedError } from "../error"
+import { AgentNotFoundError, StepFailedError, UserInterruptedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
 import type { SessionHooks } from "@opencode-ai/plugin/v2/effect/session"
 import { PluginHooks } from "../../plugin/hooks"
+import { PluginSupervisor } from "../../plugin/supervisor"
 
 type StepTokens = {
   readonly input: number
@@ -149,6 +150,7 @@ const layer = Layer.effect(
     const db = (yield* Database.Service).db
     const compaction = yield* SessionCompaction.Service
     const title = yield* SessionTitle.Service
+    const plugins = yield* PluginSupervisor.Service
     // Title generation is a side effect of the first step; it must not delay step continuation.
     // Tracked per process so repeated wakes before the second user message arrives don't
     // re-fire a redundant LLM call; `SessionTitle` itself is idempotent based on durable history.
@@ -209,7 +211,10 @@ const layer = Layer.effect(
       const session = yield* getSession(sessionID)
       if (session.location.directory !== location.directory || session.location.workspaceID !== location.workspaceID)
         return yield* Effect.interrupt
+      yield* plugins.flush
       const agent = yield* agents.select(session.agent)
+      const agentInfo = agent.info
+      if (!agentInfo) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
       // Establish what the model knows before admitting what the user said, so
       // a blocked first step leaves pending inputs untouched.
       const checkpoint = yield* InstructionCheckpoint.prepare(
@@ -218,9 +223,6 @@ const layer = Layer.effect(
         loadInstructions(agent, session.id),
         session.id,
       )
-      const toolFibers = yield* FiberSet.make<void, ToolOutputStore.Error | UserInterruptedError>()
-      const ownedToolFibers: Array<Fiber.Fiber<void, ToolOutputStore.Error | UserInterruptedError>> = []
-      let needsContinuation = false
       let currentStep = step
       if (promotion) {
         let promoted = 0
@@ -236,18 +238,15 @@ const layer = Layer.effect(
       const providerMetadataKey = model.route.providerMetadataKey ?? model.provider
       const entries = yield* SessionHistory.entriesForRunner(db, session.id, checkpoint.baselineSeq)
       const context = entries.map((entry) => entry.message)
-      const isLastStep = agent.info?.steps !== undefined && currentStep >= agent.info.steps
+      const isLastStep = agentInfo.steps !== undefined && currentStep >= agentInfo.steps
       const toolMaterialization = isLastStep
         ? undefined
-        : yield* tools.materialize({ permissions: agent.info?.permissions, model })
+        : yield* tools.materialize({ permissions: agentInfo.permissions, model })
       const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const request = LLM.request({
         model,
         providerOptions: { openai: { promptCacheKey } },
-        system: [
-          agent.info?.system ? agent.info.system : SessionRunnerSystemPrompt.provider(model),
-          checkpoint.baseline,
-        ]
+        system: [agentInfo.system ? agentInfo.system : SessionRunnerSystemPrompt.provider(model), checkpoint.baseline]
           .filter((part): part is string => part !== undefined && part.length > 0)
           .map(SystemPart.make),
         messages: [
@@ -257,6 +256,9 @@ const layer = Layer.effect(
         tools: toolMaterialization?.definitions ?? [],
         toolChoice: isLastStep ? "none" : undefined,
       })
+      const toolFibers = yield* FiberSet.make<void, ToolOutputStore.Error | UserInterruptedError>()
+      const ownedToolFibers: Array<Fiber.Fiber<void, ToolOutputStore.Error | UserInterruptedError>> = []
+      let needsContinuation = false
       const availableTools = new Map(request.tools.map((tool) => [tool.name, tool]))
       const requestEvent: SessionHooks["request"] = {
         sessionID: session.id,
@@ -436,7 +438,7 @@ const layer = Layer.effect(
             if (
               SessionRunnerRetry.isRetryable(llmFailure) &&
               !publisher.hasRetryEvidence() &&
-              (agent.info?.steps === undefined || currentStep < agent.info.steps)
+              (agentInfo.steps === undefined || currentStep < agentInfo.steps)
             ) {
               return yield* new SessionRunnerRetry.RetryableFailure({
                 cause: llmFailure,
@@ -700,5 +702,6 @@ export const node = makeLocationNode({
     Config.node,
     Snapshot.node,
     Database.node,
+    PluginSupervisor.node,
   ],
 })
