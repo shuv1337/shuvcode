@@ -6,6 +6,7 @@ test("exposes every standard HTTP API group", () => {
 
   expect(Object.keys(client)).toEqual([
     "health",
+    "server",
     "location",
     "agent",
     "plugin",
@@ -43,6 +44,21 @@ test("exposes every standard HTTP API group", () => {
   expect(Object.keys(client.pty)).toEqual(["list", "create", "get", "update", "remove"])
   expect(Object.keys(client.shell)).toEqual(["list", "create", "get", "timeout", "output", "remove"])
   expect(Object.keys(client.project)).toEqual(["list", "current", "directories"])
+})
+
+test("server.get uses the public HTTP contract", async () => {
+  let request: Request | undefined
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input) => {
+      request = input instanceof Request ? input : new Request(input)
+      return Response.json({ urls: ["http://192.168.1.10:4096"] })
+    },
+  })
+
+  expect(await client.server.get()).toEqual({ urls: ["http://192.168.1.10:4096"] })
+  expect(request?.method).toBe("GET")
+  expect(request?.url).toBe("http://localhost:3000/api/server")
 })
 
 test("MCP resource catalog uses the public HTTP contract", async () => {

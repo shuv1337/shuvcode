@@ -15154,6 +15154,37 @@ export type V2HealthGetResponses = {
 
 export type V2HealthGetResponse = V2HealthGetResponses[keyof V2HealthGetResponses]
 
+export type V2ServerGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/api/server"
+}
+
+export type V2ServerGetErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestErrorV2
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2ServerGetError = V2ServerGetErrors[keyof V2ServerGetErrors]
+
+export type V2ServerGetResponses = {
+  /**
+   * Success
+   */
+  200: {
+    urls: Array<string>
+  }
+}
+
+export type V2ServerGetResponse = V2ServerGetResponses[keyof V2ServerGetResponses]
+
 export type V2LocationGetData = {
   body?: never
   path?: never

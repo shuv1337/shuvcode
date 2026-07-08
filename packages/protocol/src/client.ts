@@ -34,6 +34,7 @@ export const ClientApi: ClientApiShape = makeDefaultApi({
 
 export const groupNames = {
   "server.health": "health",
+  "server.server": "server",
   "server.debug": "debug",
   "server.location": "location",
   "server.agent": "agent",

@@ -50,7 +50,8 @@
     "opentui-spinner": "catalog:",
     "semver": "catalog:",
     "solid-js": "catalog:",
-    "strip-ansi": "7.1.2"
+    "strip-ansi": "7.1.2",
+    "uqr": "0.1.3"
   },
   "devDependencies": {
     "@opencode-ai/script": "workspace:*",

@@ -362,6 +362,8 @@ import type {
   V2QuestionRequestListResponses,
   V2ReferenceListErrors,
   V2ReferenceListResponses,
+  V2ServerGetErrors,
+  V2ServerGetResponses,
   V2SessionActiveErrors,
   V2SessionActiveResponses,
   V2SessionBackgroundErrors,
@@ -5113,6 +5115,20 @@ export class Health extends HeyApiClient {
   }
 }
 
+export class Server extends HeyApiClient {
+  /**
+   * Get server information
+   *
+   * Return the URLs that can be used to connect to this server.
+   */
+  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<V2ServerGetResponses, V2ServerGetErrors, ThrowOnError>({
+      url: "/api/server",
+      ...options,
+    })
+  }
+}
+
 export class Location extends HeyApiClient {
   /**
    * Get location
@@ -8257,6 +8273,11 @@ export class V2 extends HeyApiClient {
   private _health?: Health
   get health(): Health {
     return (this._health ??= new Health({ client: this.client }))
+  }
+
+  private _server?: Server
+  get server(): Server {
+    return (this._server ??= new Server({ client: this.client }))
   }
 
   private _location?: Location

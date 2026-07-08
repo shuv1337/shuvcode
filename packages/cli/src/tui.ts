@@ -30,6 +30,7 @@ export function runTui(
     return yield* run({
       client: createOpencodeClient({ ...options, directory }),
       api,
+      link: linkCredentials(transport),
       discover: discover
         ? async () => {
             const next = await discover()
@@ -63,4 +64,13 @@ export function runTui(
       },
     })
   }).pipe(Effect.provide(AppNodeBuilder.build(Global.node)))
+}
+
+function linkCredentials(transport: Service.Transport) {
+  const authorization = new Headers(transport.headers).get("authorization")
+  if (!authorization?.startsWith("Basic ")) return { username: "opencode", password: "" }
+  const value = atob(authorization.slice("Basic ".length))
+  const separator = value.indexOf(":")
+  if (separator === -1) return { username: "opencode", password: "" }
+  return { username: value.slice(0, separator), password: value.slice(separator + 1) }
 }

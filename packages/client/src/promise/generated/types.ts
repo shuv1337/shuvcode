@@ -159,6 +159,8 @@ export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
 
 export type HealthGetOutput = { readonly healthy: true; readonly version: string; readonly pid: number }
 
+export type ServerGetOutput = { readonly urls: ReadonlyArray<string> }
+
 export type LocationGetInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined

@@ -1,5 +1,6 @@
 import type {
   HealthGetOutput,
+  ServerGetOutput,
   LocationGetInput,
   LocationGetOutput,
   AgentListInput,
@@ -325,6 +326,13 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<HealthGetOutput>(
           { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
+          requestOptions,
+        ),
+    },
+    server: {
+      get: (requestOptions?: RequestOptions) =>
+        request<ServerGetOutput>(
+          { method: "GET", path: `/api/server`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
           requestOptions,
         ),
     },

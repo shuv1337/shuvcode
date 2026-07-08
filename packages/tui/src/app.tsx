@@ -45,6 +45,7 @@ import { useConnected } from "./component/use-connected"
 import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
 import { DialogDebug } from "./component/dialog-debug"
+import { DialogLink, type DialogLinkCredentials } from "./component/dialog-link"
 import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
@@ -121,6 +122,7 @@ const appBindingCommands = [
   "provider.connect",
   "console.org.switch",
   "opencode.status",
+  "server.link",
   "opencode.debug",
   "theme.switch",
   "theme.switch_mode",
@@ -146,6 +148,7 @@ export type TuiInput = {
   api: OpenCodeClient
   discover?: () => Promise<{ client: OpencodeClient; api: OpenCodeClient }>
   reload?: () => Promise<void>
+  link?: DialogLinkCredentials
   args: Args
   config: TuiConfig.Resolved
   onSnapshot?: () => Promise<string[]>
@@ -335,6 +338,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                                       <App
                                                                         onSnapshot={input.onSnapshot}
                                                                         pluginHost={input.pluginHost}
+                                                                        link={input.link}
                                                                       />
                                                                     </LocationProvider>
                                                                   </EditorContextProvider>
@@ -380,7 +384,11 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
-function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPluginHost }) {
+function App(props: {
+  onSnapshot?: () => Promise<string[]>
+  pluginHost: TuiPluginHost
+  link?: DialogLinkCredentials
+}) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const tuiConfig = useTuiConfig()
@@ -810,6 +818,15 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         slashName: "status",
         run: () => {
           dialog.replace(() => <DialogStatus />)
+        },
+        category: "System",
+      },
+      {
+        name: "server.link",
+        title: "Show server connection information",
+        slashName: "link",
+        run: () => {
+          dialog.replace(() => <DialogLink credentials={props.link} />)
         },
         category: "System",
       },
