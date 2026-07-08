@@ -2661,9 +2661,10 @@ function Question(props: ToolProps) {
 }
 
 function Skill(props: ToolProps) {
+  const name = createMemo(() => stringValue(props.metadata.name) ?? stringValue(props.input.id))
   return (
-    <InlineTool icon="→" pending="Loading skill..." complete={stringValue(props.input.name)} part={props.part}>
-      Skill "{stringValue(props.input.name)}"
+    <InlineTool icon="→" pending="Loading skill..." complete={name()} part={props.part}>
+      Skill "{name()}"
     </InlineTool>
   )
 }
