@@ -624,7 +624,6 @@ export type SessionPromptOutput = {
     id: string
     sessionID: string
     timeCreated: number
-    promotedSeq?: number
     type: "user"
     data: {
       text: string
@@ -824,7 +823,6 @@ export type SessionCommandOutput = {
     id: string
     sessionID: string
     timeCreated: number
-    promotedSeq?: number
     type: "user"
     data: {
       text: string
@@ -922,7 +920,6 @@ export type SessionSyntheticOutput = {
     id: string
     sessionID: string
     timeCreated: number
-    promotedSeq?: number
     type: "synthetic"
     data: { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
     delivery: "steer" | "queue"
@@ -943,14 +940,7 @@ export type SessionCompactInput = {
 }
 
 export type SessionCompactOutput = {
-  data: {
-    admittedSeq: number
-    id: string
-    sessionID: string
-    timeCreated: number
-    type: "compaction"
-    handledSeq?: number
-  }
+  data: { admittedSeq: number; id: string; sessionID: string; timeCreated: number; type: "compaction" }
 }["data"]
 
 export type SessionWaitInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
@@ -1142,6 +1132,44 @@ export type SessionContextOutput = {
             error: { type: string; message: string }
           }
       )
+  >
+}["data"]
+
+export type SessionPendingListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionPendingListOutput = {
+  data: Array<
+    | {
+        admittedSeq: number
+        id: string
+        sessionID: string
+        timeCreated: number
+        type: "user"
+        data: {
+          text: string
+          files?: Array<{
+            data: string
+            mime: string
+            source: { type: "inline" } | { type: "uri"; uri: string }
+            name?: string
+            description?: string
+            mention?: { start: number; end: number; text: string }
+          }>
+          agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
+          metadata?: { [x: string]: JsonValue }
+        }
+        delivery: "steer" | "queue"
+      }
+    | {
+        admittedSeq: number
+        id: string
+        sessionID: string
+        timeCreated: number
+        type: "synthetic"
+        data: { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
+        delivery: "steer" | "queue"
+      }
+    | { admittedSeq: number; id: string; sessionID: string; timeCreated: number; type: "compaction" }
   >
 }["data"]
 
