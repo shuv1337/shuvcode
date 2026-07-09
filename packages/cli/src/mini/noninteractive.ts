@@ -25,7 +25,7 @@ type Input = {
   variant?: string
   thinking: boolean
   format: "default" | "json"
-  dangerouslySkipPermissions: boolean
+  auto: boolean
   /** True when the client is attached to a shared server rather than an exclusive in-process one. */
   attached: boolean
   renderTool: (part: ToolPart) => Promise<void>
@@ -91,7 +91,7 @@ export async function runNonInteractivePrompt(input: Input) {
   }
 
   const replyPermission = async (request: { id: string; action: string; resources: ReadonlyArray<string> }) => {
-    if (!input.dangerouslySkipPermissions) {
+    if (!input.auto) {
       permissionRejected = true
       UI.println(
         UI.Style.TEXT_WARNING_BOLD + "!",
@@ -103,10 +103,10 @@ export async function runNonInteractivePrompt(input: Input) {
       .reply({
         sessionID: input.sessionID,
         requestID: request.id,
-        reply: input.dangerouslySkipPermissions ? "once" : "reject",
+        reply: input.auto ? "once" : "reject",
       })
       .catch(() => {})
-    if (!input.dangerouslySkipPermissions) {
+    if (!input.auto) {
       await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
     }
   }

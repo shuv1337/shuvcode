@@ -1,6 +1,7 @@
 import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { Model } from "@opencode-ai/schema/model"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { open } from "node:fs/promises"
 import path from "node:path"
@@ -21,9 +22,8 @@ export type RunCommandInput = {
   format: "default" | "json"
   file: string[]
   title?: string
-  variant?: string
   thinking?: boolean
-  dangerouslySkipPermissions?: boolean
+  auto?: boolean
 }
 
 type FilePart = {
@@ -62,7 +62,9 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
   const session = await selectSession(client, requestedDirectory, input)
   const cwd = session?.location.directory ?? requestedDirectory
   const workspace = session?.location.workspaceID
-  const explicitModel = parseModel(input.model)
+  const explicit = parseRunModel(input.model)
+  const explicitModel = explicit?.model
+  const variant = explicit?.variant
   const sessionModel = session?.model ? { providerID: session.model.providerID, modelID: session.model.id } : undefined
   const defaultModel =
     !explicitModel && !sessionModel
@@ -70,8 +72,8 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
           .default({ location: { directory: cwd, workspace } })
           .then((result) => (result.data ? { providerID: result.data.providerID, modelID: result.data.id } : undefined))
       : undefined
-  const model = pickRunModel(explicitModel, input.variant, sessionModel, defaultModel)
-  if (input.variant && !model)
+  const model = pickRunModel(explicitModel, variant, sessionModel, defaultModel)
+  if (variant && !model)
     return reportError(input, "Cannot select a variant before selecting a model", session?.id)
   if (model) {
     await waitForCatalogReady({ sdk: client, directory: cwd, workspace, model })
@@ -84,7 +86,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
     session ??
     (await client.session.create({
       agent,
-      model: model ? { providerID: model.providerID, id: model.modelID, variant: input.variant } : undefined,
+      model: model ? { providerID: model.providerID, id: model.modelID, variant } : undefined,
       location: { directory: cwd },
     }))
   if (!session && input.title !== undefined) {
@@ -101,10 +103,10 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
     files: prepared.files,
     agent,
     model,
-    variant: input.variant,
+    variant,
     thinking: input.thinking ?? false,
     format: input.format,
-    dangerouslySkipPermissions: input.dangerouslySkipPermissions ?? false,
+    auto: input.auto ?? false,
     attached: true,
     renderTool,
     renderToolError,
@@ -142,12 +144,13 @@ function localDirectory(root: string) {
   }
 }
 
-function parseModel(value?: string) {
+export function parseRunModel(value?: string) {
   if (!value) return
-  const [providerID, ...rest] = value.split("/")
-  const modelID = rest.join("/")
-  if (!providerID || !modelID) fail("--model must use the format provider/model")
-  return { providerID, modelID }
+  const ref = Model.Ref.parse(value)
+  return {
+    model: { providerID: ref.providerID, modelID: ref.id },
+    variant: ref.variant,
+  }
 }
 
 async function validateAgent(client: OpenCodeClient, directory: string, name?: string) {

@@ -23,9 +23,8 @@ export default Runtime.handler(Commands.commands.run, (input) =>
         format: input.format,
         file: [...input.file],
         title: Option.getOrUndefined(input.title),
-        variant: Option.getOrUndefined(input.variant),
         thinking: input.thinking,
-        dangerouslySkipPermissions: input.auto || input.yolo || input.dangerouslySkipPermissions,
+        auto: input.auto || input.yolo,
       }),
     )
   }),

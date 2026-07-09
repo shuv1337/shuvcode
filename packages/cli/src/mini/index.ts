@@ -3,5 +3,6 @@ export {
   runNonInteractive,
   mergeInput as mergeNonInteractiveInput,
   pickRunModel,
+  parseRunModel,
   type RunCommandInput,
 } from "./run"

@@ -84,7 +84,7 @@ async function run(input: { turn: (inputID: string) => V2Event[]; pendingForms?:
     files: [],
     thinking: false,
     format: "default",
-    dangerouslySkipPermissions: false,
+    auto: false,
     attached: input.attached ?? false,
     renderTool: () => Promise.resolve(),
     renderToolError: () => Promise.resolve(),

@@ -171,7 +171,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         ),
         model: Flag.string("model").pipe(
           Flag.withAlias("m"),
-          Flag.withDescription("Model to use in the format provider/model"),
+          Flag.withDescription("Model to use in the format provider/model#variant"),
           Flag.optional,
         ),
         agent: Flag.string("agent").pipe(Flag.withDescription("Agent to use"), Flag.optional),
@@ -185,7 +185,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.atMost(100),
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
-        variant: Flag.string("variant").pipe(Flag.withDescription("Model variant"), Flag.optional),
         thinking: Flag.boolean("thinking").pipe(
           Flag.withDescription("Show thinking blocks"),
           Flag.withDefault(false),
@@ -195,10 +194,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.withDefault(false),
         ),
         yolo: Flag.boolean("yolo").pipe(Flag.withDefault(false), Flag.withHidden),
-        dangerouslySkipPermissions: Flag.boolean("dangerously-skip-permissions").pipe(
-          Flag.withDefault(false),
-          Flag.withHidden,
-        ),
       },
     }),
     Spec.make("service", {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import path from "node:path"
-import { mergeInteractiveInput, mergeNonInteractiveInput, pickRunModel } from "../src/mini"
+import { mergeInteractiveInput, mergeNonInteractiveInput, parseRunModel, pickRunModel } from "../src/mini"
 
 async function cli(args: string[]) {
   const child = Bun.spawn([process.execPath, "run", "src/index.ts", ...args], {
@@ -39,6 +39,12 @@ describe("mini command", () => {
     ).toEqual({ providerID: "session-provider", modelID: "session-model" })
   })
 
+  test("parses model variants from the model reference", () => {
+    expect(JSON.stringify(parseRunModel("openrouter/openai/gpt-5#high"))).toBe(
+      JSON.stringify({ model: { providerID: "openrouter", modelID: "openai/gpt-5" }, variant: "high" }),
+    )
+  })
+
   test("is registered in the preview CLI", async () => {
     const result = await cli(["--help"])
 
@@ -52,6 +58,7 @@ describe("mini command", () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("--server string")
+    expect(result.stdout).not.toContain("--variant")
     expect(result.stdout).not.toContain("--attach")
     expect(result.stdout).not.toContain("--command")
   })
