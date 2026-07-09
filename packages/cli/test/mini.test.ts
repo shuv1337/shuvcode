@@ -71,6 +71,8 @@ describe("mini command", () => {
         const url = new URL(request.url)
         if (url.pathname === "/api/health")
           return Response.json({ healthy: true, version: InstallationVersion, pid: process.pid })
+        if (url.pathname === "/api/location")
+          return Response.json({ directory: process.cwd(), project: { id: "global", directory: process.cwd() } })
         if (url.pathname === "/api/model") {
           modelRequests++
           return Response.json({
@@ -87,8 +89,6 @@ describe("mini command", () => {
         "run",
         "--server",
         server.url.toString(),
-        "--dir",
-        process.cwd(),
         "--model",
         "definitely/missing",
         "hi",
@@ -104,7 +104,8 @@ describe("mini command", () => {
   test("reports pre-admission errors as JSON", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch() {
+      fetch(request) {
+        if (new URL(request.url).pathname === "/api/session") return new Response("boom", { status: 500 })
         return Response.json({ healthy: true, version: "incompatible", pid: process.pid })
       },
     })
@@ -116,7 +117,7 @@ describe("mini command", () => {
       expect(JSON.parse(result.stdout)).toMatchObject({
         type: "error",
         sessionID: "",
-        error: { type: "unknown", message: "Failed to resolve server directory" },
+        error: { type: "unknown", message: "UnexpectedStatus" },
       })
     } finally {
       server.stop(true)

@@ -1,21 +1,17 @@
-import { NodeFileSystem } from "@effect/platform-node"
 import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
-import { Global } from "@opencode-ai/core/global"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
-import { Effect } from "effect"
 import { open } from "node:fs/promises"
 import path from "node:path"
-import { Daemon } from "../daemon"
-import { ServiceConfig } from "../services/service-config"
-import { Standalone } from "../services/standalone"
+import { Server } from "../services/server"
 import { loadRunAgents, waitForCatalogReady } from "./catalog.shared"
 import { runNonInteractivePrompt } from "./noninteractive"
 import { toolInlineInfo } from "./tool"
 import { UI } from "./ui"
 
 export type RunCommandInput = {
+  server: Server.Resolved
   message: string[]
   continue?: boolean
   session?: string
@@ -25,14 +21,9 @@ export type RunCommandInput = {
   format: "default" | "json"
   file: string[]
   title?: string
-  server?: string
-  password?: string
-  username?: string
-  directory?: string
   variant?: string
   thinking?: boolean
   dangerouslySkipPermissions?: boolean
-  standaloneCommand?: ReadonlyArray<string>
 }
 
 type FilePart = {
@@ -56,24 +47,12 @@ export function runNonInteractive(input: RunCommandInput) {
 async function run(input: RunCommandInput) {
   if (input.fork && !input.continue && !input.session) fail("--fork requires --continue or --session")
   const root = process.env.PWD ?? process.cwd()
-  const directory = input.server ? input.directory : localDirectory(input.directory, root)
+  const directory = localDirectory(root)
   const message = mergeInput(formatMessage(input.message), process.stdin.isTTY ? undefined : await Bun.stdin.text())
   if (!message?.trim()) fail("You must provide a message")
-  const files = await Promise.all(
-    input.file.map((file) => prepareFile(file, input.server ? root : (directory ?? root), input.server !== undefined)),
-  )
+  const files = await Promise.all(input.file.map((file) => prepareFile(file, root)))
   const prepared = { directory, message, files }
-  if (input.standaloneCommand)
-    return Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const endpoint = yield* Standalone.start({ command: input.standaloneCommand })
-          yield* Effect.promise(() => execute(input, prepared, endpoint))
-        }),
-      ),
-    )
-  const endpoint = await startEndpoint(input)
-  return execute(input, prepared, endpoint)
+  return execute(input, prepared, input.server.endpoint)
 }
 
 async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Service.Endpoint) {
@@ -100,7 +79,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
     if (!available.data.some((item) => item.providerID === model.providerID && item.id === model.modelID))
       return reportError(input, `Model unavailable: ${model.providerID}/${model.modelID}`, session?.id)
   }
-  const agent = await validateAgent(client, cwd, input.agent, input.server)
+  const agent = await validateAgent(client, cwd, input.agent)
   const selected =
     session ??
     (await client.session.create({
@@ -126,7 +105,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Ser
     thinking: input.thinking ?? false,
     format: input.format,
     dangerouslySkipPermissions: input.dangerouslySkipPermissions ?? false,
-    attached: !input.standaloneCommand,
+    attached: true,
     renderTool,
     renderToolError,
   }).catch((error) => reportError(input, error instanceof Error ? error.message : String(error), selected.id))
@@ -154,33 +133,13 @@ function formatMessage(message: string[]) {
   return value || undefined
 }
 
-function localDirectory(directory: string | undefined, root: string) {
+function localDirectory(root: string) {
   try {
-    process.chdir(directory ? (path.isAbsolute(directory) ? directory : path.join(root, directory)) : root)
+    process.chdir(root)
     return process.cwd()
   } catch {
-    fail(`Failed to change directory to ${directory}`)
+    fail(`Failed to change directory to ${root}`)
   }
-}
-
-function startEndpoint(input: RunCommandInput) {
-  if (input.server) {
-    return Effect.runPromise(
-      Daemon.connect({
-        url: input.server,
-        password: input.password,
-        username: input.username,
-      }),
-    )
-  }
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      return yield* Service.start(yield* ServiceConfig.options())
-    }).pipe(
-      Effect.provide(NodeFileSystem.layer),
-      Effect.provide(Global.layerWith({})),
-    ),
-  )
 }
 
 function parseModel(value?: string) {
@@ -191,11 +150,11 @@ function parseModel(value?: string) {
   return { providerID, modelID }
 }
 
-async function validateAgent(client: OpenCodeClient, directory: string, name?: string, server?: string) {
+async function validateAgent(client: OpenCodeClient, directory: string, name?: string) {
   if (!name) return
   const agents = await loadRunAgents(client, directory).catch(() => undefined)
   if (!agents) {
-    warning(`failed to list agents${server ? ` from ${server}` : ""}. Falling back to default agent`)
+    warning("failed to list agents. Falling back to default agent")
     return
   }
   const agent = agents.find((item) => item.id === name)
@@ -223,12 +182,11 @@ async function selectSession(client: OpenCodeClient, directory: string, input: R
   return client.session.fork({ sessionID: selected.id })
 }
 
-async function prepareFile(input: string, directory: string, remote: boolean): Promise<FilePart> {
+async function prepareFile(input: string, directory: string): Promise<FilePart> {
   const file = path.resolve(directory, input)
   const handle = await open(file, "r").catch(() => fail(`File not found: ${input}`))
   try {
     const stat = await handle.stat()
-    if (remote && stat.isDirectory()) fail(`Cannot attach local directory without a shared filesystem: ${input}`)
     if (!stat.isFile() || stat.size > ATTACH_FILE_MAX_BYTES)
       fail(`Cannot attach a directory, special file, or file larger than 10 MiB: ${input}`)
     const content = Buffer.alloc(Number(stat.size))

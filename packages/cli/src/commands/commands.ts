@@ -28,20 +28,24 @@ const MiniParams = {
   ),
 }
 
+const ServerParams = {
+  standalone: Flag.boolean("standalone").pipe(
+    Flag.withDescription("Run with a private server instead of the background service"),
+    Flag.withDefault(false),
+  ),
+  server: Flag.string("server").pipe(
+    Flag.withDescription("Connect to a server URL instead of the background service"),
+    Flag.optional,
+  ),
+}
+
 export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
   description: "OpenCode 2.0 preview command line interface",
   params: {
+    ...ServerParams,
     directory: Argument.string("directory").pipe(
       Argument.withDescription("Directory to start OpenCode in"),
       Argument.optional,
-    ),
-    standalone: Flag.boolean("standalone").pipe(
-      Flag.withDescription("Run with a private server instead of the background service"),
-      Flag.withDefault(false),
-    ),
-    server: Flag.string("server").pipe(
-      Flag.withDescription("Connect to a server URL instead of the background service"),
-      Flag.optional,
     ),
     continue: Flag.boolean("continue").pipe(
       Flag.withAlias("c"),
@@ -128,6 +132,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
       description: "Start the minimal interactive interface",
       params: {
         ...MiniParams,
+        ...ServerParams,
         project: Argument.string("project").pipe(
           Argument.withDescription("Path to start OpenCode in"),
           Argument.optional,
@@ -139,16 +144,13 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         ),
         agent: Flag.string("agent").pipe(Flag.withDescription("Agent to use"), Flag.optional),
         prompt: Flag.string("prompt").pipe(Flag.withDescription("Prompt to use"), Flag.optional),
-        server: Flag.string("server").pipe(
-          Flag.withDescription("Connect to a server URL instead of the background service"),
-          Flag.optional,
-        ),
         demo: Flag.boolean("demo").pipe(Flag.withDefault(false), Flag.withHidden),
       },
     }),
     Spec.make("run", {
       description: "Run OpenCode with a message",
       params: {
+        ...ServerParams,
         message: Argument.string("message").pipe(
           Argument.withDescription("Message to send"),
           Argument.variadic({ min: 0 }),
@@ -183,11 +185,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.atMost(100),
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
-        server: Flag.string("server").pipe(
-          Flag.withDescription("Connect to a server URL instead of the background service"),
-          Flag.optional,
-        ),
-        dir: Flag.string("dir").pipe(Flag.withDescription("Directory to run in"), Flag.optional),
         variant: Flag.string("variant").pipe(Flag.withDescription("Model variant"), Flag.optional),
         thinking: Flag.boolean("thinking").pipe(
           Flag.withDescription("Show thinking blocks"),

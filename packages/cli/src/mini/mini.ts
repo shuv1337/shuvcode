@@ -1,20 +1,14 @@
-import { NodeFileSystem } from "@effect/platform-node"
 import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
-import { Global } from "@opencode-ai/core/global"
-import { Effect } from "effect"
 import path from "node:path"
-import { Daemon } from "../daemon"
-import { ServiceConfig } from "../services/service-config"
+import { Server } from "../services/server"
 import { waitForCatalogReady } from "./catalog.shared"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./runtime.stdin"
 import type { RunInput, RunTuiConfig } from "./types"
 
 export type MiniCommandInput = {
+  server: Server.Resolved
   directory?: string
-  attach?: string
-  password?: string
-  username?: string
   continue?: boolean
   session?: string
   fork?: boolean
@@ -24,7 +18,6 @@ export type MiniCommandInput = {
   replay?: boolean
   replayLimit?: number
   demo?: boolean
-  serverCommand?: ReadonlyArray<string>
   tuiConfig?: RunTuiConfig | Promise<RunTuiConfig>
 }
 
@@ -33,47 +26,38 @@ export async function runMini(input: MiniCommandInput) {
   validate(input)
   const initialInput = mergeInput(process.stdin.isTTY ? undefined : await Bun.stdin.text(), input.prompt)
   const runtimeTask = import("./runtime")
-  const directory = input.attach ? input.directory : localDirectory(input.directory)
-  const endpointTask = startEndpoint(input)
-  void endpointTask.catch(() => {})
+  const directory = localDirectory(input.directory)
 
   try {
-    if (input.attach) await endpointTask
     const sdk = OpenCode.make({
-      baseUrl: "http://opencode.pending",
-      fetch: deferredFetch(endpointTask),
+      baseUrl: input.server.endpoint.url,
+      headers: Service.headers(input.server.endpoint),
     })
-    const attachedSession =
-      input.attach && input.session && !input.directory
-        ? await sdk.session.get({ sessionID: input.session }).catch(() => fail("Session not found"))
-        : undefined
-    const resolvedDirectory =
-      directory ?? attachedSession?.location.directory ?? (await remoteDirectory(await endpointTask, sdk))
     const model = parseModel(input.model)
     let agentTask: Promise<string | undefined> | undefined
     const resolveAgent = () => {
-      agentTask ??= validateAgent(sdk, resolvedDirectory, input.agent, input.attach)
+      agentTask ??= validateAgent(sdk, directory, input.agent)
       return agentTask
     }
     const resolveSession = async () => {
       const [agent, selected] = await Promise.all([
         resolveAgent(),
-        selectSession(sdk, resolvedDirectory, input, attachedSession),
+        selectSession(sdk, directory, input),
       ])
       const readyModel =
         model ?? (selected?.model ? { providerID: selected.model.providerID, modelID: selected.model.id } : undefined)
-      if (readyModel) await waitForCatalogReady({ sdk, directory: resolvedDirectory, model: readyModel })
-      const session = selected ?? (await createSession(sdk, resolvedDirectory, agent, model))
+      if (readyModel) await waitForCatalogReady({ sdk, directory, model: readyModel })
+      const session = selected ?? (await createSession(sdk, directory, agent, model))
       return { id: session.id, title: session.title, resume: selected !== undefined }
     }
     const create = (
       _sdk: OpenCodeClient,
       next: { agent: string | undefined; model: RunInput["model"]; variant: string | undefined },
-    ) => createSession(sdk, resolvedDirectory, next.agent, next.model, next.variant)
+    ) => createSession(sdk, directory, next.agent, next.model, next.variant)
     const runtime = await runtimeTask
     await runtime.runInteractiveDeferredMode({
       sdk,
-      directory: resolvedDirectory,
+      directory,
       resolveAgent,
       session: resolveSession,
       createSession: create,
@@ -94,6 +78,10 @@ export async function runMini(input: MiniCommandInput) {
   }
 }
 
+export function validateMiniTerminal() {
+  if (!process.stdout.isTTY) fail("opencode mini requires a TTY stdout")
+}
+
 /** @internal Exported for testing. */
 export function mergeInput(piped: string | undefined, prompt: string | undefined) {
   if (!prompt) return piped || undefined
@@ -102,7 +90,7 @@ export function mergeInput(piped: string | undefined, prompt: string | undefined
 }
 
 function validate(input: MiniCommandInput) {
-  if (!process.stdout.isTTY) fail("opencode mini requires a TTY stdout")
+  validateMiniTerminal()
   if (input.replayLimit !== undefined && (!Number.isInteger(input.replayLimit) || input.replayLimit <= 0)) {
     fail("--replay-limit must be a positive integer")
   }
@@ -120,50 +108,6 @@ function localDirectory(directory?: string): string {
   }
 }
 
-function startEndpoint(input: MiniCommandInput): Promise<Service.Endpoint> {
-  if (input.attach) {
-    return Effect.runPromise(
-      Daemon.connect({
-        url: input.attach,
-        password: input.password ?? process.env.OPENCODE_SERVER_PASSWORD,
-        username: input.username ?? process.env.OPENCODE_SERVER_USERNAME,
-      }),
-    )
-  }
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const options = yield* ServiceConfig.options()
-      return yield* Service.start(
-        input.serverCommand === undefined ? options : { ...options, command: input.serverCommand },
-      )
-    }).pipe(
-      Effect.provide(NodeFileSystem.layer),
-      Effect.provide(Global.layerWith({})),
-    ),
-  )
-}
-
-function deferredFetch(endpointTask: Promise<Service.Endpoint>): typeof globalThis.fetch {
-  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const endpoint = await endpointTask
-    const request = new Request(input, init)
-    const source = new URL(request.url)
-    const headers = new Headers(request.headers)
-    for (const [key, value] of new Headers(Service.headers(endpoint))) headers.set(key, value)
-    return globalThis.fetch(new Request(new URL(source.pathname + source.search, endpoint.url), request), { headers })
-  }
-  return fetch as typeof globalThis.fetch
-}
-
-async function remoteDirectory(
-  endpoint: Service.Endpoint,
-  sdk: OpenCodeClient,
-): Promise<string> {
-  const location = await sdk.location.get()
-  if (!location.directory) throw new Error(`Failed to resolve remote directory from ${endpoint.url}`)
-  return location.directory
-}
-
 function parseModel(value?: string): RunInput["model"] {
   if (!value) return
   const [providerID, ...rest] = value.split("/")
@@ -172,7 +116,7 @@ function parseModel(value?: string): RunInput["model"] {
   return { providerID, modelID }
 }
 
-async function validateAgent(sdk: OpenCodeClient, directory: string, name?: string, attach?: string) {
+async function validateAgent(sdk: OpenCodeClient, directory: string, name?: string) {
   if (!name) return
   const deadline = Date.now() + 5_000
   let agents: Awaited<ReturnType<OpenCodeClient["agent"]["list"]>> | undefined
@@ -187,7 +131,7 @@ async function validateAgent(sdk: OpenCodeClient, directory: string, name?: stri
     await Bun.sleep(25)
   }
   if (!agents) {
-    warning(`failed to list agents${attach ? ` from ${attach}` : ""}. Falling back to default agent`)
+    warning("failed to list agents. Falling back to default agent")
     return
   }
   warning(`agent "${name}" not found. Falling back to default agent`)
