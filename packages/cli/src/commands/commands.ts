@@ -209,7 +209,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         }),
       ],
     }),
-    Spec.make("link", { description: "Show server connection information" }),
+    Spec.make("pair", { description: "Show server pairing information" }),
     Spec.make("serve", {
       description: "Start the v2 API server",
       params: {

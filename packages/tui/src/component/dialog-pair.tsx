@@ -7,12 +7,12 @@ import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { errorMessage } from "../util/error"
 
-export type DialogLinkCredentials = {
+export type DialogPairCredentials = {
   readonly username: string
   readonly password: string
 }
 
-export function DialogLink(props: { credentials?: DialogLinkCredentials }) {
+export function DialogPair(props: { credentials?: DialogPairCredentials }) {
   const sdk = useSDK()
   const dialog = useDialog()
   const dimensions = useTerminalDimensions()
@@ -97,7 +97,7 @@ export function DialogLink(props: { credentials?: DialogLinkCredentials }) {
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          Link
+          Pair
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
