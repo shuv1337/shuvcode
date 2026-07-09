@@ -44,8 +44,7 @@ export function DialogSessionList() {
         directory: location.directory,
         workspace: location.workspaceID,
       })
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- generated client output is readonly; session list UI reuses legacy mutable session types.
-      return { query, sessions: structuredClone(response.data) as SessionInfo[] }
+      return { query, sessions: response.data }
     } catch (error) {
       // A transient transport failure must degrade search, not crash the TUI
       // through the root ErrorBoundary when the errored resource is read.
@@ -141,7 +140,7 @@ export function DialogSessionList() {
               setToDelete(option.value)
               return
             }
-            void sdk.client.v2.session.remove({ sessionID: option.value }, { throwOnError: true }).catch((error) => {
+            void sdk.api.session.remove({ sessionID: option.value }).catch((error) => {
               setToDelete(undefined)
               toast.show({
                 message: `Failed to delete session: ${errorMessage(error)}`,
