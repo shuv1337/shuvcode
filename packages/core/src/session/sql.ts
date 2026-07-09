@@ -61,11 +61,15 @@ export const SessionTable = sqliteTable(
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),
+    time_suspended: integer(),
   },
   (table) => [
     index("session_project_idx").on(table.project_id),
     index("session_workspace_idx").on(table.workspace_id),
     index("session_parent_idx").on(table.parent_id),
+    index("session_time_suspended_idx")
+      .on(table.time_suspended)
+      .where(sql`${table.time_suspended} is not null`),
   ],
 )
 
