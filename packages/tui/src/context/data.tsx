@@ -850,7 +850,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
               (await sdk.api.message.list({ sessionID, limit: 200, order: "desc" })).data,
             ).toReversed()
             messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
-            setStore("session", "message", sessionID, messages)
+            setStore("session", "message", sessionID, reconcile(messages))
           },
         },
         permission: {
