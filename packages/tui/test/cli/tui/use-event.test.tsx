@@ -108,7 +108,9 @@ function Probe(props: {
 describe("useEvent", () => {
   test("logs only durable events", async () => {
     const logs: Array<{ message: string; tags: Readonly<Record<string, unknown>> }> = []
-    const { app, emit, seen } = await mount(undefined, (_level, message, tags) => logs.push({ message, tags }))
+    const { app, emit, seen } = await mount(undefined, (_level, message, tags) => {
+      if (message === "event") logs.push({ message, tags })
+    })
     const durable = event(
       {
         id: "evt_renamed",
@@ -128,7 +130,7 @@ describe("useEvent", () => {
       expect(logs).toEqual([
         {
           message: "event",
-          tags: { type: "session.renamed", aggregateID: "ses_test", seq: 1 },
+          tags: { component: "sdk", type: "session.renamed", aggregateID: "ses_test", seq: 1 },
         },
       ])
     } finally {
@@ -202,6 +204,15 @@ describe("useEvent", () => {
 
       expect(sdk.client).toBe(replacement.client)
       expect(sdk.api).toBe(replacement.api)
+      const history = sdk.connection.internal.history()
+      expect(history.map((event) => [event.data.status, event.data.attempt])).toEqual([
+        ["connecting", 0],
+        ["connected", 0],
+        ["disconnected", 1],
+        ["reconnecting", 1],
+        ["connected", 1],
+      ])
+      expect(history.every((event) => Number.isFinite(event.created))).toBe(true)
     } finally {
       app.renderer.destroy()
     }

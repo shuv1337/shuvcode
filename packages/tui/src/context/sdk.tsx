@@ -7,9 +7,19 @@ import { createSimpleContext } from "./helper"
 import { useLog } from "./log"
 
 export type SDKConnectionStatus = "connected" | "connecting" | "reconnecting"
+export type SDKConnectionEvent = {
+  readonly type: "client.connection"
+  readonly created: number
+  readonly data: {
+    readonly status: "connecting" | "connected" | "disconnected" | "reconnecting"
+    readonly attempt: number
+    readonly error?: string
+  }
+}
 
 type SDKEventMap = { [Type in V2Event["type"]]: Extract<V2Event, { type: Type }> }
 const connectTimeout = 2_000
+const connectionHistoryLimit = 50
 
 export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
   name: "SDK",
@@ -20,8 +30,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     // Stops and starts the managed service; present only in service mode.
     reload?: () => Promise<void>
   }) => {
-    const log = useLog()
+    const log = useLog({ component: "sdk" })
     const abort = new AbortController()
+    const history: SDKConnectionEvent[] = []
     let client = props.client
     let api = props.api
     const events = createGlobalEmitter<SDKEventMap>()
@@ -34,6 +45,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       attempt: 0,
     })
     let stream: AbortController | undefined
+
+    function record(status: SDKConnectionEvent["data"]["status"], attempt: number, error?: string) {
+      history.push({ type: "client.connection", created: Date.now(), data: { status, attempt, error } })
+      if (history.length > connectionHistoryLimit) history.shift()
+    }
 
     function start() {
       stream?.abort()
@@ -54,6 +70,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
           )
           controller.signal.addEventListener("abort", cancel, { once: true })
           const error = await (async () => {
+            record(attempt === 0 ? "connecting" : "reconnecting", attempt)
+            log.info("event stream connecting", { attempt })
             const response = await client.v2.event.subscribe({
               signal: connection.signal,
               sseMaxRetryAttempts: 0,
@@ -69,7 +87,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             if (first.value.type !== "server.connected")
               return new Error("Event stream did not start with server.connected")
             clearTimeout(timeout)
+            record("connected", attempt)
             attempt = 0
+            log.info("event stream connected")
             events.emit(first.value.type, first.value)
             setConnection({ status: "connected", attempt: 0, error: undefined })
             connected()
@@ -93,6 +113,12 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             })
           if (abort.signal.aborted || controller.signal.aborted) return
           attempt += 1
+          const message = error instanceof Error ? error.message : String(error)
+          record("disconnected", attempt, message)
+          log.info("event stream disconnected", {
+            attempt,
+            error: message,
+          })
           // Re-resolve the transport before retrying: the server may have
           // moved (service restarted on a new port) or need starting. Static
           // transports (--server, standalone) resolve to the same address.
@@ -107,7 +133,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
           setConnection({
             status: "reconnecting",
             attempt,
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
           })
           await wait(250, controller.signal)
         }
@@ -142,6 +168,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         },
         error() {
           return connection.error
+        },
+        internal: {
+          history() {
+            return history.slice()
+          },
         },
       },
       reload: props.reload,
