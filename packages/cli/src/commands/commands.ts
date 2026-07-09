@@ -3,31 +3,6 @@ import { Spec } from "../framework/spec"
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
-const MiniParams = {
-  continue: Flag.boolean("continue").pipe(
-    Flag.withAlias("c"),
-    Flag.withDescription("Continue the last session"),
-    Flag.withDefault(false),
-  ),
-  session: Flag.string("session").pipe(
-    Flag.withAlias("s"),
-    Flag.withDescription("Session ID to continue"),
-    Flag.optional,
-  ),
-  fork: Flag.boolean("fork").pipe(
-    Flag.withDescription("Fork the session when continuing"),
-    Flag.withDefault(false),
-  ),
-  replay: Flag.boolean("replay").pipe(
-    Flag.withDescription("Replay session history on resume and after resize"),
-    Flag.withDefault(true),
-  ),
-  replayLimit: Flag.integer("replay-limit").pipe(
-    Flag.withDescription("Cap visible replay to the newest N messages"),
-    Flag.optional,
-  ),
-}
-
 const ServerParams = {
   standalone: Flag.boolean("standalone").pipe(
     Flag.withDescription("Run with a private server instead of the background service"),
@@ -131,11 +106,28 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
     Spec.make("mini", {
       description: "Start the minimal interactive interface",
       params: {
-        ...MiniParams,
         ...ServerParams,
-        project: Argument.string("project").pipe(
-          Argument.withDescription("Path to start OpenCode in"),
-          Argument.optional,
+        continue: Flag.boolean("continue").pipe(
+          Flag.withAlias("c"),
+          Flag.withDescription("Continue the last session"),
+          Flag.withDefault(false),
+        ),
+        session: Flag.string("session").pipe(
+          Flag.withAlias("s"),
+          Flag.withDescription("Session ID to continue"),
+          Flag.optional,
+        ),
+        fork: Flag.boolean("fork").pipe(
+          Flag.withDescription("Fork the session when continuing"),
+          Flag.withDefault(false),
+        ),
+        replay: Flag.boolean("replay").pipe(
+          Flag.withDescription("Replay session history on resume and after resize"),
+          Flag.withDefault(true),
+        ),
+        replayLimit: Flag.integer("replay-limit").pipe(
+          Flag.withDescription("Cap visible replay to the newest N messages"),
+          Flag.optional,
         ),
         model: Flag.string("model").pipe(
           Flag.withAlias("m"),

@@ -1,6 +1,5 @@
 import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
-import path from "node:path"
 import { Server } from "../services/server"
 import { waitForCatalogReady } from "./catalog.shared"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./runtime.stdin"
@@ -8,7 +7,6 @@ import type { RunInput, RunTuiConfig } from "./types"
 
 export type MiniCommandInput = {
   server: Server.Resolved
-  directory?: string
   continue?: boolean
   session?: string
   fork?: boolean
@@ -26,7 +24,7 @@ export async function runMini(input: MiniCommandInput) {
   validate(input)
   const initialInput = mergeInput(process.stdin.isTTY ? undefined : await Bun.stdin.text(), input.prompt)
   const runtimeTask = import("./runtime")
-  const directory = localDirectory(input.directory)
+  const directory = localDirectory()
 
   try {
     const sdk = OpenCode.make({
@@ -98,13 +96,13 @@ function validate(input: MiniCommandInput) {
   resolveInteractiveStdin().cleanup?.()
 }
 
-function localDirectory(directory?: string): string {
+function localDirectory(): string {
   const root = process.env.PWD ?? process.cwd()
   try {
-    process.chdir(directory ? (path.isAbsolute(directory) ? directory : path.join(root, directory)) : root)
+    process.chdir(root)
     return process.cwd()
   } catch {
-    fail(`Failed to change directory to ${directory}`)
+    fail(`Failed to change directory to ${root}`)
   }
 }
 
