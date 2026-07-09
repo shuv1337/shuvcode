@@ -1,0 +1,89 @@
+---
+title: "Overview"
+description: "Move from OpenCode V1 to the OpenCode 2.0 beta."
+---
+
+<Warning>
+  OpenCode 2.0 is in beta. Back up important configuration and data before migrating. Beta data may be wiped, features may
+  break, and configuration and plugin APIs may change.
+</Warning>
+
+During the beta, OpenCode V1 and V2 use different executable names. You can keep using `opencode` for V1 while trying V2
+with `opencode2`.
+
+## Install the beta
+
+Install the beta from the `next` distribution tag:
+
+```bash
+npm install -g @opencode-ai/cli@next
+```
+
+Start it in your project with:
+
+```bash
+opencode2
+```
+
+## Back up your configuration
+
+Before making changes, back up your global and project configuration files:
+
+```text
+~/.config/opencode/opencode.json(c)
+<project>/opencode.json(c)
+<project>/.opencode/opencode.json(c)
+```
+
+V2 reads these same locations. It detects V1-shaped configuration and translates supported fields in memory without
+rewriting the source file. Keep shared files in their V1 shape while evaluating both versions; V1 does not understand the
+native plural V2 fields and may silently ignore them.
+
+## Update configuration
+
+Automatic translation is a compatibility aid, not a guarantee that every V1 setting behaves identically. Convert your
+configuration to the native V2 shape only when you no longer need V1 to read those same files.
+
+<Note>
+  Do not mix V1 and V2 field names in one file. Back up the V1 file, update the complete working file to the V2 shape, and
+  validate it against the current schema. Restore the V1 copy before using V1 again.
+</Note>
+
+The main field changes are:
+
+| V1 | V2 |
+| --- | --- |
+| `permission` | `permissions` |
+| `agent` and `mode` | `agents` |
+| `snapshot` | `snapshots` |
+| `attachment` | `attachments` |
+| `command` | `commands` |
+| `reference` | `references` |
+| `plugin` | `plugins` |
+| `provider` | `providers` |
+| Servers directly under `mcp` | Servers under `mcp.servers` |
+| `skills.paths` and `skills.urls` | A single `skills` array |
+
+Permission actions also changed: `bash` is now `shell`, `task` is now `subagent`, and `write` and `patch` are now `edit`.
+See [Permissions](/permissions) for the ordered V2 rule format.
+
+V1-only fields including `logLevel`, `server`, `layout`, `disabled_providers`, `enabled_providers`, and `small_model` are
+not carried into the native V2 configuration. Remove them and use the current [Config](/config) and
+[Providers](/providers) guides to configure their replacements where applicable.
+
+## Review extensions
+
+V2 continues to discover file-based agents, commands, and skills from OpenCode configuration directories. Their schemas
+have changed, so review each extension against the current [Agents](/agents), [Commands](/commands), and
+[Skills](/skills) guides.
+
+<Warning>
+  V1 plugins are not guaranteed to work with V2. The plugin API is changing during beta; review and port each plugin using
+  the [V2 plugin guide](/plugins).
+</Warning>
+
+## Verify your setup
+
+Start `opencode2` in a project and verify your model, provider credentials, agents, permissions, MCP servers, and plugins
+before relying on the beta for regular work. Keep your V1 setup and backups until you have confirmed the V2 behavior you
+need, and do not point V1 at configuration that you have converted to the native V2 shape.

@@ -1,0 +1,223 @@
+---
+title: "Models"
+description: "Select, configure, and customize models in OpenCode 2.0."
+---
+
+OpenCode builds its model catalog from [Models.dev](https://models.dev), provider integrations, and your configuration.
+Only enabled models whose provider is available for the current project appear in the model picker.
+
+Connect a provider with `/connect` in the TUI, or configure a provider and its credentials in `opencode.json`.
+
+## Select a model
+
+Open the model picker with `/models` or the default `<leader>m` keybind. Use `/variants` to choose a variant for the
+current model, or press `ctrl+t` to cycle through its variants.
+
+A model reference has this form:
+
+```text
+provider/model#variant
+```
+
+The variant is optional. OpenCode splits at the first `/`, so model IDs may contain additional slashes:
+
+```text
+openai/gpt-5.2
+openai/gpt-5.2#high
+openrouter/anthropic/claude-sonnet-4.5#high
+```
+
+Use the catalog IDs shown by `/models`, not a provider's display name. Omit `#variant` to use the model's base settings.
+
+### Command line
+
+Select a model for a non-interactive run with `--model` or `-m`:
+
+```bash
+opencode2 run --model openai/gpt-5.2 "Explain this repository"
+opencode2 run -m openai/gpt-5.2#high "Review the current changes"
+```
+
+<Note>
+  `opencode2 run` accepts `provider/model#variant`. The current `opencode2 mini --model` option accepts only
+  `provider/model`; choose its variant from the interactive interface.
+</Note>
+
+## Set the default
+
+Set `model` in `opencode.json` or `opencode.jsonc`:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5"
+}
+```
+
+The explicit object form is equivalent:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": {
+    "providerID": "openrouter",
+    "model": "anthropic/claude-sonnet-4.5"
+  }
+}
+```
+
+Root, agent, and command `model` fields accept these same selection forms. See [Config](/config) for configuration
+locations and precedence.
+
+The configured model becomes the catalog default when its provider is available and the model is enabled. Otherwise,
+session execution falls back to the newest available supported model. An explicit model already selected on a session
+takes precedence over the default; switching models changes that session and does not rewrite your config.
+
+## Variants
+
+Variants are named request overlays for one model, commonly used for reasoning effort or token budgets. Available names
+are model-specific and are derived from current catalog metadata. Do not assume that names such as `low`, `high`, or
+`max` exist for every model; `/variants` shows the valid choices.
+
+Add a variant, or override a catalog variant with the same ID, under the model's `variants` array:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "openai": {
+      "models": {
+        "gpt-5.2": {
+          "settings": {
+            "reasoningEffort": "medium"
+          },
+          "variants": [
+            {
+              "id": "fast",
+              "settings": {
+                "reasoningEffort": "low"
+              }
+            },
+            {
+              "id": "deep",
+              "settings": {
+                "reasoningEffort": "high",
+                "reasoningSummary": "auto"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "commands": {
+    "deep-review": {
+      "description": "Review with high reasoning effort",
+      "template": "Review the current changes for correctness and missing tests.",
+      "model": "openai/gpt-5.2#deep"
+    }
+  }
+}
+```
+
+Variant entries support `settings`, `headers`, and `body`. Selecting one deeply overlays its values on the effective
+provider and model configuration. An unknown variant fails model resolution instead of silently using the base model.
+
+<Warning>
+  V2 uses `providers` (plural) and an array of `{ "id": "..." }` variant entries. The V1 `provider` key and
+  object-shaped `variants` configuration are not the V2 format.
+</Warning>
+
+## Configure a model
+
+Provider and model entries can supply three kinds of request configuration:
+
+- `settings` contains provider-package options such as `baseURL`, `reasoningEffort`, or `thinkingConfig`.
+- `headers` adds HTTP request headers.
+- `body` adds provider-specific fields to the request body.
+
+These values are provider-specific JSON. OpenCode applies provider values first, then model values, then the selected
+variant. Nested `settings` and `body` objects are merged; later array and scalar values replace earlier values. Header
+names are matched case-insensitively.
+
+You can also map a friendly catalog ID to a different API model ID with `modelID`:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/coding-default",
+  "providers": {
+    "openai": {
+      "models": {
+        "coding-default": {
+          "modelID": "gpt-5.2",
+          "name": "Coding default",
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 200000,
+            "output": 32000
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Here `openai/coding-default` is the selectable catalog reference, while `gpt-5.2` is sent to the provider. When adding a
+model that is not already in the catalog, set accurate `capabilities` and `limit` values so OpenCode can expose tools and
+enforce the correct context limits. Set `disabled: true` on a model entry to hide it from the available catalog.
+
+## Local and compatible models
+
+For an OpenAI-compatible server, define a provider package, endpoint, and at least one model:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "local/coder",
+  "providers": {
+    "local": {
+      "name": "Local server",
+      "package": "aisdk:@ai-sdk/openai-compatible",
+      "settings": {
+        "baseURL": "http://127.0.0.1:1234/v1"
+      },
+      "models": {
+        "coder": {
+          "modelID": "model-name-on-server",
+          "capabilities": {
+            "tools": true,
+            "input": ["text"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Use the server's real model name, limits, modalities, and tool support. OpenCode cannot infer these for a model you add
+manually. If the endpoint requires a key, add `apiKey` to provider `settings` using an environment substitution such as
+`"apiKey": "{env:LOCAL_API_KEY}"`; do not commit secrets.
+
+## Caveats
+
+- Provider and model IDs are case-sensitive. Provider IDs cannot contain `/` or `#`; model IDs cannot contain `#`.
+- The selector object uses `model`, while a provider catalog entry uses `modelID` for the upstream API identifier.
+- The root `model` currently sets the default provider and model only. Although its selection shape accepts a variant,
+  the V2 catalog default does not retain it; select a variant in the TUI, with `opencode2 run`, or on an agent or command.
+- Model options are provider-specific. A setting accepted by one provider package may be ignored or rejected by another.
+- Catalog data, credentials, and config are location-scoped. A model available in one project may be unavailable in
+  another.
+- Configuration files are watched and normally reload automatically, but an in-flight model request keeps the settings
+  with which it started.

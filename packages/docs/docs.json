@@ -20,7 +20,32 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["index", "config", "plugins", "troubleshooting"]
+            "pages": ["index", "config", "troubleshooting"]
+          },
+          {
+            "group": "Migrate from V1",
+            "pages": ["migrate-v1"]
+          },
+          {
+            "group": "Configure",
+            "pages": [
+              "models",
+              "providers",
+              "agents",
+              "permissions",
+              "sharing",
+              "snapshots",
+              "commands",
+              "skills",
+              "instructions",
+              "mcp",
+              "attachments",
+              "compaction",
+              "formatters",
+              "lsp",
+              "references",
+              "plugins"
+            ]
           }
         ]
       },
