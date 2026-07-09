@@ -1386,6 +1386,7 @@ test("mode cost preserves over-200k pricing from base model", () => {
         },
       },
     },
+    // @ts-expect-error dead V1 fixture uses the removed pre-normalized ModelsDev provider type.
   } as unknown as ModelsDev.Provider
 
   const model = Provider.fromModelsDevProvider(provider).models["gpt-5.4-fast"]
@@ -1415,6 +1416,7 @@ test("models.dev normalization fills required response fields", () => {
         limit: { context: 1_050_000, input: 922_000, output: 128_000 },
       },
     },
+    // @ts-expect-error dead V1 fixture uses the removed pre-normalized ModelsDev provider type.
   } as unknown as ModelsDev.Provider
 
   const model = Provider.fromModelsDevProvider(provider).models["gpt-5.4"]

@@ -5,6 +5,7 @@ import type * as Provider from "./provider"
 import type * as ModelsDev from "@opencode-ai/core/models-dev"
 import { iife } from "@/util/iife"
 
+// @ts-expect-error dead V1 consumes the removed pre-normalized ModelsDev model type.
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
 function mimeToModality(mime: string): Modality | undefined {
@@ -396,6 +397,7 @@ function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMes
       const filename = part.type === "file" ? part.filename : undefined
       const modality = mimeToModality(mime)
       if (!modality) return part
+      // @ts-expect-error dead V1 modality typing came from the removed ModelsDev model schema.
       if (model.capabilities.input[modality]) return part
 
       const name = filename ? `"${filename}"` : modality
