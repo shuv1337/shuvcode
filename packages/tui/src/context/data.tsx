@@ -115,6 +115,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     })
     const messageIndex = new Map<string, Map<string, number>>()
     let bootstrapping: Promise<void> | undefined
+    let connected = false
 
     function setSessionStatus(sessionID: string, status: DataSessionStatus) {
       setStore("session", "status", sessionID, status)
@@ -845,8 +846,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return position === undefined ? undefined : messages?.[position]
           },
           async refresh(sessionID: string) {
-            setStore("session", "message", sessionID, [])
-            messageIndex.set(sessionID, new Map())
             const messages = mutable(
               (await sdk.api.message.list({ sessionID, limit: 200, order: "desc" })).data,
             ).toReversed()
@@ -1110,8 +1109,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     onCleanup(
       sdk.event.listen(({ details }) => {
         if (details.type === "server.connected") {
+          const messages = connected ? Object.keys(store.session.message) : []
+          connected = true
           refreshActive()
-          void bootstrap()
+          void Promise.allSettled([bootstrap(), ...messages.map(result.session.message.refresh)])
           return
         }
         handleEvent(details)
