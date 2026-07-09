@@ -37,6 +37,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
+        ...ServerParams,
         request: Argument.string("operation | method path").pipe(
           Argument.withDescription("OpenAPI operation ID, or an HTTP method followed by a path"),
           Argument.variadic({ min: 1, max: 2 }),

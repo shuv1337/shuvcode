@@ -26,7 +26,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
   init: (props: {
     client: OpencodeClient
     api: OpenCodeClient
-    discover?: () => Promise<{ client: OpencodeClient; api: OpenCodeClient }>
+    reconnect?: (attempt: number) => Promise<{ client: OpencodeClient; api: OpenCodeClient }>
     // Stops and starts the managed service; present only in service mode.
     reload?: () => Promise<void>
   }) => {
@@ -122,8 +122,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
           // Re-resolve the transport before retrying: the server may have
           // moved (service restarted on a new port) or need starting. Static
           // transports (--server, standalone) resolve to the same address.
-          if (props.discover) {
-            const next = await props.discover().catch(() => undefined)
+          if (props.reconnect) {
+            const next = await props.reconnect(attempt).catch(() => undefined)
             if (abort.signal.aborted || controller.signal.aborted) return
             if (next) {
               client = next.client
@@ -135,7 +135,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             attempt,
             error: message,
           })
-          await wait(250, controller.signal)
+          await wait(1_000, controller.signal)
         }
       })()
       return ready

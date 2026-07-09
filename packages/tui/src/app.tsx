@@ -147,7 +147,7 @@ const appBindingCommands = [
 export type TuiInput = {
   server: {
     endpoint: Service.Endpoint
-    discover?: () => Promise<Service.Endpoint>
+    reconnect?: (attempt: number) => Promise<Service.Endpoint>
     reload?: () => Promise<void>
   }
   args: Args
@@ -200,10 +200,10 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       Effect.tryPromise(() => api.location.get()).pipe(Effect.map((response) => response.directory)),
     ),
   )
-  const discover = input.server.discover
-  const reconnect = discover
-    ? async () => {
-        const endpoint = await discover()
+  const reconnectEndpoint = input.server.reconnect
+  const reconnect = reconnectEndpoint
+    ? async (attempt: number) => {
+        const endpoint = await reconnectEndpoint(attempt)
         const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
         return {
           client: createOpencodeClient({ ...next, directory }),
@@ -339,7 +339,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                           <SDKProvider
                                             client={createOpencodeClient({ ...options, directory })}
                                             api={api}
-                                            discover={reconnect}
+                                            reconnect={reconnect}
                                             reload={input.server.reload}
                                           >
                                             <PermissionProvider>
