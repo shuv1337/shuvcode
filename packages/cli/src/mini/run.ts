@@ -1,4 +1,5 @@
 import { NodeFileSystem } from "@effect/platform-node"
+import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { Global } from "@opencode-ai/core/global"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -7,6 +8,7 @@ import { Effect } from "effect"
 import { open } from "node:fs/promises"
 import path from "node:path"
 import { Daemon } from "../daemon"
+import { ServiceConfig } from "../services/service-config"
 import { Standalone } from "../services/standalone"
 import { loadRunAgents, waitForCatalogReady } from "./catalog.shared"
 import { runNonInteractivePrompt } from "./noninteractive"
@@ -39,8 +41,6 @@ type FilePart = {
   mime: string
 }
 
-type Transport = { readonly url: string; readonly headers?: HeadersInit }
-
 type Prepared = {
   directory?: string
   message: string
@@ -67,17 +67,17 @@ async function run(input: RunCommandInput) {
     return Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const transport = yield* Standalone.transport({ command: input.standaloneCommand })
-          yield* Effect.promise(() => execute(input, prepared, transport))
+          const endpoint = yield* Standalone.start({ command: input.standaloneCommand })
+          yield* Effect.promise(() => execute(input, prepared, endpoint))
         }),
       ),
     )
-  const transport = await startTransport(input)
-  return execute(input, prepared, transport)
+  const endpoint = await startEndpoint(input)
+  return execute(input, prepared, endpoint)
 }
 
-async function execute(input: RunCommandInput, prepared: Prepared, transport: Transport) {
-  const client = OpenCode.make({ baseUrl: transport.url, headers: transport.headers })
+async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Service.Endpoint) {
+  const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   const requestedDirectory = prepared.directory ?? (await client.location.get()).directory
   if (!requestedDirectory) fail("Failed to resolve server directory")
   const session = await selectSession(client, requestedDirectory, input)
@@ -163,11 +163,10 @@ function localDirectory(directory: string | undefined, root: string) {
   }
 }
 
-function startTransport(input: RunCommandInput) {
+function startEndpoint(input: RunCommandInput) {
   if (input.server) {
     return Effect.runPromise(
-      Daemon.transport({
-        mode: "attach",
+      Daemon.connect({
         url: input.server,
         password: input.password,
         username: input.username,
@@ -175,7 +174,9 @@ function startTransport(input: RunCommandInput) {
     )
   }
   return Effect.runPromise(
-    Daemon.transport({ mode: "shared" }).pipe(
+    Effect.gen(function* () {
+      return yield* Service.start(yield* ServiceConfig.options())
+    }).pipe(
       Effect.provide(NodeFileSystem.layer),
       Effect.provide(Global.layerWith({})),
     ),

@@ -1,9 +1,11 @@
 import { NodeFileSystem } from "@effect/platform-node"
+import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { Global } from "@opencode-ai/core/global"
 import { Effect } from "effect"
 import path from "node:path"
 import { Daemon } from "../daemon"
+import { ServiceConfig } from "../services/service-config"
 import { waitForCatalogReady } from "./catalog.shared"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./runtime.stdin"
 import type { RunInput, RunTuiConfig } from "./types"
@@ -27,28 +29,26 @@ export type MiniCommandInput = {
 }
 
 type Session = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>
-type Transport = { readonly url: string; readonly headers?: HeadersInit }
-
 export async function runMini(input: MiniCommandInput) {
   validate(input)
   const initialInput = mergeInput(process.stdin.isTTY ? undefined : await Bun.stdin.text(), input.prompt)
   const runtimeTask = import("./runtime")
   const directory = input.attach ? input.directory : localDirectory(input.directory)
-  const transportTask = startTransport(input)
-  void transportTask.catch(() => {})
+  const endpointTask = startEndpoint(input)
+  void endpointTask.catch(() => {})
 
   try {
-    if (input.attach) await transportTask
+    if (input.attach) await endpointTask
     const sdk = OpenCode.make({
       baseUrl: "http://opencode.pending",
-      fetch: deferredFetch(transportTask),
+      fetch: deferredFetch(endpointTask),
     })
     const attachedSession =
       input.attach && input.session && !input.directory
         ? await sdk.session.get({ sessionID: input.session }).catch(() => fail("Session not found"))
         : undefined
     const resolvedDirectory =
-      directory ?? attachedSession?.location.directory ?? (await remoteDirectory(await transportTask, sdk))
+      directory ?? attachedSession?.location.directory ?? (await remoteDirectory(await endpointTask, sdk))
     const model = parseModel(input.model)
     let agentTask: Promise<string | undefined> | undefined
     const resolveAgent = () => {
@@ -120,11 +120,10 @@ function localDirectory(directory?: string): string {
   }
 }
 
-function startTransport(input: MiniCommandInput): Promise<Transport> {
+function startEndpoint(input: MiniCommandInput): Promise<Service.Endpoint> {
   if (input.attach) {
     return Effect.runPromise(
-      Daemon.transport({
-        mode: "attach",
+      Daemon.connect({
         url: input.attach,
         password: input.password ?? process.env.OPENCODE_SERVER_PASSWORD,
         username: input.username ?? process.env.OPENCODE_SERVER_USERNAME,
@@ -132,31 +131,36 @@ function startTransport(input: MiniCommandInput): Promise<Transport> {
     )
   }
   return Effect.runPromise(
-    Daemon.transport({ mode: "shared", command: input.serverCommand }).pipe(
+    Effect.gen(function* () {
+      const options = yield* ServiceConfig.options()
+      return yield* Service.start(
+        input.serverCommand === undefined ? options : { ...options, command: input.serverCommand },
+      )
+    }).pipe(
       Effect.provide(NodeFileSystem.layer),
       Effect.provide(Global.layerWith({})),
     ),
   )
 }
 
-function deferredFetch(transportTask: Promise<{ url: string; headers?: HeadersInit }>): typeof globalThis.fetch {
+function deferredFetch(endpointTask: Promise<Service.Endpoint>): typeof globalThis.fetch {
   const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const transport = await transportTask
+    const endpoint = await endpointTask
     const request = new Request(input, init)
     const source = new URL(request.url)
     const headers = new Headers(request.headers)
-    for (const [key, value] of new Headers(transport.headers)) headers.set(key, value)
-    return globalThis.fetch(new Request(new URL(source.pathname + source.search, transport.url), request), { headers })
+    for (const [key, value] of new Headers(Service.headers(endpoint))) headers.set(key, value)
+    return globalThis.fetch(new Request(new URL(source.pathname + source.search, endpoint.url), request), { headers })
   }
   return fetch as typeof globalThis.fetch
 }
 
 async function remoteDirectory(
-  transport: { url: string; headers?: HeadersInit },
+  endpoint: Service.Endpoint,
   sdk: OpenCodeClient,
 ): Promise<string> {
   const location = await sdk.location.get()
-  if (!location.directory) throw new Error(`Failed to resolve remote directory from ${transport.url}`)
+  if (!location.directory) throw new Error(`Failed to resolve remote directory from ${endpoint.url}`)
   return location.directory
 }
 
