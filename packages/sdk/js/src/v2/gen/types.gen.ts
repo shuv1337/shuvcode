@@ -87,7 +87,6 @@ export type Event =
   | EventFormCreated
   | EventFormReplied
   | EventFormCancelled
-  | EventTodoUpdated
   | EventLspUpdated
   | EventPermissionAsked
   | EventPermissionReplied
@@ -626,21 +625,6 @@ export type Pty = {
   status: "running" | "exited"
   pid: number
   exitCode?: number
-}
-
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
 }
 
 export type SessionStatus =
@@ -1446,14 +1430,6 @@ export type GlobalEvent = {
       }
     | {
         id: string
-        type: "todo.updated"
-        properties: {
-          sessionID: string
-          todos: Array<Todo>
-        }
-      }
-    | {
-        id: string
         type: "lsp.updated"
         properties: {
           [key: string]: unknown
@@ -1782,7 +1758,6 @@ export type PermissionConfig =
       bash?: PermissionRuleConfig
       task?: PermissionRuleConfig
       external_directory?: PermissionRuleConfig
-      todowrite?: PermissionActionConfig
       question?: PermissionActionConfig
       webfetch?: PermissionActionConfig
       websearch?: PermissionActionConfig
@@ -3109,7 +3084,6 @@ export type V2Event =
   | FormCreated
   | FormReplied
   | FormCancelled
-  | TodoUpdated
   | LspUpdated
   | PermissionAsked
   | PermissionReplied
@@ -6620,20 +6594,6 @@ export type FormCancelled = {
   }
 }
 
-export type TodoUpdated = {
-  id: string
-  created: number
-  metadata?: {
-    [key: string]: unknown
-  }
-  type: "todo.updated"
-  location?: LocationRef
-  data: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
 export type LspUpdated = {
   id: string
   created: number
@@ -7894,15 +7854,6 @@ export type EventFormCancelled = {
   }
 }
 
-export type EventTodoUpdated = {
-  id: string
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
 export type EventLspUpdated = {
   id: string
   type: "lsp.updated"
@@ -8730,7 +8681,6 @@ export type V2EventV2 =
   | FormCreatedV2
   | FormRepliedV2
   | FormCancelledV2
-  | TodoUpdatedV2
   | SessionStatusV22
   | SessionIdleV2
   | TuiPromptAppendV2
@@ -10738,20 +10688,6 @@ export type FormCancelledV2 = {
   data: {
     id: string
     sessionID: string
-  }
-}
-
-export type TodoUpdatedV2 = {
-  id: string
-  created: number
-  metadata?: {
-    [key: string]: unknown
-  }
-  type: "todo.updated"
-  location?: LocationRefV2
-  data: {
-    sessionID: string
-    todos: Array<Todo>
   }
 }
 
@@ -13647,40 +13583,6 @@ export type SessionChildrenResponses = {
 }
 
 export type SessionChildrenResponse = SessionChildrenResponses[keyof SessionChildrenResponses]
-
-export type SessionTodoData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/session/{sessionID}/todo"
-}
-
-export type SessionTodoErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-}
-
-export type SessionTodoError = SessionTodoErrors[keyof SessionTodoErrors]
-
-export type SessionTodoResponses = {
-  /**
-   * Todo list
-   */
-  200: Array<Todo>
-}
-
-export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
 
 export type SessionDiffData = {
   body?: never
