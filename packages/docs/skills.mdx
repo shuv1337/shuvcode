@@ -1,6 +1,6 @@
 ---
 title: "Skills"
-description: "Add reusable, on-demand instructions to OpenCode."
+description: ""
 ---
 
 Skills are Markdown instructions that OpenCode can advertise to an agent and
@@ -45,9 +45,9 @@ OpenCode automatically adds the following source directories:
 
 | Scope | Sources |
 | --- | --- |
-| Global | `~/.config/opencode/skill`, `~/.config/opencode/skills` |
+| Global | `~/.config/opencode/skills` |
 | Global compatibility | `~/.claude/skills`, `~/.agents/skills` |
-| Project | `.opencode/skill`, `.opencode/skills` |
+| Project | `.opencode/skills` |
 | Project compatibility | `.claude/skills`, `.agents/skills` |
 
 For project sources, OpenCode searches from the current directory upward to
@@ -166,12 +166,11 @@ wins. Sources are registered in this order, from lower to higher precedence:
 1. Built-in skills
 2. `.claude/skills` sources, global first and then from the current directory upward
 3. `.agents/skills` sources, global first and then from the current directory upward
-4. `~/.config/opencode/skill` and `~/.config/opencode/skills`
-5. Project `.opencode/skill` and `.opencode/skills`, from the project root toward the current directory
+4. `~/.config/opencode/skills`
+5. Project `.opencode/skills`, from the project root toward the current directory
 6. Explicit `skills` config entries, in config priority and array order
 
-Within one `.opencode` directory, `skills` has precedence over `skill`. Avoid
-duplicate IDs unless an override is intentional.
+Avoid duplicate IDs unless an override is intentional.
 
 ## Runtime loading
 

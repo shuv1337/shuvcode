@@ -1,6 +1,6 @@
 ---
-title: "Snapshots and undo"
-description: "Understand filesystem snapshots, undo, redo, and message reverts in OpenCode V2."
+title: "Undo"
+description: ""
 ---
 
 OpenCode snapshots let the default interactive TUI roll back conversation history and related file changes. They are a
@@ -104,6 +104,5 @@ Review the staged file summary and your Git diff before continuing. Commit or ba
 using undo on a dirty worktree.
 
 <Note>
-  `/undo` and `/redo` are interactive commands in the default V2 TUI. The non-interactive `run` command and the minimal
-  interactive interface do not provide these slash commands.
+  `/undo` and `/redo` are interactive TUI commands. The non-interactive `run` command does not provide them.
 </Note>

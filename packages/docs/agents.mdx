@@ -1,38 +1,12 @@
 ---
 title: "Agents"
-description: "Configure and use primary agents and subagents in OpenCode."
+description: ""
 ---
 
 Agents combine a system prompt, model preference, tool permissions, and display
 metadata into a reusable assistant profile. OpenCode includes agents for common
 workflows, and you can override them or add your own in configuration or
 Markdown files.
-
-## Modes
-
-An agent's `mode` controls where it can run:
-
-| Mode | Behavior |
-| --- | --- |
-| `primary` | Can be selected as the main agent for a session. It cannot be launched as a subagent. |
-| `subagent` | Can run in a child session through the `subagent` tool, but cannot be selected as the main agent. |
-| `all` | Can be used either way. This is the default for a custom agent when `mode` is omitted. |
-
-In the TUI, press <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> to cycle
-through visible primary and `all` agents, or use `/agents` to choose one.
-
-Subagents run in child sessions with fresh context. A primary agent can invoke
-one with the `subagent` tool, either in the foreground or in the background.
-You can also `@` mention a visible subagent to ask the current agent to delegate
-work to it:
-
-```text
-@explore find where authentication errors are handled
-```
-
-The parent agent's `subagent` permission controls which agents it may launch.
-The child currently uses its own configured permissions, not a restricted copy
-of the parent's permissions.
 
 ## Built-in agents
 
@@ -66,42 +40,33 @@ be hidden. If it is unavailable, OpenCode falls back to `build`, then to the
 first visible agent that can run as a primary agent. This selection does not
 rewrite the agent already stored on an existing session.
 
-## Configure agents
+## Modes
 
-### JSON or JSONC
+An agent's `mode` controls where it can run:
 
-Use the plural `agents` field in any [OpenCode configuration file](/config):
+| Mode | Behavior |
+| --- | --- |
+| `primary` | Can be selected as the main agent for a session. It cannot be launched as a subagent. |
+| `subagent` | Can run in a child session through the `subagent` tool, but cannot be selected as the main agent. |
+| `all` | Can be used either way. This is the default for a custom agent when `mode` is omitted. |
 
-```jsonc title="opencode.jsonc"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "default_agent": "reviewer",
-  "agents": {
-    "reviewer": {
-      "description": "Reviews changes for correctness, security, and missing tests",
-      "mode": "all",
-      "model": "anthropic/claude-sonnet-4-5#high",
-      "system": "Review the current changes. Report findings before any summary.",
-      "color": "warning",
-      "steps": 8,
-      "permissions": [
-        { "action": "edit", "resource": "*", "effect": "deny" },
-        { "action": "shell", "resource": "*", "effect": "deny" }
-      ]
-    },
-    "build": {
-      "permissions": [
-        { "action": "shell", "resource": "git push *", "effect": "ask" }
-      ]
-    }
-  }
-}
+In the TUI, press <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> to cycle
+through visible primary and `all` agents, or use `/agents` to choose one.
+
+Subagents run in child sessions with fresh context. A primary agent can invoke
+one with the `subagent` tool, either in the foreground or in the background.
+You can also `@` mention a visible subagent to ask the current agent to delegate
+work to it:
+
+```text
+@explore find where authentication errors are handled
 ```
 
-Agent definitions merge in configuration order. Later scalar fields replace
-earlier values, request maps merge by key, and permission rules are appended.
-Global `permissions` are applied to every agent before its agent-specific rules,
-so a later agent rule can refine a global rule.
+The parent agent's `subagent` permission controls which agents it may launch.
+The child currently uses its own configured permissions, not a restricted copy
+of the parent's permissions.
+
+## Configure agents
 
 ### Markdown files
 
@@ -139,9 +104,40 @@ Review for correctness, security, regressions, and missing tests.
 List findings in severity order with file and line references.
 ```
 
-For compatibility with older layouts, V2 also discovers Markdown under
-`agent/`, and treats files under `mode/` or `modes/` as primary agents. Prefer
-`agents/` for new files.
+### JSON or JSONC
+
+Use the `agents` field in any [OpenCode configuration file](/config):
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "reviewer",
+  "agents": {
+    "reviewer": {
+      "description": "Reviews changes for correctness, security, and missing tests",
+      "mode": "all",
+      "model": "anthropic/claude-sonnet-4-5#high",
+      "system": "Review the current changes. Report findings before any summary.",
+      "color": "warning",
+      "steps": 8,
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "deny" },
+        { "action": "shell", "resource": "*", "effect": "deny" }
+      ]
+    },
+    "build": {
+      "permissions": [
+        { "action": "shell", "resource": "git push *", "effect": "ask" }
+      ]
+    }
+  }
+}
+```
+
+Agent definitions merge in configuration order. Later scalar fields replace
+earlier values, request maps merge by key, and permission rules are appended.
+Global `permissions` are applied to every agent before its agent-specific rules,
+so a later agent rule can refine a global rule.
 
 ## Options
 

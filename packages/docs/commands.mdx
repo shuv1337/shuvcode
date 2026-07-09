@@ -1,6 +1,6 @@
 ---
 title: "Commands"
-description: "Create reusable slash commands from configuration or Markdown files."
+description: ""
 ---
 
 Custom commands turn a named prompt template into a slash command. Type the
@@ -10,45 +10,18 @@ command in the TUI, followed by any arguments:
 /review src/auth
 ```
 
-## Configure with JSON
-
-Add commands under the plural `commands` key in any OpenCode JSON or JSONC
-[configuration file](/config). Each entry's key is the command name and
-`template` is required.
-
-```jsonc title="opencode.jsonc"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "commands": {
-    "review": {
-      "description": "Review code for correctness and missing tests",
-      "template": "Review $ARGUMENTS. Report bugs first, then missing tests.",
-      "agent": "plan",
-      "model": "anthropic/claude-sonnet-4-5#high"
-    }
-  }
-}
-```
-
-Run it with:
-
-```text
-/review src/auth
-```
-
 ## Configure with Markdown
 
-OpenCode discovers `.md` command files in both the singular `command/` and
-plural `commands/` directories:
+OpenCode discovers `.md` command files in `commands/` directories:
 
 ```text
 ~/.config/opencode/commands/       # Global
 .opencode/commands/                # Project
 ```
 
-The equivalent `command/` paths also work. Files may be nested; for example,
-`.opencode/commands/team/review.md` defines `/team/review`. Files with other
-extensions, including `.mdx`, are not discovered.
+Files may be nested; for example, `.opencode/commands/team/review.md` defines
+`/team/review`. Files with other extensions, including `.mdx`, are not
+discovered.
 
 ```md title=".opencode/commands/review.md"
 ---
@@ -65,6 +38,32 @@ JSON and Markdown commands share one registry. Project definitions take
 precedence over global definitions, and a later definition can override a
 built-in or earlier command with the same name. Changes are reloaded
 automatically.
+
+Run it with:
+
+```text
+/review src/auth
+```
+
+## Configure with JSON
+
+Add commands under the `commands` key in any OpenCode JSON or JSONC
+[configuration file](/config). Each entry's key is the command name and
+`template` is required.
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "commands": {
+    "review": {
+      "description": "Review code for correctness and missing tests",
+      "template": "Review $ARGUMENTS. Report bugs first, then missing tests.",
+      "agent": "plan",
+      "model": "anthropic/claude-sonnet-4-5#high"
+    }
+  }
+}
+```
 
 ## Fields
 

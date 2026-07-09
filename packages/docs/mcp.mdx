@@ -1,6 +1,6 @@
 ---
 title: "MCP servers"
-description: "Connect local and remote Model Context Protocol servers to OpenCode."
+description: ""
 ---
 
 OpenCode can connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers and make their tools, prompts, and instructions available to agents. MCP tools consume model context, so enable only the servers you need.
@@ -132,13 +132,21 @@ For a server that supports dynamic client registration, only the remote server i
 }
 ```
 
-When the server reports `needs authentication`, start the browser authorization flow:
+When the server reports that it needs authentication, run `/connect` in the TUI:
+
+```text
+/connect
+```
+
+Select the MCP server under **Services**, then complete the browser authorization flow.
+
+You can also authenticate from the command line:
 
 ```bash
 opencode2 mcp auth sentry
 ```
 
-The command prints the authorization URL and waits for the redirect to OpenCode's loopback callback server.
+The CLI command prints the authorization URL and waits for the redirect to OpenCode's loopback callback server.
 
 If the provider issued client credentials, configure them using V2's snake_case field names:
 

@@ -22,7 +22,7 @@ function.
 
 ### Configuration
 
-Add ordered entries to the plural `plugins` field in `opencode.json(c)`:
+Add ordered entries to the `plugins` field in `opencode.json(c)`:
 
 ```jsonc title="opencode.jsonc"
 {
@@ -57,21 +57,19 @@ precedence rather than replacing the entire array.
 
 ### Local discovery
 
-OpenCode automatically scans both of these directories in every discovered
-OpenCode config directory:
+OpenCode automatically scans this directory in every discovered OpenCode config
+directory:
 
 ```text
-.opencode/plugin/
 .opencode/plugins/
 ```
 
-The equivalent global directories are
-`~/.config/opencode/plugin/` and `~/.config/opencode/plugins/`. Direct `.ts` and
-`.js` children are loaded. An immediate child directory is also loaded as a
+The equivalent global directory is `~/.config/opencode/plugins/`. Direct `.ts`
+and `.js` children are loaded. An immediate child directory is also loaded as a
 package when OpenCode can resolve a string `exports`, `module`, or `main`
 entrypoint, or an `index.ts` or `index.js` file.
 
-A `plugin/` directory beside a project-root `opencode.json` is not discovered
+A `plugins/` directory beside a project-root `opencode.json` is not discovered
 automatically. Put it under `.opencode/`, or add its file explicitly with a
 relative config entry.
 
@@ -86,7 +84,7 @@ applied in order:
   "plugins": [
     "-opencode.provider.*",
     "opencode.provider.openai",
-    "-./plugin/old.ts",
+    "-./plugins/old.ts",
     "-*",
     "./plugins/only-this-one.ts"
   ]
