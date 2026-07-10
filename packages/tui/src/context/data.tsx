@@ -805,6 +805,15 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         family(sessionID: string) {
           return store.session.family[resolveRoot(sessionID)] ?? []
         },
+        cost(sessionID: string) {
+          const session = store.session.info[sessionID]
+          if (!session) return 0
+          if (session.parentID) return session.cost
+          return (store.session.family[sessionID] ?? [sessionID]).reduce(
+            (total, id) => total + (store.session.info[id]?.cost ?? 0),
+            0,
+          )
+        },
         status(sessionID: string) {
           return store.session.status[sessionID] ?? "idle"
         },

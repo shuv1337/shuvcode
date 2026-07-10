@@ -33,7 +33,7 @@ export function SubagentFooter() {
       .model.list(current.location)
       ?.find((model) => model.providerID === last.model.providerID && model.id === last.model.id)
     const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
-    const cost = current.cost
+    const cost = data.session.cost(route.sessionID)
 
     const money = new Intl.NumberFormat("en-US", {
       style: "currency",

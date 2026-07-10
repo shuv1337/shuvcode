@@ -290,7 +290,7 @@ export function Prompt(props: PromptProps) {
       .list(session.location)
       ?.find((model) => model.providerID === last.model.providerID && model.id === last.model.id)
     const pct = model?.limit.context ? `${Math.round((tokens / model.limit.context) * 100)}%` : undefined
-    const cost = session.cost
+    const cost = data.session.cost(props.sessionID)
     return {
       context: pct ? `${Locale.number(tokens)} (${pct})` : Locale.number(tokens),
       cost: cost > 0 ? money.format(cost) : undefined,

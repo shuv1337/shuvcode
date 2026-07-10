@@ -16,7 +16,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
   const theme = () => props.api.theme.current
   const msg = createMemo(() => data.session.message.list(props.session_id))
   const session = createMemo(() => data.session.get(props.session_id))
-  const cost = createMemo(() => session()?.cost ?? 0)
+  const cost = createMemo(() => data.session.cost(props.session_id))
 
   const state = createMemo(() => {
     const last = lastAssistantWithUsage(msg(), session()?.revert?.messageID)

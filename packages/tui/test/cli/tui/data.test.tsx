@@ -2148,12 +2148,12 @@ test("projects live instruction updates with their message ID", async () => {
   }
 })
 
-function sessionInfo(id: string, parentID: string | undefined) {
+function sessionInfo(id: string, parentID: string | undefined, cost = 0) {
   return {
     id,
     parentID,
     projectID: "proj_test",
-    cost: 0,
+    cost,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created: 0, updated: 0 },
     title: id,
@@ -2164,10 +2164,11 @@ function sessionInfo(id: string, parentID: string | undefined) {
 // Mounts a DataProvider whose `/api/session/:id` responses are driven by the
 // given parent map (sessionID -> parentID). Roots omit the entry. Reused across
 // the family-index tests below.
-async function mountData(parents: Record<string, string>) {
+async function mountData(parents: Record<string, string>, costs: Record<string, number> = {}) {
   const calls = createFetch((url) => {
     const match = url.pathname.match(/^\/api\/session\/([^/]+)$/)
-    if (match && match[1] !== "active") return json({ data: sessionInfo(match[1], parents[match[1]]) })
+    if (match && match[1] !== "active")
+      return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
   })
   let data!: ReturnType<typeof useData>
   let ready!: () => void
@@ -2230,6 +2231,24 @@ test("indexes arbitrarily deep nesting under a single root", async () => {
     expect(data.session.root("grandchild")).toBe("root")
     expect(data.session.root("child")).toBe("root")
     expect(data.session.family("root")).toEqual(["grandchild", "child", "root"])
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("totals family cost for roots and keeps subagent cost scoped", async () => {
+  const { data, app } = await mountData(
+    { grandchild: "child", child: "root" },
+    { root: 1, child: 2, grandchild: 3 },
+  )
+  try {
+    await data.session.refresh("grandchild")
+    await data.session.refresh("child")
+    await data.session.refresh("root")
+
+    expect(data.session.cost("root")).toBe(6)
+    expect(data.session.cost("child")).toBe(2)
+    expect(data.session.cost("grandchild")).toBe(3)
   } finally {
     app.renderer.destroy()
   }
