@@ -25,17 +25,12 @@ export type ExecuteInput = {
 }
 
 export interface Interface {
-  readonly materialize: (input: MaterializeInput) => Effect.Effect<Materialization>
+  readonly materialize: (permissions?: PermissionV2.Ruleset) => Effect.Effect<Materialization>
   /** Internal registration capability exposed publicly only through Tools.Service. */
   readonly register: (
     tools: Readonly<Record<string, AnyTool>>,
     options?: Tools.RegisterOptions,
   ) => Effect.Effect<void, RegistrationError, Scope.Scope>
-}
-
-export interface MaterializeInput {
-  readonly model: { readonly id: string; readonly provider: string }
-  readonly permissions?: PermissionV2.Ruleset
 }
 
 export interface Materialization {
@@ -171,27 +166,20 @@ const registryLayer = Layer.effect(
           }),
         )
       }),
-      materialize: Effect.fn("ToolRegistry.materialize")(function* (input) {
-        const registrations = new Map<string, Registration>()
+      materialize: Effect.fn("ToolRegistry.materialize")(function* (permissions) {
+        const direct = new Map<string, Registration>()
+        const deferred = new Map<string, Registration>()
+        const rules = permissions ?? []
         for (const [name, entries] of local) {
           const registration = entries.at(-1)?.registration
-          if (registration) registrations.set(name, registration)
+          if (!registration) continue
+          if (registration.deferred && !Flag.CODEMODE_ENABLED) continue
+          if (whollyDisabled(permission(registration.tool, name), rules)) continue
+          if (registration.deferred) deferred.set(name, registration)
+          else direct.set(name, registration)
         }
-        for (const [name, registration] of registrations) {
-          if (
-            (registration.deferred && !Flag.CODEMODE_ENABLED) ||
-            whollyDisabled(permission(registration.tool, name), input.permissions ?? [])
-          )
-            registrations.delete(name)
-        }
-        const direct = new Map(Array.from(registrations).filter(([, registration]) => !registration.deferred))
-        const deferred = new Map(Array.from(registrations).filter(([, registration]) => registration.deferred))
         const execute =
-          deferred.size > 0 && !whollyDisabled("execute", input.permissions ?? [])
-            ? ExecuteTool.create({
-                registrations: deferred,
-              })
-            : undefined
+          deferred.size > 0 && !whollyDisabled("execute", rules) ? ExecuteTool.create(deferred) : undefined
         return {
           definitions: [
             ...Array.from(direct, ([name, registration]) => definition(name, registration.tool)),
