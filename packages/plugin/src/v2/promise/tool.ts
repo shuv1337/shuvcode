@@ -15,6 +15,8 @@ export type Definition<
   Output extends SchemaType<any>,
   Structured extends SchemaType<any> = Output,
 > = {
+  readonly name: string
+  readonly options?: RegisterOptions
   readonly description: string
   readonly input: Input
   readonly output: Output
@@ -34,6 +36,8 @@ export type Definition<
 }
 
 export type DynamicDefinition = {
+  readonly name: string
+  readonly options?: RegisterOptions
   readonly description: string
   readonly jsonSchema: JsonSchema.JsonSchema
   readonly outputSchema?: JsonSchema.JsonSchema
@@ -73,8 +77,8 @@ export interface ToolDraft {
     Input extends SchemaType<any>,
     Output extends SchemaType<any>,
     Structured extends SchemaType<any> = Output,
-  >(name: string, tool: Definition<Input, Output, Structured>, options?: RegisterOptions): void
-  add(name: string, tool: DynamicDefinition, options?: RegisterOptions): void
+  >(tool: Definition<Input, Output, Structured>): void
+  add(tool: DynamicDefinition): void
 }
 
 export interface ToolHooks {

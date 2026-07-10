@@ -91,7 +91,8 @@ Promise tools use plain object declarations with async executors:
 import { Schema } from "effect"
 
 await ctx.tool.transform((tools) => {
-  tools.add("echo", {
+  tools.add({
+    name: "echo",
     description: "Echo text",
     input: Schema.Struct({ text: Schema.String }),
     output: Schema.Struct({ text: Schema.String }),

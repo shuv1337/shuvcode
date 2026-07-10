@@ -106,7 +106,8 @@ describe("fromPromise", () => {
         id: "promise-tool",
         setup: async (ctx) => {
           await ctx.tool.transform((tools) => {
-            tools.add("hello", {
+            tools.add({
+              name: "hello",
               description: "Hello",
               input: Schema.Struct({ name: Schema.String }),
               output: Schema.String,

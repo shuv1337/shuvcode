@@ -282,7 +282,8 @@ export default Plugin.define({
   id: "acme.greeting",
   setup: async (ctx) => {
     await ctx.tool.transform((tools) => {
-      tools.add("greeting", {
+      tools.add({
+        name: "greeting",
         description: "Create a greeting",
         input: Schema.Struct({ name: Schema.String }),
         output: Schema.String,
@@ -295,8 +296,8 @@ export default Plugin.define({
 
 Unsupported characters in tool and group names are normalized to underscores.
 The resulting exposed key must begin with a letter and contain at most 64
-letters, digits, underscores, or hyphens. `tools.add` also accepts
-`{ group, deferred }`:
+letters, digits, underscores, or hyphens. Set `options` on the declaration to
+configure registration with `{ group, deferred }`:
 
 - `group` prefixes and groups the exposed tool name.
 - `deferred: true` makes the tool available through the deferred `execute`

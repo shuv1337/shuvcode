@@ -1,7 +1,7 @@
 export * as PluginPromise from "./promise"
 
 import { Plugin } from "@opencode-ai/plugin/v2/effect"
-import type { AnyTool, RegisterOptions } from "@opencode-ai/plugin/v2/tool"
+import type { AnyTool } from "@opencode-ai/plugin/v2/tool"
 import { Effect, Scope, Stream } from "effect"
 import { Tool } from "../tool/tool"
 
@@ -114,8 +114,7 @@ export function fromPromise(plugin: PromisePlugin) {
               register(
                 host.tool.transform((draft) =>
                   callback({
-                    add: (name: string, tool: AnyTool, options?: RegisterOptions) =>
-                      draft.add(name, fromPromiseTool(tool), options),
+                    add: (tool: AnyTool) => draft.add(tool.name, fromPromiseTool(tool), tool.options),
                   }),
                 ),
               ),
