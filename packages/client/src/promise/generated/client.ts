@@ -193,12 +193,12 @@ import { ClientError } from "./client-error"
 export interface ClientOptions {
   readonly baseUrl: string
   readonly fetch?: typeof globalThis.fetch
-  readonly headers?: HeadersInit
+  readonly headers?: RequestInit["headers"]
 }
 
 export interface RequestOptions {
   readonly signal?: AbortSignal
-  readonly headers?: HeadersInit
+  readonly headers?: RequestInit["headers"]
 }
 
 interface RequestDescriptor {
