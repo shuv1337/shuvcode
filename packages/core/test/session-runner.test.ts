@@ -128,6 +128,11 @@ const compactModel = Model.make({
   provider: "fake",
   route: OpenAIChat.route.with({ limits: { context: 4_000, output: 50 } }),
 })
+const undersizedContextModel = Model.make({
+  id: "undersized-context",
+  provider: "fake",
+  route: OpenAIChat.route.with({ limits: { context: 1, output: 1_000 } }),
+})
 const recoveryModel = Model.make({
   id: "recovery",
   provider: "fake",
@@ -1518,11 +1523,12 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("settles an admitted manual compaction that cannot start", () =>
+  it.effect("explains when manual compaction has no history", () =>
     Effect.gen(function* () {
       yield* setup
       const session = yield* SessionV2.Service
       const compaction = yield* session.compact({ sessionID })
+      modelResolveHook = Effect.die("model resolution should not run")
 
       yield* session.resume(sessionID)
 
@@ -1531,7 +1537,7 @@ describe("SessionRunnerLLM", () => {
         type: "compaction",
         status: "failed",
         reason: "manual",
-        error: { message: "Compaction could not start" },
+        error: { type: "compaction.unavailable", message: "Nothing to compact yet" },
       })
       expect(
         (yield* recordedEventTypes(sessionID)).filter(
@@ -1541,10 +1547,73 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
+  it.effect("manually compacts when the model has no context limit", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      response = reply.text("Earlier answer", "text-manual-unknown-history")
+      yield* admit(session, "Earlier question")
+      yield* session.resume(sessionID)
+
+      requests.length = 0
+      response = reply.text("Manual summary", "text-manual-unknown-summary")
+      const compaction = yield* session.compact({ sessionID })
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(1)
+      expect(userTexts(requests[0])[0]).toContain("Earlier question")
+      expect((yield* session.messages({ sessionID })).find((message) => message.id === compaction.id)).toMatchObject({
+        type: "compaction",
+        status: "completed",
+        summary: "Manual summary",
+      })
+    }),
+  )
+
+  it.effect("preserves provider errors from manual compaction", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      response = reply.text("Earlier answer", "text-manual-provider-history")
+      yield* admit(session, "Earlier question")
+      yield* session.resume(sessionID)
+
+      response = [LLMEvent.providerError({ message: "summary unavailable" })]
+      const compaction = yield* session.compact({ sessionID })
+      yield* session.resume(sessionID)
+
+      expect((yield* session.messages({ sessionID })).find((message) => message.id === compaction.id)).toMatchObject({
+        type: "compaction",
+        status: "failed",
+        error: { type: "provider.error", message: "summary unavailable" },
+      })
+    }),
+  )
+
+  it.effect("preserves typed provider failures from manual compaction", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      response = reply.text("Earlier answer", "text-manual-failure-history")
+      yield* admit(session, "Earlier question")
+      yield* session.resume(sessionID)
+
+      responseStream = Stream.fail(providerUnavailable())
+      const compaction = yield* session.compact({ sessionID })
+      yield* session.resume(sessionID)
+
+      expect((yield* session.messages({ sessionID })).find((message) => message.id === compaction.id)).toMatchObject({
+        type: "compaction",
+        status: "failed",
+        error: { type: "provider.transport", message: "Provider unavailable" },
+      })
+    }),
+  )
+
   it.effect("settles an admitted manual compaction when pre-start resolution throws", () =>
     Effect.gen(function* () {
-      yield* setup
-      const session = yield* SessionV2.Service
+      const session = yield* setup
+      response = reply.text("Earlier answer", "text-manual-resolution-history")
+      yield* admit(session, "Earlier question")
+      yield* session.resume(sessionID)
+
       const compaction = yield* session.compact({ sessionID })
       modelResolveHook = Effect.die("model resolution failed")
 
@@ -1643,6 +1712,46 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
+  it.effect("recovers from provider context overflow without a configured context limit", () =>
+    Effect.gen(function* () {
+      const session = yield* setupOverflowRecovery
+      currentModel = model
+      responses = [
+        [LLMEvent.providerError({ message: "prompt too long", classification: "context-overflow" })],
+        reply.text("## Objective\n- Recover unknown limit", "text-summary-unknown-limit"),
+        reply.text("Recovered", "text-final-unknown-limit"),
+      ]
+      yield* admit(session, "Continue")
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(3)
+      expect(yield* session.context(sessionID)).toMatchObject([
+        { type: "compaction", summary: "## Objective\n- Recover unknown limit" },
+        { type: "assistant", finish: "stop" },
+      ])
+    }),
+  )
+
+  it.effect("recovers from provider context overflow despite an undersized configured context limit", () =>
+    Effect.gen(function* () {
+      const session = yield* setupOverflowRecovery
+      currentModel = undersizedContextModel
+      responses = [
+        [LLMEvent.providerError({ message: "prompt too long", classification: "context-overflow" })],
+        reply.text("## Objective\n- Recover undersized limit", "text-summary-undersized-limit"),
+        reply.text("Recovered", "text-final-undersized-limit"),
+      ]
+      yield* admit(session, "Continue")
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(3)
+      expect(yield* session.context(sessionID)).toMatchObject([
+        { type: "compaction", summary: "## Objective\n- Recover undersized limit" },
+        { type: "assistant", finish: "stop" },
+      ])
+    }),
+  )
+
   it.effect("persists a second context overflow after one recovery", () =>
     Effect.gen(function* () {
       const session = yield* setupOverflowRecovery
@@ -1702,7 +1811,14 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests).toHaveLength(2)
       const context = yield* session.context(sessionID)
-      expect(context).toContainEqual(expect.objectContaining({ type: "compaction", status: "failed", reason: "auto" }))
+      expect(context).toContainEqual(
+        expect.objectContaining({
+          type: "compaction",
+          status: "failed",
+          reason: "auto",
+          error: { type: "provider.error", message: "summary unavailable" },
+        }),
+      )
       expect(context.slice(-3)).toMatchObject([
         { type: "user", text: "Continue" },
         { type: "compaction", status: "failed", reason: "auto" },
