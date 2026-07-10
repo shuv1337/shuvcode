@@ -1,6 +1,7 @@
 export * as PluginPromise from "./promise"
 
-import { Plugin } from "@opencode-ai/plugin/v2/effect"
+import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import type { Context, Plugin } from "@opencode-ai/plugin/v2/plugin"
 import type { AnyTool } from "@opencode-ai/plugin/v2/tool"
 import { Agent } from "@opencode-ai/schema/agent"
 import { Integration } from "@opencode-ai/schema/integration"
@@ -16,11 +17,7 @@ import { Tool } from "../tool/tool"
 
 type HostRegistration = { readonly dispose: Effect.Effect<void> }
 type Registration = { readonly dispose: () => Promise<void> }
-type PromisePlugin = import("@opencode-ai/plugin/v2/plugin").Plugin
-type PromisePluginContext = import("@opencode-ai/plugin/v2/plugin").Context
-type PromiseEvent = ReturnType<PromisePluginContext["event"]["subscribe"]> extends AsyncIterable<infer Event>
-  ? Event
-  : never
+type PromiseEvent = ReturnType<Context["event"]["subscribe"]> extends AsyncIterable<infer Event> ? Event : never
 type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
 /**
@@ -32,8 +29,8 @@ type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: s
  * preserves boot-time batching, so Promise-plugin transforms still coalesce
  * into one reload per domain.
  */
-export function fromPromise(plugin: PromisePlugin) {
-  return Plugin.define({
+export function fromPromise(plugin: Plugin) {
+  return define({
     id: plugin.id,
     effect: (host) =>
       Effect.gen(function* () {
@@ -59,7 +56,7 @@ export function fromPromise(plugin: PromisePlugin) {
               }),
             )
 
-        const context2: PromisePluginContext = {
+        const context2: Context = {
           options: host.options,
           agent: {
             list: (input) => run(host.agent.list(input)),
