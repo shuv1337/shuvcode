@@ -5,12 +5,12 @@ description: "Extend OpenCode with plugins."
 
 Plugins extend OpenCode in-process. They can transform agents, models, commands,
 integrations, references, skills, and tools; intercept model requests and tool
-execution; and call a location-scoped subset of the V2 client.
+execution; and call a subset of the V2 client.
 
 <Warning>
   The V2 plugin API is beta. Entrypoints, hooks, draft shapes, and configuration
-  may change before the stable release. Use only the `/v2` exports described on
-  this page; the root `@opencode-ai/plugin` API is the legacy API.
+  may change before the stable release. Use the `/v2` exports described on this
+  page.
 </Warning>
 
 ## Load plugins
@@ -112,7 +112,7 @@ visible from the plugin file, for example:
 
 ```sh
 cd .opencode
-bun add @opencode-ai/plugin
+bun add @opencode-ai/plugin@next
 ```
 
 Match the plugin package version to the OpenCode release you target.
@@ -147,14 +147,15 @@ export default Plugin.define({
 })
 ```
 
-`setup` runs each time the plugin is activated for a Location. Register
-long-lived behavior during setup; do not wait there on an infinite event
-stream.
+`setup` runs each time the plugin is activated. Register long-lived behavior
+during setup; do not wait there on an infinite event stream.
 
-## Context
+### Context
 
-Context methods return Promises. Read and action methods use the same inputs
-and location-aware responses as the V2 client APIs.
+The plugin context is essentially an [OpenCode server client](/build/client).
+Its read and action methods use the same inputs and responses as the client. It
+adds plugin-only methods for transforms, runtime hooks, reloads, registrations,
+and plugin options.
 
 | Capability | Available operations |
 | --- | --- |
@@ -173,16 +174,11 @@ and location-aware responses as the V2 client APIs.
 | `ctx.event` | `subscribe` to the current public server event stream |
 | `ctx.options` | Readonly options from the matching config object |
 
-Unlike the legacy API, V2 does not provide `$`, `directory`, `worktree`, or a
-general SDK client on the context. A plugin is Location-scoped, and the exposed
-domain clients apply that Location by default.
-
 ### Transform hooks
 
-Transforms synchronously edit a draft whenever a stateful domain is built.
-Registering or disposing a transform rebuilds the domain from fresh state and
-runs all active transforms in order. Call the domain's `reload()` method when
-external data captured by a transform changes.
+Transform hooks let a plugin modify how OpenCode is configured. Use them to add
+or remove definitions, override settings, choose defaults, and provide tools or
+other sources.
 
 | Transform | Draft operations |
 | --- | --- |
@@ -194,10 +190,41 @@ external data captured by a transform changes.
 | `skill.transform` | `source`, `list` |
 | `tool.transform` | `add` |
 
-Hook registrations are owned by the plugin scope. Transform and runtime hook
-calls also return a `Registration` with `dispose` for explicit cleanup. Tool
-contributions currently remain until the owning plugin scope closes, so prefer
-scope cleanup for plugin-wide teardown while this API is beta.
+Here's an example that keeps models synced from a remote source:
+
+```js title=".opencode/plugins/remote-models.js"
+import { Plugin } from "@opencode-ai/plugin/v2"
+
+export default Plugin.define({
+  id: "acme.remote-models",
+  setup: async (ctx) => {
+    let models = []
+
+    await ctx.catalog.transform((catalog) => {
+      for (const model of models) {
+        catalog.model.update(model.providerID, model.id, (draft) => Object.assign(draft, model))
+      }
+    })
+
+    const refresh = async () => {
+      const response = await fetch("https://example.com/opencode/models.json", {
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!response.ok) return
+      models = await response.json()
+      await ctx.catalog.reload()
+    }
+
+    await refresh()
+    setInterval(() => void refresh().catch(console.error), 60_000)
+  },
+})
+```
+
+`ctx.catalog.reload()` replays every catalog transform to derive the new
+catalog. Each plugin's logic remains composed with the others, so a later
+plugin can still modify models added by an earlier one. The catalog updates
+without restarting OpenCode.
 
 ### Runtime hooks
 
@@ -236,7 +263,9 @@ export default Plugin.define({
 A hook failure fails the operation it intercepts. Keep runtime hooks fast and
 handle expected errors inside the callback.
 
-## Add a tool
+## Examples
+
+### Add a tool
 
 Pass a tool declaration to `tools.add`. Define its input with JSON Schema and
 use an async executor:
@@ -284,22 +313,38 @@ configure registration with `{ group, deferred }`:
 The executor receives a second context argument containing `sessionID`,
 `agent`, `assistantMessageID`, and `toolCallID`.
 
-## Types
+### Add a command
 
-`Plugin.define` infers the context and callbacks. The package also
-re-exports the canonical `Agent`, `Command`, `Connection`, `Credential`,
-`Integration`, `Model`, `Provider`, `Reference`, and `Skill` schema namespaces.
-Import narrower API types from their public subpaths when needed:
+```js title=".opencode/plugins/review-command.js"
+import { Plugin } from "@opencode-ai/plugin/v2"
 
-```ts
-import { Plugin, Model } from "@opencode-ai/plugin/v2"
-import type { Context } from "@opencode-ai/plugin/v2/plugin"
-import type { AgentDraft } from "@opencode-ai/plugin/v2/agent"
-import type { ToolExecuteBeforeEvent } from "@opencode-ai/plugin/v2/tool"
+export default Plugin.define({
+  id: "acme.review-command",
+  setup: async (ctx) => {
+    await ctx.command.transform((commands) => {
+      commands.update("review", (command) => {
+        command.description = "Review the current changes"
+        command.template = "Review the current changes for correctness and missing tests."
+      })
+    })
+  },
+})
 ```
 
-Avoid importing types or runtime values from `@opencode-ai/core` or
-`@opencode-ai/server`; those are private host implementation details.
+### Set the default model
+
+```js title=".opencode/plugins/default-model.js"
+import { Plugin } from "@opencode-ai/plugin/v2"
+
+export default Plugin.define({
+  id: "acme.default-model",
+  setup: async (ctx) => {
+    await ctx.catalog.transform((catalog) => {
+      catalog.model.default.set("anthropic", "claude-sonnet-4-5")
+    })
+  },
+})
+```
 
 ## Publish a package
 
@@ -313,7 +358,7 @@ manifest is:
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@opencode-ai/plugin": "1.17.18"
+    "@opencode-ai/plugin": "next"
   }
 }
 ```
@@ -325,7 +370,7 @@ change.
 
 ## Verify loading
 
-List active plugin IDs for the current Location through the V2 API:
+List active plugin IDs through the V2 API:
 
 ```sh
 opencode2 api get /api/plugin
@@ -338,12 +383,12 @@ being resolved.
 
 ## Effect
 
-Plugins built with Effect use the `@opencode-ai/plugin/v2/effect` entrypoint.
-Install `effect` alongside the plugin package and export an `effect` function
-instead of `setup`:
+OpenCode provides a first-class Effect API for plugins through the
+`@opencode-ai/plugin/v2/effect` entrypoint. Install `effect` alongside the
+plugin package and export an `effect` function instead of `setup`:
 
 ```sh
-bun add @opencode-ai/plugin effect
+bun add @opencode-ai/plugin@next effect
 ```
 
 ```ts title=".opencode/plugins/reviewer-effect.ts"
