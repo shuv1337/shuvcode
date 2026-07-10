@@ -4,8 +4,12 @@ Use this guide as the starting point for work involving OpenCode itself. It
 covers the core concepts needed to configure and customize OpenCode, extend it
 with plugins, and build integrations with the OpenCode SDK, clients, and API.
 
-Full documentation is available at <https://v2.opencode.ai/>. Consult
-it when this overview does not contain enough detail for the task.
+Full documentation is available at <https://v2.opencode.ai/>. This overview is
+only an index of core concepts. Before answering a question about a topic below,
+fetch the URL named in that section and use the full page as the source of
+truth. Follow links from that page when the question needs more detail. Fetch
+<https://v2.opencode.ai/llms.txt> first when you need to discover the relevant
+documentation page.
 
 ## [Configuration](https://v2.opencode.ai/config)
 
@@ -48,11 +52,18 @@ V1 config files and `.opencode/` definitions are intended to remain compatible.
 The only intentional breaking changes are the server API and plugin API. Native
 V2 config uses more ergonomic shapes, but conversion is optional. When the user
 requests conversion, inspect the complete configuration, preserve behavior and
-unrelated settings, and apply only the relevant migrations from the guide. If
-the request includes a V1 plugin, explain that its API is not finalized and do
-not attempt migration yet. Once the V2 plugin API is finalized, OpenCode should
-be able to migrate most plugins. If non-API V1 functionality fails in V2, use
-the `report` skill to file it as a compatibility bug.
+unrelated settings, and apply only the relevant migrations from the guide. For
+plugin migrations, fetch and follow both the migration guide and the full
+[plugins guide](https://v2.opencode.ai/build/plugins). If non-API V1
+functionality fails in V2, use the `report` skill to file it as a compatibility
+bug.
+
+## [Plugins](https://v2.opencode.ai/build/plugins)
+
+For questions about creating, configuring, loading, publishing, or migrating
+plugins, fetch the full [plugins guide](https://v2.opencode.ai/build/plugins)
+before answering. This includes questions about the Effect plugin API, hooks,
+transforms, tools, plugin context capabilities, and package entrypoints.
 
 ## [Service](https://v2.opencode.ai/troubleshooting#check-the-background-service)
 
