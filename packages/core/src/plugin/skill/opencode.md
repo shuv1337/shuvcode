@@ -27,8 +27,11 @@ to every project for that user. Project configuration can live in any directory
 as `opencode.json(c)` or `.opencode/opencode.json(c)`, including nested packages
 in a monorepo.
 
-When OpenCode starts, it searches upward from the current directory for project
-configuration and merges the files it finds with the global configuration.
+When OpenCode starts, it searches from the current directory up to the project
+root. It merges direct `opencode.json(c)` files from root to current directory,
+then does the same for `.opencode/opencode.json(c)` files. This means every
+`.opencode` config overrides every direct config. Global configuration has the
+lowest precedence.
 
 Common configuration fields include `model`, `default_agent`, `permissions`,
 `agents`, `commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
@@ -71,8 +74,8 @@ OpenCode uses a client-server architecture. Interfaces such as the TUI connect
 to a background OpenCode service, which owns sessions, configuration, plugins,
 permissions, and tool execution.
 
-Configuration and related files are typically watched and reloaded while the
-service is running. If a change does not appear, restart the service:
+OpenCode normally discovers or starts the shared background service
+automatically. If the service is stuck or unhealthy, restart it:
 
 ```sh
 opencode2 service restart
@@ -89,9 +92,10 @@ opencode2 service status
 OpenCode exposes an HTTP API from its server. The API is described by an
 OpenAPI document available from the running server at `/openapi.json`.
 
-Use OpenCode's built-in `api` command for local requests. It discovers the same
-background server used by the TUI, starts it when necessary, and applies the
-server's authentication headers automatically.
+Use OpenCode's built-in `api` command for local requests. It uses the same
+discovery and authentication flow as the TUI and may start the background
+service when no compatible healthy service is available. It accepts either an
+HTTP method and path or an OpenAPI operation ID.
 
 Call an endpoint with an HTTP method and path:
 
@@ -117,6 +121,20 @@ endpoints, parameters, request bodies, and response schemas. The
 raw [OpenAPI specification](https://v2.opencode.ai/openapi.json) is also
 available for code generation and other tooling.
 
+## [Client](https://v2.opencode.ai/build/client)
+
+For questions about connecting an application to OpenCode over the network,
+fetch the full [client guide](https://v2.opencode.ai/build/client) before
+answering.
+
+`@opencode-ai/client` is the generated TypeScript client for the OpenCode HTTP
+API. Its methods and types come from the same contract as the API reference.
+The default entrypoint exposes Promise-based resource clients and async
+iterables for streaming endpoints. The `@opencode-ai/client/effect` entrypoint
+exposes typed Effects, Streams, and decoded OpenCode schema values. Its
+`Service` API can discover, start, stop, and authenticate with the local
+background service from a Node application.
+
 ## [Troubleshooting](https://v2.opencode.ai/troubleshooting)
 
 OpenCode runs a client and a background server. Start by determining whether a
@@ -124,6 +142,8 @@ problem belongs to the client, the shared server, or one project.
 
 - Check the service with `opencode2 service status` and verify the API with
   `opencode2 api get /api/health`.
+- Compare with `opencode2 --standalone`, which runs the TUI with a private
+  server, to isolate shared-service issues.
 - Inspect `~/.local/share/opencode/log/opencode.log`. Filter `role=cli` for
   client startup and `role=server` for sessions, providers, plugins,
   permissions, and tools.
