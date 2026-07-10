@@ -271,25 +271,23 @@ handle expected errors inside the callback.
 
 ## Add a tool
 
-Use `Tool.make` with Effect schemas. Promise tools use async executors:
+Pass a plain object with Effect schemas to `tools.add`. Promise tools use async
+executors:
 
 ```ts title=".opencode/plugins/greeting.ts"
 import { Plugin } from "@opencode-ai/plugin/v2"
-import { Tool } from "@opencode-ai/plugin/v2/tool"
 import { Schema } from "effect"
-
-const greeting = Tool.make({
-  description: "Create a greeting",
-  input: Schema.Struct({ name: Schema.String }),
-  output: Schema.String,
-  execute: async ({ name }) => `Hello, ${name}!`,
-})
 
 export default Plugin.define({
   id: "acme.greeting",
   setup: async (ctx) => {
     await ctx.tool.transform((tools) => {
-      tools.add("greeting", greeting)
+      tools.add("greeting", {
+        description: "Create a greeting",
+        input: Schema.Struct({ name: Schema.String }),
+        output: Schema.String,
+        execute: async ({ name }) => `Hello, ${name}!`,
+      })
     })
   },
 })
@@ -305,10 +303,9 @@ letters, digits, underscores, or hyphens. `tools.add` also accepts
   tool instead of exposing it directly.
 
 The executor receives a second context argument containing `sessionID`,
-`agent`, `assistantMessageID`, and `toolCallID`. Use
-`Tool.withPermission(tool, "permission-name")` to assign a permission key.
-Effect plugins import the helper from `@opencode-ai/plugin/v2/effect/tool` and
-return an `Effect` from `execute`.
+`agent`, `assistantMessageID`, and `toolCallID`. Effect plugins import their
+tool contracts from `@opencode-ai/plugin/v2/effect/tool` and return an `Effect`
+from `execute`.
 
 ## Types
 
