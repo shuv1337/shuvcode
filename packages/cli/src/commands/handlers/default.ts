@@ -18,6 +18,12 @@ export default Runtime.handler(Commands, (input) =>
     const server = yield* Server.resolve({
       server: Option.getOrUndefined(input.server),
       standalone: input.standalone,
+      onStart: (reason) =>
+        process.stderr.write(
+          reason === "version-mismatch"
+            ? "Restarting background server (version mismatch)...\n"
+            : "Starting background server...\n",
+        ),
     })
     const config = TuiConfig.resolve({}, { terminalSuspend: false })
     let disposeSlots: (() => void) | undefined

@@ -11,6 +11,7 @@ export type Args = {
   readonly server?: string
   readonly standalone?: boolean
   readonly mismatch?: "replace" | "ignore" | "error"
+  readonly onStart?: Service.StartOptions["onStart"]
 }
 
 export type Resolved = {
@@ -46,7 +47,7 @@ export const resolve = Effect.fn("cli.server.resolve")(function* (args: Args) {
   }
 
   const options = yield* ServiceConfig.options()
-  const endpoint = yield* resolveManaged(options, args.mismatch ?? "replace")
+  const endpoint = yield* resolveManaged({ ...options, onStart: args.onStart }, args.mismatch ?? "replace")
   const reconnectOptions = { ...options, version: undefined }
   return {
     endpoint,
@@ -70,7 +71,7 @@ export const resolve = Effect.fn("cli.server.resolve")(function* (args: Args) {
 })
 
 const resolveManaged = Effect.fnUntraced(function* (
-  options: Service.Options,
+  options: Service.StartOptions,
   mismatch: NonNullable<Args["mismatch"]>,
 ) {
   if (mismatch === "replace") return yield* Service.start(options)
