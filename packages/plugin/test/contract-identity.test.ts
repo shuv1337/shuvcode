@@ -32,10 +32,10 @@ test.each([
     "Credential",
     "Integration",
     "Model",
+    "Plugin",
     "Provider",
     "Reference",
     "Skill",
-    ...(name === "effect" ? ["Tool"] : []),
-    "define",
+    ...(name === "promise" ? ["Tool"] : []),
   ])
 })

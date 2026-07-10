@@ -118,8 +118,6 @@ export function fromPromise(plugin: PromisePlugin) {
             prompt: (input) => run(host.session.prompt(input)),
             command: (input) => run(host.session.command(input)),
             interrupt: (input) => run(host.session.interrupt(input)),
-            hook: (name, callback) =>
-              register(host.session.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
           },
         }
 

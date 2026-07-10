@@ -51,8 +51,6 @@ import { llmClient } from "../../effect/app-node-platform"
 import { AgentNotFoundError, StepFailedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
-import type { SessionHooks } from "@opencode-ai/plugin/v2/effect/session"
-import { PluginHooks } from "../../plugin/hooks"
 import { PluginSupervisor } from "../../plugin/supervisor"
 
 type StepTokens = {
@@ -91,7 +89,6 @@ const layer = Layer.effect(
     const llm = yield* LLMClient.Service
     const agents = yield* AgentV2.Service
     const tools = yield* ToolRegistry.Service
-    const hooks = yield* PluginHooks.Service
     const models = yield* SessionRunnerModel.Service
     const store = yield* SessionStore.Service
     const location = yield* Location.Service
@@ -212,30 +209,7 @@ const layer = Layer.effect(
       const toolFibers = yield* FiberSet.make<void, ToolOutputStore.Error>()
       const ownedToolFibers: Array<Fiber.Fiber<void, ToolOutputStore.Error>> = []
       let needsContinuation = false
-      const availableTools = new Map(request.tools.map((tool) => [tool.name, tool]))
-      const requestEvent: SessionHooks["request"] = {
-        sessionID: session.id,
-        agent: agent.id,
-        model: resolved.ref,
-        system: [...request.system],
-        messages: [...request.messages],
-        tools: Object.fromEntries(
-          request.tools.map((tool) => [tool.name, { description: tool.description, input: { ...tool.inputSchema } }]),
-        ),
-      }
-      // Plugins may reshape the draft, but cannot advertise tools excluded earlier
-      // by permissions or registration state.
-      yield* hooks.trigger("session", "request", requestEvent)
-      const hookedRequest = LLM.updateRequest(request, {
-        system: requestEvent.system,
-        messages: requestEvent.messages,
-        tools: Object.entries(requestEvent.tools).flatMap(([name, tool]) => {
-          const registered = availableTools.get(name)
-          if (!registered) return []
-          return [{ ...registered, description: tool.description, inputSchema: tool.input }]
-        }),
-      })
-      const advertisedTools = new Set(hookedRequest.tools.map((tool) => tool.name))
+      const hookedRequest = request
       // Automatic compaction completed; rebuild the request from compacted history.
       if (
         !(yield* SessionPending.compaction(db, session.id)) &&
@@ -276,21 +250,6 @@ const layer = Layer.effect(
                 publisher.failUnsettledTools({
                   type: "tool.execution",
                   message: "Tools are disabled after the maximum agent steps",
-                }),
-              )
-              return
-            }
-            // A request hook hid this registered tool from the current request. Fail only
-            // this call durably and continue so the model can react, instead of executing
-            // a tool that was not advertised. Unregistered tools flow through settle, which
-            // durably fails them as unknown.
-            if (!advertisedTools.has(event.name) && availableTools.has(event.name)) {
-              needsContinuation = true
-              yield* publish(
-                LLMEvent.toolError({
-                  id: event.id,
-                  name: event.name,
-                  message: `Tool is not available for this request: ${event.name}`,
                 }),
               )
               return
@@ -624,7 +583,6 @@ export const node = makeLocationNode({
     llmClient,
     AgentV2.node,
     ToolRegistry.node,
-    PluginHooks.node,
     SessionRunnerModel.node,
     SessionStore.node,
     Location.node,

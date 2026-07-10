@@ -1,7 +1,6 @@
 export * as Tool from "./tool.js"
 
 import { Tool } from "../effect/tool.js"
-import type { ToolOutput, ToolResultValue } from "@opencode-ai/llm"
 import type { Agent } from "@opencode-ai/schema/agent"
 import type { Session } from "@opencode-ai/schema/session"
 import type { SessionMessage } from "@opencode-ai/schema/session-message"
@@ -85,8 +84,8 @@ export interface ToolExecuteAfterEvent {
   readonly assistantMessageID: SessionMessage.ID
   readonly toolCallID: string
   readonly input: unknown
-  result: ToolResultValue
-  output?: ToolOutput
+  result: Tool.ToolExecuteAfterEvent["result"]
+  output?: Tool.ToolExecuteAfterEvent["output"]
   outputPaths?: ReadonlyArray<string>
 }
 
