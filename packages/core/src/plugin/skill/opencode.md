@@ -11,6 +11,24 @@ truth. Follow links from that page when the question needs more detail. Fetch
 <https://v2.opencode.ai/llms.txt> first when you need to discover the relevant
 documentation page.
 
+## Version policy
+
+Always answer for OpenCode V2 unless the user explicitly asks about V1,
+legacy OpenCode, or migrating from V1.
+
+Use only <https://v2.opencode.ai/> documentation as the source of truth for V2.
+Do not use <https://opencode.ai/docs/>, which documents V1, and do not use
+general web search to resolve a V2 documentation question when the V2 docs or
+their `llms.txt` index cover it. The schema served from
+<https://opencode.ai/config.json> may describe V1 even though V2 configuration
+files include that URL for editor integration. Never use it to infer V2 field
+names or shapes. If V2 documentation is missing or contradictory, state the
+uncertainty or ask for clarification instead of falling back to V1.
+
+V1 documentation and syntax may be consulted only when the user explicitly
+asks about V1 or when needed as migration input. Outputs and recommendations
+must still use V2 unless the user specifically requests a V1 result.
+
 ## [Configuration](https://v2.opencode.ai/config)
 
 OpenCode configuration uses JSON or JSONC. Include the published schema so the
@@ -18,7 +36,7 @@ user's editor can validate fields and provide autocomplete:
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://opencode.ai/config.json",
 }
 ```
 
@@ -37,9 +55,10 @@ Common configuration fields include `model`, `default_agent`, `permissions`,
 `agents`, `commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
 `references`, `formatter`, and `lsp`.
 
-Do not guess field names or shapes. Use
-<https://opencode.ai/config.json> as the source of truth and preserve unrelated
-settings when editing an existing file.
+Do not guess field names or shapes. Fetch the V2 configuration guide and its
+linked topic guide as the source of truth, and preserve unrelated settings when
+editing an existing file. Keep the published `$schema` URL in configuration
+examples, but do not fetch it to determine the V2 configuration shape.
 
 See the [full configuration guide](https://v2.opencode.ai/config) for
 every field, examples, config locations, and links to dedicated feature guides.
