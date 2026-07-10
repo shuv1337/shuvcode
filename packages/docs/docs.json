@@ -49,7 +49,7 @@
         "groups": [
           {
             "group": "Build with OpenCode",
-            "pages": ["plugins", "client", "sdk/index"]
+            "pages": ["build/plugins", "build/client", "build/sdk"]
           }
         ]
       },
