@@ -326,15 +326,12 @@ export const copyOut = (value: unknown, undefinedAsNull = false): unknown => {
 const definitions = <R>(
   tools: HostTools<R>,
   path: ReadonlyArray<string> = [],
-): Array<{ path: string; definition: Definition<R> }> => {
-  const entries: Array<{ path: string; definition: Definition<R> }> = []
-  for (const [name, value] of Object.entries(tools)) {
+): Array<{ path: string; definition: Definition<R> }> =>
+  Object.entries(tools).flatMap(([name, value]) => {
     const next = [...path, name]
-    if (isDefinition(value)) entries.push({ path: next.join("."), definition: value })
-    else if (typeof value !== "function") entries.push(...definitions(value, next))
-  }
-  return entries
-}
+    if (isDefinition(value)) return [{ path: next.join("."), definition: value }]
+    return typeof value === "function" ? [] : definitions(value, next)
+  })
 
 const describeDefinition = <R>(path: string, definition: Definition<R>): ToolDescription => ({
   path,
@@ -348,9 +345,6 @@ const visibleDefinitions = <R>(tools: HostTools<R>) =>
     definition,
     description: describeDefinition(path, definition),
   }))
-
-export const catalog = <R>(tools: HostTools<R>): ReadonlyArray<ToolDescription> =>
-  visibleDefinitions(tools).map(({ description }) => description)
 
 export type DiscoveryPlan = {
   readonly catalog: ReadonlyArray<ToolDescription>
@@ -617,7 +611,7 @@ export const prepare = <R>(tools: HostTools<R>, catalogBudget = defaultCatalogBu
     "## Language",
     "",
     "Use common JavaScript data operations, functions, control flow, selected standard-library methods, and awaited tool calls. Built-ins include Date, RegExp, Map, Set, URL, URLSearchParams, and URI encoding helpers.",
-    "Modules/imports, classes, generators, timers, fetch, eval, prototype access, unlisted methods, and promise chaining are unavailable. Use Code Mode tools for external operations. Use await with try/catch.",
+    "Modules/imports, classes, generators, timers, fetch, eval, prototype access, unlisted methods, and new Promise(...) are unavailable. Use Code Mode tools for external operations. Use await with try/catch.",
     "Prefer explicit `return`; otherwise only the final top-level expression becomes the result.",
     "Dates and URLs serialize to strings at data boundaries; Map/Set/RegExp/URLSearchParams serialize to `{}`.",
   ]
