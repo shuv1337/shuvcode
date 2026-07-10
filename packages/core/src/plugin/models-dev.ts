@@ -26,7 +26,10 @@ export const ModelsDevPlugin = define({
     })
     yield* ctx.catalog.transform((catalog) => {
       for (const provider of loaded.data) {
-        catalog.provider.update(provider.info.id, (draft) => Object.assign(draft, provider.info))
+        catalog.provider.update(provider.info.id, (draft) => {
+          Object.assign(draft, provider.info)
+          draft.integrationID = provider.info.id
+        })
         for (const model of provider.models) {
           catalog.model.update(provider.info.id, model.id, (draft) => Object.assign(draft, model))
         }
