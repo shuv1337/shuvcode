@@ -4,10 +4,10 @@ Use this guide as the starting point for work involving OpenCode itself. It
 covers the core concepts needed to configure and customize OpenCode, extend it
 with plugins, and build integrations with the OpenCode SDK, clients, and API.
 
-Full documentation is available at <https://opencode.mintlify.site/>. Consult
+Full documentation is available at <https://v2.opencode.ai/>. Consult
 it when this overview does not contain enough detail for the task.
 
-## Configuration
+## [Configuration](https://v2.opencode.ai/config)
 
 OpenCode configuration uses JSON or JSONC. Include the published schema so the
 user's editor can validate fields and provide autocomplete:
@@ -34,14 +34,14 @@ Do not guess field names or shapes. Use
 <https://opencode.ai/config.json> as the source of truth and preserve unrelated
 settings when editing an existing file.
 
-See the [full configuration guide](https://opencode.mintlify.site/config) for
+See the [full configuration guide](https://v2.opencode.ai/config) for
 every field, examples, config locations, and links to dedicated feature guides.
 
-## V1 to V2 migration
+## [V1 to V2 migration](https://v2.opencode.ai/migrate-v1)
 
 For any request to migrate OpenCode configuration, agents, commands, skills,
 plugins, integrations, or other behavior from V1 to V2, read the full
-[migration guide](https://opencode.mintlify.site/migrate-v1) before acting. In
+[migration guide](https://v2.opencode.ai/migrate-v1) before acting. In
 the repository, its source is `packages/docs/migrate-v1.mdx`.
 
 V1 config files and `.opencode/` definitions are intended to remain compatible.
@@ -54,7 +54,7 @@ not attempt migration yet. Once the V2 plugin API is finalized, OpenCode should
 be able to migrate most plugins. If non-API V1 functionality fails in V2, use
 the `report` skill to file it as a compatibility bug.
 
-## Service
+## [Service](https://v2.opencode.ai/troubleshooting#check-the-background-service)
 
 OpenCode uses a client-server architecture. Interfaces such as the TUI connect
 to a background OpenCode service, which owns sessions, configuration, plugins,
@@ -73,7 +73,7 @@ Check its status after restarting:
 opencode2 service status
 ```
 
-## API
+## [API](https://v2.opencode.ai/api)
 
 OpenCode exposes an HTTP API from its server. The API is described by an
 OpenAPI document available from the running server at `/openapi.json`.
@@ -101,12 +101,12 @@ connected to an explicit server instead of its managed background service, use
 the same configured server and authentication context rather than constructing
 an unauthenticated request separately.
 
-See the [full API reference](https://opencode.mintlify.site/api) for available
+See the [full API reference](https://v2.opencode.ai/api) for available
 endpoints, parameters, request bodies, and response schemas. The
-raw [OpenAPI specification](https://opencode.mintlify.site/openapi.json) is also
+raw [OpenAPI specification](https://v2.opencode.ai/openapi.json) is also
 available for code generation and other tooling.
 
-## Troubleshooting
+## [Troubleshooting](https://v2.opencode.ai/troubleshooting)
 
 OpenCode runs a client and a background server. Start by determining whether a
 problem belongs to the client, the shared server, or one project.
@@ -124,6 +124,6 @@ problem belongs to the client, the shared server, or one project.
 - Redact API keys, authorization headers, prompts, file contents, and other
   sensitive data before sharing diagnostics.
 
-See the [full troubleshooting guide](https://opencode.mintlify.site/troubleshooting)
+See the [full troubleshooting guide](https://v2.opencode.ai/troubleshooting)
 for service lifecycle commands, API inspection, log locations, explicit server
 connections, issue-reporting details, and local development paths.
