@@ -829,6 +829,7 @@ export type GlobalEvent = {
         properties: {
           sessionID: string
           parentID: string
+          parentSeq: number
           from?: string
         }
       }
@@ -884,7 +885,9 @@ export type GlobalEvent = {
         type: "session.instructions.updated"
         properties: {
           sessionID: string
-          text: string
+          delta: {
+            [key: string]: string | "removed"
+          }
         }
       }
     | {
@@ -2880,6 +2883,13 @@ export type UnknownError1 = {
   ref?: string
 }
 
+export type InstructionEntryValueTooLargeError = {
+  _tag: "InstructionEntryValueTooLargeError"
+  actualBytes: number
+  maxBytes: number
+  message: string
+}
+
 export type Shell1 = {
   id: string
   status: "running" | "exited" | "timeout" | "killed"
@@ -3787,13 +3797,14 @@ export type SyncEventSessionForked = {
   type: "sync"
   id: string
   syncEvent: {
-    type: "session.forked.1"
+    type: "session.forked.2"
     id: string
     seq: number
     aggregateID: string
     data: {
       sessionID: string
       parentID: string
+      parentSeq: number
       from?: string
     }
   }
@@ -3892,13 +3903,15 @@ export type SyncEventSessionInstructionsUpdated = {
   type: "sync"
   id: string
   syncEvent: {
-    type: "session.instructions.updated.1"
+    type: "session.instructions.updated.2"
     id: string
     seq: number
     aggregateID: string
     data: {
       sessionID: string
-      text: string
+      delta: {
+        [key: string]: string | "removed"
+      }
     }
   }
 }
@@ -4866,12 +4879,13 @@ export type SessionForked = {
   durable: {
     aggregateID: string
     seq: number
-    version: 1
+    version: 2
   }
   location?: LocationRef
   data: {
     sessionID: string
     parentID: string
+    parentSeq: number
     from?: string
   }
 }
@@ -4999,12 +5013,14 @@ export type SessionInstructionsUpdated = {
   durable: {
     aggregateID: string
     seq: number
-    version: 1
+    version: 2
   }
   location?: LocationRef
   data: {
     sessionID: string
-    text: string
+    delta: {
+      [key: string]: string | "removed"
+    }
   }
 }
 
@@ -7171,6 +7187,7 @@ export type EventSessionForked = {
   properties: {
     sessionID: string
     parentID: string
+    parentSeq: number
     from?: string
   }
 }
@@ -7233,7 +7250,9 @@ export type EventSessionInstructionsUpdated = {
   type: "session.instructions.updated"
   properties: {
     sessionID: string
-    text: string
+    delta: {
+      [key: string]: string | "removed"
+    }
   }
 }
 
@@ -9096,12 +9115,13 @@ export type SessionForkedV2 = {
   durable: {
     aggregateID: string
     seq: number
-    version: 1
+    version: 2
   }
   location?: LocationRefV2
   data: {
     sessionID: string
     parentID: string
+    parentSeq: number
     from?: string
   }
 }
@@ -9258,12 +9278,14 @@ export type SessionInstructionsUpdatedV2 = {
   durable: {
     aggregateID: string
     seq: number
-    version: 1
+    version: 2
   }
   location?: LocationRefV2
   data: {
     sessionID: string
-    text: string
+    delta: {
+      [key: string]: string | "removed"
+    }
   }
 }
 
@@ -16253,6 +16275,10 @@ export type V2SessionInstructionsEntryPutErrors = {
    * SessionNotFoundError
    */
   404: SessionNotFoundError
+  /**
+   * InstructionEntryValueTooLargeError
+   */
+  413: InstructionEntryValueTooLargeError
 }
 
 export type V2SessionInstructionsEntryPutError =

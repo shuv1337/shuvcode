@@ -46,7 +46,7 @@ import { Config } from "@opencode-ai/core/config"
 import { ConfigCompaction } from "@opencode-ai/core/config/compaction"
 import { Tool } from "@opencode-ai/core/tool/tool"
 import {
-  InstructionCheckpointTable,
+  InstructionStateTable,
   SessionPendingTable,
   SessionMessageTable,
   SessionTable,
@@ -285,22 +285,22 @@ const skillBaselines = new Map<AgentV2.ID, string>()
 const systemContext = Layer.mock(InstructionBuiltIns.Service, {
   load: () =>
     Effect.sync(() =>
-      Instructions.combine(
-        systemRemoved
-          ? []
-          : [
-              Instructions.make({
-                key: systemContextKey,
-                codec: Schema.toCodecJson(Schema.String),
-                load: systemLoadHook.pipe(
-                  Effect.andThen(Effect.sync(() => (systemUnavailable ? Instructions.unavailable : systemBaseline))),
-                ),
-                baseline: String,
-                update: (_previous, current) => current,
-                removed: () => "System context source removed: test/context",
-              }),
-            ],
-      ),
+      Instructions.make({
+        key: systemContextKey,
+        codec: Schema.toCodecJson(Schema.String),
+        read: systemLoadHook.pipe(
+          Effect.andThen(
+            Effect.sync(() =>
+              systemUnavailable ? Instructions.unavailable : systemRemoved ? Instructions.removed : systemBaseline,
+            ),
+          ),
+        ),
+        render: {
+          initial: String,
+          changed: (_previous, current) => current,
+          removed: () => "System context source removed: test/context",
+        },
+      }),
     ),
 })
 const instructionContext = Layer.mock(InstructionDiscovery.Service, { load: () => Effect.succeed(Instructions.empty) })
@@ -311,10 +311,12 @@ const skillGuidance = Layer.mock(SkillGuidance.Service, {
         ? Instructions.make({
             key: Instructions.Key.make("test/skill-guidance"),
             codec: Schema.toCodecJson(Schema.String),
-            load: Effect.succeed(skillBaselines.get(agent.id)!),
-            baseline: String,
-            update: (_previous, current) => current,
-            removed: () => "Skill guidance removed",
+            read: Effect.succeed(skillBaselines.get(agent.id)!),
+            render: {
+              initial: String,
+              changed: (_previous, current) => current,
+              removed: () => "Skill guidance removed",
+            },
           })
         : Instructions.empty,
     ),
@@ -577,6 +579,7 @@ const replaySessionProjection = (id: SessionV2.ID) =>
       .pipe(Effect.orDie)
 
     yield* events.remove(id)
+    yield* db.delete(InstructionStateTable).where(eq(InstructionStateTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionPendingTable).where(eq(SessionPendingTable.session_id, id)).run().pipe(Effect.orDie)
     yield* db.delete(SessionMessageTable).where(eq(SessionMessageTable.session_id, id)).run().pipe(Effect.orDie)
     yield* events.replayAll(
@@ -942,11 +945,7 @@ describe("SessionRunnerLLM", () => {
       expect(requests).toHaveLength(0)
       expect(yield* SessionPending.has(db, sessionID, "steer")).toBe(true)
       expect(
-        yield* db
-          .select()
-          .from(InstructionCheckpointTable)
-          .where(eq(InstructionCheckpointTable.session_id, sessionID))
-          .get(),
+        yield* db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
       ).toBeUndefined()
 
       systemUnavailable = false
@@ -971,11 +970,7 @@ describe("SessionRunnerLLM", () => {
         location: Location.Ref.make({ directory: AbsolutePath.make("/moved") }),
       })
       expect(
-        yield* db
-          .select()
-          .from(InstructionCheckpointTable)
-          .where(eq(InstructionCheckpointTable.session_id, sessionID))
-          .get(),
+        yield* db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).get(),
       ).toBeUndefined()
 
       yield* admit(session, "Second")
@@ -987,66 +982,121 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("copies the context checkpoint to a fork", () =>
+  it.effect("forks instruction values at the selected message instead of the parent's latest state", () =>
     Effect.gen(function* () {
       const session = yield* setup
-      const { db } = yield* Database.Service
-      yield* admit(session, "First")
+      const first = yield* admit(session, "First")
+      yield* session.resume(sessionID)
+      systemBaseline = "Changed context"
+      const second = yield* admit(session, "Second")
+      yield* session.resume(sessionID)
+      systemBaseline = "Latest context"
+      yield* admit(session, "Third")
       yield* session.resume(sessionID)
 
-      const forked = yield* session.fork({ sessionID })
-
-      const parent = yield* db
-        .select()
-        .from(InstructionCheckpointTable)
-        .where(eq(InstructionCheckpointTable.session_id, sessionID))
-        .get()
-        .pipe(Effect.orDie)
-      expect(parent).toBeDefined()
+      const forked = yield* session.fork({ sessionID, messageID: second.id })
       expect(
-        yield* db
+        yield* (yield* Database.Service).db
           .select()
-          .from(InstructionCheckpointTable)
-          .where(eq(InstructionCheckpointTable.session_id, forked.id))
-          .get()
-          .pipe(Effect.orDie),
-      ).toEqual({ ...parent!, session_id: forked.id })
+          .from(InstructionStateTable)
+          .where(eq(InstructionStateTable.session_id, forked.id))
+          .get(),
+      ).toMatchObject({
+        initial_values: { "test/context": Instructions.hash("Initial context") },
+        current_values: { "test/context": Instructions.hash("Changed context") },
+      })
+      yield* session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
+      yield* session.resume(forked.id)
+
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, "Initial context"])
+      expect(systemTexts(requests.at(-1)!)).toContain("Changed context")
+      expect(systemTexts(requests.at(-1)!)).toContain("Latest context")
+
+      const { db } = yield* Database.Service
+      const events = yield* EventV2.Service
+      const recorded = yield* db
+        .select()
+        .from(EventTable)
+        .where(eq(EventTable.aggregate_id, forked.id))
+        .orderBy(asc(EventTable.seq))
+        .all()
+      yield* events.remove(forked.id)
+      yield* db.delete(SessionTable).where(eq(SessionTable.id, forked.id)).run()
+      yield* events.replayAll(
+        recorded.map((event) => ({
+          id: event.id,
+          created: DateTime.makeUnsafe(event.created),
+          aggregateID: event.aggregate_id,
+          seq: event.seq,
+          type: event.type,
+          data: event.data,
+        })),
+      )
+      expect(
+        yield* db.select().from(InstructionStateTable).where(eq(InstructionStateTable.session_id, forked.id)).get(),
+      ).toMatchObject({ current_values: { "test/context": Instructions.hash("Latest context") } })
     }),
   )
 
-  it.effect("heals an undecodable stored applied record by re-announcing context", () =>
+  it.effect("caps nested fork instruction ancestry at the selected message", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      yield* admit(session, "First")
+      yield* session.resume(sessionID)
+      systemBaseline = "Changed context"
+      const second = yield* admit(session, "Second")
+      yield* session.resume(sessionID)
+
+      const child = yield* session.fork({ sessionID, messageID: second.id })
+      const inheritedFirst = (yield* session.messages({ sessionID: child.id })).find(
+        (message) => message.type === "user" && message.text === "First",
+      )
+      if (!inheritedFirst) return yield* Effect.die(new Error("Nested fork boundary message not found"))
+      const grandchild = yield* session.fork({ sessionID: child.id, messageID: inheritedFirst.id })
+
+      expect(
+        yield* (yield* Database.Service).db
+          .select()
+          .from(InstructionStateTable)
+          .where(eq(InstructionStateTable.session_id, grandchild.id))
+          .get(),
+      ).toMatchObject({
+        initial_values: { "test/context": Instructions.hash("Initial context") },
+        current_values: { "test/context": Instructions.hash("Initial context") },
+      })
+    }),
+  )
+
+  it.effect("rebuilds a missing instruction cache without admitting another delta", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const { db } = yield* Database.Service
       yield* admit(session, "First")
       yield* session.resume(sessionID)
-      yield* db
-        .update(InstructionCheckpointTable)
-        .set({ snapshot: { invalid: { value: "bad" } } })
-        .where(eq(InstructionCheckpointTable.session_id, sessionID))
-        .run()
-        .pipe(Effect.orDie)
+      yield* db.delete(InstructionStateTable).where(eq(InstructionStateTable.session_id, sessionID)).run()
       yield* admit(session, "Second")
       requests.length = 0
 
       yield* session.resume(sessionID)
 
-      // Comparison state was lost, so every source re-announces as new.
       expect(requests).toHaveLength(1)
       expect(requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, "Initial context"])
-      expect(requests[0]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
-      expect(requests[0]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Initial context" }])
-      const healed = yield* db
-        .select({ snapshot: InstructionCheckpointTable.snapshot })
-        .from(InstructionCheckpointTable)
-        .where(eq(InstructionCheckpointTable.session_id, sessionID))
-        .get()
-        .pipe(Effect.orDie)
-      expect(healed?.snapshot).toEqual({ "test/context": { value: "Initial context", removed: expect.any(String) } })
+      expect(requests[0]?.messages.map((message) => message.role)).toEqual(["user", "user"])
+      expect(
+        yield* db
+          .select({ id: EventTable.id })
+          .from(EventTable)
+          .where(eq(EventTable.type, "session.instructions.updated.2"))
+          .all(),
+      ).toHaveLength(1)
+      expect(yield* db.select().from(InstructionStateTable).get()).toMatchObject({
+        initial_values: { "test/context": Instructions.hash("Initial context") },
+        current_values: { "test/context": Instructions.hash("Initial context") },
+      })
     }),
   )
 
-  it.effect("reuses one durable baseline after the context producer changes", () =>
+  it.effect("keeps the initial instructions stable and derives a chronological update from values", () =>
     Effect.gen(function* () {
       const session = yield* setup
       yield* admit(session, "First")
@@ -1062,18 +1112,26 @@ describe("SessionRunnerLLM", () => {
       ])
       expect(requests[1]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
       expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Changed context" }])
-      expect(yield* session.messages({ sessionID })).toHaveLength(3)
+      expect(yield* session.messages({ sessionID })).toHaveLength(2)
       const { db } = yield* Database.Service
-      expect(
-        yield* db
-          .select({ id: EventTable.id })
-          .from(EventTable)
-          .where(eq(EventTable.type, "session.instructions.updated.1"))
-          .all()
-          .pipe(Effect.orDie),
-      ).toHaveLength(1)
+      const updates = yield* db
+        .select({ data: EventTable.data })
+        .from(EventTable)
+        .where(eq(EventTable.type, "session.instructions.updated.2"))
+        .orderBy(asc(EventTable.seq))
+        .all()
+        .pipe(Effect.orDie)
+      expect(updates).toHaveLength(2)
+      expect(updates[0]?.data).toEqual({
+        sessionID,
+        delta: { "test/context": Instructions.hash("Initial context") },
+      })
+      expect(updates[1]?.data).toEqual({
+        sessionID,
+        delta: { "test/context": Instructions.hash("Changed context") },
+      })
       yield* replaySessionProjection(sessionID)
-      expect(yield* session.messages({ sessionID })).toHaveLength(3)
+      expect(yield* session.messages({ sessionID })).toHaveLength(2)
     }),
   )
 
@@ -1160,7 +1218,7 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("uses only the agent prompt and durable baseline as system parts", () =>
+  it.effect("uses only the agent prompt and initial instructions as system parts", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const agent = yield* AgentV2.Service
@@ -1350,11 +1408,11 @@ describe("SessionRunnerLLM", () => {
       expect(requests[1]?.messages.at(1)?.content).toEqual([
         { type: "text", text: "System context source removed: test/context" },
       ])
-      expect(yield* session.messages({ sessionID })).toHaveLength(3)
+      expect(yield* session.messages({ sessionID })).toHaveLength(2)
     }),
   )
 
-  it.effect("renders API context entries through the belief lifecycle", () =>
+  it.effect("renders API context entries through add, change, and removal", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const contextEntries = yield* InstructionEntry.Service
@@ -1363,7 +1421,7 @@ describe("SessionRunnerLLM", () => {
 
       yield* session.resume(sessionID)
 
-      // String values render verbatim inside the tagged block at baseline.
+      // String values render verbatim inside the initial tagged block.
       expect(requests[0]?.system.map((part) => part.text)).toEqual([
         defaultSystem,
         ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
@@ -1403,7 +1461,49 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("keeps the baseline and chronological System updates after a model switch", () =>
+  it.effect("retains JSON null API entries as values", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const entries = yield* InstructionEntry.Service
+      yield* entries.put({ sessionID, key: "nullable", value: "present" })
+      yield* admit(session, "First")
+      yield* session.resume(sessionID)
+
+      yield* entries.put({ sessionID, key: "nullable", value: null })
+      yield* admit(session, "Second")
+      yield* session.resume(sessionID)
+
+      expect(requests[1]?.messages.at(1)?.content).toEqual([
+        {
+          type: "text",
+          text: [
+            'The context under "nullable" changed and supersedes the previous value:',
+            '<context key="nullable">',
+            "null",
+            "</context>",
+          ].join("\n"),
+        },
+      ])
+      expect(yield* entries.list(sessionID)).toEqual([{ key: "nullable", value: null }])
+    }),
+  )
+
+  it.effect("rejects API instruction entries larger than 8KB", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const entries = yield* InstructionEntry.Service
+
+      const exit = yield* entries
+        .put({ sessionID, key: "oversized", value: "x".repeat(InstructionEntry.MaxValueBytes) })
+        .pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isFailure(exit)) expect(Cause.squash(exit.cause)).toBeInstanceOf(InstructionEntry.ValueTooLargeError)
+      expect(yield* entries.list(sessionID)).toEqual([])
+    }),
+  )
+
+  it.effect("keeps initial instructions and chronological updates after a model switch", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const events = yield* EventV2.Service
@@ -1430,20 +1530,18 @@ describe("SessionRunnerLLM", () => {
       expect(requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
       expect((yield* session.context(sessionID)).map((message) => message.type)).toEqual([
         "user",
-        "system",
         "user",
         "model-switched",
-        "system",
         "user",
       ])
       yield* replaySessionProjection(sessionID)
-      expect(yield* session.messages({ sessionID })).toHaveLength(6)
+      expect(yield* session.messages({ sessionID })).toHaveLength(4)
       yield* admit(session, "Fourth")
       yield* session.resume(sessionID)
     }),
   )
 
-  it.effect("preserves the baseline while context is temporarily unavailable", () =>
+  it.effect("preserves instruction values while a source is temporarily unavailable", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const events = yield* EventV2.Service
@@ -1470,7 +1568,7 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("rebuilds the baseline directly after completed compaction", () =>
+  it.effect("moves the epoch at compaction and narrates later changes", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const events = yield* EventV2.Service
@@ -1494,8 +1592,10 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
         [defaultSystem, "Initial context"],
-        [defaultSystem, "Replacement context"],
+        [defaultSystem, "Initial context"],
       ])
+      expect(requests[1]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
+      expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Replacement context" }])
       yield* replaySessionProjection(sessionID)
       yield* admit(session, "Third")
       yield* session.resume(sessionID)
@@ -1953,7 +2053,7 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
-  it.effect("rebaselines after compaction from the last-applied belief while unobservable", () =>
+  it.effect("uses epoch values after compaction while a source is unavailable", () =>
     Effect.gen(function* () {
       const session = yield* setup
       const events = yield* EventV2.Service
@@ -1978,7 +2078,7 @@ describe("SessionRunnerLLM", () => {
       yield* admit(session, "Third")
       yield* session.resume(sessionID)
 
-      // The rebaseline proceeds while the source is unobservable, restating the model's belief.
+      // Compaction already moved current values into the new epoch before the unavailable read.
       expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, "Changed context"])
       expect(systemTexts(requests.at(-1)!)).not.toContain("Changed context")
     }),
@@ -2861,7 +2961,7 @@ describe("SessionRunnerLLM", () => {
       })
 
       yield* (yield* SessionExecution.Service).wake(sessionID)
-      yield* Effect.yieldNow
+      while (requests.length === 0) yield* Effect.yieldNow
 
       expect(requests).toHaveLength(1)
       expect(userTexts(requests[0]!)).toEqual(["Wait in queue"])

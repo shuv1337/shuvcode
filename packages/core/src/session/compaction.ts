@@ -159,7 +159,7 @@ const select = (
   tokens: number,
 ): { readonly head: string; readonly recent: string } | undefined => {
   const conversation = messages
-    .filter((message) => message.type !== "compaction")
+    .filter((message) => message.type !== "compaction" && message.type !== "system")
     .flatMap((message) => {
       const text = serialize(message)
       return text ? [{ message, text }] : []

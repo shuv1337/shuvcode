@@ -90,6 +90,18 @@ export type UnknownError = {
 export const isUnknownError = (value: unknown): value is UnknownError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnknownError"
 
+export type InstructionEntryValueTooLargeError = {
+  readonly _tag: "InstructionEntryValueTooLargeError"
+  readonly actualBytes: number
+  readonly maxBytes: number
+  readonly message: string
+}
+export const isInstructionEntryValueTooLargeError = (value: unknown): value is InstructionEntryValueTooLargeError =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  value["_tag"] === "InstructionEntryValueTooLargeError"
+
 export type ProviderNotFoundError = {
   readonly _tag: "ProviderNotFoundError"
   readonly providerID: string
@@ -1250,9 +1262,9 @@ export type SessionLogOutput =
           created: number
           metadata?: { [x: string]: unknown }
           type: "session.forked"
-          durable: { aggregateID: string; seq: number; version: 1 }
+          durable: { aggregateID: string; seq: number; version: 2 }
           location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; parentID: string; from?: string }
+          data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
         }
       | {
           id: string
@@ -1339,9 +1351,9 @@ export type SessionLogOutput =
           created: number
           metadata?: { [x: string]: unknown }
           type: "session.instructions.updated"
-          durable: { aggregateID: string; seq: number; version: 1 }
+          durable: { aggregateID: string; seq: number; version: 2 }
           location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; text: string }
+          data: { sessionID: string; delta: { [x: string]: string | "removed" } }
         }
       | {
           id: string
@@ -4734,9 +4746,9 @@ export type EventSubscribeOutput =
       created: number
       metadata?: { [x: string]: unknown }
       type: "session.forked"
-      durable: { aggregateID: string; seq: number; version: 1 }
+      durable: { aggregateID: string; seq: number; version: 2 }
       location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; parentID: string; from?: string }
+      data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
     }
   | {
       id: string
@@ -4823,9 +4835,9 @@ export type EventSubscribeOutput =
       created: number
       metadata?: { [x: string]: unknown }
       type: "session.instructions.updated"
-      durable: { aggregateID: string; seq: number; version: 1 }
+      durable: { aggregateID: string; seq: number; version: 2 }
       location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; text: string }
+      data: { sessionID: string; delta: { [x: string]: string | "removed" } }
     }
   | {
       id: string
