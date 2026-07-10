@@ -1,5 +1,2312 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
+export type ModelRef = { id: string; providerID: string; variant?: string }
+
+export type ProviderSettings = { [x: string]: JsonValue }
+
+export type AgentColor = string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
+
+export type PermissionV2Effect = "allow" | "deny" | "ask"
+
+export type PluginInfo = { id: string }
+
+export type MoneyUSD = number
+
+export type TokenUsageInfo = {
+  input: number
+  output: number
+  reasoning: number
+  cache: { read: number; write: number }
+}
+
+export type LocationRef = { directory: string; workspaceID?: string }
+
+export type FileDiffInfo = {
+  file: string
+  patch: string
+  additions: number
+  deletions: number
+  status: "added" | "deleted" | "modified"
+}
+
+export type SessionActive = { type: "running" }
+
+export type PromptBase64 = string
+
+export type PromptFileSource = { type: "inline" } | { type: "uri"; uri: string }
+
+export type PromptMention = { start: number; end: number; text: string }
+
+export type SessionPendingSyntheticData = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
+
+export type SessionPendingCompaction = {
+  admittedSeq: number
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "compaction"
+}
+
+export type SessionMessageAgentSelected = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "agent-switched"
+  agent: string
+}
+
+export type SessionMessageSynthetic = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  text: string
+  description?: string
+  type: "synthetic"
+}
+
+export type SessionMessageSystem = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "system"
+  text: string
+}
+
+export type SessionMessageSkill = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "skill"
+  skill: string
+  name: string
+  text: string
+}
+
+export type SessionMessageShell = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number; completed?: number }
+  type: "shell"
+  shellID: string
+  command: string
+  status: "running" | "exited" | "timeout" | "killed"
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  output?: { output: string; cursor: number; size: number; truncated: boolean }
+}
+
+export type SessionMessageAssistantText = { type: "text"; text: string }
+
+export type SessionMessageProviderState = { [x: string]: JsonValue }
+
+export type SessionMessageToolStateStreaming = { status: "streaming"; input: string }
+
+export type ToolTextContent = { type: "text"; text: string }
+
+export type ToolFileContent = { type: "file"; uri: string; mime: string; name?: string }
+
+export type SessionStructuredError = { type: string; message: string }
+
+export type SessionMessageCompactionRunning = {
+  type: "compaction"
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  status: "running"
+  reason: "auto" | "manual"
+  summary: string
+  recent: string
+}
+
+export type SessionMessageCompactionCompleted = {
+  type: "compaction"
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  status: "completed"
+  reason: "auto" | "manual"
+  summary: string
+  recent: string
+}
+
+export type InstructionEntryKey = string
+
+export type SessionPendingSyntheticData1 = { text: string; description?: string; metadata?: { [x: string]: unknown } }
+
+export type Shell = {
+  id: string
+  status: "running" | "exited" | "timeout" | "killed"
+  command: string
+  cwd: string
+  shell: string
+  file: string
+  pid?: number
+  exit?: number
+  metadata: { [x: string]: unknown }
+  time: { started: number; completed?: number }
+}
+
+export type SessionMessageProviderState3 = { [x: string]: unknown }
+
+export type SessionMessageProviderState4 = { [x: string]: unknown }
+
+export type SessionMessageProviderState5 = { [x: string]: unknown }
+
+export type SessionMessageProviderState6 = { [x: string]: unknown }
+
+export type SessionMessageProviderState7 = { [x: string]: unknown }
+
+export type EventLogSynced = { type: "log.synced"; aggregateID: string; seq?: number }
+
+export type ModelCapabilities = { tools: boolean; input: Array<string>; output: Array<string> }
+
+export type ModelVariant = {
+  id: string
+  settings?: { [x: string]: JsonValue }
+  headers?: { [x: string]: string }
+  body?: { [x: string]: JsonValue }
+}
+
+export type MoneyUSDPerMillionTokens = number
+
+export type GenerateTextResponse = { data: { text: string } }
+
+export type ProviderV2Info = {
+  id: string
+  integrationID?: string
+  name: string
+  disabled?: boolean
+  package: string
+  settings?: { [x: string]: JsonValue }
+  headers?: { [x: string]: string }
+  body?: { [x: string]: JsonValue }
+}
+
+export type IntegrationWhen = { key: string; op: "eq" | "neq"; value: string }
+
+export type IntegrationKeyMethod = { type: "key"; label?: string }
+
+export type IntegrationEnvMethod = { type: "env"; names: Array<string> }
+
+export type ConnectionCredentialInfo = { type: "credential"; id: string; label: string }
+
+export type ConnectionEnvInfo = { type: "env"; name: string }
+
+export type IntegrationAttemptStatus =
+  | {
+      status: "pending"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "complete"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "failed"
+      message: string
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "expired"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+
+export type McpStatusConnected = { status: "connected" }
+
+export type McpStatusPending = { status: "pending" }
+
+export type McpStatusDisabled = { status: "disabled" }
+
+export type McpStatusFailed = { status: "failed"; error: string }
+
+export type McpStatusNeedsAuth = { status: "needs_auth" }
+
+export type McpStatusNeedsClientRegistration = { status: "needs_client_registration"; error: string }
+
+export type McpResource = { server: string; name: string; uri: string; description?: string; mimeType?: string }
+
+export type McpResourceTemplate = {
+  server: string
+  name: string
+  uriTemplate: string
+  description?: string
+  mimeType?: string
+}
+
+export type ProjectVcs = "git" | "hg"
+
+export type ProjectIcon = { url?: string; override?: string; color?: string }
+
+export type ProjectCommands = { start?: string }
+
+export type ProjectTime = { created: number; updated: number; initialized?: number }
+
+export type ProjectCurrent = { id: string; directory: string }
+
+export type ProjectDirectory = { directory: string; strategy?: string }
+
+export type FormMetadata = { [x: string]: JsonValue }
+
+export type FormWhen = {
+  key: string
+  op: "eq" | "neq"
+  value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
+}
+
+export type FormOption = { value: string; label: string; description?: string }
+
+export type FormExternalField = { key: string; type: "external"; url: string; title?: string; description?: string }
+
+export type FormValue = string | number | boolean | Array<string>
+
+export type PermissionV2Source = { type: "tool"; messageID: string; callID: string }
+
+export type PermissionSavedInfo = { id: string; projectID: string; action: string; resource: string }
+
+export type FileSystemEntry = { path: string; type: "file" | "directory" }
+
+export type SkillInfo = {
+  id: string
+  name: string
+  description?: string
+  slash?: boolean
+  autoinvoke?: boolean
+  location: string
+  content: string
+}
+
+export type FileDiffLegacyInfo = {
+  file?: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type JSONSchema = { [x: string]: any }
+
+export type ProviderAuthError = { name: "ProviderAuthError"; data: { providerID: string; message: string } }
+
+export type UnknownError2 = { name: "UnknownError"; data: { message: string; ref?: string | undefined } }
+
+export type MessageOutputLengthError = { name: "MessageOutputLengthError"; data: {} }
+
+export type MessageAbortedError = { name: "MessageAbortedError"; data: { message: string } }
+
+export type StructuredOutputError = { name: "StructuredOutputError"; data: { message: string; retries: number } }
+
+export type ContextOverflowError = {
+  name: "ContextOverflowError"
+  data: { message: string; responseBody?: string | undefined }
+}
+
+export type ContentFilterError = { name: "ContentFilterError"; data: { message: string } }
+
+export type APIError = {
+  name: "APIError"
+  data: {
+    message: string
+    statusCode?: number | undefined
+    isRetryable: boolean
+    responseHeaders?: { [x: string]: string } | undefined
+    responseBody?: string | undefined
+    metadata?: { [x: string]: string } | undefined
+  }
+}
+
+export type TextPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "text"
+  text: string
+  synthetic?: boolean | undefined
+  ignored?: boolean | undefined
+  time?: { start: number; end?: number | undefined } | undefined
+  metadata?: { [x: string]: any } | undefined
+}
+
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: { providerID: string; modelID: string } | undefined
+  command?: string | undefined
+}
+
+export type ReasoningPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "reasoning"
+  text: string
+  metadata?: { [x: string]: any } | undefined
+  time: { start: number; end?: number | undefined }
+}
+
+export type FilePartSourceText = { value: string; start: number; end: number }
+
+export type Range = { start: { line: number; character: number }; end: { line: number; character: number } }
+
+export type ToolStatePending = { status: "pending"; input: { [x: string]: any }; raw: string }
+
+export type ToolStateRunning = {
+  status: "running"
+  input: { [x: string]: any }
+  title?: string | undefined
+  metadata?: { [x: string]: any } | undefined
+  time: { start: number }
+}
+
+export type ToolStateError = {
+  status: "error"
+  input: { [x: string]: any }
+  error: string
+  metadata?: { [x: string]: any } | undefined
+  time: { start: number; end: number }
+}
+
+export type StepStartPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-start"
+  snapshot?: string | undefined
+}
+
+export type StepFinishPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-finish"
+  reason: string
+  snapshot?: string | undefined
+  cost: number
+  tokens: {
+    total?: number | undefined
+    input: number
+    output: number
+    reasoning: number
+    cache: { read: number; write: number }
+  }
+}
+
+export type SnapshotPart = { id: string; sessionID: string; messageID: string; type: "snapshot"; snapshot: string }
+
+export type PatchPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "patch"
+  hash: string
+  files: Array<string>
+}
+
+export type AgentPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "agent"
+  name: string
+  source?: { value: string; start: number; end: number } | undefined
+}
+
+export type CompactionPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "compaction"
+  auto: boolean
+  overflow?: boolean | undefined
+  tail_start_id?: string | undefined
+}
+
+export type PermissionV2Reply = "once" | "always" | "reject"
+
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+  exitCode?: number
+}
+
+export type QuestionV2Option = { label: string; description: string }
+
+export type QuestionV2Tool = { messageID: string; callID: string }
+
+export type QuestionV2Answer = Array<string>
+
+export type FormMetadata1 = { [x: string]: unknown }
+
+export type FormWhen1 = { key: string; op: "eq" | "neq"; value: string | number | boolean }
+
+export type SessionStatus =
+  | { type: "idle" }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      action?: { reason: string; provider: string; title: string; message: string; label: string; link?: string }
+      next: number
+    }
+  | { type: "busy" }
+
+export type QuestionOption = { label: string; description: string }
+
+export type QuestionTool = { messageID: string; callID: string }
+
+export type QuestionAnswer = Array<string>
+
+export type Shell1 = {
+  id: string
+  status: "running" | "exited" | "timeout" | "killed"
+  command: string
+  cwd: string
+  shell: string
+  file: string
+  pid?: number
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  metadata: { [x: string]: JsonValue }
+  time: { started: number | "Infinity" | "-Infinity" | "NaN"; completed?: number | "Infinity" | "-Infinity" | "NaN" }
+}
+
+export type ReferenceLocalSource = { type: "local"; path: string; description?: string; hidden?: boolean }
+
+export type ReferenceGitSource = {
+  type: "git"
+  repository: string
+  branch?: string
+  description?: string
+  hidden?: boolean
+}
+
+export type ProjectCopyCopy = { directory: string }
+
+export type VcsFileStatus = {
+  file: string
+  additions: number
+  deletions: number
+  status: "added" | "deleted" | "modified"
+}
+
+export type SessionMessageModelSelected = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "model-switched"
+  model: ModelRef
+  previous?: ModelRef
+}
+
+export type CommandInfo = {
+  name: string
+  template: string
+  description?: string
+  agent?: string
+  model?: ModelRef
+  subtask?: boolean
+}
+
+export type ProviderRequest = {
+  settings: ProviderSettings
+  headers: { [x: string]: string }
+  body: { [x: string]: JsonValue }
+}
+
+export type PermissionV2Rule = { action: string; resource: string; effect: PermissionV2Effect }
+
+export type SessionAgentSelected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.agent.selected"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; agent: string }
+}
+
+export type SessionModelSelected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.model.selected"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; model: ModelRef }
+}
+
+export type SessionMoved = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.moved"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; location: LocationRef; subpath?: string }
+}
+
+export type SessionRenamed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.renamed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; title: string }
+}
+
+export type SessionDeleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.deleted"
+  durable: { aggregateID: string; seq: number; version: 2 }
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type SessionForked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.forked"
+  durable: { aggregateID: string; seq: number; version: 2 }
+  location?: LocationRef
+  data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
+}
+
+export type SessionInputPromoted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.input.promoted"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string }
+}
+
+export type SessionExecutionStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.execution.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type SessionExecutionSucceeded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.execution.succeeded"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type SessionExecutionInterrupted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.execution.interrupted"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; reason: "user" | "shutdown" | "superseded" }
+}
+
+export type SessionInstructionsUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.instructions.updated"
+  durable: { aggregateID: string; seq: number; version: 2 }
+  location?: LocationRef
+  data: { sessionID: string; delta: { [x: string]: string | "removed" } }
+}
+
+export type SessionSynthetic = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.synthetic"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; text: string; description?: string; metadata?: { [x: string]: unknown } }
+}
+
+export type SessionSkillActivated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.skill.activated"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; id: string; name: string; text: string }
+}
+
+export type SessionStepStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.step.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; agent: string; model: ModelRef; snapshot?: string }
+}
+
+export type SessionStepEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.step.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    finish: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
+    cost: MoneyUSD
+    tokens: TokenUsageInfo
+    snapshot?: string
+    files?: Array<string>
+  }
+}
+
+export type SessionTextStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.text.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; ordinal: number }
+}
+
+export type SessionTextEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.text.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; ordinal: number; text: string }
+}
+
+export type SessionToolInputStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.input.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; callID: string; name: string }
+}
+
+export type SessionToolInputEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.input.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; callID: string; text: string }
+}
+
+export type SessionCompactionAdmitted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.compaction.admitted"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string }
+}
+
+export type SessionCompactionStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.compaction.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; reason: "auto" | "manual"; recent: string; inputID?: string }
+}
+
+export type SessionCompactionEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.compaction.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
+}
+
+export type SessionRevertCleared = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.revert.cleared"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type SessionRevertCommitted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.revert.committed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; to: string }
+}
+
+export type ModelsDevRefreshed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "models-dev.refreshed"
+  location?: LocationRef
+  data: {}
+}
+
+export type IntegrationUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "integration.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type IntegrationConnectionUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "integration.connection.updated"
+  location?: LocationRef
+  data: { integrationID: string }
+}
+
+export type CatalogUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "catalog.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type AgentUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "agent.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type MessageRemoved = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "message.removed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; messageID: string }
+}
+
+export type MessagePartRemoved = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "message.part.removed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; messageID: string; partID: string }
+}
+
+export type SessionUsageUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.usage.updated"
+  location?: LocationRef
+  data: { sessionID: string; cost: MoneyUSD; tokens: TokenUsageInfo }
+}
+
+export type SessionTextDelta = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.text.delta"
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; ordinal: number; delta: string }
+}
+
+export type SessionReasoningDelta = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.reasoning.delta"
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; ordinal: number; delta: string }
+}
+
+export type SessionToolInputDelta = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.input.delta"
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; callID: string; delta: string }
+}
+
+export type SessionCompactionDelta = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.compaction.delta"
+  location?: LocationRef
+  data: { sessionID: string; text: string }
+}
+
+export type FilesystemChanged = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "filesystem.changed"
+  location?: LocationRef
+  data: { file: string; event: "add" | "change" | "unlink" }
+}
+
+export type ReferenceUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "reference.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type PluginAdded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "plugin.added"
+  location?: LocationRef
+  data: { id: string }
+}
+
+export type PluginUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "plugin.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type ProjectDirectoriesUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "project.directories.updated"
+  location?: LocationRef
+  data: { projectID: string }
+}
+
+export type CommandUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "command.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type ConfigUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "config.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type SkillUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "skill.updated"
+  location?: LocationRef
+  data: {}
+}
+
+export type PtyExited = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "pty.exited"
+  location?: LocationRef
+  data: { id: string; exitCode: number }
+}
+
+export type PtyDeleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "pty.deleted"
+  location?: LocationRef
+  data: { id: string }
+}
+
+export type ShellExited = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "shell.exited"
+  location?: LocationRef
+  data: { id: string; exit?: number; status: "running" | "exited" | "timeout" | "killed" }
+}
+
+export type ShellDeleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "shell.deleted"
+  location?: LocationRef
+  data: { id: string }
+}
+
+export type QuestionV2Rejected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.v2.rejected"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string }
+}
+
+export type FormCancelled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "form.cancelled"
+  location?: LocationRef
+  data: { id: string; sessionID: string }
+}
+
+export type SessionIdle = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.idle"
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type TuiPromptAppend = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "tui.prompt.append"
+  location?: LocationRef
+  data: { text: string }
+}
+
+export type TuiCommandExecute = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "tui.command.execute"
+  location?: LocationRef
+  data: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.background"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type TuiToastShow = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "tui.toast.show"
+  location?: LocationRef
+  data: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    duration?: number | undefined
+  }
+}
+
+export type TuiSessionSelect = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "tui.session.select"
+  location?: LocationRef
+  data: { sessionID: string }
+}
+
+export type InstallationUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "installation.updated"
+  location?: LocationRef
+  data: { version: string }
+}
+
+export type InstallationUpdateAvailable = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "installation.update-available"
+  location?: LocationRef
+  data: { version: string }
+}
+
+export type VcsBranchUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "vcs.branch.updated"
+  location?: LocationRef
+  data: { branch?: string }
+}
+
+export type McpStatusChanged = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "mcp.status.changed"
+  location?: LocationRef
+  data: { server: string }
+}
+
+export type McpResourcesChanged = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "mcp.resources.changed"
+  location?: LocationRef
+  data: { server: string }
+}
+
+export type PermissionAsked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "permission.asked"
+  location?: LocationRef
+  data: {
+    id: string
+    sessionID: string
+    permission: string
+    patterns: Array<string>
+    metadata: { [x: string]: unknown }
+    always: Array<string>
+    tool?: { messageID: string; callID: string } | undefined
+  }
+}
+
+export type PermissionReplied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "permission.replied"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string; reply: "once" | "always" | "reject" }
+}
+
+export type QuestionRejected = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.rejected"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string }
+}
+
+export type V2EventServerConnected = {
+  id: string
+  metadata?: { [x: string]: unknown } | undefined
+  location?: LocationRef | undefined
+  type: "server.connected"
+  data: {}
+}
+
+export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
+
+export type PromptFileAttachment = {
+  data: PromptBase64
+  mime: string
+  source: PromptFileSource
+  name?: string
+  description?: string
+  mention?: PromptMention
+}
+
+export type PromptAgentAttachment = { name: string; mention?: PromptMention }
+
+export type SessionPendingSynthetic = {
+  admittedSeq: number
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "synthetic"
+  data: SessionPendingSyntheticData
+  delivery: "steer" | "queue"
+}
+
+export type SessionMessageAssistantReasoning = {
+  type: "reasoning"
+  text: string
+  state?: SessionMessageProviderState
+  time?: { created: number; completed?: number }
+}
+
+export type LLMToolContent = ToolTextContent | ToolFileContent
+
+export type SessionMessageAssistantRetry = { attempt: number; at: number; error: SessionStructuredError }
+
+export type SessionMessageCompactionFailed = {
+  type: "compaction"
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  status: "failed"
+  reason: "auto" | "manual"
+  error: SessionStructuredError
+}
+
+export type SessionExecutionFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.execution.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; error: SessionStructuredError }
+}
+
+export type SessionStepFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.step.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    error: SessionStructuredError
+    cost?: MoneyUSD
+    tokens?: TokenUsageInfo
+  }
+}
+
+export type SessionRetryScheduled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.retry.scheduled"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; attempt: number; at: number; error: SessionStructuredError }
+}
+
+export type SessionCompactionFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.compaction.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
+}
+
+export type InstructionEntryInfo = { key: InstructionEntryKey; value: JsonValue }
+
+export type SessionPendingSyntheticMessage = {
+  type: "synthetic"
+  data: SessionPendingSyntheticData1
+  delivery: "steer" | "queue"
+}
+
+export type SessionShellStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.shell.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; shell: Shell }
+}
+
+export type SessionShellEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.shell.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    shell: Shell
+    output: { output: string; cursor: number; size: number; truncated: boolean }
+  }
+}
+
+export type ShellCreated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "shell.created"
+  location?: LocationRef
+  data: { info: Shell }
+}
+
+export type SessionReasoningStarted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.reasoning.started"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; ordinal: number; state?: SessionMessageProviderState3 }
+}
+
+export type SessionReasoningEnded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.reasoning.ended"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    ordinal: number
+    text: string
+    state?: SessionMessageProviderState4
+  }
+}
+
+export type SessionToolCalled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.called"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    input: { [x: string]: unknown }
+    executed: boolean
+    state?: SessionMessageProviderState5
+  }
+}
+
+export type SessionToolFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    error: SessionStructuredError
+    result?: unknown
+    executed: boolean
+    resultState?: SessionMessageProviderState7
+  }
+}
+
+export type ModelCost = {
+  tier?: { type: "context"; size: number }
+  input: MoneyUSDPerMillionTokens
+  output: MoneyUSDPerMillionTokens
+  cache: { read: MoneyUSDPerMillionTokens; write: MoneyUSDPerMillionTokens }
+}
+
+export type IntegrationTextPrompt = {
+  type: "text"
+  key: string
+  message: string
+  placeholder?: string
+  when?: IntegrationWhen
+}
+
+export type IntegrationSelectPrompt = {
+  type: "select"
+  key: string
+  message: string
+  options: Array<{ label: string; value: string; hint?: string }>
+  when?: IntegrationWhen
+}
+
+export type ConnectionInfo = ConnectionCredentialInfo | ConnectionEnvInfo
+
+export type McpServer = {
+  name: string
+  status:
+    | McpStatusConnected
+    | McpStatusPending
+    | McpStatusDisabled
+    | McpStatusFailed
+    | McpStatusNeedsAuth
+    | McpStatusNeedsClientRegistration
+  integrationID?: string
+}
+
+export type McpResourceCatalog = { resources: Array<McpResource>; templates: Array<McpResourceTemplate> }
+
+export type Project = {
+  id: string
+  worktree: string
+  vcs?: ProjectVcs
+  name?: string
+  icon?: ProjectIcon
+  commands?: ProjectCommands
+  time: ProjectTime
+  sandboxes: Array<string>
+}
+
+export type ProjectDirectories = Array<ProjectDirectory>
+
+export type FormNumberField = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen>
+  type: "number"
+  minimum?: number | "Infinity" | "-Infinity" | "NaN"
+  maximum?: number | "Infinity" | "-Infinity" | "NaN"
+  default?: number | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type FormIntegerField = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen>
+  type: "integer"
+  minimum?: number | "Infinity" | "-Infinity" | "NaN"
+  maximum?: number | "Infinity" | "-Infinity" | "NaN"
+  default?: number | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type FormBooleanField = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen>
+  type: "boolean"
+  default?: boolean
+}
+
+export type FormStringField = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen>
+  type: "string"
+  format?: "email" | "uri" | "date" | "date-time"
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  placeholder?: string
+  default?: string
+  options?: Array<FormOption>
+  custom?: boolean
+}
+
+export type FormMultiselectField = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen>
+  type: "multiselect"
+  options: Array<FormOption>
+  minItems?: number
+  maxItems?: number
+  custom?: boolean
+  default?: Array<string>
+}
+
+export type FormAnswer = { [x: string]: FormValue }
+
+export type PermissionV2Request = {
+  id: string
+  sessionID: string
+  action: string
+  resources: Array<string>
+  save?: Array<string>
+  metadata?: { [x: string]: JsonValue }
+  source?: PermissionV2Source
+}
+
+export type PermissionV2Asked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "permission.v2.asked"
+  location?: LocationRef
+  data: {
+    id: string
+    sessionID: string
+    action: string
+    resources: Array<string>
+    save?: Array<string>
+    metadata?: { [x: string]: unknown }
+    source?: PermissionV2Source
+  }
+}
+
+export type PermissionRule = { permission: string; pattern: string; action: PermissionAction }
+
+export type OutputFormat =
+  | { type: "text" }
+  | { type: "json_schema"; schema: JSONSchema; retryCount?: number | undefined | undefined }
+
+export type AssistantMessage = {
+  id: string
+  sessionID: string
+  role: "assistant"
+  time: { created: number; completed?: number | undefined }
+  error?:
+    | ProviderAuthError
+    | UnknownError2
+    | MessageOutputLengthError
+    | MessageAbortedError
+    | StructuredOutputError
+    | ContextOverflowError
+    | ContentFilterError
+    | APIError
+    | undefined
+  parentID: string
+  modelID: string
+  providerID: string
+  mode: string
+  agent: string
+  path: { cwd: string; root: string }
+  summary?: boolean | undefined
+  cost: number
+  tokens: {
+    total?: number | undefined
+    input: number
+    output: number
+    reasoning: number
+    cache: { read: number; write: number }
+  }
+  structured?: any | undefined
+  variant?: string | undefined
+  finish?: string | undefined
+}
+
+export type RetryPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "retry"
+  attempt: number
+  error: APIError
+  time: { created: number }
+}
+
+export type SessionError = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.error"
+  location?: LocationRef
+  data: {
+    sessionID?: string | undefined
+    error?:
+      | ProviderAuthError
+      | UnknownError2
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | ContextOverflowError
+      | ContentFilterError
+      | APIError
+      | undefined
+  }
+}
+
+export type FileSource = { text: FilePartSourceText; type: "file"; path: string }
+
+export type ResourceSource = { text: FilePartSourceText; type: "resource"; clientName: string; uri: string }
+
+export type SymbolSource = {
+  text: FilePartSourceText
+  type: "symbol"
+  path: string
+  range: Range
+  name: string
+  kind: number
+}
+
+export type PermissionV2Replied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "permission.v2.replied"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string; reply: PermissionV2Reply }
+}
+
+export type PtyCreated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "pty.created"
+  location?: LocationRef
+  data: { info: Pty }
+}
+
+export type PtyUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "pty.updated"
+  location?: LocationRef
+  data: { info: Pty }
+}
+
+export type QuestionV2Info = {
+  question: string
+  header: string
+  options: Array<QuestionV2Option>
+  multiple?: boolean
+  custom?: boolean
+}
+
+export type QuestionV2Replied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.v2.replied"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string; answers: Array<QuestionV2Answer> }
+}
+
+export type FormStringField1 = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen1>
+  type: "string"
+  format?: "email" | "uri" | "date" | "date-time"
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  placeholder?: string
+  default?: string
+  options?: Array<FormOption>
+  custom?: boolean
+}
+
+export type FormNumberField1 = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen1>
+  type: "number"
+  minimum?: number
+  maximum?: number
+  default?: number
+}
+
+export type FormIntegerField1 = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen1>
+  type: "integer"
+  minimum?: number
+  maximum?: number
+  default?: number
+}
+
+export type FormBooleanField1 = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen1>
+  type: "boolean"
+  default?: boolean
+}
+
+export type FormMultiselectField1 = {
+  key: string
+  title?: string
+  description?: string
+  required?: boolean
+  when?: Array<FormWhen1>
+  type: "multiselect"
+  options: Array<FormOption>
+  minItems?: number
+  maxItems?: number
+  custom?: boolean
+  default?: Array<string>
+}
+
+export type SessionStatus2 = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.status"
+  location?: LocationRef
+  data: { sessionID: string; status: SessionStatus }
+}
+
+export type QuestionInfo = {
+  question: string
+  header: string
+  options: Array<QuestionOption>
+  multiple?: boolean | undefined
+  custom?: boolean | undefined
+}
+
+export type QuestionReplied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.replied"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string; answers: Array<QuestionAnswer> }
+}
+
+export type ReferenceSource = ReferenceLocalSource | ReferenceGitSource
+
+export type PermissionV2Ruleset = Array<PermissionV2Rule>
+
+export type SessionInfo = {
+  id: string
+  parentID?: string
+  fork?: { sessionID: string; messageID?: string }
+  projectID: string
+  agent?: string
+  model?: ModelRef
+  cost: MoneyUSD
+  tokens: TokenUsageInfo
+  time: { created: number; updated: number; archived?: number }
+  title: string
+  location: LocationRef
+  subpath?: string
+  revert?: SessionRevert
+}
+
+export type SessionRevertStaged = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.revert.staged"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; revert: SessionRevert }
+}
+
+export type SessionPendingUserData = {
+  text: string
+  files?: Array<PromptFileAttachment>
+  agents?: Array<PromptAgentAttachment>
+  metadata?: { [x: string]: JsonValue }
+}
+
+export type SessionMessageUser = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  text: string
+  files?: Array<PromptFileAttachment>
+  agents?: Array<PromptAgentAttachment>
+  type: "user"
+}
+
+export type SessionPendingUserData1 = {
+  text: string
+  files?: Array<PromptFileAttachment>
+  agents?: Array<PromptAgentAttachment>
+  metadata?: { [x: string]: unknown }
+}
+
+export type SessionMessageToolStateRunning = {
+  status: "running"
+  input: { [x: string]: JsonValue }
+  structured: { [x: string]: JsonValue }
+  content: Array<LLMToolContent>
+}
+
+export type SessionMessageToolStateCompleted = {
+  status: "completed"
+  input: { [x: string]: JsonValue }
+  content: Array<LLMToolContent>
+  structured: { [x: string]: JsonValue }
+  result?: JsonValue
+}
+
+export type SessionMessageToolStateError = {
+  status: "error"
+  input: { [x: string]: JsonValue }
+  content: Array<LLMToolContent>
+  structured: { [x: string]: JsonValue }
+  error: SessionStructuredError
+  result?: JsonValue
+}
+
+export type SessionToolProgress = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.progress"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    structured: { [x: string]: unknown }
+    content: Array<LLMToolContent>
+  }
+}
+
+export type SessionToolSuccess = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.tool.success"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    structured: { [x: string]: unknown }
+    content: Array<LLMToolContent>
+    result?: unknown
+    executed: boolean
+    resultState?: SessionMessageProviderState6
+  }
+}
+
+export type SessionMessageCompaction =
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
+
+export type ModelInfo = {
+  id: string
+  modelID: string
+  providerID: string
+  family?: string
+  name: string
+  package?: string
+  settings?: { [x: string]: JsonValue }
+  headers?: { [x: string]: string }
+  body?: { [x: string]: JsonValue }
+  capabilities: ModelCapabilities
+  variants: Array<ModelVariant>
+  time: { released: number }
+  cost: Array<ModelCost>
+  status: "alpha" | "beta" | "deprecated" | "active"
+  enabled: boolean
+  limit: { context: number; input?: number; output: number }
+}
+
+export type IntegrationOAuthMethod = {
+  id: string
+  type: "oauth"
+  label: string
+  prompts?: Array<IntegrationTextPrompt | IntegrationSelectPrompt>
+}
+
+export type FormField =
+  | FormStringField
+  | FormNumberField
+  | FormIntegerField
+  | FormBooleanField
+  | FormMultiselectField
+  | FormExternalField
+
+export type FormState = { status: "pending" } | { status: "answered"; answer: FormAnswer } | { status: "cancelled" }
+
+export type FormReplied = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "form.replied"
+  location?: LocationRef
+  data: { id: string; sessionID: string; answer: FormAnswer }
+}
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type UserMessage = {
+  id: string
+  sessionID: string
+  role: "user"
+  time: { created: number }
+  format?: OutputFormat | undefined
+  summary?: { title?: string | undefined; body?: string | undefined; diffs: Array<FileDiffLegacyInfo> } | undefined
+  agent: string
+  model: { providerID: string; modelID: string; variant?: string | undefined }
+  system?: string | undefined
+  tools?: { [x: string]: boolean } | undefined
+}
+
+export type FilePartSource = FileSource | SymbolSource | ResourceSource
+
+export type QuestionV2Asked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.v2.asked"
+  location?: LocationRef
+  data: { id: string; sessionID: string; questions: Array<QuestionV2Info>; tool?: QuestionV2Tool }
+}
+
+export type QuestionV2Request = {
+  id: string
+  sessionID: string
+  questions: Array<QuestionV2Info>
+  tool?: QuestionV2Tool
+}
+
+export type FormField1 =
+  | FormStringField1
+  | FormNumberField1
+  | FormIntegerField1
+  | FormBooleanField1
+  | FormMultiselectField1
+  | FormExternalField
+
+export type QuestionAsked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "question.asked"
+  location?: LocationRef
+  data: { id: string; sessionID: string; questions: Array<QuestionInfo>; tool?: QuestionTool | undefined }
+}
+
+export type AgentInfo = {
+  id: string
+  name: string
+  model?: ModelRef
+  request: ProviderRequest
+  system?: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  hidden: boolean
+  color?: AgentColor
+  steps?: number
+  permissions: PermissionV2Ruleset
+}
+
+export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
+
+export type SessionPendingUser = {
+  admittedSeq: number
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "user"
+  data: SessionPendingUserData
+  delivery: "steer" | "queue"
+}
+
+export type SessionPendingUserMessage = { type: "user"; data: SessionPendingUserData1; delivery: "steer" | "queue" }
+
+export type SessionMessageAssistantTool = {
+  type: "tool"
+  id: string
+  name: string
+  executed?: boolean
+  providerState?: SessionMessageProviderState
+  providerResultState?: SessionMessageProviderState
+  state:
+    | SessionMessageToolStateStreaming
+    | SessionMessageToolStateRunning
+    | SessionMessageToolStateCompleted
+    | SessionMessageToolStateError
+  time: { created: number; ran?: number; completed?: number }
+}
+
+export type IntegrationMethod = IntegrationOAuthMethod | IntegrationKeyMethod | IntegrationEnvMethod
+
+export type FormFields = [FormField, ...Array<FormField>]
+
+export type SessionV1Info = {
+  id: string
+  slug: string
+  projectID: string
+  workspaceID?: string
+  directory: string
+  path?: string
+  parentID?: string
+  summary?: { additions: number; deletions: number; files: number; diffs?: Array<FileDiffLegacyInfo> }
+  cost?: number
+  tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
+  share?: { url: string }
+  title: string
+  agent?: string
+  model?: { id: string; providerID: string; variant?: string }
+  version: string
+  metadata?: { [x: string]: any }
+  time: { created: number; updated: number; compacting?: number; archived?: number }
+  permission?: PermissionRuleset
+  revert?: { messageID: string; partID?: string; snapshot?: string; diff?: string }
+}
+
+export type Message = UserMessage | AssistantMessage
+
+export type FilePart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "file"
+  mime: string
+  filename?: string | undefined
+  url: string
+  source?: FilePartSource | undefined
+}
+
+export type FormFields1 = [FormField1, ...Array<FormField1>]
+
+export type SessionPendingInfo = SessionPendingUser | SessionPendingSynthetic | SessionPendingCompaction
+
+export type SessionPendingMessage = SessionPendingUserMessage | SessionPendingSyntheticMessage
+
+export type SessionMessageAssistant = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number; completed?: number }
+  type: "assistant"
+  agent: string
+  model: ModelRef
+  content: Array<SessionMessageAssistantText | SessionMessageAssistantReasoning | SessionMessageAssistantTool>
+  snapshot?: { start?: string; end?: string; files?: Array<string> }
+  finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
+  cost?: MoneyUSD
+  tokens?: TokenUsageInfo
+  error?: SessionStructuredError
+  retry?: SessionMessageAssistantRetry
+}
+
+export type FormInfo = { id: string; sessionID: string; title: string; metadata?: FormMetadata; fields: FormFields }
+
+export type SessionCreated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.created"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; info: SessionV1Info }
+}
+
+export type SessionUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.updated"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; info: SessionV1Info }
+}
+
+export type SessionDeleted1 = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.deleted"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; info: SessionV1Info }
+}
+
+export type MessageUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "message.updated"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; info: Message }
+}
+
+export type ToolStateCompleted = {
+  status: "completed"
+  input: { [x: string]: any }
+  output: string
+  title: string
+  metadata: { [x: string]: any }
+  time: { start: number; end: number; compacted?: number | undefined }
+  attachments?: Array<FilePart> | undefined
+}
+
+export type FormInfo1 = { id: string; sessionID: string; title: string; metadata?: FormMetadata1; fields: FormFields1 }
+
+export type SessionInputAdmitted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "session.input.admitted"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string; input: SessionPendingMessage }
+}
+
+export type SessionMessageInfo =
+  | SessionMessageAgentSelected
+  | SessionMessageModelSelected
+  | SessionMessageUser
+  | SessionMessageSynthetic
+  | SessionMessageSystem
+  | SessionMessageSkill
+  | SessionMessageShell
+  | SessionMessageAssistant
+  | SessionMessageCompaction
+
+export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
+
+export type FormCreated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "form.created"
+  location?: LocationRef
+  data: { form: FormInfo1 }
+}
+
+export type SessionEventDurable =
+  | SessionAgentSelected
+  | SessionModelSelected
+  | SessionMoved
+  | SessionRenamed
+  | SessionDeleted
+  | SessionForked
+  | SessionInputPromoted
+  | SessionInputAdmitted
+  | SessionExecutionStarted
+  | SessionExecutionSucceeded
+  | SessionExecutionFailed
+  | SessionExecutionInterrupted
+  | SessionInstructionsUpdated
+  | SessionSynthetic
+  | SessionSkillActivated
+  | SessionShellStarted
+  | SessionShellEnded
+  | SessionStepStarted
+  | SessionStepEnded
+  | SessionStepFailed
+  | SessionTextStarted
+  | SessionTextEnded
+  | SessionReasoningStarted
+  | SessionReasoningEnded
+  | SessionToolInputStarted
+  | SessionToolInputEnded
+  | SessionToolCalled
+  | SessionToolProgress
+  | SessionToolSuccess
+  | SessionToolFailed
+  | SessionRetryScheduled
+  | SessionCompactionAdmitted
+  | SessionCompactionStarted
+  | SessionCompactionEnded
+  | SessionCompactionFailed
+  | SessionRevertStaged
+  | SessionRevertCleared
+  | SessionRevertCommitted
+
+export type SessionMessagesResponse = {
+  data: Array<SessionMessageInfo>
+  cursor: { previous?: string | null; next?: string | null }
+}
+
+export type ToolPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "tool"
+  callID: string
+  tool: string
+  state: ToolState
+  metadata?: { [x: string]: any } | undefined
+}
+
+export type SessionLogItem = SessionEventDurable | EventLogSynced
+
+export type Part =
+  | TextPart
+  | SubtaskPart
+  | ReasoningPart
+  | FilePart
+  | ToolPart
+  | StepStartPart
+  | StepFinishPart
+  | SnapshotPart
+  | PatchPart
+  | AgentPart
+  | RetryPart
+  | CompactionPart
+
+export type MessagePartUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: unknown }
+  type: "message.part.updated"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; part: Part; time: number }
+}
+
+export type V2Event =
+  | ModelsDevRefreshed
+  | IntegrationUpdated
+  | IntegrationConnectionUpdated
+  | CatalogUpdated
+  | AgentUpdated
+  | SessionCreated
+  | SessionUpdated
+  | SessionDeleted1
+  | MessageUpdated
+  | MessageRemoved
+  | MessagePartUpdated
+  | MessagePartRemoved
+  | SessionAgentSelected
+  | SessionModelSelected
+  | SessionMoved
+  | SessionRenamed
+  | SessionUsageUpdated
+  | SessionDeleted
+  | SessionForked
+  | SessionInputPromoted
+  | SessionInputAdmitted
+  | SessionExecutionStarted
+  | SessionExecutionSucceeded
+  | SessionExecutionFailed
+  | SessionExecutionInterrupted
+  | SessionInstructionsUpdated
+  | SessionSynthetic
+  | SessionSkillActivated
+  | SessionShellStarted
+  | SessionShellEnded
+  | SessionStepStarted
+  | SessionStepEnded
+  | SessionStepFailed
+  | SessionTextStarted
+  | SessionTextDelta
+  | SessionTextEnded
+  | SessionReasoningStarted
+  | SessionReasoningDelta
+  | SessionReasoningEnded
+  | SessionToolInputStarted
+  | SessionToolInputDelta
+  | SessionToolInputEnded
+  | SessionToolCalled
+  | SessionToolProgress
+  | SessionToolSuccess
+  | SessionToolFailed
+  | SessionRetryScheduled
+  | SessionCompactionAdmitted
+  | SessionCompactionStarted
+  | SessionCompactionDelta
+  | SessionCompactionEnded
+  | SessionCompactionFailed
+  | SessionRevertStaged
+  | SessionRevertCleared
+  | SessionRevertCommitted
+  | FilesystemChanged
+  | ReferenceUpdated
+  | PermissionV2Asked
+  | PermissionV2Replied
+  | PluginAdded
+  | PluginUpdated
+  | ProjectDirectoriesUpdated
+  | CommandUpdated
+  | ConfigUpdated
+  | SkillUpdated
+  | PtyCreated
+  | PtyUpdated
+  | PtyExited
+  | PtyDeleted
+  | ShellCreated
+  | ShellExited
+  | ShellDeleted
+  | QuestionV2Asked
+  | QuestionV2Replied
+  | QuestionV2Rejected
+  | FormCreated
+  | FormReplied
+  | FormCancelled
+  | SessionStatus2
+  | SessionIdle
+  | TuiPromptAppend
+  | TuiCommandExecute
+  | TuiToastShow
+  | TuiSessionSelect
+  | InstallationUpdated
+  | InstallationUpdateAvailable
+  | VcsBranchUpdated
+  | McpStatusChanged
+  | McpResourcesChanged
+  | PermissionAsked
+  | PermissionReplied
+  | QuestionAsked
+  | QuestionReplied
+  | QuestionRejected
+  | SessionError
+  | V2EventServerConnected
+
 export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly message: string }
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnauthorizedError"
@@ -181,23 +2488,7 @@ export type AgentListInput = {
 
 export type AgentListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    name: string
-    model?: { id: string; providerID: string; variant?: string }
-    request: {
-      settings: { [x: string]: JsonValue }
-      headers: { [x: string]: string }
-      body: { [x: string]: JsonValue }
-    }
-    system?: string
-    description?: string
-    mode: "subagent" | "primary" | "all"
-    hidden: boolean
-    color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
-    steps?: number
-    permissions: Array<{ action: string; resource: string; effect: "allow" | "deny" | "ask" }>
-  }>
+  data: Array<AgentInfo>
 }
 
 export type PluginListInput = {
@@ -208,7 +2499,7 @@ export type PluginListInput = {
 
 export type PluginListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{ id: string }>
+  data: Array<PluginInfo>
 }
 
 export type SessionListInput = {
@@ -313,35 +2604,7 @@ export type SessionListInput = {
   }["cursor"]
 }
 
-export type SessionListOutput = {
-  data: Array<{
-    id: string
-    parentID?: string
-    fork?: { sessionID: string; messageID?: string }
-    projectID: string
-    agent?: string
-    model?: { id: string; providerID: string; variant?: string }
-    cost: number
-    tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-    time: { created: number; updated: number; archived?: number }
-    title: string
-    location: { directory: string; workspaceID?: string }
-    subpath?: string
-    revert?: {
-      messageID: string
-      partID?: string
-      snapshot?: string
-      files?: Array<{
-        file: string
-        patch: string
-        additions: number
-        deletions: number
-        status: "added" | "deleted" | "modified"
-      }>
-    }
-  }>
-  cursor: { previous?: string | null; next?: string | null }
-}
+export type SessionListOutput = SessionsResponse
 
 export type SessionCreateInput = {
   readonly id?: {
@@ -370,67 +2633,13 @@ export type SessionCreateInput = {
   }["location"]
 }
 
-export type SessionCreateOutput = {
-  data: {
-    id: string
-    parentID?: string
-    fork?: { sessionID: string; messageID?: string }
-    projectID: string
-    agent?: string
-    model?: { id: string; providerID: string; variant?: string }
-    cost: number
-    tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-    time: { created: number; updated: number; archived?: number }
-    title: string
-    location: { directory: string; workspaceID?: string }
-    subpath?: string
-    revert?: {
-      messageID: string
-      partID?: string
-      snapshot?: string
-      files?: Array<{
-        file: string
-        patch: string
-        additions: number
-        deletions: number
-        status: "added" | "deleted" | "modified"
-      }>
-    }
-  }
-}["data"]
+export type SessionCreateOutput = { data: SessionInfo }["data"]
 
-export type SessionActiveOutput = { data: { [x: string]: { type: "running" } } }["data"]
+export type SessionActiveOutput = { data: { [x: string]: SessionActive } }["data"]
 
 export type SessionGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type SessionGetOutput = {
-  data: {
-    id: string
-    parentID?: string
-    fork?: { sessionID: string; messageID?: string }
-    projectID: string
-    agent?: string
-    model?: { id: string; providerID: string; variant?: string }
-    cost: number
-    tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-    time: { created: number; updated: number; archived?: number }
-    title: string
-    location: { directory: string; workspaceID?: string }
-    subpath?: string
-    revert?: {
-      messageID: string
-      partID?: string
-      snapshot?: string
-      files?: Array<{
-        file: string
-        patch: string
-        additions: number
-        deletions: number
-        status: "added" | "deleted" | "modified"
-      }>
-    }
-  }
-}["data"]
+export type SessionGetOutput = { data: SessionInfo }["data"]
 
 export type SessionRemoveInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -441,34 +2650,7 @@ export type SessionForkInput = {
   readonly messageID?: { readonly messageID?: string | undefined }["messageID"]
 }
 
-export type SessionForkOutput = {
-  data: {
-    id: string
-    parentID?: string
-    fork?: { sessionID: string; messageID?: string }
-    projectID: string
-    agent?: string
-    model?: { id: string; providerID: string; variant?: string }
-    cost: number
-    tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-    time: { created: number; updated: number; archived?: number }
-    title: string
-    location: { directory: string; workspaceID?: string }
-    subpath?: string
-    revert?: {
-      messageID: string
-      partID?: string
-      snapshot?: string
-      files?: Array<{
-        file: string
-        patch: string
-        additions: number
-        deletions: number
-        status: "added" | "deleted" | "modified"
-      }>
-    }
-  }
-}["data"]
+export type SessionForkOutput = { data: SessionInfo }["data"]
 
 export type SessionSwitchAgentInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -630,29 +2812,7 @@ export type SessionPromptInput = {
   }["resume"]
 }
 
-export type SessionPromptOutput = {
-  data: {
-    admittedSeq: number
-    id: string
-    sessionID: string
-    timeCreated: number
-    type: "user"
-    data: {
-      text: string
-      files?: Array<{
-        data: string
-        mime: string
-        source: { type: "inline" } | { type: "uri"; uri: string }
-        name?: string
-        description?: string
-        mention?: { start: number; end: number; text: string }
-      }>
-      agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-      metadata?: { [x: string]: JsonValue }
-    }
-    delivery: "steer" | "queue"
-  }
-}["data"]
+export type SessionPromptOutput = { data: SessionPendingUser }["data"]
 
 export type SessionCommandInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -829,29 +2989,7 @@ export type SessionCommandInput = {
   }["resume"]
 }
 
-export type SessionCommandOutput = {
-  data: {
-    admittedSeq: number
-    id: string
-    sessionID: string
-    timeCreated: number
-    type: "user"
-    data: {
-      text: string
-      files?: Array<{
-        data: string
-        mime: string
-        source: { type: "inline" } | { type: "uri"; uri: string }
-        name?: string
-        description?: string
-        mention?: { start: number; end: number; text: string }
-      }>
-      agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-      metadata?: { [x: string]: JsonValue }
-    }
-    delivery: "steer" | "queue"
-  }
-}["data"]
+export type SessionCommandOutput = { data: SessionPendingUser }["data"]
 
 export type SessionSkillInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -926,17 +3064,7 @@ export type SessionSyntheticInput = {
   }["resume"]
 }
 
-export type SessionSyntheticOutput = {
-  data: {
-    admittedSeq: number
-    id: string
-    sessionID: string
-    timeCreated: number
-    type: "synthetic"
-    data: { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
-    delivery: "steer" | "queue"
-  }
-}["data"]
+export type SessionSyntheticOutput = { data: SessionPendingSynthetic }["data"]
 
 export type SessionShellInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -951,9 +3079,7 @@ export type SessionCompactInput = {
   readonly id?: { readonly id?: string | undefined }["id"]
 }
 
-export type SessionCompactOutput = {
-  data: { admittedSeq: number; id: string; sessionID: string; timeCreated: number; type: "compaction" }
-}["data"]
+export type SessionCompactOutput = { data: SessionPendingCompaction }["data"]
 
 export type SessionWaitInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -965,20 +3091,7 @@ export type SessionRevertStageInput = {
   readonly files?: { readonly messageID: string; readonly files?: boolean | undefined }["files"]
 }
 
-export type SessionRevertStageOutput = {
-  data: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    files?: Array<{
-      file: string
-      patch: string
-      additions: number
-      deletions: number
-      status: "added" | "deleted" | "modified"
-    }>
-  }
-}["data"]
+export type SessionRevertStageOutput = { data: SessionRevert }["data"]
 
 export type SessionRevertClearInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -990,204 +3103,15 @@ export type SessionRevertCommitOutput = void
 
 export type SessionContextInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type SessionContextOutput = {
-  data: Array<
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "agent-switched"
-        agent: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "model-switched"
-        model: { id: string; providerID: string; variant?: string }
-        previous?: { id: string; providerID: string; variant?: string }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        files?: Array<{
-          data: string
-          mime: string
-          source: { type: "inline" } | { type: "uri"; uri: string }
-          name?: string
-          description?: string
-          mention?: { start: number; end: number; text: string }
-        }>
-        agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-        type: "user"
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        description?: string
-        type: "synthetic"
-      }
-    | { id: string; metadata?: { [x: string]: JsonValue }; time: { created: number }; type: "system"; text: string }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "skill"
-        skill: string
-        name: string
-        text: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "shell"
-        shellID: string
-        command: string
-        status: "running" | "exited" | "timeout" | "killed"
-        exit?: number | "Infinity" | "-Infinity" | "NaN"
-        output?: { output: string; cursor: number; size: number; truncated: boolean }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "assistant"
-        agent: string
-        model: { id: string; providerID: string; variant?: string }
-        content: Array<
-          | { type: "text"; text: string }
-          | {
-              type: "reasoning"
-              text: string
-              state?: { [x: string]: JsonValue }
-              time?: { created: number; completed?: number }
-            }
-          | {
-              type: "tool"
-              id: string
-              name: string
-              executed?: boolean
-              providerState?: { [x: string]: JsonValue }
-              providerResultState?: { [x: string]: JsonValue }
-              state:
-                | { status: "streaming"; input: string }
-                | {
-                    status: "running"
-                    input: { [x: string]: JsonValue }
-                    structured: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                  }
-                | {
-                    status: "completed"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    result?: JsonValue
-                  }
-                | {
-                    status: "error"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    error: { type: string; message: string }
-                    result?: JsonValue
-                  }
-              time: { created: number; ran?: number; completed?: number }
-            }
-        >
-        snapshot?: { start?: string; end?: string; files?: Array<string> }
-        finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-        cost?: number
-        tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-        error?: { type: string; message: string }
-        retry?: { attempt: number; at: number; error: { type: string; message: string } }
-      }
-    | (
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "running"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "completed"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "failed"
-            reason: "auto" | "manual"
-            error: { type: string; message: string }
-          }
-      )
-  >
-}["data"]
+export type SessionContextOutput = { data: Array<SessionMessageInfo> }["data"]
 
 export type SessionPendingListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type SessionPendingListOutput = {
-  data: Array<
-    | {
-        admittedSeq: number
-        id: string
-        sessionID: string
-        timeCreated: number
-        type: "user"
-        data: {
-          text: string
-          files?: Array<{
-            data: string
-            mime: string
-            source: { type: "inline" } | { type: "uri"; uri: string }
-            name?: string
-            description?: string
-            mention?: { start: number; end: number; text: string }
-          }>
-          agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-          metadata?: { [x: string]: JsonValue }
-        }
-        delivery: "steer" | "queue"
-      }
-    | {
-        admittedSeq: number
-        id: string
-        sessionID: string
-        timeCreated: number
-        type: "synthetic"
-        data: { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
-        delivery: "steer" | "queue"
-      }
-    | { admittedSeq: number; id: string; sessionID: string; timeCreated: number; type: "compaction" }
-  >
-}["data"]
+export type SessionPendingListOutput = { data: Array<SessionPendingInfo> }["data"]
 
 export type SessionInstructionsEntryListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type SessionInstructionsEntryListOutput = { data: Array<{ key: string; value: JsonValue }> }["data"]
+export type SessionInstructionsEntryListOutput = { data: Array<InstructionEntryInfo> }["data"]
 
 export type SessionInstructionsEntryPutInput = {
   readonly sessionID: { readonly sessionID: string; readonly key: string }["sessionID"]
@@ -1210,488 +3134,7 @@ export type SessionLogInput = {
   readonly follow?: { readonly after?: number | undefined; readonly follow?: boolean | undefined }["follow"]
 }
 
-export type SessionLogOutput =
-  | (
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.agent.selected"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; agent: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.model.selected"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; model: { id: string; providerID: string; variant?: string } }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.moved"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; location: { directory: string; workspaceID?: string }; subpath?: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.renamed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; title: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.deleted"
-          durable: { aggregateID: string; seq: number; version: 2 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.forked"
-          durable: { aggregateID: string; seq: number; version: 2 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.input.promoted"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; inputID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.input.admitted"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            inputID: string
-            input:
-              | {
-                  type: "user"
-                  data: {
-                    text: string
-                    files?: Array<{
-                      data: string
-                      mime: string
-                      source: { type: "inline" } | { type: "uri"; uri: string }
-                      name?: string
-                      description?: string
-                      mention?: { start: number; end: number; text: string }
-                    }>
-                    agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-                    metadata?: { [x: string]: unknown }
-                  }
-                  delivery: "steer" | "queue"
-                }
-              | {
-                  type: "synthetic"
-                  data: { text: string; description?: string; metadata?: { [x: string]: unknown } }
-                  delivery: "steer" | "queue"
-                }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.execution.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.execution.succeeded"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.execution.failed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; error: { type: string; message: string } }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.execution.interrupted"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; reason: "user" | "shutdown" | "superseded" }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.instructions.updated"
-          durable: { aggregateID: string; seq: number; version: 2 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; delta: { [x: string]: string | "removed" } }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.synthetic"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; text: string; description?: string; metadata?: { [x: string]: unknown } }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.skill.activated"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; id: string; name: string; text: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.shell.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            shell: {
-              id: string
-              status: "running" | "exited" | "timeout" | "killed"
-              command: string
-              cwd: string
-              shell: string
-              file: string
-              pid?: number
-              exit?: number
-              metadata: { [x: string]: unknown }
-              time: { started: number; completed?: number }
-            }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.shell.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            shell: {
-              id: string
-              status: "running" | "exited" | "timeout" | "killed"
-              command: string
-              cwd: string
-              shell: string
-              file: string
-              pid?: number
-              exit?: number
-              metadata: { [x: string]: unknown }
-              time: { started: number; completed?: number }
-            }
-            output: { output: string; cursor: number; size: number; truncated: boolean }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.step.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            agent: string
-            model: { id: string; providerID: string; variant?: string }
-            snapshot?: string
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.step.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            finish: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-            cost: number
-            tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-            snapshot?: string
-            files?: Array<string>
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.step.failed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            error: { type: string; message: string }
-            cost?: number
-            tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.text.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; assistantMessageID: string; ordinal: number }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.text.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; assistantMessageID: string; ordinal: number; text: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.reasoning.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; assistantMessageID: string; ordinal: number; state?: { [x: string]: unknown } }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.reasoning.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            ordinal: number
-            text: string
-            state?: { [x: string]: unknown }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.input.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; assistantMessageID: string; callID: string; name: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.input.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; assistantMessageID: string; callID: string; text: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.called"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            callID: string
-            input: { [x: string]: unknown }
-            executed: boolean
-            state?: { [x: string]: unknown }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.progress"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            callID: string
-            structured: { [x: string]: unknown }
-            content: Array<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }>
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.success"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            callID: string
-            structured: { [x: string]: unknown }
-            content: Array<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }>
-            result?: unknown
-            executed: boolean
-            resultState?: { [x: string]: unknown }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.tool.failed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            callID: string
-            error: { type: string; message: string }
-            result?: unknown
-            executed: boolean
-            resultState?: { [x: string]: unknown }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.retry.scheduled"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            assistantMessageID: string
-            attempt: number
-            at: number
-            error: { type: string; message: string }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.compaction.admitted"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; inputID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.compaction.started"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; reason: "auto" | "manual"; recent: string; inputID?: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.compaction.ended"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.compaction.failed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            reason: "auto" | "manual"
-            error: { type: string; message: string }
-            inputID?: string
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.revert.staged"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: {
-            sessionID: string
-            revert: {
-              messageID: string
-              partID?: string
-              snapshot?: string
-              files?: Array<{
-                file: string
-                patch: string
-                additions: number
-                deletions: number
-                status: "added" | "deleted" | "modified"
-              }>
-            }
-          }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.revert.cleared"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string }
-        }
-      | {
-          id: string
-          created: number
-          metadata?: { [x: string]: unknown }
-          type: "session.revert.committed"
-          durable: { aggregateID: string; seq: number; version: 1 }
-          location?: { directory: string; workspaceID?: string }
-          data: { sessionID: string; to: string }
-        }
-    )
-  | { type: "log.synced"; aggregateID: string; seq?: number }
+export type SessionLogOutput = SessionLogItem
 
 export type SessionInterruptInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -1706,161 +3149,7 @@ export type SessionMessageInput = {
   readonly messageID: { readonly sessionID: string; readonly messageID: string }["messageID"]
 }
 
-export type SessionMessageOutput = {
-  data:
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "agent-switched"
-        agent: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "model-switched"
-        model: { id: string; providerID: string; variant?: string }
-        previous?: { id: string; providerID: string; variant?: string }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        files?: Array<{
-          data: string
-          mime: string
-          source: { type: "inline" } | { type: "uri"; uri: string }
-          name?: string
-          description?: string
-          mention?: { start: number; end: number; text: string }
-        }>
-        agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-        type: "user"
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        description?: string
-        type: "synthetic"
-      }
-    | { id: string; metadata?: { [x: string]: JsonValue }; time: { created: number }; type: "system"; text: string }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "skill"
-        skill: string
-        name: string
-        text: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "shell"
-        shellID: string
-        command: string
-        status: "running" | "exited" | "timeout" | "killed"
-        exit?: number | "Infinity" | "-Infinity" | "NaN"
-        output?: { output: string; cursor: number; size: number; truncated: boolean }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "assistant"
-        agent: string
-        model: { id: string; providerID: string; variant?: string }
-        content: Array<
-          | { type: "text"; text: string }
-          | {
-              type: "reasoning"
-              text: string
-              state?: { [x: string]: JsonValue }
-              time?: { created: number; completed?: number }
-            }
-          | {
-              type: "tool"
-              id: string
-              name: string
-              executed?: boolean
-              providerState?: { [x: string]: JsonValue }
-              providerResultState?: { [x: string]: JsonValue }
-              state:
-                | { status: "streaming"; input: string }
-                | {
-                    status: "running"
-                    input: { [x: string]: JsonValue }
-                    structured: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                  }
-                | {
-                    status: "completed"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    result?: JsonValue
-                  }
-                | {
-                    status: "error"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    error: { type: string; message: string }
-                    result?: JsonValue
-                  }
-              time: { created: number; ran?: number; completed?: number }
-            }
-        >
-        snapshot?: { start?: string; end?: string; files?: Array<string> }
-        finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-        cost?: number
-        tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-        error?: { type: string; message: string }
-        retry?: { attempt: number; at: number; error: { type: string; message: string } }
-      }
-    | (
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "running"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "completed"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "failed"
-            reason: "auto" | "manual"
-            error: { type: string; message: string }
-          }
-      )
-}["data"]
+export type SessionMessageOutput = { data: SessionMessageInfo }["data"]
 
 export type MessageListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -1881,163 +3170,7 @@ export type MessageListInput = {
   }["cursor"]
 }
 
-export type MessageListOutput = {
-  data: Array<
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "agent-switched"
-        agent: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "model-switched"
-        model: { id: string; providerID: string; variant?: string }
-        previous?: { id: string; providerID: string; variant?: string }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        files?: Array<{
-          data: string
-          mime: string
-          source: { type: "inline" } | { type: "uri"; uri: string }
-          name?: string
-          description?: string
-          mention?: { start: number; end: number; text: string }
-        }>
-        agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-        type: "user"
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        text: string
-        description?: string
-        type: "synthetic"
-      }
-    | { id: string; metadata?: { [x: string]: JsonValue }; time: { created: number }; type: "system"; text: string }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number }
-        type: "skill"
-        skill: string
-        name: string
-        text: string
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "shell"
-        shellID: string
-        command: string
-        status: "running" | "exited" | "timeout" | "killed"
-        exit?: number | "Infinity" | "-Infinity" | "NaN"
-        output?: { output: string; cursor: number; size: number; truncated: boolean }
-      }
-    | {
-        id: string
-        metadata?: { [x: string]: JsonValue }
-        time: { created: number; completed?: number }
-        type: "assistant"
-        agent: string
-        model: { id: string; providerID: string; variant?: string }
-        content: Array<
-          | { type: "text"; text: string }
-          | {
-              type: "reasoning"
-              text: string
-              state?: { [x: string]: JsonValue }
-              time?: { created: number; completed?: number }
-            }
-          | {
-              type: "tool"
-              id: string
-              name: string
-              executed?: boolean
-              providerState?: { [x: string]: JsonValue }
-              providerResultState?: { [x: string]: JsonValue }
-              state:
-                | { status: "streaming"; input: string }
-                | {
-                    status: "running"
-                    input: { [x: string]: JsonValue }
-                    structured: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                  }
-                | {
-                    status: "completed"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    result?: JsonValue
-                  }
-                | {
-                    status: "error"
-                    input: { [x: string]: JsonValue }
-                    content: Array<
-                      { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
-                    >
-                    structured: { [x: string]: JsonValue }
-                    error: { type: string; message: string }
-                    result?: JsonValue
-                  }
-              time: { created: number; ran?: number; completed?: number }
-            }
-        >
-        snapshot?: { start?: string; end?: string; files?: Array<string> }
-        finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-        cost?: number
-        tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-        error?: { type: string; message: string }
-        retry?: { attempt: number; at: number; error: { type: string; message: string } }
-      }
-    | (
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "running"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "completed"
-            reason: "auto" | "manual"
-            summary: string
-            recent: string
-          }
-        | {
-            type: "compaction"
-            id: string
-            metadata?: { [x: string]: JsonValue }
-            time: { created: number }
-            status: "failed"
-            reason: "auto" | "manual"
-            error: { type: string; message: string }
-          }
-      )
-  >
-  cursor: { previous?: string | null; next?: string | null }
-}
+export type MessageListOutput = SessionMessagesResponse
 
 export type ModelListInput = {
   readonly location?: {
@@ -2047,34 +3180,7 @@ export type ModelListInput = {
 
 export type ModelListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    modelID: string
-    providerID: string
-    family?: string
-    name: string
-    package?: string
-    settings?: { [x: string]: JsonValue }
-    headers?: { [x: string]: string }
-    body?: { [x: string]: JsonValue }
-    capabilities: { tools: boolean; input: Array<string>; output: Array<string> }
-    variants: Array<{
-      id: string
-      settings?: { [x: string]: JsonValue }
-      headers?: { [x: string]: string }
-      body?: { [x: string]: JsonValue }
-    }>
-    time: { released: number }
-    cost: Array<{
-      tier?: { type: "context"; size: number }
-      input: number
-      output: number
-      cache: { read: number; write: number }
-    }>
-    status: "alpha" | "beta" | "deprecated" | "active"
-    enabled: boolean
-    limit: { context: number; input?: number; output: number }
-  }>
+  data: Array<ModelInfo>
 }
 
 export type ModelDefaultInput = {
@@ -2085,34 +3191,7 @@ export type ModelDefaultInput = {
 
 export type ModelDefaultOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    modelID: string
-    providerID: string
-    family?: string
-    name: string
-    package?: string
-    settings?: { [x: string]: JsonValue }
-    headers?: { [x: string]: string }
-    body?: { [x: string]: JsonValue }
-    capabilities: { tools: boolean; input: Array<string>; output: Array<string> }
-    variants: Array<{
-      id: string
-      settings?: { [x: string]: JsonValue }
-      headers?: { [x: string]: string }
-      body?: { [x: string]: JsonValue }
-    }>
-    time: { released: number }
-    cost: Array<{
-      tier?: { type: "context"; size: number }
-      input: number
-      output: number
-      cache: { read: number; write: number }
-    }>
-    status: "alpha" | "beta" | "deprecated" | "active"
-    enabled: boolean
-    limit: { context: number; input?: number; output: number }
-  } | null
+  data: ModelInfo | null
 }
 
 export type GenerateTextInput = {
@@ -2129,7 +3208,7 @@ export type GenerateTextInput = {
   }["model"]
 }
 
-export type GenerateTextOutput = { data: { text: string } }["data"]
+export type GenerateTextOutput = GenerateTextResponse["data"]
 
 export type ProviderListInput = {
   readonly location?: {
@@ -2139,16 +3218,7 @@ export type ProviderListInput = {
 
 export type ProviderListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    integrationID?: string
-    name: string
-    disabled?: boolean
-    package: string
-    settings?: { [x: string]: JsonValue }
-    headers?: { [x: string]: string }
-    body?: { [x: string]: JsonValue }
-  }>
+  data: Array<ProviderV2Info>
 }
 
 export type ProviderGetInput = {
@@ -2160,16 +3230,7 @@ export type ProviderGetInput = {
 
 export type ProviderGetOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    integrationID?: string
-    name: string
-    disabled?: boolean
-    package: string
-    settings?: { [x: string]: JsonValue }
-    headers?: { [x: string]: string }
-    body?: { [x: string]: JsonValue }
-  }
+  data: ProviderV2Info
 }
 
 export type IntegrationListInput = {
@@ -2180,36 +3241,7 @@ export type IntegrationListInput = {
 
 export type IntegrationListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    name: string
-    methods: Array<
-      | {
-          id: string
-          type: "oauth"
-          label: string
-          prompts?: Array<
-            | {
-                type: "text"
-                key: string
-                message: string
-                placeholder?: string
-                when?: { key: string; op: "eq" | "neq"; value: string }
-              }
-            | {
-                type: "select"
-                key: string
-                message: string
-                options: Array<{ label: string; value: string; hint?: string }>
-                when?: { key: string; op: "eq" | "neq"; value: string }
-              }
-          >
-        }
-      | { type: "key"; label?: string }
-      | { type: "env"; names: Array<string> }
-    >
-    connections: Array<{ type: "credential"; id: string; label: string } | { type: "env"; name: string }>
-  }>
+  data: Array<{ id: string; name: string; methods: Array<IntegrationMethod>; connections: Array<ConnectionInfo> }>
 }
 
 export type IntegrationGetInput = {
@@ -2221,36 +3253,7 @@ export type IntegrationGetInput = {
 
 export type IntegrationGetOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    name: string
-    methods: Array<
-      | {
-          id: string
-          type: "oauth"
-          label: string
-          prompts?: Array<
-            | {
-                type: "text"
-                key: string
-                message: string
-                placeholder?: string
-                when?: { key: string; op: "eq" | "neq"; value: string }
-              }
-            | {
-                type: "select"
-                key: string
-                message: string
-                options: Array<{ label: string; value: string; hint?: string }>
-                when?: { key: string; op: "eq" | "neq"; value: string }
-              }
-          >
-        }
-      | { type: "key"; label?: string }
-      | { type: "env"; names: Array<string> }
-    >
-    connections: Array<{ type: "credential"; id: string; label: string } | { type: "env"; name: string }>
-  } | null
+  data: { id: string; name: string; methods: Array<IntegrationMethod>; connections: Array<ConnectionInfo> } | null
 }
 
 export type IntegrationConnectKeyInput = {
@@ -2306,24 +3309,7 @@ export type IntegrationAttemptStatusInput = {
 
 export type IntegrationAttemptStatusOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data:
-    | {
-        status: "pending"
-        time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-      }
-    | {
-        status: "complete"
-        time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-      }
-    | {
-        status: "failed"
-        message: string
-        time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-      }
-    | {
-        status: "expired"
-        time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-      }
+  data: IntegrationAttemptStatus
 }
 
 export type IntegrationAttemptCompleteInput = {
@@ -2353,17 +3339,7 @@ export type ServerMcpListInput = {
 
 export type ServerMcpListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    name: string
-    status:
-      | { status: "connected" }
-      | { status: "pending" }
-      | { status: "disabled" }
-      | { status: "failed"; error: string }
-      | { status: "needs_auth" }
-      | { status: "needs_client_registration"; error: string }
-    integrationID?: string
-  }>
+  data: Array<McpServer>
 }
 
 export type ServerMcpResourceCatalogInput = {
@@ -2374,10 +3350,7 @@ export type ServerMcpResourceCatalogInput = {
 
 export type ServerMcpResourceCatalogOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    resources: Array<{ server: string; name: string; uri: string; description?: string; mimeType?: string }>
-    templates: Array<{ server: string; name: string; uriTemplate: string; description?: string; mimeType?: string }>
-  }
+  data: McpResourceCatalog
 }
 
 export type CredentialUpdateInput = {
@@ -2399,16 +3372,7 @@ export type CredentialRemoveInput = {
 
 export type CredentialRemoveOutput = void
 
-export type ProjectListOutput = Array<{
-  id: string
-  worktree: string
-  vcs?: "git" | "hg"
-  name?: string
-  icon?: { url?: string; override?: string; color?: string }
-  commands?: { start?: string }
-  time: { created: number; updated: number; initialized?: number }
-  sandboxes: Array<string>
-}>
+export type ProjectListOutput = Array<Project>
 
 export type ProjectCurrentInput = {
   readonly location?: {
@@ -2416,7 +3380,7 @@ export type ProjectCurrentInput = {
   }["location"]
 }
 
-export type ProjectCurrentOutput = { id: string; directory: string }
+export type ProjectCurrentOutput = ProjectCurrent
 
 export type ProjectDirectoriesInput = {
   readonly projectID: { readonly projectID: string }["projectID"]
@@ -2425,7 +3389,7 @@ export type ProjectDirectoriesInput = {
   }["location"]
 }
 
-export type ProjectDirectoriesOutput = Array<{ directory: string; strategy?: string }>
+export type ProjectDirectoriesOutput = ProjectDirectories
 
 export type FormRequestListInput = {
   readonly location?: {
@@ -2435,360 +3399,12 @@ export type FormRequestListInput = {
 
 export type FormRequestListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    sessionID: string
-    title: string
-    metadata?: { [x: string]: JsonValue }
-    fields: [
-      (
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      ),
-      ...Array<
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      >,
-    ]
-  }>
+  data: Array<FormInfo>
 }
 
 export type FormListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type FormListOutput = {
-  data: Array<{
-    id: string
-    sessionID: string
-    title: string
-    metadata?: { [x: string]: JsonValue }
-    fields: [
-      (
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      ),
-      ...Array<
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      >,
-    ]
-  }>
-}["data"]
+export type FormListOutput = { data: Array<FormInfo> }["data"]
 
 export type FormCreateInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -3598,376 +4214,21 @@ export type FormCreateInput = {
   }["fields"]
 }
 
-export type FormCreateOutput = {
-  data: {
-    id: string
-    sessionID: string
-    title: string
-    metadata?: { [x: string]: JsonValue }
-    fields: [
-      (
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      ),
-      ...Array<
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      >,
-    ]
-  }
-}["data"]
+export type FormCreateOutput = { data: FormInfo }["data"]
 
 export type FormGetInput = {
   readonly sessionID: { readonly sessionID: string; readonly formID: string }["sessionID"]
   readonly formID: { readonly sessionID: string; readonly formID: string }["formID"]
 }
 
-export type FormGetOutput = {
-  data: {
-    id: string
-    sessionID: string
-    title: string
-    metadata?: { [x: string]: JsonValue }
-    fields: [
-      (
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      ),
-      ...Array<
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "string"
-            format?: "email" | "uri" | "date" | "date-time"
-            minLength?: number
-            maxLength?: number
-            pattern?: string
-            placeholder?: string
-            default?: string
-            options?: Array<{ value: string; label: string; description?: string }>
-            custom?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "number"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "integer"
-            minimum?: number | "Infinity" | "-Infinity" | "NaN"
-            maximum?: number | "Infinity" | "-Infinity" | "NaN"
-            default?: number | "Infinity" | "-Infinity" | "NaN"
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "boolean"
-            default?: boolean
-          }
-        | {
-            key: string
-            title?: string
-            description?: string
-            required?: boolean
-            when?: Array<{
-              key: string
-              op: "eq" | "neq"
-              value: string | number | "Infinity" | "-Infinity" | "NaN" | boolean
-            }>
-            type: "multiselect"
-            options: Array<{ value: string; label: string; description?: string }>
-            minItems?: number
-            maxItems?: number
-            custom?: boolean
-            default?: Array<string>
-          }
-        | { key: string; type: "external"; url: string; title?: string; description?: string }
-      >,
-    ]
-  }
-}["data"]
+export type FormGetOutput = { data: FormInfo }["data"]
 
 export type FormStateInput = {
   readonly sessionID: { readonly sessionID: string; readonly formID: string }["sessionID"]
   readonly formID: { readonly sessionID: string; readonly formID: string }["formID"]
 }
 
-export type FormStateOutput = {
-  data:
-    | { status: "pending" }
-    | { status: "answered"; answer: { [x: string]: string | number | boolean | Array<string> } }
-    | { status: "cancelled" }
-}["data"]
+export type FormStateOutput = { data: FormState }["data"]
 
 export type FormReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly formID: string }["sessionID"]
@@ -3994,22 +4255,12 @@ export type PermissionRequestListInput = {
 
 export type PermissionRequestListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    sessionID: string
-    action: string
-    resources: Array<string>
-    save?: Array<string>
-    metadata?: { [x: string]: JsonValue }
-    source?: { type: "tool"; messageID: string; callID: string }
-  }>
+  data: Array<PermissionV2Request>
 }
 
 export type PermissionSavedListInput = { readonly projectID?: { readonly projectID?: string | undefined }["projectID"] }
 
-export type PermissionSavedListOutput = {
-  data: Array<{ id: string; projectID: string; action: string; resource: string }>
-}["data"]
+export type PermissionSavedListOutput = { data: Array<PermissionSavedInfo> }["data"]
 
 export type PermissionSavedRemoveInput = { readonly id: { readonly id: string }["id"] }
 
@@ -4082,38 +4333,18 @@ export type PermissionCreateInput = {
   }["agent"]
 }
 
-export type PermissionCreateOutput = { data: { id: string; effect: "allow" | "deny" | "ask" } }["data"]
+export type PermissionCreateOutput = { data: { id: string; effect: PermissionV2Effect } }["data"]
 
 export type PermissionListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type PermissionListOutput = {
-  data: Array<{
-    id: string
-    sessionID: string
-    action: string
-    resources: Array<string>
-    save?: Array<string>
-    metadata?: { [x: string]: JsonValue }
-    source?: { type: "tool"; messageID: string; callID: string }
-  }>
-}["data"]
+export type PermissionListOutput = { data: Array<PermissionV2Request> }["data"]
 
 export type PermissionGetInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
   readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
 }
 
-export type PermissionGetOutput = {
-  data: {
-    id: string
-    sessionID: string
-    action: string
-    resources: Array<string>
-    save?: Array<string>
-    metadata?: { [x: string]: JsonValue }
-    source?: { type: "tool"; messageID: string; callID: string }
-  }
-}["data"]
+export type PermissionGetOutput = { data: PermissionV2Request }["data"]
 
 export type PermissionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
@@ -4146,7 +4377,7 @@ export type FileListInput = {
 
 export type FileListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{ path: string; type: "file" | "directory" }>
+  data: Array<FileSystemEntry>
 }
 
 export type FileFindInput = {
@@ -4178,7 +4409,7 @@ export type FileFindInput = {
 
 export type FileFindOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{ path: string; type: "file" | "directory" }>
+  data: Array<FileSystemEntry>
 }
 
 export type CommandListInput = {
@@ -4189,14 +4420,7 @@ export type CommandListInput = {
 
 export type CommandListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    name: string
-    template: string
-    description?: string
-    agent?: string
-    model?: { id: string; providerID: string; variant?: string }
-    subtask?: boolean
-  }>
+  data: Array<CommandInfo>
 }
 
 export type SkillListInput = {
@@ -4207,1601 +4431,10 @@ export type SkillListInput = {
 
 export type SkillListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    name: string
-    description?: string
-    slash?: boolean
-    autoinvoke?: boolean
-    location: string
-    content: string
-  }>
+  data: Array<SkillInfo>
 }
 
-export type EventSubscribeOutput =
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "models-dev.refreshed"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "integration.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "integration.connection.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: { integrationID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "catalog.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "agent.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.created"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        info: {
-          id: string
-          slug: string
-          projectID: string
-          workspaceID?: string
-          directory: string
-          path?: string
-          parentID?: string
-          summary?: {
-            additions: number
-            deletions: number
-            files: number
-            diffs?: Array<{
-              file?: string
-              patch?: string
-              additions: number
-              deletions: number
-              status?: "added" | "deleted" | "modified"
-            }>
-          }
-          cost?: number
-          tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-          share?: { url: string }
-          title: string
-          agent?: string
-          model?: { id: string; providerID: string; variant?: string }
-          version: string
-          metadata?: { [x: string]: any }
-          time: { created: number; updated: number; compacting?: number; archived?: number }
-          permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>
-          revert?: { messageID: string; partID?: string; snapshot?: string; diff?: string }
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.updated"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        info: {
-          id: string
-          slug: string
-          projectID: string
-          workspaceID?: string
-          directory: string
-          path?: string
-          parentID?: string
-          summary?: {
-            additions: number
-            deletions: number
-            files: number
-            diffs?: Array<{
-              file?: string
-              patch?: string
-              additions: number
-              deletions: number
-              status?: "added" | "deleted" | "modified"
-            }>
-          }
-          cost?: number
-          tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-          share?: { url: string }
-          title: string
-          agent?: string
-          model?: { id: string; providerID: string; variant?: string }
-          version: string
-          metadata?: { [x: string]: any }
-          time: { created: number; updated: number; compacting?: number; archived?: number }
-          permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>
-          revert?: { messageID: string; partID?: string; snapshot?: string; diff?: string }
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.deleted"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        info: {
-          id: string
-          slug: string
-          projectID: string
-          workspaceID?: string
-          directory: string
-          path?: string
-          parentID?: string
-          summary?: {
-            additions: number
-            deletions: number
-            files: number
-            diffs?: Array<{
-              file?: string
-              patch?: string
-              additions: number
-              deletions: number
-              status?: "added" | "deleted" | "modified"
-            }>
-          }
-          cost?: number
-          tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-          share?: { url: string }
-          title: string
-          agent?: string
-          model?: { id: string; providerID: string; variant?: string }
-          version: string
-          metadata?: { [x: string]: any }
-          time: { created: number; updated: number; compacting?: number; archived?: number }
-          permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>
-          revert?: { messageID: string; partID?: string; snapshot?: string; diff?: string }
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "message.updated"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        info:
-          | {
-              id: string
-              sessionID: string
-              role: "user"
-              time: { created: number }
-              format?:
-                | (
-                    | { type: "text" }
-                    | { type: "json_schema"; schema: { [x: string]: any }; retryCount?: number | undefined | undefined }
-                  )
-                | undefined
-              summary?:
-                | {
-                    title?: string | undefined
-                    body?: string | undefined
-                    diffs: Array<{
-                      file?: string
-                      patch?: string
-                      additions: number
-                      deletions: number
-                      status?: "added" | "deleted" | "modified"
-                    }>
-                  }
-                | undefined
-              agent: string
-              model: { providerID: string; modelID: string; variant?: string | undefined }
-              system?: string | undefined
-              tools?: { [x: string]: boolean } | undefined
-            }
-          | {
-              id: string
-              sessionID: string
-              role: "assistant"
-              time: { created: number; completed?: number | undefined }
-              error?:
-                | { name: "ProviderAuthError"; data: { providerID: string; message: string } }
-                | { name: "UnknownError"; data: { message: string; ref?: string | undefined } }
-                | { name: "MessageOutputLengthError"; data: {} }
-                | { name: "MessageAbortedError"; data: { message: string } }
-                | { name: "StructuredOutputError"; data: { message: string; retries: number } }
-                | { name: "ContextOverflowError"; data: { message: string; responseBody?: string | undefined } }
-                | { name: "ContentFilterError"; data: { message: string } }
-                | {
-                    name: "APIError"
-                    data: {
-                      message: string
-                      statusCode?: number | undefined
-                      isRetryable: boolean
-                      responseHeaders?: { [x: string]: string } | undefined
-                      responseBody?: string | undefined
-                      metadata?: { [x: string]: string } | undefined
-                    }
-                  }
-                | undefined
-              parentID: string
-              modelID: string
-              providerID: string
-              mode: string
-              agent: string
-              path: { cwd: string; root: string }
-              summary?: boolean | undefined
-              cost: number
-              tokens: {
-                total?: number | undefined
-                input: number
-                output: number
-                reasoning: number
-                cache: { read: number; write: number }
-              }
-              structured?: any | undefined
-              variant?: string | undefined
-              finish?: string | undefined
-            }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "message.removed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; messageID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "message.part.updated"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        part:
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "text"
-              text: string
-              synthetic?: boolean | undefined
-              ignored?: boolean | undefined
-              time?: { start: number; end?: number | undefined } | undefined
-              metadata?: { [x: string]: any } | undefined
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "subtask"
-              prompt: string
-              description: string
-              agent: string
-              model?: { providerID: string; modelID: string } | undefined
-              command?: string | undefined
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "reasoning"
-              text: string
-              metadata?: { [x: string]: any } | undefined
-              time: { start: number; end?: number | undefined }
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "file"
-              mime: string
-              filename?: string | undefined
-              url: string
-              source?:
-                | (
-                    | { text: { value: string; start: number; end: number }; type: "file"; path: string }
-                    | {
-                        text: { value: string; start: number; end: number }
-                        type: "symbol"
-                        path: string
-                        range: { start: { line: number; character: number }; end: { line: number; character: number } }
-                        name: string
-                        kind: number
-                      }
-                    | {
-                        text: { value: string; start: number; end: number }
-                        type: "resource"
-                        clientName: string
-                        uri: string
-                      }
-                  )
-                | undefined
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "tool"
-              callID: string
-              tool: string
-              state:
-                | { status: "pending"; input: { [x: string]: any }; raw: string }
-                | {
-                    status: "running"
-                    input: { [x: string]: any }
-                    title?: string | undefined
-                    metadata?: { [x: string]: any } | undefined
-                    time: { start: number }
-                  }
-                | {
-                    status: "completed"
-                    input: { [x: string]: any }
-                    output: string
-                    title: string
-                    metadata: { [x: string]: any }
-                    time: { start: number; end: number; compacted?: number | undefined }
-                    attachments?:
-                      | Array<{
-                          id: string
-                          sessionID: string
-                          messageID: string
-                          type: "file"
-                          mime: string
-                          filename?: string | undefined
-                          url: string
-                          source?:
-                            | (
-                                | { text: { value: string; start: number; end: number }; type: "file"; path: string }
-                                | {
-                                    text: { value: string; start: number; end: number }
-                                    type: "symbol"
-                                    path: string
-                                    range: {
-                                      start: { line: number; character: number }
-                                      end: { line: number; character: number }
-                                    }
-                                    name: string
-                                    kind: number
-                                  }
-                                | {
-                                    text: { value: string; start: number; end: number }
-                                    type: "resource"
-                                    clientName: string
-                                    uri: string
-                                  }
-                              )
-                            | undefined
-                        }>
-                      | undefined
-                  }
-                | {
-                    status: "error"
-                    input: { [x: string]: any }
-                    error: string
-                    metadata?: { [x: string]: any } | undefined
-                    time: { start: number; end: number }
-                  }
-              metadata?: { [x: string]: any } | undefined
-            }
-          | { id: string; sessionID: string; messageID: string; type: "step-start"; snapshot?: string | undefined }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "step-finish"
-              reason: string
-              snapshot?: string | undefined
-              cost: number
-              tokens: {
-                total?: number | undefined
-                input: number
-                output: number
-                reasoning: number
-                cache: { read: number; write: number }
-              }
-            }
-          | { id: string; sessionID: string; messageID: string; type: "snapshot"; snapshot: string }
-          | { id: string; sessionID: string; messageID: string; type: "patch"; hash: string; files: Array<string> }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "agent"
-              name: string
-              source?: { value: string; start: number; end: number } | undefined
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "retry"
-              attempt: number
-              error: {
-                name: "APIError"
-                data: {
-                  message: string
-                  statusCode?: number | undefined
-                  isRetryable: boolean
-                  responseHeaders?: { [x: string]: string } | undefined
-                  responseBody?: string | undefined
-                  metadata?: { [x: string]: string } | undefined
-                }
-              }
-              time: { created: number }
-            }
-          | {
-              id: string
-              sessionID: string
-              messageID: string
-              type: "compaction"
-              auto: boolean
-              overflow?: boolean | undefined
-              tail_start_id?: string | undefined
-            }
-        time: number
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "message.part.removed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; messageID: string; partID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.agent.selected"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; agent: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.model.selected"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; model: { id: string; providerID: string; variant?: string } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.moved"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; location: { directory: string; workspaceID?: string }; subpath?: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.renamed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; title: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.usage.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        cost: number
-        tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.deleted"
-      durable: { aggregateID: string; seq: number; version: 2 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.forked"
-      durable: { aggregateID: string; seq: number; version: 2 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.input.promoted"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; inputID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.input.admitted"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        inputID: string
-        input:
-          | {
-              type: "user"
-              data: {
-                text: string
-                files?: Array<{
-                  data: string
-                  mime: string
-                  source: { type: "inline" } | { type: "uri"; uri: string }
-                  name?: string
-                  description?: string
-                  mention?: { start: number; end: number; text: string }
-                }>
-                agents?: Array<{ name: string; mention?: { start: number; end: number; text: string } }>
-                metadata?: { [x: string]: unknown }
-              }
-              delivery: "steer" | "queue"
-            }
-          | {
-              type: "synthetic"
-              data: { text: string; description?: string; metadata?: { [x: string]: unknown } }
-              delivery: "steer" | "queue"
-            }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.execution.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.execution.succeeded"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.execution.failed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; error: { type: string; message: string } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.execution.interrupted"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; reason: "user" | "shutdown" | "superseded" }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.instructions.updated"
-      durable: { aggregateID: string; seq: number; version: 2 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; delta: { [x: string]: string | "removed" } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.synthetic"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; text: string; description?: string; metadata?: { [x: string]: unknown } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.skill.activated"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; id: string; name: string; text: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.shell.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        shell: {
-          id: string
-          status: "running" | "exited" | "timeout" | "killed"
-          command: string
-          cwd: string
-          shell: string
-          file: string
-          pid?: number
-          exit?: number
-          metadata: { [x: string]: unknown }
-          time: { started: number; completed?: number }
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.shell.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        shell: {
-          id: string
-          status: "running" | "exited" | "timeout" | "killed"
-          command: string
-          cwd: string
-          shell: string
-          file: string
-          pid?: number
-          exit?: number
-          metadata: { [x: string]: unknown }
-          time: { started: number; completed?: number }
-        }
-        output: { output: string; cursor: number; size: number; truncated: boolean }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.step.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        agent: string
-        model: { id: string; providerID: string; variant?: string }
-        snapshot?: string
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.step.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        finish: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-        cost: number
-        tokens: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-        snapshot?: string
-        files?: Array<string>
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.step.failed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        error: { type: string; message: string }
-        cost?: number
-        tokens?: { input: number; output: number; reasoning: number; cache: { read: number; write: number } }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.text.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; ordinal: number }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.text.delta"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; ordinal: number; delta: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.text.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; ordinal: number; text: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.reasoning.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; ordinal: number; state?: { [x: string]: unknown } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.reasoning.delta"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; ordinal: number; delta: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.reasoning.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        ordinal: number
-        text: string
-        state?: { [x: string]: unknown }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.input.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; callID: string; name: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.input.delta"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; callID: string; delta: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.input.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; assistantMessageID: string; callID: string; text: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.called"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        callID: string
-        input: { [x: string]: unknown }
-        executed: boolean
-        state?: { [x: string]: unknown }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.progress"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        callID: string
-        structured: { [x: string]: unknown }
-        content: Array<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }>
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.success"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        callID: string
-        structured: { [x: string]: unknown }
-        content: Array<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }>
-        result?: unknown
-        executed: boolean
-        resultState?: { [x: string]: unknown }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.tool.failed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        callID: string
-        error: { type: string; message: string }
-        result?: unknown
-        executed: boolean
-        resultState?: { [x: string]: unknown }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.retry.scheduled"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        assistantMessageID: string
-        attempt: number
-        at: number
-        error: { type: string; message: string }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.compaction.admitted"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; inputID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.compaction.started"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; reason: "auto" | "manual"; recent: string; inputID?: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.compaction.delta"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; text: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.compaction.ended"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; reason: "auto" | "manual"; text: string; recent: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.compaction.failed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; reason: "auto" | "manual"; error: { type: string; message: string }; inputID?: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.revert.staged"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        revert: {
-          messageID: string
-          partID?: string
-          snapshot?: string
-          files?: Array<{
-            file: string
-            patch: string
-            additions: number
-            deletions: number
-            status: "added" | "deleted" | "modified"
-          }>
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.revert.cleared"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.revert.committed"
-      durable: { aggregateID: string; seq: number; version: 1 }
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; to: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "filesystem.changed"
-      location?: { directory: string; workspaceID?: string }
-      data: { file: string; event: "add" | "change" | "unlink" }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "reference.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "permission.v2.asked"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        id: string
-        sessionID: string
-        action: string
-        resources: Array<string>
-        save?: Array<string>
-        metadata?: { [x: string]: unknown }
-        source?: { type: "tool"; messageID: string; callID: string }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "permission.v2.replied"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string; reply: "once" | "always" | "reject" }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "plugin.added"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "plugin.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "project.directories.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: { projectID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "command.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "config.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "skill.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {}
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "pty.created"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        info: {
-          id: string
-          title: string
-          command: string
-          args: Array<string>
-          cwd: string
-          status: "running" | "exited"
-          pid: number
-          exitCode?: number
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "pty.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        info: {
-          id: string
-          title: string
-          command: string
-          args: Array<string>
-          cwd: string
-          status: "running" | "exited"
-          pid: number
-          exitCode?: number
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "pty.exited"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string; exitCode: number }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "pty.deleted"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "shell.created"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        info: {
-          id: string
-          status: "running" | "exited" | "timeout" | "killed"
-          command: string
-          cwd: string
-          shell: string
-          file: string
-          pid?: number
-          exit?: number
-          metadata: { [x: string]: unknown }
-          time: { started: number; completed?: number }
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "shell.exited"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string; exit?: number; status: "running" | "exited" | "timeout" | "killed" }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "shell.deleted"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.v2.asked"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        id: string
-        sessionID: string
-        questions: Array<{
-          question: string
-          header: string
-          options: Array<{ label: string; description: string }>
-          multiple?: boolean
-          custom?: boolean
-        }>
-        tool?: { messageID: string; callID: string }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.v2.replied"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string; answers: Array<Array<string>> }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.v2.rejected"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "form.created"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        form: {
-          id: string
-          sessionID: string
-          title: string
-          metadata?: { [x: string]: unknown }
-          fields: [
-            (
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "string"
-                  format?: "email" | "uri" | "date" | "date-time"
-                  minLength?: number
-                  maxLength?: number
-                  pattern?: string
-                  placeholder?: string
-                  default?: string
-                  options?: Array<{ value: string; label: string; description?: string }>
-                  custom?: boolean
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "number"
-                  minimum?: number
-                  maximum?: number
-                  default?: number
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "integer"
-                  minimum?: number
-                  maximum?: number
-                  default?: number
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "boolean"
-                  default?: boolean
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "multiselect"
-                  options: Array<{ value: string; label: string; description?: string }>
-                  minItems?: number
-                  maxItems?: number
-                  custom?: boolean
-                  default?: Array<string>
-                }
-              | { key: string; type: "external"; url: string; title?: string; description?: string }
-            ),
-            ...Array<
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "string"
-                  format?: "email" | "uri" | "date" | "date-time"
-                  minLength?: number
-                  maxLength?: number
-                  pattern?: string
-                  placeholder?: string
-                  default?: string
-                  options?: Array<{ value: string; label: string; description?: string }>
-                  custom?: boolean
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "number"
-                  minimum?: number
-                  maximum?: number
-                  default?: number
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "integer"
-                  minimum?: number
-                  maximum?: number
-                  default?: number
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "boolean"
-                  default?: boolean
-                }
-              | {
-                  key: string
-                  title?: string
-                  description?: string
-                  required?: boolean
-                  when?: Array<{ key: string; op: "eq" | "neq"; value: string | number | boolean }>
-                  type: "multiselect"
-                  options: Array<{ value: string; label: string; description?: string }>
-                  minItems?: number
-                  maxItems?: number
-                  custom?: boolean
-                  default?: Array<string>
-                }
-              | { key: string; type: "external"; url: string; title?: string; description?: string }
-            >,
-          ]
-        }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "form.replied"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string; sessionID: string; answer: { [x: string]: string | number | boolean | Array<string> } }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "form.cancelled"
-      location?: { directory: string; workspaceID?: string }
-      data: { id: string; sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.status"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID: string
-        status:
-          | { type: "idle" }
-          | {
-              type: "retry"
-              attempt: number
-              message: string
-              action?: {
-                reason: string
-                provider: string
-                title: string
-                message: string
-                label: string
-                link?: string
-              }
-              next: number
-            }
-          | { type: "busy" }
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.idle"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "tui.prompt.append"
-      location?: { directory: string; workspaceID?: string }
-      data: { text: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "tui.command.execute"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        command:
-          | "session.list"
-          | "session.new"
-          | "session.share"
-          | "session.interrupt"
-          | "session.background"
-          | "session.compact"
-          | "session.page.up"
-          | "session.page.down"
-          | "session.line.up"
-          | "session.line.down"
-          | "session.half.page.up"
-          | "session.half.page.down"
-          | "session.first"
-          | "session.last"
-          | "prompt.clear"
-          | "prompt.submit"
-          | "agent.cycle"
-          | string
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "tui.toast.show"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        title?: string
-        message: string
-        variant: "info" | "success" | "warning" | "error"
-        duration?: number | undefined
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "tui.session.select"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "installation.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: { version: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "installation.update-available"
-      location?: { directory: string; workspaceID?: string }
-      data: { version: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "vcs.branch.updated"
-      location?: { directory: string; workspaceID?: string }
-      data: { branch?: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "mcp.status.changed"
-      location?: { directory: string; workspaceID?: string }
-      data: { server: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "mcp.resources.changed"
-      location?: { directory: string; workspaceID?: string }
-      data: { server: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "permission.asked"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        id: string
-        sessionID: string
-        permission: string
-        patterns: Array<string>
-        metadata: { [x: string]: unknown }
-        always: Array<string>
-        tool?: { messageID: string; callID: string } | undefined
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "permission.replied"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string; reply: "once" | "always" | "reject" }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.asked"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        id: string
-        sessionID: string
-        questions: Array<{
-          question: string
-          header: string
-          options: Array<{ label: string; description: string }>
-          multiple?: boolean | undefined
-          custom?: boolean | undefined
-        }>
-        tool?: { messageID: string; callID: string } | undefined
-      }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.replied"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string; answers: Array<Array<string>> }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "question.rejected"
-      location?: { directory: string; workspaceID?: string }
-      data: { sessionID: string; requestID: string }
-    }
-  | {
-      id: string
-      created: number
-      metadata?: { [x: string]: unknown }
-      type: "session.error"
-      location?: { directory: string; workspaceID?: string }
-      data: {
-        sessionID?: string | undefined
-        error?:
-          | { name: "ProviderAuthError"; data: { providerID: string; message: string } }
-          | { name: "UnknownError"; data: { message: string; ref?: string | undefined } }
-          | { name: "MessageOutputLengthError"; data: {} }
-          | { name: "MessageAbortedError"; data: { message: string } }
-          | { name: "StructuredOutputError"; data: { message: string; retries: number } }
-          | { name: "ContextOverflowError"; data: { message: string; responseBody?: string | undefined } }
-          | { name: "ContentFilterError"; data: { message: string } }
-          | {
-              name: "APIError"
-              data: {
-                message: string
-                statusCode?: number | undefined
-                isRetryable: boolean
-                responseHeaders?: { [x: string]: string } | undefined
-                responseBody?: string | undefined
-                metadata?: { [x: string]: string } | undefined
-              }
-            }
-          | undefined
-      }
-    }
-  | {
-      id: string
-      metadata?: { [x: string]: unknown } | undefined
-      location?: { directory: string; workspaceID?: string } | undefined
-      type: "server.connected"
-      data: {}
-    }
+export type EventSubscribeOutput = V2Event
 
 export type PtyListInput = {
   readonly location?: {
@@ -5811,16 +4444,7 @@ export type PtyListInput = {
 
 export type PtyListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    title: string
-    command: string
-    args: Array<string>
-    cwd: string
-    status: "running" | "exited"
-    pid: number
-    exitCode?: number
-  }>
+  data: Array<Pty>
 }
 
 export type PtyCreateInput = {
@@ -5866,16 +4490,7 @@ export type PtyCreateInput = {
 
 export type PtyCreateOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    title: string
-    command: string
-    args: Array<string>
-    cwd: string
-    status: "running" | "exited"
-    pid: number
-    exitCode?: number
-  }
+  data: Pty
 }
 
 export type PtyGetInput = {
@@ -5887,16 +4502,7 @@ export type PtyGetInput = {
 
 export type PtyGetOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    title: string
-    command: string
-    args: Array<string>
-    cwd: string
-    status: "running" | "exited"
-    pid: number
-    exitCode?: number
-  }
+  data: Pty
 }
 
 export type PtyUpdateInput = {
@@ -5913,16 +4519,7 @@ export type PtyUpdateInput = {
 
 export type PtyUpdateOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    title: string
-    command: string
-    args: Array<string>
-    cwd: string
-    status: "running" | "exited"
-    pid: number
-    exitCode?: number
-  }
+  data: Pty
 }
 
 export type PtyRemoveInput = {
@@ -5942,18 +4539,7 @@ export type ShellListInput = {
 
 export type ShellListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    status: "running" | "exited" | "timeout" | "killed"
-    command: string
-    cwd: string
-    shell: string
-    file: string
-    pid?: number
-    exit?: number | "Infinity" | "-Infinity" | "NaN"
-    metadata: { [x: string]: JsonValue }
-    time: { started: number | "Infinity" | "-Infinity" | "NaN"; completed?: number | "Infinity" | "-Infinity" | "NaN" }
-  }>
+  data: Array<Shell1>
 }
 
 export type ShellCreateInput = {
@@ -5988,18 +4574,7 @@ export type ShellCreateInput = {
 
 export type ShellCreateOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    status: "running" | "exited" | "timeout" | "killed"
-    command: string
-    cwd: string
-    shell: string
-    file: string
-    pid?: number
-    exit?: number | "Infinity" | "-Infinity" | "NaN"
-    metadata: { [x: string]: JsonValue }
-    time: { started: number | "Infinity" | "-Infinity" | "NaN"; completed?: number | "Infinity" | "-Infinity" | "NaN" }
-  }
+  data: Shell1
 }
 
 export type ShellGetInput = {
@@ -6011,18 +4586,7 @@ export type ShellGetInput = {
 
 export type ShellGetOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    status: "running" | "exited" | "timeout" | "killed"
-    command: string
-    cwd: string
-    shell: string
-    file: string
-    pid?: number
-    exit?: number | "Infinity" | "-Infinity" | "NaN"
-    metadata: { [x: string]: JsonValue }
-    time: { started: number | "Infinity" | "-Infinity" | "NaN"; completed?: number | "Infinity" | "-Infinity" | "NaN" }
-  }
+  data: Shell1
 }
 
 export type ShellTimeoutInput = {
@@ -6035,18 +4599,7 @@ export type ShellTimeoutInput = {
 
 export type ShellTimeoutOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: {
-    id: string
-    status: "running" | "exited" | "timeout" | "killed"
-    command: string
-    cwd: string
-    shell: string
-    file: string
-    pid?: number
-    exit?: number | "Infinity" | "-Infinity" | "NaN"
-    metadata: { [x: string]: JsonValue }
-    time: { started: number | "Infinity" | "-Infinity" | "NaN"; completed?: number | "Infinity" | "-Infinity" | "NaN" }
-  }
+  data: Shell1
 }
 
 export type ShellOutputInput = {
@@ -6090,36 +4643,12 @@ export type QuestionRequestListInput = {
 
 export type QuestionRequestListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    id: string
-    sessionID: string
-    questions: Array<{
-      question: string
-      header: string
-      options: Array<{ label: string; description: string }>
-      multiple?: boolean
-      custom?: boolean
-    }>
-    tool?: { messageID: string; callID: string }
-  }>
+  data: Array<QuestionV2Request>
 }
 
 export type QuestionListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
-export type QuestionListOutput = {
-  data: Array<{
-    id: string
-    sessionID: string
-    questions: Array<{
-      question: string
-      header: string
-      options: Array<{ label: string; description: string }>
-      multiple?: boolean
-      custom?: boolean
-    }>
-    tool?: { messageID: string; callID: string }
-  }>
-}["data"]
+export type QuestionListOutput = { data: Array<QuestionV2Request> }["data"]
 
 export type QuestionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
@@ -6144,15 +4673,7 @@ export type ReferenceListInput = {
 
 export type ReferenceListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    name: string
-    path: string
-    description?: string
-    hidden?: boolean
-    source:
-      | { type: "local"; path: string; description?: string; hidden?: boolean }
-      | { type: "git"; repository: string; branch?: string; description?: string; hidden?: boolean }
-  }>
+  data: Array<{ name: string; path: string; description?: string; hidden?: boolean; source: ReferenceSource }>
 }
 
 export type ProjectCopyCreateInput = {
@@ -6165,7 +4686,7 @@ export type ProjectCopyCreateInput = {
   readonly name?: { readonly strategy: string; readonly directory: string; readonly name?: string }["name"]
 }
 
-export type ProjectCopyCreateOutput = { directory: string }
+export type ProjectCopyCreateOutput = ProjectCopyCopy
 
 export type ProjectCopyRemoveInput = {
   readonly projectID: { readonly projectID: string }["projectID"]
@@ -6195,7 +4716,7 @@ export type VcsStatusInput = {
 
 export type VcsStatusOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{ file: string; additions: number; deletions: number; status: "added" | "deleted" | "modified" }>
+  data: Array<VcsFileStatus>
 }
 
 export type VcsDiffInput = {
@@ -6218,16 +4739,10 @@ export type VcsDiffInput = {
 
 export type VcsDiffOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
-  data: Array<{
-    file: string
-    patch: string
-    additions: number
-    deletions: number
-    status: "added" | "deleted" | "modified"
-  }>
+  data: Array<FileDiffInfo>
 }
 
-export type DebugLocationListOutput = Array<{ directory: string; workspaceID?: string }>
+export type DebugLocationListOutput = Array<LocationRef>
 
 export type DebugLocationEvictInput = {
   readonly location?: {

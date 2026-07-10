@@ -580,6 +580,17 @@ function renderPromiseTypes(
     types.set(projected.ast, type)
     return type
   }
+  const outputMarkers = new Map<SchemaAST.AST, string>()
+  const outputSchemas: Array<Schema.Top> = []
+  const outputTypeOf = (schema: Schema.Top) => {
+    const projected = Schema.toEncoded(schema)
+    const cached = outputMarkers.get(projected.ast)
+    if (cached !== undefined) return cached
+    const marker = `__PROMISE_TYPE_${outputSchemas.length}__`
+    outputSchemas.push(projected)
+    outputMarkers.set(projected.ast, marker)
+    return marker
+  }
   const errors = new Map(
     groups.flatMap((group) =>
       group.endpoints.flatMap((endpoint) =>
@@ -618,26 +629,42 @@ function renderPromiseTypes(
         const successSchema = endpoint.successes[0]
         const success =
           outputTypes?.[clientOperationKey(group, endpoint)]?.name ??
-          typeOf(
+          outputTypeOf(
             isStreamSchema(successSchema) && successSchema._tag === "StreamSse"
               ? successSchema.sseMode === "data"
                 ? streamEncodedDataSchema(successSchema)
                 : successSchema.events
               : successSchema,
           )
-        const output = mutableOutputs ? mutableType(success) : success
         return [
           ...(promiseInputMode(endpoint) === "none" ? [] : [`export type ${prefix}Input = { ${input} }`]),
-          `export type ${prefix}Output = ${endpoint.unwrapData ? `(${output})["data"]` : output}`,
+          `export type ${prefix}Output = ${endpoint.unwrapData ? `(${success})["data"]` : success}`,
         ]
       }),
     )
     .join("\n\n")
-  const json = operations.includes("JsonValue")
+  const reservedNames = new Set([
+    "ClientError",
+    "JsonValue",
+    ...errors.keys(),
+    ...groups.flatMap((group) =>
+      group.endpoints.flatMap((endpoint) => {
+        const prefix = promiseTypePrefix(group.identifier, endpoint.clientPath)
+        return [`${prefix}Input`, `${prefix}Output`]
+      }),
+    ),
+    ...Object.values(outputTypes ?? {}).map((output) => output.name),
+  ])
+  const rendered = structuralTypes(outputSchemas, mutableOutputs, reservedNames)
+  const resolve = (source: string) =>
+    rendered.types.reduce((result, type, index) => result.replaceAll(`__PROMISE_TYPE_${index}__`, type), source)
+  const resolvedErrors = errorTypes.map(resolve)
+  const resolvedOperations = resolve(operations)
+  const json = [...rendered.definitions, ...resolvedErrors, resolvedOperations].some((type) => type.includes("JsonValue"))
     ? `export type JsonValue = null | boolean | number | string | ${mutableOutputs ? "Array<JsonValue> | { [key: string]: JsonValue }" : "ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue }"}`
     : ""
   const imports = [...new Set(Object.values(outputTypes ?? {}).map((override) => override.import))]
-  return [...imports, json, ...errorTypes, operations].filter(Boolean).join("\n\n")
+  return [...imports, json, ...rendered.definitions, ...resolvedErrors, resolvedOperations].filter(Boolean).join("\n\n")
 }
 
 function mutableType(type: string) {
@@ -768,6 +795,49 @@ function identifierPart(value: string) {
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join("")
+}
+
+function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, reservedNames: ReadonlySet<string>) {
+  if (schemas.length === 0) return { types: [], definitions: [] }
+  const document = SchemaRepresentation.toCodeDocument(
+    SchemaRepresentation.fromASTs(schemas.map((schema) => schema.ast) as [SchemaAST.AST, ...Array<SchemaAST.AST>]),
+  )
+  if (
+    document.artifacts.some(
+      (artifact) =>
+        artifact._tag !== "Import" || artifact.importDeclaration !== 'import type * as Brand from "effect/Brand"',
+    ) ||
+    Object.keys(document.references.recursives).length > 0
+  ) {
+    throw new GenerationError({ reason: "Referenced Promise types are not implemented" })
+  }
+  const names = new Map<string, string>()
+  const usedNames = new Set(reservedNames)
+  for (const reference of document.references.nonRecursives) {
+    const seed = identifierPart(reference.$ref)
+    const name = uniqueTypeName(seed, usedNames)
+    names.set(reference.$ref, name)
+    usedNames.add(name)
+  }
+  const render = (type: string) => {
+    for (const [reference, name] of names) {
+      const pattern = `(?<![A-Za-z0-9_$.'"])${reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_$.'"])`
+      type = type.replace(new RegExp(pattern, "g"), name)
+    }
+    const output = type.replaceAll(/ & Brand\.Brand<"[^"]+">/g, "").replaceAll("Schema.Json", "JsonValue")
+    return mutable ? mutableType(output) : output
+  }
+  return {
+    types: document.codes.map((code) => render(code.Type)),
+    definitions: document.references.nonRecursives.map(
+      (reference) => `export type ${names.get(reference.$ref)} = ${render(reference.code.Type)}`,
+    ),
+  }
+}
+
+function uniqueTypeName(seed: string, used: ReadonlySet<string>, suffix = 1): string {
+  const name = suffix === 1 ? seed : `${seed}${suffix}`
+  return used.has(name) ? uniqueTypeName(seed, used, suffix + 1) : name
 }
 
 function structuralType(schema: Schema.Top) {
