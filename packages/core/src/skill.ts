@@ -92,6 +92,7 @@ const layer = Layer.effect(
         },
         list: () => draft.sources as Source[],
       }),
+      finalize: () => events.publish(Event.Updated, {}).pipe(Effect.asVoid),
     })
 
     const load = Effect.fn("SkillV2.load")(function* (source: Source) {
