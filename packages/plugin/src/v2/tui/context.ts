@@ -19,6 +19,7 @@ import type {
   ShellInfo,
   SkillInfo,
 } from "@opencode-ai/client"
+import type { JSX } from "@opentui/solid"
 
 interface LocationCollection<Value> {
   list(location?: LocationRef): Value[] | undefined
@@ -85,7 +86,23 @@ export interface Data {
   }
 }
 
-export interface UI {}
+export interface RouteDefinition {
+  readonly name: string
+  readonly render: (input: { readonly params: any }) => JSX.Element
+}
+
+export interface Route {
+  register(definition: RouteDefinition): () => void
+  navigate(input: { readonly name: string; readonly params?: any }): void
+  current(): {
+    readonly name: string
+    readonly params: any
+  }
+}
+
+export interface UI {
+  readonly route: Route
+}
 
 export interface Context {
   readonly options: Record<string, any>
