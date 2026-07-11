@@ -177,6 +177,7 @@ export function Prompt(props: PromptProps) {
   const keymap = useOpencodeKeymap()
   const agentShortcut = useCommandShortcut("agent.cycle")
   const paletteShortcut = useCommandShortcut("command.palette.show")
+  const liveWorkShortcut = useCommandShortcut("session.child.first")
   const renderer = useRenderer()
   const exit = useExit()
   const dimensions = useTerminalDimensions()
@@ -864,6 +865,7 @@ export function Prompt(props: PromptProps) {
 
   useBindings(() => {
     return {
+      priority: 1,
       target: inputTarget,
       enabled: (() => {
         cursorVersion()
@@ -876,8 +878,12 @@ export function Prompt(props: PromptProps) {
           category: "Prompt",
           run() {
             if (input.cursorOffset !== 0) {
-              if (input.scrollY + input.visualCursor.visualRow === 0) input.cursorOffset = 0
-              return false
+              if (input.scrollY + input.visualCursor.visualRow === 0) {
+                input.cursorOffset = 0
+                return
+              }
+              input.moveCursorUp()
+              return
             }
 
             const item = history.move(-1, input.plainText)
@@ -896,6 +902,7 @@ export function Prompt(props: PromptProps) {
 
   useBindings(() => {
     return {
+      priority: 1,
       target: inputTarget,
       enabled: (() => {
         cursorVersion()
@@ -911,9 +918,12 @@ export function Prompt(props: PromptProps) {
               if (
                 input.scrollY + input.visualCursor.visualRow ===
                 Math.max(0, input.editorView.getTotalVirtualLineCount() - 1)
-              )
+              ) {
                 input.cursorOffset = input.plainText.length
-              return false
+                return
+              }
+              input.moveCursorDown()
+              return
             }
 
             const item = history.move(1, input.plainText)
@@ -1608,6 +1618,9 @@ export function Prompt(props: PromptProps) {
                 <Switch>
                   <Match when={liveWorkStatusVisible() || statusItems().length > 0}>
                     <text fg={theme.textMuted} wrapMode="none">
+                      <Show when={liveWorkStatusVisible() && liveWorkShortcut()}>
+                        {(shortcut) => <span style={{ fg: theme.text }}>{shortcut()} </span>}
+                      </Show>
                       <Show when={subagentStatusLabel()}>
                         {(label) => <span style={{ fg: theme.textMuted }}>{label()}</span>}
                       </Show>

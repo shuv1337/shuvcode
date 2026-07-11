@@ -193,6 +193,10 @@ function formatOptions(config: FormatConfig) {
       [LEADER_TOKEN]: leaderDisplay(config),
     },
     keyNameAliases: {
+      up: "↑",
+      down: "↓",
+      left: "←",
+      right: "→",
       pageup: "pgup",
       pagedown: "pgdn",
       delete: "del",
