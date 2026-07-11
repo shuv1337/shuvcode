@@ -1,4 +1,4 @@
-import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client/promise"
+import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
 import type { OpencodeClient } from "@opencode-ai/sdk/v2"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { onCleanup, onMount } from "solid-js"

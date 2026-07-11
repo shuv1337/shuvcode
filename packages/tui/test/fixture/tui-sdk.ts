@@ -1,4 +1,4 @@
-import { OpenCode, type OpenCodeEvent } from "@opencode-ai/client/promise"
+import { OpenCode, type OpenCodeEvent } from "@opencode-ai/client"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
 export const worktree = "/tmp/opencode"
