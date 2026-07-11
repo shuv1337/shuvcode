@@ -1,4 +1,4 @@
-import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/sdk/v2"
+import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client"
 import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useData } from "../../context/data"

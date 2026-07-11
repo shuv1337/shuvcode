@@ -53,8 +53,6 @@ import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
 import { DialogSessionList } from "./component/dialog-session-list"
-import { DialogWorkspaceList } from "./component/dialog-workspace-list"
-import { DialogConsoleOrg } from "./component/dialog-console-org"
 import { ThemeProvider, useTheme } from "./context/theme"
 import { Home } from "./routes/home"
 import { Session } from "./routes/session"
@@ -121,7 +119,6 @@ const appBindingCommands = [
   "variant.cycle",
   "variant.list",
   "provider.connect",
-  "console.org.switch",
   "opencode.status",
   "server.pair",
   "opencode.debug",
@@ -131,7 +128,6 @@ const appBindingCommands = [
   "help.show",
   "docs.open",
   "diff.open",
-  "workspace.list",
   "app.debug",
   "app.console",
   "app.heap_snapshot",
@@ -618,13 +614,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   })
 
   const connected = useConnected()
-  const currentWorktreeWorkspace = createMemo(() => {
-    const workspaceID = project.workspace.current()
-    if (!workspaceID) return
-    const workspace = project.workspace.get(workspaceID)
-    if (workspace?.type !== "worktree" || !workspace.directory) return
-    return workspace
-  })
   const appCommands = createMemo(() =>
     [
       {
@@ -659,31 +648,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
             type: "home",
           })
           dialog.clear()
-        },
-      },
-      {
-        name: "workspace.copy_path",
-        title: "Copy worktree path",
-        category: "Workspace",
-        enabled: () => currentWorktreeWorkspace() !== undefined,
-        run: async () => {
-          const workspace = currentWorktreeWorkspace()
-          if (!workspace?.directory) return
-          await clipboard
-            .write?.(workspace.directory)
-            .then(() => toast.show({ message: "Copied worktree path", variant: "info" }))
-            .catch(toast.error)
-          dialog.clear()
-        },
-      },
-      {
-        name: "workspace.list",
-        title: "Manage workspaces",
-        category: "Workspace",
-        hidden: !Flag.OPENCODE_EXPERIMENTAL_WORKSPACES,
-        slashName: "workspaces",
-        run: () => {
-          dialog.replace(() => <DialogWorkspaceList />)
         },
       },
       ...Array.from({ length: 9 }, (_, i) => ({
@@ -818,21 +782,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         },
         category: "Integration",
       },
-      ...(sync.data.console_state.switchableOrgCount > 1
-        ? [
-            {
-              name: "console.org.switch",
-              title: "Switch org",
-              suggested: Boolean(sync.data.console_state.activeOrgName),
-              slashName: "org",
-              slashAliases: ["orgs", "switch-org"],
-              run: () => {
-                dialog.replace(() => <DialogConsoleOrg />)
-              },
-              category: "Provider",
-            },
-          ]
-        : []),
       {
         name: "opencode.status",
         title: "View status",
@@ -1040,7 +989,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         category: "System",
         run: async () => {
           kv.set("session_directory_filter_enabled", !kv.get("session_directory_filter_enabled", true))
-          await sync.session.refresh()
           dialog.clear()
         },
       },

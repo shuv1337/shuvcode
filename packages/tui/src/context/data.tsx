@@ -21,10 +21,10 @@ import type {
   SessionMessageAssistantText,
   SessionMessageAssistantTool,
   SessionInfo,
-  Shell,
+  ShellInfo,
   SkillInfo,
-} from "@opencode-ai/sdk/v2"
-import type { OpenCodeEvent } from "@opencode-ai/client/promise"
+  OpenCodeEvent,
+} from "@opencode-ai/client"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useSDK } from "./sdk"
@@ -49,7 +49,7 @@ type LocationData = {
   reference?: ReferenceInfo[]
   // Currently running shell commands for this location, keyed by shell id. Entries are removed
   // once the command exits or is deleted, so this only ever holds in-flight shells.
-  shell?: Record<string, Shell>
+  shell?: Record<string, ShellInfo>
   skill?: SkillInfo[]
 }
 

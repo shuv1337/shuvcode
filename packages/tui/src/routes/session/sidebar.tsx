@@ -1,4 +1,3 @@
-import { useProject } from "../../context/project"
 import { useData } from "../../context/data"
 import { createMemo, Show } from "solid-js"
 import { useTheme } from "../../context/theme"
@@ -7,20 +6,13 @@ import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { usePluginRuntime } from "../../plugin/runtime"
 
 import { getScrollAcceleration } from "../../util/scroll"
-import { WorkspaceLabel } from "../../component/workspace-label"
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const pluginRuntime = usePluginRuntime()
-  const project = useProject()
   const data = useData()
   const { theme } = useTheme()
   const tuiConfig = useTuiConfig()
   const session = createMemo(() => data.session.get(props.sessionID))
-  const workspace = () => {
-    const workspaceID = session()?.location.workspaceID
-    if (!workspaceID) return
-    return project.workspace.get(workspaceID)
-  }
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
 
   return (
@@ -58,21 +50,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </text>
                 <Show when={session()!.location.workspaceID}>
                   <text fg={theme.textMuted}>
-                    <Show
-                      when={workspace()}
-                      fallback={
-                        <WorkspaceLabel type="unknown" name={session()!.location.workspaceID!} status="error" icon />
-                      }
-                    >
-                      {(item) => (
-                        <WorkspaceLabel
-                          type={item().type}
-                          name={item().name}
-                          status={project.workspace.status(item().id) ?? "error"}
-                          icon
-                        />
-                      )}
-                    </Show>
+                    {session()!.location.workspaceID}
                   </text>
                 </Show>
               </box>

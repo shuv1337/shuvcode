@@ -35,7 +35,7 @@ import type {
   SessionMessageAssistantTool,
   SessionMessageUser,
   SessionInfo,
-} from "@opencode-ai/sdk/v2"
+} from "@opencode-ai/client"
 import { useLocal } from "../../context/local"
 import { Locale } from "../../util/locale"
 import { FilePath } from "../../ui/file-path"

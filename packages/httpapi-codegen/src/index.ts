@@ -824,7 +824,10 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
       const pattern = `(?<![A-Za-z0-9_$.'"])${reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_$.'"])`
       type = type.replace(new RegExp(pattern, "g"), name)
     }
-    const output = type.replaceAll(/ & Brand\.Brand<"[^"]+">/g, "").replaceAll("Schema.Json", "JsonValue")
+    const output = type
+      .replaceAll(/ & Brand\.Brand<"[^"]+">/g, "")
+      .replaceAll("Schema.Json", "JsonValue")
+      .replaceAll(/(?<!["'])\bunknown\b(?!["'])/g, "JsonValue")
     return mutable ? mutableType(output) : output
   }
   return {
