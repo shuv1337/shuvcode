@@ -21,8 +21,12 @@ import { ToolHooks } from "./tool/hooks"
 import { PluginHooks } from "./plugin/hooks"
 
 export interface Interface {
-  readonly activate: (plugins: readonly Plugin[]) => Effect.Effect<void>
+  readonly activate: (plugins: readonly Versioned[]) => Effect.Effect<void>
   readonly list: () => Effect.Effect<Info[]>
+}
+
+export interface Versioned extends Plugin {
+  readonly version: string
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Plugin") {}
@@ -32,11 +36,11 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const events = yield* EventV2.Service
     const scope = yield* Scope.make()
-    const active = new Map<typeof ID.Type, { readonly plugin: Plugin; readonly scope: Scope.Closeable }>()
+    const active = new Map<typeof ID.Type, { readonly plugin: Versioned; readonly scope: Scope.Closeable }>()
     const lock = Semaphore.makeUnsafe(1)
     let host: Parameters<Plugin["effect"]>[0]
 
-    const load = Effect.fnUntraced(function* (plugin: Plugin) {
+    const load = Effect.fnUntraced(function* (plugin: Versioned) {
       const child = yield* Scope.fork(scope)
       const inherit = yield* State.inherit()
       const loaded = yield* Effect.suspend(() => plugin.effect(host)).pipe(
@@ -55,7 +59,7 @@ const layer = Layer.effect(
       return undefined
     })
 
-    const activate = Effect.fn("Plugin.activate")(function* (plugins: readonly Plugin[]) {
+    const activate = Effect.fn("Plugin.activate")(function* (plugins: readonly Versioned[]) {
       const definitions = plugins.map((plugin) => ({ ...plugin, id: ID.make(plugin.id) }))
       const ids = new Set<typeof ID.Type>()
       for (const definition of definitions) {
@@ -65,6 +69,20 @@ const layer = Layer.effect(
 
       yield* lock.withPermit(
         Effect.gen(function* () {
+          const next = definitions.map((definition) => ({ id: definition.id, version: definition.version }))
+          const current = Array.from(active.values(), (entry) => ({
+            id: entry.plugin.id,
+            version: entry.plugin.version,
+          }))
+          if (
+            current.length === next.length &&
+            current.every((definition, index) => {
+              const candidate = next[index]
+              return definition.id === candidate?.id && definition.version === candidate.version
+            })
+          )
+            return
+
           yield* State.batch(
             Effect.gen(function* () {
               for (const definition of definitions) {

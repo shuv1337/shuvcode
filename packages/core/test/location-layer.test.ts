@@ -249,6 +249,36 @@ describe("LocationServiceMap", () => {
     ),
   )
 
+  itWithSdk.live("does not reload plugins when config updates leave plugin operations unchanged", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const activations = { count: 0 }
+          const sdk = yield* SdkPlugins.Service
+          yield* sdk.register(
+            EffectPlugin.define({
+              id: "unchanged-config-plugin",
+              effect: () => Effect.sync(() => ++activations.count).pipe(Effect.asVoid),
+            }),
+          )
+
+          const locations = yield* LocationServiceMap.Service
+          const context = yield* locations.contextEffect(Location.Ref.make({ directory: AbsolutePath.make(dir.path) }))
+          yield* PluginSupervisor.Service.use((supervisor) => supervisor.flush).pipe(Effect.provide(context))
+          expect(activations.count).toBe(1)
+
+          yield* EventV2.Service.use((events) => events.publish(Config.Event.Updated, {})).pipe(Effect.provide(context))
+          yield* Effect.sleep("200 millis")
+
+          expect(activations.count).toBe(1)
+        }),
+      ),
+    ),
+  )
+
   itWithSdk.live("keeps flush open while later hot reload runs", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
@@ -706,7 +736,7 @@ describe("LocationServiceMap", () => {
                 })
                 .pipe(Effect.asVoid),
           })
-          yield* plugins.activate([reviewer])
+          yield* plugins.activate([{ ...reviewer, version: "1" }])
 
           expect(yield* (yield* AgentV2.Service).get(AgentV2.ID.make("reviewer"))).toMatchObject({
             description: "Reviews code",

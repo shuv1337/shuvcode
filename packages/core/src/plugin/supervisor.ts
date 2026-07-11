@@ -116,15 +116,15 @@ const scan = Effect.fn("PluginSupervisor.scan")(function* (entries: readonly Con
 })
 
 const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
-  pre: readonly Plugin[],
-  post: readonly Plugin[],
+  pre: readonly PluginV2.Versioned[],
+  post: readonly PluginV2.Versioned[],
   operations: readonly Operation[],
 ) {
   const matches = (selector: string, target: string) =>
     selector === "*" || (selector.endsWith(".*") ? target.startsWith(selector.slice(0, -1)) : selector === target)
   const definitions = [...pre, ...post]
   const enabled = new Set(definitions.map((plugin) => plugin.id))
-  const packages = new Map<string, Plugin>()
+  const packages = new Map<string, PluginV2.Versioned>()
   const plugins = () => [...definitions, ...packages.values()]
 
   for (const operation of operations) {
@@ -178,8 +178,9 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
   const plugin = "effect" in value ? value : PluginPromise.fromPromise(value)
   return {
     id: plugin.id,
+    version: JSON.stringify(operation),
     effect: (host) => plugin.effect({ ...host, options: operation.options }),
-  } satisfies Plugin
+  } satisfies PluginV2.Versioned
 })
 
 function discoverDirectory(fs: FSUtil.Interface, directory: string) {
@@ -253,10 +254,11 @@ const layer = Layer.effect(
           // Resolve OpenCode's internal plugins with their privileged Location services.
           const internal = yield* PluginInternal.list()
           // Combine internal plugins with host-contributed SDK plugins in boot order.
-          const pre = [...internal.pre, ...sdk.all()]
+          const pre = [...internal.pre.map((plugin) => ({ ...plugin, version: "internal" })), ...sdk.all()]
+          const post = internal.post.map((plugin) => ({ ...plugin, version: "internal" }))
           const operations = yield* scan(yield* config.entries())
           // Apply config operations and load enabled package plugins into one ordered generation.
-          const plugins = yield* resolve(pre, internal.post, operations)
+          const plugins = yield* resolve(pre, post, operations)
           // Replace the active generation in one scoped, batched activation.
           yield* registry.activate(plugins)
           applied = target
