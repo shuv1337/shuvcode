@@ -1,13 +1,14 @@
 # @opencode-ai/codemode
 
-CodeMode is a lightweight, JavaScript-like DSL for model-written orchestration programs, backed by a pure JavaScript
-interpreter - no `eval`, no VM, no code generation. A program can only call the schema-described tools its host
-supplies: it can sequence calls, transform plain data, branch, loop, and run independent calls in parallel, without
-ambient filesystem, process, network, module, or application authority. Instead of many model round trips, the model
-writes one small program that does the orchestration in code.
+This is our take on code mode. Programs are written in a lightweight, JavaScript-like DSL and run in the package's
+own interpreter. They never execute as actual JavaScript, so there is no runtime to escape into. The interpreter
+itself can reach nothing; every effect a program has goes through a tool you explicitly supplied. The tradeoff is a
+bounded language rather than full JavaScript: the [interpreter support checklist](./interpreter-support.md) documents
+exactly what is supported.
 
-The supported language and standard-library surface is documented exhaustively in the
-[interpreter support checklist](./interpreter-support.md).
+[Cloudflare's post](https://blog.cloudflare.com/code-mode/) introduced the idea. Their implementation executes
+generated code in isolate sandboxes. We took a lighter route: a pure interpreter that runs wherever your application
+runs, no sandbox required.
 
 ## How it differs from JavaScript
 
