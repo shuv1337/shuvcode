@@ -827,7 +827,7 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
     const output = type
       .replaceAll(/ & Brand\.Brand<"[^"]+">/g, "")
       .replaceAll("Schema.Json", "JsonValue")
-      .replaceAll(/(?<!["'])\bunknown\b(?!["'])/g, "JsonValue")
+      .replaceAll(/(?<!["'])\bunknown\b(?!["'])/g, "any")
     return mutable ? mutableType(output) : output
   }
   return {
