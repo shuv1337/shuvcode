@@ -5,7 +5,7 @@ import { createMemo, For } from "solid-js"
 import { createStore } from "solid-js/store"
 import { FilePath } from "../ui/file-path"
 import { useTheme } from "../context/theme"
-import { useTuiConfig } from "../config"
+import { useTuiConfig } from "../config/v1"
 import { useDialog, type DialogContext } from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 

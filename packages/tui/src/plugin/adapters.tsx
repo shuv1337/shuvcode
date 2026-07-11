@@ -1,5 +1,5 @@
 import type { TuiDialogSelectOption, TuiPluginApi, TuiSlotProps } from "@opencode-ai/plugin/tui"
-import type { TuiConfig } from "../config"
+import type { TuiConfig } from "../config/v1"
 import type { useEvent } from "../context/event"
 import type { useRoute } from "../context/route"
 import type { useSDK } from "../context/sdk"

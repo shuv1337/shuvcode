@@ -1,7 +1,7 @@
 export * as TuiConfig from "./tui-config"
 
 import { Global } from "@opencode-ai/core/global"
-import { TuiConfig } from "@opencode-ai/tui/config"
+import { TuiConfig } from "@opencode-ai/tui/config/v1"
 import { Effect, FileSystem, Option, Schema } from "effect"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "path"

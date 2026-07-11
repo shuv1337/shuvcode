@@ -10,7 +10,7 @@ import { useSDK } from "../../context/sdk"
 import { useClipboard } from "../../context/clipboard"
 import { SplitBorder } from "../../ui/border"
 import { useToast } from "../../ui/toast"
-import { useTuiConfig } from "../../config"
+import { useTuiConfig } from "../../config/v1"
 import { useBindings, useOpencodeModeStack } from "../../keymap"
 
 const FORM_MODE = "form"

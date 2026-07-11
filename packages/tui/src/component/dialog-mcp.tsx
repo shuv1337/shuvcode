@@ -9,7 +9,7 @@ import type { McpServer } from "@opencode-ai/client"
 import { useClipboard } from "../context/clipboard"
 import { useToast } from "../ui/toast"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import { useTuiConfig } from "../config"
+import { useTuiConfig } from "../config/v1"
 import { getScrollAcceleration } from "../util/scroll"
 import { useBindings } from "../keymap"
 
