@@ -89,7 +89,7 @@ test("resolves a session move keybind", () => {
 test("opens the subagent picker with down", () => {
   const config = resolve({}, { terminalSuspend: true })
 
-  expect(config.keybinds.get("session.child.first")).toMatchObject([{ key: "down" }])
+  expect(config.keybinds.get("session.child.first")).toMatchObject([{ key: "down,<leader>down" }])
 })
 
 test("disables suspend and assigns ctrl+z to undo when unsupported", () => {
