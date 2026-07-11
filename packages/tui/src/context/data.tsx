@@ -22,10 +22,12 @@ import type {
   SessionMessageAssistantText,
   SessionMessageAssistantTool,
   SessionInfo,
+  SessionPendingInfo,
   ShellInfo,
   SkillInfo,
   OpenCodeEvent,
 } from "@opencode-ai/client"
+import type { Data } from "@opencode-ai/plugin/v2/tui/context"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useSDK } from "./sdk"
@@ -57,7 +59,7 @@ type LocationData = {
   skill?: SkillInfo[]
 }
 
-type Data = {
+type Store = {
   session: {
     info: Record<string, SessionInfo>
     // Family index keyed by a family's root (or furthest-known-ancestor when the
@@ -66,6 +68,7 @@ type Data = {
     family: Record<string, string[]>
     status: Record<string, DataSessionStatus>
     message: Record<string, SessionMessageInfo[]>
+    pending: Record<string, SessionPendingInfo[]>
     input: Record<string, string[]>
     compaction: Record<string, string[]>
     permission: Record<string, PermissionV2Request[]>
@@ -89,12 +92,13 @@ function locationQuery(ref?: LocationRef) {
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",
   init: () => {
-    const [store, setStore] = createStore<Data>({
+    const [store, setStore] = createStore<Store>({
       session: {
         info: {},
         family: {},
         status: {},
         message: {},
+        pending: {},
         input: {},
         compaction: {},
         permission: {},
@@ -121,6 +125,21 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     function addCompaction(sessionID: string, inputID: string) {
       if (store.session.compaction[sessionID]?.includes(inputID)) return
       setStore("session", "compaction", sessionID, [...(store.session.compaction[sessionID] ?? []), inputID])
+    }
+
+    function addPending(item: SessionPendingInfo) {
+      if (store.session.pending[item.sessionID]?.some((pending) => pending.id === item.id)) return
+      setStore("session", "pending", item.sessionID, [...(store.session.pending[item.sessionID] ?? []), item])
+    }
+
+    function removePending(sessionID: string, inputID?: string) {
+      if (!inputID) return
+      setStore(
+        "session",
+        "pending",
+        sessionID,
+        (store.session.pending[sessionID] ?? []).filter((item) => item.id !== inputID),
+      )
     }
 
     function removeCompaction(sessionID: string, inputID?: string) {
@@ -241,6 +260,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           delete draft.info[sessionID]
           delete draft.status[sessionID]
           delete draft.message[sessionID]
+          delete draft.pending[sessionID]
           delete draft.input[sessionID]
           delete draft.compaction[sessionID]
           delete draft.permission[sessionID]
@@ -330,6 +350,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           }
           break
         case "session.input.promoted": {
+          removePending(event.data.sessionID, event.data.inputID)
           message.update(event.data.sessionID, (draft, index) => {
             const position = index.get(event.data.inputID)
             if (position === undefined) return
@@ -350,6 +371,13 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           break
         }
         case "session.input.admitted":
+          addPending({
+            id: event.data.inputID,
+            sessionID: event.data.sessionID,
+            admittedSeq: event.durable.seq,
+            timeCreated: event.created,
+            ...event.data.input,
+          })
           if (!store.session.input[event.data.sessionID]?.includes(event.data.inputID))
             setStore("session", "input", event.data.sessionID, [
               ...(store.session.input[event.data.sessionID] ?? []),
@@ -633,9 +661,17 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           setSessionStatus(event.data.sessionID, "running")
           break
         case "session.compaction.admitted":
+          addPending({
+            id: event.data.inputID,
+            sessionID: event.data.sessionID,
+            admittedSeq: event.durable.seq,
+            timeCreated: event.created,
+            type: "compaction",
+          })
           addCompaction(event.data.sessionID, event.data.inputID)
           break
         case "session.compaction.started":
+          removePending(event.data.sessionID, event.data.inputID)
           removeCompaction(event.data.sessionID, event.data.inputID)
           message.update(event.data.sessionID, (draft, index) => {
             message.append(draft, index, {
@@ -713,6 +749,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           })
           break
         case "session.compaction.failed":
+          removePending(event.data.sessionID, event.data.inputID)
           removeCompaction(event.data.sessionID, event.data.inputID)
           message.update(event.data.sessionID, (draft, index) => {
             const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
@@ -854,16 +891,27 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.session.compaction[sessionID] ?? []
           },
           async refresh(sessionID: string) {
-            if (!store.session.compaction[sessionID]) setStore("session", "compaction", sessionID, [])
+            await result.session.pending.refresh(sessionID)
+          },
+        },
+        pending: {
+          list(sessionID: string) {
+            return store.session.pending[sessionID] ?? []
+          },
+          async refresh(sessionID: string) {
+            const pending = await sdk.api.session.pending.list({ sessionID })
+            setStore("session", "pending", sessionID, reconcile(pending))
+            setStore(
+              "session",
+              "input",
+              sessionID,
+              reconcile(pending.filter((item) => item.type !== "compaction").map((item) => item.id)),
+            )
             setStore(
               "session",
               "compaction",
               sessionID,
-              reconcile(
-                (await sdk.api.session.pending.list({ sessionID }))
-                  .filter((item) => item.type === "compaction")
-                  .map((item) => item.id),
-              ),
+              reconcile(pending.filter((item) => item.type === "compaction").map((item) => item.id)),
             )
           },
         },
@@ -872,9 +920,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           registerSession(sessionID)
         },
         message: {
-          ids(sessionID: string) {
-            return (store.session.message[sessionID] ?? []).map((message) => message.id)
-          },
           list(sessionID: string) {
             return store.session.message[sessionID] ?? []
           },
@@ -1063,6 +1108,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         },
       },
     }
+    result satisfies Data
 
     async function bootstrap() {
       if (bootstrapping) return bootstrapping

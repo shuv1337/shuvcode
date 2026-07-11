@@ -160,12 +160,7 @@ export function Session() {
   const { theme } = useTheme()
   const promptRef = usePromptRef()
   const session = createMemo(() => data.session.get(route.sessionID))
-  const messageIDs = createMemo(() => data.session.message.ids(route.sessionID))
-  const sessionMessages = () =>
-    messageIDs().flatMap((id) => {
-      const message = data.session.message.get(route.sessionID, id)
-      return message ? [message] : []
-    })
+  const messages = () => data.session.message.list(route.sessionID)
   const location = createMemo(() => session()?.location)
 
   createEffect(() => {
@@ -173,7 +168,6 @@ export function Session() {
     setEpilogue(sessionEpilogue({ title, sessionID: session()?.id }))
   })
   onCleanup(() => setEpilogue())
-  const messages = sessionMessages
   const descendantSessionIDs = createMemo(() => {
     if (session()?.parentID) return []
     return data.session.family(route.sessionID).filter((id) => id !== route.sessionID)
@@ -649,7 +643,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        const messages = sessionMessages()
+        const messages = data.session.message.list(route.sessionID)
         if (!messages || !messages.length) return
 
         // Find the most recent user message with non-ignored, non-synthetic text parts

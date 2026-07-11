@@ -111,7 +111,7 @@ test("refreshes resources into reactive getters", async () => {
     await data.location.agent.refresh()
 
     expect(data.session.get("ses_test")?.title).toBe("Test session")
-    expect(data.session.message.ids("ses_test")).toEqual(["msg_first", "msg_second"])
+    expect(data.session.message.list("ses_test").map((message) => message.id)).toEqual(["msg_first", "msg_second"])
     expect(data.session.message.get("ses_test", "msg_second")?.id).toBe("msg_second")
     await app.renderOnce()
     expect(app.captureCharFrame()).toContain("msg_second")
@@ -330,9 +330,9 @@ test("truncates committed revert messages without changing lifetime usage", asyn
       durable: durable(sessionID, 6),
       data: { sessionID, to: "msg_revert_later" },
     })
-    await wait(() => data.session.message.ids(sessionID).length === 1)
+    await wait(() => data.session.message.list(sessionID).length === 1)
     expect(data.session.get(sessionID)?.cost).toBe(0.75)
-    expect(data.session.message.ids(sessionID)).toEqual(["msg_revert_boundary"])
+    expect(data.session.message.list(sessionID).map((message) => message.id)).toEqual(["msg_revert_boundary"])
     expect(data.session.get(sessionID)?.revert).toBeUndefined()
     expect(data.session.get(sessionID)?.tokens).toEqual(tokens)
   } finally {
@@ -688,7 +688,7 @@ test("removes committed revert messages from local state", async () => {
         data: { sessionID, inputID, input: { type: "user", data: { text: inputID }, delivery: "steer" } },
       })
     }
-    await wait(() => data.session.message.ids(sessionID).length === 3)
+    await wait(() => data.session.message.list(sessionID).length === 3)
 
     emitEvent(events, {
       id: EventV2.ID.create(),
@@ -698,8 +698,8 @@ test("removes committed revert messages from local state", async () => {
       data: { sessionID, to: "msg_002" },
     })
 
-    await wait(() => data.session.message.ids(sessionID).length === 1)
-    expect(data.session.message.ids(sessionID)).toEqual(["msg_001"])
+    await wait(() => data.session.message.list(sessionID).length === 1)
+    expect(data.session.message.list(sessionID).map((message) => message.id)).toEqual(["msg_001"])
     expect(data.session.message.get(sessionID, "msg_002")).toBeUndefined()
     expect(data.session.message.get(sessionID, "msg_003")).toBeUndefined()
   } finally {
@@ -2239,6 +2239,17 @@ test("renders admitted prompts immediately and tracks them until promoted", asyn
     const admitted = sync.session.message.list(sessionID)?.[0]
     expect(admitted).toMatchObject({ id: messageID, type: "user", text: "hello" })
     expect(admitted?.metadata).toBeUndefined()
+    expect(sync.session.pending.list(sessionID)).toEqual([
+      {
+        id: messageID,
+        sessionID,
+        admittedSeq: 0,
+        timeCreated: 0,
+        type: "user",
+        data: { text: "hello" },
+        delivery: "steer",
+      },
+    ])
     expect(sync.session.input.list(sessionID)).toEqual([messageID])
 
     await sync.session.message.refresh(sessionID)
@@ -2263,9 +2274,10 @@ test("renders admitted prompts immediately and tracks them until promoted", asyn
     if (message?.type !== "user") return
     expect(message).toMatchObject({ id: messageID, text: "hello" })
     expect(message.metadata).toBeUndefined()
+    expect(sync.session.pending.list(sessionID)).toEqual([])
     expect(sync.session.input.list(sessionID)).toEqual([])
-    expect(sync.session.message.ids(sessionID)).toEqual([messageID])
-    expect(sync.session.message.ids("missing")).toEqual([])
+    expect(sync.session.message.list(sessionID).map((message) => message.id)).toEqual([messageID])
+    expect(sync.session.message.list("missing")).toEqual([])
     expect(sync.session.message.get(sessionID, messageID)).toBe(message)
     expect(sync.session.message.get(sessionID, "missing")).toBeUndefined()
     expect(received).toHaveLength(3)
