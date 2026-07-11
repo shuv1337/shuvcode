@@ -1,7 +1,6 @@
 import { Prompt, type PromptRef } from "../component/prompt"
 import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Logo } from "../component/logo"
-import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useRouteData } from "../context/route"
@@ -24,7 +23,6 @@ const placeholder = {
 
 export function Home() {
   const pluginRuntime = usePluginRuntime()
-  const sync = useSync()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const [ref, setRef] = createSignal<PromptRef | undefined>()
@@ -61,12 +59,12 @@ export function Home() {
     once = true
   }
 
-  // Wait for sync and model store to be ready before auto-submitting --prompt
+  // Wait for the model store to be ready before auto-submitting --prompt.
   createEffect(() => {
     const r = ref()
     if (sent) return
     if (!r) return
-    if (!sync.ready || !local.model.ready) return
+    if (!local.model.ready) return
     if (!args.prompt) return
     if (r.current.text !== args.prompt) return
     sent = true

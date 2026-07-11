@@ -418,10 +418,10 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   const keymap = useOpencodeKeymap()
   const event = useEvent()
   const sdk = useSDK()
+  const sync = useSync()
   const toast = useToast()
   const themeState = useTheme()
   const { theme, mode, setMode, locked, lock, unlock } = themeState
-  const sync = useSync()
   const data = useData()
   const project = useProject()
   const exit = useExit()
@@ -435,7 +435,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   // the same problem on every refresh while still re-alerting if the state changes.
   const mcpAlerted: Record<string, string> = {}
   createEffect(() => {
-    for (const server of data.location.mcp.list() ?? []) {
+    for (const server of data.location.mcp.server.list() ?? []) {
       const status = server.status
       if (status.status !== "failed" && status.status !== "needs_auth") {
         delete mcpAlerted[server.name]
@@ -520,7 +520,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
   const [pasteSummaryEnabled, setPasteSummaryEnabled] = createSignal(
-    kv.get("paste_summary_enabled", !sync.data.config.experimental?.disable_paste_summary),
+    kv.get("paste_summary_enabled", true),
   )
 
   // Update terminal window title based on current route and session
@@ -574,7 +574,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
 
   let continued = false
   createEffect(() => {
-    if (continued || sync.status === "loading" || !args.continue) return
+    if (continued || !args.continue) return
     continued = true
     const location = data.location.default()
     void sdk.api.session
@@ -600,12 +600,10 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       .catch(toast.error)
   })
 
-  // Handle --session with --fork: wait for sync to be fully complete before forking
-  // (session list loads in non-blocking phase for --session, so we must wait for "complete"
-  // to avoid a race where reconcile overwrites the newly forked session)
+  // Handle --session with --fork once.
   let forked = false
   createEffect(() => {
-    if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
+    if (forked || !args.sessionID || !args.fork) return
     forked = true
     void sdk.api.session
       .fork({ sessionID: args.sessionID })

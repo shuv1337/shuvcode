@@ -1305,6 +1305,70 @@ test("refreshes integrations after integration updates", async () => {
   }
 })
 
+test("refreshes MCP resources after catalog updates", async () => {
+  const events = createEventStream()
+  let requests = 0
+  const calls = createFetch((url) => {
+    if (url.pathname !== "/api/mcp/resource") return
+    requests++
+    return json({
+      location: { directory, project: { id: "proj_test", directory } },
+      data: {
+        resources:
+          requests === 1
+            ? []
+            : [{ server: "docs", name: "API reference", uri: "https://example.com/api", description: "API docs" }],
+        templates: [],
+      },
+    })
+  }, events)
+  let data!: ReturnType<typeof useData>
+  let ready!: () => void
+  const mounted = new Promise<void>((resolve) => {
+    ready = resolve
+  })
+
+  function Probe() {
+    data = useData()
+    onMount(ready)
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <SDKProvider client={createClient(calls.fetch)} api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </SDKProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await mounted
+    await wait(() => data.location.mcp.resource.list() !== undefined)
+    expect(data.location.mcp.resource.list()).toEqual([])
+
+    emitEvent(events, {
+      id: "evt_mcp_resources",
+      created: 0,
+      type: "mcp.resources.changed",
+      data: { server: "docs" },
+    })
+    await wait(() => data.location.mcp.resource.list()?.length === 1)
+    expect(data.location.mcp.resource.list()?.[0]).toEqual({
+      server: "docs",
+      name: "API reference",
+      uri: "https://example.com/api",
+      description: "API docs",
+    })
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
 test("refreshes effective catalog data after catalog updates", async () => {
   const events = createEventStream()
   const requests = { model: 0, provider: 0 }

@@ -23,7 +23,6 @@ import { Spinner } from "../spinner"
 import { useSDK } from "../../context/sdk"
 import { useRoute } from "../../context/route"
 import { useProject } from "../../context/project"
-import { useSync } from "../../context/sync"
 import { useEvent } from "../../context/event"
 import { editorSelectionKey, useEditorContext, type EditorSelection } from "../../context/editor"
 import { normalizePromptContent, openEditor } from "../../editor"
@@ -153,7 +152,6 @@ export function Prompt(props: PromptProps) {
   const editor = useEditorContext()
   const route = useRoute()
   const project = useProject()
-  const sync = useSync()
   const data = useData()
   const currentLocation = useLocation()
   const tuiConfig = useTuiConfig()
@@ -1193,7 +1191,7 @@ export function Prompt(props: PromptProps) {
     const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
     if (
       (lineCount >= 3 || pastedContent.length > 150) &&
-      kv.get("paste_summary_enabled", !sync.data.config.experimental?.disable_paste_summary)
+      kv.get("paste_summary_enabled", true)
     ) {
       pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
       return

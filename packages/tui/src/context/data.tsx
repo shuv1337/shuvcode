@@ -9,6 +9,7 @@ import type {
   FormInfo,
   IntegrationInfo,
   LocationRef,
+  McpResource,
   McpServer,
   ModelInfo,
   PermissionSavedInfo,
@@ -43,7 +44,10 @@ type LocationData = {
   agent?: AgentInfo[]
   command?: CommandInfo[]
   integration?: IntegrationInfo[]
-  mcp?: McpServer[]
+  mcp?: {
+    server?: McpServer[]
+    resource?: McpResource[]
+  }
   model?: ModelInfo[]
   provider?: ProviderV2Info[]
   reference?: ReferenceInfo[]
@@ -801,7 +805,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         // so the mcp list refreshes here rather than off integration.updated.
         case "mcp.status.changed":
           if (bootstrapping) break
-          void result.location.mcp.refresh(event.location)
+          void result.location.mcp.server.refresh(event.location)
+          break
+        case "mcp.resources.changed":
+          void result.location.mcp.resource.refresh(event.location)
           break
       }
     }
@@ -987,13 +994,31 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           },
         },
         mcp: {
-          list(location?: LocationRef) {
-            return store.location[locationKey(location ?? defaultLocation())]?.mcp
+          server: {
+            list(location?: LocationRef) {
+              return store.location[locationKey(location ?? defaultLocation())]?.mcp?.server
+            },
+            async refresh(ref?: LocationRef) {
+              const result = await sdk.api.mcp.list({ location: locationQuery(ref) })
+              const key = locationKey(result.location)
+              setStore("location", key, {
+                ...store.location[key],
+                mcp: { ...store.location[key]?.mcp, server: result.data },
+              })
+            },
           },
-          async refresh(ref?: LocationRef) {
-            const result = await sdk.api["server.mcp"].list({ location: locationQuery(ref) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], mcp: result.data })
+          resource: {
+            list(location?: LocationRef) {
+              return store.location[locationKey(location ?? defaultLocation())]?.mcp?.resource
+            },
+            async refresh(ref?: LocationRef) {
+              const result = await sdk.api.mcp.resource.catalog({ location: locationQuery(ref) })
+              const key = locationKey(result.location)
+              setStore("location", key, {
+                ...store.location[key],
+                mcp: { ...store.location[key]?.mcp, resource: result.data.resources },
+              })
+            },
           },
         },
         model: {
@@ -1089,7 +1114,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         result.location.refresh(),
         result.location.agent.refresh(),
         result.location.integration.refresh(),
-        result.location.mcp.refresh(),
+        result.location.mcp.server.refresh(),
+        result.location.mcp.resource.refresh(),
         result.location.model.refresh(),
         result.location.provider.refresh(),
         result.location.reference.refresh(),

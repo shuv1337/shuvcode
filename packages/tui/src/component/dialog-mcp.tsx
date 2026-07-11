@@ -45,7 +45,7 @@ export function DialogMcp() {
 
   const servers = createMemo(() =>
     pipe(
-      data.location.mcp.list() ?? [],
+      data.location.mcp.server.list() ?? [],
       sortBy(
         (server) => statusMeta(server.status, theme).rank,
         (server) => server.name,

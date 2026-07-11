@@ -3346,24 +3346,24 @@ export type IntegrationAttemptCancelInput = {
 
 export type IntegrationAttemptCancelOutput = void
 
-export type ServerMcpListInput = {
+export type McpListInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type ServerMcpListOutput = {
+export type McpListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: Array<McpServer>
 }
 
-export type ServerMcpResourceCatalogInput = {
+export type McpResourceCatalogInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type ServerMcpResourceCatalogOutput = {
+export type McpResourceCatalogOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: McpResourceCatalog
 }

@@ -90,10 +90,10 @@ import type {
   IntegrationAttemptCompleteOutput,
   IntegrationAttemptCancelInput,
   IntegrationAttemptCancelOutput,
-  ServerMcpListInput,
-  ServerMcpListOutput,
-  ServerMcpResourceCatalogInput,
-  ServerMcpResourceCatalogOutput,
+  McpListInput,
+  McpListOutput,
+  McpResourceCatalogInput,
+  McpResourceCatalogOutput,
   CredentialUpdateInput,
   CredentialUpdateOutput,
   CredentialRemoveInput,
@@ -941,9 +941,9 @@ export function make(options: ClientOptions) {
           ),
       },
     },
-    "server.mcp": {
-      list: (input?: ServerMcpListInput, requestOptions?: RequestOptions) =>
-        request<ServerMcpListOutput>(
+    mcp: {
+      list: (input?: McpListInput, requestOptions?: RequestOptions) =>
+        request<McpListOutput>(
           {
             method: "GET",
             path: `/api/mcp`,
@@ -955,8 +955,8 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
       resource: {
-        catalog: (input?: ServerMcpResourceCatalogInput, requestOptions?: RequestOptions) =>
-          request<ServerMcpResourceCatalogOutput>(
+        catalog: (input?: McpResourceCatalogInput, requestOptions?: RequestOptions) =>
+          request<McpResourceCatalogOutput>(
             {
               method: "GET",
               path: `/api/mcp/resource`,
