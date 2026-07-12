@@ -76,6 +76,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfig, TuiConfigProvider, useTuiConfig } from "./config"
+import { TuiConfigV1 } from "./config/v1"
 import { createTuiApiAdapters } from "./plugin/adapters"
 import { createTuiApi } from "./plugin/api"
 import { createPluginRuntime, PluginRuntimeProvider, usePluginRuntime, type TuiPluginHost } from "./plugin/runtime"
@@ -153,7 +154,7 @@ export type TuiInput = {
     reload?: () => Promise<void>
   }
   args: Args
-  config: TuiConfig.Interface
+  config: TuiConfig.Interface | TuiConfigV1.Resolved
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
   terminalHandoff?: () => Promise<
@@ -199,11 +200,43 @@ function isVersionGreater(left: string, right: string) {
   return a.prerelease.localeCompare(b.prerelease, undefined, { numeric: true }) > 0
 }
 
+function fromV1(config: TuiConfigV1.Resolved): TuiConfig.Info {
+  return {
+    theme: config.theme ? { name: config.theme } : undefined,
+    plugins: config.plugin?.map((plugin) =>
+      typeof plugin === "string" ? plugin : { package: plugin[0], options: plugin[1] },
+    ),
+    leader: { timeout: config.leader_timeout },
+    scroll:
+      config.scroll_speed === undefined && config.scroll_acceleration === undefined
+        ? undefined
+        : { speed: config.scroll_speed, acceleration: config.scroll_acceleration?.enabled },
+    attention: config.attention,
+    diffs: config.diff_style === undefined ? undefined : { view: config.diff_style === "stacked" ? "unified" : "auto" },
+    mouse: config.mouse,
+  }
+}
+
+function isConfigInterface(config: TuiConfig.Interface | TuiConfigV1.Resolved): config is TuiConfig.Interface {
+  return "get" in config && typeof config.get === "function" && "update" in config && typeof config.update === "function"
+}
+
 export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   const log = input.log ?? (() => {})
   const global = yield* Global.Service
-  const configInfo = yield* Effect.tryPromise(() => input.config.get())
-  const config = TuiConfig.resolve(configInfo, { terminalSuspend: process.platform !== "win32" })
+  const configInput = input.config
+  const loaded = yield* Effect.gen(function* () {
+    if (isConfigInterface(configInput)) {
+      return {
+        service: configInput,
+        info: yield* Effect.tryPromise(() => configInput.get()),
+        legacy: undefined,
+      }
+    }
+    return { service: undefined, info: fromV1(configInput), legacy: configInput }
+  })
+  const config = TuiConfig.resolve(loaded.info, { terminalSuspend: process.platform !== "win32" })
+  if (loaded.legacy) config.keybinds = loaded.legacy.keybinds
   const options = { baseUrl: input.server.endpoint.url, headers: Service.headers(input.server.endpoint) }
   const api = OpenCode.make(options)
   const directory = yield* Effect.tryPromise(() => api.file.list({ location: { directory: process.cwd() } })).pipe(
@@ -340,7 +373,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                               <ArgsProvider {...input.args}>
                                 <TuiConfigProvider
                                   config={config}
-                                  service={input.config}
+                                  service={loaded.service}
                                   options={{ terminalSuspend: process.platform !== "win32" }}
                                 >
                                   <KVProvider>
@@ -378,6 +411,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                                       <App
                                                                         onSnapshot={input.onSnapshot}
                                                                         pluginHost={input.pluginHost}
+                                                                        pluginConfig={loaded.legacy ?? config}
                                                                         pair={
                                                                           input.server.endpoint.auth
                                                                             ? input.server.endpoint.auth
@@ -435,7 +469,12 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
-function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPluginHost; pair?: DialogPairCredentials }) {
+function App(props: {
+  onSnapshot?: () => Promise<string[]>
+  pluginHost: TuiPluginHost
+  pluginConfig: any
+  pair?: DialogPairCredentials
+}) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const tuiConfig = useTuiConfig()
@@ -512,7 +551,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   props.pluginHost
     .start({
       api,
-      config: tuiConfig,
+      config: props.pluginConfig,
       runtime: pluginRuntime,
       dispose: () => attention.dispose(),
     })

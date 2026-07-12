@@ -24,7 +24,7 @@ import {
   type SequenceBindingLike,
 } from "@opentui/keymap/extras"
 import type { JSX, SolidPlugin } from "@opentui/solid"
-import type { PluginOptions } from "./index.js"
+import type { Config as PluginConfig, PluginOptions } from "./index.js"
 
 export type { CliRenderer, KeyEvent, Renderable, SlotMode } from "@opentui/core"
 export { stringifyKeySequence, stringifyKeyStroke } from "@opentui/keymap"
@@ -408,13 +408,16 @@ type TuiAttentionConfigView = {
 }
 
 type TuiConfigView = {
-  theme?: {
-    name?: string
-    mode?: "system" | "dark" | "light"
-  }
+  $schema?: string
+  theme?: string | { name?: string; mode?: "system" | "dark" | "light" }
+  plugin?: PluginConfig["plugin"]
   plugins?: ReadonlyArray<string | { package: string; options?: Record<string, any> }>
-  leader: { timeout: number }
+  plugin_enabled?: Record<string, boolean>
+  leader?: { timeout: number }
+  leader_timeout?: number
   scroll?: { speed?: number; acceleration?: boolean }
+  scroll_speed?: number
+  scroll_acceleration?: { enabled: boolean }
   attention: TuiAttentionConfigView
   diffs?: {
     wrap?: "word" | "none"
@@ -422,8 +425,11 @@ type TuiConfigView = {
     single?: boolean
     view?: "auto" | "split" | "unified"
   }
+  diff_style?: "auto" | "stacked"
   terminal?: { title?: boolean }
-  prompt?: { editor?: boolean; paste?: "compact" | "full" }
+  prompt?:
+    | { editor?: boolean; paste?: "compact" | "full" }
+    | { max_height?: number; max_width?: number | "auto" }
   session?: {
     sidebar?: "auto" | "hide"
     scrollbar?: boolean
