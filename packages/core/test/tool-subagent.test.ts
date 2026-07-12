@@ -288,6 +288,15 @@ describe("SubagentTool", () => {
 
           const admission = Array.from(yield* Fiber.join(admitted))[0]
           expect(admission?.data.input.data.text).toContain(`<subagent id="${childID}" state="completed"`)
+          expect(admission?.data.input.data).toMatchObject({
+            description: "background review",
+            metadata: {
+              source: "subagent",
+              childID,
+              agent: "reviewer",
+              state: "completed",
+            },
+          })
           const database = yield* Database.Service
           yield* SessionPending.promoteSteers(database.db, events, parent.id)
           const synthetic = (yield* sessions.context(parent.id)).filter((message) => message.type === "synthetic")

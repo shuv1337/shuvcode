@@ -1245,15 +1245,43 @@ function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
 
 function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
   const { theme } = useTheme()
+  const metadata = () => (props.message.type === "synthetic" ? props.message.metadata : undefined)
+  const completion = () => metadata()?.source === "subagent"
+  const state = () => stringValue(metadata()?.state)
+  const agent = () => Locale.titlecase(stringValue(metadata()?.agent) ?? "Subagent")
   const text = () => {
     if (props.message.type === "system") return props.message.text
     if (props.message.type === "synthetic") return props.message.description ?? ""
     return ""
   }
+  const status = () => {
+    if (state() === "completed") return "finished"
+    if (state() === "error") return "failed"
+    return state() ?? "finished"
+  }
+  const color = () => {
+    if (state() === "error") return theme.error
+    if (state() === "cancelled") return theme.warning
+    return theme.info
+  }
   return (
-    <InlineToolRow icon="◈" color={theme.textMuted} pending="Notice" complete={true}>
-      {text()}
-    </InlineToolRow>
+    <Show
+      when={completion()}
+      fallback={
+        <InlineToolRow icon="◈" color={theme.textMuted} pending="Notice" complete={true}>
+          {text()}
+        </InlineToolRow>
+      }
+    >
+      <box marginLeft={3}>
+        <text>
+          <span style={{ fg: color() }}>
+            {state() === "completed" ? "↳" : "!"} {agent()} {status()}
+          </span>
+          <span style={{ fg: theme.textMuted }}> · {text()}</span>
+        </text>
+      </box>
+    </Show>
   )
 }
 

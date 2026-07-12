@@ -65,6 +65,7 @@ export const Plugin = {
     const injectCompletion = Effect.fn("SubagentTool.injectCompletion")(function* (
       parentID: SessionSchema.ID,
       childID: SessionSchema.ID,
+      agent: string,
       description: string,
       state: "completed" | "error" | "cancelled",
       text: string,
@@ -72,22 +73,32 @@ export const Plugin = {
       yield* runtime.session.synthetic({
         sessionID: parentID,
         text: `<subagent id="${childID}" state="${state}" description="${description}">\n${text}\n</subagent>`,
+        description,
+        metadata: { source: "subagent", childID, agent, state },
       })
     })
 
     const notifyWhenDone = Effect.fn("SubagentTool.notifyWhenDone")(function* (
       parentID: SessionSchema.ID,
       childID: SessionSchema.ID,
+      agent: string,
       description: string,
     ) {
       yield* runtime.job.wait({ id: childID }).pipe(
         Effect.flatMap((result) => {
           if (result.info?.status === "completed")
-            return injectCompletion(parentID, childID, description, "completed", result.info.output ?? NO_TEXT)
+            return injectCompletion(parentID, childID, agent, description, "completed", result.info.output ?? NO_TEXT)
           if (result.info?.status === "error")
-            return injectCompletion(parentID, childID, description, "error", result.info.error ?? "Subagent failed")
+            return injectCompletion(
+              parentID,
+              childID,
+              agent,
+              description,
+              "error",
+              result.info.error ?? "Subagent failed",
+            )
           if (result.info?.status === "cancelled")
-            return injectCompletion(parentID, childID, description, "cancelled", "Subagent cancelled")
+            return injectCompletion(parentID, childID, agent, description, "cancelled", "Subagent cancelled")
           return Effect.void
         }),
         Effect.forkIn(scope, { startImmediately: true }),
@@ -167,7 +178,7 @@ export const Plugin = {
 
                 if (background) {
                   yield* runtime.job.background(info.id)
-                  yield* notifyWhenDone(context.sessionID, child.id, input.description)
+                  yield* notifyWhenDone(context.sessionID, child.id, agent.name, input.description)
                   return {
                     sessionID: child.id,
                     status: "running" as const,
@@ -183,7 +194,7 @@ export const Plugin = {
                   ),
                 )
                 if (result?.type === "backgrounded") {
-                  yield* notifyWhenDone(context.sessionID, child.id, input.description)
+                  yield* notifyWhenDone(context.sessionID, child.id, agent.name, input.description)
                   return {
                     sessionID: child.id,
                     status: "running" as const,
