@@ -23,7 +23,7 @@ import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useKV } from "./kv"
-import { useTuiConfig } from "../config/v1"
+import { useTuiConfig } from "../config"
 import { Global } from "@opencode-ai/core/global"
 import { Glob } from "@opencode-ai/core/util/glob"
 import { readFile } from "node:fs/promises"
@@ -118,14 +118,14 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         if (!lock && pick(kv.get("theme_mode")) !== undefined) kv.set("theme_mode", undefined)
         draft.mode = mode
         draft.lock = lock
-        const active = config.theme ?? kv.get("theme", "opencode")
+        const active = config.theme?.name ?? kv.get("theme", "opencode")
         draft.active = typeof active === "string" ? active : "opencode"
         draft.ready = false
       }),
     )
 
     createEffect(() => {
-      const theme = config.theme
+      const theme = config.theme?.name
       if (theme) setStore("active", theme)
     })
 

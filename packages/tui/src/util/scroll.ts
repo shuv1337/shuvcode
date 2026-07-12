@@ -1,8 +1,10 @@
 import { MacOSScrollAccel, type ScrollAcceleration } from "@opentui/core"
 
 export type ScrollConfig = {
-  scroll_acceleration?: { enabled?: boolean }
-  scroll_speed?: number
+  scroll?: {
+    acceleration?: boolean
+    speed?: number
+  }
 }
 
 export class CustomSpeedScroll implements ScrollAcceleration {
@@ -16,11 +18,11 @@ export class CustomSpeedScroll implements ScrollAcceleration {
 }
 
 export function getScrollAcceleration(tuiConfig?: ScrollConfig): ScrollAcceleration {
-  if (tuiConfig?.scroll_acceleration?.enabled) {
+  if (tuiConfig?.scroll?.acceleration) {
     return new MacOSScrollAccel()
   }
-  if (tuiConfig?.scroll_speed !== undefined) {
-    return new CustomSpeedScroll(tuiConfig.scroll_speed)
+  if (tuiConfig?.scroll?.speed !== undefined) {
+    return new CustomSpeedScroll(tuiConfig.scroll.speed)
   }
 
   return new CustomSpeedScroll(3)

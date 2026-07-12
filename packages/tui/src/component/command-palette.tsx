@@ -8,7 +8,7 @@ import {
   useKeymapSelector,
   useOpencodeKeymap,
 } from "../keymap"
-import { useTuiConfig } from "../config/v1"
+import { useTuiConfig } from "../config"
 
 type PaletteCommandEntry = ReturnType<OpenTuiKeymap["getCommandEntries"]>[number]
 

@@ -12,7 +12,7 @@ import { filetype } from "../../util/filetype"
 import { Locale } from "../../util/locale"
 import { webSearchProviderLabel } from "../../util/tool-display"
 import { getScrollAcceleration } from "../../util/scroll"
-import { useTuiConfig } from "../../config/v1"
+import { useTuiConfig } from "../../config"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
 
@@ -34,8 +34,9 @@ function EditBody(props: { request: PermissionV2Request; patch?: string }) {
   })
 
   const view = createMemo(() => {
-    const diffStyle = config.diff_style
-    if (diffStyle === "stacked") return "unified"
+    const diffView = config.diffs?.view
+    if (diffView === "unified") return "unified"
+    if (diffView === "split") return "split"
     return dimensions().width > 120 ? "split" : "unified"
   })
 

@@ -75,7 +75,7 @@ import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
-import { TuiConfigProvider, useTuiConfig, type TuiConfig } from "./config/v1"
+import { TuiConfig, TuiConfigProvider, useTuiConfig } from "./config"
 import { createTuiApiAdapters } from "./plugin/adapters"
 import { createTuiApi } from "./plugin/api"
 import { createPluginRuntime, PluginRuntimeProvider, usePluginRuntime, type TuiPluginHost } from "./plugin/runtime"
@@ -144,7 +144,6 @@ const appBindingCommands = [
   "app.toggle.file_context",
   "app.toggle.diffwrap",
   "app.toggle.paste_summary",
-  "app.toggle.session_directory_filter",
 ] as const
 
 export type TuiInput = {
@@ -154,7 +153,7 @@ export type TuiInput = {
     reload?: () => Promise<void>
   }
   args: Args
-  config: TuiConfig.Resolved
+  config: TuiConfig.Interface
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
   terminalHandoff?: () => Promise<
@@ -203,6 +202,8 @@ function isVersionGreater(left: string, right: string) {
 export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   const log = input.log ?? (() => {})
   const global = yield* Global.Service
+  const configInfo = yield* Effect.tryPromise(() => input.config.get())
+  const config = TuiConfig.resolve(configInfo, { terminalSuspend: process.platform !== "win32" })
   const options = { baseUrl: input.server.endpoint.url, headers: Service.headers(input.server.endpoint) }
   const api = OpenCode.make(options)
   const directory = yield* Effect.tryPromise(() => api.file.list({ location: { directory: process.cwd() } })).pipe(
@@ -235,7 +236,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
               useKittyKeyboard: {},
               autoFocus: false,
               openConsoleOnError: false,
-              useMouse: !Flag.OPENCODE_DISABLE_MOUSE && input.config.mouse,
+              useMouse: !Flag.OPENCODE_DISABLE_MOUSE && config.mouse,
               consoleOptions: {
                 keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
               },
@@ -263,7 +264,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       win32DisableProcessedInput()
       const keymap = createDefaultOpenTuiKeymap(renderer)
       yield* Effect.acquireRelease(
-        Effect.sync(() => registerOpencodeKeymap(keymap, renderer, input.config)),
+        Effect.sync(() => registerOpencodeKeymap(keymap, renderer, config)),
         (unregister) => Effect.sync(unregister),
       )
       yield* Effect.addFinalizer(() =>
@@ -337,19 +338,23 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                           <ClipboardProvider>
                             <OpencodeKeymapProvider keymap={keymap}>
                               <ArgsProvider {...input.args}>
-                                <KVProvider>
-                                  <ToastProvider>
-                                    <RouteProvider
-                                      initialRoute={
-                                        input.args.continue
-                                          ? {
-                                              type: "session",
-                                              sessionID: "dummy",
-                                            }
-                                          : undefined
-                                      }
-                                    >
-                                      <TuiConfigProvider config={input.config}>
+                                <TuiConfigProvider
+                                  config={config}
+                                  service={input.config}
+                                  options={{ terminalSuspend: process.platform !== "win32" }}
+                                >
+                                  <KVProvider>
+                                    <ToastProvider>
+                                      <RouteProvider
+                                        initialRoute={
+                                          input.args.continue
+                                            ? {
+                                                type: "session",
+                                                sessionID: "dummy",
+                                              }
+                                            : undefined
+                                        }
+                                      >
                                         <PluginRuntimeProvider value={pluginRuntime}>
                                           <SDKProvider
                                             client={createOpencodeClient({ ...options, directory })}
@@ -397,10 +402,10 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                             </PermissionProvider>
                                           </SDKProvider>
                                         </PluginRuntimeProvider>
-                                      </TuiConfigProvider>
-                                    </RouteProvider>
-                                  </ToastProvider>
-                                </KVProvider>
+                                      </RouteProvider>
+                                    </ToastProvider>
+                                  </KVProvider>
+                                </TuiConfigProvider>
                               </ArgsProvider>
                             </OpencodeKeymapProvider>
                           </ClipboardProvider>
@@ -1001,17 +1006,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
             kv.set("paste_summary_enabled", next)
             return next
           })
-          dialog.clear()
-        },
-      },
-      {
-        name: "app.toggle.session_directory_filter",
-        title: kv.get("session_directory_filter_enabled", true)
-          ? "Disable session directory filtering"
-          : "Enable session directory filtering",
-        category: "System",
-        run: async () => {
-          kv.set("session_directory_filter_enabled", !kv.get("session_directory_filter_enabled", true))
           dialog.clear()
         },
       },

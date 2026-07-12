@@ -24,7 +24,7 @@ import {
   type SequenceBindingLike,
 } from "@opentui/keymap/extras"
 import type { JSX, SolidPlugin } from "@opentui/solid"
-import type { Config as PluginConfig, PluginOptions } from "./index.js"
+import type { PluginOptions } from "./index.js"
 
 export type { CliRenderer, KeyEvent, Renderable, SlotMode } from "@opentui/core"
 export { stringifyKeySequence, stringifyKeyStroke } from "@opentui/keymap"
@@ -407,13 +407,34 @@ type TuiAttentionConfigView = {
   sounds: Partial<Record<TuiAttentionSoundName, string>>
 }
 
-type TuiConfigView = Pick<PluginConfig, "$schema" | "theme" | "plugin"> &
-  NonNullable<PluginConfig["tui"]> & {
-    leader_timeout: number
-    attention: TuiAttentionConfigView
-    plugin_enabled?: Record<string, boolean>
-    keybinds: TuiBindingLookupView
+type TuiConfigView = {
+  theme?: {
+    name?: string
+    mode?: "system" | "dark" | "light"
   }
+  plugins?: ReadonlyArray<string | { package: string; options?: Record<string, any> }>
+  leader: { timeout: number }
+  scroll?: { speed?: number; acceleration?: boolean }
+  attention: TuiAttentionConfigView
+  diffs?: {
+    wrap?: "word" | "none"
+    tree?: boolean
+    single?: boolean
+    view?: "auto" | "split" | "unified"
+  }
+  terminal?: { title?: boolean }
+  prompt?: { editor?: boolean; paste?: "compact" | "full" }
+  session?: {
+    sidebar?: "auto" | "hide"
+    scrollbar?: boolean
+    thinking?: "show" | "hide"
+    grouping?: "auto" | "none"
+  }
+  hints?: { tips?: boolean; onboarding?: boolean }
+  animations?: boolean
+  mouse: boolean
+  keybinds: TuiBindingLookupView
+}
 
 export type TuiApp = {
   readonly version: string

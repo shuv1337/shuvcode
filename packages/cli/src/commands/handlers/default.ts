@@ -4,7 +4,7 @@ import { run } from "@opencode-ai/tui"
 import { loadBuiltinPlugins } from "@opencode-ai/tui/builtins"
 import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
-import { TuiConfig } from "../../tui-config"
+import { Config } from "../../config"
 import { Effect, Option } from "effect"
 import { Server } from "../../services/server"
 import { Updater } from "../../services/updater"
@@ -35,13 +35,16 @@ export default Runtime.handler(Commands, (input) =>
       ),
     )
     preflight.loading()
-    const config = yield* TuiConfig.load()
+    const configService = yield* Config.Service
     let disposeSlots: (() => void) | undefined
     const runFork = Effect.runForkWith(yield* Effect.context())
     yield* run({
       server,
       args: { continue: input.continue, sessionID: Option.getOrUndefined(input.session) },
-      config,
+      config: {
+        get: () => Effect.runPromise(configService.get()),
+        update: (update) => Effect.runPromise(configService.update(update)),
+      },
       terminalHandoff: () => preflight.finish(),
       log: (level, message, tags) => {
         const effect =
