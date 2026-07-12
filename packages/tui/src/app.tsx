@@ -12,7 +12,14 @@ import { LogProvider, useLog, type LogSink } from "./context/log"
 import { ExitProvider, useExit } from "./context/exit"
 import { EpilogueProvider } from "./context/epilogue"
 import * as Selection from "./util/selection"
-import { createCliRenderer, MouseButton, type CliRendererConfig } from "@opentui/core"
+import {
+  CliRenderEvents,
+  createCliRenderer,
+  MouseButton,
+  type CliRenderer,
+  type CliRendererConfig,
+  type ThemeMode,
+} from "@opentui/core"
 import { RouteProvider, useRoute } from "./context/route"
 import {
   Switch,
@@ -150,6 +157,14 @@ export type TuiInput = {
   config: TuiConfig.Resolved
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
+  terminalHandoff?: () => Promise<
+    | {
+        readonly renderer: CliRenderer
+        readonly mode: ThemeMode | null
+        readonly complete: () => void
+      }
+    | undefined
+  >
   log?: LogSink
 }
 
@@ -194,6 +209,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     Effect.map((response) => response.location.directory),
     Effect.catch(() => Effect.tryPromise(() => api.location.get()).pipe(Effect.map((response) => response.directory))),
   )
+  const handoff = input.terminalHandoff ? yield* Effect.promise(input.terminalHandoff) : undefined
   const reconnectEndpoint = input.server.reconnect
   const reconnect = reconnectEndpoint
     ? async (attempt: number) => {
@@ -224,6 +240,11 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                 keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
               },
             } satisfies CliRendererConfig
+
+            if (handoff) {
+              handoff.renderer.useMouse = options.useMouse
+              return handoff.renderer
+            }
 
             if (process.env.OPENCODE_DRIVE) {
               const { Drive } = await import("@opencode-ai/simulation/frontend")
@@ -267,7 +288,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       yield* Effect.tryPromise(async () => {
         // Prewarm palette before ThemeProvider mounts so `system` theme avoids a first-paint fallback flash.
         void renderer.getPalette({ size: 16 }).catch(() => undefined)
-        const mode = (await renderer.waitForThemeMode(1000)) ?? "dark"
+        const mode = handoff?.mode ?? (await renderer.waitForThemeMode(1000)) ?? "dark"
         if (renderer.isDestroyed) return
 
         await render(() => {
@@ -392,6 +413,10 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
             </LogProvider>
           )
         }, renderer)
+        if (handoff) {
+          renderer.once(CliRenderEvents.FRAME, handoff.complete)
+          renderer.requestRender()
+        }
       })
       yield* Deferred.await(shutdown)
       return { epilogue: exit.epilogue, reason: exit.reason }

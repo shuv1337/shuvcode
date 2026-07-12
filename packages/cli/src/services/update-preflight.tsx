@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 // Split-footer status shown while a freshly launched CLI replaces a
 // version-mismatched background service before the TUI attaches.
-import { createCliRenderer, RGBA, TextAttributes, type CliRenderer } from "@opentui/core"
+import { createCliRenderer, RGBA, TextAttributes, type CliRenderer, type ThemeMode } from "@opentui/core"
 import { render, useTerminalDimensions } from "@opentui/solid"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { registerOpencodeSpinner } from "@opencode-ai/tui/component/register-spinner"
@@ -21,15 +21,23 @@ import {
   untrack,
 } from "solid-js"
 
-const stages = ["Keeping your session safe", "Starting the new background service", "Connecting to OpenCode"] as const
+const stages = ["Keeping your session safe", "Starting the new background service", "Loading OpenCode"] as const
 const stageFloor = 480
 const transitionDuration = 420
 const completionHold = 650
 
 export type Handle = {
   readonly begin: (from?: string) => boolean
-  readonly finish: () => Promise<void>
+  readonly loading: () => void
+  readonly finish: () => Promise<Handoff | undefined>
   readonly fail: (message: string) => Promise<void>
+  readonly close: () => Promise<void>
+}
+
+export type Handoff = {
+  readonly renderer: CliRenderer
+  readonly mode: ThemeMode | null
+  readonly complete: () => void
 }
 
 export const make = (): Handle => {
@@ -43,20 +51,29 @@ export const make = (): Handle => {
       })
       return true
     },
+    loading: () => {
+      void session?.then((active) => active?.loading())
+    },
     finish: async () => {
       const active = await session
-      await active?.finish()
+      return active?.finish()
     },
     fail: async (message) => {
       const active = await session
       await active?.fail(message)
     },
+    close: async () => {
+      const active = await session
+      await active?.close()
+    },
   }
 }
 
 type Session = {
-  readonly finish: () => Promise<void>
+  readonly loading: () => Promise<void>
+  readonly finish: () => Promise<Handoff>
   readonly fail: (message: string) => Promise<void>
+  readonly close: () => Promise<void>
 }
 
 async function open(from?: string): Promise<Session> {
@@ -65,6 +82,7 @@ async function open(from?: string): Promise<Session> {
   const [outcome, setOutcome] = createSignal<"running" | "success" | "failure">("running")
   const [failure, setFailure] = createSignal("")
   const [animating, setAnimating] = createSignal(true)
+  const [visible, setVisible] = createSignal(true)
   let resolveOutcome: (() => void) | undefined
   const renderer = await createCliRenderer({
     stdin: process.stdin,
@@ -72,25 +90,30 @@ async function open(from?: string): Promise<Session> {
     autoFocus: false,
     openConsoleOnError: false,
     exitOnCtrlC: false,
-    exitSignals: [],
     screenMode: "split-footer",
     footerHeight: 4,
     targetFps: 60,
+    useKittyKeyboard: {},
+    consoleOptions: {
+      keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
+    },
     externalOutputMode: "capture-stdout",
     consoleMode: "disabled",
-    clearOnShutdown: false,
   })
+  const terminalMode = renderer.waitForThemeMode(1000).catch(() => null)
   await render(
     () => (
-      <UpdateFooter
-        from={from}
-        active={active}
-        outcome={outcome}
-        failure={failure}
-        animating={animating}
-        renderer={renderer}
-        onOutcomeSettled={() => resolveOutcome?.()}
-      />
+      <Show when={visible()}>
+        <UpdateFooter
+          from={from}
+          active={active}
+          outcome={outcome}
+          failure={failure}
+          animating={animating}
+          renderer={renderer}
+          onOutcomeSettled={() => resolveOutcome?.()}
+        />
+      </Show>
     ),
     renderer,
   ).catch((error) => {
@@ -98,9 +121,12 @@ async function open(from?: string): Promise<Session> {
     throw error
   })
   let shownAt = performance.now()
-  const advance = async (stage: number) => {
+  const waitForStage = async () => {
     const remaining = stageFloor - (performance.now() - shownAt)
     if (remaining > 0) await Bun.sleep(remaining)
+  }
+  const advance = async (stage: number) => {
+    await waitForStage()
     if (outcome() !== "running") return
     setActive(stage)
     shownAt = performance.now()
@@ -120,30 +146,53 @@ async function open(from?: string): Promise<Session> {
     setAnimating(false)
     if (completed) await Bun.sleep(hold)
   }
-  const close = async () => {
-    setAnimating(false)
-    if (renderer.isDestroyed) return
-    renderer.pause()
-    await Promise.race([renderer.idle(), Bun.sleep(500)])
-    renderer.destroy()
-  }
+  let closing: Promise<void> | undefined
+  let transferred = false
+  const close = () =>
+    (closing ??= (async () => {
+      if (transferred) return
+      setAnimating(false)
+      if (renderer.isDestroyed) return
+      renderer.pause()
+      await Promise.race([renderer.idle(), Bun.sleep(500)])
+      renderer.destroy()
+    })())
+  let loading: Promise<void> | undefined
+  const load = () =>
+    (loading ??= (async () => {
+      await auto
+      await advance(2)
+    })())
   let settled: Promise<void> | undefined
   const settle = (task: () => Promise<void>) => (settled ??= task())
   return {
-    finish: () =>
-      settle(async () => {
-        await auto
-        await advance(2)
-        await Bun.sleep(stageFloor)
+    loading: load,
+    finish: async () => {
+      await settle(async () => {
+        await load()
+        await waitForStage()
         await transitionTo("success", completionHold)
-        await close()
-      }),
+      })
+      const mode = await terminalMode
+      renderer.externalOutputMode = "passthrough"
+      renderer.screenMode = "alternate-screen"
+      renderer.consoleMode = "console-overlay"
+      renderer.requestRender()
+      await Promise.race([renderer.idle(), Bun.sleep(500)])
+      transferred = true
+      return {
+        renderer,
+        mode,
+        complete: () => setVisible(false),
+      }
+    },
     fail: (message) =>
       settle(async () => {
         setFailure(message)
         await transitionTo("failure", 250)
         await close()
       }),
+    close,
   }
 }
 
@@ -162,15 +211,14 @@ const sweepBlend = 8
 const textDim = RGBA.fromHex("#4c4c4c")
 const rampSteps = 32
 
+const blend = (from: RGBA, to: RGBA, amount: number) =>
+  RGBA.fromValues(
+    from.r + (to.r - from.r) * amount,
+    from.g + (to.g - from.g) * amount,
+    from.b + (to.b - from.b) * amount,
+  )
 const ramp = (from: RGBA, to: RGBA) =>
-  Array.from({ length: rampSteps + 1 }, (_, step) => {
-    const amount = step / rampSteps
-    return RGBA.fromValues(
-      from.r + (to.r - from.r) * amount,
-      from.g + (to.g - from.g) * amount,
-      from.b + (to.b - from.b) * amount,
-    )
-  })
+  Array.from({ length: rampSteps + 1 }, (_, step) => blend(from, to, step / rampSteps))
 const railRamp = ramp(colors.accentDim, colors.accentBright)
 const monogramRamp = ramp(colors.muted, colors.accent)
 const rampCache = new Map<RGBA, ReadonlyArray<RGBA>>()
@@ -356,15 +404,21 @@ function UpdateFooter(props: {
   const rail = createMemo(() => {
     const width = Math.max(0, Math.min(30, term().width - 39))
     if (width === 0) return []
-    if (props.outcome() === "success") return Array.from({ length: width }, () => ({ char: "━", color: colors.accent }))
     const filled = Math.round(position() * width)
     const glowRadius = 6
     const span = Math.max(1, filled + glowRadius * 2)
     const center = pulse() * span - glowRadius
+    const success = props.outcome() === "success"
+    const completion = smoothstep(headerFade.progress())
     return Array.from({ length: width }, (_, index) => {
-      if (index >= filled) return { char: "·", color: colors.muted }
-      const glow = Math.max(0, 1 - Math.abs(index - center) / glowRadius) ** 2
-      return { char: "━", color: shade(railRamp, glow) }
+      const color =
+        index >= filled
+          ? colors.muted
+          : shade(railRamp, Math.max(0, 1 - Math.abs(index - center) / glowRadius) ** 2)
+      return {
+        char: success || index < filled ? "━" : "·",
+        color: success ? blend(color, colors.accent, completion) : color,
+      }
     })
   })
 
