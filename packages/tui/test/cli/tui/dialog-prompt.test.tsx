@@ -33,7 +33,7 @@ async function mountPrompt(input: {
     { DialogPrompt },
     { KVProvider },
     { ThemeProvider },
-    { TuiConfigProvider },
+    { ConfigProvider },
     { ToastProvider },
     { OpencodeKeymapProvider, registerOpencodeKeymap },
   ] = await Promise.all([
@@ -66,7 +66,7 @@ async function mountPrompt(input: {
         }}
       >
         <OpencodeKeymapProvider keymap={keymap}>
-          <TuiConfigProvider config={resolvedConfig}>
+          <ConfigProvider config={resolvedConfig}>
             <KVProvider>
               <ThemeProvider mode="dark">
                 <ToastProvider>
@@ -76,7 +76,7 @@ async function mountPrompt(input: {
                 </ToastProvider>
               </ThemeProvider>
             </KVProvider>
-          </TuiConfigProvider>
+          </ConfigProvider>
         </OpencodeKeymapProvider>
       </TestTuiContexts>
     )

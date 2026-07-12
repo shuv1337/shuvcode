@@ -1,4 +1,4 @@
-export * as TuiConfig from "."
+export * as Config from "."
 
 import { createBindingLookup } from "@opentui/keymap/extras"
 import { Schema } from "effect"
@@ -176,9 +176,12 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
   }
 }
 
-const ConfigContext = createContext<{ config: Resolved; service?: Interface }>()
+const ConfigContext = createContext<{
+  data: Resolved
+  update: Interface["update"]
+}>()
 
-export function TuiConfigProvider(props: {
+export function ConfigProvider(props: {
   config: Resolved
   service?: Interface
   options?: { terminalSuspend: boolean }
@@ -186,31 +189,21 @@ export function TuiConfigProvider(props: {
 }) {
   const [config, setConfig] = createStore(props.config)
   const host = props.service
-  const service = host
-    ? {
-        get: host.get,
-        update: async (update: (draft: any) => void) => {
-          const info = await host.update(update)
-          setConfig(reconcile(resolve(info, props.options ?? { terminalSuspend: true })))
-          return info
-        },
-      }
-    : undefined
-  return <ConfigContext.Provider value={{ config, service }}>{props.children}</ConfigContext.Provider>
+  const update = async (update: (draft: any) => void) => {
+    if (!host) throw new Error("Config updates are not available")
+    const info = await host.update(update)
+    setConfig(reconcile(resolve(info, props.options ?? { terminalSuspend: true })))
+    return info
+  }
+  return <ConfigContext.Provider value={{ data: config, update }}>{props.children}</ConfigContext.Provider>
 }
 
-export function useTuiConfig() {
+export function useConfig() {
   const value = useContext(ConfigContext)
-  if (!value) throw new Error("TuiConfigProvider is missing")
-  return value.config
+  if (!value) throw new Error("ConfigProvider is missing")
+  return value
 }
 
-export function useTuiConfigOptional() {
-  return useContext(ConfigContext)?.config
-}
-
-export function useTuiConfigService() {
-  const value = useContext(ConfigContext)
-  if (!value?.service) throw new Error("TuiConfig service is missing")
-  return value.service
+export function useConfigOptional() {
+  return useContext(ConfigContext)
 }

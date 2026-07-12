@@ -14,7 +14,7 @@ import {
 } from "@opentui/keymap/extras"
 import { KeymapProvider, useKeymap, useKeymapSelector, useBindings } from "@opentui/keymap/solid"
 import { createMemo, type Accessor } from "solid-js"
-import { useTuiConfig } from "./config"
+import { useConfig } from "./config"
 import { TuiKeybind } from "./config/keybind"
 
 export const LEADER_TOKEN = "leader"
@@ -252,7 +252,7 @@ export function useLeaderActive(): Accessor<boolean> {
 }
 
 export function useCommandShortcut(command: string): Accessor<string> {
-  const config = useTuiConfig()
+  const config = useConfig().data
   return useKeymapSelector((keymap: OpenTuiKeymap) =>
     formatKeySequence(
       keymap.getCommandBindings({ visibility: "registered", commands: [command] }).get(command)?.[0]?.sequence,

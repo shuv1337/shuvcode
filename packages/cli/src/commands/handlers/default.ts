@@ -35,15 +35,17 @@ export default Runtime.handler(Commands, (input) =>
       ),
     )
     preflight.loading()
-    const configService = yield* Config.Service
+    const config = yield* Config.Service
     let disposeSlots: (() => void) | undefined
-    const runFork = Effect.runForkWith(yield* Effect.context())
+    const context = yield* Effect.context()
+    const runFork = Effect.runForkWith(context)
+    const runPromise = Effect.runPromiseWith(context)
     yield* run({
       server,
       args: { continue: input.continue, sessionID: Option.getOrUndefined(input.session) },
       config: {
-        get: () => Effect.runPromise(configService.get()),
-        update: (update) => Effect.runPromise(configService.update(update)),
+        get: () => runPromise(config.get()),
+        update: (update) => runPromise(config.update(update)),
       },
       terminalHandoff: () => preflight.finish(),
       log: (level, message, tags) => {

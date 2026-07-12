@@ -6,12 +6,12 @@ import { Global } from "@opencode-ai/core/global"
 import { readJson, writeJsonAtomic } from "../util/persistence"
 import { useTuiPaths } from "./runtime"
 import path from "path"
-import { useTuiConfigOptional, type TuiConfig } from "../config"
+import { useConfigOptional, type Config } from "../config"
 
 export const { use: useKV, provider: KVProvider } = createSimpleContext({
   name: "KV",
-  init: (props: { config?: TuiConfig.Info }) => {
-    const config = props.config ?? useTuiConfigOptional()
+  init: (props: { config?: Config.Info }) => {
+    const config = props.config ?? useConfigOptional()?.data
     const paths = useTuiPaths()
     void Global.Path.state
     const file = path.join(paths.state, "kv.json")
@@ -80,7 +80,7 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
   },
 })
 
-function configValues(config: TuiConfig.Info) {
+function configValues(config: Config.Info) {
   const values: Record<string, any> = {}
   if (config.theme?.name !== undefined) values.theme = config.theme.name
   if (config.theme?.mode !== undefined) {

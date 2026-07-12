@@ -3,9 +3,8 @@ import { testRender } from "@opentui/solid"
 import { expect, test } from "bun:test"
 import {
   resolve,
-  TuiConfigProvider,
-  useTuiConfig,
-  useTuiConfigService,
+  ConfigProvider,
+  useConfig,
   type Interface,
 } from "../src/config"
 
@@ -38,24 +37,23 @@ test("provides config and its host interface", async () => {
       return draft
     },
   }
-  let configService: Interface | undefined
+  let context: ReturnType<typeof useConfig> | undefined
 
   function Consumer() {
-    const config = useTuiConfig()
-    configService = useTuiConfigService()
-    return <text>{`${config.mouse ? "mouse" : "none"} ${config.keybinds.get("leader")?.[0]?.key}`}</text>
+    context = useConfig()
+    return <text>{`${context.data.mouse ? "mouse" : "none"} ${context.data.keybinds.get("leader")?.[0]?.key}`}</text>
   }
 
   const app = await testRender(() => (
-    <TuiConfigProvider config={config} service={service}>
+    <ConfigProvider config={config} service={service}>
       <Consumer />
-    </TuiConfigProvider>
+    </ConfigProvider>
   ))
   try {
     await app.renderOnce()
     expect(app.captureCharFrame()).toContain("mouse ctrl+x")
-    if (!configService) throw new Error("Config service was not provided")
-    await configService.update((draft) => {
+    if (!context) throw new Error("Config context was not provided")
+    await context.update((draft) => {
       draft.mouse = false
       draft.keybinds = { leader: "ctrl+o" }
     })

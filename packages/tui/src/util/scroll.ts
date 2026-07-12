@@ -17,12 +17,12 @@ export class CustomSpeedScroll implements ScrollAcceleration {
   reset(): void {}
 }
 
-export function getScrollAcceleration(tuiConfig?: ScrollConfig): ScrollAcceleration {
-  if (tuiConfig?.scroll?.acceleration) {
+export function getScrollAcceleration(config?: ScrollConfig): ScrollAcceleration {
+  if (config?.scroll?.acceleration) {
     return new MacOSScrollAccel()
   }
-  if (tuiConfig?.scroll?.speed !== undefined) {
-    return new CustomSpeedScroll(tuiConfig.scroll.speed)
+  if (config?.scroll?.speed !== undefined) {
+    return new CustomSpeedScroll(config.scroll.speed)
   }
 
   return new CustomSpeedScroll(3)

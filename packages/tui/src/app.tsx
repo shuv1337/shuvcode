@@ -75,7 +75,7 @@ import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
-import { TuiConfig, TuiConfigProvider, useTuiConfig } from "./config"
+import { Config, ConfigProvider, useConfig } from "./config"
 import { TuiConfigV1 } from "./config/v1"
 import { createTuiApiAdapters } from "./plugin/adapters"
 import { createTuiApi } from "./plugin/api"
@@ -154,7 +154,7 @@ export type TuiInput = {
     reload?: () => Promise<void>
   }
   args: Args
-  config: TuiConfig.Interface | TuiConfigV1.Resolved
+  config: Config.Interface | TuiConfigV1.Resolved
   onSnapshot?: () => Promise<string[]>
   pluginHost: TuiPluginHost
   terminalHandoff?: () => Promise<
@@ -200,7 +200,7 @@ function isVersionGreater(left: string, right: string) {
   return a.prerelease.localeCompare(b.prerelease, undefined, { numeric: true }) > 0
 }
 
-function fromV1(config: TuiConfigV1.Resolved): TuiConfig.Info {
+function fromV1(config: TuiConfigV1.Resolved): Config.Info {
   return {
     theme: config.theme ? { name: config.theme } : undefined,
     plugins: config.plugin?.map((plugin) =>
@@ -217,7 +217,7 @@ function fromV1(config: TuiConfigV1.Resolved): TuiConfig.Info {
   }
 }
 
-function isConfigInterface(config: TuiConfig.Interface | TuiConfigV1.Resolved): config is TuiConfig.Interface {
+function isConfigInterface(config: Config.Interface | TuiConfigV1.Resolved): config is Config.Interface {
   return "get" in config && typeof config.get === "function" && "update" in config && typeof config.update === "function"
 }
 
@@ -235,7 +235,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     }
     return { service: undefined, info: fromV1(configInput), legacy: configInput }
   })
-  const config = TuiConfig.resolve(loaded.info, { terminalSuspend: process.platform !== "win32" })
+  const config = Config.resolve(loaded.info, { terminalSuspend: process.platform !== "win32" })
   if (loaded.legacy) config.keybinds = loaded.legacy.keybinds
   const options = { baseUrl: input.server.endpoint.url, headers: Service.headers(input.server.endpoint) }
   const api = OpenCode.make(options)
@@ -371,7 +371,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                           <ClipboardProvider>
                             <OpencodeKeymapProvider keymap={keymap}>
                               <ArgsProvider {...input.args}>
-                                <TuiConfigProvider
+                                <ConfigProvider
                                   config={config}
                                   service={loaded.service}
                                   options={{ terminalSuspend: process.platform !== "win32" }}
@@ -439,7 +439,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                       </RouteProvider>
                                     </ToastProvider>
                                   </KVProvider>
-                                </TuiConfigProvider>
+                                </ConfigProvider>
                               </ArgsProvider>
                             </OpencodeKeymapProvider>
                           </ClipboardProvider>
@@ -477,7 +477,7 @@ function App(props: {
 }) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
-  const tuiConfig = useTuiConfig()
+  const config = useConfig().data
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
@@ -496,7 +496,7 @@ function App(props: {
   const exit = useExit()
   const promptRef = usePromptRef()
   const pluginRuntime = usePluginRuntime()
-  const attention = createTuiAttention({ renderer, config: tuiConfig, kv })
+  const attention = createTuiAttention({ renderer, config, kv })
   const clipboard = useClipboard()
 
   // Toast once when an MCP server enters a failed or needs-auth state so the user knows to act,
@@ -530,7 +530,7 @@ function App(props: {
   const api = createTuiApi(
     createTuiApiAdapters({
       version: InstallationVersion,
-      tuiConfig,
+      tuiConfig: config,
       dialog,
       keymap,
       kv,
@@ -1070,11 +1070,11 @@ function App(props: {
 
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
-    bindings: tuiConfig.keybinds.gather("app", appBindingCommands),
+    bindings: config.keybinds.gather("app", appBindingCommands),
   }))
 
   useBindings(() => ({
-    bindings: tuiConfig.keybinds.gather("app.global", appGlobalBindingCommands),
+    bindings: config.keybinds.gather("app.global", appGlobalBindingCommands),
   }))
 
   useBindings(() => ({
@@ -1084,7 +1084,7 @@ function App(props: {
       if (!current?.focused) return true
       return current.current.text === ""
     },
-    bindings: tuiConfig.keybinds.gather("app_exit", ["app.exit"]),
+    bindings: config.keybinds.gather("app_exit", ["app.exit"]),
   }))
 
   event.on("tui.command.execute", (evt, { workspace }) => {

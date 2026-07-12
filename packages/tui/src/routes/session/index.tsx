@@ -64,7 +64,7 @@ import { FormPrompt } from "./form"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { DialogExportResult } from "../../ui/dialog-export-result"
 import { sessionEpilogue } from "../../util/presentation"
-import { useTuiConfig } from "../../config"
+import { useConfig } from "../../config"
 import { useClipboard } from "../../context/clipboard"
 import { nextThinkingMode, reasoningSummary, useThinkingMode, type ThinkingMode } from "../../context/thinking"
 import { getScrollAcceleration } from "../../util/scroll"
@@ -127,7 +127,7 @@ const context = createContext<{
   groupExploration: () => boolean
   diffWrapMode: () => "word" | "none"
   models: () => ModelInfo[]
-  tui: ReturnType<typeof useTuiConfig>
+  config: ReturnType<typeof useConfig>["data"]
 }>()
 
 function use() {
@@ -149,7 +149,7 @@ export function Session() {
   const data = useData()
   const project = useProject()
   const paths = useTuiPaths()
-  const tuiConfig = useTuiConfig()
+  const config = useConfig().data
   const kv = useKV()
   const { theme } = useTheme()
   const promptRef = usePromptRef()
@@ -217,7 +217,7 @@ export function Session() {
   const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
   const models = createMemo(() => data.location.model.list(location()) ?? [])
 
-  const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
+  const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const toast = useToast()
   const sdk = useSDK()
   const editor = useEditorContext()
@@ -835,17 +835,17 @@ export function Session() {
   }))
 
   useBindings(() => ({
-    bindings: tuiConfig.keybinds.gather("session.global", sessionGlobalBindingCommands),
+    bindings: config.keybinds.gather("session.global", sessionGlobalBindingCommands),
   }))
 
   useBindings(() => ({
     enabled: () => renderer.currentFocusedEditor === null,
-    bindings: tuiConfig.keybinds.gather("session.global.unfocused", sessionGlobalUnfocusedBindingCommands),
+    bindings: config.keybinds.gather("session.global.unfocused", sessionGlobalUnfocusedBindingCommands),
   }))
 
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
-    bindings: tuiConfig.keybinds.gather("session", sessionBindingCommands),
+    bindings: config.keybinds.gather("session", sessionBindingCommands),
   }))
 
   // snap to bottom when session changes
@@ -871,7 +871,7 @@ export function Session() {
           groupExploration,
           diffWrapMode,
           models,
-          tui: tuiConfig,
+          config,
         }}
       >
         <box flexDirection="row" flexGrow={1} minHeight={0}>
@@ -2465,7 +2465,7 @@ function Edit(props: ToolProps) {
   const pathFormatter = usePathFormatter()
 
   const view = createMemo(() => {
-    const diffView = ctx.tui.diffs?.view
+    const diffView = ctx.config.diffs?.view
     if (diffView === "unified") return "unified"
     if (diffView === "split") return "split"
     // Default to "auto" behavior
@@ -2542,8 +2542,8 @@ function ApplyPatch(props: ToolProps) {
     })
   })
   const view = createMemo(() => {
-    if (ctx.tui.diffs?.view === "unified") return "unified"
-    if (ctx.tui.diffs?.view === "split") return "split"
+    if (ctx.config.diffs?.view === "unified") return "unified"
+    if (ctx.config.diffs?.view === "split") return "split"
     return ctx.width > 120 ? "split" : "unified"
   })
 

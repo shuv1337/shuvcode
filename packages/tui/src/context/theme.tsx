@@ -23,7 +23,7 @@ import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useKV } from "./kv"
-import { useTuiConfig } from "../config"
+import { useConfig } from "../config"
 import { Global } from "@opencode-ai/core/global"
 import { Glob } from "@opencode-ai/core/util/glob"
 import { readFile } from "node:fs/promises"
@@ -103,7 +103,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode: "dark" | "light"; source?: ThemeSource }) => {
     const renderer = useRenderer()
-    const config = useTuiConfig()
+    const config = useConfig().data
     const kv = useKV()
     const themes = props.source ?? themeSource
     const pick = (value: unknown) => {
