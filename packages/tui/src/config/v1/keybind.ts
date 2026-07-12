@@ -142,7 +142,6 @@ export const Definitions = {
   messages_copy: keybind("<leader>y", "Copy message"),
   messages_undo: keybind("<leader>u", "Undo message"),
   messages_redo: keybind("<leader>r", "Redo message"),
-  messages_toggle_conceal: keybind("<leader>h", "Toggle code block concealment in messages"),
   display_thinking: keybind("none", "Toggle thinking blocks visibility"),
 
   prompt_submit: keybind("none", "Submit prompt"),
@@ -341,7 +340,6 @@ export const CommandMap = {
   messages_copy: "messages.copy",
   messages_undo: "session.undo",
   messages_redo: "session.redo",
-  messages_toggle_conceal: "session.toggle.conceal",
   display_thinking: "session.toggle.thinking",
   prompt_submit: "prompt.submit",
   prompt_editor_context_clear: "prompt.editor_context.clear",

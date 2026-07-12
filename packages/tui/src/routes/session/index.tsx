@@ -88,7 +88,6 @@ const sessionBindingCommands = [
   "session.undo",
   "session.redo",
   "session.sidebar.toggle",
-  "session.toggle.conceal",
   "session.toggle.thinking",
   "session.toggle.scrollbar",
   "session.toggle.exploration_grouping",
@@ -121,7 +120,6 @@ const sessionGlobalUnfocusedBindingCommands = ["session.first", "session.last"] 
 const context = createContext<{
   width: number
   sessionID: string
-  conceal: () => boolean
   thinkingMode: () => ThinkingMode
   showThinking: () => boolean
   groupExploration: () => boolean
@@ -198,7 +196,6 @@ export function Session() {
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
-  const [conceal, setConceal] = createSignal(true)
   const thinking = useThinkingMode()
   const thinkingMode = thinking.mode
   const showThinking = createMemo(() => true)
@@ -472,15 +469,6 @@ export function Session() {
       },
     },
     {
-      title: conceal() ? "Disable code concealment" : "Enable code concealment",
-      value: "session.toggle.conceal",
-      category: "Session",
-      run: () => {
-        setConceal((prev) => !prev)
-        dialog.clear()
-      },
-    },
-    {
       title: (() => {
         const next = nextThinkingMode(thinkingMode())
         if (next === "hide") return "Collapse thinking"
@@ -507,7 +495,7 @@ export function Session() {
       },
     },
     {
-      title: groupExploration() ? "Show exploration tools individually" : "Group exploration tools",
+      title: groupExploration() ? "Show tool calls individually" : "Group related tool calls",
       value: "session.toggle.exploration_grouping",
       category: "Session",
       run: () => {
@@ -865,7 +853,6 @@ export function Session() {
             return contentWidth()
           },
           sessionID: route.sessionID,
-          conceal,
           thinkingMode,
           showThinking,
           groupExploration,
@@ -1329,7 +1316,7 @@ function CompactionMessage(props: { message: Extract<SessionMessageInfo, { type:
             internalBlockMode="top-level"
             content={content()}
             tableOptions={{ style: "grid" }}
-            conceal={ctx.conceal()}
+            conceal={false}
             fg={theme.markdownText}
             bg={theme.background}
           />
@@ -1747,7 +1734,7 @@ function ReasoningPart(props: {
               streaming={true}
               syntaxStyle={syntax()}
               content={summary().body}
-              conceal={ctx.conceal()}
+              conceal={false}
               fg={theme.textMuted}
             />
           </box>
@@ -1813,7 +1800,7 @@ function TextPart(props: { last: boolean; part: SessionMessageAssistantText }) {
           internalBlockMode="top-level"
           content={props.part.text.trim()}
           tableOptions={{ style: "grid" }}
-          conceal={ctx.conceal()}
+          conceal={false}
           fg={theme.markdownText}
           bg={theme.background}
         />
