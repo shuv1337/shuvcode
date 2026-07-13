@@ -171,7 +171,6 @@ ultimate source of truth.
 - [ ] `Array.prototype.toSpliced`.
 - [ ] Canonical index handling: a key such as `"01"` must not alias index `1`.
 - [ ] Complete sparse-array parity. Promise combinators do consume holes as `undefined` members, as in JS.
-- [ ] Correct `findLast` return behavior when its predicate mutates the examined element.
 
 ## Strings
 

@@ -60,7 +60,6 @@ export type PluginRuntime = ReturnType<typeof createPluginRuntime>
 export type TuiPluginHost = {
   start(input: {
     api: TuiPluginApi
-    config: any
     runtime: PluginRuntime
     dispose?: () => void
   }): Promise<void>

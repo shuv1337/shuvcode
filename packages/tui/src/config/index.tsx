@@ -118,6 +118,9 @@ export const Info = Schema.Struct({
       grouping: Schema.optional(Schema.Literals(["auto", "none"])).annotate({
         description: "Group related transcript items automatically or render each item separately",
       }),
+      markdown: Schema.optional(Schema.Literals(["source", "rendered"])).annotate({
+        description: "Show Markdown syntax markers or conceal them in rendered transcript content",
+      }),
     }),
   ).annotate({ description: "Session transcript presentation settings" }),
   hints: Schema.optional(
@@ -179,7 +182,6 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
 const ConfigContext = createContext<{
   data: Resolved
   update: Interface["update"]
-  writable: boolean
 }>()
 
 export function ConfigProvider(props: {
@@ -197,7 +199,7 @@ export function ConfigProvider(props: {
     return info
   }
   return (
-    <ConfigContext.Provider value={{ data: config, update, writable: !!host }}>{props.children}</ConfigContext.Provider>
+    <ConfigContext.Provider value={{ data: config, update }}>{props.children}</ConfigContext.Provider>
   )
 }
 
