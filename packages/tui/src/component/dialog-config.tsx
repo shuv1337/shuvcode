@@ -269,8 +269,12 @@ export function DialogConfig() {
     setting.path.join(".") === "theme.name"
       ? Object.keys(themeState.all()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
       : setting.values
-  const compact = (setting: Setting) => setting.path.join(".") === "theme.name" || !setting.values
-  const display = (setting: Setting) => setting.format?.(value(setting)) ?? String(value(setting))
+  const display = (setting: Setting) => {
+    const current = value(setting)
+    if (setting.format) return setting.format(current)
+    const index = setting.values?.indexOf(current)
+    return index === undefined || index < 0 ? String(current) : (setting.labels?.[index] ?? String(current))
+  }
   const rows = createMemo(() =>
     settings.map((setting, index) => ({
       setting,
@@ -368,43 +372,16 @@ export function DialogConfig() {
                     {row.setting.title}
                   </text>
                   <box flexGrow={1} flexDirection="row" justifyContent="flex-end">
-                    <Show
-                      when={!compact(row.setting) && values(row.setting)}
-                      fallback={
-                        <box flexDirection="row">
-                          <Show when={row.index === selected()}>
-                            <text fg={theme.textMuted}>‹ </text>
-                          </Show>
-                          <text
-                            fg={row.index === selected() ? theme.primary : theme.textMuted}
-                            attributes={row.index === selected() ? TextAttributes.BOLD : undefined}
-                          >
-                            {display(row.setting)}
-                          </text>
-                          <Show when={row.index === selected()}>
-                            <text fg={theme.textMuted}> ›</text>
-                          </Show>
-                        </box>
-                      }
-                    >
-                      <box flexDirection="row" gap={2}>
-                        <For each={values(row.setting)!}>
-                          {(option, optionIndex) => {
-                            const active = () => value(row.setting) === option
-                            return (
-                              <text
-                                fg={
-                                  active() ? (row.index === selected() ? theme.primary : theme.text) : theme.textMuted
-                                }
-                                attributes={active() ? TextAttributes.BOLD : undefined}
-                              >
-                                {row.setting.labels?.[optionIndex()] ?? String(option)}
-                              </text>
-                            )
-                          }}
-                        </For>
-                      </box>
-                    </Show>
+                    <box flexDirection="row">
+                      <text fg={theme.textMuted}>{row.index === selected() ? "‹ " : "  "}</text>
+                      <text
+                        fg={row.index === selected() ? theme.primary : theme.textMuted}
+                        attributes={row.index === selected() ? TextAttributes.BOLD : undefined}
+                      >
+                        {display(row.setting)}
+                      </text>
+                      <text fg={theme.textMuted}>{row.index === selected() ? " ›" : "  "}</text>
+                    </box>
                   </box>
                 </box>
               </>
