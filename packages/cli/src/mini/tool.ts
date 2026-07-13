@@ -15,10 +15,9 @@
 import os from "os"
 import path from "path"
 import stripAnsi from "strip-ansi"
-import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { LANGUAGE_EXTENSIONS } from "@opencode-ai/tui/util/filetype"
 import { Locale } from "@opencode-ai/tui/util/locale"
-import type { RunEntryBody, StreamCommit, ToolSnapshot } from "./types"
+import type { MiniToolPart, RunEntryBody, StreamCommit, ToolSnapshot } from "./types"
 
 export type ToolView = {
   output: boolean
@@ -1177,7 +1176,7 @@ function rule(name?: string): AnyToolRule | undefined {
   return TOOL_RULES[name]
 }
 
-function frame(part: ToolPart): ToolFrame {
+function frame(part: MiniToolPart): ToolFrame {
   const state = dict(part.state)
   return {
     raw: "",
@@ -1231,7 +1230,7 @@ export function toolStructuredFinal(commit: StreamCommit): boolean {
   )
 }
 
-export function toolInlineInfo(part: ToolPart): ToolInline {
+export function toolInlineInfo(part: MiniToolPart): ToolInline {
   const ctx = frame(part)
   const draw = rule(ctx.name)?.run
   try {

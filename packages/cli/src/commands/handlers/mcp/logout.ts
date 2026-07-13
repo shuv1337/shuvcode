@@ -1,6 +1,6 @@
 import { EOL } from "node:os"
 import { Effect } from "effect"
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
+import { OpenCode } from "@opencode-ai/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { Service } from "@opencode-ai/client/effect"
@@ -15,7 +15,7 @@ export default Runtime.handler(
     const options = yield* ServiceConfig.options()
     const found = yield* Service.discover(options)
     const endpoint = found ?? (yield* Service.start(options))
-    const client = createOpencodeClient({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
 
     const integration = yield* resolveIntegration(client, input.name, location)
     if (!integration) {
@@ -31,7 +31,7 @@ export default Runtime.handler(
 
     yield* Effect.forEach(
       credentials,
-      (connection) => Effect.promise(() => client.v2.credential.remove({ credentialID: connection.id, location })),
+      (connection) => Effect.promise(() => client.credential.remove({ credentialID: connection.id, location })),
       { discard: true },
     )
     process.stdout.write(`Removed OAuth credentials for ${input.name}` + EOL)

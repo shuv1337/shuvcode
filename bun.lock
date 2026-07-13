@@ -108,7 +108,6 @@
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
-        "@opencode-ai/sdk": "workspace:*",
         "@opencode-ai/server": "workspace:*",
         "@opencode-ai/tui": "workspace:*",
         "@opentui/core": "catalog:",
