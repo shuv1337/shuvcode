@@ -14,7 +14,10 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
   const config = useConfig().data
   const color = () => props.color ?? theme.textMuted
   return (
-    <Show when={config.animations ?? true} fallback={<text fg={color()}>⋯ {props.children}</text>}>
+    <Show
+      when={config.animations ?? true}
+      fallback={<text fg={color()}>{props.children ? <>⋯ {props.children}</> : "⋯"}</text>}
+    >
       <box flexDirection="row" gap={1}>
         <spinner frames={SPINNER_FRAMES} interval={80} color={color()} />
         <Show when={props.children}>
