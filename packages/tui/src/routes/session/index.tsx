@@ -1468,6 +1468,7 @@ function UserMessage(props: { message: SessionMessageUser }) {
   )
   const dialog = useDialog()
   const renderer = useRenderer()
+  const promptRef = usePromptRef()
 
   return (
     <Show when={props.message.text.trim() || files().length}>
@@ -1486,7 +1487,13 @@ function UserMessage(props: { message: SessionMessageUser }) {
           }}
           onMouseUp={() => {
             if (renderer.getSelection()?.getSelectedText()) return
-            dialog.replace(() => <DialogMessage messageID={props.message.id} sessionID={ctx.sessionID} />)
+            dialog.replace(() => (
+              <DialogMessage
+                messageID={props.message.id}
+                sessionID={ctx.sessionID}
+                setPrompt={(value) => promptRef.current?.set(value)}
+              />
+            ))
           }}
           paddingTop={1}
           paddingBottom={1}
