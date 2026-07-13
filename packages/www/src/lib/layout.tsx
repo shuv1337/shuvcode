@@ -8,11 +8,6 @@ export function baseOptions(): BaseLayoutProps {
     },
     links: [
       {
-        text: "Docs",
-        url: "/docs",
-        active: "nested-url",
-      },
-      {
         text: "GitHub",
         url: "https://github.com/anomalyco/opencode",
         external: true,

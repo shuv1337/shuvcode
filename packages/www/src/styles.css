@@ -23,6 +23,12 @@ body {
   margin: 0;
 }
 
+/* Fumadocs 16.11 stretches top layout tabs across the main grid row. */
+#nd-docs-layout > div:has(> a[href="/docs/build"], > a[href="/docs/api"]) {
+  align-self: start;
+  height: 3rem;
+}
+
 .home {
   min-height: 100vh;
   display: grid;
