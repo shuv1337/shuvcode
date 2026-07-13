@@ -7,7 +7,7 @@ import path from "node:path"
 import { onCleanup } from "solid-js"
 import { ClipboardProvider } from "../../../src/context/clipboard"
 import type { FormWithLocation } from "../../../src/context/data"
-import { SDKProvider } from "../../../src/context/sdk"
+import { ClientProvider } from "../../../src/context/client"
 import { ThemeProvider } from "../../../src/context/theme"
 import { ConfigProvider } from "../../../src/config"
 import { OpencodeKeymapProvider, registerOpencodeKeymap } from "../../../src/keymap"
@@ -15,7 +15,7 @@ import { ToastProvider } from "../../../src/ui/toast"
 import { tmpdir } from "../../fixture/fixture"
 import { TestTuiContexts } from "../../fixture/tui-environment"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
-import { createApi, createClient, createEventStream, createFetch } from "../../fixture/tui-sdk"
+import { createApi, createEventStream, createFetch } from "../../fixture/tui-client"
 
 async function mountForm(root: string, width = 80) {
   const state = path.join(root, "state")
@@ -75,13 +75,13 @@ async function mountForm(root: string, width = 80) {
         >
           <OpencodeKeymapProvider keymap={keymap}>
             <ConfigProvider config={config}>
-              <SDKProvider client={createClient(transport.fetch)} api={createApi(transport.fetch)}>
+              <ClientProvider api={createApi(transport.fetch)}>
                 <ThemeProvider mode="dark" source={{ discover: () => Promise.resolve({}) }}>
                   <ToastProvider>
                     <FormPrompt form={form} />
                   </ToastProvider>
                 </ThemeProvider>
-              </SDKProvider>
+              </ClientProvider>
             </ConfigProvider>
           </OpencodeKeymapProvider>
         </ClipboardProvider>

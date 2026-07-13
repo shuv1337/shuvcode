@@ -1,14 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import Notifications from "../../../../src/feature-plugins/system/notifications"
 import type { OpenCodeEvent, PermissionAsked, QuestionAsked } from "@opencode-ai/client"
-import type { Session } from "@opencode-ai/sdk/v2"
-import type { TuiAttentionNotifyInput } from "@opencode-ai/plugin/tui"
+import type { TuiAttentionNotifyInput, TuiPluginApi } from "@opencode-ai/plugin/tui"
 import { createTuiPluginApi } from "../../../fixture/tui-plugin"
+
+type Session = NonNullable<ReturnType<TuiPluginApi["state"]["session"]["get"]>>
 
 async function setup() {
   const notifications: TuiAttentionNotifyInput[] = []
   const handlers = new Map<OpenCodeEvent["type"], ((event: OpenCodeEvent) => void)[]>()
-  const session = (id: string, title: string, parentID?: string): Session => ({
+  const session = (
+    id: string,
+    title: string,
+    parentID?: string,
+  ): Session => ({
     id,
     title,
     slug: id,

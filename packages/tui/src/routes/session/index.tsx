@@ -41,7 +41,7 @@ import { Locale } from "../../util/locale"
 import { FilePath } from "../../ui/file-path"
 import { webSearchProviderLabel } from "../../util/tool-display"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { useEditorContext } from "../../context/editor"
 import { openEditor } from "../../editor"
 import { useDialog } from "../../ui/dialog"
@@ -215,7 +215,7 @@ export function Session() {
 
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const toast = useToast()
-  const sdk = useSDK()
+  const client = useClient()
   const editor = useEditorContext()
   const rows = createSessionRows(() => route.sessionID)
 
@@ -389,7 +389,7 @@ export function Session() {
         aliases: ["summarize"],
       },
       run: () => {
-        void sdk.api.session.compact({ sessionID: route.sessionID })
+        void client.api.session.compact({ sessionID: route.sessionID })
         dialog.clear()
       },
     },
@@ -417,7 +417,7 @@ export function Session() {
           dialog.clear()
           return
         }
-        void sdk.api.session.revert
+        void client.api.session.revert
           .stage({ sessionID: route.sessionID, messageID: message.id })
           .catch((error) => toast.show({ message: errorMessage(error), variant: "error", duration: 5000 }))
         prompt?.set({
@@ -445,7 +445,7 @@ export function Session() {
       slash: { name: "redo" },
       run: () => {
         void (async () => {
-          const error = await sdk.api.session.revert.clear({ sessionID: route.sessionID }).then(
+          const error = await client.api.session.revert.clear({ sessionID: route.sessionID }).then(
             () => undefined,
             (error) => error,
           )
@@ -722,11 +722,11 @@ export function Session() {
               : await (async () => {
                   if (options.debug) {
                     const events: { readonly created: number }[] = []
-                    for await (const event of sdk.api.session.log({ sessionID: sessionData.id, follow: false })) {
+                    for await (const event of client.api.session.log({ sessionID: sessionData.id, follow: false })) {
                       if (event.type !== "log.synced") events.push(event)
                     }
                     // Durable events stay in aggregate order even when their wall-clock timestamps differ.
-                    sdk.connection.internal.history().forEach((event) => {
+                    client.connection.internal.history().forEach((event) => {
                       const index = events.findIndex((item) => item.created > event.created)
                       if (index === -1) {
                         events.push(event)
@@ -740,7 +740,7 @@ export function Session() {
                   const messages: unknown[] = []
                   let cursor: string | undefined
                   do {
-                    const page = await sdk.api.message.list(
+                    const page = await client.api.message.list(
                       cursor
                         ? { sessionID: sessionData.id, limit: 200, cursor }
                         : { sessionID: sessionData.id, limit: 200, order: "asc" },
@@ -776,7 +776,7 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        void sdk.api.session.background({ sessionID: route.sessionID })
+        void client.api.session.background({ sessionID: route.sessionID })
         dialog.clear()
       },
     },
@@ -1380,7 +1380,7 @@ function RevertMessage(props: {
   const ctx = use()
   const { theme } = useTheme()
   const route = useRouteData("session")
-  const sdk = useSDK()
+  const client = useClient()
   const toast = useToast()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
@@ -1392,7 +1392,7 @@ function RevertMessage(props: {
       onMouseUp={() => {
         if (renderer.getSelection()?.getSelectedText()) return
         void (async () => {
-          const error = await sdk.api.session.revert.clear({ sessionID: route.sessionID }).then(
+          const error = await client.api.session.revert.clear({ sessionID: route.sessionID }).then(
             () => undefined,
             (error) => error,
           )

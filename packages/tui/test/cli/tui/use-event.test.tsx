@@ -2,12 +2,11 @@
 import { describe, expect, test } from "bun:test"
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
 import { testRender } from "@opentui/solid"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2"
 import { onMount } from "solid-js"
 import { ProjectProvider, useProject } from "../../../src/context/project"
-import { SDKProvider, useSDK } from "../../../src/context/sdk"
+import { ClientProvider, useClient } from "../../../src/context/client"
 import { useEvent } from "../../../src/context/event"
-import { createApi, createClient, createEventStream, createFetch } from "../../fixture/tui-sdk"
+import { createApi, createEventStream, createFetch } from "../../fixture/tui-client"
 import { TestTuiContexts } from "../../fixture/tui-environment"
 import type { LogLevel, LogSink } from "../../../src/context/log"
 
@@ -54,7 +53,7 @@ function update(version: string): OpenCodeEvent {
 }
 
 async function mount(
-  reconnect?: (attempt: number) => Promise<{ client: OpencodeClient; api: OpenCodeClient }>,
+  reconnect?: (attempt: number) => Promise<{ api: OpenCodeClient }>,
   log?: LogSink,
 ) {
   const events = createEventStream()
@@ -62,7 +61,7 @@ async function mount(
   const seen: OpenCodeEvent[] = []
   const workspaces: Array<string | undefined> = []
   let project!: ReturnType<typeof useProject>
-  let sdk!: ReturnType<typeof useSDK>
+  let client!: ReturnType<typeof useClient>
   let done!: () => void
   const ready = new Promise<void>((resolve) => {
     done = resolve
@@ -70,12 +69,12 @@ async function mount(
 
   const app = await testRender(() => (
     <TestTuiContexts log={log}>
-      <SDKProvider client={createClient(calls.fetch)} api={createApi(calls.fetch)} reconnect={reconnect}>
+      <ClientProvider api={createApi(calls.fetch)} reconnect={reconnect}>
         <ProjectProvider>
           <Probe
             onReady={async (ctx) => {
               project = ctx.project
-              sdk = ctx.sdk
+              client = ctx.client
               await project.sync()
               done()
             }}
@@ -83,21 +82,21 @@ async function mount(
             workspaces={workspaces}
           />
         </ProjectProvider>
-      </SDKProvider>
+      </ClientProvider>
     </TestTuiContexts>
   ))
 
   await ready
-  return { app, events, emit: events.emit, project, sdk, seen, workspaces }
+  return { app, events, emit: events.emit, project, client, seen, workspaces }
 }
 
 function Probe(props: {
   seen: OpenCodeEvent[]
   workspaces: Array<string | undefined>
-  onReady: (ctx: { project: ReturnType<typeof useProject>; sdk: ReturnType<typeof useSDK> }) => void
+  onReady: (ctx: { project: ReturnType<typeof useProject>; client: ReturnType<typeof useClient> }) => void
 }) {
   const project = useProject()
-  const sdk = useSDK()
+  const client = useClient()
   const event = useEvent()
 
   onMount(() => {
@@ -105,7 +104,7 @@ function Probe(props: {
       props.seen.push(evt)
       props.workspaces.push(workspace)
     })
-    props.onReady({ project, sdk })
+    props.onReady({ project, client })
   })
 
   return <box />
@@ -137,7 +136,7 @@ describe("useEvent", () => {
         {
           level: "debug",
           message: "event",
-          tags: { component: "sdk", type: "session.renamed", aggregateID: "ses_test", seq: 1 },
+          tags: { component: "client", type: "session.renamed", aggregateID: "ses_test", seq: 1 },
         },
       ])
     } finally {
@@ -194,25 +193,24 @@ describe("useEvent", () => {
     const attempts: number[] = []
     const replacementEvents = createEventStream()
     const replacementCalls = createFetch(undefined, replacementEvents)
-    const replacement = { client: createClient(replacementCalls.fetch), api: createApi(replacementCalls.fetch) }
-    const { app, events, sdk, seen } = await mount(async (attempt) => {
+    const replacement = { api: createApi(replacementCalls.fetch) }
+    const { app, events, client, seen } = await mount(async (attempt) => {
       attempts.push(attempt)
       return replacement
     })
 
     try {
-      await wait(() => sdk.connection.status() === "connected")
+      await wait(() => client.connection.status() === "connected")
       // Reconnection only runs when the stream is down, never while connected.
       expect(attempts).toEqual([])
       events.disconnect()
-      await wait(() => sdk.connection.status() === "connected" && attempts.length > 0)
+      await wait(() => client.connection.status() === "connected" && attempts.length > 0)
       replacementEvents.emit(event(vcs("rediscovered"), { directory: "/tmp/rediscovered" }))
       await wait(() => seen.some((item) => item.type === "vcs.branch.updated" && item.data.branch === "rediscovered"))
 
-      expect(sdk.client).toBe(replacement.client)
-      expect(sdk.api).toBe(replacement.api)
+      expect(client.api).toBe(replacement.api)
       expect(attempts).toEqual([1])
-      const history = sdk.connection.internal.history()
+      const history = client.connection.internal.history()
       expect(history.map((event) => [event.data.status, event.data.attempt])).toEqual([
         ["connecting", 0],
         ["connected", 0],
@@ -228,22 +226,22 @@ describe("useEvent", () => {
 
   test("keeps the current client when reconnection fails", async () => {
     let calls = 0
-    const { app, events, sdk, seen } = await mount(async () => {
+    const { app, events, client, seen } = await mount(async () => {
       calls += 1
       throw new Error("no server")
     })
 
     try {
-      await wait(() => sdk.connection.status() === "connected")
-      const original = sdk.client
+      await wait(() => client.connection.status() === "connected")
+      const original = client.api
       events.disconnect()
       // Reconnection rejects; the loop retries against the last known transport,
       // which succeeds once the fixture accepts the reconnect.
-      await wait(() => calls > 0 && sdk.connection.status() === "connected")
+      await wait(() => calls > 0 && client.connection.status() === "connected")
       events.emit(event(vcs("recovered"), { directory: "/tmp/recovered" }))
       await wait(() => seen.some((item) => item.type === "vcs.branch.updated" && item.data.branch === "recovered"))
 
-      expect(sdk.client).toBe(original)
+      expect(client.api).toBe(original)
     } finally {
       app.renderer.destroy()
     }

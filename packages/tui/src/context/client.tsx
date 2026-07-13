@@ -1,13 +1,12 @@
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useLog } from "./log"
 
-export type SDKConnectionStatus = "connected" | "connecting" | "reconnecting"
-export type SDKConnectionEvent = {
+export type ClientConnectionStatus = "connected" | "connecting" | "reconnecting"
+export type ClientConnectionEvent = {
   readonly type: "client.connection"
   readonly created: number
   readonly data: {
@@ -17,27 +16,25 @@ export type SDKConnectionEvent = {
   }
 }
 
-type SDKEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
+type ClientEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
 const connectTimeout = 2_000
 const connectionHistoryLimit = 50
 
-export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
-  name: "SDK",
+export const { use: useClient, provider: ClientProvider } = createSimpleContext({
+  name: "Client",
   init: (props: {
-    client: OpencodeClient
     api: OpenCodeClient
-    reconnect?: (attempt: number) => Promise<{ client: OpencodeClient; api: OpenCodeClient }>
+    reconnect?: (attempt: number) => Promise<{ api: OpenCodeClient }>
     // Stops and starts the managed service; present only in service mode.
     reload?: () => Promise<void>
   }) => {
-    const log = useLog({ component: "sdk" })
+    const log = useLog({ component: "client" })
     const abort = new AbortController()
-    const history: SDKConnectionEvent[] = []
-    let client = props.client
+    const history: ClientConnectionEvent[] = []
     let api = props.api
-    const events = createGlobalEmitter<SDKEventMap>()
+    const events = createGlobalEmitter<ClientEventMap>()
     const [connection, setConnection] = createStore<{
-      status: SDKConnectionStatus
+      status: ClientConnectionStatus
       attempt: number
       error?: string
     }>({
@@ -46,7 +43,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     })
     let stream: AbortController | undefined
 
-    function record(status: SDKConnectionEvent["data"]["status"], attempt: number, error?: string) {
+    function record(status: ClientConnectionEvent["data"]["status"], attempt: number, error?: string) {
       history.push({ type: "client.connection", created: Date.now(), data: { status, attempt, error } })
       if (history.length > connectionHistoryLimit) history.shift()
     }
@@ -121,7 +118,6 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
             const next = await props.reconnect(attempt).catch(() => undefined)
             if (abort.signal.aborted || controller.signal.aborted) return
             if (next) {
-              client = next.client
               api = next.api
             }
           }
@@ -144,9 +140,6 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     })
 
     return {
-      get client() {
-        return client
-      },
       get api() {
         return api
       },

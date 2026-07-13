@@ -1,5 +1,4 @@
 import { OpenCode, type OpenCodeEvent } from "@opencode-ai/client"
-import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
 export const worktree = "/tmp/opencode"
 export const directory = `${worktree}/packages/tui`
@@ -133,10 +132,6 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
   }
   fetch.preconnect = () => {}
   return { fetch, session }
-}
-
-export function createClient(fetch: typeof globalThis.fetch) {
-  return createOpencodeClient({ baseUrl: "http://test", fetch })
 }
 
 export function createApi(fetch: typeof globalThis.fetch) {

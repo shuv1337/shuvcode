@@ -8,7 +8,7 @@ import { useData } from "../context/data"
 import { Locale } from "../util/locale"
 import { useProject } from "../context/project"
 import { useTheme } from "../context/theme"
-import { useSDK } from "../context/sdk"
+import { useClient } from "../context/client"
 import { useLocal } from "../context/local"
 import { createDebouncedSignal } from "../util/signal"
 import { useToast } from "../ui/toast"
@@ -23,7 +23,7 @@ export function DialogSessionList() {
   const data = useData()
   const project = useProject()
   const { theme } = useTheme()
-  const sdk = useSDK()
+  const client = useClient()
   const local = useLocal()
   const toast = useToast()
   const [search, setSearch] = createDebouncedSignal("", 150)
@@ -36,7 +36,7 @@ export function DialogSessionList() {
     if (!query) return
     const location = data.location.default()
     try {
-      const response = await sdk.api.session.list({
+      const response = await client.api.session.list({
         search: query,
         limit: 50,
         order: "desc",
@@ -140,7 +140,7 @@ export function DialogSessionList() {
               setToDelete(option.value)
               return
             }
-            void sdk.api.session.remove({ sessionID: option.value }).catch((error) => {
+            void client.api.session.remove({ sessionID: option.value }).catch((error) => {
               setToDelete(undefined)
               toast.show({
                 message: `Failed to delete session: ${errorMessage(error)}`,

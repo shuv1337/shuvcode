@@ -1,5 +1,5 @@
 import type { OpenCodeEvent } from "@opencode-ai/client"
-import { useSDK } from "./sdk"
+import { useClient } from "./client"
 
 type EventMetadata = {
   directory: string | undefined
@@ -7,10 +7,10 @@ type EventMetadata = {
 }
 
 export function useEvent() {
-  const sdk = useSDK()
+  const client = useClient()
 
   function subscribe(handler: (event: OpenCodeEvent, metadata: EventMetadata) => void) {
-    return sdk.event.listen(({ details }) => {
+    return client.event.listen(({ details }) => {
       if (details.type === "server.connected") return
       handler(details, { directory: details.location?.directory, workspace: details.location?.workspaceID })
     })
@@ -20,7 +20,7 @@ export function useEvent() {
     type: T,
     handler: (event: Extract<OpenCodeEvent, { type: T }>, metadata: EventMetadata) => void,
   ) {
-    return sdk.event.on(type, (event) => {
+    return client.event.on(type, (event) => {
       handler(event, { directory: event.location?.directory, workspace: event.location?.workspaceID })
     })
   }

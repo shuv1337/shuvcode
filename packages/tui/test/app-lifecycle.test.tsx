@@ -4,7 +4,7 @@ import { createTestRenderer } from "@opentui/core/testing"
 import { Effect } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Global } from "@opencode-ai/core/global"
-import { createEventStream, createFetch, directory, json } from "./fixture/tui-sdk"
+import { createEventStream, createFetch, directory, json } from "./fixture/tui-client"
 
 test("SIGHUP clears title and disposes scoped resources once", async () => {
   const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })

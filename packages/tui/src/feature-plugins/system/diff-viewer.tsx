@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiRouteCurrent } from "@opencode-ai/plugin/tui"
-import type { FileDiffInfo, FileDiffLegacyInfo } from "@opencode-ai/client"
+import type { FileDiffInfo } from "@opencode-ai/client"
 import {
   TextAttributes,
   type BorderSides,
@@ -11,7 +11,7 @@ import {
 import { LANGUAGE_EXTENSIONS } from "../../util/filetype"
 import { useBindings, useCommandShortcut } from "../../keymap"
 import { useTheme } from "../../context/theme"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { useTerminalDimensions } from "@opentui/solid"
 import path from "path"
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
@@ -42,7 +42,7 @@ const MIN_SPLIT_WIDTH = 100
 const FILE_TREE_WIDTH = 32
 const PLAIN_TEXT_FILETYPE = "opencode-plain-text"
 const VCS_DIFF_CONTEXT_LINES = 12
-type DiffMode = "working" | "branch" | "last-turn"
+type DiffMode = "working" | "branch"
 type DiffViewerFocus = "patches" | "files"
 type DiffView = "split" | "unified"
 type SelectedHunk = { readonly fileIndex: number; readonly hunkIndex: number; readonly scrollTop: number }
@@ -55,20 +55,14 @@ type DiffFile = {
   readonly status: "added" | "deleted" | "modified"
 }
 
-const normalizeDiffs = (diffs: readonly (FileDiffInfo | FileDiffLegacyInfo)[]): DiffFile[] =>
-  diffs.flatMap((item) =>
-    item.file
-      ? [
-          {
-            file: item.file,
-            patch: item.patch,
-            additions: item.additions,
-            deletions: item.deletions,
-            status: item.status ?? "modified",
-          } satisfies DiffFile,
-        ]
-      : [],
-  )
+const normalizeDiffs = (diffs: readonly FileDiffInfo[]): DiffFile[] =>
+  diffs.map((item) => ({
+    file: item.file,
+    patch: item.patch,
+    additions: item.additions,
+    deletions: item.deletions,
+    status: item.status,
+  }))
 
 function filetype(input?: string) {
   if (!input) return "none"
@@ -82,14 +76,13 @@ function storedView(value: unknown): DiffView | undefined {
 }
 
 function diffSourceLabel(mode: DiffMode) {
-  if (mode === "last-turn") return "last turn"
   if (mode === "branch") return "main branch"
   return "working tree"
 }
 
 function DiffViewer(props: { api: TuiPluginApi }) {
   const dimensions = useTerminalDimensions()
-  const sdk = useSDK()
+  const client = useClient()
   const config = useConfig()
   const themeState = useTheme()
   const theme = () => props.api.theme.current
@@ -98,7 +91,6 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       | {
           mode?: DiffMode
           sessionID?: string
-          messageID?: string
           returnRoute?: TuiRouteCurrent
         }
       | undefined
@@ -108,22 +100,11 @@ function DiffViewer(props: { api: TuiPluginApi }) {
     return {
       mode: mode(),
       sessionID,
-      messageID: params()?.messageID,
       directory: sessionID ? props.api.state.session.get(sessionID)?.directory : undefined,
     }
   })
   const [diff] = createResource(diffInput, async (input) => {
-    if (input.mode === "last-turn") {
-      const sessionID = input.sessionID
-      if (!sessionID) return []
-      const result = await props.api.client.session.diff(
-        { sessionID, messageID: input.messageID },
-        { throwOnError: true },
-      )
-      return normalizeDiffs(result.data ?? [])
-    }
-
-    const result = await sdk.api.vcs.diff(
+    const result = await client.api.vcs.diff(
       {
         location: input.directory ? { directory: input.directory } : undefined,
         mode: input.mode,
@@ -704,26 +685,16 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   ]
 
   const switchDiffOptions = createMemo(() => {
-    const vcs = props.api.state.vcs
     return [
       {
         title: "Working tree",
         value: "working" as const,
         description: "Show current git changes",
       },
-      ...(vcs?.branch && vcs.default_branch && vcs.branch !== vcs.default_branch
-        ? [
-            {
-              title: "Main branch",
-              value: "branch" as const,
-              description: "Show changes compared to main branch",
-            },
-          ]
-        : []),
       {
-        title: "Last turn",
-        value: "last-turn" as const,
-        description: "Show changes from the last assistant turn",
+        title: "Main branch",
+        value: "branch" as const,
+        description: "Show changes compared to main branch",
       },
     ]
   })
@@ -742,7 +713,6 @@ function DiffViewer(props: { api: TuiPluginApi }) {
             props.api.route.navigate(ROUTE, {
               mode: option.value,
               sessionID: params()?.sessionID,
-              messageID: params()?.messageID,
               returnRoute: params()?.returnRoute,
             })
           },
@@ -1011,7 +981,7 @@ function DiffViewerHelpDialog() {
     {
       shortcut: useCommandShortcut("diff.switch_source"),
       action: "Switch source",
-      description: "Choose working tree, main branch, or last-turn changes",
+      description: "Choose working tree or main branch changes",
     },
     {
       shortcut: useCommandShortcut("diff.toggle_view"),

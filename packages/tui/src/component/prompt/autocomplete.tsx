@@ -7,7 +7,7 @@ import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Sh
 import { createStore } from "solid-js/store"
 import { useEditorContext } from "../../context/editor"
 import { useProject } from "../../context/project"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { useData } from "../../context/data"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiPaths } from "../../context/runtime"
@@ -84,7 +84,7 @@ export function Autocomplete(props: {
   promptPartTypeId: () => number
 }) {
   const editor = useEditorContext()
-  const sdk = useSDK()
+  const client = useClient()
   const data = useData()
   const project = useProject()
   const slashes = useCommandSlashes()
@@ -315,7 +315,7 @@ export function Autocomplete(props: {
       if (referenceMatch()) return []
       const { lineRange, baseQuery } = extractLineRange(input.query ?? "")
 
-      const result = await sdk.api.file
+      const result = await client.api.file
         .find({
           query: baseQuery,
           limit: 20,

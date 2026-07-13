@@ -2,7 +2,7 @@ import type { TuiDialogSelectOption, TuiPluginApi, TuiSlotProps } from "@opencod
 import type { Config } from "../config"
 import type { useEvent } from "../context/event"
 import type { useRoute } from "../context/route"
-import type { useSDK } from "../context/sdk"
+import type { useClient } from "../context/client"
 import type { useData } from "../context/data"
 import type { useProject } from "../context/project"
 import type { useTheme } from "../context/theme"
@@ -28,7 +28,7 @@ type Input = {
   route: ReturnType<typeof useRoute>
   routes: PluginRoutes
   event: ReturnType<typeof useEvent>
-  sdk: ReturnType<typeof useSDK>
+  client: ReturnType<typeof useClient>
   project: ReturnType<typeof useProject>
   data: ReturnType<typeof useData>
   theme: ReturnType<typeof useTheme>
@@ -167,6 +167,15 @@ function appApi(version: string): TuiPluginApi["app"] {
   }
 }
 
+const unsupportedClient = new Proxy(
+  {},
+  {
+    get() {
+      throw new Error("The legacy plugin client is not supported in V2")
+    },
+  },
+) as TuiPluginApi["client"]
+
 export function createTuiApiAdapters(input: Input): Omit<TuiPluginApi, "lifecycle"> {
   return {
     app: appApi(input.version),
@@ -292,9 +301,7 @@ export function createTuiApiAdapters(input: Input): Omit<TuiPluginApi, "lifecycl
       ready: true,
     },
     state: stateApi(input.project, input.data),
-    get client() {
-      return input.sdk.client
-    },
+    client: unsupportedClient,
     event: input.event,
     renderer: input.renderer,
     slots: {

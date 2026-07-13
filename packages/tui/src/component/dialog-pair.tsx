@@ -2,7 +2,7 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { renderUnicodeCompact } from "uqr"
-import { useSDK } from "../context/sdk"
+import { useClient } from "../context/client"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { errorMessage } from "../util/error"
@@ -13,7 +13,7 @@ export type DialogPairCredentials = {
 }
 
 export function DialogPair(props: { credentials?: DialogPairCredentials }) {
-  const sdk = useSDK()
+  const client = useClient()
   const dialog = useDialog()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
@@ -25,7 +25,7 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
   dialog.setCentered(true)
 
   const [server] = createResource(() =>
-    sdk.api.server
+    client.api.server
       .get()
       .catch((error) => {
         setLoadError(error)

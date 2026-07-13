@@ -1,12 +1,12 @@
 import { batch } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
-import { useSDK } from "./sdk"
+import { useClient } from "./client"
 
 export const { use: useProject, provider: ProjectProvider } = createSimpleContext({
   name: "Project",
   init: () => {
-    const sdk = useSDK()
+    const client = useClient()
 
     const defaultPath = {
       home: "",
@@ -33,8 +33,8 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
     async function sync() {
       const workspace = store.workspace.current
       const location = { workspace }
-      const current = await sdk.api.location.get({ location })
-      const directories = await sdk.api.project.directories({ projectID: current.project.id, location })
+      const current = await client.api.location.get({ location })
+      const directories = await client.api.project.directories({ projectID: current.project.id, location })
       batch(() => {
         setStore(
           "instance",

@@ -4,17 +4,16 @@ import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { DiffRenderable, type Renderable, ScrollBoxRenderable } from "@opentui/core"
 import { testRender, useRenderer } from "@opentui/solid"
 import type { TuiPluginApi, TuiPluginMeta, TuiRouteCurrent, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
-import type { Session } from "@opencode-ai/sdk/v2"
 import { ThemeProvider } from "../../../src/context/theme"
 import { ConfigProvider } from "../../../src/config"
-import { SDKProvider } from "../../../src/context/sdk"
+import { ClientProvider } from "../../../src/context/client"
 import { TuiKeybind } from "../../../src/config/keybind"
 import { OpencodeKeymapProvider } from "../../../src/keymap"
 import diffViewerPlugin from "../../../src/feature-plugins/system/diff-viewer"
 import { createTuiPluginApi } from "../../fixture/tui-plugin"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 import { TestTuiContexts } from "../../fixture/tui-environment"
-import { createApi, createClient, createEventStream, createFetch, json } from "../../fixture/tui-sdk"
+import { createApi, createEventStream, createFetch, json } from "../../fixture/tui-client"
 
 test("closing the diff viewer returns to the route it opened from", async () => {
   const viewer = await renderDiffViewer([])
@@ -111,7 +110,6 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
   let current = initialRoute ?? startRoute
   let renderDiff: TuiRouteDefinition["render"] | undefined
   let vcsDiffInput: unknown
-  let sessionDiffInput: unknown
   const config = createTuiResolvedConfig()
   const transport = createFetch((url) => {
     if (url.pathname !== "/api/vcs/diff") return
@@ -135,14 +133,6 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
     }
     const base = createTuiPluginApi({
       keymap,
-      client: {
-        session: {
-          diff: async (input: unknown) => {
-            sessionDiffInput = input
-            return { data: [] }
-          },
-        },
-      } as unknown as TuiPluginApi["client"],
       state: {
         session: {
           get: () => session,
@@ -170,7 +160,7 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
 
     return (
       <TestTuiContexts>
-        <SDKProvider client={createClient(transport.fetch)} api={createApi(transport.fetch)}>
+        <ClientProvider api={createApi(transport.fetch)}>
           <OpencodeKeymapProvider keymap={keymap}>
             <ConfigProvider config={config}>
               <ThemeProvider mode="dark">
@@ -178,7 +168,7 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
               </ThemeProvider>
             </ConfigProvider>
           </OpencodeKeymapProvider>
-        </SDKProvider>
+        </ClientProvider>
       </TestTuiContexts>
     )
   }
@@ -190,7 +180,6 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
     commands,
     current: () => current,
     vcsDiffInput: () => vcsDiffInput,
-    sessionDiffInput: () => sessionDiffInput,
   }
 }
 
@@ -217,7 +206,7 @@ const session = {
     created: 0,
     updated: 0,
   },
-} satisfies Session
+} satisfies NonNullable<ReturnType<TuiPluginApi["state"]["session"]["get"]>>
 
 test("branch diff source requests branch VCS diff", async () => {
   const viewer = await renderDiffViewer([], 20, {
@@ -234,24 +223,6 @@ test("branch diff source requests branch VCS diff", async () => {
       mode: "branch",
       context: "12",
     })
-    expect(viewer.sessionDiffInput()).toBeUndefined()
-  } finally {
-    viewer.app.renderer.destroy()
-  }
-})
-
-test("last-turn diff source requests session diff", async () => {
-  const viewer = await renderDiffViewer([], 20, {
-    name: "diff",
-    params: { mode: "last-turn", sessionID: "session-1", messageID: "message-1", returnRoute: startRoute },
-  })
-  try {
-    expect(viewer.current()).toEqual({
-      name: "diff",
-      params: { mode: "last-turn", sessionID: "session-1", messageID: "message-1", returnRoute: startRoute },
-    })
-    expect(viewer.sessionDiffInput()).toEqual({ sessionID: "session-1", messageID: "message-1" })
-    expect(viewer.vcsDiffInput()).toBeUndefined()
   } finally {
     viewer.app.renderer.destroy()
   }

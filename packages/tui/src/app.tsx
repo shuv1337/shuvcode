@@ -41,7 +41,7 @@ import { PluginRouteMissing } from "./component/plugin-route-missing"
 import { ProjectProvider, useProject } from "./context/project"
 import { EditorContextProvider } from "./context/editor"
 import { useEvent } from "./context/event"
-import { SDKProvider, useSDK } from "./context/sdk"
+import { ClientProvider, useClient } from "./context/client"
 import { StartupLoading } from "./component/startup-loading"
 import { Reconnecting } from "./component/reconnecting"
 import { DataProvider, useData } from "./context/data"
@@ -55,7 +55,6 @@ import { DialogStatus } from "./component/dialog-status"
 import { DialogConfig } from "./component/dialog-config"
 import { DialogDebug } from "./component/dialog-debug"
 import { DialogPair, type DialogPairCredentials } from "./component/dialog-pair"
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
@@ -66,8 +65,6 @@ import { Session } from "./routes/session"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
-import { DialogAlert } from "./ui/dialog-alert"
-import { DialogConfirm } from "./ui/dialog-confirm"
 import { ToastProvider, useToast } from "./ui/toast"
 import { isDefaultTitle } from "./util/session"
 import * as Model from "./util/model"
@@ -198,7 +195,6 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
         const endpoint = await reconnectEndpoint(attempt)
         const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
         return {
-          client: createOpencodeClient({ ...next, directory }),
           api: OpenCode.make(next),
         }
       }
@@ -336,8 +332,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                       }
                                     >
                                       <PluginRuntimeProvider value={pluginRuntime}>
-                                        <SDKProvider
-                                          client={createOpencodeClient({ ...options, directory })}
+                                        <ClientProvider
                                           api={api}
                                           reconnect={reconnect}
                                           reload={input.server.reload}
@@ -377,7 +372,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                               </DataProvider>
                                             </ProjectProvider>
                                           </PermissionProvider>
-                                        </SDKProvider>
+                                        </ClientProvider>
                                       </PluginRuntimeProvider>
                                     </RouteProvider>
                                   </ToastProvider>
@@ -426,7 +421,7 @@ function App(props: {
   const local = useLocal()
   const keymap = useOpencodeKeymap()
   const event = useEvent()
-  const sdk = useSDK()
+  const client = useClient()
   const toast = useToast()
   const themeState = useTheme()
   const { theme, mode, setMode, locked, lock, unlock } = themeState
@@ -475,7 +470,7 @@ function App(props: {
       route,
       routes: pluginRuntime.routes,
       event,
-      sdk,
+      client,
       project,
       data,
       theme: themeState,
@@ -585,7 +580,7 @@ function App(props: {
     if (continued || !args.continue) return
     continued = true
     const location = data.location.default()
-    void sdk.api.session
+    void client.api.session
       .list({
         limit: 1,
         order: "desc",
@@ -600,7 +595,7 @@ function App(props: {
           route.navigate({ type: "session", sessionID: match })
           return
         }
-        void sdk.api.session
+        void client.api.session
           .fork({ sessionID: match })
           .then((result) => route.navigate({ type: "session", sessionID: result.id }))
           .catch(toast.error)
@@ -613,7 +608,7 @@ function App(props: {
   createEffect(() => {
     if (forked || !args.sessionID || !args.fork) return
     forked = true
-    void sdk.api.session
+    void client.api.session
       .fork({ sessionID: args.sessionID })
       .then((result) => route.navigate({ type: "session", sessionID: result.id }))
       .catch(toast.error)
@@ -815,7 +810,7 @@ function App(props: {
         },
         category: "System",
       },
-      ...(sdk.reload
+      ...(client.reload
         ? [
             {
               name: "server.reload",
@@ -826,7 +821,7 @@ function App(props: {
                 toast.show({ variant: "info", message: "Reloading server...", duration: 30000 })
                 // reload resolves once the replacement service is healthy; the
                 // event stream reattaches through the reconnect loop.
-                await sdk.reload!()
+                await client.reload!()
                   .then(() => toast.show({ variant: "success", message: "Server reloaded" }))
                   .catch(toast.error)
               },
@@ -1092,45 +1087,6 @@ function App(props: {
     })
   })
 
-  event.on("installation.update-available", async (evt) => {
-    const version = evt.data.version
-
-    const choice = await DialogConfirm.show(
-      dialog,
-      `Update Available`,
-      `A new release v${version} is available. Would you like to update now?`,
-      "later",
-    )
-
-    if (choice !== true) return
-
-    toast.show({
-      variant: "info",
-      message: `Updating to v${version}...`,
-      duration: 30000,
-    })
-
-    const result = await sdk.client.global.upgrade({ target: version })
-
-    if (result.error || !result.data?.success) {
-      toast.show({
-        variant: "error",
-        title: "Update Failed",
-        message: "Update failed",
-        duration: 10000,
-      })
-      return
-    }
-
-    await DialogAlert.show(
-      dialog,
-      "Update Complete",
-      `Successfully updated to OpenCode v${result.data.version}. Please restart the application.`,
-    )
-
-    void exit()
-  })
-
   const plugin = createMemo(() => {
     if (!ready()) return
     if (route.data.type !== "plugin") return
@@ -1148,7 +1104,7 @@ function App(props: {
       clearTimeout(reconnectTimer)
       reconnectTimer = undefined
     }
-    const status = sdk.connection.status()
+    const status = client.connection.status()
     if (status === "connected") {
       setShowReconnecting(false)
       return
@@ -1211,7 +1167,7 @@ function App(props: {
         <StartupLoading ready={ready} />
       </Show>
       <Show when={showReconnecting()}>
-        <Reconnecting attempt={sdk.connection.attempt()} error={sdk.connection.error()} />
+        <Reconnecting attempt={client.connection.attempt()} error={client.connection.error()} />
       </Show>
     </box>
   )

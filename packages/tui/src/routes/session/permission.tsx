@@ -5,7 +5,7 @@ import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/s
 import type { TextareaRenderable } from "@opentui/core"
 import { useTheme, selectedForeground } from "../../context/theme"
 import type { PermissionV2Request } from "@opencode-ai/client"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
 import { filetype } from "../../util/filetype"
@@ -135,7 +135,7 @@ function TextBody(props: { title: string; description?: string; icon?: string })
 }
 
 export function PermissionPrompt(props: { request: PermissionV2Request; directory?: string }) {
-  const sdk = useSDK()
+  const client = useClient()
   const data = useData()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
@@ -187,7 +187,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
-            void sdk.api.permission.reply({
+            void client.api.permission.reply({
               sessionID: props.request.sessionID,
               reply: "always",
               requestID: props.request.id,
@@ -198,7 +198,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
       <Match when={store.stage === "reject"}>
         <RejectPrompt
           onConfirm={(message) => {
-            void sdk.api.permission.reply({
+            void client.api.permission.reply({
               sessionID: props.request.sessionID,
               reply: "reject",
               requestID: props.request.id,
@@ -444,14 +444,14 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
                     setStore("stage", "reject")
                     return
                   }
-                  void sdk.api.permission.reply({
+                  void client.api.permission.reply({
                     sessionID: props.request.sessionID,
                     reply: "reject",
                     requestID: props.request.id,
                   })
                   return
                 }
-                void sdk.api.permission.reply({
+                void client.api.permission.reply({
                   sessionID: props.request.sessionID,
                   reply: "once",
                   requestID: props.request.id,
