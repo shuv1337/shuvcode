@@ -1,17 +1,12 @@
-import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core"
-import { useTerminalDimensions } from "@opentui/solid"
-import { createMemo, createSignal, For, onMount, Show } from "solid-js"
+import { createMemo, createSignal } from "solid-js"
 import { useConfig } from "../config"
 import { useTheme } from "../context/theme"
-import { useBindings } from "../keymap"
-import { useDialog } from "../ui/dialog"
+import { DialogSelect } from "../ui/dialog-select"
 import { useToast } from "../ui/toast"
 
 type Setting = {
   title: string
   category: string
-  description: string
-  detail?: string
   path: string[]
   default: unknown
   values?: readonly unknown[]
@@ -26,18 +21,12 @@ const settings: Setting[] = [
   {
     title: "Theme",
     category: "Appearance",
-    description: "Interface color theme",
-    detail:
-      "Choose the color theme used throughout OpenCode. Custom themes discovered from your config directory appear here alongside the built-in themes.",
     path: ["theme", "name"],
     default: "opencode",
   },
   {
     title: "Color mode",
     category: "Appearance",
-    description: "Terminal color preference",
-    detail:
-      "Choose how OpenCode selects its colors. System follows your terminal preference, while dark and light keep the interface in a fixed mode.",
     path: ["theme", "mode"],
     default: "system",
     values: ["system", "dark", "light"],
@@ -45,7 +34,6 @@ const settings: Setting[] = [
   {
     title: "Animations",
     category: "Appearance",
-    description: "Interface motion",
     path: ["animations"],
     default: true,
     values: [false, true],
@@ -54,7 +42,6 @@ const settings: Setting[] = [
   {
     title: "Tips",
     category: "Appearance",
-    description: "Home screen hints",
     path: ["hints", "tips"],
     default: true,
     values: [false, true],
@@ -63,7 +50,6 @@ const settings: Setting[] = [
   {
     title: "Onboarding",
     category: "Appearance",
-    description: "Getting-started guidance",
     path: ["hints", "onboarding"],
     default: true,
     values: [false, true],
@@ -72,7 +58,6 @@ const settings: Setting[] = [
   {
     title: "Sidebar",
     category: "Session",
-    description: "Session sidebar visibility",
     path: ["session", "sidebar"],
     default: "auto",
     values: ["hide", "auto"],
@@ -80,7 +65,6 @@ const settings: Setting[] = [
   {
     title: "Scrollbar",
     category: "Session",
-    description: "Transcript scrollbar",
     path: ["session", "scrollbar"],
     default: false,
     values: [false, true],
@@ -89,7 +73,6 @@ const settings: Setting[] = [
   {
     title: "Thinking",
     category: "Session",
-    description: "Model reasoning by default",
     path: ["session", "thinking"],
     default: "hide",
     values: ["hide", "show"],
@@ -97,7 +80,6 @@ const settings: Setting[] = [
   {
     title: "Grouping",
     category: "Session",
-    description: "Related transcript items",
     path: ["session", "grouping"],
     default: "auto",
     values: ["none", "auto"],
@@ -105,7 +87,6 @@ const settings: Setting[] = [
   {
     title: "Layout",
     category: "Diffs",
-    description: "Diff presentation",
     path: ["diffs", "view"],
     default: "auto",
     values: ["auto", "split", "unified"],
@@ -113,7 +94,6 @@ const settings: Setting[] = [
   {
     title: "Wrapping",
     category: "Diffs",
-    description: "Long diff lines",
     path: ["diffs", "wrap"],
     default: "word",
     values: ["none", "word"],
@@ -121,7 +101,6 @@ const settings: Setting[] = [
   {
     title: "File tree",
     category: "Diffs",
-    description: "Diff file navigation",
     path: ["diffs", "tree"],
     default: true,
     values: [false, true],
@@ -130,7 +109,6 @@ const settings: Setting[] = [
   {
     title: "Single patch",
     category: "Diffs",
-    description: "Only the selected patch",
     path: ["diffs", "single"],
     default: false,
     values: [false, true],
@@ -139,7 +117,6 @@ const settings: Setting[] = [
   {
     title: "Scroll speed",
     category: "Input",
-    description: "Distance per input tick",
     path: ["scroll", "speed"],
     default: 3,
     step: 0.25,
@@ -150,7 +127,6 @@ const settings: Setting[] = [
   {
     title: "Acceleration",
     category: "Input",
-    description: "Repeated scrolling",
     path: ["scroll", "acceleration"],
     default: false,
     values: [false, true],
@@ -159,7 +135,6 @@ const settings: Setting[] = [
   {
     title: "Mouse",
     category: "Input",
-    description: "Terminal mouse capture",
     path: ["mouse"],
     default: true,
     values: [false, true],
@@ -168,7 +143,6 @@ const settings: Setting[] = [
   {
     title: "Editor context",
     category: "Input",
-    description: "Active selection in prompts",
     path: ["prompt", "editor"],
     default: true,
     values: [false, true],
@@ -177,7 +151,6 @@ const settings: Setting[] = [
   {
     title: "Large pastes",
     category: "Input",
-    description: "Paste display style",
     path: ["prompt", "paste"],
     default: "compact",
     values: ["compact", "full"],
@@ -185,7 +158,6 @@ const settings: Setting[] = [
   {
     title: "Leader timeout",
     category: "Input",
-    description: "Wait after leader key",
     path: ["leader", "timeout"],
     default: 2000,
     step: 250,
@@ -196,7 +168,6 @@ const settings: Setting[] = [
   {
     title: "Attention",
     category: "Alerts",
-    description: "Alerts when input is needed",
     path: ["attention", "enabled"],
     default: false,
     values: [false, true],
@@ -205,7 +176,6 @@ const settings: Setting[] = [
   {
     title: "Notifications",
     category: "Alerts",
-    description: "System notifications",
     path: ["attention", "notifications"],
     default: true,
     values: [false, true],
@@ -214,7 +184,6 @@ const settings: Setting[] = [
   {
     title: "Sounds",
     category: "Alerts",
-    description: "Attention sounds",
     path: ["attention", "sound"],
     default: true,
     values: [false, true],
@@ -223,7 +192,6 @@ const settings: Setting[] = [
   {
     title: "Volume",
     category: "Alerts",
-    description: "Attention sound level",
     path: ["attention", "volume"],
     default: 0.4,
     step: 0.1,
@@ -234,7 +202,6 @@ const settings: Setting[] = [
   {
     title: "Window title",
     category: "Terminal",
-    description: "Update terminal title",
     path: ["terminal", "title"],
     default: true,
     values: [false, true],
@@ -244,18 +211,10 @@ const settings: Setting[] = [
 
 export function DialogConfig() {
   const config = useConfig()
-  const dialog = useDialog()
   const toast = useToast()
   const themeState = useTheme()
-  const { theme } = themeState
-  const dimensions = useTerminalDimensions()
   const [selected, setSelected] = createSignal(0)
   const [saving, setSaving] = createSignal(false)
-  let scroll: ScrollBoxRenderable | undefined
-  onMount(() => {
-    dialog.setSize("xlarge")
-    dialog.setCentered(true)
-  })
 
   const value = (setting: Setting) => {
     const current = setting.path.reduce<unknown>((result, key) => {
@@ -275,34 +234,18 @@ export function DialogConfig() {
     const index = setting.values?.indexOf(current)
     return index === undefined || index < 0 ? String(current) : (setting.labels?.[index] ?? String(current))
   }
-  const rows = createMemo(() =>
+  const options = createMemo(() =>
     settings.map((setting, index) => ({
-      setting,
-      index,
-      heading: index === 0 || settings[index - 1].category !== setting.category,
+      title: setting.title,
+      category: setting.category,
+      footer: display(setting),
+      value: index,
     })),
   )
-  const split = createMemo(() => dimensions().width >= 110)
-  const height = createMemo(() => Math.max(8, Math.min(36, dimensions().height - 12)))
 
-  function move(direction: number) {
-    const next = (selected() + direction + settings.length) % settings.length
-    setSelected(next)
-    queueMicrotask(() => {
-      if (!scroll) return
-      const row =
-        next +
-        settings.slice(0, next + 1).filter((setting, index) => {
-          return index === 0 || settings[index - 1].category !== setting.category
-        }).length
-      if (row < scroll.scrollTop) scroll.scrollTo(row)
-      if (row >= scroll.scrollTop + scroll.viewport.height) scroll.scrollTo(row - scroll.viewport.height + 1)
-    })
-  }
-
-  async function change(direction: number) {
+  async function change(direction: number, index = selected()) {
     if (saving()) return
-    const setting = settings[selected()]
+    const setting = settings[index]
     const current = value(setting)
     const choices = values(setting)
     const next = choices
@@ -322,99 +265,27 @@ export function DialogConfig() {
       .finally(() => setSaving(false))
   }
 
-  useBindings(() => ({
-    bindings: [
-      {
-        key: "up",
-        desc: "Previous setting",
-        group: "Settings",
-        cmd: () => move(-1),
-      },
-      {
-        key: "down",
-        desc: "Next setting",
-        group: "Settings",
-        cmd: () => move(1),
-      },
-      { key: "left", desc: "Previous value", group: "Settings", cmd: () => void change(-1) },
-      { key: "right", desc: "Next value", group: "Settings", cmd: () => void change(1) },
-      { key: "return", desc: "Next value", group: "Settings", cmd: () => void change(1) },
-    ],
-  }))
-
   return (
-    <box flexDirection="row" height={height() + 1}>
-      <box width={split() ? "54%" : "100%"} paddingLeft={4} paddingRight={split() ? 3 : 4} paddingBottom={1}>
-        <text fg={theme.text} attributes={TextAttributes.BOLD} paddingBottom={1}>
-          Settings
-        </text>
-        <scrollbox
-          ref={(element: ScrollBoxRenderable) => (scroll = element)}
-          flexGrow={1}
-          scrollbarOptions={{ visible: false }}
-        >
-          <For each={rows()}>
-            {(row) => (
-              <>
-                <Show when={row.heading}>
-                  <box paddingTop={row.index === 0 ? 0 : 1}>
-                    <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                      {row.setting.category}
-                    </text>
-                  </box>
-                </Show>
-                <box flexDirection="row" height={1}>
-                  <text
-                    width={25}
-                    fg={row.index === selected() ? theme.text : theme.textMuted}
-                    attributes={row.index === selected() ? TextAttributes.BOLD : undefined}
-                  >
-                    {row.setting.title}
-                  </text>
-                  <box flexGrow={1} flexDirection="row" justifyContent="flex-end">
-                    <box flexDirection="row">
-                      <text fg={theme.textMuted}>{row.index === selected() ? "‹ " : "  "}</text>
-                      <text
-                        fg={row.index === selected() ? theme.primary : theme.textMuted}
-                        attributes={row.index === selected() ? TextAttributes.BOLD : undefined}
-                      >
-                        {display(row.setting)}
-                      </text>
-                      <text fg={theme.textMuted}>{row.index === selected() ? " ›" : "  "}</text>
-                    </box>
-                  </box>
-                </box>
-              </>
-            )}
-          </For>
-        </scrollbox>
-      </box>
-      <Show when={split()}>
-        <box
-          position="relative"
-          top={-1}
-          width="46%"
-          height={height() + 2}
-          paddingTop={1}
-          paddingLeft={2}
-          paddingRight={2}
-          backgroundColor={theme.backgroundElement}
-        >
-          <box flexDirection="row" justifyContent="space-between">
-            <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-              {settings[selected()].title}
-            </text>
-            <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
-              esc
-            </text>
-          </box>
-          <box paddingTop={1}>
-            <text fg={theme.text} wrapMode="word">
-              {settings[selected()].detail ?? settings[selected()].description}
-            </text>
-          </box>
-        </box>
-      </Show>
-    </box>
+    <DialogSelect
+      title="Settings"
+      options={options()}
+      onMove={(option) => setSelected(option.value)}
+      onSelect={(option) => void change(1, option.value)}
+      footerHints={[{ title: "←/→", label: "change" }]}
+      bindings={[
+        {
+          key: "left",
+          desc: "Previous value",
+          group: "Settings",
+          cmd: () => void change(-1),
+        },
+        {
+          key: "right",
+          desc: "Next value",
+          group: "Settings",
+          cmd: () => void change(1),
+        },
+      ]}
+    />
   )
 }
