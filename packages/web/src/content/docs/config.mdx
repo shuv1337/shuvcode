@@ -749,12 +749,12 @@ You can configure file watcher ignore patterns through the `watcher` option.
 {
   "$schema": "https://opencode.ai/config.json",
   "watcher": {
-    "ignore": ["node_modules/**", "dist/**", ".git/**"]
+    "ignore": ["**/generated/**"]
   }
 }
 ```
 
-Patterns follow glob syntax. Use this to exclude noisy directories from file watching.
+Patterns follow glob syntax. Common dependency, VCS, build, and cache directories are ignored automatically at any depth.
 
 ---
 

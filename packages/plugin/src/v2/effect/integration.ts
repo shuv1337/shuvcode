@@ -9,8 +9,9 @@ import type {
   IntegrationOAuthMethod,
   IntegrationRef,
 } from "@opencode-ai/sdk/v2/types"
+import type { IntegrationApi } from "@opencode-ai/client/effect/api"
 import type { Effect, Scope } from "effect"
-import type { Hooks } from "./registration.js"
+import type { Transform } from "./registration.js"
 
 export type IntegrationOAuthAuthorization = {
   readonly url: string
@@ -55,7 +56,9 @@ export interface IntegrationDraft {
   }
 }
 
-export interface IntegrationHooks extends Hooks<{ transform: IntegrationDraft }> {
+export interface IntegrationDomain extends IntegrationApi<unknown> {
+  readonly transform: Transform<IntegrationDraft>
+  readonly reload: () => Effect.Effect<void>
   readonly connection: {
     readonly active: (integrationID: string) => Effect.Effect<ConnectionInfo | undefined>
     readonly resolve: (connection: ConnectionInfo) => Effect.Effect<CredentialValue | undefined, unknown>

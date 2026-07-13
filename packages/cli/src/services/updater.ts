@@ -5,7 +5,6 @@ import {
   InstallationChannel,
   InstallationLocal,
   InstallationVersion,
-  parseForkVersion,
 } from "@opencode-ai/core/installation/version"
 import { Context, Duration, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess } from "effect/unstable/process"
@@ -41,8 +40,8 @@ export function action(current: string, latest: string, policy: Policy): Action 
   // Major upgrades are never installed automatically.
   if (semver.major(latest) !== semver.major(current)) return "none"
 
-  const currentFork = parseForkVersion(current)
-  const latestFork = parseForkVersion(latest)
+  const currentFork = forkVersion(current)
+  const latestFork = forkVersion(latest)
   if (currentFork) {
     if (!latestFork) return "none"
     if (currentFork.base === latestFork.base) return latestFork.iteration > currentFork.iteration ? "upgrade" : "none"
@@ -50,6 +49,12 @@ export function action(current: string, latest: string, policy: Policy): Action 
   }
 
   return "upgrade"
+}
+
+function forkVersion(version: string) {
+  const match = version.replace(/^v/, "").match(/^(\d+\.\d+\.\d+)-(\d+)$/)
+  if (!match) return
+  return { base: match[1], iteration: Number(match[2]) }
 }
 
 export const layer = Layer.effect(

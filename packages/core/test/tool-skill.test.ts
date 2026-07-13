@@ -13,12 +13,20 @@ import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
-import { toolIdentity, executeTool, settleTool, toolDefinitions } from "./lib/tool"
+import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
+import { FSUtil } from "@opencode-ai/core/fs-util"
+import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
+
+const skillToolNode = makeLocationNode({
+  name: "test/skill-tool-plugin",
+  layer: Layer.effectDiscard(registerToolPlugin(SkillTool.Plugin)),
+  deps: [ToolRegistry.toolsNode, FSUtil.node, SkillV2.node, PermissionV2.node],
+})
 
 const sessionID = SessionV2.ID.make("ses_skill_tool_test")
 
 describe("SkillTool", () => {
-  it.live("lists available skills, authorizes the selected name, and loads model-facing content", () =>
+  it.live("lists available skills, authorizes the selected ID, and loads model-facing content", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
@@ -34,7 +42,8 @@ describe("SkillTool", () => {
           )
 
           const info: SkillV2.Info = {
-            name: "effect",
+            id: SkillV2.ID.make("effect"),
+            name: SkillV2.Name.make("Effect"),
             description: "Use Effect",
             location: AbsolutePath.make(location),
             content: "# Effect\n\nGuidance",
@@ -47,7 +56,17 @@ describe("SkillTool", () => {
             PermissionV2.Service.of({
               assert: (input) =>
                 Effect.sync(() => assertions.push(input)).pipe(
-                  Effect.andThen(deny ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void),
+                  Effect.andThen(
+                    deny
+                      ? Effect.fail(
+                          new PermissionV2.BlockedError({
+                            rules: [],
+                            permission: input.action,
+                            resources: input.resources,
+                          }),
+                        )
+                      : Effect.void,
+                  ),
                 ),
               ask: () => Effect.die("unused"),
               reply: () => Effect.die("unused"),
@@ -66,7 +85,7 @@ describe("SkillTool", () => {
             }),
           )
           const skillToolLayer = AppNodeBuilder.build(
-            LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, SkillTool.node]),
+            LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, skillToolNode]),
             [
               [PermissionV2.node, permission],
               [SkillV2.node, skills],
@@ -84,7 +103,7 @@ describe("SkillTool", () => {
               yield* executeTool(registry, {
                 sessionID,
                 ...toolIdentity,
-                call: { type: "tool-call", id: "call-skill", name: "skill", input: { name: "effect" } },
+                call: { type: "tool-call", id: "call-skill", name: "skill", input: { id: "effect" } },
               }),
             ).toEqual({
               type: "text",
@@ -95,11 +114,11 @@ describe("SkillTool", () => {
               yield* settleTool(registry, {
                 sessionID,
                 ...toolIdentity,
-                call: { type: "tool-call", id: "call-skill-overflow", name: "skill", input: { name: "effect" } },
+                call: { type: "tool-call", id: "call-skill-overflow", name: "skill", input: { id: "effect" } },
               }),
             ).toMatchObject({
               result: { type: "text", value: SkillTool.toModelOutput(info, [reference]) },
-              output: { structured: { name: "effect" } },
+              output: { structured: { name: "Effect" } },
             })
             expect(assertions).toMatchObject([
               { sessionID, action: "skill", resources: ["effect"], save: ["effect"] },
@@ -109,7 +128,7 @@ describe("SkillTool", () => {
               yield* executeTool(registry, {
                 sessionID,
                 ...toolIdentity,
-                call: { type: "tool-call", id: "call-missing-skill", name: "skill", input: { name: "missing" } },
+                call: { type: "tool-call", id: "call-missing-skill", name: "skill", input: { id: "missing" } },
               }),
             ).toEqual({ type: "error", value: "Unable to load skill missing" })
             deny = true
@@ -117,12 +136,13 @@ describe("SkillTool", () => {
               yield* executeTool(registry, {
                 sessionID,
                 ...toolIdentity,
-                call: { type: "tool-call", id: "call-denied-skill", name: "skill", input: { name: "effect" } },
+                call: { type: "tool-call", id: "call-denied-skill", name: "skill", input: { id: "effect" } },
               }),
             ).toEqual({ type: "error", value: "Unable to load skill effect" })
             deny = false
             const flat = SkillV2.Info.make({
-              name: "public",
+              id: SkillV2.ID.make("public"),
+              name: SkillV2.Name.make("Public"),
               description: "Public guidance",
               location: AbsolutePath.make(path.join(tmp.path, "public.md")),
               content: "Public",
@@ -138,7 +158,7 @@ describe("SkillTool", () => {
               yield* executeTool(registry, {
                 sessionID,
                 ...toolIdentity,
-                call: { type: "tool-call", id: "call-flat-skill", name: "skill", input: { name: "public" } },
+                call: { type: "tool-call", id: "call-flat-skill", name: "skill", input: { id: "public" } },
               }),
             ).toEqual({ type: "text", value: SkillTool.toModelOutput(flat, []) })
           }).pipe(Effect.provide(skillToolLayer))

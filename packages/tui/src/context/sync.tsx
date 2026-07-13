@@ -2,7 +2,6 @@ import type {
   Agent,
   Command,
   Config,
-  ConsoleState,
   FormatterStatus,
   LspStatus,
   McpResource,
@@ -11,22 +10,14 @@ import type {
   Part,
   PermissionRequest,
   Provider,
-  ProviderAuthMethod,
-  ProviderListResponse,
   QuestionRequest,
   Session,
-  SnapshotFileDiff,
-  Todo,
+  FileDiffInfo,
   VcsInfo,
 } from "@opencode-ai/sdk/v2"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useProject } from "./project"
-
-const emptyConsoleState: ConsoleState = {
-  consoleManagedProviders: [],
-  switchableOrgCount: 0,
-}
 
 export const {
   context: SyncContext,
@@ -39,21 +30,13 @@ export const {
     const [store, setStore] = createStore<{
       status: "loading" | "partial" | "complete"
       provider: Provider[]
-      provider_default: Record<string, string>
-      provider_next: ProviderListResponse
-      console_state: ConsoleState
-      capabilities: {
-        experimentalBackgroundSubagents: boolean
-      }
-      provider_auth: Record<string, ProviderAuthMethod[]>
       agent: Agent[]
       command: Command[]
       permission: Record<string, PermissionRequest[]>
       question: Record<string, QuestionRequest[]>
       config: Config
       session: Session[]
-      session_diff: Record<string, SnapshotFileDiff[]>
-      todo: Record<string, Todo[]>
+      session_diff: Record<string, FileDiffInfo[]>
       message: Record<string, Message[]>
       part: Record<string, Part[]>
       lsp: LspStatus[]
@@ -64,17 +47,6 @@ export const {
     }>({
       status: "complete",
       provider: [],
-      provider_default: {},
-      provider_next: {
-        all: [],
-        default: {},
-        connected: [],
-      },
-      console_state: emptyConsoleState,
-      capabilities: {
-        experimentalBackgroundSubagents: false,
-      },
-      provider_auth: {},
       agent: [],
       command: [],
       permission: {},
@@ -82,7 +54,6 @@ export const {
       config: {},
       session: [],
       session_diff: {},
-      todo: {},
       message: {},
       part: {},
       lsp: [],

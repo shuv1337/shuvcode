@@ -1,7 +1,7 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import { dirname, isAbsolute, join, relative, resolve as pathResolve, sep } from "path"
+import path, { dirname, isAbsolute, join, relative, sep } from "path"
 import { realpathSync } from "fs"
-import * as NFS from "fs/promises"
+import { readdir } from "fs/promises"
 import { lookup } from "mime-types"
 import { Context, Effect, FileSystem, Layer, Schema } from "effect"
 import type { PlatformError } from "effect/PlatformError"
@@ -38,6 +38,7 @@ export namespace FSUtil {
     readonly ensureDir: (path: string) => Effect.Effect<void, Error>
     readonly writeWithDirs: (path: string, content: string | Uint8Array, mode?: number) => Effect.Effect<void, Error>
     readonly readDirectoryEntries: (path: string) => Effect.Effect<DirEntry[], Error>
+    readonly resolve: (path: string) => Effect.Effect<string>
     readonly findUp: (target: string, start: string, stop?: string) => Effect.Effect<string[], Error>
     readonly up: (options: { targets: string[]; start: string; stop?: string }) => Effect.Effect<string[], Error>
     readonly globUp: (pattern: string, start: string, stop?: string) => Effect.Effect<string[], Error>
@@ -49,7 +50,9 @@ export namespace FSUtil {
 
   export const use = serviceUse(Service)
 
-  const layer = Layer.effect(
+  // Exported so simulation can wrap this layer and override the methods that
+  // bypass the injected FileSystem (readDirectoryEntries, glob, globUp).
+  export const layer = Layer.effect(
     Service,
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
@@ -59,9 +62,10 @@ export namespace FSUtil {
       })
 
       const readFileStringSafe = Effect.fn("FileSystem.readFileStringSafe")(function* (path: string) {
-        return yield* fs
-          .readFileString(path)
-          .pipe(Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)))
+        return yield* fs.readFileString(path).pipe(
+          Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)),
+          Effect.catchReason("PlatformError", "PermissionDenied", () => Effect.succeed(undefined)),
+        )
       })
 
       const isDir = Effect.fn("FileSystem.isDir")(function* (path: string) {
@@ -77,7 +81,7 @@ export namespace FSUtil {
       const readDirectoryEntries = Effect.fn("FileSystem.readDirectoryEntries")(function* (dirPath: string) {
         return yield* Effect.tryPromise({
           try: async () => {
-            const entries = await NFS.readdir(dirPath, { withFileTypes: true })
+            const entries = await readdir(dirPath, { withFileTypes: true })
             return entries.map(
               (e): DirEntry => ({
                 name: e.name,
@@ -87,6 +91,14 @@ export namespace FSUtil {
           },
           catch: (cause) => new FileSystemError({ method: "readDirectoryEntries", cause }),
         })
+      })
+
+      const resolve = Effect.fn("FileSystem.resolve")(function* (input: string) {
+        const resolved = path.resolve(windowsPath(input))
+        return yield* fs.realPath(resolved).pipe(
+          Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(resolved)),
+          Effect.orDie,
+        )
       })
 
       const readJson = Effect.fn("FileSystem.readJson")(function* (path: string) {
@@ -187,6 +199,7 @@ export namespace FSUtil {
         isDir,
         isFile,
         readDirectoryEntries,
+        resolve,
         readJson,
         writeJson,
         ensureDir,
@@ -209,7 +222,7 @@ export namespace FSUtil {
 
   export function normalizePath(p: string): string {
     if (process.platform !== "win32") return p
-    const resolved = pathResolve(windowsPath(p))
+    const resolved = path.resolve(windowsPath(p))
     try {
       return realpathSync.native(resolved)
     } catch {
@@ -227,7 +240,7 @@ export namespace FSUtil {
   }
 
   export function resolve(p: string): string {
-    const resolved = pathResolve(windowsPath(p))
+    const resolved = path.resolve(windowsPath(p))
     try {
       return normalizePath(realpathSync(resolved))
     } catch (e: any) {

@@ -1,18 +1,25 @@
 export * as ConfigProvider from "./provider"
 
 import { Schema } from "effect"
-import { ProviderV2 } from "../provider"
+import { Money } from "@opencode-ai/schema/money"
 import { ModelV2 } from "../model"
 
-export class Request extends Schema.Class<Request>("ConfigV2.Provider.Request")({
-  settings: ProviderV2.Settings.pipe(Schema.optional),
+const JsonRecord = Schema.Record(Schema.String, Schema.Json)
+
+export const Overlays = {
+  settings: JsonRecord.pipe(Schema.optional),
   headers: Schema.Record(Schema.String, Schema.String).pipe(Schema.optional),
-  body: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
+  body: JsonRecord.pipe(Schema.optional),
+}
+
+export class Request extends Schema.Class<Request>("ConfigV2.Provider.Request")({
+  headers: Overlays.headers,
+  body: Overlays.body,
 }) {}
 
 class Cache extends Schema.Class<Cache>("ConfigV2.Model.Cost.Cache")({
-  read: Schema.Finite.pipe(Schema.optional),
-  write: Schema.Finite.pipe(Schema.optional),
+  read: Money.USDPerMillionTokens.pipe(Schema.optional),
+  write: Money.USDPerMillionTokens.pipe(Schema.optional),
 }) {}
 
 class Cost extends Schema.Class<Cost>("ConfigV2.Model.Cost")({
@@ -20,8 +27,8 @@ class Cost extends Schema.Class<Cost>("ConfigV2.Model.Cost")({
     type: Schema.Literal("context"),
     size: Schema.Int,
   }).pipe(Schema.optional),
-  input: Schema.Finite,
-  output: Schema.Finite,
+  input: Money.USDPerMillionTokens,
+  output: Money.USDPerMillionTokens,
   cache: Cache.pipe(Schema.optional),
 }) {}
 
@@ -31,32 +38,16 @@ class Limit extends Schema.Class<Limit>("ConfigV2.Model.Limit")({
   output: Schema.Int.pipe(Schema.optional),
 }) {}
 
-const ModelApi = Schema.Union([
-  Schema.Struct({
-    id: ModelV2.ID.pipe(Schema.optional),
-    ...ProviderV2.AISDK.fields,
-  }),
-  Schema.Struct({
-    id: ModelV2.ID.pipe(Schema.optional),
-    ...ProviderV2.Native.fields,
-  }),
-  Schema.Struct({
-    id: ModelV2.ID,
-  }),
-])
-
 class Model extends Schema.Class<Model>("ConfigV2.Model")({
+  modelID: ModelV2.ID.pipe(Schema.optional),
   family: ModelV2.Family.pipe(Schema.optional),
   name: Schema.String.pipe(Schema.optional),
-  api: ModelApi.pipe(Schema.optional),
+  package: Schema.String.pipe(Schema.optional),
+  ...Overlays,
   capabilities: ModelV2.Capabilities.pipe(Schema.optional),
-  request: Schema.Struct({
-    ...Request.fields,
-    variant: Schema.String.pipe(Schema.optional),
-  }).pipe(Schema.optional),
   variants: Schema.Struct({
     id: ModelV2.VariantID,
-    ...Request.fields,
+    ...Overlays,
   }).pipe(Schema.Array, Schema.optional),
   cost: Schema.Union([Cost, Cost.pipe(Schema.Array)]).pipe(Schema.optional),
   disabled: Schema.Boolean.pipe(Schema.optional),
@@ -66,7 +57,7 @@ class Model extends Schema.Class<Model>("ConfigV2.Model")({
 export class Info extends Schema.Class<Info>("ConfigV2.Provider")({
   name: Schema.String.pipe(Schema.optional),
   env: Schema.String.pipe(Schema.Array, Schema.optional),
-  api: ProviderV2.Api.pipe(Schema.optional),
-  request: Request.pipe(Schema.optional),
+  package: Schema.String.pipe(Schema.optional),
+  ...Overlays,
   models: Schema.Record(Schema.String, Model).pipe(Schema.optional),
 }) {}

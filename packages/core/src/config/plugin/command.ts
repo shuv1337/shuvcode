@@ -1,50 +1,60 @@
 export * as ConfigCommandPlugin from "./command"
 
-import { define } from "../../plugin/internal"
+import { define } from "@opencode-ai/plugin/v2/effect/plugin"
 import path from "path"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option, Schema, Stream } from "effect"
 import { CommandV2 } from "../../command"
 import { Config } from "../../config"
 import { FSUtil } from "../../fs-util"
-import { ModelV2 } from "../../model"
 import { ConfigCommand } from "../command"
 import { ConfigMarkdown } from "../markdown"
 
 const decodeCommand = Schema.decodeUnknownOption(ConfigCommand.Info)
 
 export const Plugin = define({
-  id: "config-command",
+  id: "opencode.config.command",
   effect: Effect.fn(function* (ctx) {
     const config = yield* Config.Service
     const fs = yield* FSUtil.Service
-    yield* ctx.command.transform(
-      Effect.fn(function* (draft) {
-        const documents = yield* Effect.forEach(yield* config.entries(), (entry) => {
-          if (entry.type === "document") return Effect.succeed([{ commands: entry.info.commands }])
-          return loadDirectory(fs, entry.path).pipe(
-            Effect.map((commands) => [
-              { commands: Object.fromEntries(commands.map((command) => [command.name, command.info])) },
-            ]),
-          )
-        }).pipe(Effect.map((documents) => documents.flat()))
-        for (const document of documents) {
-          for (const [name, command] of Object.entries(document.commands ?? {})) {
-            draft.update(name, (item) => {
-              item.template = command.template
-              if (command.description !== undefined) item.description = command.description
-              if (command.agent !== undefined) item.agent = command.agent
-              if (command.model !== undefined) {
-                const model = ModelV2.parse(command.model)
-                item.model = { id: model.modelID, providerID: model.providerID, variant: item.model?.variant }
+    const load = Effect.fn("ConfigCommandPlugin.load")(function* () {
+      return yield* Effect.forEach(yield* config.entries(), (entry) => {
+        if (entry.type === "document") return Effect.succeed([{ commands: entry.info.commands }])
+        if (entry.type !== "directory") return Effect.succeed([])
+        return loadDirectory(fs, entry.path).pipe(
+          Effect.map((commands) => [
+            { commands: Object.fromEntries(commands.map((command) => [command.name, command.info])) },
+          ]),
+        )
+      }).pipe(Effect.map((documents) => documents.flat()))
+    })
+    const loaded = { documents: yield* load() }
+    yield* ctx.command.transform((draft) => {
+      for (const document of loaded.documents) {
+        for (const [name, command] of Object.entries(document.commands ?? {})) {
+          draft.update(name, (item) => {
+            item.template = command.template
+            if (command.description !== undefined) item.description = command.description
+            if (command.agent !== undefined) item.agent = command.agent
+            if (command.model !== undefined)
+              item.model = {
+                id: command.model.model,
+                providerID: command.model.providerID,
+                ...(command.model.variant === undefined ? {} : { variant: command.model.variant }),
               }
-              if (command.variant !== undefined && item.model !== undefined) {
-                item.model.variant = ModelV2.VariantID.make(command.variant)
-              }
-              if (command.subtask !== undefined) item.subtask = command.subtask
-            })
-          }
+            if (command.subtask !== undefined) item.subtask = command.subtask
+          })
         }
-      }),
+      }
+    })
+    yield* ctx.event.subscribe().pipe(
+      Stream.filter((event) => event.type === "config.updated"),
+      Stream.runForEach(() =>
+        load().pipe(
+          Effect.tap((documents) => Effect.sync(() => (loaded.documents = documents))),
+          Effect.andThen(ctx.command.reload()),
+        ),
+      ),
+      Effect.forkScoped({ startImmediately: true }),
     )
   }),
 })

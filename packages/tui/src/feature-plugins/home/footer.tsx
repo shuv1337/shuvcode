@@ -1,36 +1,46 @@
 import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
 import type { BuiltinTuiPlugin } from "../builtins"
 import { createMemo, Match, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "@opentui/solid"
 import { abbreviateHome } from "../../runtime"
-import { Locale } from "../../util/locale"
 import { useTuiPaths } from "../../context/runtime"
 import { useHomeSessionDestination } from "../../routes/home/session-destination"
-import { useTuiConfig } from "../../config"
-import { compactMetadata } from "../../util/density"
+import { FilePath } from "../../ui/file-path"
+import { useTerminalDimensions } from "@opentui/solid"
 
 const id = "internal:home-footer"
 
-function Directory(props: { api: TuiPluginApi; width: number }) {
+function Directory(props: { api: TuiPluginApi; maxWidth: number }) {
   const theme = () => props.api.theme.current
   const destination = useHomeSessionDestination()
   const paths = useTuiPaths()
   const dir = createMemo(() => {
     const selected = destination?.destination()
     if (!selected || selected.type === "new") return
-    const out = abbreviateHome(selected.directory, paths.home)
     const branch =
       selected.directory === (props.api.state.path.directory || paths.cwd) ? props.api.state.vcs?.branch : undefined
-    if (branch) return out + ":" + branch
-    return out
+    return { path: abbreviateHome(selected.directory, paths.home), branch }
   })
-  const label = createMemo(() => Locale.truncateLeft(dir() ?? "", Math.max(1, props.width)))
 
   return (
     <Show when={dir()}>
-      <text fg={theme().textMuted} wrapMode="none" width={props.width} truncate>
-        {label()}
-      </text>
+      {(value) => {
+        const suffix = () => (value().branch ? `:${value().branch}` : "")
+        const suffixWidth = () => Math.min(Bun.stringWidth(suffix()), Math.max(0, props.maxWidth - 2))
+        return (
+          <box flexDirection="row" minWidth={0}>
+            <FilePath
+              value={value().path}
+              maxWidth={Math.max(2, props.maxWidth - suffixWidth())}
+              fg={theme().textMuted}
+            />
+            <Show when={suffix()}>
+              <text width={suffixWidth()} wrapMode="none" truncate fg={theme().textMuted}>
+                {suffix()}
+              </text>
+            </Show>
+          </box>
+        )
+      }}
     </Show>
   )
 }
@@ -67,20 +77,21 @@ function Version(props: { api: TuiPluginApi }) {
 
   return (
     <box flexShrink={0}>
-      <text fg={theme().textMuted} wrapMode="none">
-        {props.api.app.version}
-      </text>
+      <text fg={theme().textMuted}>{props.api.app.version}</text>
     </box>
   )
 }
 
 function View(props: { api: TuiPluginApi }) {
   const dimensions = useTerminalDimensions()
-  const tuiConfig = useTuiConfig()
-  const versionWidth = createMemo(() => props.api.app.version.length)
-  const compact = createMemo(() => compactMetadata(tuiConfig.density, dimensions().width))
+  const mcpWidth = createMemo(() => {
+    const list = props.api.state.mcp()
+    if (list.length === 0) return 0
+    const count = list.filter((item) => item.status === "connected").length
+    return Bun.stringWidth(`⊙ ${count} MCP /status`) + 2
+  })
   const directoryWidth = createMemo(() =>
-    Math.max(1, dimensions().width - 4 - versionWidth() - (compact() ? 1 : 18)),
+    Math.max(2, dimensions().width - 8 - Bun.stringWidth(props.api.app.version) - mcpWidth()),
   )
   return (
     <box
@@ -91,12 +102,10 @@ function View(props: { api: TuiPluginApi }) {
       paddingRight={2}
       flexDirection="row"
       flexShrink={0}
-      gap={compact() ? 1 : 2}
+      gap={2}
     >
-      <Directory api={props.api} width={directoryWidth()} />
-      <Show when={!compact()}>
-        <Mcp api={props.api} />
-      </Show>
+      <Directory api={props.api} maxWidth={directoryWidth()} />
+      <Mcp api={props.api} />
       <box flexGrow={1} />
       <Version api={props.api} />
     </box>

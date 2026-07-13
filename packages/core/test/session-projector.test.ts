@@ -1,7 +1,8 @@
 import { describe, expect } from "bun:test"
-import { DateTime, Effect, Schema } from "effect"
-import { asc, eq } from "drizzle-orm"
+import { DateTime, Effect, Fiber, Option, Schema, Stream } from "effect"
+import { asc, eq, sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
+import { AgentV2 } from "@opencode-ai/core/agent"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -14,14 +15,16 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Prompt } from "@opencode-ai/core/session/prompt"
+import { Money } from "@opencode-ai/schema/money"
 import { SessionMessageUpdater } from "@opencode-ai/core/session/message-updater"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionInput } from "@opencode-ai/core/session/input"
+import { fromRow } from "@opencode-ai/core/session/info"
+import { SessionPending } from "@opencode-ai/core/session/pending"
+import { Shell } from "@opencode-ai/schema/shell"
 import {
-  SessionContextCheckpointTable,
-  SessionInputTable,
+  InstructionStateTable,
+  SessionPendingTable,
   SessionMessageTable,
   SessionTable,
 } from "@opencode-ai/core/session/sql"
@@ -33,23 +36,28 @@ const sessionsLayer = AppNodeBuilder.build(SessionV2.node, [[SessionExecution.no
 const sessionID = SessionV2.ID.make("ses_projector_test")
 const created = DateTime.makeUnsafe(0)
 const model = { id: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
-const encodeMessage = Schema.encodeSync(SessionMessage.Message)
+const previousModel = { ...model, variant: ModelV2.VariantID.make("medium") }
+const encodeMessage = Schema.encodeSync(SessionMessage.Info)
+const build = AgentV2.defaultID
 
 const assistantRow = (
   id: SessionMessage.ID,
   seq: number,
   time: { created: DateTime.Utc; completed?: DateTime.Utc } = { created },
+  usage?: Pick<SessionMessage.Assistant, "cost" | "tokens">,
 ) => {
   const {
     id: _,
     type,
     ...data
-  } = encodeMessage(SessionMessage.Assistant.make({ id, type: "assistant", agent: "build", model, content: [], time }))
+  } = encodeMessage(
+    SessionMessage.Assistant.make({ id, type: "assistant", agent: build, model, content: [], time, ...usage }),
+  )
   return { id, session_id: sessionID, type, seq, time_created: DateTime.toEpochMillis(time.created), data }
 }
 
 describe("SessionProjector", () => {
-  it.effect("projects staged, cleared, and committed reverts", () =>
+  it.effect("does not settle a pending manual compaction on an auto failure", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
       yield* db
@@ -67,43 +75,177 @@ describe("SessionProjector", () => {
           version: "test",
         })
         .run()
-      const boundary = SessionMessage.ID.make("msg_boundary")
+      const events = yield* EventV2.Service
+      const inputID = SessionMessage.ID.make("msg_manual_compaction")
+      yield* SessionPending.admitCompaction(db, events, { id: inputID, sessionID })
+
+      yield* events.publish(SessionEvent.Compaction.Failed, {
+        sessionID,
+        reason: "auto",
+        error: { type: "compaction.failed", message: "Auto compaction failed" },
+      })
+
+      expect(yield* SessionPending.compaction(db, sessionID)).toMatchObject({ id: inputID })
+    }),
+  )
+
+  it.effect("loads legacy revert storage into canonical state", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
       yield* db
-        .insert(SessionMessageTable)
-        .values([assistantRow(boundary, 1), assistantRow(SessionMessage.ID.make("msg_later"), 2)])
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
         .run()
       yield* db
-        .insert(SessionContextCheckpointTable)
-        .values({ session_id: sessionID, baseline: "baseline", snapshot: {}, baseline_seq: 0 })
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .run()
+      const legacy = JSON.stringify({
+        messageID: "msg_boundary",
+        snapshot: "tree",
+        diff: "legacy patch",
+        files: [{ path: "src/old.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" }],
+      })
+      yield* db.run(sql`update session set revert = ${legacy} where id = ${sessionID}`)
+      const stored = yield* db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()
+      if (!stored) return yield* Effect.die("Session row missing")
+      const storedRevert = fromRow(stored).revert
+      expect(String(storedRevert?.messageID)).toBe("msg_boundary")
+      expect(String(storedRevert?.snapshot)).toBe("tree")
+      expect(storedRevert?.files).toEqual([
+        { file: "src/old.ts", status: "modified", additions: 1, deletions: 0, patch: "@@" },
+      ])
+    }),
+  )
+
+  it.effect("folds live compaction deltas into running memory state", () =>
+    Effect.gen(function* () {
+      const state = {
+        messages: [
+          SessionMessage.CompactionRunning.make({
+            id: SessionMessage.ID.make("msg_compaction"),
+            type: "compaction",
+            status: "running",
+            reason: "manual",
+            summary: "partial ",
+            recent: "recent",
+            time: { created },
+          }),
+        ],
+      }
+      yield* SessionMessageUpdater.update(
+        SessionMessageUpdater.memory(state),
+        SessionEvent.Compaction.Delta.make({
+          id: EventV2.ID.make("evt_delta"),
+          type: "session.compaction.delta",
+          created,
+          data: { sessionID, text: "summary" },
+        }),
+      )
+      expect(state.messages[0]).toMatchObject({ status: "running", summary: "partial summary", recent: "recent" })
+    }),
+  )
+
+  it.effect("projects staged, cleared, and committed reverts", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+          cost: 1.25,
+          tokens_input: 10,
+          tokens_output: 4,
+          tokens_reasoning: 2,
+          tokens_cache_read: 3,
+          tokens_cache_write: 1,
+        })
+        .run()
+      const boundary = SessionMessage.ID.make("msg_boundary")
+      const earlier = SessionMessage.ID.make("msg_earlier")
+      yield* db
+        .insert(SessionMessageTable)
+        .values([
+          assistantRow(earlier, 0),
+          assistantRow(
+            boundary,
+            1,
+            { created },
+            {
+              cost: Money.USD.make(0.5),
+              tokens: { input: 4, output: 1, reasoning: 1, cache: { read: 1, write: 0 } },
+            },
+          ),
+          assistantRow(
+            SessionMessage.ID.make("msg_later"),
+            2,
+            { created },
+            {
+              cost: Money.USD.make(0.75),
+              tokens: { input: 6, output: 3, reasoning: 1, cache: { read: 2, write: 1 } },
+            },
+          ),
+        ])
+        .run()
+      yield* db
+        .insert(InstructionStateTable)
+        .values({
+          session_id: sessionID,
+          epoch_start: 0,
+          through_seq: 0,
+          initial_values: {},
+          current_values: {},
+        })
         .run()
       const events = yield* EventV2.Service
       yield* events.publish(SessionEvent.RevertEvent.Staged, {
         sessionID,
-        timestamp: DateTime.makeUnsafe(1),
-        revert: { messageID: boundary, snapshot: Snapshot.ID.make("tree"), diff: "patch", files: [] },
+        revert: { messageID: boundary, snapshot: Snapshot.ID.make("tree"), files: [] },
       })
       expect((yield* db.select({ revert: SessionTable.revert }).from(SessionTable).get())?.revert).toMatchObject({
         messageID: boundary,
         snapshot: "tree",
         files: [],
       })
-      yield* events.publish(SessionEvent.RevertEvent.Cleared, { sessionID, timestamp: DateTime.makeUnsafe(2) })
+      yield* events.publish(SessionEvent.RevertEvent.Cleared, { sessionID })
       expect((yield* db.select({ revert: SessionTable.revert }).from(SessionTable).get())?.revert).toBeNull()
       yield* events.publish(SessionEvent.RevertEvent.Staged, {
         sessionID,
-        timestamp: DateTime.makeUnsafe(3),
         revert: { messageID: boundary, files: [] },
       })
       yield* events.publish(SessionEvent.RevertEvent.Committed, {
         sessionID,
-        messageID: boundary,
-        timestamp: DateTime.makeUnsafe(4),
+        to: boundary,
       })
       expect(
         (yield* db.select({ id: SessionMessageTable.id }).from(SessionMessageTable).all()).map((row) => row.id),
-      ).toEqual([boundary])
-      // A committed revert resets the context checkpoint so the next turn re-initializes.
-      expect(yield* db.select().from(SessionContextCheckpointTable).get().pipe(Effect.orDie)).toBeUndefined()
+      ).toEqual([earlier])
+      expect(yield* db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()).toMatchObject({
+        cost: Money.USD.make(1.25),
+        tokens_input: 10,
+        tokens_output: 4,
+        tokens_reasoning: 2,
+        tokens_cache_read: 3,
+        tokens_cache_write: 1,
+      })
+      // A committed revert resets the fold cache so the next boundary establishes a new epoch.
+      expect(yield* db.select().from(InstructionStateTable).get().pipe(Effect.orDie)).toBeUndefined()
     }),
   )
 
@@ -129,25 +271,29 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       const events = yield* EventV2.Service
 
+      yield* events.publish(SessionEvent.InputAdmitted, {
+        sessionID,
+        inputID: SessionMessage.ID.make("msg_first"),
+        input: { type: "user", data: { text: "first" }, delivery: "steer" },
+      })
       yield* events.publish(
-        SessionEvent.Prompted,
+        SessionEvent.InputPromoted,
         {
           sessionID,
-          messageID: SessionMessage.ID.make("msg_first"),
-          timestamp: created,
-          prompt: Prompt.make({ text: "first" }),
-          delivery: "steer",
+          inputID: SessionMessage.ID.make("msg_first"),
         },
         { id: EventV2.ID.make("evt_z") },
       )
+      yield* events.publish(SessionEvent.InputAdmitted, {
+        sessionID,
+        inputID: SessionMessage.ID.make("msg_second"),
+        input: { type: "user", data: { text: "second" }, delivery: "steer" },
+      })
       yield* events.publish(
-        SessionEvent.Prompted,
+        SessionEvent.InputPromoted,
         {
           sessionID,
-          messageID: SessionMessage.ID.make("msg_second"),
-          timestamp: created,
-          prompt: Prompt.make({ text: "second" }),
-          delivery: "steer",
+          inputID: SessionMessage.ID.make("msg_second"),
         },
         { id: EventV2.ID.make("evt_a") },
       )
@@ -176,7 +322,7 @@ describe("SessionProjector", () => {
     }).pipe(Effect.provide(sessionsLayer)),
   )
 
-  it.effect("marks an inbox row promoted with the Prompted event sequence", () =>
+  it.effect("consumes the pending row and projects the message at promotion", () =>
     Effect.gen(function* () {
       const { db } = yield* Database.Service
       yield* db
@@ -198,25 +344,24 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       const events = yield* EventV2.Service
       const id = SessionMessage.ID.make("msg_admitted")
-      const admitted = yield* SessionInput.admit(db, events, {
+      const admitted = yield* SessionPending.admit(db, events, {
         id,
         sessionID,
-        prompt: Prompt.make({ text: "promote me" }),
-        delivery: "steer",
+        input: { type: "user", data: { text: "promote me" }, delivery: "steer" },
       })
       if (!admitted) return yield* Effect.die("Prompt admission failed")
 
-      const event = yield* events.publish(SessionEvent.Prompted, {
+      const event = yield* events.publish(SessionEvent.InputPromoted, {
         sessionID,
-        timestamp: admitted.timeCreated,
-        messageID: id,
-        prompt: Prompt.make({ text: "promote me" }),
-        delivery: "steer",
+        inputID: id,
       })
 
       expect(
-        yield* db.select().from(SessionInputTable).where(eq(SessionInputTable.id, id)).get().pipe(Effect.orDie),
-      ).toMatchObject({ promoted_seq: event.durable?.seq })
+        yield* db.select().from(SessionPendingTable).where(eq(SessionPendingTable.id, id)).get().pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(
+        yield* db.select().from(SessionMessageTable).where(eq(SessionMessageTable.id, id)).get().pipe(Effect.orDie),
+      ).toMatchObject({ session_id: sessionID, type: "user", seq: event.durable?.seq })
     }),
   )
 
@@ -237,76 +382,80 @@ describe("SessionProjector", () => {
           directory: "/project",
           title: "test",
           version: "test",
+          model: previousModel,
         })
         .run()
         .pipe(Effect.orDie)
       const events = yield* EventV2.Service
 
-      yield* events.publish(SessionEvent.AgentSwitched, {
+      yield* events.publish(SessionEvent.AgentSelected, {
         sessionID,
-        messageID: SessionMessage.ID.create(),
-        timestamp: created,
-        agent: "build",
+        agent: build,
       })
-      yield* events.publish(SessionEvent.ModelSwitched, {
+      yield* events.publish(SessionEvent.ModelSelected, {
         sessionID,
-        messageID: SessionMessage.ID.create(),
-        timestamp: created,
         model,
       })
       yield* events.publish(SessionEvent.Synthetic, {
         sessionID,
-        messageID: SessionMessage.ID.create(),
-        timestamp: created,
         text: "synthetic context",
         metadata: { source: "projector-test" },
       })
       yield* events.publish(SessionEvent.Shell.Started, {
         sessionID,
-        messageID: SessionMessage.ID.create(),
-        timestamp: created,
-        callID: "shell-1",
-        command: "pwd",
+        shell: Shell.Info.make({
+          id: Shell.ID.make("sh_projector"),
+          status: "running",
+          command: "pwd",
+          cwd: "/project",
+          shell: "/bin/sh",
+          file: "/tmp/sh_projector.out",
+          metadata: {},
+          time: { started: 0 },
+        }),
       })
       yield* events.publish(SessionEvent.Shell.Ended, {
         sessionID,
-        timestamp: DateTime.makeUnsafe(1),
-        callID: "shell-1",
-        output: "/project",
+        shell: Shell.Info.make({
+          id: Shell.ID.make("sh_projector"),
+          status: "exited",
+          command: "pwd",
+          cwd: "/project",
+          shell: "/bin/sh",
+          file: "/tmp/sh_projector.out",
+          exit: 0,
+          metadata: {},
+          time: { started: 0, completed: 1 },
+        }),
+        output: { output: "/project", cursor: 8, size: 8, truncated: false },
       })
-      const compactionID = SessionMessage.ID.create()
       yield* events.publish(SessionEvent.Compaction.Started, {
         sessionID,
-        messageID: compactionID,
-        timestamp: created,
         reason: "manual",
+        recent: "recent context",
       })
       yield* events.publish(SessionEvent.Compaction.Delta, {
         sessionID,
-        messageID: compactionID,
-        timestamp: created,
         text: "partial",
       })
       expect(
         yield* db
           .select({ id: EventTable.id })
           .from(EventTable)
-          .where(eq(EventTable.type, SessionEvent.Compaction.Delta.type))
+          .where(sql`${EventTable.type} like 'session.compaction.delta.%'`)
           .all()
           .pipe(Effect.orDie),
-      ).toEqual([])
+      ).toHaveLength(0)
       expect(
         yield* db
-          .select({ id: SessionMessageTable.id })
+          .select({ data: SessionMessageTable.data })
           .from(SessionMessageTable)
           .where(eq(SessionMessageTable.type, "compaction"))
           .all()
           .pipe(Effect.orDie),
-      ).toEqual([])
+      ).toEqual([{ data: expect.objectContaining({ status: "running", summary: "", recent: "recent context" }) }])
       yield* events.publish(SessionEvent.Compaction.Ended, {
         sessionID,
-        messageID: compactionID,
-        timestamp: DateTime.makeUnsafe(1),
         reason: "manual",
         text: "summary",
         recent: "recent context",
@@ -320,7 +469,7 @@ describe("SessionProjector", () => {
         .all()
         .pipe(Effect.orDie)
       const messages = rows.map((row) =>
-        Schema.decodeUnknownSync(SessionMessage.Message)({ ...row.data, id: row.id, type: row.type }),
+        Schema.decodeUnknownSync(SessionMessage.Info)({ ...row.data, id: row.id, type: row.type }),
       )
 
       expect(messages.map((message) => message.type)).toEqual([
@@ -334,9 +483,13 @@ describe("SessionProjector", () => {
         text: "synthetic context",
         metadata: { source: "projector-test" },
       })
+      expect(messages.find((message) => message.type === "model-switched")).toMatchObject({ previous: previousModel })
       expect(messages.find((message) => message.type === "shell")).toMatchObject({
-        output: "/project",
-        time: { completed: DateTime.makeUnsafe(1) },
+        command: "pwd",
+        status: "exited",
+        exit: 0,
+        output: { output: "/project", truncated: false },
+        time: { completed: DateTime.makeUnsafe(0) },
       })
       expect(messages.find((message) => message.type === "compaction")).toMatchObject({
         summary: "summary",
@@ -374,14 +527,17 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
       const events = yield* EventV2.Service
       const id = SessionMessage.ID.make("msg_creator_collision")
+      const { id: _, type, ...data } = encodeMessage({ id, type: "synthetic", text: "existing", time: { created } })
+      yield* db
+        .insert(SessionMessageTable)
+        .values({ id, session_id: sessionID, type, seq: 0, time_created: 0, data })
+        .run()
 
-      yield* events.publish(SessionEvent.Synthetic, { sessionID, messageID: id, timestamp: created, text: "keep me" })
       const exit = yield* events
         .publish(SessionEvent.Step.Started, {
           sessionID,
           assistantMessageID: id,
-          timestamp: created,
-          agent: "build",
+          agent: build,
           model,
         })
         .pipe(Effect.exit)
@@ -398,7 +554,7 @@ describe("SessionProjector", () => {
       const stale = SessionMessage.Assistant.make({
         id: SessionMessage.ID.make("msg_assistant_stale"),
         type: "assistant",
-        agent: "build",
+        agent: build,
         model,
         content: [],
         time: { created },
@@ -406,7 +562,7 @@ describe("SessionProjector", () => {
       const completed = SessionMessage.Assistant.make({
         id: SessionMessage.ID.make("msg_assistant_completed"),
         type: "assistant",
-        agent: "build",
+        agent: build,
         model,
         content: [],
         time: { created: DateTime.makeUnsafe(1), completed: DateTime.makeUnsafe(2) },
@@ -415,6 +571,110 @@ describe("SessionProjector", () => {
       expect(
         yield* SessionMessageUpdater.memory({ messages: [stale, completed] }).getCurrentAssistant(),
       ).toBeUndefined()
+    }),
+  )
+
+  it.effect("projects retry state and clears it at the next step or execution terminal", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+        .pipe(Effect.orDie)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .run()
+        .pipe(Effect.orDie)
+      const events = yield* EventV2.Service
+      const first = SessionMessage.ID.make("msg_retry_first")
+      const second = SessionMessage.ID.make("msg_retry_second")
+      yield* events.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: first, agent: build, model })
+      yield* events.publish(SessionEvent.RetryScheduled, {
+        sessionID,
+        assistantMessageID: first,
+        attempt: 2,
+        at: 2_000,
+        error: { type: "provider.transport", message: "Disconnected" },
+      })
+
+      const decode = (row: typeof SessionMessageTable.$inferSelect) =>
+        Schema.decodeUnknownSync(SessionMessage.Info)({ ...row.data, id: row.id, type: row.type })
+      const firstRow = yield* db
+        .select()
+        .from(SessionMessageTable)
+        .where(eq(SessionMessageTable.id, first))
+        .get()
+        .pipe(Effect.orDie)
+      const projected = firstRow ?? (yield* Effect.die(new Error("Missing retry projection")))
+      expect(decode(projected)).toMatchObject({
+        retry: { attempt: 2, at: DateTime.makeUnsafe(2_000), error: { type: "provider.transport" } },
+      })
+
+      yield* events.publish(SessionEvent.Step.Started, { sessionID, assistantMessageID: second, agent: build, model })
+      yield* events.publish(SessionEvent.RetryScheduled, {
+        sessionID,
+        assistantMessageID: second,
+        attempt: 3,
+        at: 6_000,
+        error: { type: "provider.internal", message: "Unavailable" },
+      })
+      yield* events.publish(SessionEvent.Execution.Interrupted, { sessionID, reason: "shutdown" })
+
+      const rows = yield* db
+        .select()
+        .from(SessionMessageTable)
+        .where(eq(SessionMessageTable.session_id, sessionID))
+        .orderBy(asc(SessionMessageTable.seq))
+        .all()
+        .pipe(Effect.orDie)
+      expect(decode(rows[0])).not.toHaveProperty("retry")
+      expect(decode(rows[1])).not.toHaveProperty("retry")
+    }),
+  )
+
+  it.effect("does not infer restart continuation from lifecycle history", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+        .run()
+        .pipe(Effect.orDie)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: Project.ID.global,
+          slug: "test",
+          directory: "/project",
+          title: "test",
+          version: "test",
+        })
+        .run()
+        .pipe(Effect.orDie)
+      const events = yield* EventV2.Service
+      const suspended = () =>
+        db
+          .select({ timeSuspended: SessionTable.time_suspended })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, sessionID))
+          .get()
+          .pipe(Effect.orDie)
+
+      yield* events.publish(SessionEvent.Execution.Interrupted, { sessionID, reason: "shutdown" })
+      expect((yield* suspended())?.timeSuspended).toBeNull()
+
+      yield* events.publish(SessionEvent.Execution.Started, { sessionID })
+      expect((yield* suspended())?.timeSuspended).toBeNull()
     }),
   )
 
@@ -448,13 +708,15 @@ describe("SessionProjector", () => {
         .pipe(Effect.orDie)
 
       const service = yield* EventV2.Service
+      const usageUpdated = yield* service
+        .subscribe(SessionEvent.UsageUpdated)
+        .pipe(Stream.runHead, Effect.forkScoped({ startImmediately: true }))
       yield* service.publish(SessionEvent.Step.Ended, {
         sessionID,
-        timestamp: DateTime.makeUnsafe(1),
         assistantMessageID: SessionMessage.ID.make("msg_assistant_2"),
         finish: "stop",
-        cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        cost: Money.USD.make(1.25),
+        tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
       })
 
       const rows = yield* db
@@ -465,13 +727,30 @@ describe("SessionProjector", () => {
         .all()
         .pipe(Effect.orDie)
       const messages = rows.map((row) =>
-        Schema.decodeUnknownSync(SessionMessage.Message)({ ...row.data, id: row.id, type: row.type }),
+        Schema.decodeUnknownSync(SessionMessage.Info)({ ...row.data, id: row.id, type: row.type }),
       )
       expect(messages[0]).not.toHaveProperty("time.completed")
       expect(messages[1]).toMatchObject({
         type: "assistant",
         finish: "stop",
-        time: { completed: DateTime.makeUnsafe(1) },
+        cost: Money.USD.make(1.25),
+        tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
+        time: { completed: DateTime.makeUnsafe(0) },
+      })
+      expect(
+        yield* db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get().pipe(Effect.orDie),
+      ).toMatchObject({
+        cost: 1.25,
+        tokens_input: 10,
+        tokens_output: 4,
+        tokens_reasoning: 2,
+        tokens_cache_read: 3,
+        tokens_cache_write: 1,
+      })
+      expect(Option.getOrThrow(yield* Fiber.join(usageUpdated)).data).toEqual({
+        sessionID,
+        cost: Money.USD.make(1.25),
+        tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
       })
     }),
   )
@@ -512,8 +791,7 @@ describe("SessionProjector", () => {
       yield* service.publish(SessionEvent.Text.Started, {
         sessionID,
         assistantMessageID: SessionMessage.ID.make("msg_assistant_completed"),
-        timestamp: DateTime.makeUnsafe(3),
-        textID: "text-stale",
+        ordinal: 0,
       })
 
       const rows = yield* db
@@ -524,21 +802,21 @@ describe("SessionProjector", () => {
         .all()
         .pipe(Effect.orDie)
       const messages = rows.map((row) =>
-        Schema.decodeUnknownSync(SessionMessage.Message)({ ...row.data, id: row.id, type: row.type }),
+        Schema.decodeUnknownSync(SessionMessage.Info)({ ...row.data, id: row.id, type: row.type }),
       )
       expect(messages).toEqual([
         SessionMessage.Assistant.make({
           id: SessionMessage.ID.make("msg_assistant_completed"),
           type: "assistant",
-          agent: "build",
+          agent: build,
           model,
-          content: [SessionMessage.AssistantText.make({ type: "text", id: "text-stale", text: "" })],
+          content: [SessionMessage.AssistantText.make({ type: "text", text: "" })],
           time: { created: DateTime.makeUnsafe(1), completed: DateTime.makeUnsafe(2) },
         }),
         SessionMessage.Assistant.make({
           id: SessionMessage.ID.make("msg_assistant_stale"),
           type: "assistant",
-          agent: "build",
+          agent: build,
           model,
           content: [],
           time: { created },

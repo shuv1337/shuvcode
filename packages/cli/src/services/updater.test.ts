@@ -32,13 +32,13 @@ describe("updater", () => {
   })
 
   test("fork builds ignore bare upstream versions", () => {
-    expect(action("1.17.13-1", "1.17.13", true)).toBe("none")
-    expect(action("1.17.13-2", "1.17.13", "notify")).toBe("none")
+    expect(action("1.17.18-1", "1.17.18", true)).toBe("none")
+    expect(action("1.17.18-2", "1.17.18", "notify")).toBe("none")
   })
 
-  test("fork builds upgrade to newer fork iterations", () => {
-    expect(action("1.17.13-1", "1.17.13-2", true)).toBe("upgrade")
-    expect(action("1.17.13-1", "1.17.14-1", true)).toBe("upgrade")
-    expect(action("1.17.13-2", "1.17.13-1", true)).toBe("none")
+  test("fork builds upgrade only to newer fork versions", () => {
+    expect(action("1.17.18-1", "1.17.18-2", true)).toBe("upgrade")
+    expect(action("1.17.18-1", "1.17.19-1", true)).toBe("upgrade")
+    expect(action("1.17.18-2", "1.17.18-1", true)).toBe("none")
   })
 })

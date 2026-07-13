@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
-import { entryBody, entryCanStream, entryDone } from "@/cli/cmd/run/entry.body"
-import type { StreamCommit, ToolSnapshot } from "@/cli/cmd/run/types"
+import { entryBody, entryCanStream, entryDone } from "@opencode-ai/cli/mini/entry.body"
+import type { StreamCommit, ToolSnapshot } from "@opencode-ai/cli/mini/types"
 
 function commit(input: Partial<StreamCommit> & Pick<StreamCommit, "kind" | "text" | "phase" | "source">): StreamCommit {
   return input
@@ -50,6 +50,23 @@ function structured(next: StreamCommit) {
 }
 
 describe("run entry body", () => {
+  test("renders a failed direct shell as an error instead of completed success", () => {
+    expect(
+      entryBody(
+        commit({
+          kind: "tool",
+          text: "Shell exited with code 7",
+          phase: "final",
+          source: "tool",
+          tool: "bash",
+          toolState: "error",
+          toolError: "Shell exited with code 7",
+          shell: { callID: "sh_failed", command: "false" },
+        }),
+      ),
+    ).toEqual({ type: "text", content: "✖ bash failed: Shell exited with code 7" })
+  })
+
   test("renders assistant, reasoning, and user entries in their display formats", () => {
     expect(
       entryBody(

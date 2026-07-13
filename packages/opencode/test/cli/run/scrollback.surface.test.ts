@@ -2,9 +2,9 @@ import { afterEach, expect, test } from "bun:test"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { RGBA, SyntaxStyle } from "@opentui/core"
 import { MockTreeSitterClient, createTestRenderer, type TestRenderer } from "@opentui/core/testing"
-import { RunScrollbackStream } from "@/cli/cmd/run/scrollback.surface"
-import { RUN_THEME_FALLBACK, type RunTheme } from "@/cli/cmd/run/theme"
-import type { StreamCommit } from "@/cli/cmd/run/types"
+import { RunScrollbackStream } from "@opencode-ai/cli/mini/scrollback.surface"
+import { RUN_THEME_FALLBACK, type RunTheme } from "@opencode-ai/cli/mini/theme"
+import type { StreamCommit } from "@opencode-ai/cli/mini/types"
 
 type ClaimedCommit = {
   snapshot: {
@@ -321,50 +321,8 @@ test("holds markdown code blocks until final commit and keeps newline ownership"
   }
 })
 
-test("renders todo and question summaries without boilerplate footer copy", async () => {
+test("renders question summaries without boilerplate footer copy", async () => {
   const cases = [
-    {
-      title: "# Todos",
-      include: [
-        "[✓] List files under `run/`",
-        "[•] Count functions in each `run/` file",
-        "[ ] Mark each tracking item complete",
-      ],
-      exclude: ["Updating", "todos completed"],
-      start: toolCommit({
-        tool: "todowrite",
-        phase: "start",
-        toolState: "running",
-        state: {
-          status: "running",
-          input: {
-            todos: [
-              { status: "completed", content: "List files under `run/`" },
-              { status: "in_progress", content: "Count functions in each `run/` file" },
-              { status: "pending", content: "Mark each tracking item complete" },
-            ],
-          },
-          time: { start: 1 },
-        },
-      }),
-      final: toolCommit({
-        tool: "todowrite",
-        phase: "final",
-        toolState: "completed",
-        state: {
-          status: "completed",
-          input: {
-            todos: [
-              { status: "completed", content: "List files under `run/`" },
-              { status: "in_progress", content: "Count functions in each `run/` file" },
-              { status: "pending", content: "Mark each tracking item complete" },
-            ],
-          },
-          metadata: {},
-          time: { start: 1, end: 4 },
-        },
-      }),
-    },
     {
       title: "# Questions",
       include: ["What should I work on in the codebase next?", "Bug fix"],

@@ -1,7 +1,6 @@
 import { Prompt, type PromptRef } from "../component/prompt"
 import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Logo } from "../component/logo"
-import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useRouteData } from "../context/route"
@@ -9,10 +8,10 @@ import { usePromptRef } from "../context/prompt"
 import { useLocal } from "../context/local"
 import { usePluginRuntime } from "../plugin/runtime"
 import { useEditorContext } from "../context/editor"
-import { useTerminalDimensions } from "@opentui/solid"
-import { useTuiConfig } from "../config"
-import { compactMetadata, showLogo as logoVisible } from "../util/density"
 import { HomeSessionDestinationProvider } from "./home/session-destination"
+import { useData } from "../context/data"
+import { LocationProvider } from "../context/location"
+import { FormPrompt } from "./session/form"
 
 let once = false
 const placeholder = {
@@ -22,22 +21,15 @@ const placeholder = {
 
 export function Home() {
   const pluginRuntime = usePluginRuntime()
-  const sync = useSync()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const [ref, setRef] = createSignal<PromptRef | undefined>()
   const args = useArgs()
   const local = useLocal()
   const editor = useEditorContext()
-  const dimensions = useTerminalDimensions()
-  const tuiConfig = useTuiConfig()
-  const promptMaxWidth = createMemo(() => {
-    const available = Math.max(1, dimensions().width - 4)
-    const configured = tuiConfig.prompt?.max_width
-    if (configured === "auto") return Math.min(available, Math.max(40, Math.floor(dimensions().width * 0.7)))
-    return Math.min(available, configured ?? 75)
-  })
-  const showLogo = createMemo(() => logoVisible(tuiConfig.density, dimensions().width, dimensions().height))
+  const data = useData()
+  // Global MCP elicitations can arrive without a session route, so keep them reachable from Home.
+  const forms = createMemo(() => data.session.form.list("global", data.location.default()) ?? [])
   let sent = false
 
   onMount(() => {
@@ -54,47 +46,72 @@ export function Home() {
       return
     }
     if (!args.prompt) return
-    r.set({ input: args.prompt, parts: [] })
+    r.set({ text: args.prompt, files: [], agents: [], pasted: [] })
     once = true
   }
 
-  // Wait for sync and model store to be ready before auto-submitting --prompt
+  // Wait for the model store to be ready before auto-submitting --prompt.
   createEffect(() => {
     const r = ref()
     if (sent) return
     if (!r) return
-    if (!sync.ready || !local.model.ready) return
+    if (!local.model.ready) return
     if (!args.prompt) return
-    if (r.current.input !== args.prompt) return
+    if (r.current.text !== args.prompt) return
     sent = true
     r.submit()
   })
 
   return (
-    <HomeSessionDestinationProvider>
-      <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-        <box flexGrow={1} minHeight={0} />
-        <box height={4} minHeight={0} flexShrink={1} />
-        <Show when={showLogo()}>
+    <LocationProvider location={data.location.default()}>
+      <HomeSessionDestinationProvider>
+        <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
+          <box flexGrow={1} minHeight={0} />
+          <box height={4} minHeight={0} flexShrink={1} />
           <box flexShrink={0}>
             <pluginRuntime.Slot name="home_logo" mode="replace">
               <Logo />
             </pluginRuntime.Slot>
           </box>
           <box height={1} minHeight={0} flexShrink={1} />
-        </Show>
-        <box width="100%" maxWidth={promptMaxWidth()} zIndex={1000} paddingTop={1} flexShrink={0}>
-          <pluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
-            <Prompt ref={bind} right={<pluginRuntime.Slot name="home_prompt_right" />} placeholders={placeholder} />
-          </pluginRuntime.Slot>
+          <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
+            <pluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
+              <Prompt
+                ref={bind}
+                right={<pluginRuntime.Slot name="home_prompt_right" />}
+                placeholders={placeholder}
+                disabled={forms().length > 0}
+              />
+            </pluginRuntime.Slot>
+          </box>
+          <pluginRuntime.Slot name="home_bottom" />
+          <box flexGrow={1} minHeight={0} />
+          <Toast />
         </box>
-        <pluginRuntime.Slot name="home_bottom" />
-        <box flexGrow={1} minHeight={0} />
-        <Toast />
-      </box>
-      <box width="100%" flexShrink={0}>
-        <pluginRuntime.Slot name="home_footer" mode="single_winner" />
-      </box>
-    </HomeSessionDestinationProvider>
+        <box width="100%" flexShrink={0}>
+          <pluginRuntime.Slot name="home_footer" mode="single_winner" />
+        </box>
+        <Show when={forms()[0]?.id} keyed>
+          {(_) => {
+            const form = forms()[0]
+            return form ? (
+              <box
+                position="absolute"
+                zIndex={2000}
+                left={0}
+                right={0}
+                bottom={1}
+                paddingLeft={2}
+                paddingRight={2}
+              >
+                <box width="100%">
+                  <FormPrompt form={form} />
+                </box>
+              </box>
+            ) : null
+          }}
+        </Show>
+      </HomeSessionDestinationProvider>
+    </LocationProvider>
   )
 }

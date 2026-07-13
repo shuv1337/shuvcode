@@ -1,7 +1,7 @@
 export * as AgentPlugin from "./agent"
 
 import path from "path"
-import { define } from "./internal"
+import { define } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Effect } from "effect"
 import { AgentV2 } from "../agent"
 import { Global } from "../global"
@@ -100,7 +100,7 @@ Rules:
 - If the conversation ends with an imperative statement or request to the user (e.g. "Now please run the command and paste the console output"), always include that exact request in the summary`
 
 export const Plugin = define({
-  id: "agent",
+  id: "opencode.agent",
   effect: Effect.fn(function* (ctx) {
     const location = yield* Location.Service
     const worktree = location.directory
@@ -125,6 +125,7 @@ export const Plugin = define({
 
     yield* ctx.agent.transform((draft) => {
       draft.update(AgentV2.defaultID, (item) => {
+        item.name = AgentV2.Name.make("Build")
         item.description = "The default agent. Executes tools based on configured permissions."
         item.mode = "primary"
         item.permissions.push(
@@ -136,6 +137,7 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("plan"), (item) => {
+        item.name = AgentV2.Name.make("Plan")
         item.description = "Plan mode. Disallows all edit tools."
         item.mode = "primary"
         item.permissions.push(
@@ -155,18 +157,15 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("general"), (item) => {
+        item.name = AgentV2.Name.make("General")
         item.description =
           "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel."
         item.mode = "subagent"
-        item.permissions.push(
-          ...PermissionV2.merge(defaults, [
-            { action: "subagent", resource: "*", effect: "deny" },
-            { action: "todowrite", resource: "*", effect: "deny" },
-          ]),
-        )
+        item.permissions.push(...PermissionV2.merge(defaults, [{ action: "subagent", resource: "*", effect: "deny" }]))
       })
 
       draft.update(AgentV2.ID.make("explore"), (item) => {
+        item.name = AgentV2.Name.make("Explore")
         item.description =
           'Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.'
         item.system = PROMPT_EXPLORE
@@ -189,6 +188,7 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("compaction"), (item) => {
+        item.name = AgentV2.Name.make("Compaction")
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_COMPACTION
@@ -196,6 +196,7 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("title"), (item) => {
+        item.name = AgentV2.Name.make("Title")
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_TITLE
@@ -203,6 +204,7 @@ export const Plugin = define({
       })
 
       draft.update(AgentV2.ID.make("summary"), (item) => {
+        item.name = AgentV2.Name.make("Summary")
         item.mode = "primary"
         item.hidden = true
         item.system = PROMPT_SUMMARY

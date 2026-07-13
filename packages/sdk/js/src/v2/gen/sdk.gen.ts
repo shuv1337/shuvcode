@@ -76,6 +76,8 @@ import type {
   FindTextResponses,
   FormatterStatusErrors,
   FormatterStatusResponses,
+  FormCreatePayloadV2,
+  FormReply,
   GlobalConfigGetErrors,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -90,7 +92,8 @@ import type {
   GlobalUpgradeResponses,
   InstanceDisposeErrors,
   InstanceDisposeResponses,
-  LocationRef,
+  InstructionEntryKeyV2,
+  LocationRefV2,
   LspStatusErrors,
   LspStatusResponses,
   McpAddErrors,
@@ -129,7 +132,7 @@ import type {
   PermissionRespondResponses,
   PermissionRuleset,
   PermissionV2Reply,
-  PermissionV2Source,
+  PermissionV2SourceV2,
   ProjectCommands,
   ProjectCurrentErrors,
   ProjectCurrentResponses,
@@ -143,7 +146,6 @@ import type {
   ProjectUpdateErrors,
   ProjectUpdateResponses,
   PromptAgentAttachment,
-  PromptInput,
   PromptInputFileAttachment,
   ProviderAuthErrors,
   ProviderAuthResponses,
@@ -183,7 +185,6 @@ import type {
   SessionChildrenResponses,
   SessionCommandErrors,
   SessionCommandResponses,
-  SessionContextEntryKey,
   SessionCreateErrors,
   SessionCreateResponses,
   SessionDeleteErrors,
@@ -218,8 +219,6 @@ import type {
   SessionStatusResponses,
   SessionSummarizeErrors,
   SessionSummarizeResponses,
-  SessionTodoErrors,
-  SessionTodoResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
   SessionUnshareErrors,
@@ -274,8 +273,14 @@ import type {
   V2CredentialRemoveResponses,
   V2CredentialUpdateErrors,
   V2CredentialUpdateResponses,
+  V2DebugLocationEvictErrors,
+  V2DebugLocationEvictResponses,
+  V2DebugLocationListErrors,
+  V2DebugLocationListResponses,
   V2EventSubscribeErrors,
   V2EventSubscribeResponses,
+  V2FormRequestListErrors,
+  V2FormRequestListResponses,
   V2FsFindErrors,
   V2FsFindResponses,
   V2FsListErrors,
@@ -304,6 +309,10 @@ import type {
   V2LocationGetResponses,
   V2McpListErrors,
   V2McpListResponses,
+  V2McpResourceCatalogErrors,
+  V2McpResourceCatalogResponses,
+  V2MessageListErrors,
+  V2MessageListResponses,
   V2ModelDefaultErrors,
   V2ModelDefaultResponses,
   V2ModelListErrors,
@@ -326,6 +335,8 @@ import type {
   V2ProjectCurrentResponses,
   V2ProjectDirectoriesErrors,
   V2ProjectDirectoriesResponses,
+  V2ProjectListErrors,
+  V2ProjectListResponses,
   V2ProviderGetErrors,
   V2ProviderGetResponses,
   V2ProviderListErrors,
@@ -348,6 +359,8 @@ import type {
   V2QuestionRequestListResponses,
   V2ReferenceListErrors,
   V2ReferenceListResponses,
+  V2ServerGetErrors,
+  V2ServerGetResponses,
   V2SessionActiveErrors,
   V2SessionActiveResponses,
   V2SessionBackgroundErrors,
@@ -356,32 +369,44 @@ import type {
   V2SessionCommandResponses,
   V2SessionCompactErrors,
   V2SessionCompactResponses,
-  V2SessionContextEntryListErrors,
-  V2SessionContextEntryListResponses,
-  V2SessionContextEntryPutErrors,
-  V2SessionContextEntryPutResponses,
-  V2SessionContextEntryRemoveErrors,
-  V2SessionContextEntryRemoveResponses,
   V2SessionContextErrors,
   V2SessionContextResponses,
   V2SessionCreateErrors,
   V2SessionCreateResponses,
-  V2SessionEventsErrors,
-  V2SessionEventsResponses,
   V2SessionForkErrors,
   V2SessionForkResponses,
+  V2SessionFormCancelErrors,
+  V2SessionFormCancelResponses,
+  V2SessionFormCreateErrors,
+  V2SessionFormCreateResponses,
+  V2SessionFormGetErrors,
+  V2SessionFormGetResponses,
+  V2SessionFormListErrors,
+  V2SessionFormListResponses,
+  V2SessionFormReplyErrors,
+  V2SessionFormReplyResponses,
+  V2SessionFormStateErrors,
+  V2SessionFormStateResponses,
   V2SessionGetErrors,
   V2SessionGetResponses,
-  V2SessionHistoryErrors,
-  V2SessionHistoryResponses,
+  V2SessionInstructionsEntryListErrors,
+  V2SessionInstructionsEntryListResponses,
+  V2SessionInstructionsEntryPutErrors,
+  V2SessionInstructionsEntryPutResponses,
+  V2SessionInstructionsEntryRemoveErrors,
+  V2SessionInstructionsEntryRemoveResponses,
   V2SessionInterruptErrors,
   V2SessionInterruptResponses,
   V2SessionListErrors,
   V2SessionListResponses,
+  V2SessionLogErrors,
+  V2SessionLogResponses,
   V2SessionMessageErrors,
   V2SessionMessageResponses,
-  V2SessionMessagesErrors,
-  V2SessionMessagesResponses,
+  V2SessionMoveErrors,
+  V2SessionMoveResponses,
+  V2SessionPendingListErrors,
+  V2SessionPendingListResponses,
   V2SessionPermissionCreateErrors,
   V2SessionPermissionCreateResponses,
   V2SessionPermissionGetErrors,
@@ -398,6 +423,8 @@ import type {
   V2SessionQuestionRejectResponses,
   V2SessionQuestionReplyErrors,
   V2SessionQuestionReplyResponses,
+  V2SessionRemoveErrors,
+  V2SessionRemoveResponses,
   V2SessionRenameErrors,
   V2SessionRenameResponses,
   V2SessionRevertClearErrors,
@@ -406,6 +433,8 @@ import type {
   V2SessionRevertCommitResponses,
   V2SessionRevertStageErrors,
   V2SessionRevertStageResponses,
+  V2SessionShellErrors,
+  V2SessionShellResponses,
   V2SessionSkillErrors,
   V2SessionSkillResponses,
   V2SessionSwitchAgentErrors,
@@ -426,8 +455,14 @@ import type {
   V2ShellOutputResponses,
   V2ShellRemoveErrors,
   V2ShellRemoveResponses,
+  V2ShellTimeoutErrors,
+  V2ShellTimeoutResponses,
   V2SkillListErrors,
   V2SkillListResponses,
+  V2VcsDiffErrors,
+  V2VcsDiffResponses,
+  V2VcsStatusErrors,
+  V2VcsStatusResponses,
   VcsApplyErrors,
   VcsApplyResponses,
   VcsDiffErrors,
@@ -436,6 +471,7 @@ import type {
   VcsDiffResponses,
   VcsGetErrors,
   VcsGetResponses,
+  VcsMode,
   VcsStatusErrors,
   VcsStatusResponses,
   WorktreeCreateErrors,
@@ -3676,38 +3712,6 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Get session todos
-   *
-   * Retrieve the todo list associated with a specific session, showing tasks and action items.
-   */
-  public todo<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<SessionTodoResponses, SessionTodoErrors, ThrowOnError>({
-      url: "/session/{sessionID}/todo",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Get message diff
    *
    * Get the file changes (diff) that resulted from a specific user message in the session.
@@ -5078,6 +5082,20 @@ export class Health extends HeyApiClient {
   }
 }
 
+export class Server extends HeyApiClient {
+  /**
+   * Get server information
+   *
+   * Return the URLs that can be used to connect to this server.
+   */
+  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<V2ServerGetResponses, V2ServerGetErrors, ThrowOnError>({
+      url: "/api/server",
+      ...options,
+    })
+  }
+}
+
 export class Location extends HeyApiClient {
   /**
    * Get location
@@ -5087,9 +5105,9 @@ export class Location extends HeyApiClient {
   public get<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5111,9 +5129,9 @@ export class Agent extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5135,9 +5153,9 @@ export class Plugin extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5160,7 +5178,7 @@ export class Revert extends HeyApiClient {
     parameters: {
       sessionID: string
       messageID?: string
-      files?: boolean
+      files?: boolean | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5235,11 +5253,11 @@ export class Revert extends HeyApiClient {
   }
 }
 
-export class Entry extends HeyApiClient {
+export class Pending extends HeyApiClient {
   /**
-   * List context entries
+   * List pending session work
    *
-   * List API-managed context entries attached to the session's system context.
+   * List durable admitted session work not yet visible in projected history, ordered by admission. Includes unpromoted user and synthetic inputs and unhandled compaction barriers. The runner owns consumption; items disappear once promoted or handled.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5249,25 +5267,50 @@ export class Entry extends HeyApiClient {
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
     return (options?.client ?? this.client).get<
-      V2SessionContextEntryListResponses,
-      V2SessionContextEntryListErrors,
+      V2SessionPendingListResponses,
+      V2SessionPendingListErrors,
       ThrowOnError
     >({
-      url: "/api/session/{sessionID}/context-entry",
+      url: "/api/session/{sessionID}/pending",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Entry extends HeyApiClient {
+  /**
+   * List instruction entries
+   *
+   * List API-managed instruction entries attached to the session.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
+    return (options?.client ?? this.client).get<
+      V2SessionInstructionsEntryListResponses,
+      V2SessionInstructionsEntryListErrors,
+      ThrowOnError
+    >({
+      url: "/api/session/{sessionID}/instructions/entries",
       ...options,
       ...params,
     })
   }
 
   /**
-   * Remove context entry
+   * Remove instruction entry
    *
-   * Remove one context entry; the removal is announced to the model at the next turn boundary.
+   * Remove one instruction entry; the removal is announced to the model at the next step boundary.
    */
   public remove<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      key: SessionContextEntryKey
+      key: InstructionEntryKeyV2
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5283,25 +5326,25 @@ export class Entry extends HeyApiClient {
       ],
     )
     return (options?.client ?? this.client).delete<
-      V2SessionContextEntryRemoveResponses,
-      V2SessionContextEntryRemoveErrors,
+      V2SessionInstructionsEntryRemoveResponses,
+      V2SessionInstructionsEntryRemoveErrors,
       ThrowOnError
     >({
-      url: "/api/session/{sessionID}/context-entry/{key}",
+      url: "/api/session/{sessionID}/instructions/entries/{key}",
       ...options,
       ...params,
     })
   }
 
   /**
-   * Put context entry
+   * Put instruction entry
    *
-   * Attach or replace one durable context entry. The value is rendered into the session's system context; changes announce as updates at the next turn boundary.
+   * Attach or replace one durable instruction entry. Changes announce as updates at the next step boundary.
    */
   public put<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      key: SessionContextEntryKey
+      key: InstructionEntryKeyV2
       value?: unknown
     },
     options?: Options<never, ThrowOnError>,
@@ -5319,11 +5362,11 @@ export class Entry extends HeyApiClient {
       ],
     )
     return (options?.client ?? this.client).put<
-      V2SessionContextEntryPutResponses,
-      V2SessionContextEntryPutErrors,
+      V2SessionInstructionsEntryPutResponses,
+      V2SessionInstructionsEntryPutErrors,
       ThrowOnError
     >({
-      url: "/api/session/{sessionID}/context-entry/{key}",
+      url: "/api/session/{sessionID}/instructions/entries/{key}",
       ...options,
       ...params,
       headers: {
@@ -5335,10 +5378,197 @@ export class Entry extends HeyApiClient {
   }
 }
 
-export class Context extends HeyApiClient {
+export class Instructions extends HeyApiClient {
   private _entry?: Entry
   get entry(): Entry {
     return (this._entry ??= new Entry({ client: this.client }))
+  }
+}
+
+export class Form extends HeyApiClient {
+  /**
+   * List session forms
+   *
+   * Retrieve pending forms for a session.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
+    return (options?.client ?? this.client).get<V2SessionFormListResponses, V2SessionFormListErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/form",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create session form
+   *
+   * Create a form for a session.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      formCreatePayloadV2: FormCreatePayloadV2
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { key: "formCreatePayloadV2", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2SessionFormCreateResponses, V2SessionFormCreateErrors, ThrowOnError>(
+      {
+        url: "/api/session/{sessionID}/form",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Get session form
+   *
+   * Retrieve a form for a session.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      formID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "formID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<V2SessionFormGetResponses, V2SessionFormGetErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/form/{formID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get form state
+   *
+   * Retrieve the current state for a form.
+   */
+  public state<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      formID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "formID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<V2SessionFormStateResponses, V2SessionFormStateErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/form/{formID}/state",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Reply to form
+   *
+   * Submit an answer to a pending form.
+   */
+  public reply<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      formID: string
+      formReply: FormReply
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "formID" },
+            { key: "formReply", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2SessionFormReplyResponses, V2SessionFormReplyErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/form/{formID}/reply",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel form
+   *
+   * Cancel a pending form.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      formID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "formID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2SessionFormCancelResponses, V2SessionFormCancelErrors, ThrowOnError>(
+      {
+        url: "/api/session/{sessionID}/form/{formID}/cancel",
+        ...options,
+        ...params,
+      },
+    )
   }
 }
 
@@ -5374,15 +5604,15 @@ export class Permission2 extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      id?: string
+      id?: string | null
       action?: string
       resources?: Array<string>
       save?: Array<string>
       metadata?: {
         [key: string]: unknown
       }
-      source?: PermissionV2Source
-      agent?: string
+      source?: PermissionV2SourceV2
+      agent?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5463,7 +5693,7 @@ export class Permission2 extends HeyApiClient {
       sessionID: string
       requestID: string
       reply?: PermissionV2Reply
-      message?: string
+      message?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5605,14 +5835,15 @@ export class Session3 extends HeyApiClient {
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
-      workspace?: string
-      limit?: number
-      order?: "asc" | "desc"
-      search?: string
-      directory?: string
-      project?: string
-      subpath?: string
-      cursor?: string
+      workspace?: string | null
+      limit?: number | null
+      order?: "asc" | "desc" | null
+      search?: string | null
+      parentID?: string | "null" | null
+      directory?: string | null
+      project?: string | null
+      subpath?: string | null
+      cursor?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5625,6 +5856,7 @@ export class Session3 extends HeyApiClient {
             { in: "query", key: "limit" },
             { in: "query", key: "order" },
             { in: "query", key: "search" },
+            { in: "query", key: "parentID" },
             { in: "query", key: "directory" },
             { in: "query", key: "project" },
             { in: "query", key: "subpath" },
@@ -5647,10 +5879,10 @@ export class Session3 extends HeyApiClient {
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
-      id?: string
-      agent?: string
-      model?: ModelRef
-      location?: LocationRef
+      id?: string | null
+      agent?: string | null
+      model?: ModelRef | null
+      location?: LocationRefV2 | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5692,6 +5924,25 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
+   * Delete session
+   *
+   * Delete a session and its child sessions.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
+    return (options?.client ?? this.client).delete<V2SessionRemoveResponses, V2SessionRemoveErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get session
    *
    * Retrieve a session by ID.
@@ -5718,7 +5969,7 @@ export class Session3 extends HeyApiClient {
   public fork<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      messageID?: string
+      messageID?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5859,6 +6110,45 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
+   * Move session
+   *
+   * Move a session to another project directory, optionally transferring local changes.
+   */
+  public move<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      destination?: {
+        directory: string
+      }
+      moveChanges?: boolean | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "body", key: "destination" },
+            { in: "body", key: "moveChanges" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2SessionMoveResponses, V2SessionMoveErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/move",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Send message
    *
    * Durably admit one session input and schedule agent-loop execution unless resume is false.
@@ -5866,10 +6156,15 @@ export class Session3 extends HeyApiClient {
   public prompt<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      id?: string
-      prompt?: PromptInput
-      delivery?: "steer" | "queue"
-      resume?: boolean
+      id?: string | null
+      text?: string
+      files?: Array<PromptInputFileAttachment>
+      agents?: Array<PromptAgentAttachment>
+      metadata?: {
+        [key: string]: unknown
+      }
+      delivery?: "steer" | "queue" | null
+      resume?: boolean | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5880,7 +6175,10 @@ export class Session3 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "body", key: "id" },
-            { in: "body", key: "prompt" },
+            { in: "body", key: "text" },
+            { in: "body", key: "files" },
+            { in: "body", key: "agents" },
+            { in: "body", key: "metadata" },
             { in: "body", key: "delivery" },
             { in: "body", key: "resume" },
           ],
@@ -5907,15 +6205,15 @@ export class Session3 extends HeyApiClient {
   public command<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      id?: string
+      id?: string | null
       command?: string
-      arguments?: string
-      agent?: string
-      model?: ModelRef
+      arguments?: string | null
+      agent?: string | null
+      model?: ModelRef | null
       files?: Array<PromptInputFileAttachment>
       agents?: Array<PromptAgentAttachment>
-      delivery?: "steer" | "queue"
-      resume?: boolean
+      delivery?: "steer" | "queue" | null
+      resume?: boolean | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5958,9 +6256,9 @@ export class Session3 extends HeyApiClient {
   public skill<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      id?: string
+      id?: string | null
       skill?: string
-      resume?: boolean
+      resume?: boolean | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5992,16 +6290,19 @@ export class Session3 extends HeyApiClient {
   /**
    * Add synthetic message
    *
-   * Append a synthetic message to a session and resume execution.
+   * Durably admit synthetic session input and schedule execution unless resume is false.
    */
   public synthetic<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
+      id?: string | null
       text?: string
-      description?: string
+      description?: string | null
       metadata?: {
         [key: string]: unknown
       }
+      delivery?: "steer" | "queue" | null
+      resume?: boolean | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6011,9 +6312,12 @@ export class Session3 extends HeyApiClient {
         {
           args: [
             { in: "path", key: "sessionID" },
+            { in: "body", key: "id" },
             { in: "body", key: "text" },
             { in: "body", key: "description" },
             { in: "body", key: "metadata" },
+            { in: "body", key: "delivery" },
+            { in: "body", key: "resume" },
           ],
         },
       ],
@@ -6031,21 +6335,74 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
+   * Run shell command
+   *
+   * Execute one shell command in the session's working directory. Emits a shell.started event before execution and a shell.ended event with the merged output after.
+   */
+  public shell<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      id?: string | null
+      command?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "body", key: "id" },
+            { in: "body", key: "command" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2SessionShellResponses, V2SessionShellErrors, ThrowOnError>({
+      url: "/api/session/{sessionID}/shell",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Compact session
    *
-   * Compact a session conversation.
+   * Queue a durable session compaction request.
    */
   public compact<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
+      id?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "body", key: "id" },
+          ],
+        },
+      ],
+    )
     return (options?.client ?? this.client).post<V2SessionCompactResponses, V2SessionCompactErrors, ThrowOnError>({
       url: "/api/session/{sessionID}/compact",
       ...options,
       ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -6088,46 +6445,15 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
-   * Get session history
+   * Read the session log
    *
-   * Read one finite page of public durable Session events after an exclusive aggregate sequence. Newly committed events may appear on later pages.
+   * Experimental durable session event log. Reads events after an exclusive aggregate sequence and continues with live events when follow=true.
    */
-  public history<ThrowOnError extends boolean = false>(
+  public log<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      limit?: number
-      after?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "after" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<V2SessionHistoryResponses, V2SessionHistoryErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/history",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Subscribe to session events
-   *
-   * Replay durable events after an aggregate sequence, then continue with new durable events.
-   */
-  public events<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      after?: string
+      after?: number | null
+      follow?: "true" | "false" | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6138,12 +6464,13 @@ export class Session3 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "after" },
+            { in: "query", key: "follow" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).sse.get<V2SessionEventsResponses, V2SessionEventsErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/event",
+    return (options?.client ?? this.client).sse.get<V2SessionLogResponses, V2SessionLogErrors, ThrowOnError>({
+      url: "/api/experimental/session/{sessionID}/log",
       ...options,
       ...params,
     })
@@ -6219,17 +6546,49 @@ export class Session3 extends HeyApiClient {
     })
   }
 
+  private _revert?: Revert
+  get revert(): Revert {
+    return (this._revert ??= new Revert({ client: this.client }))
+  }
+
+  private _pending?: Pending
+  get pending(): Pending {
+    return (this._pending ??= new Pending({ client: this.client }))
+  }
+
+  private _instructions?: Instructions
+  get instructions(): Instructions {
+    return (this._instructions ??= new Instructions({ client: this.client }))
+  }
+
+  private _form?: Form
+  get form(): Form {
+    return (this._form ??= new Form({ client: this.client }))
+  }
+
+  private _permission?: Permission2
+  get permission(): Permission2 {
+    return (this._permission ??= new Permission2({ client: this.client }))
+  }
+
+  private _question?: Question2
+  get question(): Question2 {
+    return (this._question ??= new Question2({ client: this.client }))
+  }
+}
+
+export class Message extends HeyApiClient {
   /**
    * Get session messages
    *
    * Retrieve projected messages for a session. Items keep the requested order across pages; use cursor.next or cursor.previous to move through the ordered timeline.
    */
-  public messages<ThrowOnError extends boolean = false>(
+  public list<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      limit?: number
-      order?: "asc" | "desc"
-      cursor?: string
+      limit?: number | null
+      order?: "asc" | "desc" | null
+      cursor?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6246,31 +6605,11 @@ export class Session3 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<V2SessionMessagesResponses, V2SessionMessagesErrors, ThrowOnError>({
+    return (options?.client ?? this.client).get<V2MessageListResponses, V2MessageListErrors, ThrowOnError>({
       url: "/api/session/{sessionID}/message",
       ...options,
       ...params,
     })
-  }
-
-  private _revert?: Revert
-  get revert(): Revert {
-    return (this._revert ??= new Revert({ client: this.client }))
-  }
-
-  private _context?: Context
-  get context2(): Context {
-    return (this._context ??= new Context({ client: this.client }))
-  }
-
-  private _permission?: Permission2
-  get permission(): Permission2 {
-    return (this._permission ??= new Permission2({ client: this.client }))
-  }
-
-  private _question?: Question2
-  get question(): Question2 {
-    return (this._question ??= new Question2({ client: this.client }))
   }
 }
 
@@ -6283,9 +6622,9 @@ export class Model extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6305,9 +6644,9 @@ export class Model extends HeyApiClient {
   public default<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6329,11 +6668,11 @@ export class Generate extends HeyApiClient {
   public text<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       prompt?: string
-      model?: ModelRef
+      model?: ModelRef | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6371,9 +6710,9 @@ export class Provider2 extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6394,9 +6733,9 @@ export class Provider2 extends HeyApiClient {
     parameters: {
       providerID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6429,11 +6768,11 @@ export class Connect extends HeyApiClient {
     parameters: {
       integrationID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       key?: string
-      label?: string
+      label?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6475,14 +6814,14 @@ export class Connect extends HeyApiClient {
     parameters: {
       integrationID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       methodID?: string
       inputs?: {
         [key: string]: string
       }
-      label?: string
+      label?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6527,9 +6866,9 @@ export class Attempt extends HeyApiClient {
     parameters: {
       attemptID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6564,9 +6903,9 @@ export class Attempt extends HeyApiClient {
     parameters: {
       attemptID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6601,10 +6940,10 @@ export class Attempt extends HeyApiClient {
     parameters: {
       attemptID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
-      code?: string
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      code?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6646,9 +6985,9 @@ export class Integration extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6669,9 +7008,9 @@ export class Integration extends HeyApiClient {
     parameters: {
       integrationID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6704,6 +7043,34 @@ export class Integration extends HeyApiClient {
   }
 }
 
+export class Resource2 extends HeyApiClient {
+  /**
+   * List MCP resources
+   *
+   * Retrieve resources and resource templates from connected MCP servers.
+   */
+  public catalog<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "location" }] }])
+    return (options?.client ?? this.client).get<
+      V2McpResourceCatalogResponses,
+      V2McpResourceCatalogErrors,
+      ThrowOnError
+    >({
+      url: "/api/mcp/resource",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Mcp2 extends HeyApiClient {
   /**
    * List MCP servers
@@ -6713,9 +7080,9 @@ export class Mcp2 extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6725,6 +7092,11 @@ export class Mcp2 extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _resource?: Resource2
+  get resource(): Resource2 {
+    return (this._resource ??= new Resource2({ client: this.client }))
   }
 }
 
@@ -6738,9 +7110,9 @@ export class Credential extends HeyApiClient {
     parameters: {
       credentialID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6773,9 +7145,9 @@ export class Credential extends HeyApiClient {
     parameters: {
       credentialID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       label?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -6807,6 +7179,18 @@ export class Credential extends HeyApiClient {
 
 export class Project2 extends HeyApiClient {
   /**
+   * List projects
+   *
+   * List known projects.
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<V2ProjectListResponses, V2ProjectListErrors, ThrowOnError>({
+      url: "/api/project",
+      ...options,
+    })
+  }
+
+  /**
    * Get current project
    *
    * Resolve the project for the requested location.
@@ -6814,9 +7198,9 @@ export class Project2 extends HeyApiClient {
   public current<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6837,9 +7221,9 @@ export class Project2 extends HeyApiClient {
     parameters: {
       projectID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6868,6 +7252,37 @@ export class Project2 extends HeyApiClient {
 
 export class Request extends HeyApiClient {
   /**
+   * List pending form requests
+   *
+   * Retrieve pending forms for a location.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "location" }] }])
+    return (options?.client ?? this.client).get<V2FormRequestListResponses, V2FormRequestListErrors, ThrowOnError>({
+      url: "/api/form/request",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Form2 extends HeyApiClient {
+  private _request?: Request
+  get request(): Request {
+    return (this._request ??= new Request({ client: this.client }))
+  }
+}
+
+export class Request2 extends HeyApiClient {
+  /**
    * List pending permission requests
    *
    * Retrieve pending permission requests for a location.
@@ -6875,9 +7290,9 @@ export class Request extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6902,7 +7317,7 @@ export class Saved extends HeyApiClient {
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
-      projectID?: string
+      projectID?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6943,9 +7358,9 @@ export class Saved extends HeyApiClient {
 }
 
 export class Permission3 extends HeyApiClient {
-  private _request?: Request
-  get request(): Request {
-    return (this._request ??= new Request({ client: this.client }))
+  private _request?: Request2
+  get request(): Request2 {
+    return (this._request ??= new Request2({ client: this.client }))
   }
 
   private _saved?: Saved
@@ -6963,9 +7378,9 @@ export class Fs extends HeyApiClient {
   public read<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6985,10 +7400,10 @@ export class Fs extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
-      path?: string
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      path?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7018,12 +7433,12 @@ export class Fs extends HeyApiClient {
   public find<ThrowOnError extends boolean = false>(
     parameters: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       query: string
       type?: "file" | "directory"
-      limit?: string
+      limit?: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7057,9 +7472,9 @@ export class Command2 extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7081,9 +7496,9 @@ export class Skill extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7100,12 +7515,47 @@ export class Event2 extends HeyApiClient {
   /**
    * Subscribe to events
    *
-   * Subscribe to native event payloads for the server.
+   * Subscribe to native event payloads for the server. Volatile by contract: a slow consumer overflows and fails the stream, and events during disconnection are missed.
    */
   public subscribe<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).sse.get<V2EventSubscribeResponses, V2EventSubscribeErrors, ThrowOnError>({
       url: "/api/event",
       ...options,
+    })
+  }
+}
+
+export class Connect2 extends HeyApiClient {
+  /**
+   * Create PTY WebSocket token
+   *
+   * Create a short-lived single-use ticket for opening a PTY WebSocket connection.
+   */
+  public token<ThrowOnError extends boolean = false>(
+    parameters: {
+      ptyID: string
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "ptyID" },
+            { in: "query", key: "location" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2PtyConnectTokenResponses, V2PtyConnectTokenErrors, ThrowOnError>({
+      url: "/api/pty/{ptyID}/connect-token",
+      ...options,
+      ...params,
     })
   }
 }
@@ -7119,9 +7569,9 @@ export class Pty2 extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7141,9 +7591,9 @@ export class Pty2 extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       command?: string
       args?: Array<string>
       cwd?: string
@@ -7190,9 +7640,9 @@ export class Pty2 extends HeyApiClient {
     parameters: {
       ptyID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7223,9 +7673,9 @@ export class Pty2 extends HeyApiClient {
     parameters: {
       ptyID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7256,9 +7706,9 @@ export class Pty2 extends HeyApiClient {
     parameters: {
       ptyID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       title?: string
       size?: {
         rows: number
@@ -7289,39 +7739,6 @@ export class Pty2 extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
-    })
-  }
-
-  /**
-   * Create PTY WebSocket token
-   *
-   * Create a short-lived single-use ticket for opening a PTY WebSocket connection.
-   */
-  public connectToken<ThrowOnError extends boolean = false>(
-    parameters: {
-      ptyID: string
-      location?: {
-        directory?: string
-        workspace?: string
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "ptyID" },
-            { in: "query", key: "location" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<V2PtyConnectTokenResponses, V2PtyConnectTokenErrors, ThrowOnError>({
-      url: "/api/pty/{ptyID}/connect-token",
-      ...options,
-      ...params,
     })
   }
 
@@ -7360,6 +7777,11 @@ export class Pty2 extends HeyApiClient {
       ...params,
     })
   }
+
+  private _connect?: Connect2
+  get connect2(): Connect2 {
+    return (this._connect ??= new Connect2({ client: this.client }))
+  }
 }
 
 export class Shell extends HeyApiClient {
@@ -7371,9 +7793,9 @@ export class Shell extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7393,9 +7815,9 @@ export class Shell extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       command?: string
       cwd?: string
       timeout?: number
@@ -7440,9 +7862,9 @@ export class Shell extends HeyApiClient {
     parameters: {
       id: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7473,9 +7895,9 @@ export class Shell extends HeyApiClient {
     parameters: {
       id: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7498,6 +7920,46 @@ export class Shell extends HeyApiClient {
   }
 
   /**
+   * Update shell timeout
+   *
+   * Replace a running shell command's timeout from now, or clear it with zero.
+   */
+  public timeout<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      timeout?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "location" },
+            { in: "body", key: "timeout" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<V2ShellTimeoutResponses, V2ShellTimeoutErrors, ThrowOnError>({
+      url: "/api/shell/{id}/timeout",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Read shell output
    *
    * Page through captured combined output by absolute byte cursor.
@@ -7506,9 +7968,9 @@ export class Shell extends HeyApiClient {
     parameters: {
       id: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       cursor?: string
       limit?: string
     },
@@ -7535,7 +7997,7 @@ export class Shell extends HeyApiClient {
   }
 }
 
-export class Request2 extends HeyApiClient {
+export class Request3 extends HeyApiClient {
   /**
    * List pending question requests
    *
@@ -7544,9 +8006,9 @@ export class Request2 extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7564,9 +8026,9 @@ export class Request2 extends HeyApiClient {
 }
 
 export class Question3 extends HeyApiClient {
-  private _request?: Request2
-  get request(): Request2 {
-    return (this._request ??= new Request2({ client: this.client }))
+  private _request?: Request3
+  get request(): Request3 {
+    return (this._request ??= new Request3({ client: this.client }))
   }
 }
 
@@ -7579,9 +8041,9 @@ export class Reference extends HeyApiClient {
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7599,9 +8061,9 @@ export class ProjectCopy2 extends HeyApiClient {
     parameters: {
       projectID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       directory?: string
       force?: boolean
     },
@@ -7640,9 +8102,9 @@ export class ProjectCopy2 extends HeyApiClient {
     parameters: {
       projectID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
       strategy?: string
       directory?: string
       name?: string
@@ -7681,9 +8143,9 @@ export class ProjectCopy2 extends HeyApiClient {
     parameters: {
       projectID: string
       location?: {
-        directory?: string
-        workspace?: string
-      }
+        directory?: string | null
+        workspace?: string | null
+      } | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7710,10 +8172,121 @@ export class ProjectCopy2 extends HeyApiClient {
   }
 }
 
+export class Vcs2 extends HeyApiClient {
+  /**
+   * VCS status
+   *
+   * List uncommitted working-copy changes relative to the requested location.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "location" }] }])
+    return (options?.client ?? this.client).get<V2VcsStatusResponses, V2VcsStatusErrors, ThrowOnError>({
+      url: "/api/vcs/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * VCS diff
+   *
+   * Diff the working copy against HEAD (mode git) or the default-branch merge base (mode branch) for the requested location.
+   */
+  public diff<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      mode: VcsMode
+      context?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "query", key: "mode" },
+            { in: "query", key: "context" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<V2VcsDiffResponses, V2VcsDiffErrors, ThrowOnError>({
+      url: "/api/vcs/diff",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Location2 extends HeyApiClient {
+  /**
+   * Evict a loaded location
+   *
+   * Dispose the requested location's cached services so its next use boots them fresh.
+   */
+  public evict<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "location" }] }])
+    return (options?.client ?? this.client).delete<
+      V2DebugLocationEvictResponses,
+      V2DebugLocationEvictErrors,
+      ThrowOnError
+    >({
+      url: "/api/debug/location",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List loaded locations
+   *
+   * List locations currently loaded by the server.
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<V2DebugLocationListResponses, V2DebugLocationListErrors, ThrowOnError>({
+      url: "/api/debug/location",
+      ...options,
+    })
+  }
+}
+
+export class Debug extends HeyApiClient {
+  private _location?: Location2
+  get location(): Location2 {
+    return (this._location ??= new Location2({ client: this.client }))
+  }
+}
+
 export class V2 extends HeyApiClient {
   private _health?: Health
   get health(): Health {
     return (this._health ??= new Health({ client: this.client }))
+  }
+
+  private _server?: Server
+  get server(): Server {
+    return (this._server ??= new Server({ client: this.client }))
   }
 
   private _location?: Location
@@ -7734,6 +8307,11 @@ export class V2 extends HeyApiClient {
   private _session?: Session3
   get session(): Session3 {
     return (this._session ??= new Session3({ client: this.client }))
+  }
+
+  private _message?: Message
+  get message(): Message {
+    return (this._message ??= new Message({ client: this.client }))
   }
 
   private _model?: Model
@@ -7769,6 +8347,11 @@ export class V2 extends HeyApiClient {
   private _project?: Project2
   get project(): Project2 {
     return (this._project ??= new Project2({ client: this.client }))
+  }
+
+  private _form?: Form2
+  get form(): Form2 {
+    return (this._form ??= new Form2({ client: this.client }))
   }
 
   private _permission?: Permission3
@@ -7819,6 +8402,16 @@ export class V2 extends HeyApiClient {
   private _projectCopy?: ProjectCopy2
   get projectCopy(): ProjectCopy2 {
     return (this._projectCopy ??= new ProjectCopy2({ client: this.client }))
+  }
+
+  private _vcs?: Vcs2
+  get vcs(): Vcs2 {
+    return (this._vcs ??= new Vcs2({ client: this.client }))
+  }
+
+  private _debug?: Debug
+  get debug(): Debug {
+    return (this._debug ??= new Debug({ client: this.client }))
   }
 }
 

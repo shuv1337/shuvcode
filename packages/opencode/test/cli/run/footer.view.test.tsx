@@ -15,10 +15,10 @@ import {
   RunSkillSelectBody,
   RunSubagentSelectBody,
   RunVariantSelectBody,
-} from "@/cli/cmd/run/footer.command"
-import { RunFooterView } from "@/cli/cmd/run/footer.view"
-import { RunEntryContent } from "@/cli/cmd/run/scrollback.writer"
-import { RUN_THEME_FALLBACK, type RunTheme } from "@/cli/cmd/run/theme"
+} from "@opencode-ai/cli/mini/footer.command"
+import { RunFooterView } from "@opencode-ai/cli/mini/footer.view"
+import { RunEntryContent } from "@opencode-ai/cli/mini/scrollback.writer"
+import { RUN_THEME_FALLBACK, type RunTheme } from "@opencode-ai/cli/mini/theme"
 import type {
   FooterState,
   FooterSubagentState,
@@ -30,9 +30,10 @@ import type {
   RunProvider,
   RunTuiConfig,
   StreamCommit,
-} from "@/cli/cmd/run/types"
-import { RunQuestionBody } from "@/cli/cmd/run/footer.question"
-import { RejectField } from "@/cli/cmd/run/footer.permission"
+} from "@opencode-ai/cli/mini/types"
+import { RunQuestionBody } from "@opencode-ai/cli/mini/footer.question"
+import { selectedCommand } from "@opencode-ai/cli/mini/footer.prompt"
+import { RejectField } from "@opencode-ai/cli/mini/footer.permission"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 
 const tuiConfig = createTuiResolvedConfig()
@@ -160,7 +161,6 @@ async function renderFooter(
     currentModel?: RunInput["model"]
     currentVariant?: string
     subagents?: FooterSubagentState
-    backgroundSubagents?: boolean
     width?: number
     height?: number
     state?: Partial<FooterState>
@@ -198,7 +198,6 @@ async function renderFooter(
           subagent={subagents}
           theme={input.theme ?? (() => RUN_THEME_FALLBACK)}
           tuiConfig={config}
-          backgroundSubagents={input.backgroundSubagents ?? true}
           agent="opencode"
           onSubmit={input.onSubmit ?? (() => true)}
           onPermissionReply={() => {}}
@@ -832,6 +831,52 @@ test("direct footer slash autocomplete keeps a real skills command", async () =>
   }
 })
 
+test("selectedCommand backfills the catalog source for bound drafts", () => {
+  const catalog = [command({ name: "opencode-ts", description: "TS skill", source: "skill" })]
+
+  // The skill picker binds `/name ` drafts; older drafts may lack source.
+  expect(selectedCommand("/opencode-ts fix it", { name: "opencode-ts", arguments: "" }, catalog)).toEqual({
+    name: "opencode-ts",
+    arguments: "fix it",
+    source: "skill",
+  })
+  // An explicit source wins without a catalog lookup.
+  expect(selectedCommand("/opencode-ts", { name: "opencode-ts", arguments: "", source: "skill" })).toEqual({
+    name: "opencode-ts",
+    arguments: "",
+    source: "skill",
+  })
+  // Plain commands stay untagged.
+  expect(selectedCommand("/deploy prod", { name: "deploy", arguments: "" }, [
+    command({ name: "deploy", description: "Deploy" }),
+  ])).toEqual({ name: "deploy", arguments: "prod" })
+})
+
+test("direct footer tags skill slash submissions with their catalog source", async () => {
+  const submits: RunPrompt[] = []
+  const app = await renderFooter({
+    commands: [command({ name: "formatter", description: "Apply formatter fixes", source: "skill" })],
+    onSubmit(prompt) {
+      submits.push(prompt)
+      return true
+    },
+  })
+
+  try {
+    await app.renderOnce()
+    "/formatter src".split("").forEach((key) => app.mockInput.pressKey(key))
+    await app.renderOnce()
+    app.mockInput.pressEnter()
+    await app.renderOnce()
+
+    expect(submits).toEqual([
+      { text: "/formatter src", parts: [], command: { name: "formatter", arguments: "src", source: "skill" } },
+    ])
+  } finally {
+    app.cleanup()
+  }
+})
+
 // OpenTUI currently segfaults Bun while tearing down this composer-to-skill-panel transition.
 // Re-enable after the upstream renderer teardown fix lands.
 test.skip("direct footer skill picker inserts an editable bound skill command", async () => {
@@ -864,7 +909,7 @@ test.skip("direct footer skill picker inserts an editable bound skill command", 
     app.mockInput.pressEnter()
     await app.renderOnce()
 
-    expect(submits).toEqual([{ text: "/new task", parts: [], command: { name: "new", arguments: "task" } }])
+    expect(submits).toEqual([{ text: "/new task", parts: [], command: { name: "new", arguments: "task", source: "skill" } }])
   } finally {
     app.cleanup()
   }
@@ -951,7 +996,6 @@ test("direct footer shows editable prompts and additional queued work while runn
           ]}
           theme={() => RUN_THEME_FALLBACK}
           tuiConfig={tuiConfig}
-          backgroundSubagents={true}
           agent="opencode"
           onSubmit={() => true}
           onPermissionReply={() => {}}
@@ -1024,7 +1068,7 @@ test("direct footer shows editable prompts and additional queued work while runn
   }
 })
 
-test("direct footer separates a lone context hint from model and command hint", async () => {
+test("direct footer always offers backgrounding for a foreground subagent", async () => {
   const app = await renderFooter({
     providers: [provider()],
     currentModel: { providerID: "opencode", modelID: "gpt-5" },
@@ -1035,7 +1079,6 @@ test("direct footer separates a lone context hint from model and command hint", 
       permissions: [],
       questions: [],
     },
-    backgroundSubagents: false,
     width: 160,
   })
 
@@ -1044,8 +1087,8 @@ test("direct footer separates a lone context hint from model and command hint", 
     const frame = app.captureCharFrame()
 
     expect(frame).toContain("GPT-5")
-    expect(frame).toContain("xhigh · ctrl+x down subagents · ctrl+p cmd")
-    expect(frame).not.toContain("ctrl+b background")
+    expect(frame).toContain("xhigh · ctrl+b background · ctrl+x down subagents · ctrl+p cmd")
+    expect(frame).toContain("ctrl+b background")
     expect(frame).not.toContain("queued")
   } finally {
     app.cleanup()
@@ -1063,7 +1106,6 @@ test("direct footer hides the subagent hint when only completed subagents remain
       permissions: [],
       questions: [],
     },
-    backgroundSubagents: false,
     width: 160,
   })
 

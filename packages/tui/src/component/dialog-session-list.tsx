@@ -1,6 +1,6 @@
-import { createMemo, createResource, onMount } from "solid-js"
+import { createMemo, createResource, createSignal, onMount } from "solid-js"
 import path from "path"
-import type { SessionV2Info } from "@opencode-ai/sdk/v2"
+import type { SessionInfo } from "@opencode-ai/client"
 import { useDialog } from "../ui/dialog"
 import { DialogSelect } from "../ui/dialog-select"
 import { useRoute } from "../context/route"
@@ -15,6 +15,7 @@ import { useToast } from "../ui/toast"
 import { useCommandShortcut } from "../keymap"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { Spinner } from "./spinner"
+import { errorMessage } from "../util/error"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -26,21 +27,30 @@ export function DialogSessionList() {
   const local = useLocal()
   const toast = useToast()
   const [search, setSearch] = createDebouncedSignal("", 150)
+  const [toDelete, setToDelete] = createSignal<string>()
   const quickSwitch1 = useCommandShortcut("session.quick_switch.1")
   const quickSwitch9 = useCommandShortcut("session.quick_switch.9")
+  const deleteHint = useCommandShortcut("session.delete")
 
   const [searchResults] = createResource(search, async (query) => {
     if (!query) return
     const location = data.location.default()
-    const response = await sdk.api.session.list({
-      search: query,
-      limit: 50,
-      order: "desc",
-      directory: location.directory,
-      workspace: location.workspaceID,
-    })
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- generated client output is readonly; session list UI reuses legacy mutable session types.
-    return { query, sessions: structuredClone(response.data) as SessionV2Info[] }
+    try {
+      const response = await sdk.api.session.list({
+        search: query,
+        limit: 50,
+        order: "desc",
+        parentID: null,
+        directory: location.directory,
+        workspace: location.workspaceID,
+      })
+      return { query, sessions: response.data }
+    } catch (error) {
+      // A transient transport failure must degrade search, not crash the TUI
+      // through the root ErrorBoundary when the errored resource is read.
+      toast.show({ message: errorMessage(error), variant: "error", duration: 5000 })
+      return { query, sessions: [] as SessionInfo[] }
+    }
   })
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
@@ -73,21 +83,22 @@ export function DialogSessionList() {
     const pinnedSet = new Set(pinned)
     const slotByID = new Map(local.session.slots().map((sessionID, index) => [sessionID, index + 1]))
 
-    const option = (session: SessionV2Info, category: string) => {
+    const option = (session: SessionInfo, category: string) => {
       const directory = session.location.directory
       const footer = directory !== project.data.project.mainDir ? Locale.truncate(path.basename(directory), 20) : ""
       const slot = slotByID.get(session.id)
+      const deleting = toDelete() === session.id
       return {
-        title: session.title,
+        title: deleting ? `Press ${deleteHint()} again to confirm` : session.title,
         value: session.id,
         category,
         footer,
-        gutter:
-          data.session.family(session.id).some((id) => data.session.status(id) === "running")
-            ? () => <Spinner />
-            : slot === undefined
-              ? undefined
-              : () => <text fg={theme.accent}>{slot}</text>,
+        bg: deleting ? theme.error : undefined,
+        gutter: data.session.family(session.id).some((id) => data.session.status(id) === "running")
+          ? () => <Spinner />
+          : slot === undefined
+            ? undefined
+            : () => <text fg={theme.accent}>{slot}</text>,
       }
     }
 
@@ -103,9 +114,6 @@ export function DialogSessionList() {
 
   onMount(() => dialog.setSize("large"))
 
-  const unavailable = (feature: string) =>
-    toast.show({ message: `${feature} is not implemented for V2 sessions yet`, variant: "error", duration: 5000 })
-
   return (
     <DialogSelect
       title="Sessions"
@@ -113,6 +121,7 @@ export function DialogSessionList() {
       skipFilter={true}
       current={currentSessionID()}
       onFilter={setSearch}
+      onMove={() => setToDelete(undefined)}
       onSelect={(option) => {
         route.navigate({ type: "session", sessionID: option.value })
         dialog.clear()
@@ -126,7 +135,20 @@ export function DialogSessionList() {
         {
           command: "session.delete",
           title: "delete",
-          onTrigger: () => unavailable("Deleting"),
+          onTrigger: (option: { value: string }) => {
+            if (toDelete() !== option.value) {
+              setToDelete(option.value)
+              return
+            }
+            void sdk.api.session.remove({ sessionID: option.value }).catch((error) => {
+              setToDelete(undefined)
+              toast.show({
+                message: `Failed to delete session: ${errorMessage(error)}`,
+                variant: "error",
+                duration: 5000,
+              })
+            })
+          },
         },
         {
           command: "session.rename",

@@ -5,30 +5,34 @@ import { AgentV2 } from "@opencode-ai/core/agent"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SkillV2 } from "@opencode-ai/core/skill"
-import { SystemContext } from "@opencode-ai/core/system-context"
 import { SkillGuidance } from "@opencode-ai/core/skill/guidance"
 import { it } from "../lib/effect"
+import { readInitial, readUpdate } from "../lib/instructions"
 
 const build = AgentV2.ID.make("build")
 const effect = SkillV2.Info.make({
-  name: "effect",
+  id: SkillV2.ID.make("effect"),
+  name: SkillV2.Name.make("Effect"),
   description: "Build applications with Effect",
   location: AbsolutePath.make(path.resolve("/skills/effect/SKILL.md")),
   content: "Effect guidance",
 })
 const hidden = SkillV2.Info.make({
-  name: "hidden",
+  id: SkillV2.ID.make("hidden"),
+  name: SkillV2.Name.make("Hidden"),
   location: AbsolutePath.make(path.resolve("/skills/hidden/SKILL.md")),
   content: "Undescribed guidance",
 })
 const denied = SkillV2.Info.make({
-  name: "denied",
+  id: SkillV2.ID.make("denied"),
+  name: SkillV2.Name.make("Denied"),
   description: "Must not be advertised",
   location: AbsolutePath.make(path.resolve("/skills/denied/SKILL.md")),
   content: "Denied guidance",
 })
 const manual = SkillV2.Info.make({
-  name: "manual",
+  id: SkillV2.ID.make("manual"),
+  name: SkillV2.Name.make("Manual"),
   description: "Load only when explicitly selected",
   autoinvoke: false,
   location: AbsolutePath.make(path.resolve("/skills/manual/SKILL.md")),
@@ -41,7 +45,7 @@ const layer = (list: () => SkillV2.Info[]) =>
   ])
 
 describe("SkillGuidance", () => {
-  it.effect("renders described agent skills and reconciles the complete available list", () => {
+  it.effect("renders described agent skills and updates the complete available list", () => {
     const agent = AgentV2.Info.make({
       ...AgentV2.Info.empty(build),
       permissions: [{ action: "skill", resource: "denied", effect: "deny" }],
@@ -49,9 +53,7 @@ describe("SkillGuidance", () => {
     let skills = [hidden, denied, manual, effect]
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      const initialized = yield* guidance
-        .load({ id: agent.id, info: agent })
-        .pipe(Effect.flatMap(SystemContext.initialize))
+      const initialized = yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))
 
       expect(initialized.text).toBe(
         [
@@ -59,7 +61,8 @@ describe("SkillGuidance", () => {
           "Use the skill tool to load a skill when a task matches its description.",
           "<available_skills>",
           "  <skill>",
-          "    <name>effect</name>",
+          "    <id>effect</id>",
+          "    <name>Effect</name>",
           "    <description>Build applications with Effect</description>",
           "  </skill>",
           "</available_skills>",
@@ -71,18 +74,16 @@ describe("SkillGuidance", () => {
       expect(
         yield* guidance
           .load({ id: agent.id, info: agent })
-          .pipe(Effect.flatMap((context) => SystemContext.reconcile(context, initialized.applied))),
-      ).toMatchObject({
-        _tag: "Updated",
-        text: "The following skills are no longer available and must not be used: effect.",
-      })
+          .pipe(Effect.flatMap((context) => readUpdate(context, initialized))),
+      ).toMatchObject({ text: "Skill guidance is no longer available. Do not use any previously listed skill." })
     }).pipe(Effect.provide(layer(() => skills)))
   })
 
   it.effect("announces added and removed skills as deltas without restating the list", () => {
     const agent = AgentV2.Info.make(AgentV2.Info.empty(build))
     const debugging = SkillV2.Info.make({
-      name: "debugging",
+      id: SkillV2.ID.make("debugging"),
+      name: SkillV2.Name.make("Debugging"),
       description: "Diagnose hard bugs",
       location: AbsolutePath.make(path.resolve("/skills/debugging/SKILL.md")),
       content: "Debugging guidance",
@@ -90,35 +91,28 @@ describe("SkillGuidance", () => {
     let skills = [effect]
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      const initialized = yield* guidance
-        .load({ id: agent.id, info: agent })
-        .pipe(Effect.flatMap(SystemContext.initialize))
+      const initialized = yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))
 
       skills = [effect, debugging]
       const added = yield* guidance
         .load({ id: agent.id, info: agent })
-        .pipe(Effect.flatMap((context) => SystemContext.reconcile(context, initialized.applied)))
-      expect(added).toMatchObject({
-        _tag: "Updated",
-        text: [
+        .pipe(Effect.flatMap((context) => readUpdate(context, initialized)))
+      expect(added.text).toBe(
+        [
           "New skills are available in addition to those previously listed:",
           "  <skill>",
-          "    <name>debugging</name>",
+          "    <id>debugging</id>",
+          "    <name>Debugging</name>",
           "    <description>Diagnose hard bugs</description>",
           "  </skill>",
         ].join("\n"),
-      })
+      )
 
       skills = [debugging]
       const removed = yield* guidance
         .load({ id: agent.id, info: agent })
-        .pipe(
-          Effect.flatMap((context) => SystemContext.reconcile(context, added._tag === "Updated" ? added.applied : {})),
-        )
-      expect(removed).toMatchObject({
-        _tag: "Updated",
-        text: "The following skills are no longer available and must not be used: effect.",
-      })
+        .pipe(Effect.flatMap((context) => readUpdate(context, added)))
+      expect(removed.text).toBe("The following skill IDs are no longer available and must not be used: effect.")
     }).pipe(Effect.provide(layer(() => skills)))
   })
 
@@ -127,17 +121,14 @@ describe("SkillGuidance", () => {
     let skills = [effect]
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      const initialized = yield* guidance
-        .load({ id: agent.id, info: agent })
-        .pipe(Effect.flatMap(SystemContext.initialize))
+      const initialized = yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))
 
       skills = [SkillV2.Info.make({ ...effect, description: "Build applications with Effect v4" })]
       expect(
         yield* guidance
           .load({ id: agent.id, info: agent })
-          .pipe(Effect.flatMap((context) => SystemContext.reconcile(context, initialized.applied))),
+          .pipe(Effect.flatMap((context) => readUpdate(context, initialized))),
       ).toMatchObject({
-        _tag: "Updated",
         text: expect.stringContaining(
           "The available skills have changed. This list supersedes the previous available skills list.",
         ),
@@ -152,12 +143,7 @@ describe("SkillGuidance", () => {
     })
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      expect(
-        yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(SystemContext.initialize)),
-      ).toEqual({
-        text: "",
-        applied: {},
-      })
+      expect((yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))).text).toBe("")
     }).pipe(Effect.provide(layer(() => [effect])))
   })
 
@@ -171,12 +157,7 @@ describe("SkillGuidance", () => {
     })
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      expect(
-        yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(SystemContext.initialize)),
-      ).toEqual({
-        text: "",
-        applied: {},
-      })
+      expect((yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))).text).toBe("")
     }).pipe(Effect.provide(layer(() => [effect])))
   })
 
@@ -190,9 +171,9 @@ describe("SkillGuidance", () => {
     })
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      expect(
-        (yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(SystemContext.initialize))).text,
-      ).toContain("<name>effect</name>")
+      expect((yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))).text).toContain(
+        "<name>Effect</name>",
+      )
     }).pipe(Effect.provide(layer(() => [effect])))
   })
 
@@ -207,12 +188,7 @@ describe("SkillGuidance", () => {
     })
     return Effect.gen(function* () {
       const guidance = yield* SkillGuidance.Service
-      expect(
-        yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(SystemContext.initialize)),
-      ).toEqual({
-        text: "",
-        applied: {},
-      })
+      expect((yield* guidance.load({ id: agent.id, info: agent }).pipe(Effect.flatMap(readInitial))).text).toBe("")
     }).pipe(Effect.provide(layer(() => [effect])))
   })
 })

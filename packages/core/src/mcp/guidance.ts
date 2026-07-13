@@ -6,7 +6,7 @@ import { AgentV2 } from "../agent"
 import { PermissionV2 } from "../permission"
 import { McpTool } from "../tool/mcp"
 import { MCP } from "./index"
-import { SystemContext } from "../system-context/index"
+import { Instructions } from "../instructions/index"
 
 const Summary = Schema.Struct({
   server: Schema.String,
@@ -17,6 +17,7 @@ type Summary = typeof Summary.Type
 const entries = (servers: ReadonlyArray<Summary>) =>
   servers.flatMap((server) => [
     `  <server name="${server.server}">`,
+    `    Use tools from this server through \`execute\` under \`tools[${JSON.stringify(McpTool.group(server.server))}]\`.`,
     ...server.instructions.split("\n").map((line) => `    ${line}`),
     "  </server>",
   ])
@@ -25,7 +26,7 @@ const render = (servers: ReadonlyArray<Summary>) =>
   ["<mcp_instructions>", ...entries(servers), "</mcp_instructions>"].join("\n")
 
 const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary>) => {
-  const diff = SystemContext.diffByKey(
+  const diff = Instructions.diffByKey(
     previous,
     current,
     (server) => server.server,
@@ -50,7 +51,7 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: AgentV2.Selection) => Effect.Effect<SystemContext.SystemContext>
+  readonly load: (agent: AgentV2.Selection) => Effect.Effect<Instructions.Instructions>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/McpGuidance") {}
@@ -63,32 +64,35 @@ export const layer = Layer.effect(
     return Service.of({
       load: Effect.fn("McpGuidance.load")(function* (selection) {
         const agent = selection.info
-        if (!agent) return SystemContext.empty
+        if (!agent) return Instructions.empty
+        const source = (value: ReadonlyArray<Summary> | Instructions.Removed) =>
+          Instructions.make<ReadonlyArray<Summary>>({
+            key: Instructions.Key.make("core/mcp-guidance"),
+            codec: Schema.toCodecJson(Schema.Array(Summary)),
+            read: Effect.succeed(value),
+            render: {
+              initial: render,
+              changed: update,
+              removed: () => "MCP server instructions are no longer available.",
+            },
+          })
+        if (PermissionV2.evaluate("execute", "*", agent.permissions).effect === "deny")
+          return source(Instructions.removed)
         const [instructions, tools] = yield* Effect.all([mcp.instructions(), mcp.tools()], {
           concurrency: "unbounded",
         })
-        // Hide a server only when every tool it contributes is wholly denied for this agent.
+        // Instructions are useful only when this agent can reach at least one server tool.
         const visible = instructions
           .filter((item) => {
             const owned = tools.filter((tool) => tool.server === item.server)
-            return (
-              owned.length === 0 ||
-              owned.some(
-                (tool) =>
-                  PermissionV2.evaluate(McpTool.name(tool.server, tool.name), "*", agent.permissions).effect !== "deny",
-              )
+            return owned.some(
+              (tool) =>
+                PermissionV2.evaluate(McpTool.name(tool.server, tool.name), "*", agent.permissions).effect !== "deny",
             )
           })
           .map((item) => ({ server: item.server, instructions: item.instructions }))
-        if (visible.length === 0) return SystemContext.empty
-        return SystemContext.make({
-          key: SystemContext.Key.make("core/mcp-guidance"),
-          codec: Schema.toCodecJson(Schema.Array(Summary)),
-          load: Effect.succeed(visible),
-          baseline: render,
-          update,
-          removed: () => "MCP server instructions are no longer available.",
-        })
+          .toSorted((a, b) => a.server.localeCompare(b.server))
+        return source(visible.length === 0 ? Instructions.removed : visible)
       }),
     })
   }),

@@ -198,11 +198,11 @@ const OpenAIResponsesStreamItem = Schema.Struct({
 })
 type OpenAIResponsesStreamItem = Schema.Schema.Type<typeof OpenAIResponsesStreamItem>
 
-// OpenAI Responses surfaces provider failures in two related shapes. The
-// streaming `error` event carries the details at the top level
-// (`{ type: "error", code, message, param, sequence_number }`), while
-// `response.failed` carries them under `response.error`. We capture both so
-// the parser can surface a useful provider-error message in either path.
+// The Responses schema puts streaming error details at the top level and
+// response failures under `response.error`. The official SDK also recognizes
+// an event-level HTTP-style `error` envelope, so accept all three shapes here.
+// https://github.com/openai/openai-openapi/blob/5162af98d3147432c14680df789e8e12d4891e6b/openapi.yaml#L67234-L67382
+// https://github.com/openai/openai-node/blob/61539248cbe04665de68a71e6fd878127ae4db87/src/core/streaming.ts#L58-L85
 const OpenAIResponsesErrorPayload = Schema.Struct({
   code: optionalNull(Schema.String),
   message: optionalNull(Schema.String),
@@ -227,9 +227,10 @@ const OpenAIResponsesEvent = Schema.Struct({
       [Schema.Record(Schema.String, Schema.Unknown)],
     ),
   ),
-  code: Schema.optional(Schema.String),
+  code: optionalNull(Schema.String),
   message: Schema.optional(Schema.String),
-  param: Schema.optional(Schema.String),
+  param: optionalNull(Schema.String),
+  error: optionalNull(OpenAIResponsesErrorPayload),
 })
 type OpenAIResponsesEvent = Schema.Schema.Type<typeof OpenAIResponsesEvent>
 
@@ -619,6 +620,11 @@ const onOutputTextDelta = (state: ParserState, event: OpenAIResponsesEvent): Ste
   ]
 }
 
+const onOutputTextDone = (state: ParserState, event: OpenAIResponsesEvent): StepResult => {
+  const events: LLMEvent[] = []
+  return [{ ...state, lifecycle: Lifecycle.textEnd(state.lifecycle, events, event.item_id ?? "text-0") }, events]
+}
+
 const onReasoningDelta = (state: ParserState, event: OpenAIResponsesEvent): StepResult => {
   if (!event.delta) return [state, NO_EVENTS]
   const events: LLMEvent[] = []
@@ -810,6 +816,8 @@ const onOutputItemDone = Effect.fn("OpenAIResponses.onOutputItemDone")(function*
   const item = event.item
   if (!item) return [state, NO_EVENTS] satisfies StepResult
 
+  if (item.type === "message" && item.id) return onOutputTextDone(state, { ...event, item_id: item.id })
+
   if (item.type === "function_call") {
     if (!item.id || !item.call_id || !item.name) return [state, NO_EVENTS] satisfies StepResult
     const tools = state.tools[item.id]
@@ -892,7 +900,7 @@ const onResponseFinish = (state: ParserState, event: OpenAIResponsesEvent): Step
 // the bare message — production rate limits and context-length failures used
 // to be indistinguishable from generic stream drops.
 const providerErrorMessage = (event: OpenAIResponsesEvent, fallback: string): string => {
-  const nested = event.response?.error ?? undefined
+  const nested = event.error ?? event.response?.error ?? undefined
   const message = event.message || nested?.message || undefined
   const code = event.code || nested?.code || undefined
   if (message && code) return `${code}: ${message}`
@@ -900,7 +908,7 @@ const providerErrorMessage = (event: OpenAIResponsesEvent, fallback: string): st
 }
 
 const providerError = (event: OpenAIResponsesEvent, fallback: string) => {
-  const code = event.code || event.response?.error?.code || undefined
+  const code = event.code || event.error?.code || event.response?.error?.code || undefined
   const message = providerErrorMessage(event, fallback)
   return LLMEvent.providerError({
     message,
@@ -920,6 +928,7 @@ const onError = (state: ParserState, event: OpenAIResponsesEvent): StepResult =>
 
 const step = (state: ParserState, event: OpenAIResponsesEvent) => {
   if (event.type === "response.output_text.delta") return Effect.succeed(onOutputTextDelta(state, event))
+  if (event.type === "response.output_text.done") return Effect.succeed(onOutputTextDone(state, event))
   if (
     event.type === "response.reasoning_text.delta" ||
     event.type === "response.reasoning_summary.delta" ||
@@ -982,6 +991,7 @@ export const httpTransport = HttpTransport.sseJson.with<OpenAIResponsesBody>()
 export const route = Route.make({
   id: ADAPTER,
   provider: "openai",
+  providerMetadataKey: "openai",
   protocol,
   endpoint,
   auth,
@@ -1010,6 +1020,7 @@ export const webSocketTransport = WebSocketTransport.jsonTransport.with<
 export const webSocketRoute = Route.make({
   id: `${ADAPTER}-websocket`,
   provider: "openai",
+  providerMetadataKey: "openai",
   protocol,
   endpoint,
   auth,

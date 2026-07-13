@@ -1,8 +1,7 @@
 import { createServer } from "node:http"
 import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/v2/effect/integration"
 import { define } from "@opencode-ai/plugin/v2/effect/plugin"
-import { Deferred, Effect, Semaphore, Stream } from "effect"
-import type { Scope } from "effect"
+import { Deferred, Effect, Option, Schema, Semaphore, Stream } from "effect"
 import { Credential } from "../../credential"
 import { EventV2 } from "../../event"
 import { InstallationVersion } from "../../installation/version"
@@ -32,11 +31,16 @@ type TokenResponse = {
   expires_in?: number
 }
 
-type Claims = {
-  chatgpt_account_id?: string
-  organizations?: Array<{ id: string }>
-  "https://api.openai.com/auth"?: { chatgpt_account_id?: string }
-}
+const Claims = Schema.fromJsonString(
+  Schema.Struct({
+    chatgpt_account_id: Schema.optional(Schema.String),
+    organizations: Schema.optional(Schema.Array(Schema.Struct({ id: Schema.String }))),
+    "https://api.openai.com/auth": Schema.optional(
+      Schema.Struct({ chatgpt_account_id: Schema.optional(Schema.String) }),
+    ),
+  }),
+)
+const decodeClaims = Schema.decodeUnknownOption(Claims)
 
 const browser = {
   integrationID: Integration.ID.make("openai"),
@@ -154,7 +158,7 @@ const headless = {
 } satisfies IntegrationOAuthMethodRegistration
 
 export const OpenAIPlugin = define({
-  id: "openai",
+  id: "opencode.provider.openai",
   effect: Effect.fn(function* (ctx) {
     const events = yield* EventV2.Service
     const loading = Semaphore.makeUnsafe(1)
@@ -172,34 +176,32 @@ export const OpenAIPlugin = define({
       draft.method.update(browser)
       draft.method.update(headless)
     })
-    yield* ctx.catalog.transform(
-      Effect.fn(function* (evt) {
-        for (const item of evt.provider.list()) {
-          if (item.provider.api.type !== "aisdk") continue
-          if (item.provider.api.package !== "@ai-sdk/openai") continue
-          if (!item.models.has(ModelV2.ID.make("gpt-5-chat-latest"))) continue
-          evt.model.update(item.provider.id, ModelV2.ID.make("gpt-5-chat-latest"), (model) => {
-            // OpenAIPlugin sends OpenAI models through Responses; this alias is a
-            // chat-completions-only model, so hide it only from OpenAI's catalog.
-            model.enabled = false
-          })
-        }
-        if (!chatgpt) return
-        const item = evt.provider.get(ProviderV2.ID.openai)
-        if (!item) return
-        for (const model of item.models.values()) {
-          // ChatGPT-plan tokens only authorize codex-eligible models, and the
-          // subscription covers usage, so hide the rest and zero the cost.
-          evt.model.update(item.provider.id, model.id, (draft) => {
-            if (!OpenAICodex.eligible(draft.api.id)) {
-              draft.enabled = false
-              return
-            }
-            draft.cost = []
-          })
-        }
-      }),
-    )
+    yield* ctx.catalog.transform((evt) => {
+      for (const item of evt.provider.list()) {
+        if (!ProviderV2.isAISDK(item.provider.package)) continue
+        if (ProviderV2.packageName(item.provider.package) !== "@ai-sdk/openai") continue
+        if (!item.models.has(ModelV2.ID.make("gpt-5-chat-latest"))) continue
+        evt.model.update(item.provider.id, ModelV2.ID.make("gpt-5-chat-latest"), (model) => {
+          // OpenAIPlugin sends OpenAI models through Responses; this alias is a
+          // chat-completions-only model, so hide it only from OpenAI's catalog.
+          model.enabled = false
+        })
+      }
+      if (!chatgpt) return
+      const item = evt.provider.get(ProviderV2.ID.openai)
+      if (!item) return
+      for (const model of item.models.values()) {
+        // ChatGPT-plan tokens only authorize codex-eligible models, and the
+        // subscription covers usage, so hide the rest and zero the cost.
+        evt.model.update(item.provider.id, model.id, (draft) => {
+          if (!OpenAICodex.eligible(draft.modelID ?? draft.id)) {
+            draft.enabled = false
+            return
+          }
+          draft.cost = []
+        })
+      }
+    })
 
     const refresh = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
     yield* events.subscribe(Integration.Event.ConnectionUpdated).pipe(
@@ -208,21 +210,23 @@ export const OpenAIPlugin = define({
       Effect.forkScoped({ startImmediately: true }),
     )
     yield* refresh().pipe(Effect.forkScoped)
-    yield* ctx.aisdk.sdk(
+    yield* ctx.aisdk.hook(
+      "sdk",
       Effect.fn(function* (evt) {
         if (evt.package !== "@ai-sdk/openai") return
         const mod = yield* Effect.promise(() => import("@ai-sdk/openai"))
         evt.sdk = mod.createOpenAI(evt.options)
       }),
     )
-    yield* ctx.aisdk.language(
+    yield* ctx.aisdk.hook(
+      "language",
       Effect.fn(function* (evt) {
         if (evt.model.providerID !== ProviderV2.ID.openai) return
-        evt.language = evt.sdk.responses(evt.model.api.id)
+        evt.language = evt.sdk.responses(evt.model.modelID ?? evt.model.id)
       }),
     )
   }),
-} satisfies PluginInternal.Plugin<PluginInternal.Requirements | Scope.Scope>)
+} satisfies PluginInternal.InternalPlugin)
 
 function headers(contentType: string) {
   return { "Content-Type": contentType, "User-Agent": `opencode/${InstallationVersion}` }
@@ -315,14 +319,11 @@ function extractAccountID(tokens: TokenResponse) {
 function claim(token: string) {
   const part = token.split(".")[1]
   if (!part) return
-  try {
-    const claims = JSON.parse(Buffer.from(part, "base64url").toString()) as Claims
-    return (
-      claims.chatgpt_account_id ??
-      claims["https://api.openai.com/auth"]?.chatgpt_account_id ??
-      claims.organizations?.[0]?.id
-    )
-  } catch {
-    return
-  }
+  const claims = Option.getOrUndefined(decodeClaims(Buffer.from(part, "base64url").toString()))
+  if (!claims) return
+  return (
+    claims.chatgpt_account_id ??
+    claims["https://api.openai.com/auth"]?.chatgpt_account_id ??
+    claims.organizations?.[0]?.id
+  )
 }

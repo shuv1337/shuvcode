@@ -23,7 +23,11 @@ describe("CommandPlugin.Plugin", () => {
       const command = yield* CommandV2.Service
       yield* CommandPlugin.Plugin.effect(
         host({
-          command: { transform: command.transform, reload: command.reload },
+          command: {
+            list: () => Effect.die("unused command.list"),
+            transform: command.transform,
+            reload: command.reload,
+          },
         }),
       ).pipe(
         Effect.provideService(

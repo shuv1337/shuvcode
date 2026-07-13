@@ -6,12 +6,15 @@ import { ProviderHandler } from "./handlers/provider"
 import { SessionHandler } from "./handlers/session"
 import { PermissionHandler } from "./handlers/permission"
 import { FileSystemHandler } from "./handlers/fs"
+import { FormHandler } from "./handlers/form"
 import { CommandHandler } from "./handlers/command"
 import { SkillHandler } from "./handlers/skill"
 import { EventHandler } from "./handlers/event"
 import { AgentHandler } from "./handlers/agent"
 import { PluginHandler } from "./handlers/plugin"
 import { HealthHandler } from "./handlers/health"
+import { ServerHandler } from "./handlers/server"
+import { DebugHandler } from "./handlers/debug"
 import { PtyHandler } from "./handlers/pty"
 import { ShellHandler } from "./handlers/shell"
 import { QuestionHandler } from "./handlers/question"
@@ -22,9 +25,13 @@ import { McpHandler } from "./handlers/mcp"
 import { CredentialHandler } from "./handlers/credential"
 import { ProjectHandler } from "./handlers/project"
 import { ProjectCopyHandler } from "./handlers/project-copy"
+import { VcsHandler } from "./handlers/vcs"
+import { EventFeed } from "./event-feed"
 
 export const handlers = Layer.mergeAll(
   HealthHandler,
+  ServerHandler,
+  DebugHandler,
   LocationHandler,
   AgentHandler,
   PluginHandler,
@@ -37,14 +44,16 @@ export const handlers = Layer.mergeAll(
   McpHandler,
   CredentialHandler,
   ProjectHandler,
+  FormHandler,
   PermissionHandler,
   FileSystemHandler,
   CommandHandler,
   SkillHandler,
-  EventHandler,
+  EventHandler.pipe(Layer.provide(EventFeed.layer)),
   PtyHandler,
   ShellHandler,
   QuestionHandler,
   ReferenceHandler,
   ProjectCopyHandler,
+  VcsHandler,
 )

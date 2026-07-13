@@ -9,8 +9,15 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { WebSearchTool } from "@opencode-ai/core/tool/websearch"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { toolIdentity, executeTool, settleTool, toolDefinitions } from "./lib/tool"
+import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
+
+const webSearchToolNode = makeLocationNode({
+  name: "test/websearch-tool-plugin",
+  layer: Layer.effectDiscard(registerToolPlugin(WebSearchTool.Plugin)),
+  deps: [ToolRegistry.toolsNode, PermissionV2.node, LayerNodePlatform.httpClient, WebSearchTool.configNode],
+})
 
 const sessionID = SessionV2.ID.make("ses_websearch_test")
 const payload = (text: string) =>
@@ -125,7 +132,7 @@ const websearchConfig = Layer.succeed(
 )
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, WebSearchTool.configNode, WebSearchTool.node]),
+    LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, WebSearchTool.configNode, webSearchToolNode]),
     [
       [PermissionV2.node, permission],
       [LayerNodePlatform.httpClient, http],

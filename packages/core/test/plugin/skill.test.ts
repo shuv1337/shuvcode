@@ -19,7 +19,15 @@ describe("SkillPlugin.Plugin", () => {
   it.effect("registers built-in skills", () =>
     Effect.gen(function* () {
       const skill = yield* SkillV2.Service
-      yield* SkillPlugin.Plugin.effect(host({ skill: { ...skill, reload: skill.reload } })).pipe(
+      yield* SkillPlugin.Plugin.effect(
+        host({
+          skill: {
+            list: () => Effect.die("unused skill.list"),
+            transform: skill.transform,
+            reload: skill.reload,
+          },
+        }),
+      ).pipe(
         Effect.provideService(Config.Service, Config.Service.of({ entries: () => Effect.succeed([]) })),
         Effect.provideService(
           Location.Service,
@@ -29,17 +37,19 @@ describe("SkillPlugin.Plugin", () => {
         Effect.provide(NodeFileSystem.layer),
       )
       const skills = yield* skill.list()
-      const report = skills.find((item) => item.name === "report")
+      const report = skills.find((item) => item.id === "report")
 
       expect(skills).toContainEqual(
         expect.objectContaining({
-          name: "customize-opencode",
-          description: expect.stringContaining("opencode's own configuration"),
+          id: "opencode",
+          name: "OpenCode",
+          description: expect.stringContaining("any question about OpenCode itself"),
         }),
       )
       expect(skills).toContainEqual(
         expect.objectContaining({
-          name: "report",
+          id: "report",
+          name: "Report",
           description: expect.stringContaining("opencode issue"),
         }),
       )

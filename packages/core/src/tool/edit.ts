@@ -6,18 +6,16 @@
  */
 export * as EditTool from "./edit"
 
+import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { ToolFailure } from "@opencode-ai/llm"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
-import { Effect, Layer, Schema } from "effect"
-import { makeLocationNode } from "../effect/app-node"
+import { Effect, Schema } from "effect"
 import { FileMutation } from "../file-mutation"
 import { FSUtil } from "../fs-util"
 import { LocationMutation } from "../location-mutation"
 import { PermissionV2 } from "../permission"
-import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
-import { Tools } from "./tools"
 
 export const name = "edit"
 
@@ -87,137 +85,136 @@ export const toModelOutput = (output: Output, oldString: string, newString: stri
 // TODO: Add snapshots / undo after design exists.
 // TODO: Add LSP notification and diagnostics after V2 LSP runtime exists.
 
-const layer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const tools = yield* Tools.Service
+export const Plugin = {
+  id: "opencode.tool.edit",
+  effect: Effect.fn("EditTool.Plugin")(function* (ctx: PluginContext) {
     const mutation = yield* LocationMutation.Service
     const files = yield* FileMutation.Service
     const fs = yield* FSUtil.Service
     const permission = yield* PermissionV2.Service
 
-    yield* tools
-      .register({
-        [name]: Tool.withPermission(
-          Tool.make({
-            description:
-              "Replace exact text in one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval.",
-            input: Input,
-            output: Output,
-            toModelOutput: ({ input, output }) => [
-              { type: "text", text: toModelOutput(output, input.oldString, input.newString) },
-            ],
-            execute: (input, context) => {
-              const unableToEdit = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-                effect.pipe(
-                  Effect.mapError((error) =>
-                    error instanceof FileMutation.StaleContentError
-                      ? new ToolFailure({
-                          message: "File changed after permission approval. Read it again before editing.",
-                        })
-                      : new ToolFailure({ message: `Unable to edit ${input.path}` }),
-                  ),
-                )
+    yield* ctx.tool
+      .transform((draft) =>
+        draft.add(
+          name,
+          Tool.withPermission(
+            Tool.make({
+              description:
+                "Replace exact text in one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval.",
+              input: Input,
+              output: Output,
+              toModelOutput: ({ input, output }) => [
+                { type: "text", text: toModelOutput(output, input.oldString, input.newString) },
+              ],
+              execute: (input, context) => {
+                const unableToEdit = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+                  effect.pipe(
+                    Effect.mapError((error) =>
+                      error instanceof FileMutation.StaleContentError
+                        ? new ToolFailure({
+                            message: "File changed after permission approval. Read it again before editing.",
+                            error,
+                          })
+                        : new ToolFailure({ message: `Unable to edit ${input.path}`, error }),
+                    ),
+                  )
 
-              return Effect.gen(function* () {
-                const permissionSource = {
-                  type: "tool" as const,
-                  messageID: context.assistantMessageID,
-                  callID: context.toolCallID,
-                }
-                if (input.oldString === input.newString) {
-                  return yield* new ToolFailure({
-                    message: "No changes to apply: oldString and newString are identical.",
-                  })
-                }
-                if (input.oldString === "") {
-                  return yield* new ToolFailure({
-                    message: "oldString must not be empty. Use write to create or overwrite a file.",
-                  })
-                }
+                return Effect.gen(function* () {
+                  const permissionSource = {
+                    type: "tool" as const,
+                    messageID: context.assistantMessageID,
+                    callID: context.toolCallID,
+                  }
+                  if (input.oldString === input.newString) {
+                    return yield* new ToolFailure({
+                      message: "No changes to apply: oldString and newString are identical.",
+                    })
+                  }
+                  if (input.oldString === "") {
+                    return yield* new ToolFailure({
+                      message: "oldString must not be empty. Use write to create or overwrite a file.",
+                    })
+                  }
 
-                const target = yield* unableToEdit(mutation.resolve({ path: input.path, kind: "file" }))
-                const external = target.externalDirectory
-                if (external) {
+                  const target = yield* unableToEdit(mutation.resolve({ path: input.path, kind: "file" }))
+                  const external = target.externalDirectory
+                  if (external) {
+                    yield* unableToEdit(
+                      permission.assert({
+                        ...LocationMutation.externalDirectoryPermission(external),
+                        sessionID: context.sessionID,
+                        agent: context.agent,
+                        source: permissionSource,
+                      }),
+                    )
+                  }
+
                   yield* unableToEdit(
                     permission.assert({
-                      ...LocationMutation.externalDirectoryPermission(external),
+                      action: "edit",
+                      resources: [target.resource],
+                      save: ["*"],
                       sessionID: context.sessionID,
                       agent: context.agent,
                       source: permissionSource,
                     }),
                   )
-                }
+                  const source = decodeUtf8(yield* unableToEdit(fs.readFile(target.canonical)))
+                  const ending = detectLineEnding(source.text)
+                  const oldString = convertToLineEnding(input.oldString, ending)
+                  const newString = convertToLineEnding(input.newString, ending)
+                  const replacements = countOccurrences(source.text, oldString)
+                  if (replacements === 0) {
+                    return yield* new ToolFailure({
+                      message:
+                        "Could not find oldString in the file. It must match exactly, including whitespace and indentation.",
+                    })
+                  }
+                  if (replacements > 1 && input.replaceAll !== true) {
+                    return yield* new ToolFailure({
+                      message:
+                        "Found multiple exact matches for oldString. Provide more surrounding context or set replaceAll to true.",
+                    })
+                  }
 
-                yield* unableToEdit(
-                  permission.assert({
-                    action: "edit",
-                    resources: [target.resource],
-                    save: ["*"],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source: permissionSource,
-                  }),
-                )
-                const source = decodeUtf8(yield* unableToEdit(fs.readFile(target.canonical)))
-                const ending = detectLineEnding(source.text)
-                const oldString = convertToLineEnding(input.oldString, ending)
-                const newString = convertToLineEnding(input.newString, ending)
-                const replacements = countOccurrences(source.text, oldString)
-                if (replacements === 0) {
-                  return yield* new ToolFailure({
-                    message:
-                      "Could not find oldString in the file. It must match exactly, including whitespace and indentation.",
-                  })
-                }
-                if (replacements > 1 && input.replaceAll !== true) {
-                  return yield* new ToolFailure({
-                    message:
-                      "Found multiple exact matches for oldString. Provide more surrounding context or set replaceAll to true.",
-                  })
-                }
-
-                const replaced =
-                  input.replaceAll === true
-                    ? source.text.replaceAll(oldString, newString)
-                    : source.text.replace(oldString, newString)
-                const counts = diffLines(source.text, replaced).reduce(
-                  (result, item) => ({
-                    additions: result.additions + (item.added ? (item.count ?? 0) : 0),
-                    deletions: result.deletions + (item.removed ? (item.count ?? 0) : 0),
-                  }),
-                  { additions: 0, deletions: 0 },
-                )
-                const next = splitBom(replaced)
-                const result = yield* unableToEdit(
-                  files.writeIfUnchanged({
-                    target,
-                    expected: source.content,
-                    content: joinBom(next.text, source.bom || next.bom),
-                  }),
-                )
-                return {
-                  files: [
-                    {
-                      file: result.resource,
-                      patch: createTwoFilesPatch(result.resource, result.resource, source.text, replaced),
-                      status: "modified" as const,
-                      ...counts,
-                    },
-                  ],
-                  replacements,
-                } satisfies Output
-              })
-            },
-          }),
-          "edit",
+                  const replaced =
+                    input.replaceAll === true
+                      ? source.text.replaceAll(oldString, newString)
+                      : source.text.replace(oldString, newString)
+                  const counts = diffLines(source.text, replaced).reduce(
+                    (result, item) => ({
+                      additions: result.additions + (item.added ? (item.count ?? 0) : 0),
+                      deletions: result.deletions + (item.removed ? (item.count ?? 0) : 0),
+                    }),
+                    { additions: 0, deletions: 0 },
+                  )
+                  const next = splitBom(replaced)
+                  const result = yield* unableToEdit(
+                    files.writeIfUnchanged({
+                      target,
+                      expected: source.content,
+                      content: joinBom(next.text, source.bom || next.bom),
+                    }),
+                  )
+                  return {
+                    files: [
+                      {
+                        file: result.resource,
+                        patch: createTwoFilesPatch(result.resource, result.resource, source.text, replaced),
+                        status: "modified" as const,
+                        ...counts,
+                      },
+                    ],
+                    replacements,
+                  } satisfies Output
+                })
+              },
+            }),
+            "edit",
+          ),
+          { codemode: false },
         ),
-      })
+      )
       .pipe(Effect.orDie)
   }),
-)
-
-export const node = makeLocationNode({
-  name: "tool/edit",
-  layer,
-  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, PermissionV2.node],
-})
+}

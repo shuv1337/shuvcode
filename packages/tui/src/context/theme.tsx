@@ -9,7 +9,6 @@ import {
   generateSystem,
   hasTheme,
   isTheme,
-  normalizeBackgrounds,
   resolveTheme,
   selectedForeground,
   setCustomThemes,
@@ -24,7 +23,7 @@ import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useKV } from "./kv"
-import { useTuiConfig } from "../config"
+import { useConfig } from "../config"
 import { Global } from "@opencode-ai/core/global"
 import { Glob } from "@opencode-ai/core/util/glob"
 import { readFile } from "node:fs/promises"
@@ -104,7 +103,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode: "dark" | "light"; source?: ThemeSource }) => {
     const renderer = useRenderer()
-    const config = useTuiConfig()
+    const config = useConfig().data
     const kv = useKV()
     const themes = props.source ?? themeSource
     const pick = (value: unknown) => {
@@ -119,15 +118,24 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         if (!lock && pick(kv.get("theme_mode")) !== undefined) kv.set("theme_mode", undefined)
         draft.mode = mode
         draft.lock = lock
-        const active = config.theme ?? kv.get("theme", "opencode")
+        const active = config.theme?.name ?? kv.get("theme", "opencode")
         draft.active = typeof active === "string" ? active : "opencode"
         draft.ready = false
       }),
     )
 
     createEffect(() => {
-      const theme = config.theme
+      const theme = config.theme?.name
       if (theme) setStore("active", theme)
+    })
+
+    createEffect(() => {
+      const mode = config.theme?.mode
+      if (mode === "dark" || mode === "light") {
+        pin(mode)
+        return
+      }
+      if (mode === "system" && store.lock !== undefined) free()
     })
 
     function syncCustomThemes() {
@@ -255,18 +263,16 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
-      const transparent = kv.get("theme_transparent", false)
-      const resolve = (json: ThemeJson) => normalizeBackgrounds(resolveTheme(json, store.mode), transparent, store.mode)
       const active = store.themes[store.active]
-      if (active) return resolve(active)
+      if (active) return resolveTheme(active, store.mode)
 
       const saved = kv.get("theme")
       if (typeof saved === "string") {
         const theme = store.themes[saved]
-        if (theme) return resolve(theme)
+        if (theme) return resolveTheme(theme, store.mode)
       }
 
-      return resolve(store.themes.opencode)
+      return resolveTheme(store.themes.opencode, store.mode)
     })
 
     createEffect(() => renderer.setBackgroundColor(values().background))

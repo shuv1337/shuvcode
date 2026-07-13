@@ -4,7 +4,7 @@ import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
 import { useTheme, selectedForeground } from "../../context/theme"
-import type { PermissionV2Request } from "@opencode-ai/sdk/v2"
+import type { PermissionV2Request } from "@opencode-ai/client"
 import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
@@ -12,7 +12,7 @@ import { filetype } from "../../util/filetype"
 import { Locale } from "../../util/locale"
 import { webSearchProviderLabel } from "../../util/tool-display"
 import { getScrollAcceleration } from "../../util/scroll"
-import { useTuiConfig } from "../../config"
+import { useConfig } from "../../config"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
 
@@ -22,7 +22,7 @@ function EditBody(props: { request: PermissionV2Request; patch?: string }) {
   const themeState = useTheme()
   const theme = themeState.theme
   const syntax = themeState.syntax
-  const config = useTuiConfig()
+  const config = useConfig().data
   const dimensions = useTerminalDimensions()
 
   const filepath = createMemo(() => {
@@ -34,8 +34,9 @@ function EditBody(props: { request: PermissionV2Request; patch?: string }) {
   })
 
   const view = createMemo(() => {
-    const diffStyle = config.diff_style
-    if (diffStyle === "stacked") return "unified"
+    const diffView = config.diffs?.view
+    if (diffView === "unified") return "unified"
+    if (diffView === "split") return "split"
     return dimensions().width > 120 ? "split" : "unified"
   })
 
@@ -148,7 +149,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
     const message = data.session.message.get(props.request.sessionID, tool.messageID)
     if (message?.type !== "assistant") return {}
     const part = message.content.find((part) => part.type === "tool" && part.id === tool.callID)
-    if (part?.type === "tool" && part.state.status !== "pending") return part.state.input
+    if (part?.type === "tool" && part.state.status !== "streaming") return part.state.input
     return {}
   })
 
@@ -162,11 +163,11 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
           body={
             <Switch>
               <Match when={props.request.save?.length === 1 && props.request.save[0] === "*"}>
-                <TextBody title={"This will allow " + props.request.action + " until OpenCode is restarted."} />
+                <TextBody title={"This will allow " + props.request.action + " until shuvcode is restarted."} />
               </Match>
               <Match when={true}>
                 <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>This will allow the following patterns until OpenCode is restarted</text>
+                  <text fg={theme.textMuted}>This will allow the following patterns until shuvcode is restarted</text>
                   <box>
                     <For each={props.request.save ?? []}>
                       {(pattern) => (
@@ -469,7 +470,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
 function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: () => void }) {
   let input: TextareaRenderable
   const { theme } = useTheme()
-  const tuiConfig = useTuiConfig()
+  const config = useConfig().data
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
   useBindings(() => ({
@@ -486,7 +487,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
     ],
     bindings: [
       { key: "escape", desc: "Cancel permission rejection", group: "Permission", cmd: () => props.onCancel() },
-      ...tuiConfig.keybinds.get("app.exit"),
+      ...config.keybinds.get("app.exit"),
       {
         key: "return",
         desc: "Confirm permission rejection",
@@ -509,7 +510,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
           <text fg={theme.text}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.textMuted}>Tell OpenCode what to do differently</text>
+          <text fg={theme.textMuted}>Tell shuvcode what to do differently</text>
         </box>
       </box>
       <box
@@ -557,7 +558,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   onSelect: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
-  const tuiConfig = useTuiConfig()
+  const config = useConfig().data
   const dimensions = useTerminalDimensions()
   const keys = Object.keys(props.options) as (keyof T)[]
   const [store, setStore] = createStore({
@@ -646,8 +647,8 @@ function Prompt<const T extends Record<string, string>>(props: {
             },
           ]
         : []),
-      ...(props.escapeKey ? tuiConfig.keybinds.get("app.exit") : []),
-      ...(props.fullscreen ? tuiConfig.keybinds.get("permission.prompt.fullscreen") : []),
+      ...(props.escapeKey ? config.keybinds.get("app.exit") : []),
+      ...(props.fullscreen ? config.keybinds.get("permission.prompt.fullscreen") : []),
     ],
   }))
 

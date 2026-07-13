@@ -1,14 +1,15 @@
-import { OpenCode } from "@opencode-ai/client"
+import { OpenCode, type OpenCodeEvent } from "@opencode-ai/client"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
-import type { V2Event } from "@opencode-ai/sdk/v2"
 
 export const worktree = "/tmp/opencode"
 export const directory = `${worktree}/packages/tui`
 
 export function json(data: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers)
+  if (!headers.has("content-type")) headers.set("content-type", "application/json")
   return new Response(JSON.stringify(data), {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   })
 }
 
@@ -51,7 +52,7 @@ export function createEventStream() {
   }
 
   return {
-    emit(event: V2Event) {
+    emit(event: OpenCodeEvent) {
       send(v2, pending, event)
     },
     v2() {
@@ -64,14 +65,15 @@ export function createEventStream() {
   }
 }
 
-export type FetchHandler = (url: URL) => Response | Promise<Response> | undefined
+export type FetchHandler = (url: URL, request: Request) => Response | undefined | Promise<Response | undefined>
 
 export function createFetch(override?: FetchHandler, events?: ReturnType<typeof createEventStream>) {
   const session = [] as URL[]
-  const fetch = (async (input: RequestInfo | URL) => {
-    const url = new URL(input instanceof Request ? input.url : String(input))
+  async function fetch(input: RequestInfo | URL, init?: RequestInit) {
+    const request = input instanceof Request ? input : new Request(input, init)
+    const url = new URL(request.url)
     if (url.pathname === "/session") session.push(url)
-    const overridden = await override?.(url)
+    const overridden = await override?.(url, request)
     if (overridden) return overridden
     if (url.pathname === "/api/event" && events) return events.v2()
 
@@ -90,15 +92,29 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
       return json({})
     if (url.pathname === "/config/providers") return json({ providers: {}, default: {} })
     if (url.pathname === "/experimental/console") return json({ consoleManagedProviders: [], switchableOrgCount: 0 })
-    if (url.pathname === "/experimental/capabilities") return json({ backgroundSubagents: false })
+    if (url.pathname === "/experimental/capabilities") return json({ backgroundSubagents: true })
     if (url.pathname === "/path") return json({ home: "", state: "", config: "", worktree, directory })
     if (url.pathname === "/api/location") return json({ directory, project: { id: "proj_test", directory: worktree } })
+    if (url.pathname === "/api/fs/list")
+      return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
     if (url.pathname === "/api/project/current") return json({ id: "proj_test", directory: worktree })
     if (url.pathname === "/api/project/proj_test/directories") return json([{ directory: worktree }])
-    if (url.pathname === "/api/shell") return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
-    if (url.pathname === "/api/mcp") return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
+    if (url.pathname === "/api/shell")
+      return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
+    if (url.pathname === "/api/mcp")
+      return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
+    if (url.pathname === "/api/mcp/resource")
+      return json({
+        location: { directory, project: { id: "proj_test", directory: worktree } },
+        data: { resources: [], templates: [] },
+      })
     if (url.pathname === "/api/session") return json({ data: [], cursor: {} })
     if (url.pathname === "/api/session/active") return json({ data: {} })
+    if (url.pathname === "/api/permission/request")
+      return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
+    if (url.pathname === "/api/form/request")
+      return json({ location: { directory, project: { id: "proj_test", directory: worktree } }, data: [] })
+    if (/^\/api\/session\/[^/]+\/form$/.test(url.pathname)) return json({ data: [] })
     if (
       ["/api/agent", "/api/model", "/api/provider", "/api/integration", "/api/command", "/api/skill"].includes(
         url.pathname,
@@ -114,7 +130,8 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
     if (url.pathname === "/session") return json([])
     if (url.pathname === "/vcs") return json({ branch: "main" })
     throw new Error(`unexpected request: ${url.pathname}`)
-  }) as typeof globalThis.fetch
+  }
+  fetch.preconnect = () => {}
   return { fetch, session }
 }
 

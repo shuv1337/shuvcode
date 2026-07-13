@@ -1,11 +1,11 @@
 export * as Tool from "./tool.js"
 
-import { ToolDefinition, ToolFailure, ToolOutput, type ToolCall, type ToolResultValue } from "@opencode-ai/llm"
 import { Agent } from "@opencode-ai/schema/agent"
+import type { LLM } from "@opencode-ai/schema/llm"
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { Effect, JsonSchema, Schema, type Scope } from "effect"
-import type { Hooks } from "./registration.js"
+import type { Hooks, Transform } from "./registration.js"
 
 export interface Context {
   readonly sessionID: Session.ID
@@ -15,6 +15,29 @@ export interface Context {
 }
 
 export type SchemaType<A> = Schema.Codec<A, any>
+
+type ToolDefinition = {
+  readonly name: string
+  readonly description: string
+  readonly inputSchema: JsonSchema.JsonSchema
+  readonly outputSchema?: JsonSchema.JsonSchema
+}
+
+type ToolCall = {
+  readonly input: unknown
+  readonly [key: string]: unknown
+}
+
+type ToolResultValue =
+  | { readonly type: "json"; readonly value: unknown }
+  | { readonly type: "text"; readonly value: unknown }
+  | { readonly type: "error"; readonly value: unknown }
+  | { readonly type: "content"; readonly value: ReadonlyArray<LLM.ToolContent> }
+
+type ToolOutput = {
+  readonly structured: unknown
+  readonly content: ReadonlyArray<LLM.ToolContent>
+}
 
 declare const TypeId: unique symbol
 
@@ -26,8 +49,11 @@ export interface Definition<Input extends SchemaType<any>, Output extends Schema
 }
 
 export type AnyTool = Definition<any, any>
-export const Failure = ToolFailure
-export type Failure = ToolFailure
+export class Failure extends Schema.TaggedErrorClass<Failure>()("LLM.ToolFailure", {
+  message: Schema.String,
+  error: Schema.optional(Schema.Defect()),
+  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+}) {}
 
 export class RegistrationError extends Schema.TaggedErrorClass<RegistrationError>()("Tool.RegistrationError", {
   name: Schema.String,
@@ -54,7 +80,7 @@ type Config<
   readonly execute: (
     input: Schema.Schema.Type<Input>,
     context: Context,
-  ) => Effect.Effect<Schema.Schema.Type<Output>, ToolFailure>
+  ) => Effect.Effect<Schema.Schema.Type<Output>, Failure>
   readonly toModelOutput?: (input: {
     readonly input: Schema.Schema.Type<Input>
     readonly output: Output["Encoded"]
@@ -75,13 +101,13 @@ type DynamicConfig = {
   readonly description: string
   readonly jsonSchema: JsonSchema.JsonSchema
   readonly outputSchema?: JsonSchema.JsonSchema
-  readonly execute: (input: unknown, context: Context) => Effect.Effect<DynamicOutput, ToolFailure>
+  readonly execute: (input: unknown, context: Context) => Effect.Effect<DynamicOutput, Failure>
 }
 
 type Runtime = {
   readonly permission?: string
   readonly definition: (name: string) => ToolDefinition
-  readonly settle: (call: ToolCall, context: Context) => Effect.Effect<ToolOutput, ToolFailure>
+  readonly settle: (call: ToolCall, context: Context) => Effect.Effect<ToolOutput, Failure>
 }
 
 const runtimes = new WeakMap<AnyTool, Runtime>()
@@ -108,18 +134,18 @@ function makeTyped<
     definition: (name) => {
       const cached = definitions.get(name)
       if (cached) return cached
-      const definition = new ToolDefinition({
+      const definition: ToolDefinition = {
         name,
         description: config.description,
         inputSchema: toJsonSchema(config.input),
         outputSchema: toJsonSchema(config.structured ?? config.output),
-      })
+      }
       definitions.set(name, definition)
       return definition
     },
     settle: (call, context) =>
       Schema.decodeUnknownEffect(config.input)(call.input).pipe(
-        Effect.mapError((error) => new ToolFailure({ message: `Invalid tool input: ${error.message}` })),
+        Effect.mapError((error) => new Failure({ message: `Invalid tool input: ${error.message}` })),
         Effect.flatMap((input) =>
           config.execute(input, context).pipe(
             Effect.flatMap((output) =>
@@ -133,7 +159,7 @@ function makeTyped<
                 }),
                 Effect.mapError(
                   (error) =>
-                    new ToolFailure({
+                    new Failure({
                       message: `Tool returned an invalid value for its output schema: ${error.message}`,
                     }),
                 ),
@@ -159,12 +185,12 @@ function makeDynamic(config: DynamicConfig): AnyTool {
     definition: (name) => {
       const cached = definitions.get(name)
       if (cached) return cached
-      const definition = new ToolDefinition({
+      const definition: ToolDefinition = {
         name,
         description: config.description,
         inputSchema: config.jsonSchema,
         outputSchema: config.outputSchema,
-      })
+      }
       definitions.set(name, definition)
       return definition
     },
@@ -186,8 +212,17 @@ export const validateName = (name: string) =>
     ? Effect.void
     : Effect.fail(new RegistrationError({ name, message: `Invalid tool name: ${name}` }))
 
-export const registrationEntries = (tools: Readonly<Record<string, AnyTool>>) =>
-  Object.entries(tools).map(([name, tool]) => [name.replace(/[^a-zA-Z0-9_-]/g, "_"), tool] as const)
+export const registrationEntries = (tools: Readonly<Record<string, AnyTool>>, group?: string) =>
+  Object.entries(tools).map(([name, tool]) => {
+    const normalized = name.replace(/[^a-zA-Z0-9_-]/g, "_")
+    const parent = group?.replace(/[^a-zA-Z0-9_-]/g, "_")
+    return {
+      key: parent === undefined ? normalized : `${parent}_${normalized}`,
+      name: normalized,
+      group: parent,
+      tool,
+    }
+  })
 
 export const withPermission = <Input extends SchemaType<any>, Output extends SchemaType<any>>(
   tool: Definition<Input, Output>,
@@ -235,7 +270,22 @@ export interface ToolExecuteAfterEvent {
   outputPaths?: ReadonlyArray<string>
 }
 
+export interface RegisterOptions {
+  readonly group?: string
+  /** Defaults to true. False exposes the tool directly to the provider. */
+  readonly codemode?: boolean
+}
+
+export interface ToolDraft {
+  add(name: string, tool: AnyTool, options?: RegisterOptions): void
+}
+
+export interface ToolHooks {
+  readonly "execute.before": ToolExecuteBeforeEvent
+  readonly "execute.after": ToolExecuteAfterEvent
+}
+
 export interface ToolDomain {
-  readonly register: (tools: Readonly<Record<string, AnyTool>>) => Effect.Effect<void, RegistrationError, Scope.Scope>
-  readonly execute: Hooks<{ before: ToolExecuteBeforeEvent; after: ToolExecuteAfterEvent }>
+  readonly transform: Transform<ToolDraft>
+  readonly hook: Hooks<ToolHooks>
 }

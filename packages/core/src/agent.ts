@@ -8,6 +8,8 @@ import { State } from "./state"
 
 export const ID = Agent.ID
 export type ID = typeof ID.Type
+export const Name = Agent.Name
+export type Name = Agent.Name
 export const defaultID = ID.make("build")
 
 export const Color = Agent.Color
@@ -50,6 +52,7 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const events = yield* EventV2.Service
     const state = State.create<Data, Draft>({
+      name: "agent",
       initial: () => ({ agents: new Map() }),
       draft: (draft) => ({
         list: () => Array.fromIterable(draft.agents.values()) as Info[],

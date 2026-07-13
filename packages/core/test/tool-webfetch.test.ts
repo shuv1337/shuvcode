@@ -10,8 +10,15 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { WebFetchTool } from "@opencode-ai/core/tool/webfetch"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
 import { testEffect } from "./lib/effect"
-import { toolIdentity, executeTool, settleTool, toolDefinitions } from "./lib/tool"
+import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
+
+const webFetchToolNode = makeLocationNode({
+  name: "test/webfetch-tool-plugin",
+  layer: Layer.effectDiscard(registerToolPlugin(WebFetchTool.Plugin)),
+  deps: [ToolRegistry.toolsNode, PermissionV2.node, LayerNodePlatform.httpClient],
+})
 
 const sessionID = SessionV2.ID.make("ses_webfetch_test")
 const requests: Array<{ readonly url: string; readonly headers: Record<string, string> }> = []
@@ -40,7 +47,7 @@ const permission = Layer.succeed(
   }),
 )
 const toolLayer = (replacements: LayerNode.Replacements = []) =>
-  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, WebFetchTool.node]), [
+  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, webFetchToolNode]), [
     [PermissionV2.node, permission],
     [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
     ...replacements,

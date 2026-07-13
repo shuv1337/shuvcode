@@ -15,10 +15,13 @@
     "@opencode-ai/client": "workspace:*",
     "@opencode-ai/core": "workspace:*",
     "@opencode-ai/plugin": "workspace:*",
+    "@opencode-ai/schema": "workspace:*",
     "@opencode-ai/server": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@opencode-ai/httpapi-codegen": "workspace:*",
+    "@opencode-ai/protocol": "workspace:*",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"

@@ -1,12 +1,11 @@
 export * as Catalog from "./catalog"
 
 import { makeLocationNode } from "./effect/app-node"
-import { Array, Context, Effect, Layer, Option, Order, pipe, Schema } from "effect"
+import { Array, Context, Effect, Layer, Option, Order, pipe } from "effect"
 import { Catalog } from "@opencode-ai/schema/catalog"
 import { ModelV2 } from "./model"
 import { ProviderV2 } from "./provider"
 import { EventV2 } from "./event"
-import { Policy } from "./policy"
 import { State } from "./state"
 import { Integration } from "./integration"
 
@@ -16,8 +15,6 @@ export type ProviderRecord = {
 }
 
 export type DefaultModel = { providerID: ProviderV2.ID; modelID: ModelV2.ID }
-
-export const PolicyActions = Schema.Literals(["provider.use"])
 
 export const Event = Catalog.Event
 
@@ -65,45 +62,27 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2.Service
-    const policy = yield* Policy.Service
     const integrations = yield* Integration.Service
 
     const available = (provider: ProviderV2.Info, integration: Integration.Info | undefined) => {
       if (provider.disabled) return false
-      if (typeof provider.request.body.apiKey === "string") return true
+      if (typeof provider.settings?.apiKey === "string") return true
       if (integration?.connections.length) return true
       return provider.integrationID === undefined && !integration
     }
 
     const projectModel = (model: ModelV2.Info, provider: ProviderV2.Info) => {
-      const api =
-        model.api.type === "native" && !model.api.url && Object.keys(model.api.settings).length === 0
-          ? { ...provider.api, id: model.api.id }
-          : model.api.type === "aisdk" && provider.api.type === "aisdk" && !model.api.url
-            ? { ...model.api, url: provider.api.url, settings: { ...provider.api.settings, ...model.api.settings } }
-            : model.api.type === "aisdk" && provider.api.type === "aisdk"
-              ? { ...model.api, settings: { ...provider.api.settings, ...model.api.settings } }
-              : model.api
-      const request = {
-        settings: { ...provider.request.settings, ...model.request.settings },
-        headers: { ...provider.request.headers, ...model.request.headers },
-        body: { ...provider.request.body, ...model.request.body },
-        variant: model.request.variant,
-      }
-      return ModelV2.Info.make({
+      return {
         ...model,
-        api,
-        request,
-      })
-    }
-
-    const normalizeApi = (item: ProviderV2.MutableInfo | ModelV2.MutableInfo) => {
-      if (typeof item.request.body.baseURL !== "string") return
-      item.api.url = item.request.body.baseURL
-      delete item.request.body.baseURL
+        package: model.package ?? provider.package,
+        settings: ProviderV2.mergeOverlay(provider.settings, model.settings),
+        headers: ProviderV2.mergeHeaders(provider.headers, model.headers),
+        body: ProviderV2.mergeOverlay(provider.body, model.body),
+      } satisfies ModelV2.Info
     }
 
     const state = State.create<Data, Draft>({
+      name: "catalog",
       initial: () => ({ providers: new Map() }),
       draft: (draft) => {
         const result: Draft = {
@@ -120,7 +99,6 @@ const layer = Layer.effect(
                 draft.providers.set(providerID, current)
               }
               fn(current.provider)
-              normalizeApi(current.provider)
             },
             remove: (providerID) => {
               draft.providers.delete(providerID)
@@ -143,7 +121,6 @@ const layer = Layer.effect(
               fn(model)
               model.id = modelID
               model.providerID = providerID
-              normalizeApi(model)
             },
             remove: (providerID, modelID) => {
               draft.providers.get(providerID)?.models.delete(modelID)
@@ -159,13 +136,6 @@ const layer = Layer.effect(
         return result
       },
       finalize: Effect.fn("CatalogV2.finalize")(function* (catalog) {
-        if (policy.hasStatements()) {
-          for (const record of [...catalog.provider.list()]) {
-            if ((yield* policy.evaluate("provider.use", record.provider.id, "allow")) === "deny") {
-              catalog.provider.remove(record.provider.id)
-            }
-          }
-        }
         yield* events.publish(Event.Updated, {})
       }),
     })
@@ -210,7 +180,18 @@ const layer = Layer.effect(
 
         available: Effect.fn("CatalogV2.model.available")(function* () {
           const providers = new Set((yield* result.provider.available()).map((provider) => provider.id))
-          return (yield* result.model.all()).filter((model) => providers.has(model.providerID) && model.enabled)
+          const models: ModelV2.Info[] = []
+          for (const record of state.get().providers.values()) {
+            if (!providers.has(record.provider.id)) continue
+            for (const model of record.models.values()) {
+              if (!model.enabled) continue
+              models.push(projectModel(model, record.provider))
+            }
+          }
+          return pipe(
+            models,
+            Array.sortWith((item) => item.time.released, Order.flip(Order.Number)),
+          )
         }),
 
         default: Effect.fn("CatalogV2.model.default")(function* () {
@@ -223,13 +204,7 @@ const layer = Layer.effect(
             }
           }
 
-          return Option.getOrUndefined(
-            pipe(
-              yield* result.model.available(),
-              Array.sortWith((item) => item.time.released, Order.flip(Order.Number)),
-              Array.head,
-            ),
-          )
+          return (yield* result.model.available())[0]
         }),
 
         small: Effect.fn("CatalogV2.model.small")(function* (providerID) {
@@ -294,4 +269,4 @@ const layer = Layer.effect(
 
 const SMALL_MODEL_RE = /\b(nano|flash|lite|mini|haiku|small|fast)\b/
 
-export const node = makeLocationNode({ service: Service, layer, deps: [EventV2.node, Policy.node, Integration.node] })
+export const node = makeLocationNode({ service: Service, layer, deps: [EventV2.node, Integration.node] })

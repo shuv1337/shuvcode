@@ -153,11 +153,11 @@ const OpenAIChatChoice = Schema.Struct({
   finish_reason: optionalNull(Schema.String),
 })
 
-const OpenAIChatEvent = Schema.Struct({
+export const OpenAIChatEvent = Schema.Struct({
   choices: Schema.Array(OpenAIChatChoice),
   usage: optionalNull(OpenAIChatUsage),
 })
-type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
+export type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
 type OpenAIChatRequestMessage = LLMRequest["messages"][number]
 
 interface ParserState {
@@ -493,6 +493,7 @@ export const httpTransport = HttpTransport.sseJson.with<OpenAIChatBody>()
 export const route = Route.make({
   id: ADAPTER,
   provider: "openai",
+  providerMetadataKey: "openai",
   protocol,
   endpoint: Endpoint.path(PATH, { baseURL: DEFAULT_BASE_URL }),
   auth: Auth.none,

@@ -19,12 +19,15 @@ Valid types are `feat`, `fix`, `docs`, `chore`, `refactor`, and `test`. Scopes a
 
 Examples: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`.
 
+Never bypass Git hooks. Do not use `--no-verify` or otherwise disable, skip, or circumvent commit or push hooks. If a hook fails, fix the failure or stop and report it to the user.
+
 ## Style Guide
 
 ### General Principles
 
 - Keep things in one function unless composable or reusable
 - Do not extract single-use helpers preemptively. Inline the logic at the call site unless the helper is reused, hides a genuinely complex boundary, or has a clear independent name that improves the caller.
+- Before adding complexity for a speculative or vanishingly unlikely race or security edge case, explain the concrete failure mode, likelihood, and complexity cost to the user and get their buy-in. Do not silently expand scope for theoretical robustness.
 - Avoid `try`/`catch` where possible
 - Avoid using the `any` type
 - Use Bun APIs when possible, like `Bun.file()`
@@ -151,22 +154,23 @@ const table = sqliteTable("session", {
 
 ## V2 Session Core
 
-- Keep durable prompt admission separate from model execution. `SessionV2.prompt(...)` admits one durable `session_input` row before scheduling advisory `SessionExecution.wake(sessionID)` unless `resume: false` requests admit-only behavior. The serialized runner promotes admitted inputs into visible user messages at safe boundaries.
-- Reusing a Session ID adopts the existing Session. Reusing a prompt message ID reconciles an exact retry only when Session, prompt, and delivery mode match; conflicting reuse fails. Historical projected prompts lazily synthesize promoted inbox records during exact retry.
-- Keep `SessionExecution` process-global and Session-ID based. Its local implementation owns the process-local Session coordinator and discovers placement through `SessionStore` plus `LocationServiceMap.get(session.location)` only when a drain starts; no layer should take a Session ID. V2 interruption targets the active process-local ownership chain for that Session; idle or missing interruption is a no-op.
+- Keep durable events minimal: record irreducible new facts and do not repeat state derivable by folding the ordered aggregate history. Enrich projections and read models with previous or derived state when consumers need self-contained views.
+- Keep durable prompt admission separate from model execution. `SessionV2.prompt(...)` admits one durable `session_pending` row before scheduling advisory `SessionExecution.wake(sessionID)` unless `resume: false` requests admit-only behavior. The serialized runner promotes admitted inputs into visible user messages at safe boundaries, consuming the pending row in the same event transaction; `session_pending` stores only unconsumed work.
+- Reusing a Session ID adopts the existing Session. Reusing a prompt message ID reconciles an exact retry only when Session, prompt, and delivery mode match; conflicting reuse fails. Retry of an already-promoted input reconciles against the projected message and the durable admitted event rather than a retained row.
+- Keep `SessionExecution` process-global and Session-ID based. Its local implementation owns the process-local Session coordinator and discovers placement through `SessionStore` plus `LocationServiceMap.get(session.location)` only when a drain starts; no layer should take a Session ID. V2 interruption targets the active process-local ownership chain for that Session; interruption of a known but idle or locally unowned Session is a no-op, while the public API rejects an unknown Session.
 - Keep `SessionRunner`, model resolution, tool registry, permissions, and filesystem Location-scoped. Omitted `Location.workspaceID` means implicit-local placement; explicit workspace identity remains reserved for future placement semantics.
-- Preserve one explicit `llm.stream(request)` call per provider turn and reload projected history before durable continuation. Do not bridge through legacy `SessionPrompt.loop(...)` or delegate orchestration to an in-memory tool loop.
+- Preserve one explicit `llm.stream(request)` call per Physical Attempt and reload projected history before durable continuation. Most Steps have one Physical Attempt; overflow-triggered compaction recovery may rebuild one Step for a second attempt. Do not bridge through legacy `SessionPrompt.loop(...)` or delegate orchestration to an in-memory tool loop.
 - Keep local Session drains process-local until clustering is implemented. `SessionRunCoordinator` joins explicit same-Session resumes, coalesces prompt wakeups, and allows different Sessions to run concurrently. Advisory wakes drain eligible durable inbox rows only; post-crash continuation recovery requires a separate explicit design before it may retry provider work. A drain has no durable identity or transcript boundary.
-- Keep delivery vocabulary explicit. Prompts steer by default and promote at the next safe provider-turn boundary while the current drain requires continuation. An explicit `queue` input remains pending until the Session would otherwise become idle; promote one queued input at that boundary, then reevaluate continuation before promoting another. Promoting any new user input resets the selected agent's provider-turn allowance; a batch of steers resets it once.
+- Keep delivery vocabulary explicit. Prompts steer by default and promote at the next safe step boundary while the current drain requires continuation. An explicit `queue` input remains pending until the Session would otherwise become idle; promote one queued input at that boundary, then reevaluate continuation before promoting another. Promoting any new user input resets the selected agent's step allowance; a batch of steers resets it once.
+- One step is one logical LLM call; its durable record covers only the model-visible span. Do not write "provider turn", and do not use bare "turn" for a single call: "turn" is reserved for the future assistant-turn unit containing all steps from prompt promotion until the session would go idle.
 - Keep EventV2 replay owner claims separate from clustered Session execution ownership.
-- Keep the System Context algebra and built-ins in `src/system-context`; keep Context Source producers with their observed domains, and keep Session History selection plus Context Checkpoint persistence Session-owned. The runner composes all context producers explicitly in `loadSystemContext`; there is no context registry.
-- The durable Applied record is what the model was last told, per source. Reconcile narrates drift as chronological System updates and never rewrites the baseline; only completed compaction rebaselines, and move or committed revert resets the checkpoint. Unavailable sources keep the model's prior belief, blocking only a session's first baseline.
+- Keep the Instructions algebra and built-ins in `src/instructions`; keep instruction producers with their observed domains, and keep Session History selection plus `InstructionState` and `InstructionEntry` persistence Session-owned. `InstructionDiscovery` observes ambient global and upward-project instructions. The runner composes built-ins, discovery, guidance, and entries explicitly in `loadInstructions`; there is no instruction registry.
+- `session.instructions.updated` stores only changed source keys and content hashes. Blob values live once in `instruction_blob`; `instruction_state` is a rebuildable fold cache, never primary state. Render initial instructions and chronological updates from values during request assembly. Completed compaction moves the instruction epoch; Session movement and committed revert clear it. Unavailable sources retain the last value and block only the initial complete delta.
 
 ## Fork: shuvcode (Latitudes-Dev/shuvcode)
 
-- This workspace is a fork of `anomalyco/opencode`. Never open PRs against upstream.
-- Default port branch: `integration-v2` (re-based on `upstream/v2`). Frozen v1 rollback: `integration` @ tag `fork-v1-final`.
-- Record upstream sync state in `.github/last-synced-tag` as a **v2 commit SHA** (no v2 release tags yet).
-- Merge upstream: `git fetch upstream v2 && git merge upstream/v2` on `integration-v2`; prefer TUI plugins in `packages/tui/src/feature-plugins/` over patching components.
-- Sync automation: `.github/workflows/upstream-sync.yml` + `script/sync/release-watcher.sh` watch `anomalyco/opencode` branch `v2`.
-- CLI binary name: `shuvcode`. Keep `packages/core/src/global.ts` `app = "opencode"` for XDG path compatibility.
+- This workspace is a fork of `anomalyco/opencode`. Never open pull requests against upstream.
+- The fork tracks `upstream/v2` on `integration-v2`; `integration` and tag `fork-v1-final` are the frozen V1 rollback line.
+- Record upstream sync state in `.github/last-synced-tag` as a V2 commit SHA.
+- The CLI binary and npm package are named `shuvcode`.
+- Keep `packages/core/src/global.ts` `app = "opencode"` for XDG path compatibility.

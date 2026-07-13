@@ -36,7 +36,7 @@ describe("ConfigSkillPlugin.Plugin", () => {
 
       yield* ConfigSkillPlugin.Plugin.effect(
         host({
-          skill: { transform, reload: () => Effect.void },
+          skill: { list: () => Effect.die("unused skill.list"), transform, reload: () => Effect.void },
         }),
       ).pipe(
         Effect.provideService(Global.Service, Global.Service.of({ ...Global.make(), home: "/home/test" })),
@@ -46,6 +46,8 @@ describe("ConfigSkillPlugin.Plugin", () => {
           Config.Service.of({
             entries: () =>
               Effect.succeed([
+                new Config.ClaudeDirectory({ type: "claude", path: AbsolutePath.make("/repo/.claude") }),
+                new Config.AgentsDirectory({ type: "agents", path: AbsolutePath.make("/repo/.agents") }),
                 new Config.Directory({ type: "directory", path: AbsolutePath.make("/repo/.opencode") }),
                 new Config.Document({
                   type: "document",
@@ -59,6 +61,14 @@ describe("ConfigSkillPlugin.Plugin", () => {
       )
 
       expect(sources).toEqual([
+        SkillV2.DirectorySource.make({
+          type: "directory",
+          path: AbsolutePath.make(path.join("/repo/.claude", "skills")),
+        }),
+        SkillV2.DirectorySource.make({
+          type: "directory",
+          path: AbsolutePath.make(path.join("/repo/.agents", "skills")),
+        }),
         SkillV2.DirectorySource.make({
           type: "directory",
           path: AbsolutePath.make(path.join("/repo/.opencode", "skill")),

@@ -1,13 +1,16 @@
-import type { CommandV2Info } from "@opencode-ai/sdk/v2/types"
-import type { Hooks } from "./registration.js"
+import type { CommandInfo } from "@opencode-ai/sdk/v2/types"
+import type { CommandApi } from "@opencode-ai/client/effect/api"
+import type { Effect } from "effect"
+import type { Transform } from "./registration.js"
 
 export interface CommandDraft {
-  list(): readonly CommandV2Info[]
-  get(name: string): CommandV2Info | undefined
-  update(name: string, update: (command: CommandV2Info) => void): void
+  list(): readonly CommandInfo[]
+  get(name: string): CommandInfo | undefined
+  update(name: string, update: (command: CommandInfo) => void): void
   remove(name: string): void
 }
 
-export type CommandHooks = Hooks<{
-  transform: CommandDraft
-}>
+export interface CommandDomain extends CommandApi<unknown> {
+  readonly transform: Transform<CommandDraft>
+  readonly reload: () => Effect.Effect<void>
+}

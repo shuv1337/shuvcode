@@ -107,7 +107,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.pty.connectToken",
+          identifier: "v2.pty.connect.token",
           summary: "Create PTY WebSocket token",
           description: "Create a short-lived single-use ticket for opening a PTY WebSocket connection.",
         }),
@@ -127,6 +127,7 @@ export const PtyGroup = HttpApiGroup.make("server.pty")
         description: "Establish a WebSocket connection streaming PTY output and accepting terminal input.",
         transform: (operation) => ({
           ...operation,
+          "x-websocket": true,
           parameters: [
             ...(operation.parameters ?? []),
             ...["location[directory]", "location[workspace]", "cursor", PTY_CONNECT_TICKET_QUERY].map((name) => ({

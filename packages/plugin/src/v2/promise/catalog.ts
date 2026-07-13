@@ -1,8 +1,10 @@
+import type { CatalogApi } from "@opencode-ai/client/promise/api"
 import type { CatalogDraft, CatalogProviderRecord } from "../effect/catalog.js"
-import type { Hooks } from "./registration.js"
+import type { Transform } from "./registration.js"
 
 export type { CatalogDraft, CatalogProviderRecord }
 
-export type CatalogHooks = Hooks<{
-  transform: CatalogDraft
-}>
+export interface CatalogDomain extends CatalogApi {
+  readonly transform: Transform<CatalogDraft>
+  readonly reload: () => Promise<void>
+}

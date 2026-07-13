@@ -26,22 +26,34 @@ export interface Transformable<DraftApi> {
   readonly reload: Reload
 }
 
-const CurrentBatch = Context.Reference<Set<Reload> | undefined>("@opencode/State/CurrentBatch", {
+type Batch = {
+  active: boolean
+  readonly reloads: Set<Reload>
+}
+
+const CurrentBatch = Context.Reference<Batch | undefined>("@opencode/State/CurrentBatch", {
   defaultValue: () => undefined,
 })
 
 export function batch<A, E, R>(effect: Effect.Effect<A, E, R>) {
   return Effect.gen(function* () {
     const current = yield* CurrentBatch
-    if (current) return yield* effect
-    const reloads = new Set<Reload>()
-    const result = yield* effect.pipe(Effect.provideService(CurrentBatch, reloads))
-    yield* Effect.forEach(reloads, (reload) => reload(), { discard: true })
-    return result
+    if (current?.active) return yield* effect
+    const batch: Batch = { active: true, reloads: new Set() }
+    const exit = yield* effect.pipe(Effect.provideService(CurrentBatch, batch), Effect.exit)
+    batch.active = false
+    yield* Effect.forEach(batch.reloads, (reload) => reload(), { discard: true })
+    return yield* exit
   })
 }
 
+export const inherit = Effect.fnUntraced(function* () {
+  const batch = yield* CurrentBatch
+  return <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.provideService(effect, CurrentBatch, batch)
+})
+
 export interface Options<State, DraftApi> {
+  readonly name?: string
   /** Creates the base value for initial state and every scoped-transform reload. */
   readonly initial: () => State
   /** Wraps mutable state in a domain-specific draft API. */
@@ -78,7 +90,10 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
   const materialize = Effect.fnUntraced(function* () {
     const next = options.initial()
     const api = options.draft(next)
-    for (const transform of transforms) yield* apply(transform.run, api).pipe(Effect.withSpan("State.reload.update"))
+    for (const transform of transforms)
+      yield* apply(transform.run, api).pipe(
+        Effect.withSpan("State.reload.update", { attributes: { state: options.name ?? "anonymous" } }),
+      )
     yield* commit(next)
   })
 
@@ -87,6 +102,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
   const result: Interface<State, DraftApi> = {
     get: () => state,
     transform: Effect.fn("State.transform")(function* (update) {
+      yield* Effect.annotateCurrentSpan("state", options.name ?? "anonymous")
       const scope = yield* Scope.Scope
       return yield* Effect.uninterruptible(
         Effect.gen(function* () {
@@ -100,8 +116,8 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
                 transforms = transforms.filter((item) => item !== transform)
                 return Effect.gen(function* () {
                   const batch = yield* CurrentBatch
-                  if (batch) {
-                    batch.add(reload)
+                  if (batch?.active) {
+                    batch.reloads.add(reload)
                     return
                   }
                   yield* materialize()
@@ -116,7 +132,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
           )
           yield* Scope.addFinalizer(scope, dispose)
           const batch = yield* CurrentBatch
-          if (batch) batch.add(reload)
+          if (batch?.active) batch.reloads.add(reload)
           else yield* reload()
           return { dispose }
         }),

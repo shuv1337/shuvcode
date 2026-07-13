@@ -10,6 +10,7 @@ import { Integration } from "../../integration"
 import { ModelV2 } from "../../model"
 import { ProviderV2 } from "../../provider"
 import { ConfigProviderV1 } from "../../v1/config/provider"
+import { Money } from "@opencode-ai/schema/money"
 import { ConfigProviderOptionsV1 } from "../../v1/config/provider-options"
 import { ConfigV1 } from "../../v1/config/config"
 
@@ -42,14 +43,21 @@ function oauth(http: HttpClient.HttpClient) {
       type: "oauth",
       label: "OpenCode Console account",
     },
-    authorize: () =>
+    authorize: (inputs) =>
       Effect.gen(function* () {
-        const device = yield* post(http, `${defaultServer}/auth/device/code`, { client_id: clientID }, Device)
+        const server = yield* normalizeServer(inputs.server ?? defaultServer)
+        const device = yield* post(http, `${server}/auth/device/code`, { client_id: clientID }, Device)
+        const verification = URL.canParse(device.verification_uri_complete)
+          ? new URL(device.verification_uri_complete)
+          : undefined
+        if (verification && verification.protocol !== "http:" && verification.protocol !== "https:") {
+          return yield* Effect.fail(new Error("Invalid device verification URL: expected HTTP(S)"))
+        }
         return {
           mode: "auto" as const,
-          url: `${defaultServer}${device.verification_uri_complete}`,
+          url: verification?.href ?? `${server}/${device.verification_uri_complete.replace(/^\/+/, "")}`,
           instructions: `Enter code: ${device.user_code}`,
-          callback: poll(http, defaultServer, device.device_code, Duration.seconds(device.interval)),
+          callback: poll(http, server, device.device_code, Duration.seconds(device.interval)),
         }
       }),
     refresh: (credential) =>
@@ -75,7 +83,7 @@ function oauth(http: HttpClient.HttpClient) {
 }
 
 export const OpencodePlugin = define<HttpClient.HttpClient | EventV2.Service | Scope.Scope>({
-  id: "opencode",
+  id: "opencode.provider.opencode",
   effect: Effect.fn(function* (ctx) {
     const events = yield* EventV2.Service
     const http = yield* HttpClient.HttpClient
@@ -112,45 +120,43 @@ export const OpencodePlugin = define<HttpClient.HttpClient | EventV2.Service | S
         catalog.provider.update(providerID, (provider) => {
           provider.integrationID = Integration.ID.make("opencode")
           if (item.name !== undefined) provider.name = item.name
-          provider.api = item.npm
-            ? { type: "aisdk", package: item.npm, url: item.api }
-            : { type: "native", url: item.api, settings: {} }
-          Object.assign(provider.request.headers, item.options?.headers)
-          Object.assign(provider.request.body, withoutCredentials(item.options))
+          provider.package = item.npm ? ProviderV2.aisdk(item.npm) : ""
+          provider.settings = {
+            ...provider.settings,
+            ...withoutCredentials(item.options),
+            ...(item.api ? { baseURL: item.api } : {}),
+          }
+          provider.headers = { ...provider.headers, ...item.options?.headers }
         })
 
         for (const [modelID, config] of Object.entries(item.models ?? {})) {
           catalog.model.update(providerID, modelID, (model) => {
             if (config.family !== undefined) model.family = config.family
             if (config.name !== undefined) model.name = config.name
-            if (config.id !== undefined) model.api.id = config.id
+            if (config.id !== undefined) model.modelID = config.id
             if (config.provider !== undefined) {
-              model.api = config.provider.npm
-                ? {
-                    id: model.api.id,
-                    type: "aisdk",
-                    package: config.provider.npm,
-                    url: config.provider.api,
-                  }
-                : { id: model.api.id, type: "native", url: config.provider.api, settings: {} }
+              model.package = config.provider.npm ? ProviderV2.aisdk(config.provider.npm) : undefined
+              if (config.provider.api) model.settings = { ...model.settings, baseURL: config.provider.api }
             }
             if (config.tool_call !== undefined) model.capabilities.tools = config.tool_call
             if (config.modalities?.input !== undefined) model.capabilities.input = [...config.modalities.input]
             if (config.modalities?.output !== undefined) model.capabilities.output = [...config.modalities.output]
-            const packageName = config.provider?.npm ?? item.npm
-            const lowerer = ConfigProviderOptionsV1.get(packageName)
-            Object.assign(model.request.headers, config.headers)
-            Object.assign(model.request.body, lowerer.request(withoutCredentials(config.options)))
+            model.headers = { ...model.headers, ...config.headers }
+            model.settings = { ...model.settings, ...ConfigProviderOptionsV1.model(withoutCredentials(config.options)) }
             if (config.variants !== undefined) {
+              model.variants ??= []
               for (const [id, options] of Object.entries(config.variants)) {
                 const variantID = ModelV2.VariantID.make(id)
                 let existing = model.variants.find((item) => item.id === variantID)
                 if (!existing) {
-                  existing = { id: variantID, settings: {}, headers: {}, body: {} }
+                  existing = { id: variantID }
                   model.variants.push(existing)
                 }
-                Object.assign(existing.headers, options.headers)
-                Object.assign(existing.body, lowerer.request(withoutCredentials(options)))
+                existing.headers = { ...existing.headers, ...options.headers }
+                existing.settings = {
+                  ...existing.settings,
+                  ...ConfigProviderOptionsV1.model(withoutCredentials(options)),
+                }
               }
             }
             if (config.release_date !== undefined) {
@@ -169,9 +175,9 @@ export const OpencodePlugin = define<HttpClient.HttpClient | EventV2.Service | S
 
       const item = catalog.provider.get(ProviderV2.ID.opencode)
       if (!item) return
-      const hasKey = Boolean(process.env.OPENCODE_API_KEY || connected || item.provider.request.body.apiKey)
+      const hasKey = Boolean(process.env.OPENCODE_API_KEY || connected || item.provider.settings?.apiKey)
       catalog.provider.update(item.provider.id, (provider) => {
-        if (!hasKey) provider.request.body.apiKey = "public"
+        if (!hasKey) provider.settings = { ...provider.settings, apiKey: "public" }
       })
       if (hasKey) return
       for (const model of item.models.values()) {
@@ -188,7 +194,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | EventV2.Service | S
       Stream.runForEach(refresh),
       Effect.forkScoped({ startImmediately: true }),
     )
-    yield* refresh().pipe(Effect.forkScoped)
+    yield* refresh()
   }),
 })
 
@@ -220,22 +226,37 @@ function withoutCredentials(body: Readonly<Record<string, unknown>> | undefined)
   return Object.fromEntries(Object.entries(body ?? {}).filter(([key]) => key !== "apiKey" && key !== "headers"))
 }
 
+function normalizeServer(input: string) {
+  return Effect.try({
+    try: () => {
+      const url = new URL(input)
+      if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("expected HTTP(S)")
+      return `${url.origin}${url.pathname.replace(/\/+$/, "")}`
+    },
+    catch: (cause) =>
+      new Error(`Invalid OpenCode server URL: ${cause instanceof Error ? cause.message : String(cause)}`),
+  })
+}
+
 function remoteCost(input: NonNullable<(typeof ConfigProviderV1.Model.Type)["cost"]>) {
   const base = {
-    input: input.input,
-    output: input.output,
-    cache: { read: input.cache_read ?? 0, write: input.cache_write ?? 0 },
+    input: Money.USDPerMillionTokens.make(input.input),
+    output: Money.USDPerMillionTokens.make(input.output),
+    cache: {
+      read: Money.USDPerMillionTokens.make(input.cache_read ?? 0),
+      write: Money.USDPerMillionTokens.make(input.cache_write ?? 0),
+    },
   }
   if (!input.context_over_200k) return [base]
   return [
     base,
     {
       tier: { type: "context" as const, size: 200_000 },
-      input: input.context_over_200k.input,
-      output: input.context_over_200k.output,
+      input: Money.USDPerMillionTokens.make(input.context_over_200k.input),
+      output: Money.USDPerMillionTokens.make(input.context_over_200k.output),
       cache: {
-        read: input.context_over_200k.cache_read ?? 0,
-        write: input.context_over_200k.cache_write ?? 0,
+        read: Money.USDPerMillionTokens.make(input.context_over_200k.cache_read ?? 0),
+        write: Money.USDPerMillionTokens.make(input.context_over_200k.cache_write ?? 0),
       },
     },
   ]

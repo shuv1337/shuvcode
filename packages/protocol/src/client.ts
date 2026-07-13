@@ -19,16 +19,23 @@ type ClientApiShape = Api<
   Context.Service.Shape<typeof LocationMiddleware>,
   Context.Service.Identifier<typeof SessionLocationMiddleware>,
   Context.Service.Shape<typeof SessionLocationMiddleware>,
+  Context.Service.Identifier<typeof SessionLocationMiddleware>,
+  Context.Service.Shape<typeof SessionLocationMiddleware>,
   typeof EventGroup
 >
 
 export const ClientApi: ClientApiShape = makeDefaultApi({
   locationMiddleware: LocationMiddleware,
+  // The real server uses a form-specific middleware with an undocumented `global` sentinel branch.
+  // The generated client only needs a middleware identity for API typing.
+  formLocationMiddleware: SessionLocationMiddleware,
   sessionLocationMiddleware: SessionLocationMiddleware,
 })
 
 export const groupNames = {
   "server.health": "health",
+  "server.server": "server",
+  "server.debug": "debug",
   "server.location": "location",
   "server.agent": "agent",
   "server.plugin": "plugin",
@@ -39,6 +46,7 @@ export const groupNames = {
   "server.provider": "provider",
   "server.integration": "integration",
   "server.credential": "credential",
+  "server.form": "form",
   "server.permission": "permission",
   "server.fs": "file",
   "server.command": "command",
@@ -46,29 +54,12 @@ export const groupNames = {
   "server.event": "event",
   "server.pty": "pty",
   "server.shell": "shell",
+  "server.mcp": "mcp",
   "server.question": "question",
   "server.reference": "reference",
   "server.project": "project",
   "server.projectCopy": "projectCopy",
-} as const
-
-export const endpointNames = {
-  "session.messages": "list",
-  "integration.connect.key": "connectKey",
-  "integration.connect.oauth": "connectOauth",
-  "integration.attempt.status": "attemptStatus",
-  "integration.attempt.complete": "attemptComplete",
-  "integration.attempt.cancel": "attemptCancel",
-  "session.context.entry.list": "listContextEntries",
-  "session.context.entry.put": "putContextEntry",
-  "session.context.entry.remove": "removeContextEntry",
-  "session.revert.stage": "revertStage",
-  "session.revert.clear": "revertClear",
-  "session.revert.commit": "revertCommit",
-  "permission.request.list": "listRequests",
-  "permission.saved.list": "listSaved",
-  "permission.saved.remove": "removeSaved",
-  "question.request.list": "listRequests",
+  "server.vcs": "vcs",
 } as const
 
 export const promiseOmitEndpoints = new Set(["pty.connect", "pty.connectToken"])

@@ -1,7 +1,6 @@
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { batch, createEffect, createMemo } from "solid-js"
-import { useSync } from "./sync"
 import { useEvent } from "./event"
 import path from "path"
 import { useTuiPaths } from "./runtime"
@@ -52,7 +51,6 @@ export function recentModels(
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
   init: () => {
-    const sync = useSync()
     const data = useData()
     const sdk = useSDK()
     const toast = useToast()
@@ -210,16 +208,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        if (sync.data.config.model) {
-          const { providerID, modelID } = parseModel(sync.data.config.model)
-          if (isModelValid({ providerID, modelID })) {
-            return {
-              providerID,
-              modelID,
-            }
-          }
-        }
-
         for (const item of modelStore.recent) {
           if (isModelValid(item)) {
             return item
@@ -272,7 +260,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           return {
             provider: provider?.name ?? value.providerID,
             model: info?.name ?? value.modelID,
-            reasoning: info?.variants.length !== 0,
+            reasoning: (info?.variants?.length ?? 0) !== 0,
           }
         }),
         cycle(direction: 1 | -1) {
@@ -373,12 +361,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             const v = this.selected()
             if (!v) return undefined
             if (v !== "default" && this.list().includes(v)) return v
-            const m = currentModel()!
-            return (
-              data.location.model
-                .list()
-                ?.find((item) => item.providerID === m.providerID && item.id === m.modelID)?.request.variant ?? "default"
-            )
+            return "default"
           },
           list() {
             const m = currentModel()
@@ -386,7 +369,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             const info = data.location.model
               .list()
               ?.find((item) => item.providerID === m.providerID && item.id === m.modelID)
-            return info?.variants.map((variant) => variant.id) ?? []
+            return info?.variants?.map((variant) => variant.id) ?? []
           },
           set(value: string | undefined) {
             const m = currentModel()
@@ -458,7 +441,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         })
 
       const slots = createMemo(() => {
-        const existing = new Set(sync.data.session.filter((x) => x.parentID === undefined).map((x) => x.id))
+        const existing = new Set(data.session.list().filter((x) => x.parentID === undefined).map((x) => x.id))
         return sessionStore.pinned.filter((id) => existing.has(id)).slice(0, 9)
       })
 
@@ -475,7 +458,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
 
       event.on("session.deleted", (evt) => {
-        prune(evt.data.info.id)
+        prune(evt.data.sessionID)
       })
 
       return {
@@ -512,12 +495,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     const mcp = {
       isEnabled(name: string) {
-        const status = sync.data.mcp[name]
-        return status?.status === "connected"
+        return data.location.mcp.server.list()?.find((item) => item.name === name)?.status.status === "connected"
       },
       async toggle(name: string) {
-        const status = sync.data.mcp[name]
-        if (status?.status === "connected") {
+        const status = data.location.mcp.server.list()?.find((item) => item.name === name)?.status.status
+        if (status === "connected") {
           // Disable: disconnect the MCP
           await sdk.client.mcp.disconnect({ name })
         } else {

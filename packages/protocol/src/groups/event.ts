@@ -8,7 +8,6 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/un
 const fields = {
   id: Event.ID,
   metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  durable: Schema.optional(Schema.Struct({ aggregateID: Schema.String, seq: Schema.Int, version: Schema.Int })),
   location: Schema.optional(Location.Ref),
 }
 
@@ -38,11 +37,12 @@ const make = <const Definitions extends ReadonlyArray<Definition>>(definitions: 
           OpenApi.annotations({
             identifier: "v2.event.subscribe",
             summary: "Subscribe to events",
-            description: "Subscribe to native event payloads for the server.",
+            description:
+              "Subscribe to native event payloads for the server. Volatile by contract: a slow consumer overflows and fails the stream, and events during disconnection are missed.",
           }),
         ),
       )
-      .annotateMerge(OpenApi.annotations({ title: "events", description: "Experimental event stream route." })),
+      .annotateMerge(OpenApi.annotations({ title: "event", description: "Experimental event stream routes." })),
   }
 }
 
@@ -54,3 +54,5 @@ export const EventGroup = event.group
 export const OpenCodeEvent = event.schema
 export type OpenCodeEvent = typeof OpenCodeEvent.Type
 export type OpenCodeEventEncoded = typeof OpenCodeEvent.Encoded
+export const isOpenCodeEvent = (event: { readonly type: string }): event is OpenCodeEvent =>
+  event.type === "server.connected" || EventManifest.isServer(event)

@@ -2,7 +2,7 @@
 
 export * as SkillPlugin from "./skill"
 
-import { define } from "./internal"
+import { define } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Effect } from "effect"
 import { AbsolutePath } from "../schema"
 import { SkillV2 } from "../skill"
@@ -13,19 +13,19 @@ import { FSUtil } from "../fs-util"
 import os from "os"
 import path from "path"
 import { fileURLToPath } from "url"
-import customizeOpencodeContent from "./skill/customize-opencode.md" with { type: "text" }
+import opencodeContent from "./skill/opencode.md" with { type: "text" }
 import reportContent from "./skill/report.md" with { type: "text" }
 
-export const CustomizeOpencodeContent = customizeOpencodeContent
+export const OpencodeContent = opencodeContent
 export const ReportContent = reportContent
 
-const CUSTOMIZE_OPENCODE_DESCRIPTION =
-  "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, commands, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself."
+export const OpencodeDescription =
+  "Use this skill for any question about OpenCode itself, including how OpenCode works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OpenCode SDK, clients, server, or API, and contributing to the OpenCode codebase. Also use it for OpenCode agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI, TUI, desktop app, and web app."
 const REPORT_DESCRIPTION =
   "Use when the user wants to report an opencode issue or bug. Collect standard diagnostics, add user-specific reproduction context, and publish the issue with GitHub CLI."
 
 export const Plugin = define({
-  id: "skill",
+  id: "opencode.skill",
   effect: Effect.fn(function* (ctx) {
     const reportContent = yield* reportContentWithDiagnostics()
     yield* ctx.skill.transform((draft) => {
@@ -33,10 +33,11 @@ export const Plugin = define({
         SkillV2.EmbeddedSource.make({
           type: "embedded",
           skill: SkillV2.Info.make({
-            name: "customize-opencode",
-            description: CUSTOMIZE_OPENCODE_DESCRIPTION,
-            location: AbsolutePath.make("/builtin/customize-opencode.md"),
-            content: CustomizeOpencodeContent,
+            id: SkillV2.ID.make("opencode"),
+            name: SkillV2.Name.make("OpenCode"),
+            description: OpencodeDescription,
+            location: AbsolutePath.make("/builtin/opencode.md"),
+            content: OpencodeContent,
           }),
         }),
       )
@@ -44,7 +45,8 @@ export const Plugin = define({
         SkillV2.EmbeddedSource.make({
           type: "embedded",
           skill: SkillV2.Info.make({
-            name: "report",
+            id: SkillV2.ID.make("report"),
+            name: SkillV2.Name.make("Report"),
             description: REPORT_DESCRIPTION,
             slash: true,
             location: AbsolutePath.make("/builtin/report.md"),
@@ -90,6 +92,7 @@ const configuredPlugins = Effect.fn("SkillPlugin.configuredPlugins")(function* (
         }),
       )
     }
+    if (entry.type !== "directory") return Effect.succeed([])
     return fs
       .glob("{plugin,plugins}/*.{ts,js}", {
         cwd: entry.path,
@@ -103,15 +106,22 @@ const configuredPlugins = Effect.fn("SkillPlugin.configuredPlugins")(function* (
 })
 
 function terminal() {
-  return [
-    process.env.TERM_PROGRAM ? `TERM_PROGRAM=${process.env.TERM_PROGRAM}` : undefined,
-    process.env.TERM ? `TERM=${process.env.TERM}` : undefined,
-    process.env.COLORTERM ? `COLORTERM=${process.env.COLORTERM}` : undefined,
-  ]
-    .filter((item): item is string => item !== undefined)
-    .join(", ") || "Unavailable: terminal environment variables are not set"
+  return (
+    [
+      process.env.TERM_PROGRAM ? `TERM_PROGRAM=${process.env.TERM_PROGRAM}` : undefined,
+      process.env.TERM ? `TERM=${process.env.TERM}` : undefined,
+      process.env.COLORTERM ? `COLORTERM=${process.env.COLORTERM}` : undefined,
+    ]
+      .filter((item): item is string => item !== undefined)
+      .join(", ") || "Unavailable: terminal environment variables are not set"
+  )
 }
 
 function shell() {
-  return process.env.SHELL ?? process.env.ComSpec ?? process.env.COMSPEC ?? "Unavailable: shell environment variable is not set"
+  return (
+    process.env.SHELL ??
+    process.env.ComSpec ??
+    process.env.COMSPEC ??
+    "Unavailable: shell environment variable is not set"
+  )
 }

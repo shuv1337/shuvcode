@@ -10,7 +10,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SkillV2 } from "@opencode-ai/core/skill"
 import { SkillDiscovery } from "@opencode-ai/core/skill/discovery"
-import { FileSystemWatcher } from "@opencode-ai/schema/filesystem-watcher"
+import { FileSystem } from "@opencode-ai/schema/filesystem"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 
@@ -26,9 +26,7 @@ const discovery = Layer.succeed(
   }),
 )
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([SkillV2.node, AgentV2.node, EventV2.node]), [
-    [SkillDiscovery.node, discovery],
-  ]),
+  AppNodeBuilder.build(LayerNode.group([SkillV2.node, AgentV2.node, EventV2.node]), [[SkillDiscovery.node, discovery]]),
 )
 
 function write(directory: string, name: string, description: string) {
@@ -56,6 +54,23 @@ function waitForSkillUpdate() {
 }
 
 describe("SkillV2", () => {
+  it.live("publishes updates when skill sources change", () =>
+    Effect.gen(function* () {
+      const skill = yield* SkillV2.Service
+
+      yield* Effect.acquireUseRelease(
+        waitForSkillUpdate(),
+        ({ deferred }) =>
+          skill
+            .transform((editor) =>
+              editor.source({ type: "directory", path: AbsolutePath.make("/tmp/opencode-skills") }),
+            )
+            .pipe(Effect.andThen(Deferred.await(deferred)), Effect.timeout("1 second")),
+        ({ fiber }) => Fiber.interrupt(fiber),
+      )
+    }),
+  )
+
   it.live("registers sources and resolves later source precedence", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
@@ -90,13 +105,15 @@ describe("SkillV2", () => {
           ])
           expect(yield* skill.list()).toEqual([
             SkillV2.Info.make({
-              name: "foo",
+              id: SkillV2.ID.make("foo"),
+              name: SkillV2.Name.make("foo"),
               slash: true,
               location: AbsolutePath.make(path.join(first, "foo.md")),
               content: "# foo",
             }),
             {
-              name: "review",
+              id: SkillV2.ID.make("review"),
+              name: SkillV2.Name.make("review"),
               description: "Second",
               location: AbsolutePath.make(path.join(second, "review", "SKILL.md")),
               content: "# review",
@@ -131,8 +148,8 @@ describe("SkillV2", () => {
           const skill = yield* SkillV2.Service
           yield* skill.transform((editor) => editor.source({ type: "url", url: "https://example.test/skills/" }))
 
-          expect((yield* skill.list()).map((item) => item.name)).toEqual(["deploy"])
-          expect((yield* skill.list()).map((item) => item.name)).toEqual(["deploy"])
+          expect((yield* skill.list()).map((item) => item.name)).toEqual([SkillV2.Name.make("deploy")])
+          expect((yield* skill.list()).map((item) => item.name)).toEqual([SkillV2.Name.make("deploy")])
           expect(pulls).toBe(1)
           expect(SkillV2.available(yield* skill.list(), (yield* agents.get(AgentV2.ID.make("reviewer")))!)).toEqual([])
         }),
@@ -167,7 +184,8 @@ metadata:
 
           expect(yield* skill.list()).toEqual([
             {
-              name: "manual",
+              id: SkillV2.ID.make("manual"),
+              name: SkillV2.Name.make("manual"),
               description: "Manual only",
               slash: true,
               autoinvoke: false,
@@ -206,7 +224,7 @@ metadata:
             waitForSkillUpdate(),
             ({ deferred }) =>
               events
-                .publish(FileSystemWatcher.Event.Updated, { file, event: "change" })
+                .publish(FileSystem.Event.Changed, { file, event: "change" })
                 .pipe(Effect.andThen(Deferred.await(deferred)), Effect.timeout("1 second")),
             ({ fiber }) => Fiber.interrupt(fiber),
           )

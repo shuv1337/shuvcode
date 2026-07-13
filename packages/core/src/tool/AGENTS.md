@@ -28,19 +28,21 @@ Leaves own resolution, permission, and side-effect ordering. Translate only expe
 
 ## Registration
 
-Built-ins and plugin tools register through `Tools.Service.register({ [name]: tool })`.
+Built-ins and plugin tools register through `Tools.Service.register({ [name]: tool })`. Registrations may provide a
+group, which flattens direct model names to `<group>_<tool>`, and default into CodeMode (`codemode` defaults true;
+`codemode: false` keeps the tool on the provider's native tool list).
 
 Registrations are scoped:
 
 - The latest active same-placement registration wins.
 - Closing any registration removes only that registration and reveals the next active one.
-- An invocation captures the effective tool once settlement starts.
+- Each model request captures the effective tools it advertises; later registration changes affect later requests.
 
 `ToolRegistry.Service` is Location-scoped. Do not make the registry process-global or construct a separate application-tool service for each Location.
 
 ## Permissions
 
-The registry has no `PermissionV2.Service` dependency and performs no execution authorization. An internal built-in-only operation attaches a permission action solely to preserve whole-tool definition filtering; it is not part of public `Tool.make`. Most tools default to their registered name; `edit`, `write`, and `apply_patch` declare the shared `edit` action.
+The registry has no `PermissionV2.Service` dependency and performs no execution authorization. An internal built-in-only operation attaches a permission action solely to preserve whole-tool definition filtering; it is not part of public `Tool.make`. Most tools default to their registered name; `edit`, `write`, and `patch` declare the shared `edit` action.
 
 Definition filtering is catalog visibility, not execution authorization. A call still executes the captured leaf policy if it reaches settlement.
 

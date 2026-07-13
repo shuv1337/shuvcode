@@ -3,37 +3,31 @@ import { compile, emitEffectImported, emitEffectShape, emitPromise, write } from
 import {
   ClientApi,
   effectOmitEndpoints,
-  endpointNames,
   groupNames,
   promiseOmitEndpoints,
 } from "@opencode-ai/protocol/client"
 import { Effect } from "effect"
 import { fileURLToPath } from "url"
 
-const promiseContract = compile(ClientApi, { groupNames, endpointNames, omitEndpoints: promiseOmitEndpoints })
-const effectContract = compile(ClientApi, { groupNames, endpointNames, omitEndpoints: effectOmitEndpoints })
+const promiseContract = compile(ClientApi, { groupNames, omitEndpoints: promiseOmitEndpoints })
+const effectContract = compile(ClientApi, { groupNames, omitEndpoints: effectOmitEndpoints })
 
 await Effect.runPromise(
   Effect.all(
     [
       write(
         emitPromise(promiseContract, {
-          outputTypes: {
-            "events.subscribe": {
-              name: "OpenCodeEventEncoded",
-              import: 'import type { OpenCodeEventEncoded } from "@opencode-ai/protocol/groups/event"',
-            },
-          },
+          mutableOutputs: true,
         }),
-        fileURLToPath(new URL("../src/generated", import.meta.url)),
+        fileURLToPath(new URL("../src/promise/generated", import.meta.url)),
       ),
       write(
-        emitEffectImported(effectContract, { module: "../contract", api: "ClientApi" }),
-        fileURLToPath(new URL("../src/generated-effect", import.meta.url)),
+        emitEffectImported(effectContract, { module: "../../contract", api: "ClientApi" }),
+        fileURLToPath(new URL("../src/effect/generated", import.meta.url)),
       ),
       write(
-        emitEffectShape(effectContract, { module: "@opencode-ai/protocol/client", api: "ClientApi" }),
-        fileURLToPath(new URL("../../plugin/src/v2/effect/generated", import.meta.url)),
+        emitEffectShape(effectContract, { module: "../../contract", api: "ClientApi" }),
+        fileURLToPath(new URL("../src/effect/api", import.meta.url)),
       ),
     ],
     { concurrency: 3, discard: true },

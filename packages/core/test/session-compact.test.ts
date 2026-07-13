@@ -15,8 +15,8 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionCompaction } from "@opencode-ai/core/session/compaction"
 import { SessionEvent } from "@opencode-ai/core/session/event"
+import { SessionPending } from "@opencode-ai/core/session/pending"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Prompt } from "@opencode-ai/core/session/prompt"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
@@ -33,6 +33,7 @@ const model = Model.make({
 const projects = Layer.succeed(
   ProjectV2.Service,
   ProjectV2.Service.of({
+    list: () => Effect.succeed([]),
     resolve: (directory) => Effect.succeed({ id: ProjectV2.ID.global, directory }),
     directories: () => Effect.succeed([]),
     commit: () => Effect.void,
@@ -48,7 +49,7 @@ const client = Layer.mock(LLMClient.Service)({
   generate: () => Effect.die("unused"),
 })
 const config = Layer.mock(Config.Service)({ entries: () => Effect.succeed([]) })
-const models = SessionRunnerModel.layerWith(() => Effect.succeed(model))
+const models = SessionRunnerModel.layerWith(() => Effect.succeed(SessionRunnerModel.resolved(model)))
 const locations = Layer.effect(
   LocationServiceMap.Service,
   LayerMap.make(
@@ -74,28 +75,41 @@ const it = testEffect(
 )
 
 describe("SessionV2.compact", () => {
-  it.effect("manually compacts the active session context", () =>
+  it.effect("durably admits and coalesces manual compaction", () =>
     Effect.gen(function* () {
       requests = []
       const session = yield* SessionV2.Service
       const events = yield* EventV2.Service
       const created = yield* session.create({ location })
 
-      yield* events.publish(SessionEvent.Prompted, {
+      const messageID = SessionMessage.ID.create()
+      yield* events.publish(SessionEvent.InputAdmitted, {
         sessionID: created.id,
-        messageID: SessionMessage.ID.create(),
-        timestamp: DateTime.makeUnsafe(0),
-        prompt: Prompt.make({ text: "Please compact this session history." }),
-        delivery: "steer",
+        inputID: messageID,
+        input: {
+          type: "user",
+          data: { text: "Please compact this session history." },
+          delivery: "steer",
+        },
+      })
+      yield* events.publish(SessionEvent.InputPromoted, {
+        sessionID: created.id,
+        inputID: messageID,
       })
 
-      yield* session.compact({ sessionID: created.id })
+      expect(yield* session.compact({ id: messageID, sessionID: created.id }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Session.CompactionConflictError",
+        inputID: messageID,
+      })
+      const first = yield* session.compact({ sessionID: created.id })
+      const second = yield* session.compact({ sessionID: created.id })
 
-      expect(requests).toHaveLength(1)
-      expect(JSON.stringify(requests[0]?.messages)).toContain("Please compact this session history.")
-      expect(yield* session.context(created.id)).toMatchObject([
-        { type: "compaction", reason: "manual", summary: "manual session summary", recent: "" },
-      ])
+      expect(second.id).toBe(first.id)
+      expect(requests).toHaveLength(0)
+      expect(yield* SessionPending.compaction((yield* Database.Service).db, created.id)).toMatchObject({
+        id: first.id,
+      })
+      expect((yield* session.context(created.id)).find((message) => message.id === first.id)).toBeUndefined()
     }),
   )
 })

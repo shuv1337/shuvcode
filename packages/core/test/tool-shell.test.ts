@@ -2,7 +2,8 @@ import fs from "fs/promises"
 import { realpathSync } from "node:fs"
 import path from "path"
 import { describe, expect, test } from "bun:test"
-import { DateTime, Effect, Fiber, Layer, Scope } from "effect"
+import { DateTime, Duration, Effect, Fiber, Layer, Scope, Stream } from "effect"
+import { Money } from "@opencode-ai/schema/money"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
@@ -47,7 +48,15 @@ const permission = Layer.succeed(
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(Effect.suspend(() => afterPermission(input))),
         Effect.andThen(
-          input.action === denyAction ? Effect.fail(new PermissionV2.DeniedError({ rules: [] })) : Effect.void,
+          input.action === denyAction
+            ? Effect.fail(
+                new PermissionV2.BlockedError({
+                  rules: [],
+                  permission: input.action,
+                  resources: input.resources,
+                }),
+              )
+            : Effect.void,
         ),
       ),
     ask: () => Effect.die("unused"),
@@ -75,33 +84,28 @@ const executionNode = makeGlobalNode({
         const session = yield* store.get(id)
         if (!session) return
         const assistantMessageID = SessionMessage.ID.create()
-        const textID = "text_shell_test"
         yield* events.publish(SessionEvent.Step.Started, {
           sessionID: id,
           assistantMessageID,
-          timestamp: yield* DateTime.now,
           agent: session.agent ?? AgentV2.ID.make("code"),
           model: sessionModel,
         })
         yield* events.publish(SessionEvent.Text.Started, {
           sessionID: id,
           assistantMessageID,
-          timestamp: yield* DateTime.now,
-          textID,
+          ordinal: 0,
         })
         yield* events.publish(SessionEvent.Text.Ended, {
           sessionID: id,
           assistantMessageID,
-          timestamp: yield* DateTime.now,
-          textID,
+          ordinal: 0,
           text: "ok",
         })
         yield* events.publish(SessionEvent.Step.Ended, {
           sessionID: id,
           assistantMessageID,
-          timestamp: yield* DateTime.now,
           finish: "stop",
-          cost: 0,
+          cost: Money.USD.zero,
           tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         })
       })
@@ -175,9 +179,11 @@ const withSession = <A, E, R>(directory: string, body: (registry: ToolRegistry.I
     })
     const locations = yield* LocationServiceMap.Service
     const locationLayer = locations.get(location)
-    const registry = yield* ToolRegistry.Service.pipe(Effect.provide(locationLayer))
-    yield* waitForTool(registry, ShellTool.name)
-    return yield* body(registry).pipe(Effect.provide(locationLayer))
+    return yield* Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      yield* waitForTool(registry, ShellTool.name)
+      return yield* body(registry)
+    }).pipe(Effect.provide(locationLayer), Effect.ensuring(locations.invalidate(location)))
   })
 
 describe("ShellTool", () => {
@@ -437,7 +443,13 @@ describe("ShellTool", () => {
         reset()
         return withSession(tmp.path, (registry) =>
           Effect.gen(function* () {
-            const settled = yield* settleTool(registry, call({ command: idleCommand, background: true }))
+            const events = yield* EventV2.Service
+            const admitted = yield* events.subscribe(SessionEvent.InputAdmitted).pipe(
+              Stream.filter((event) => event.data.sessionID === sessionID && event.data.input.type === "synthetic"),
+              Stream.runHead,
+              Effect.forkScoped({ startImmediately: true }),
+            )
+            const settled = yield* settleTool(registry, call({ command: idleCommand, timeout: 50, background: true }))
             const structured = settled.output?.structured as Record<string, unknown> | undefined
             const shellID = typeof structured?.shellID === "string" ? structured.shellID : undefined
             expect(settled.output?.structured).toMatchObject({ truncated: false })
@@ -447,7 +459,52 @@ describe("ShellTool", () => {
             if (!shellID) return
             const id = ShellSchema.ID.make(shellID)
             expect((yield* shell.list()).map((info) => info.id)).toContain(id)
-            yield* shell.remove(id)
+            expect((yield* shell.wait(id)).status).toBe("timeout")
+            expect((yield* Fiber.join(admitted)).valueOrUndefined?.data.input.data).toMatchObject({
+              description: idleCommand,
+              metadata: {
+                source: "shell",
+                state: "completed",
+              },
+            })
+          }),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
+    ),
+  )
+
+  it.live("updates and clears a running shell timeout", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        return withSession(tmp.path, (registry) =>
+          Effect.gen(function* () {
+            const shell = yield* Shell.Service
+            const timed = yield* settleTool(
+              registry,
+              call({ command: idleCommand, background: true }, "call-updated-timeout"),
+            )
+            const timedID = (timed.output?.structured as Record<string, unknown> | undefined)?.shellID
+            expect(typeof timedID).toBe("string")
+            if (typeof timedID !== "string") return
+            const timedShellID = ShellSchema.ID.make(timedID)
+            yield* shell.timeout(timedShellID, 50)
+            expect((yield* shell.wait(timedShellID)).status).toBe("timeout")
+
+            const cleared = yield* settleTool(
+              registry,
+              call({ command: idleCommand, timeout: 50, background: true }, "call-cleared-timeout"),
+            )
+            const clearedID = (cleared.output?.structured as Record<string, unknown> | undefined)?.shellID
+            expect(typeof clearedID).toBe("string")
+            if (typeof clearedID !== "string") return
+            const clearedShellID = ShellSchema.ID.make(clearedID)
+            yield* shell.timeout(clearedShellID, 0)
+            yield* Effect.sleep(Duration.millis(100))
+            expect((yield* shell.get(clearedShellID)).status).toBe("running")
+            yield* shell.remove(clearedShellID)
           }),
         )
       },
@@ -464,9 +521,10 @@ describe("ShellTool", () => {
           Effect.gen(function* () {
             const jobs = yield* Job.Service
             const scope = yield* Scope.Scope
-            const waiting = yield* settleTool(registry, call({ command: idleCommand }, "call-background-signal")).pipe(
-              Effect.forkIn(scope, { startImmediately: true }),
-            )
+            const waiting = yield* settleTool(
+              registry,
+              call({ command: idleCommand, timeout: 50 }, "call-background-signal"),
+            ).pipe(Effect.forkIn(scope, { startImmediately: true }))
 
             const backgroundWhenReady = (remaining = 1000): Effect.Effect<Job.Info[], Error> =>
               Effect.gen(function* () {
@@ -477,20 +535,25 @@ describe("ShellTool", () => {
                 return yield* backgroundWhenReady(remaining - 1)
               })
             expect(yield* backgroundWhenReady()).toMatchObject([{ id: "call-background-signal", type: "shell" }])
-
             const settled = yield* Fiber.join(waiting)
             const structured = settled.output?.structured as Record<string, unknown> | undefined
             const shellID = typeof structured?.shellID === "string" ? structured.shellID : undefined
             expect(settled.output?.structured).toMatchObject({ truncated: false })
-            expect(settled.output?.content[0]).toMatchObject({
+            expect(settled.output?.content[0]).toEqual({
               type: "text",
-              text: expect.stringContaining("running in the background"),
+              text: "The command was moved to the background.",
+            })
+            expect(settled.output?.content[1]).toMatchObject({
+              type: "text",
+              text: expect.stringContaining("DO NOT sleep, poll"),
             })
             expect(shellID).toStartWith("sh_")
 
             const shell = yield* Shell.Service
             if (!shellID) return
             const id = ShellSchema.ID.make(shellID)
+            yield* Effect.sleep(Duration.millis(100))
+            expect((yield* shell.get(id)).status).toBe("running")
             expect((yield* shell.list()).map((info) => info.id)).toContain(id)
             yield* shell.remove(id)
           }),

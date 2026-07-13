@@ -1,4 +1,4 @@
-import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { TuiPlugin } from "@opencode-ai/plugin/tui"
 import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import type { BuiltinTuiPlugin } from "../builtins"
@@ -15,8 +15,8 @@ function ShuvcodeLogo() {
     const attrs = bold ? TextAttributes.BOLD : undefined
     return Array.from(line).map((char) => {
       if (marks.includes(char)) {
-        const text = char === "_" ? " " : char === "^" ? "▀" : char === "~" ? "▀" : "▄"
-        const color = char === "~" || char === "," ? shadow : fg
+        const text = char === "_" ? " " : "▀"
+        const color = char === "~" ? shadow : fg
         return (
           <text fg={color} bg={char === "_" ? shadow : undefined} attributes={attrs} selectable={false}>
             {text}

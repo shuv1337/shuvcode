@@ -1,5 +1,100 @@
 # V2 Schema Changelog
 
+Status: **Historical pre-release compatibility ledger.** Older entries retain the names and behavior that were accurate when written; current contracts live in Protocol, Schema, Core, and the indexed specifications.
+
+## 2026-07-10: Replace Instruction Checkpoints With Value Deltas
+
+- Replace rendered `session.instructions.updated.1` prose with `session.instructions.updated.2 { delta }`, where values are SHA-256 hashes and the literal `"removed"` means removal.
+- Add the global `instruction_blob` content-addressed value store and rebuildable per-Session `instruction_state` fold cache. Drop `instruction_checkpoint` and its stored baseline, snapshot, and baseline sequence.
+- Add an authoritative parent event sequence to `session.forked.2` so forks derive instruction values from the selected parent prefix rather than copying the parent's latest state.
+- Keep removed API entries as hidden source tombstones so the next safe boundary can admit and render a revocation. Reject API entry JSON larger than 8KB with a typed HTTP 413 error.
+- Render initial instructions and chronological updates from stored values during request assembly. Instruction update prose is no longer a `session_message` row or compaction input; clients display changed keys from the durable delta.
+
+Compatibility:
+
+- Delete pre-beta `session.instructions.updated.1` events and their event-derived System rows instead of carrying a legacy event schema. The next safe boundary establishes one complete v2 delta.
+- Existing forks are assigned the sequence reserved by their original projection and their durable event is rewritten to v2 with that cutoff.
+- Blob GC is intentionally deferred. A future sync/export boundary must hydrate referenced blobs on the wire and re-hash them on ingestion.
+
+## 2026-07-09: Make Session Input Storage Pending-Only And Rename It To Session Pending
+
+- Rename the `SessionInput` schema namespace to `SessionPending` and the `session_input` table to `session_pending`.
+- Make the table pending-only: promotion consumes the user or synthetic row in the same event transaction that projects the message, and compaction settlement deletes the barrier row. Drop the `promoted_seq` column and the retained `promotedSeq`/`handledSeq` wire fields.
+- Add `GET /api/session/:sessionID/pending` (`v2.session.pending.list`) returning durable admitted work not yet visible in projected history, ordered by admission.
+- Reconcile exact retry of an already-promoted input against the projected `session_message` row plus the durable `session.input.admitted` event instead of a retained row. A projected message without an admitted event in the aggregate (for example fork-copied history) is conflicting reuse. Reusing a settled compaction ID admits a fresh barrier instead of reconciling; the worst case is one redundant compaction on a retried request.
+
+Compatibility:
+
+- `20260709190621_session_pending_table` drops `session_input` (including consumed ledger rows, any in-flight pending work, and whatever historical index variant the database carried) and creates the empty `session_pending` table. V2 storage is beta; no compatibility or data retention is attempted.
+- Durable event names and payloads are unchanged; `session.input.admitted` still records the full admitted message including delivery.
+- Promise, Effect, and legacy JavaScript SDK surfaces are regenerated; `SessionInput*` generated schema names become `SessionPending*` while event-derived names keep their `session.input.*` vocabulary.
+
+## 2026-07-05: Rename Session Context Contracts To Instructions
+
+- Rename the System Context algebra to `Instructions`, API-managed `SessionContextEntry` records to `InstructionEntry`, and the session-owned context checkpoint to `InstructionCheckpoint`.
+- Rename the tables `session_context_entry` and `session_context_epoch` to `instruction_entry` and `instruction_checkpoint`.
+- Rename the durable update event from `session.context.updated` to `session.instructions.updated`; the migration rewrites existing durable event types in place.
+- Rename the API-managed entry routes from `/api/session/:sessionID/context-entry` to `/api/session/:sessionID/instructions/entries` and their operation identifiers from `session.context.entry.*` to `session.instructions.entry.*`, keeping bare `session.instructions.*` free for the composed instruction surface.
+
+Compatibility:
+
+- The V2 contracts remain experimental. The renamed tables, event, endpoints, schemas, and generated client names are intentionally breaking changes for beta consumers.
+- Existing changelog entries retain the names that were accurate when those changes occurred.
+- Behavior is unchanged: this is a vocabulary and contract rename only.
+
+## 2026-07-04: Canonicalize Generated Shell Type Name
+
+- Collapse the legacy JavaScript SDK generator's equivalent `Shell1V2` component into the canonical `ShellV2` contract.
+
+Compatibility:
+
+- The Shell wire shape is unchanged. Generated event and endpoint types now consistently reference `ShellV2`.
+
+## 2026-07-03: Add Execution Lifecycle, Retry, And Structured Session Errors
+
+- Replace live-only `session.execution.settled` and unused `session.retried` with durable v1 `session.execution.started`, `session.execution.succeeded`, `session.execution.failed`, `session.execution.interrupted`, and `session.retry.scheduled` events.
+- Add an open `SessionError` wire envelope with dot-cased type values and the browser-safe `FinishReason` contract.
+- Project retry state onto the current assistant and classify content-filter finishes as failed steps.
+- Reuse one projected assistant across pre-output retry steps; each provider call remains a distinct step and consumes agent allowance.
+
+Compatibility:
+
+- Experimental V2 event, sequence, input, and message-projection rows are reset. Durable event contracts restart at v1.
+- `SessionError.type` remains an open string so new error classifications do not require event-version or database migrations. Unknown fields are ignored by older decoders; richer public details require a separate compatibility design.
+- Execution lifecycle events are historical observations of one process-local coordinator busy period. Unmatched starts never establish current liveness or recovery work; `/api/session/active` remains the current-process liveness authority.
+- Scheduled retries are historical UI state after a crash and never trigger provider recovery.
+
+## 2026-07-03: Require Durable Envelope On Durable Events
+
+- Make the wire `durable` envelope required on durable event definitions.
+- Remove the `durable` envelope field from live-only event definitions.
+
+Compatibility:
+
+- No stored event row, database, or runtime publish behavior change; runtime already attaches the envelope only after durable commit/replay.
+- Generated clients now model the existing invariant: durable events carry `durable`, live-only events do not.
+
+## 2026-07-03: Declare Event Durability At Definition Level
+
+- Add explicit `Event.durable(...)` and `Event.ephemeral(...)` definition constructors.
+- Preserve the existing durable and live-only event classifications while deriving durable inventories from definition metadata instead of hand-maintained lists.
+
+Compatibility:
+
+- No wire payload, stored event row, database, or behavior change.
+- Generated clients were regenerated from the unchanged public event schemas.
+
+## 2026-07-02: Rename Session Log Replay Marker
+
+- Rename the replay boundary marker from `log.caught_up` / `EventLog.CaughtUp` to `log.synced` / `EventLog.Synced`.
+- Define the marker as a single notification that replay reached the captured aggregate watermark; omit `seq` only when the captured watermark is empty.
+- Page durable Session log reads toward the captured watermark before switching to live tailing.
+
+Compatibility:
+
+- The V2 event stream is still experimental. No durable event rows change because replay markers are stream-only and are not stored.
+- Generated clients are intentionally regenerated by the audit integrator lane, not by this parallel branch.
+
 ## 2026-07-02: Add Default Model Endpoint
 
 - Add `GET /api/model/default` (`v2.model.default`) returning the Location's resolved default model, or `undefined` when no model is available.
@@ -68,9 +163,7 @@ Compatibility:
 - Preserve full durable history; compaction changes only the active model representation.
 - Defer provider-overflow recovery, explicit manual compaction, and deterministic old tool-result pruning.
 
-Record V2 database, durable-event, projected-message, HTTP, and generated SDK schema changes here. Each entry states why the contract changed and whether consumers or stored data need compatibility handling. Commit messages for schema-affecting changes should include the same summary.
-
-This document covers meaningful contract changes introduced on the `feat/opencode-embedded-api` branch since its divergence from `origin/dev`. Mechanical file moves and internal refactors are omitted unless they changed stored data, replay behavior, public HTTP or SDK shapes, or model-facing tool contracts.
+The entries below record meaningful contract changes from the pre-release V2 rebuild. Mechanical file moves and internal refactors were omitted unless they changed stored data, replay behavior, public HTTP or SDK shapes, or model-facing tool contracts.
 
 ## 2026-06-04 Event-Sourced Session Input Cutover
 
@@ -318,7 +411,7 @@ Change:
 - Add Location-scoped pending permission requests with `once`, `always`, and `reject` replies.
 - Attach optional originating tool message and call IDs.
 - Preserve authored ordered rules and saved approvals as separate inputs to evaluation.
-- Establish action and resource conventions for `read`, `glob`, `grep`, `edit`, `external_directory`, `bash`, `todowrite`, and `webfetch` approvals.
+- Establish action and resource conventions for `read`, `glob`, `grep`, `edit`, `external_directory`, `bash`, and `webfetch` approvals.
 
 Reason:
 
@@ -514,37 +607,15 @@ Compatibility:
 - These are additive experimental V2 contracts.
 - No database migration is required because pending questions are intentionally in-memory Location state.
 
-## 2026-06-03: Core-Owned Todo Update Event
-
-Affected schema:
-
-- Core-owned `SessionTodo.Info`.
-- Global `todo.updated` event registration.
-
-Change:
-
-- Register the todo update event from Core session-todo ownership and expose the existing todo item shape to the Core V2 tool.
-
-Reason:
-
-- Embedded V2 `todowrite` execution needs Core-owned persistence and update publication without importing legacy application orchestration.
-
-Compatibility:
-
-- The todo table and public todo update event shape are preserved.
-- No database migration is required.
-
 ## 2026-06-03: Added Core V2 Tool Schemas
 
 Affected schema:
 
-- New `todowrite` tool parameters and success payload.
 - New `question` tool parameters and success payload.
 - New `webfetch` tool parameters and success payload.
 
 Change:
 
-- Add a todo replacement-list tool using `SessionTodo.Info` items.
 - Add a question tool using ordered `QuestionV2.Prompt` values and ordered answer arrays.
 - Add an HTTP(S) fetch tool with explicit `text`, `markdown`, and `html` formats, bounded timeout input, and optional managed output resource metadata.
 
@@ -848,7 +919,7 @@ Change:
 - Request Context Epoch replacement after an agent switch, dynamically re-observe the effective agent during retries, and fence first-epoch creation against the authoritative effective agent.
 - Fence existing-epoch replacement against the authoritative effective agent and block cross-agent provider turns while replacement context is unavailable.
 - Group the System Context algebra, registry, and built-ins under `system-context/`; keep source producers and Context Epoch persistence with their owning Skill, instruction, and Session modules; rename projected conversation selection to Session History.
-- Add the canonical V1-to-V2 runtime-context parity checklist to `specs/v2/session.md`.
+- Add the then-current V1-to-V2 runtime-context parity checklist to `specs/v2/session.md` (later removed with the completed migration plan).
 
 Compatibility:
 
@@ -873,3 +944,52 @@ Compatibility:
 
 - Existing Context Epoch rows migrate in place by dropping the obsolete selection and pending-replacement columns.
 - Model and agent switches no longer discard earlier chronological System Context updates by forcing a new baseline.
+
+## 2026-07-03: Normalize Session Event Names And Envelope Time
+
+- Drop the experimental `session.next.` prefix from current Session event names.
+- Rename `agent.switched` to `session.agent.selected`, `model.switched` to `session.model.selected`, and `prompted` to `session.prompt.promoted`; add `session.prompt.admitted` as the durable prompt admission record.
+- Add an envelope-level `created` timestamp stored on each event row; payload-level `timestamp` fields are removed.
+- Remove projection-only `messageID` fields from selected/message-producing events; projected message IDs derive from the event ID. `revert.committed.messageID` remains, and `forked.messageID` is now `forked.from`.
+- Rename `session.moved.subdirectory` to `subpath` and normalize event-related schema identifiers.
+
+Compatibility:
+
+- V2 durable events and projections are experimental and are reset by `20260703090000_reset_v2_event_rename_sweep`; existing V2 event rows, event sequences, projected session messages, and admitted inputs are wiped.
+- All renamed durable event types restart at version 1 under their normalized names.
+- Generated Promise, Effect, and legacy JavaScript SDK surfaces were regenerated from the normalized schemas.
+
+## 2026-07-03: Restore Session Event Prefix
+
+- Restore the `session.` prefix on current Session event names; the prior rename intended to drop only the `.next.` segment from `session.next.*` names.
+- Payloads are unchanged. For example, `step.ended` is now `session.step.ended`, while already-correct names such as `session.moved` and `session.context.updated` are unchanged.
+
+Compatibility:
+
+- Covered by the existing `20260703190000_reset_v2_shell_event_payloads` V2 reset; no additional migration or column change is required.
+
+## 2026-07-03: Align Session Shell Payloads With Shell Service
+
+- Change durable `session.shell.started` to carry `shell: Shell.Info`.
+- Change durable `session.shell.ended` to carry the final `shell: Shell.Info` snapshot and structured `output: Shell.Output`.
+- Project `SessionMessage.Shell` with the same nested Shell service objects so consumers can render command, exit status, truncation, and paged output consistently.
+- Remove the transitional `callID` correlation field from shell events and projected shell messages; shell records now key by `shell.id`.
+- Publish `session.shell.started` after the shell process is created so `Shell.Info` reflects the real process. A failed spawn publishes no shell events; the failure surfaces as an error on the shell request itself, so the durable ledger never records a `session.shell.started` without a process that existed.
+
+Compatibility:
+
+- V2 durable events and projections are experimental and are reset by `20260703190000_reset_v2_shell_event_payloads`; existing V2 event rows, event sequences, projected session messages, and admitted inputs are wiped.
+
+## 2026-07-03: Simplify Assistant Fragments And Provider State
+
+- Remove provider block IDs from current Session text and reasoning event payloads and projected content. A Session assistant step allows at most one open fragment of each kind; events carry a Session-assigned kind-specific ordinal so live updates and hydrated projections share the stable `(assistantMessageID, kind, ordinal)` reference. Tool correlation continues to use `callID`.
+- Replace nested `providerMetadata` with opaque, provider-un-nested `state` at the Session boundary. Reasoning uses `state`; tool calls use `state`, settlements use `resultState`, and projected tools expose `providerState` and `providerResultState`. Replay re-nests state under the selected provider only for the same successful model.
+- Flatten `executed` on tool events and projected tools, and remove the redundant tool name from `session.tool.called` because `session.tool.input.started` owns it.
+- Rename `session.revert.committed.messageID` to `to`, paired with `session.forked.from`.
+- Publish live-only `session.compaction.delta` events for accepted summary chunks while `session.compaction.ended.1` remains the durable full summary.
+- OpenAI Responses closes output text on `response.output_text.done` or its message `response.output_item.done` boundary. Provider documentation and recorded stream shapes show sequential output items, not valid overlapping text or reasoning blocks of the same kind.
+
+Compatibility:
+
+- All changed durable definitions remain version 1. `20260703200000_reset_v2_session_events` performs the single reset for this Session event contract update, wiping experimental V2 events, sequences, projected messages, and admitted inputs.
+- Promise, Effect, and legacy JavaScript SDK surfaces are regenerated from the simplified schemas.

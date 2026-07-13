@@ -1,18 +1,16 @@
 export * as GrepTool from "./grep"
 
+import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { ToolFailure } from "@opencode-ai/llm"
-import { Effect, Layer, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import path from "path"
-import { makeLocationNode } from "../effect/app-node"
 import { FileSystem } from "../filesystem"
 import { FSUtil } from "../fs-util"
 import { Location } from "../location"
 import { PermissionV2 } from "../permission"
 import { Ripgrep } from "../ripgrep"
 import { RelativePath } from "../schema"
-import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
-import { Tools } from "./tools"
 
 export const name = "grep"
 
@@ -50,88 +48,98 @@ export const toModelOutput = (output: ModelOutput) => {
 }
 
 /** Grep leaf that defaults its filesystem root to the active Location. */
-const layer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const tools = yield* Tools.Service
+export const Plugin = {
+  id: "opencode.tool.grep",
+  effect: Effect.fn("GrepTool.Plugin")(function* (ctx: PluginContext) {
     const fs = yield* FSUtil.Service
     const ripgrep = yield* Ripgrep.Service
     const location = yield* Location.Service
     const permission = yield* PermissionV2.Service
 
-    yield* tools
-      .register({
-        [name]: Tool.make({
-          description:
-            "Search file contents by regular expression within the active Location or an absolute managed tool-output file. Use a path to narrow the search, include to filter files by glob, and limit to bound the match count. Returns concise file resources, line numbers, and bounded line previews.",
-          input: Input,
-          output: Output,
-          toModelOutput: ({ output }) => [
-            {
-              type: "text",
-              text: toModelOutput(
-                output.map((match) => ({
-                  ...match,
-                  entry: { ...match.entry, path: path.resolve(location.directory, match.entry.path) },
-                })),
-              ),
-            },
-          ],
-          execute: (input, context) =>
-            Effect.gen(function* () {
-              yield* permission.assert({
-                action: name,
-                resources: [input.pattern],
-                save: ["*"],
-                metadata: {
-                  root: ".",
-                  path: input.path,
-                  include: input.include,
-                  limit: input.limit,
-                },
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
-              })
-              const target = path.resolve(location.directory, input.path ?? ".")
-              const info = yield* fs.stat(target).pipe(Effect.catch(() => Effect.succeed(undefined)))
-              return yield* ripgrep
-                .grep({
-                  cwd: info?.type === "Directory" ? target : path.dirname(target),
-                  pattern: input.pattern,
-                  file: info?.type === "File" ? path.basename(target) : undefined,
-                  include: input.include,
-                  limit: input.limit ?? Number.MAX_SAFE_INTEGER,
+    yield* ctx.tool
+      .transform((draft) =>
+        draft.add(
+          name,
+          Tool.make({
+            description:
+              "Search file contents by regular expression within the active Location or an absolute managed tool-output file. Use a path to narrow the search, include to filter files by glob, and limit to bound the match count. Returns concise file resources, line numbers, and bounded line previews.",
+            input: Input,
+            output: Output,
+            toModelOutput: ({ output }) => [
+              {
+                type: "text",
+                text: toModelOutput(
+                  output.map((match) => ({
+                    ...match,
+                    entry: { ...match.entry, path: path.resolve(location.directory, match.entry.path) },
+                  })),
+                ),
+              },
+            ],
+            execute: (input, context) =>
+              Effect.gen(function* () {
+                yield* permission.assert({
+                  action: name,
+                  resources: [input.pattern],
+                  save: ["*"],
+                  metadata: {
+                    root: ".",
+                    path: input.path,
+                    include: input.include,
+                    limit: input.limit,
+                  },
+                  sessionID: context.sessionID,
+                  agent: context.agent,
+                  source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
                 })
-                .pipe(
-                  Effect.map((result) =>
-                    result.map((match) =>
-                      FileSystem.Match.make({
-                        ...match,
-                        entry: FileSystem.Entry.make({
-                          ...match.entry,
-                          path: RelativePath.make(
-                            path.relative(
-                              location.directory,
-                              path.resolve(
-                                info?.type === "Directory" ? target : path.dirname(target),
-                                match.entry.path,
+                const target = path.resolve(location.directory, input.path ?? ".")
+                const info = yield* fs
+                  .stat(target)
+                  .pipe(
+                    Effect.catchReason("PlatformError", "NotFound", () =>
+                      Effect.fail(new ToolFailure({ message: `Search path does not exist: ${input.path ?? "."}` })),
+                    ),
+                  )
+                return yield* ripgrep
+                  .grep({
+                    cwd: info?.type === "Directory" ? target : path.dirname(target),
+                    pattern: input.pattern,
+                    file: info?.type === "File" ? path.basename(target) : undefined,
+                    include: input.include,
+                    limit: input.limit ?? Number.MAX_SAFE_INTEGER,
+                  })
+                  .pipe(
+                    Effect.map((result) =>
+                      result.map((match) =>
+                        FileSystem.Match.make({
+                          ...match,
+                          entry: FileSystem.Entry.make({
+                            ...match.entry,
+                            path: RelativePath.make(
+                              path.relative(
+                                location.directory,
+                                path.resolve(
+                                  info?.type === "Directory" ? target : path.dirname(target),
+                                  match.entry.path,
+                                ),
                               ),
                             ),
-                          ),
+                          }),
                         }),
-                      }),
+                      ),
                     ),
-                  ),
-                )
-            }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to grep for ${input.pattern}` }))),
-        }),
-      })
+                  )
+              }).pipe(
+                Effect.mapError((error) =>
+                  error instanceof ToolFailure
+                    ? error
+                    : new ToolFailure({ message: `Unable to grep for ${input.pattern}`, error }),
+                ),
+              ),
+          }),
+          { codemode: false },
+        ),
+      )
       .pipe(Effect.orDie)
   }),
-)
-
-export const node = makeLocationNode({
-  name: "tool/grep",
-  layer,
-  deps: [ToolRegistry.node, FSUtil.node, Ripgrep.node, Location.node, PermissionV2.node],
-})
+}

@@ -9,7 +9,6 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { Prompt } from "@opencode-ai/core/session/prompt"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionTable } from "@opencode-ai/core/session/sql"
@@ -36,10 +35,19 @@ const client = Layer.mock(LLMClient.Service)({
   },
   generate: () => Effect.die("unused"),
 })
-const models = Layer.mock(SessionRunnerModel.Service)({ resolve: () => Effect.succeed(model) })
+const models = Layer.mock(SessionRunnerModel.Service)({
+  resolve: () => Effect.succeed(SessionRunnerModel.resolved(model)),
+})
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([Database.node, EventV2.node, SessionProjector.node, SessionStore.node, AgentV2.node, SessionTitle.node]),
+    LayerNode.group([
+      Database.node,
+      EventV2.node,
+      SessionProjector.node,
+      SessionStore.node,
+      AgentV2.node,
+      SessionTitle.node,
+    ]),
     [
       [llmClient, client],
       [SessionRunnerModel.node, models],
@@ -74,12 +82,15 @@ const insertSession = (id: SessionV2.ID) =>
 const prompt = (sessionID: SessionV2.ID, text: string) =>
   Effect.gen(function* () {
     const events = yield* EventV2.Service
-    yield* events.publish(SessionEvent.Prompted, {
+    const messageID = SessionMessage.ID.create()
+    yield* events.publish(SessionEvent.InputAdmitted, {
       sessionID,
-      messageID: SessionMessage.ID.create(),
-      timestamp: DateTime.makeUnsafe(0),
-      prompt: Prompt.make({ text }),
-      delivery: "steer",
+      inputID: messageID,
+      input: { type: "user", data: { text }, delivery: "steer" },
+    })
+    yield* events.publish(SessionEvent.InputPromoted, {
+      sessionID,
+      inputID: messageID,
     })
   })
 
@@ -99,9 +110,9 @@ it.effect("generates a title from the sole user message and renames the session"
     yield* prompt(sessionID, "Help me debug the failing build")
 
     const store = yield* SessionStore.Service
-    const session = yield* store.get(sessionID).pipe(
-      Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))),
-    )
+    const session = yield* store
+      .get(sessionID)
+      .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))))
     const title = yield* SessionTitle.Service
     yield* title.generateForFirstPrompt(session)
 
@@ -129,9 +140,9 @@ it.effect("does not generate once a second user message exists", () =>
     yield* prompt(sessionID, "Second message")
 
     const store = yield* SessionStore.Service
-    const session = yield* store.get(sessionID).pipe(
-      Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))),
-    )
+    const session = yield* store
+      .get(sessionID)
+      .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))))
     const title = yield* SessionTitle.Service
     yield* title.generateForFirstPrompt(session)
 
@@ -177,9 +188,9 @@ it.effect("does not generate for a child session", () =>
     yield* prompt(sessionID, "Do this subtask")
 
     const store = yield* SessionStore.Service
-    const session = yield* store.get(sessionID).pipe(
-      Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))),
-    )
+    const session = yield* store
+      .get(sessionID)
+      .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))))
     const title = yield* SessionTitle.Service
     yield* title.generateForFirstPrompt(session)
 
@@ -195,9 +206,9 @@ it.effect("does not generate when the title agent is removed", () =>
     yield* prompt(sessionID, "Help me debug the failing build")
 
     const store = yield* SessionStore.Service
-    const session = yield* store.get(sessionID).pipe(
-      Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))),
-    )
+    const session = yield* store
+      .get(sessionID)
+      .pipe(Effect.flatMap((session) => (session ? Effect.succeed(session) : Effect.die("session missing"))))
     const title = yield* SessionTitle.Service
     yield* title.generateForFirstPrompt(session)
 

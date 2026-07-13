@@ -25,7 +25,7 @@ for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: "./dist" }
 }
 console.log("binaries", binaries)
 const version = Object.values(binaries)[0]
-const name = pkg.name
+const name = "shuvcode"
 
 await $`mkdir -p ./dist/${name}/bin`
 await $`cp ./bin/shuvcode.cjs ./dist/${name}/bin/shuvcode`
@@ -47,8 +47,6 @@ await Bun.file(`./dist/${name}/package.json`).write(
 )
 
 await Promise.all(
-  Object.entries(binaries).map(([name, version]) =>
-    publish(`./dist/${name}`, name, version),
-  ),
+  Object.entries(binaries).map(([name, version]) => publish(`./dist/${name}`, name, version)),
 )
 await publish(`./dist/${name}`, name, version)

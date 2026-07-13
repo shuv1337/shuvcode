@@ -1,53 +1,76 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "@opencode-ai/docs",
+  "name": "OpenCode",
+  "description": "OpenCode documentation.",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#3B7DD8",
+    "light": "#3B7DD8",
+    "dark": "#FAB283"
   },
-  "favicon": "/favicon-v3.svg",
+  "favicon": "/assets/favicon.svg",
+  "logo": {
+    "light": "/assets/logo-light.svg",
+    "dark": "/assets/logo-dark.svg"
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "SDK",
+        "tab": "Docs",
         "groups": [
           {
-            "group": "Getting started",
-            "pages": ["index", "quickstart", "development"],
-            "openapi": "https://opencode.ai/openapi.json"
+            "group": "Get started",
+            "pages": ["index", "migrate-v1", "config", "troubleshooting"]
+          },
+          {
+            "group": "Configure",
+            "pages": [
+              "providers",
+              "models",
+              "agents",
+              "permissions",
+              "sharing",
+              "snapshots",
+              "commands",
+              "skills",
+              "instructions",
+              "mcp-servers",
+              "attachments",
+              "compaction",
+              "formatters",
+              "lsp",
+              "references"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Build",
+        "pages": ["build/index", "build/plugins", "build/client", "build/sdk"]
+      },
+      {
+        "tab": "API",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api/index"]
+          },
+          {
+            "group": "Endpoints",
+            "openapi": "openapi.json"
           }
         ]
       }
     ],
     "global": {}
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
   "contextual": {
-    "options": ["copy", "view", "chatgpt", "claude", "perplexity", "mcp", "cursor", "vscode"]
+    "options": ["copy", "view", "chatgpt", "claude", "mcp", "cursor", "vscode"]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/anomalyco/opencode",
+      "x": "https://x.com/opencode"
     }
   }
 }

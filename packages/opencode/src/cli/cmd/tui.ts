@@ -8,7 +8,7 @@ import { errorMessage } from "@opencode-ai/tui/util/error"
 import { withTimeout } from "@/util/timeout"
 import { withNetworkOptions, resolveNetworkOptionsNoConfig, hasArg } from "@/cli/network"
 import { Filesystem } from "@/util/filesystem"
-import { OpenCode } from "@opencode-ai/client"
+import { OpenCode } from "@opencode-ai/client/promise"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { writeHeapSnapshot } from "v8"
 import { ServerAuth } from "@/server/auth"
@@ -112,7 +112,11 @@ export const TuiThreadCommand = cmd({
       }
       const cwd = Filesystem.resolve(process.cwd())
 
-      const worker = new Worker(file)
+      const worker = new Worker(file, {
+        env: Object.fromEntries(
+          Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+        ),
+      })
       const client = Rpc.client<typeof rpc>(worker)
       const reload = () => {
         client.call("reload", undefined).catch(() => {})
@@ -132,6 +136,8 @@ export const TuiThreadCommand = cmd({
       const config = await TuiConfig.get()
 
       const network = resolveNetworkOptionsNoConfig(args)
+      const external = hasArg("--port") || hasArg("--hostname") || network.mdns === true
+      const headers = external ? ServerAuth.headers() : undefined
       const url = (await client.call("server", network)).url
 
       try {
@@ -139,6 +145,7 @@ export const TuiThreadCommand = cmd({
           url,
           sessionID: args.session,
           directory: cwd,
+          headers,
         })
       } catch (error) {
         UI.error(errorMessage(error))
@@ -154,10 +161,11 @@ export const TuiThreadCommand = cmd({
         const { Effect } = await import("effect")
         const { run } = await import("../tui/layer")
         const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")
-        await Effect.runPromise(
+         await Effect.runPromise(
           run({
-            client: createOpencodeClient({ baseUrl: url, directory: cwd }),
-            api: OpenCode.make({ baseUrl: url }),
+            // @ts-expect-error V1 does not consume the V2-only server input.
+            client: createOpencodeClient({ baseUrl: url, headers, directory: cwd }),
+            api: OpenCode.make({ baseUrl: url, headers }),
             async onSnapshot() {
               const tui = writeHeapSnapshot("tui.heapsnapshot")
               const server = await client.call("snapshot", undefined)

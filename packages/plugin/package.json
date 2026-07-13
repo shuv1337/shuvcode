@@ -1,39 +1,39 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@opencode-ai/plugin",
-  "version": "1.17.13",
+  "version": "1.17.18",
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "test": "bun test --timeout 5000",
     "typecheck": "tsgo --noEmit",
-    "build": "tsc"
+    "build": "tsc -p tsconfig.build.json"
   },
   "exports": {
     ".": "./src/index.ts",
     "./tool": "./src/tool.ts",
     "./tui": "./src/tui.ts",
     "./v2/effect": "./src/v2/effect/index.ts",
-    "./v2/effect/integration": "./src/v2/effect/integration.ts",
-    "./v2/effect/plugin": "./src/v2/effect/plugin.ts",
-    "./v2/effect/tool": "./src/v2/effect/tool.ts",
-    "./v2/promise": "./src/v2/promise/index.ts"
+    "./v2/effect/*": "./src/v2/effect/*.ts",
+    "./v2/tui/*": "./src/v2/tui/*.ts",
+    "./v2": "./src/v2/promise/index.ts",
+    "./v2/*": "./src/v2/promise/*.ts"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
     "@ai-sdk/provider": "3.0.8",
-    "@opencode-ai/llm": "workspace:*",
-    "@opencode-ai/protocol": "workspace:*",
+    "@opencode-ai/client": "workspace:*",
     "@opencode-ai/schema": "workspace:*",
     "@opencode-ai/sdk": "workspace:*",
     "effect": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@opentui/core": ">=0.3.4",
-    "@opentui/keymap": ">=0.3.4",
-    "@opentui/solid": ">=0.3.4"
+    "@opentui/core": ">=0.4.3",
+    "@opentui/keymap": ">=0.4.3",
+    "@opentui/solid": ">=0.4.3"
   },
   "peerDependenciesMeta": {
     "@opentui/core": {

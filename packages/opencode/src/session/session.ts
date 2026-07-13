@@ -1,3 +1,6 @@
+export { isDefaultTitle } from "./title"
+import { createDefaultTitle } from "./title"
+
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Slug } from "@opencode-ai/core/util/slug"
@@ -43,15 +46,6 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 
-const parentTitlePrefix = "New session - "
-const childTitlePrefix = "Child session - "
-
-export function isDefaultTitle(title: string) {
-  return new RegExp(
-    `^(${parentTitlePrefix}|${childTitlePrefix})\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$`,
-  ).test(title)
-}
-
 type SessionRow = typeof SessionTable.$inferSelect
 
 export function fromRow(row: SessionRow): Info {
@@ -70,7 +64,7 @@ export function fromRow(row: SessionRow): Info {
         messageID: MessageID.make(row.revert.messageID),
         partID: row.revert.partID ? PartID.make(row.revert.partID) : undefined,
         snapshot: row.revert.snapshot,
-        diff: row.revert.diff,
+        diff: "diff" in row.revert ? row.revert.diff : undefined,
       }
     : undefined
   return {
@@ -518,7 +512,7 @@ const layer: Layer.Layer<
         path: input.path,
         workspaceID: input.workspaceID,
         parentID: input.parentID,
-        title: input.title ?? (input.parentID ? childTitlePrefix : parentTitlePrefix) + new Date().toISOString(),
+        title: input.title ?? createDefaultTitle(!!input.parentID),
         agent: input.agent,
         model: input.model,
         metadata: input.metadata,

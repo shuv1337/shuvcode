@@ -3,12 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Effect, FileSystem, Schema, SchemaAST, SchemaGetter } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import { format } from "prettier"
 import {
   compile as compileContract,
   emitEffect,
   emitEffectImported,
+  emitEffectShape,
   emitPromise,
   generate,
   GenerationError,
@@ -138,17 +139,242 @@ describe("HttpApiCodegen.generate", () => {
     expect(contract.groups[0]?.endpoints[0]?.operation).toMatchObject({ group: "sessions", name: "get" })
   })
 
-  test("supports explicit public endpoint names", () => {
+  test("derives nested paths from OpenAPI operation IDs", () => {
     const source = HttpApi.make("test").add(
-      HttpApiGroup.make("server.permission")
-        .add(HttpApiEndpoint.get("permission.request.list", "/request", { success: Schema.String }))
-        .add(HttpApiEndpoint.get("session.permission.list", "/session", { success: Schema.String })),
+      HttpApiGroup.make("server.session").add(
+        HttpApiEndpoint.get("internal.stage", "/session/revert/stage", { success: Schema.String }).annotateMerge(
+          OpenApi.annotations({ identifier: "v2.session.revert.stage" }),
+        ),
+      ),
     )
-    const contract = compileContract(source, {
-      endpointNames: { "permission.request.list": "listRequests" },
-    })
+    const contract = compileContract(source, { groupNames: { "server.session": "session" } })
 
-    expect(contract.groups[0]?.endpoints.map((endpoint) => endpoint.operation.name)).toEqual(["listRequests", "list"])
+    expect(contract.groups[0]?.endpoints[0]?.clientPath).toEqual(["revert", "stage"])
+    expect(OpenApi.fromApi(source).paths["/session/revert/stage"]?.get?.operationId).toBe("v2.session.revert.stage")
+  })
+
+  test("uses nested OpenAPI operation IDs across emitters", () => {
+    const source = HttpApi.make("test").add(
+      HttpApiGroup.make("server.session")
+        .add(
+          HttpApiEndpoint.get("list", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "v2.session.instructions.list" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.put("put", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "v2.session.instructions.put" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.delete("remove", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "v2.session.instructions.remove" }),
+          ),
+        ),
+    )
+    const contract = compileContract(source, { groupNames: { "server.session": "session" } })
+
+    expect(contract.groups[0]?.endpoints.map((endpoint) => endpoint.clientPath)).toEqual([
+      ["instructions", "list"],
+      ["instructions", "put"],
+      ["instructions", "remove"],
+    ])
+    expect(contract.groups[0]?.endpoints.map((endpoint) => endpoint.operation.name)).toEqual([
+      "instructions.list",
+      "instructions.put",
+      "instructions.remove",
+    ])
+
+    const promise = emitPromise(contract, {
+      outputTypes: {
+        "session.instructions.list": {
+          name: "InstructionListWire",
+          import: 'import type { InstructionListWire } from "./instruction-list-wire"',
+        },
+      },
+    })
+    const promiseClient = promise.files.find((file) => file.path === "client.ts")?.content
+    const promiseTypes = promise.files.find((file) => file.path === "types.ts")?.content
+    expect(promiseClient).toContain('"session": { "instructions": { "list": (requestOptions?: RequestOptions)')
+    expect(promiseClient).toContain('"put": (requestOptions?: RequestOptions)')
+    expect(promiseClient).toContain('"remove": (requestOptions?: RequestOptions)')
+    expect(promiseTypes).toContain('import type { InstructionListWire } from "./instruction-list-wire"')
+    expect(promiseTypes).toContain("export type SessionInstructionsListOutput = InstructionListWire")
+    expect(promiseTypes).toContain("export type SessionInstructionsPutOutput = string")
+    expect(promiseTypes).toContain("export type SessionInstructionsRemoveOutput = string")
+
+    const effect = emitEffect(contract)
+    expect(effect.files.find((file) => file.path === "session.ts")?.content).toContain(
+      '"instructions": { "list": Endpoint0(raw), "put": Endpoint1(raw), "remove": Endpoint2(raw) }',
+    )
+
+    const imported = emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    expect(imported.files.find((file) => file.path === "client.ts")?.content).toContain(
+      '"instructions": { "list": Endpoint0_0(raw), "put": Endpoint0_1(raw), "remove": Endpoint0_2(raw) }',
+    )
+
+    const shape = emitEffectShape(contract, { module: "@example/api", api: "Api" })
+    const apiShape = shape.files.find((file) => file.path === "api.ts")?.content
+    expect(apiShape).toContain('readonly "instructions": { readonly "list": SessionInstructionsListOperation<E>')
+    expect(apiShape).toContain('readonly "put": SessionInstructionsPutOperation<E>')
+    expect(apiShape).toContain('readonly "remove": SessionInstructionsRemoveOperation<E>')
+  })
+
+  test("executes nested Promise operation IDs", async () => {
+    const source = HttpApi.make("test").add(
+      HttpApiGroup.make("session")
+        .add(
+          HttpApiEndpoint.get("list", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.instructions.list" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.put("put", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.instructions.put" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.delete("remove", "/session/instructions", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.instructions.remove" }),
+          ),
+        ),
+    )
+    const output = emitPromise(compileContract(source))
+    const directory = await mkdtemp(join(tmpdir(), "opencode-httpapi-codegen-"))
+    const methods: Array<string> = []
+
+    try {
+      await Promise.all(output.files.map((file) => Bun.write(join(directory, file.path), file.content)))
+      const generated = await import(`${join(directory, "index.ts")}?t=${crypto.randomUUID()}`)
+      const client = generated.OpenCode.make({
+        baseUrl: "https://example.com",
+        fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+          methods.push(init?.method ?? "GET")
+          return Response.json("ok")
+        },
+      })
+
+      expect(await client.session.instructions.list()).toBe("ok")
+      expect(await client.session.instructions.put()).toBe("ok")
+      expect(await client.session.instructions.remove()).toBe("ok")
+      expect(methods).toEqual(["GET", "PUT", "DELETE"])
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects duplicate and leaf-namespace endpoint paths", () => {
+    const source = HttpApi.make("test").add(
+      HttpApiGroup.make("session")
+        .add(
+          HttpApiEndpoint.get("first", "/first", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.instructions.list" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.get("second", "/second", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.instructions.list" }),
+          ),
+        ),
+    )
+
+    expect(() => compileContract(source)).toThrow("Client endpoint name collision: session.instructions.list")
+  })
+
+  test("rejects nested root collisions across top-level groups", () => {
+    const source = HttpApi.make("test")
+      .add(
+        HttpApiGroup.make("first", { topLevel: true }).add(
+          HttpApiEndpoint.get("first.list", "/first", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "instructions.list" }),
+          ),
+        ),
+      )
+      .add(
+        HttpApiGroup.make("second", { topLevel: true }).add(
+          HttpApiEndpoint.get("second.put", "/second", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "instructions.put" }),
+          ),
+        ),
+      )
+
+    expect(() => compileContract(source)).toThrow("Client name collision: instructions")
+  })
+
+  test("rejects nested paths that collide after type-name normalization", () => {
+    const source = HttpApi.make("test").add(
+      HttpApiGroup.make("session")
+        .add(
+          HttpApiEndpoint.get("first", "/first", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.foo.bar" }),
+          ),
+        )
+        .add(
+          HttpApiEndpoint.get("second", "/second", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "session.foo-bar" }),
+          ),
+        ),
+    )
+
+    expect(() => compileContract(source)).toThrow("Client endpoint type collision: SessionFooBar")
+  })
+
+  test("rejects ambiguous and prototype-mutating nested path segments", () => {
+    const source = api(
+      HttpApiEndpoint.get("get", "/session", { success: Schema.String }).annotateMerge(
+        OpenApi.annotations({ identifier: "session.__proto__.get" }),
+      ),
+    )
+
+    expect(() => compileContract(source)).toThrow("Client endpoint path cannot contain __proto__")
+  })
+
+  test("rejects normalized group, operation-key, and group prototype collisions", () => {
+    const normalized = HttpApi.make("test")
+      .add(HttpApiGroup.make("foo-bar").add(HttpApiEndpoint.get("get", "/first", { success: Schema.String })))
+      .add(HttpApiGroup.make("foo.bar").add(HttpApiEndpoint.get("get", "/second", { success: Schema.String })))
+    expect(() => compileContract(normalized)).toThrow("Client group type collision: FooBar")
+
+    const endpointType = HttpApi.make("test")
+      .add(
+        HttpApiGroup.make("foo").add(
+          HttpApiEndpoint.get("first", "/first", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "foo.bar.baz" }),
+          ),
+        ),
+      )
+      .add(
+        HttpApiGroup.make("fooBar").add(
+          HttpApiEndpoint.get("second", "/second", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "fooBar.baz" }),
+          ),
+        ),
+      )
+    expect(() => compileContract(endpointType)).toThrow("Client endpoint type collision: FooBarBaz")
+
+    const operationKey = HttpApi.make("test")
+      .add(
+        HttpApiGroup.make("a.b").add(
+          HttpApiEndpoint.get("get", "/first", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "a.b.c" }),
+          ),
+        ),
+      )
+      .add(
+        HttpApiGroup.make("a").add(
+          HttpApiEndpoint.get("b.c", "/second", { success: Schema.String }).annotateMerge(
+            OpenApi.annotations({ identifier: "a.b.c" }),
+          ),
+        ),
+      )
+    expect(() => compileContract(operationKey)).toThrow("Client operation key collision: a.b.c")
+
+    const prototype = HttpApi.make("test").add(
+      HttpApiGroup.make("session").add(HttpApiEndpoint.get("get", "/session", { success: Schema.String })),
+    )
+    expect(() => compileContract(prototype, { groupNames: { session: "__proto__" } })).toThrow(
+      "Client group name cannot be __proto__",
+    )
   })
 
   test("omits custom transport endpoints", () => {
@@ -270,7 +496,7 @@ describe("HttpApiCodegen.generate", () => {
     expect(types).not.toContain("Brand")
   })
 
-  test("inlines non-recursive references in Promise wire types", () => {
+  test("retains non-recursive references in Promise wire types", () => {
     const Referenced = Schema.Struct({ value: Schema.String }).annotate({ identifier: "Referenced" })
     const output = emitPromise(
       compileContract(
@@ -282,12 +508,30 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
 
-    expect(output.files.find((file) => file.path === "types.ts")?.content).toContain(
-      'export type SessionGetOutput = ({ readonly "data": ({ readonly "value": string }) })["data"]',
-    )
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+    expect(types).toContain('export type Referenced = { readonly "value": string }')
+    expect(types).toContain('export type SessionGetOutput = ({ readonly "data": Referenced })["data"]')
   })
 
-  test("expands Promise references only at identifier boundaries", () => {
+  test("emits mutable Promise outputs without restricting inputs", () => {
+    const output = emitPromise(
+      compileContract(
+        api(
+          HttpApiEndpoint.post("create", "/session", {
+            payload: Schema.Struct({ values: Schema.Array(Schema.String) }),
+            success: Schema.Struct({ data: Schema.Array(Schema.Struct({ values: Schema.Array(Schema.String) })) }),
+          }),
+        ),
+      ),
+      { mutableOutputs: true },
+    )
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+
+    expect(types).toContain('readonly "values": ReadonlyArray<string>')
+    expect(types).toContain('export type SessionCreateOutput = ({ "data": Array<{ "values": Array<string> }> })["data"]')
+  })
+
+  test("retains distinct Promise references at identifier boundaries", () => {
     const Session = Schema.Struct({ name: Schema.Literal("Session"), id: Schema.String }).annotate({
       identifier: "Session",
     })
@@ -302,9 +546,24 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
 
-    expect(output.files.find((file) => file.path === "types.ts")?.content).toContain(
-      'readonly "session": ({ readonly "name": "Session", readonly "id": string })',
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+    expect(types).toContain('export type Session = { readonly "name": "Session", readonly "id": string }')
+    expect(types).toContain("export type SessionID = string")
+    expect(types).toContain('readonly "session": Session, readonly "sessionID": SessionID')
+  })
+
+  test("disambiguates flattened Promise reference names", () => {
+    const First = Schema.String.annotate({ identifier: "ExampleName" })
+    const Second = Schema.String.annotate({ identifier: "Example_Name" })
+    const output = emitPromise(
+      compileContract(
+        api(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ first: First, second: Second }) })),
+      ),
     )
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+
+    expect(types).toContain("export type ExampleName = string")
+    expect(types).toContain("export type ExampleName2 = string")
   })
 
   test("emits Effect Json schemas as standalone Promise types", () => {
@@ -357,22 +616,6 @@ describe("HttpApiCodegen.generate", () => {
     expect(() =>
       emitPromise(compileContract(api(HttpApiEndpoint.get("read", "/file/*/tail", { success: Schema.String })))),
     ).toThrow("Unsupported Promise path wildcard: /file/*/tail")
-
-    expect(() =>
-      emitPromise(
-        compileContract(
-          api(
-            HttpApiEndpoint.get("binary", "/binary", {
-              success: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array()),
-            }),
-          ),
-        ),
-      ),
-    ).toThrow("Unsupported Promise success encoding: session.binary")
-
-    expect(() =>
-      emitPromise(compileContract(api(HttpApiEndpoint.get("read", "/file/*", { success: Schema.String })))),
-    ).toThrow("Unsupported Promise path wildcard: /file/*")
 
     expect(() =>
       emitPromise(
@@ -516,6 +759,39 @@ describe("HttpApiCodegen.generate", () => {
       expect(request?.url).toBe("https://example.com/session/session?resume=true")
       expect(request?.headers.get("traceID")).toBe("trace")
       expect(await request?.json()).toEqual({ prompt: "hello" })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  test("serializes explicit null query values", async () => {
+    const output = emitPromise(
+      compileContract(
+        api(
+          HttpApiEndpoint.get("list", "/session", {
+            query: { parentID: Schema.optional(Schema.NullOr(Schema.String)) },
+            success: Schema.Struct({ data: Schema.Array(Schema.String) }),
+          }),
+        ),
+      ),
+    )
+    const directory = await mkdtemp(join(tmpdir(), "opencode-httpapi-codegen-"))
+
+    try {
+      await Promise.all(output.files.map((file) => Bun.write(join(directory, file.path), file.content)))
+      const generated = await import(`${join(directory, "index.ts")}?t=${crypto.randomUUID()}`)
+      let request: Request | undefined
+      const client = generated.OpenCode.make({
+        baseUrl: "https://example.com",
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          request = input instanceof Request ? input : new Request(input, init)
+          return Response.json({ data: [] })
+        },
+      })
+
+      await client.session.list({ parentID: null })
+
+      expect(request?.url).toBe("https://example.com/session?parentID=null")
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
@@ -819,6 +1095,27 @@ describe("HttpApiCodegen.generate", () => {
     )
 
     expect(output.operations[0]?.success).toBe("stream")
+  })
+
+  test("emits opaque Promise SSE fields as any", () => {
+    const output = emitPromise(
+      compileContract(
+        api(
+          HttpApiEndpoint.get("subscribe", "/event", {
+            success: HttpApiSchema.StreamSse({
+              data: Schema.Struct({
+                metadata: Schema.Record(Schema.String, Schema.Unknown),
+                label: Schema.Literal("unknown"),
+              }),
+            }),
+          }),
+        ),
+      ),
+    )
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+
+    expect(types).toContain('readonly "metadata": { readonly [x: string]: any }')
+    expect(types).toContain('readonly "label": "unknown"')
   })
 
   test("preserves annotated stream response statuses", () => {

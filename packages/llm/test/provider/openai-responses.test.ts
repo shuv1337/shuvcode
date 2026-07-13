@@ -764,6 +764,35 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
+  // OpenAI's documented stream orders output text within one message item; no
+  // provider-valid same-kind overlap is evidenced, so done boundaries close it.
+  it.effect("closes sequential output messages before starting the next", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents(
+              { type: "response.output_text.delta", item_id: "msg_1", delta: "First" },
+              { type: "response.output_text.done", item_id: "msg_1" },
+              { type: "response.output_text.delta", item_id: "msg_2", delta: "Second" },
+              { type: "response.output_item.done", item: { type: "message", id: "msg_2" } },
+              { type: "response.completed", response: { id: "resp_1" } },
+            ),
+          ),
+        ),
+      )
+
+      expect(response.events.filter((event) => event.type.startsWith("text-"))).toEqual([
+        { type: "text-start", id: "msg_1" },
+        { type: "text-delta", id: "msg_1", text: "First" },
+        { type: "text-end", id: "msg_1" },
+        { type: "text-start", id: "msg_2" },
+        { type: "text-delta", id: "msg_2", text: "Second" },
+        { type: "text-end", id: "msg_2" },
+      ])
+    }),
+  )
+
   it.effect("parses reasoning summary stream fixtures", () =>
     Effect.gen(function* () {
       const body = sseEvents(
@@ -1414,7 +1443,7 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
-  it.effect("surfaces error event details even when they arrive nested under response.error", () =>
+  it.effect("surfaces error event details nested under response.error", () =>
     Effect.gen(function* () {
       // Some OpenAI-compatible proxies and older SDK versions wrap the
       // top-level error fields into a nested `response.error` payload
@@ -1439,6 +1468,65 @@ describe("OpenAI Responses route", () => {
           classification: "context-overflow",
         },
       ])
+    }),
+  )
+
+  it.effect("surfaces error event details nested under error", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents({
+              type: "error",
+              sequence_number: 2,
+              error: {
+                type: "invalid_request_error",
+                code: "context_length_exceeded",
+                message: "prompt too long",
+                param: "input",
+              },
+            }),
+          ),
+        ),
+      )
+
+      expect(response.events).toEqual([
+        {
+          type: "provider-error",
+          message: "context_length_exceeded: prompt too long",
+          classification: "context-overflow",
+        },
+      ])
+    }),
+  )
+
+  it.effect("accepts nullable fields in spec-compliant error events", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents({
+              type: "error",
+              code: null,
+              message: "Something went wrong",
+              param: null,
+              sequence_number: 1,
+            }),
+          ),
+        ),
+      )
+
+      expect(response.events).toEqual([{ type: "provider-error", message: "Something went wrong" }])
+    }),
+  )
+
+  it.effect("falls back to a stable default when error is null", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(fixedResponse(sseEvents({ type: "error", error: null }))),
+      )
+
+      expect(response.events).toEqual([{ type: "provider-error", message: "OpenAI Responses stream error" }])
     }),
   )
 

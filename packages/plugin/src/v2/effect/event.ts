@@ -1,10 +1,3 @@
-import type { Event as SDKEvent } from "@opencode-ai/sdk/v2/types"
-import type { Stream } from "effect"
+import type { EventApi } from "@opencode-ai/client/effect/api"
 
-export type EventMap = {
-  [Item in SDKEvent as Item["type"]]: Item
-}
-
-export interface Event {
-  subscribe<Type extends keyof EventMap>(type: Type): Stream.Stream<EventMap[Type]>
-}
+export interface EventDomain extends Pick<EventApi<unknown>, "subscribe"> {}

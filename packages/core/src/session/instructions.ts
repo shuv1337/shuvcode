@@ -35,10 +35,10 @@ const layer = Layer.effect(
     // Resolved once for the Location layer; the synthetic text and dedup ledger keep
     // absolute paths, but the human-facing description shows paths relative to the project
     // root so opening a subdirectory still describes paths from the project root.
-    const root = FSUtil.resolve(location.project.directory)
-    // Same-turn parallel reads settle concurrently, so an in-memory claim guards each
+    const root = yield* fs.resolve(location.project.directory)
+    // Same-step parallel reads settle concurrently, so an in-memory claim guards each
     // Session/path pair before any filesystem work. The durable history check below covers
-    // paths injected in earlier turns after this Location layer was reopened.
+    // paths injected in earlier steps after this Location layer was reopened.
     const injected = yield* Ref.make<Map<SessionSchema.ID, Set<string>>>(new Map())
 
     const load = Effect.fn("SessionInstructions.load")(function* (input: {
@@ -60,9 +60,9 @@ const layer = Layer.effect(
       const files = yield* Effect.forEach(
         toInject,
         (path) =>
-          fs.readFileStringSafe(path).pipe(
-            Effect.map((content) => (content === undefined ? undefined : { path, content })),
-          ),
+          fs
+            .readFileStringSafe(path)
+            .pipe(Effect.map((content) => (content === undefined ? undefined : { path, content }))),
         { concurrency: "unbounded" },
       )
       const readable = files.filter((file): file is { path: string; content: string } => file !== undefined)
@@ -74,8 +74,6 @@ const layer = Layer.effect(
       // metadata so it survives across Location layer restarts.
       yield* events.publish(SessionEvent.Synthetic, {
         sessionID: input.sessionID,
-        messageID: SessionMessage.ID.create(),
-        timestamp: yield* DateTime.now,
         text: readable.map((file) => `Instructions from: ${file.path}\n${file.content}`).join("\n\n"),
         description: `Loaded ${readable.map((file) => describePath(root, file.path)).join(", ")}`,
         metadata: { instruction: { paths: readable.map((file) => file.path) } },

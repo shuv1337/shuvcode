@@ -19,8 +19,25 @@ import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { ReadTool } from "@opencode-ai/core/tool/read"
 import { ReadToolFileSystem } from "@opencode-ai/core/tool/read-filesystem"
+import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
+import { SessionInstructions } from "@opencode-ai/core/session/instructions"
 import { testEffect } from "./lib/effect"
-import { toolIdentity, executeTool, settleTool, toolDefinitions } from "./lib/tool"
+import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
+
+const readToolNode = makeLocationNode({
+  name: "test/read-tool-plugin",
+  layer: Layer.effectDiscard(registerToolPlugin(ReadTool.Plugin)),
+  deps: [
+    ToolRegistry.toolsNode,
+    ReadToolFileSystem.node,
+    LocationMutation.node,
+    Image.node,
+    PermissionV2.node,
+    SessionInstructions.node,
+    FSUtil.node,
+    Location.node,
+  ],
+})
 
 const assertions: PermissionV2.AssertInput[] = []
 const missingPath = "__missing_read_target__.txt"
@@ -64,7 +81,19 @@ const permission = Layer.succeed(
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
-      }).pipe(Effect.andThen(allow ? Effect.void : Effect.fail(new PermissionV2.DeniedError({ rules: [] })))),
+      }).pipe(
+        Effect.andThen(
+          allow
+            ? Effect.void
+            : Effect.fail(
+                new PermissionV2.BlockedError({
+                  rules: [],
+                  permission: input.action,
+                  resources: input.resources,
+                }),
+              ),
+        ),
+      ),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
     get: () => Effect.die("unused"),
@@ -130,7 +159,7 @@ const unavailableImage = Layer.succeed(
   Image.Service.of({ normalize: () => Effect.fail(new Image.ResizerUnavailableError()) }),
 )
 const readLayer = (imageLayer: Layer.Layer<Image.Service>) =>
-  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, ReadTool.node]), [
+  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, readToolNode]), [
     [ReadToolFileSystem.node, reader],
     [PermissionV2.node, permission],
     [Config.node, config],

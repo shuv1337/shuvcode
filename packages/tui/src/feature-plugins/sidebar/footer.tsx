@@ -3,10 +3,11 @@ import type { BuiltinTuiPlugin } from "../builtins"
 import { createMemo, Show } from "solid-js"
 import { abbreviateHome } from "../../runtime"
 import { useTuiPaths } from "../../context/runtime"
+import { FilePath } from "../../ui/file-path"
 
 const id = "internal:sidebar-footer"
 
-function View(props: { api: TuiPluginApi; sessionID: string }) {
+function View(props: { api: TuiPluginApi; directory: string }) {
   const paths = useTuiPaths()
   const theme = () => props.api.theme.current
   const has = createMemo(() =>
@@ -16,18 +17,12 @@ function View(props: { api: TuiPluginApi; sessionID: string }) {
   )
   const done = createMemo(() => props.api.kv.get("dismissed_getting_started", false))
   const show = createMemo(() => !has() && !done())
-  const path = createMemo(() => {
-    const session = props.api.state.session.get(props.sessionID)
-    const dir = session?.directory || props.api.state.path.directory || paths.cwd
-    const out = abbreviateHome(dir, paths.home)
-    const branch = session?.directory === props.api.state.path.directory ? props.api.state.vcs?.branch : undefined
-    const text = branch ? out + ":" + branch : out
-    const list = text.split("/")
-    return {
-      parent: list.slice(0, -1).join("/"),
-      name: list.at(-1) ?? "",
-    }
+  const location = createMemo(() => {
+    const branch = props.directory === props.api.state.path.directory ? props.api.state.vcs?.branch : undefined
+    return { path: abbreviateHome(props.directory, paths.home), branch }
   })
+  const suffix = createMemo(() => (location().branch ? `:${location().branch}` : ""))
+  const suffixWidth = createMemo(() => Math.min(Bun.stringWidth(suffix()), 36))
 
   return (
     <box gap={1}>
@@ -53,7 +48,7 @@ function View(props: { api: TuiPluginApi; sessionID: string }) {
                 ✕
               </text>
             </box>
-            <text fg={theme().textMuted}>OpenCode includes free models so you can start immediately.</text>
+            <text fg={theme().textMuted}>shuvcode includes free models so you can start immediately.</text>
             <text fg={theme().textMuted}>
               Connect from 75+ providers to use other models, including Claude, GPT, Gemini etc
             </text>
@@ -64,10 +59,19 @@ function View(props: { api: TuiPluginApi; sessionID: string }) {
           </box>
         </box>
       </Show>
-      <text>
-        <span style={{ fg: theme().textMuted }}>{path().parent}/</span>
-        <span style={{ fg: theme().text }}>{path().name}</span>
-      </text>
+      <box flexDirection="row" minWidth={0}>
+        <FilePath
+          value={location().path}
+          maxWidth={Math.max(2, 38 - suffixWidth())}
+          fg={theme().textMuted}
+          basenameFg={theme().text}
+        />
+        <Show when={suffix()}>
+          <text width={suffixWidth()} wrapMode="none" truncate fg={theme().textMuted}>
+            {suffix()}
+          </text>
+        </Show>
+      </box>
       <text fg={theme().textMuted}>
         <span style={{ fg: theme().success }}>•</span> <b>Open</b>
         <span style={{ fg: theme().text }}>
@@ -84,7 +88,7 @@ const tui: TuiPlugin = async (api) => {
     order: 100,
     slots: {
       sidebar_footer(_ctx, props) {
-        return <View api={api} sessionID={props.session_id} />
+        return <View api={api} directory={props.directory} />
       },
     },
   })

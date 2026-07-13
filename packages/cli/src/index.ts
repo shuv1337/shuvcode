@@ -1,32 +1,26 @@
 #!/usr/bin/env bun
 
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
-import * as NodeServices from "@effect/platform-node/NodeServices"
-import { NodeFileSystem } from "@effect/platform-node"
-import * as Effect from "effect/Effect"
-import { Layer, Logger, References } from "effect"
+import { NodeRuntime, NodeServices } from "@effect/platform-node"
+import { Effect } from "effect"
 import { Commands } from "./commands/commands"
 import { Runtime } from "./framework/runtime"
-import { Daemon } from "./services/daemon"
-import { Logging } from "@opencode-ai/core/observability/logging"
+import { Observability } from "@opencode-ai/core/observability"
 import { Updater } from "./services/updater"
 import { InstallationChannel, InstallationVersion, InstallationLocal } from "@opencode-ai/core/installation/version"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { AppProcess } from "@opencode-ai/core/process"
-
-const LoggingLayer = Logger.layer(Logging.loggers(), { mergeWithExisting: false }).pipe(
-  Layer.provide(NodeFileSystem.layer),
-  Layer.orDie,
-  Layer.merge(Layer.succeed(References.MinimumLogLevel, Logging.minimumLogLevel())),
-)
+import { Config } from "./config"
 
 const Handlers = Runtime.handlers(Commands, {
   $: () => import("./commands/handlers/default"),
   api: () => import("./commands/handlers/api"),
   debug: {
     agents: () => import("./commands/handlers/debug/agents"),
+  },
+  console: {
+    login: () => import("./commands/handlers/console/login"),
   },
   mcp: {
     list: () => import("./commands/handlers/mcp/list"),
@@ -35,6 +29,9 @@ const Handlers = Runtime.handlers(Commands, {
     logout: () => import("./commands/handlers/mcp/logout"),
   },
   migrate: () => import("./commands/handlers/migrate"),
+  mini: () => import("./commands/handlers/mini"),
+  run: () => import("./commands/handlers/run"),
+  pair: () => import("./commands/handlers/pair"),
   service: {
     start: () => import("./commands/handlers/service/start"),
     restart: () => import("./commands/handlers/service/restart"),
@@ -47,15 +44,20 @@ const Handlers = Runtime.handlers(Commands, {
   serve: () => import("./commands/handlers/serve"),
 })
 
-Effect.logInfo("cli starting", { version: InstallationVersion, channel: InstallationChannel, local: InstallationLocal }).pipe(
+Effect.logInfo("cli starting", {
+  version: InstallationVersion,
+  channel: InstallationChannel,
+  local: InstallationLocal,
+  args: process.argv.slice(2),
+}).pipe(
   Effect.flatMap(() => Runtime.run(Commands, Handlers, { version: InstallationVersion })),
   Effect.annotateLogs({ role: "cli" }),
-  Effect.provide(Daemon.layer),
+  Effect.provide(Config.layer),
   Effect.provide(Updater.layer),
   Effect.provide(AppNodeBuilder.build(LayerNode.group([Global.node, AppProcess.node]))),
-  Effect.provide(LoggingLayer),
+  Effect.provide(Observability.layer),
   Effect.provide(NodeServices.layer),
   Effect.scoped,
-  Effect.tap(() => Effect.sync(() => process.exit(0))),
+  Effect.tap(() => Effect.sync(() => process.exit(process.exitCode ?? 0))),
   NodeRuntime.runMain,
 )

@@ -1,17 +1,14 @@
 export * as WebFetchTool from "./webfetch"
 
+import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { ToolFailure } from "@opencode-ai/llm"
-import { Duration, Effect, Layer, Schema } from "effect"
+import { Duration, Effect, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Parser } from "htmlparser2"
 import TurndownService from "turndown"
-import { makeLocationNode } from "../effect/app-node"
-import { LayerNodePlatform } from "../effect/app-node-platform"
 import { PermissionV2 } from "../permission"
 import { collectBoundedResponseBody } from "./http-body"
-import { ToolRegistry } from "./registry"
 import { Tool } from "./tool"
-import { Tools } from "./tools"
 
 export const name = "webfetch"
 export const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -115,76 +112,74 @@ const convert = (content: string, contentType: string, format: Format) => {
   return content
 }
 
-const layer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const tools = yield* Tools.Service
+export const Plugin = {
+  id: "opencode.tool.webfetch",
+  effect: Effect.fn("WebFetchTool.Plugin")(function* (ctx: PluginContext) {
     const http = yield* HttpClient.HttpClient
     const permission = yield* PermissionV2.Service
 
-    yield* tools
-      .register({
-        [name]: Tool.make({
-          description,
-          input: Input,
-          output: Output,
-          toModelOutput: ({ output }) => [{ type: "text", text: output.output }],
-          execute: (input, context) =>
-            Effect.gen(function* () {
-              yield* Effect.try({
-                try: () => assertHttpUrl(new URL(input.url)),
-                catch: (error) => error,
-              })
+    yield* ctx.tool
+      .transform((draft) =>
+        draft.add(
+          name,
+          Tool.make({
+            description,
+            input: Input,
+            output: Output,
+            toModelOutput: ({ output }) => [{ type: "text", text: output.output }],
+            execute: (input, context) =>
+              Effect.gen(function* () {
+                yield* Effect.try({
+                  try: () => assertHttpUrl(new URL(input.url)),
+                  catch: (error) => error,
+                })
 
-              yield* permission.assert({
-                action: name,
-                resources: [input.url],
-                save: ["*"],
-                metadata: input,
-                sessionID: context.sessionID,
-                agent: context.agent,
-                source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
-              })
+                yield* permission.assert({
+                  action: name,
+                  resources: [input.url],
+                  save: ["*"],
+                  metadata: input,
+                  sessionID: context.sessionID,
+                  agent: context.agent,
+                  source: { type: "tool", messageID: context.assistantMessageID, callID: context.toolCallID },
+                })
 
-              const { body, contentType } = yield* Effect.gen(function* () {
-                const response = yield* execute(http, input.url, input.format).pipe(
-                  Effect.catchIf(isCloudflareChallenge, () => execute(http, input.url, input.format, "opencode")),
+                const { body, contentType } = yield* Effect.gen(function* () {
+                  const response = yield* execute(http, input.url, input.format).pipe(
+                    Effect.catchIf(isCloudflareChallenge, () => execute(http, input.url, input.format, "opencode")),
+                  )
+                  const contentType = response.headers["content-type"] || ""
+                  const mime = mimeFrom(contentType)
+                  if (isImageAttachment(mime))
+                    return yield* Effect.fail(new Error(`Unsupported fetched image content type: ${mime}`))
+                  if (!isTextualMime(mime))
+                    return yield* Effect.fail(new Error(`Unsupported fetched file content type: ${mime}`))
+                  return { body: yield* collectBody(response), contentType }
+                }).pipe(
+                  Effect.timeoutOrElse({
+                    duration: Duration.seconds(input.timeout ?? DEFAULT_TIMEOUT_SECONDS),
+                    orElse: () => Effect.fail(new Error("Request timed out")),
+                  }),
                 )
-                const contentType = response.headers["content-type"] || ""
-                const mime = mimeFrom(contentType)
-                if (isImageAttachment(mime))
-                  return yield* Effect.fail(new Error(`Unsupported fetched image content type: ${mime}`))
-                if (!isTextualMime(mime))
-                  return yield* Effect.fail(new Error(`Unsupported fetched file content type: ${mime}`))
-                return { body: yield* collectBody(response), contentType }
-              }).pipe(
-                Effect.timeoutOrElse({
-                  duration: Duration.seconds(input.timeout ?? DEFAULT_TIMEOUT_SECONDS),
-                  orElse: () => Effect.fail(new Error("Request timed out")),
-                }),
-              )
-              const content = new TextDecoder().decode(body)
-              const output = yield* Effect.try({
-                try: () => convert(content, contentType, input.format),
-                catch: (error) => error,
-              })
-              return {
-                url: input.url,
-                contentType,
-                format: input.format,
-                output,
-              }
-            }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to fetch ${input.url}` }))),
-        }),
-      })
+                const content = new TextDecoder().decode(body)
+                const output = yield* Effect.try({
+                  try: () => convert(content, contentType, input.format),
+                  catch: (error) => error,
+                })
+                return {
+                  url: input.url,
+                  contentType,
+                  format: input.format,
+                  output,
+                }
+              }).pipe(Effect.mapError((error) => new ToolFailure({ message: `Unable to fetch ${input.url}`, error }))),
+          }),
+          { codemode: false },
+        ),
+      )
       .pipe(Effect.orDie)
   }),
-)
-
-export const node = makeLocationNode({
-  name: "tool/webfetch",
-  layer,
-  deps: [ToolRegistry.node, PermissionV2.node, LayerNodePlatform.httpClient],
-})
+}
 
 export function extractTextFromHTML(html: string) {
   let text = ""

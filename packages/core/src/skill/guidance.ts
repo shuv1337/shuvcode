@@ -3,12 +3,12 @@ export * as SkillGuidance from "./guidance"
 import { makeLocationNode } from "../effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { AgentV2 } from "../agent"
-import { PermissionV2 } from "../permission"
 import { SkillV2 } from "../skill"
-import { SystemContext } from "../system-context/index"
+import { Instructions } from "../instructions/index"
 
 const Summary = Schema.Struct({
-  name: Schema.String,
+  id: SkillV2.ID,
+  name: SkillV2.Name,
   description: Schema.String,
 })
 type Summary = typeof Summary.Type
@@ -16,6 +16,7 @@ type Summary = typeof Summary.Type
 const entries = (skills: ReadonlyArray<Summary>) =>
   skills.flatMap((skill) => [
     "  <skill>",
+    `    <id>${skill.id}</id>`,
     `    <name>${skill.name}</name>`,
     `    <description>${skill.description}</description>`,
     "  </skill>",
@@ -31,11 +32,11 @@ const render = (skills: ReadonlyArray<Summary>) =>
   ].join("\n")
 
 const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary>) => {
-  const diff = SystemContext.diffByKey(
+  const diff = Instructions.diffByKey(
     previous,
     current,
-    (skill) => skill.name,
-    (before, after) => before.description !== after.description,
+    (skill) => skill.id,
+    (before, after) => before.name !== after.name || before.description !== after.description,
   )
   // Additions and removals render as small deltas; anything else restates the full list.
   if (diff.changed.length > 0 || (diff.added.length === 0 && diff.removed.length === 0))
@@ -50,13 +51,13 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
     ...(diff.removed.length === 0
       ? []
       : [
-          `The following skills are no longer available and must not be used: ${diff.removed.map((skill) => skill.name).join(", ")}.`,
+          `The following skill IDs are no longer available and must not be used: ${diff.removed.map((skill) => skill.id).join(", ")}.`,
         ]),
   ].join("\n")
 }
 
 export interface Interface {
-  readonly load: (agent: AgentV2.Selection) => Effect.Effect<SystemContext.SystemContext>
+  readonly load: (agent: AgentV2.Selection) => Effect.Effect<Instructions.Instructions>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SkillGuidance") {}
@@ -69,24 +70,24 @@ const layer = Layer.effect(
     return Service.of({
       load: Effect.fn("SkillGuidance.load")(function* (selection) {
         const agent = selection.info
-        if (!agent) return SystemContext.empty
+        if (!agent) return Instructions.empty
         const permitted = SkillV2.available(yield* skills.list(), agent)
-        if (permitted.length === 0 && PermissionV2.evaluate("skill", "*", agent.permissions).effect === "deny")
-          return SystemContext.empty
         const available = permitted
           .flatMap((skill) =>
             skill.description === undefined || skill.autoinvoke === false
               ? []
-              : [{ name: skill.name, description: skill.description }],
+              : [{ id: skill.id, name: skill.name, description: skill.description }],
           )
-          .toSorted((a, b) => a.name.localeCompare(b.name))
-        return SystemContext.make({
-          key: SystemContext.Key.make("core/skill-guidance"),
+          .toSorted((a, b) => a.id.localeCompare(b.id))
+        return Instructions.make<ReadonlyArray<Summary>>({
+          key: Instructions.Key.make("core/skill-guidance"),
           codec: Schema.toCodecJson(Schema.Array(Summary)),
-          load: Effect.succeed(available),
-          baseline: render,
-          update,
-          removed: () => "Skill guidance is no longer available. Do not use any previously listed skill.",
+          read: Effect.succeed(available.length === 0 ? Instructions.removed : available),
+          render: {
+            initial: render,
+            changed: update,
+            removed: () => "Skill guidance is no longer available. Do not use any previously listed skill.",
+          },
         })
       }),
     })

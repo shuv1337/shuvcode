@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { Skill } from "@opencode-ai/schema/skill"
 
 export class InvalidRequestError extends Schema.TaggedErrorClass<InvalidRequestError>()(
   "InvalidRequestError",
@@ -83,7 +84,7 @@ export class MessageNotFoundError extends Schema.TaggedErrorClass<MessageNotFoun
 export class SkillNotFoundError extends Schema.TaggedErrorClass<SkillNotFoundError>()(
   "SkillNotFoundError",
   {
-    skill: Schema.String,
+    skill: Skill.ID,
     message: Schema.String,
   },
   { httpApiStatus: 404 },
@@ -129,6 +130,33 @@ export class QuestionNotFoundError extends Schema.TaggedErrorClass<QuestionNotFo
     message: Schema.String,
   },
   { httpApiStatus: 404 },
+) {}
+
+export class FormNotFoundError extends Schema.TaggedErrorClass<FormNotFoundError>()(
+  "FormNotFoundError",
+  {
+    id: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class FormAlreadySettledError extends Schema.TaggedErrorClass<FormAlreadySettledError>()(
+  "FormAlreadySettledError",
+  {
+    id: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class FormInvalidAnswerError extends Schema.TaggedErrorClass<FormInvalidAnswerError>()(
+  "FormInvalidAnswerError",
+  {
+    id: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 400 },
 ) {}
 
 export class ForbiddenError extends Schema.TaggedErrorClass<ForbiddenError>()(

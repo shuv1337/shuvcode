@@ -5,7 +5,7 @@ import { Location } from "@opencode-ai/core/location"
 import { Effect, Queue } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
-import * as Socket from "effect/unstable/socket/Socket"
+import { Socket } from "effect/unstable/socket"
 import { Api } from "../api"
 import { CorsConfig, isAllowedRequestOrigin } from "../cors"
 import { ForbiddenError, PtyNotFoundError } from "@opencode-ai/protocol/errors"
@@ -32,7 +32,8 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
       .handle(
         "pty.list",
         Effect.fn(function* () {
-          return yield* response((yield* Pty.Service).list())
+          const pty = yield* Pty.Service
+          return yield* response(pty.list())
         }),
       )
       .handle(

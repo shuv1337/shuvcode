@@ -579,8 +579,10 @@ const scenarios: Scenario[] = [
     .at((ctx) => ({ path: "/experimental/session?roots=false&archived=false", headers: ctx.headers() }))
     .json(200, array),
   http.protected.get("/experimental/capabilities", "experimental.capabilities.get").json(200, (body) => {
-    check(typeof body === "object" && body !== null, "capabilities should be an object")
-    check("backgroundSubagents" in body, "capabilities should report background subagents")
+    check(
+      typeof body === "object" && body !== null && "backgroundSubagents" in body && body.backgroundSubagents === true,
+      "capabilities should report background subagents as available",
+    )
   }),
   http.protected
     .post("/experimental/session/{sessionID}/background", "experimental.session.background")
@@ -816,6 +818,83 @@ const scenarios: Scenario[] = [
     object(body.location)
     array(body.data)
   }),
+  http.protected.get("/api/form/request", "v2.form.request.list").json(200, (body) => {
+    object(body)
+    object(body.location)
+    array(body.data)
+  }),
+  http.protected
+    .get("/api/session/{sessionID}/form", "v2.session.form.list")
+    .seeded((ctx) => ctx.session({ title: "Form list owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, data(array)),
+  http.protected
+    .post("/api/session/{sessionID}/form", "v2.session.form.create")
+    .mutating()
+    .seeded((ctx) => ctx.session({ title: "Form create owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: {
+        title: "External form",
+        fields: [{ key: "authorization", type: "external", url: "https://example.com/form" }],
+      },
+    }))
+    .json(200, (body) => {
+      object(body)
+      object(body.data)
+      check(typeof body.data.id === "string", "form create should return an ID")
+      array(body.data.fields)
+      object(body.data.fields[0])
+      check(body.data.fields[0].type === "external", "form create should preserve the external field")
+    }),
+  http.protected
+    .get("/api/session/{sessionID}/form/{formID}", "v2.session.form.get")
+    .seeded((ctx) => ctx.session({ title: "Form get owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form/{formID}", { sessionID: ctx.state.id, formID: "frm_httpapi_missing" }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/form/{formID}/state", "v2.session.form.state")
+    .seeded((ctx) => ctx.session({ title: "Form state owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form/{formID}/state", {
+        sessionID: ctx.state.id,
+        formID: "frm_httpapi_missing",
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/api/session/{sessionID}/form/{formID}/reply", "v2.session.form.reply")
+    .mutating()
+    .seeded((ctx) => ctx.session({ title: "Form reply owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form/{formID}/reply", {
+        sessionID: ctx.state.id,
+        formID: "frm_httpapi_missing",
+      }),
+      headers: ctx.headers(),
+      body: { answer: {} },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/api/session/{sessionID}/form/{formID}/cancel", "v2.session.form.cancel")
+    .mutating()
+    .seeded((ctx) => ctx.session({ title: "Form cancel owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/form/{formID}/cancel", {
+        sessionID: ctx.state.id,
+        formID: "frm_httpapi_missing",
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
   http.protected
     .post("/api/session/{sessionID}/permission", "v2.session.permission.create")
     .seeded((ctx) => ctx.session({ title: "Permission create owner" }))
@@ -1008,6 +1087,14 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
     }))
     .json(404, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/pending", "v2.session.pending.list")
+    .seeded((ctx) => ctx.session({ title: "Pending list owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/pending", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, data(array)),
   http.protected
     .post("/api/session/{sessionID}/revert/stage", "v2.session.revert.stage")
     .at((ctx) => ({
@@ -1251,23 +1338,6 @@ const scenarios: Scenario[] = [
         body.some((item) => isRecord(item) && item.id === ctx.state.child.id && item.parentID === ctx.state.parent.id),
         "children should include seeded child",
       )
-    }),
-  http.protected
-    .get("/session/{sessionID}/todo", "session.todo")
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "Todo session" })
-        const todos = [{ content: "cover session todo", status: "pending" as const, priority: "high" as const }]
-        yield* ctx.todos(session.id, todos)
-        return { session, todos }
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/todo", { sessionID: ctx.state.session.id }),
-      headers: ctx.headers(),
-    }))
-    .json(200, (body, ctx) => {
-      check(stable(body) === stable(ctx.state.todos), "todos should match seeded state")
     }),
   http.protected
     .get("/session/{sessionID}/diff", "session.diff")
@@ -1558,33 +1628,21 @@ const scenarios: Scenario[] = [
         const session = yield* ctx.session({ title: "Summarize session" })
         yield* ctx.message(session.id, { text: "summarize this work" })
         const summary = [
-          "## Goal",
+          "## Objective",
           "- Exercise session summarize.",
           "",
-          "## Constraints & Preferences",
+          "## Important Details",
           "- Use fake LLM.",
-          "",
-          "## Progress",
-          "### Done",
-          "- Summary generated.",
-          "",
-          "### In Progress",
-          "- (none)",
-          "",
-          "### Blocked",
-          "- (none)",
-          "",
-          "## Key Decisions",
           "- Keep route local.",
+          "- Test fixture: test/server/httpapi-exercise/index.ts.",
           "",
-          "## Next Steps",
-          "- (none)",
+          "## Work State",
+          "- Completed: Summary generated.",
+          "- Active: (none)",
+          "- Blocked: (none)",
           "",
-          "## Critical Context",
-          "- Test fixture.",
-          "",
-          "## Relevant Files",
-          "- test/server/httpapi-exercise/index.ts: scenario",
+          "## Next Move",
+          "1. (none)",
         ].join("\n")
         yield* ctx.llmText(summary)
         yield* ctx.llmText(summary)

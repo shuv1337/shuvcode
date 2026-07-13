@@ -176,7 +176,7 @@ Both use the same low-level scoped registration registry, but consumers invoke t
 
 ```ts
 ctx.tool.transform(...) // replayed to build effective tool registry state
-ctx.tool.hook(...)      // invoked at a live tool operation boundary
+ctx.tool.hook(...)     // invoked at a live tool operation boundary
 ```
 
 The shared low-level machinery owns registration order, scope cleanup, disposal, and snapshots. Each domain owns when its transforms or runtime hooks execute.
@@ -290,7 +290,7 @@ begin batch
 → end batch
 ```
 
-Registration itself is not staged per plugin. If setup fails, closing the plugin's child scope removes every registration made before the failure.
+Registration itself is not staged per plugin. If setup fails, closing the plugin's child scope removes every registration made before the failure. A replacement then retries the previous definition; if that setup also fails, the plugin remains inactive.
 
 Outside a batch, transform registration and disposal rebuild immediately.
 

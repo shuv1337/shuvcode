@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencode-ai/simulation",
+  "version": "1.17.13",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./backend": "./src/backend/index.ts",
+    "./backend/*": "./src/backend/*.ts",
+    "./frontend": "./src/frontend/simulation.ts",
+    "./frontend/*": "./src/frontend/*.ts",
+    "./protocol": "./src/protocol/index.ts",
+    "./recording": "./src/recording.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/adwaita-mono": "5.2.1",
+    "@napi-rs/canvas": "1.0.2",
+    "@opencode-ai/core": "workspace:*",
+    "@opencode-ai/llm": "workspace:*",
+    "@opentui/core": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}
