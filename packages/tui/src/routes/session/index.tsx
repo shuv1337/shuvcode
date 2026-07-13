@@ -1231,21 +1231,27 @@ function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
 }
 
 function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
+  const ctx = use()
   const { theme } = useTheme()
   const metadata = () => (props.message.type === "synthetic" ? props.message.metadata : undefined)
-  const completion = () => metadata()?.source === "subagent"
+  const source = () => stringValue(metadata()?.source)
+  const completion = () => source() === "subagent" || source() === "shell"
   const state = () => stringValue(metadata()?.state)
-  const agent = () => Locale.titlecase(stringValue(metadata()?.agent) ?? "Subagent")
+  const actor = () => (source() === "shell" ? "Shell" : Locale.titlecase(stringValue(metadata()?.agent) ?? "Subagent"))
   const text = () => {
     if (props.message.type === "system") return props.message.text
     if (props.message.type === "synthetic") return props.message.description ?? ""
     return ""
   }
+  const description = () => (source() === "shell" ? text().replace(/\s+/g, " ").trim() : text())
   const status = () => {
     if (state() === "completed") return "finished"
     if (state() === "error") return "failed"
     return state() ?? "finished"
   }
+  const heading = () => `${state() === "completed" ? "↳" : "!"} ${actor()} ${status()}`
+  const suffix = () =>
+    Locale.truncateWidth(` · ${description()}`, Math.max(0, ctx.width - 3 - Bun.stringWidth(heading())))
   const color = () => {
     if (state() === "error") return theme.error
     if (state() === "cancelled") return theme.warning
@@ -1261,11 +1267,9 @@ function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
       }
     >
       <box marginLeft={3}>
-        <text>
-          <span style={{ fg: color() }}>
-            {state() === "completed" ? "↳" : "!"} {agent()} {status()}
-          </span>
-          <span style={{ fg: theme.textMuted }}> · {text()}</span>
+        <text wrapMode="none">
+          <span style={{ fg: color() }}>{heading()}</span>
+          <span style={{ fg: theme.textMuted }}>{suffix()}</span>
         </text>
       </box>
     </Show>
