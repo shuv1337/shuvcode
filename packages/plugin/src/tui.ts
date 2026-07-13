@@ -358,12 +358,6 @@ export type TuiTheme = {
   readonly ready: boolean
 }
 
-export type TuiKV = {
-  get: <Value = unknown>(key: string, fallback?: Value) => Value
-  set: (key: string, value: unknown) => void
-  readonly ready: boolean
-}
-
 export type TuiState = {
   readonly ready: boolean
   readonly config: SdkConfig
@@ -434,6 +428,7 @@ type TuiConfigView = {
     sidebar?: "auto" | "hide"
     scrollbar?: boolean
     thinking?: "show" | "hide"
+    markdown?: "source" | "rendered"
     grouping?: "auto" | "none"
   }
   hints?: { tips?: boolean; onboarding?: boolean }
@@ -628,7 +623,6 @@ export type TuiPluginApi = {
     dialog: TuiDialogStack
   }
   readonly tuiConfig: Frozen<TuiConfigView>
-  kv: TuiKV
   state: TuiState
   theme: TuiTheme
   client: OpencodeClient

@@ -5,7 +5,6 @@ import type {
   TuiAttentionNotifyResult,
   TuiAttentionNotifySkipReason,
   TuiAttentionWhen,
-  TuiKV,
   TuiAttentionSoundName,
   TuiAttentionSoundPack,
   TuiAttentionSoundPackInfo,
@@ -40,7 +39,6 @@ type TuiAttentionHost = TuiAttention & {
 
 const DEFAULT_TITLE = "opencode"
 const DEFAULT_PACK_ID = "opencode.default"
-const KV_SOUND_PACK = "attention_sound_pack"
 const TITLE_LIMIT = 80
 const MESSAGE_LIMIT = 240
 const BUILTIN_PACK: RegisteredSoundPack = {
@@ -114,7 +112,7 @@ function focusSkip(when: TuiAttentionWhen, focus: FocusState) {
 export function createTuiAttention(input: {
   renderer: AttentionRenderer
   config: Pick<Config.Resolved, "attention">
-  kv?: TuiKV
+  update?: Config.Interface["update"]
   audio?: Pick<typeof TuiAudio, "loadSoundFile" | "play">
 }): TuiAttentionHost {
   let focus: FocusState = "unknown"
@@ -134,8 +132,7 @@ export function createTuiAttention(input: {
   input.renderer.on("blur", onBlur)
 
   function configuredPackID() {
-    const stored = input.kv?.get<string | undefined>(KV_SOUND_PACK, undefined)
-    return activePackID ?? stored ?? input.config.attention.sound_pack
+    return activePackID ?? input.config.attention.sound_pack
   }
 
   function currentPack() {
@@ -234,7 +231,12 @@ export function createTuiAttention(input: {
         const pack = packs.get(id)
         if (!pack) return false
         activePackID = pack.id
-        if (options?.persist) input.kv?.set(KV_SOUND_PACK, pack.id)
+        if (options?.persist)
+          void input
+            .update?.((draft) => {
+              draft.attention = { ...draft.attention, sound_pack: pack.id }
+            })
+            .catch(() => {})
         return true
       },
       current() {
