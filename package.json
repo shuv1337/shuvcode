@@ -12,6 +12,7 @@
     "dev:web": "bun --cwd packages/app dev",
     "dev:console": "ulimit -n 10240 2>/dev/null; bun run --cwd packages/console/app dev",
     "dev:stats": "bun sst shell --stage=production -- bun run --cwd packages/stats/app dev",
+    "dev:www": "bun run --cwd packages/www dev",
     "dev:storybook": "bun --cwd packages/storybook storybook",
     "lint": "oxlint",
     "lint:effect-patterns": "ast-grep scan -c script/ast-grep/sgconfig.yml packages/core/src packages/server/src packages/protocol/src packages/cli/src",
@@ -102,6 +103,8 @@
   "devDependencies": {
     "@actions/artifact": "5.0.1",
     "@ast-grep/cli": "0.44.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "@tsconfig/bun": "catalog:",
     "@types/mime-types": "3.0.1",
     "@typescript/native-preview": "catalog:",
