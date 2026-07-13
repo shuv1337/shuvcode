@@ -289,6 +289,14 @@ export function createTuiApiAdapters(input: Input): Omit<TuiPluginApi, "lifecycl
     get tuiConfig() {
       return input.tuiConfig
     },
+    kv: {
+      get(_key, fallback) {
+        if (fallback === undefined) throw new Error("Persistent TUI KV storage is not supported")
+        return fallback
+      },
+      set() {},
+      ready: true,
+    },
     state: stateApi(input.sync, input.data),
     get client() {
       return input.sdk.client
