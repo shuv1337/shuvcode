@@ -1,7 +1,7 @@
 import { $ } from "bun"
 import semver from "semver"
 import path from "path"
-import { bumpVersion } from "./version.js"
+import { nextForkVersion } from "./version.js"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
@@ -41,7 +41,7 @@ const VERSION = await (async () => {
       return res.json()
     })
     .then((data: any) => data.version)
-  return bumpVersion(version, env.OPENCODE_BUMP)
+  return nextForkVersion(version)
 })()
 
 function previewBuildNumber() {

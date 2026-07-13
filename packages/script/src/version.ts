@@ -1,10 +1,12 @@
 import semver from "semver"
 
-export function bumpVersion(version: string, bump?: string) {
+const base = "2.0.0"
+
+export function nextForkVersion(version: string) {
   const parsed = semver.parse(version)
   if (!parsed) throw new Error(`Invalid release version: ${version}`)
-  const type = bump?.toLowerCase()
-  if (type === "major") return `${parsed.major + 1}.0.0`
-  if (type === "minor") return `${parsed.major}.${parsed.minor + 1}.0`
-  return `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`
+  if (`${parsed.major}.${parsed.minor}.${parsed.patch}` !== base) return `${base}-1`
+  const iteration =
+    parsed.prerelease.length === 1 && typeof parsed.prerelease[0] === "number" ? parsed.prerelease[0] : 0
+  return `${base}-${iteration + 1}`
 }
