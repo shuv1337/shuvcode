@@ -3,7 +3,6 @@ export * as ToolRegistry from "./registry"
 import { ToolOutput, type ToolCall, type ToolDefinition, type ToolResultValue } from "@opencode-ai/llm"
 import { Context, Effect, Layer, Scope } from "effect"
 import type { AgentV2 } from "../agent"
-import { Flag } from "../flag/flag"
 import { PermissionV2 } from "../permission"
 import { SessionMessage } from "../session/message"
 import { SessionSchema } from "../session/schema"
@@ -56,7 +55,7 @@ const registryLayer = Layer.effect(
       readonly tool: AnyTool
       readonly name: string
       readonly group?: string
-      readonly deferred: boolean
+      readonly codemode: boolean
     }
     const local = new Map<string, Array<{ readonly token: object; readonly registration: Registration }>>()
 
@@ -132,7 +131,8 @@ const registryLayer = Layer.effect(
       register: Effect.fn("ToolRegistry.register")(function* (tools, options) {
         const entries = registrationEntries(tools, options?.group)
         if (entries.length === 0) return
-        const reserved = options?.deferred ? undefined : entries.find((entry) => entry.key === "execute")
+        const codemode = options?.codemode ?? true
+        const reserved = codemode ? undefined : entries.find((entry) => entry.key === "execute")
         if (reserved)
           return yield* Effect.fail(
             new RegistrationError({ name: reserved.key, message: 'Tool name "execute" is reserved for CodeMode' }),
@@ -149,7 +149,7 @@ const registryLayer = Layer.effect(
                     tool: entry.tool,
                     name: entry.name,
                     group: entry.group,
-                    deferred: options?.deferred ?? false,
+                    codemode,
                   },
                 },
               ])
@@ -168,18 +168,17 @@ const registryLayer = Layer.effect(
       }),
       materialize: Effect.fn("ToolRegistry.materialize")(function* (permissions) {
         const direct = new Map<string, Registration>()
-        const deferred = new Map<string, Registration>()
+        const codemode = new Map<string, Registration>()
         const rules = permissions ?? []
         for (const [name, entries] of local) {
           const registration = entries.at(-1)?.registration
           if (!registration) continue
-          if (registration.deferred && !Flag.CODEMODE_ENABLED) continue
           if (whollyDisabled(permission(registration.tool, name), rules)) continue
-          if (registration.deferred) deferred.set(name, registration)
+          if (registration.codemode) codemode.set(name, registration)
           else direct.set(name, registration)
         }
         const execute =
-          deferred.size > 0 && !whollyDisabled("execute", rules) ? ExecuteTool.create(deferred) : undefined
+          codemode.size > 0 && !whollyDisabled("execute", rules) ? ExecuteTool.create(codemode) : undefined
         return {
           definitions: [
             ...Array.from(direct, ([name, registration]) => definition(name, registration.tool)),

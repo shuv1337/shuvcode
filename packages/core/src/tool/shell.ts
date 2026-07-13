@@ -278,6 +278,7 @@ export const Plugin = {
                 ),
               ),
           }),
+          { codemode: false },
         ),
       )
       .pipe(Effect.orDie)
