@@ -44,7 +44,6 @@ import { useEvent } from "./context/event"
 import { SDKProvider, useSDK } from "./context/sdk"
 import { StartupLoading } from "./component/startup-loading"
 import { Reconnecting } from "./component/reconnecting"
-import { SyncProvider, useSync } from "./context/sync"
 import { DataProvider, useData } from "./context/data"
 import { LocationProvider } from "./context/location"
 import { LocalProvider, useLocal } from "./context/local"
@@ -345,8 +344,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                         >
                                           <PermissionProvider>
                                             <ProjectProvider>
-                                              <SyncProvider>
-                                                <DataProvider>
+                                              <DataProvider>
                                                   <ThemeProvider mode={mode}>
                                                     <LocalProvider>
                                                       <PromptStashProvider>
@@ -376,8 +374,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                       </PromptStashProvider>
                                                     </LocalProvider>
                                                   </ThemeProvider>
-                                                </DataProvider>
-                                              </SyncProvider>
+                                              </DataProvider>
                                             </ProjectProvider>
                                           </PermissionProvider>
                                         </SDKProvider>
@@ -430,7 +427,6 @@ function App(props: {
   const keymap = useOpencodeKeymap()
   const event = useEvent()
   const sdk = useSDK()
-  const sync = useSync()
   const toast = useToast()
   const themeState = useTheme()
   const { theme, mode, setMode, locked, lock, unlock } = themeState
@@ -480,7 +476,7 @@ function App(props: {
       routes: pluginRuntime.routes,
       event,
       sdk,
-      sync,
+      project,
       data,
       theme: themeState,
       toast,
