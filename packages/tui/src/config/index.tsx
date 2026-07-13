@@ -179,6 +179,7 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
 const ConfigContext = createContext<{
   data: Resolved
   update: Interface["update"]
+  writable: boolean
 }>()
 
 export function ConfigProvider(props: {
@@ -195,7 +196,9 @@ export function ConfigProvider(props: {
     setConfig(reconcile(resolve(info, props.options ?? { terminalSuspend: true })))
     return info
   }
-  return <ConfigContext.Provider value={{ data: config, update }}>{props.children}</ConfigContext.Provider>
+  return (
+    <ConfigContext.Provider value={{ data: config, update, writable: !!host }}>{props.children}</ConfigContext.Provider>
+  )
 }
 
 export function useConfig() {

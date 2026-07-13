@@ -53,6 +53,7 @@ import { DialogModel } from "./component/dialog-model"
 import { useConnected } from "./component/use-connected"
 import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
+import { DialogConfig } from "./component/dialog-config"
 import { DialogDebug } from "./component/dialog-debug"
 import { DialogPair, type DialogPairCredentials } from "./component/dialog-pair"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
@@ -218,7 +219,9 @@ function fromV1(config: TuiConfigV1.Resolved): Config.Info {
 }
 
 function isConfigInterface(config: Config.Interface | TuiConfigV1.Resolved): config is Config.Interface {
-  return "get" in config && typeof config.get === "function" && "update" in config && typeof config.update === "function"
+  return (
+    "get" in config && typeof config.get === "function" && "update" in config && typeof config.update === "function"
+  )
 }
 
 export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
@@ -477,7 +480,8 @@ function App(props: {
 }) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
-  const config = useConfig().data
+  const configContext = useConfig()
+  const config = configContext.data
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
@@ -587,10 +591,12 @@ function App(props: {
 
     renderer.clearSelection()
   }
-  const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
-  const [pasteSummaryEnabled, setPasteSummaryEnabled] = createSignal(
-    kv.get("paste_summary_enabled", true),
-  )
+  const [terminalTitleEnabled, setTerminalTitleEnabled] = kv.signal("terminal_title_enabled", true)
+  const [pasteSummaryEnabled, setPasteSummaryEnabled] = kv.signal("paste_summary_enabled", true)
+
+  createEffect(() => {
+    renderer.useMouse = !Flag.OPENCODE_DISABLE_MOUSE && config.mouse
+  })
 
   // Update terminal window title based on current route and session
   createEffect(() => {
@@ -848,6 +854,16 @@ function App(props: {
           ))
         },
         category: "Integration",
+      },
+      {
+        name: "opencode.settings",
+        title: "Open settings",
+        slashName: "settings",
+        enabled: configContext.writable,
+        run: () => {
+          dialog.replace(() => <DialogConfig />)
+        },
+        category: "System",
       },
       {
         name: "opencode.status",

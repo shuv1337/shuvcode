@@ -129,6 +129,15 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (theme) setStore("active", theme)
     })
 
+    createEffect(() => {
+      const mode = config.theme?.mode
+      if (mode === "dark" || mode === "light") {
+        pin(mode)
+        return
+      }
+      if (mode === "system" && store.lock !== undefined) free()
+    })
+
     function syncCustomThemes() {
       return themes
         .discover()
