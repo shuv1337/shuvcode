@@ -155,11 +155,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       .filter((item) => item.label),
     ...(props.footerHints ?? []),
   ])
-  const actionItems = createMemo(() =>
+  const actionItems = () =>
     visibleActions()
       .filter(isActionItem)
-      .filter((item) => !isActionDisabled(item)),
-  )
+      .filter((item) => !isActionDisabled(item))
 
   createEffect(() => {
     const index = focusedAction()

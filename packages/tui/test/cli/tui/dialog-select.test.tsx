@@ -16,6 +16,7 @@ async function renderSelect(
   options: DialogSelectOption<string>[],
   onGlobal: () => void,
   onRow: (option: DialogSelectOption<string>) => void,
+  current?: string,
 ) {
   const state = path.join(root, "state")
   await mkdir(state, { recursive: true })
@@ -52,6 +53,7 @@ async function renderSelect(
                   <DialogSelect
                     title="Items"
                     options={options}
+                    current={current}
                     actions={[
                       {
                         command: "dialog.move_session.delete",
@@ -152,6 +154,23 @@ async function mountSelect(root: string, initial: DialogSelectOption<string>[]) 
   await app.waitFor(() => app.renderer.currentFocusedEditor instanceof InputRenderable)
   return { app, moved, replaceOptions, selected }
 }
+
+test("renders actions with a current selection", async () => {
+  await using tmp = await tmpdir()
+  const app = await renderSelect(
+    tmp.path,
+    [{ title: "Alpha", value: "alpha" }],
+    () => {},
+    () => {},
+    "alpha",
+  )
+
+  try {
+    await app.waitForFrame((frame) => frame.includes("delete"))
+  } finally {
+    app.renderer.destroy()
+  }
+})
 
 test("dialog actions run without options while row actions still require a selection", async () => {
   await using tmp = await tmpdir()
