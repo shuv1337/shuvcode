@@ -54,12 +54,6 @@ const PluginModule = Schema.Struct({
   ]),
 })
 
-const PluginPackage = Schema.Struct({
-  exports: Schema.optional(Schema.Unknown),
-  main: Schema.optional(Schema.String),
-  module: Schema.optional(Schema.String),
-})
-
 type Operation =
   | {
       readonly type: "add"
@@ -165,7 +159,7 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
   const npm = yield* Npm.Service
   const entrypoint = path.isAbsolute(operation.target)
     ? pathToFileURL(operation.target).href
-    : (yield* npm.add(operation.target)).entrypoint
+    : (yield* npm.add(operation.target, { subpaths: ["server", ""] })).entrypoint
   if (!entrypoint) return
   // Bun currently ignores query parameters when caching file:// imports.
   const source =
@@ -194,39 +188,9 @@ function discoverDirectory(fs: FSUtil.Interface, directory: string) {
         symlink: true,
       })
       .pipe(Effect.orElseSucceed(() => []))
-    const directories = yield* fs
-      .glob("{plugin,plugins}/*", {
-        cwd: directory,
-        absolute: true,
-        include: "all",
-        dot: true,
-        symlink: true,
-      })
-      .pipe(
-        Effect.flatMap((items) => Effect.filter(items, (item) => fs.isDir(item), { concurrency: "unbounded" })),
-        Effect.orElseSucceed(() => []),
-      )
-    const packages = yield* Effect.forEach(directories.sort(), (directory) => resolvePackageEntrypoint(fs, directory), {
-      concurrency: "unbounded",
-    }).pipe(Effect.map((items) => items.filter((item): item is string => item !== undefined)))
-    return [...files.sort(), ...packages].map((target): Operation => ({ type: "add", target, options: {} }))
+    return files.sort().map((target): Operation => ({ type: "add", target, options: {} }))
   })
 }
-
-const resolvePackageEntrypoint = Effect.fnUntraced(function* (fs: FSUtil.Interface, directory: string) {
-  const pkg = yield* fs.readJson(path.join(directory, "package.json")).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(PluginPackage)),
-    Effect.catch(() => Effect.succeed(undefined)),
-  )
-  const exported = typeof pkg?.exports === "string" ? pkg.exports : undefined
-  const entries = [exported, pkg?.module, pkg?.main, "index.ts", "index.js"]
-
-  return yield* Effect.forEach(entries, (entry) => {
-    if (!entry) return Effect.succeed(undefined)
-    const file = path.resolve(directory, entry)
-    return fs.isFile(file).pipe(Effect.map((exists) => (exists ? file : undefined)))
-  }).pipe(Effect.map((items) => items.find((item): item is string => item !== undefined)))
-})
 
 export interface Interface {
   /** Wait for the initial plugin generation and startup updates to settle. */
