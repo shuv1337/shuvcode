@@ -182,7 +182,7 @@ test("binary failure emits no success event", async () => {
 test("success event data can carry a provider-executed result", () => {
   const decoded = Schema.decodeUnknownSync(SessionEvent.Tool.Success.data)({
     sessionID,
-    assistantMessageID: SessionMessage.ID.create(),
+    messageID: SessionMessage.ID.create(),
     callID: "call-old",
     structured: { type: "media", mime: "image/png" },
     content: [{ type: "file", uri: `data:image/png;base64,${base64}`, mime: "image/png" }],
