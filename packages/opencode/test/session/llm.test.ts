@@ -1095,7 +1095,7 @@ describe("session.llm.stream", () => {
         const agent = {
           name: "test",
           mode: "primary",
-          options: {},
+          options: { reasoningMode: "pro" },
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
           temperature: 0.2,
         } satisfies Agent.Info
@@ -1126,6 +1126,7 @@ describe("session.llm.stream", () => {
         expect(body.model).toBe(resolved.api.id)
         expect(body.stream).toBe(true)
         expect((body.reasoning as { effort?: string } | undefined)?.effort).toBe("high")
+        expect((body.reasoning as { mode?: string } | undefined)?.mode).toBe("pro")
 
         const maxTokens = body.max_output_tokens as number | undefined
         expect(maxTokens).toBe(undefined) // match codex cli behavior

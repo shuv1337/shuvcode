@@ -244,6 +244,7 @@ function useHomeSessionHeaderOpacity(groups: () => HomeSessionGroup[]) {
 // background without navigating, matching browser conventions.
 function isBackgroundOpen(event: MouseEvent) {
   return shouldOpenSessionInBackground({
+    button: event.button,
     mac: typeof navigator === "object" && /(Mac|iPod|iPhone|iPad)/.test(navigator.platform),
     meta: event.metaKey,
     ctrl: event.ctrlKey,
