@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Layer } from "effect"
 import { randomBytes, randomUUID } from "node:crypto"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
-import { createRoutes } from "../src/routes"
+import { createEmbeddedRoutes, createRoutes } from "../src/routes"
 
 process.env.OPENCODE_DB = ":memory:"
 
@@ -11,12 +11,15 @@ const basic = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`
 const app = HttpRouter.toWebHandler(
   createRoutes(password, () => ["https://shuvdev.example"]).pipe(Layer.provide(HttpServer.layerServices)),
 )
+const embedded = HttpRouter.toWebHandler(createEmbeddedRoutes().pipe(Layer.provide(HttpServer.layerServices)))
 
 beforeAll(async () => {
   await app.handler(new Request("http://localhost/api/health", { headers: { authorization: basic } }))
 })
 
-afterAll(() => app.dispose())
+afterAll(async () => {
+  await Promise.all([app.dispose(), embedded.dispose()])
+})
 
 describe("pairing HTTP authorization", () => {
   test("redeems without server credentials but keeps management administrator-only", async () => {
@@ -96,5 +99,18 @@ describe("pairing HTTP authorization", () => {
         )
       ).status,
     ).toBe(400)
+  })
+
+  test("keeps embedded server routes open while protecting pairing management", async () => {
+    expect((await embedded.handler(new Request("http://localhost/api/server"))).status).toBe(200)
+    expect(
+      (
+        await embedded.handler(
+          new Request("http://localhost/api/pairing/invitation", {
+            method: "POST",
+          }),
+        )
+      ).status,
+    ).toBe(401)
   })
 })

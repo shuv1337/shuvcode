@@ -1,10 +1,12 @@
 export * as Pairing from "./pairing"
 
 import { asc, eq, or } from "drizzle-orm"
-import { Context, Data, Duration, Effect, Layer, Schema, Semaphore } from "effect"
+import { timingSafeEqual } from "node:crypto"
+import { Context, Data, Duration, Effect, Layer, Schema } from "effect"
 import { Pairing } from "@opencode-ai/schema/pairing"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
+import { KeyedMutex } from "./effect/keyed-mutex"
 import { PairingDeviceTable } from "./pairing/sql"
 import { Hash } from "./util/hash"
 
@@ -53,7 +55,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Pa
 export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const lock = Semaphore.makeUnsafe(1)
+    const redemptionLocks = KeyedMutex.makeUnsafe<string>()
     const invitations = new Map<string, { readonly expiresAt: number }>()
 
     const rowDevice = (row: typeof PairingDeviceTable.$inferSelect): Pairing.Device => ({
@@ -71,33 +73,29 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
           catch: () => new InvalidRequest({ message: "Invalid advertised pairing URL" }),
         })
         if (urls.length === 0) return yield* new InvalidRequest({ message: "No pairing URL is available" })
-        return yield* lock.withPermit(
-          Effect.gen(function* () {
-            const now = Date.now()
-            for (const [digest, invitation] of invitations) {
-              if (invitation.expiresAt <= now) invitations.delete(digest)
-            }
-            if (invitations.size >= capacity)
-              return yield* new CapacityExceeded({ message: "Too many outstanding pairing invitations" })
-            const token = Pairing.InvitationToken.make(
-              Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
-            )
-            const expiresAt = now + Duration.toMillis(Duration.fromInputUnsafe(ttl))
-            invitations.set(Hash.sha256(token), { expiresAt })
-            const result = {
-              v: 1 as const,
-              kind: "shuvcode.pair" as const,
-              urls,
-              token,
-              expiresAt: new Date(expiresAt).toISOString(),
-            }
-            if (Buffer.byteLength(JSON.stringify(result)) > 4_096) {
-              invitations.delete(Hash.sha256(token))
-              return yield* new InvalidRequest({ message: "Pairing invitation exceeds the scanner size limit" })
-            }
-            return result
-          }),
+        const now = Date.now()
+        for (const [digest, invitation] of invitations) {
+          if (invitation.expiresAt <= now) invitations.delete(digest)
+        }
+        if (invitations.size >= capacity)
+          return yield* new CapacityExceeded({ message: "Too many outstanding pairing invitations" })
+        const token = Pairing.InvitationToken.make(
+          Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
         )
+        const expiresAt = now + Duration.toMillis(Duration.fromInputUnsafe(ttl))
+        invitations.set(Hash.sha256(token), { expiresAt })
+        const result = {
+          v: 1 as const,
+          kind: "shuvcode.pair" as const,
+          urls,
+          token,
+          expiresAt: new Date(expiresAt).toISOString(),
+        }
+        if (Buffer.byteLength(JSON.stringify(result)) > 4_096) {
+          invitations.delete(Hash.sha256(token))
+          return yield* new InvalidRequest({ message: "Pairing invitation exceeds the scanner size limit" })
+        }
+        return result
       }),
       redeem: Effect.fn("Pairing.redeem")(function* (input) {
         if (!Schema.is(Pairing.DeviceCredential)(input.credential))
@@ -106,7 +104,7 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
           return yield* new InvalidRequest({ message: "Invalid device name" })
         const invitationHash = Hash.sha256(input.token)
         const credentialHash = Hash.sha256(input.credential)
-        return yield* lock.withPermit(
+        return yield* redemptionLocks.withLock(invitationHash)(
           Effect.gen(function* () {
             const existing = yield* database.db
               .select()
@@ -123,8 +121,8 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
             if (existing) {
               if (
                 existing.request_id === input.requestID &&
-                existing.invitation_hash === invitationHash &&
-                existing.credential_hash === credentialHash
+                digestEqual(existing.invitation_hash, invitationHash) &&
+                digestEqual(existing.credential_hash, credentialHash)
               )
                 return { deviceID: existing.id }
               return yield* new Conflict({ message: "Pairing redemption does not match the committed enrollment" })
@@ -136,7 +134,7 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
               return yield* new InvitationUnavailable({ message: "Pairing invitation is unavailable" })
             }
             const deviceID = Pairing.DeviceID.create()
-            yield* database.db
+            const stored = yield* database.db
               .transaction((tx) =>
                 tx
                   .insert(PairingDeviceTable)
@@ -149,7 +147,31 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
                   })
                   .run(),
               )
-              .pipe(Effect.orDie)
+              .pipe(Effect.orDie, Effect.exit)
+            if (stored._tag === "Failure") {
+              const committed = yield* database.db
+                .select()
+                .from(PairingDeviceTable)
+                .where(
+                  or(
+                    eq(PairingDeviceTable.request_id, input.requestID),
+                    eq(PairingDeviceTable.invitation_hash, invitationHash),
+                    eq(PairingDeviceTable.credential_hash, credentialHash),
+                  ),
+                )
+                .get()
+                .pipe(Effect.orDie)
+              if (!committed) return yield* Effect.failCause(stored.cause)
+              if (
+                committed.request_id === input.requestID &&
+                digestEqual(committed.invitation_hash, invitationHash) &&
+                digestEqual(committed.credential_hash, credentialHash)
+              ) {
+                invitations.delete(invitationHash)
+                return { deviceID: committed.id }
+              }
+              return yield* new Conflict({ message: "Pairing redemption conflicts with another enrollment" })
+            }
             invitations.delete(invitationHash)
             return { deviceID }
           }),
@@ -196,3 +218,9 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
 const layer = Layer.effect(Service, make())
 
 export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node] })
+
+function digestEqual(left: string, right: string) {
+  const leftBytes = Buffer.from(left, "hex")
+  const rightBytes = Buffer.from(right, "hex")
+  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes)
+}

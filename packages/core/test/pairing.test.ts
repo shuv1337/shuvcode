@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Duration, Effect, Exit, Layer } from "effect"
+import { Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import { eq } from "drizzle-orm"
 import { Pairing } from "@opencode-ai/core/pairing"
 import { PairingDeviceTable } from "@opencode-ai/core/pairing/sql"
@@ -93,6 +93,71 @@ describe("Pairing.Service", () => {
       const results = yield* Effect.all([pairing.redeem(input), pairing.redeem(input)], { concurrency: 2 })
       expect(results[0]).toEqual(results[1])
       expect((yield* pairing.list()).filter((device) => device.deviceID === results[0].deviceID)).toHaveLength(1)
+    }),
+  )
+
+  it.live("keeps issuance independent while an unrelated redemption waits on storage", () =>
+    Effect.gen(function* () {
+      const pairing = yield* Pairing.Service
+      const database = yield* Database.Service
+      const invitation = yield* pairing.issue({ urls: ["https://shuvdev.example"] })
+      const transactionStarted = yield* Deferred.make<void>()
+      const releaseTransaction = yield* Deferred.make<void>()
+      const transaction = yield* database.db
+        .transaction(() =>
+          Deferred.succeed(transactionStarted, undefined).pipe(Effect.andThen(Deferred.await(releaseTransaction))),
+        )
+        .pipe(Effect.forkScoped)
+      yield* Deferred.await(transactionStarted)
+      const redemption = yield* pairing
+        .redeem({
+          token: invitation.token,
+          requestID: RequestID.make("f94cd2d0-40be-4d3b-b876-4bfc31f70027"),
+          deviceName: DeviceName.make("Independent Phone"),
+          credential: DeviceCredential.make("scd_v1_OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO"),
+        })
+        .pipe(Effect.forkScoped)
+      yield* Effect.yieldNow
+
+      expect(yield* pairing.issue({ urls: ["https://shuvdev.example"] }).pipe(Effect.timeout("100 millis"))).toEqual(
+        expect.objectContaining({ kind: "shuvcode.pair" }),
+      )
+      yield* Deferred.succeed(releaseTransaction, undefined)
+      yield* Fiber.join(transaction)
+      expect((yield* Fiber.join(redemption)).deviceID).toStartWith("device_")
+    }),
+  )
+
+  it.effect("redeems unrelated invitations concurrently without cross-token interference", () =>
+    Effect.gen(function* () {
+      const pairing = yield* Pairing.Service
+      const first = yield* pairing.issue({ urls: ["https://shuvdev.example"] })
+      const second = yield* pairing.issue({ urls: ["https://shuvdev.example"] })
+      const devices = yield* Effect.all(
+        [
+          pairing.redeem({
+            token: first.token,
+            requestID: RequestID.make("716cb8b5-6e73-4584-b65b-47e2f6ffde90"),
+            deviceName: DeviceName.make("First Independent Phone"),
+            credential: DeviceCredential.make("scd_v1_PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"),
+          }),
+          pairing.redeem({
+            token: second.token,
+            requestID: RequestID.make("67fd50f9-410c-48f1-a8bb-54f61349870a"),
+            deviceName: DeviceName.make("Second Independent Phone"),
+            credential: DeviceCredential.make("scd_v1_QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ"),
+          }),
+        ],
+        { concurrency: 2 },
+      )
+
+      expect(devices[0].deviceID).not.toBe(devices[1].deviceID)
+      expect(yield* pairing.list()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "First Independent Phone" }),
+          expect.objectContaining({ name: "Second Independent Phone" }),
+        ]),
+      )
     }),
   )
 
