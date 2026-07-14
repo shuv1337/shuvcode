@@ -26,7 +26,14 @@ export const RequestID = Schema.String.check(
 ).pipe(Schema.brand("Pairing.RequestID"))
 export type RequestID = typeof RequestID.Type
 
-export const DeviceName = Schema.Trim.check(Schema.isMinLength(1)).pipe(Schema.brand("Pairing.DeviceName"))
+export const DeviceName = Schema.Trimmed.check(
+  Schema.isMinLength(1),
+  Schema.makeFilter((value) => Array.from(value).length <= 80, {
+    expected: "a string with at most 80 Unicode scalar values",
+    meta: { _tag: "isMaxLength", maxLength: 80 },
+    arbitrary: { constraint: { maxLength: 80 } },
+  }),
+).pipe(Schema.brand("Pairing.DeviceName"))
 export type DeviceName = typeof DeviceName.Type
 
 export const Invitation = Schema.Struct({

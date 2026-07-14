@@ -9,7 +9,7 @@ export type PairingDevice = {
   name: string
   createdAt: string
   updatedAt: string
-  revokedAt?: string | null
+  revokedAt?: string | undefined
 }
 
 export type ModelRef = { id: string; providerID: string; variant?: string }

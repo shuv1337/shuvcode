@@ -1,6 +1,6 @@
 import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import { createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { renderUnicodeCompact } from "uqr"
 import { useSDK } from "../context/sdk"
 import { useTheme } from "../context/theme"
@@ -12,20 +12,19 @@ export function DialogPair() {
   const dialog = useDialog()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
-  const [loadError, setLoadError] = createSignal<unknown>()
+  const [actionError, setActionError] = createSignal<unknown>()
   const [revoking, setRevoking] = createSignal<string>()
+  const [now, setNow] = createSignal(Date.now())
 
   dialog.setSize("large")
   dialog.setCentered(true)
 
-  const [invitation, invitationActions] = createResource(() =>
-    sdk.api.pairing.invitation.create().catch((error) => {
-      setLoadError(error)
-      return undefined
-    }),
-  )
+  const [invitation, invitationActions] = createResource(() => sdk.api.pairing.invitation.create())
   const [devices, deviceActions] = createResource(() => sdk.api.pairing.device.list())
-  const info = createMemo(() => invitation())
+  const clock = setInterval(() => setNow(Date.now()), 1_000)
+  onCleanup(() => clearInterval(clock))
+  const status = createMemo(() => invitationStatus(invitation(), invitation.error, invitation.loading, now()))
+  const info = createMemo(() => (status().type === "active" ? invitation() : undefined))
   const horizontal = createMemo(() => dimensions().width >= 96)
   const content = () => {
     const value = info()
@@ -76,7 +75,7 @@ export function DialogPair() {
                         sdk.api.pairing.device
                           .revoke({ deviceID: device.deviceID })
                           .then(() => deviceActions.refetch())
-                          .catch(setLoadError)
+                          .catch(setActionError)
                           .finally(() => setRevoking(undefined))
                       }}
                     >
@@ -102,8 +101,20 @@ export function DialogPair() {
           esc
         </text>
       </box>
-      <Show when={loadError()}>{(error) => <text fg={theme.error}>{errorMessage(error())}</text>}</Show>
-      <Show when={info()} fallback={<text fg={theme.textMuted}>Loading server information...</text>}>
+      <Show when={actionError()}>{(error) => <text fg={theme.error}>{errorMessage(error())}</text>}</Show>
+      <Show when={status().type === "loading"}>
+        <text fg={theme.textMuted}>Loading pairing invitation...</text>
+      </Show>
+      <Show when={status().type === "unavailable"}>
+        <text fg={theme.error}>Pairing is unavailable: {errorMessage(invitation.error)}</text>
+      </Show>
+      <Show when={status().type === "expired"}>
+        <text fg={theme.textMuted}>This pairing invitation expired. Regenerate it to display a new QR code.</text>
+        <text fg={theme.primary} onMouseUp={() => invitationActions.refetch()}>
+          Regenerate invitation
+        </text>
+      </Show>
+      <Show when={status().type === "active"}>
         <Show
           when={dimensions().height >= 36}
           fallback={
@@ -120,4 +131,16 @@ export function DialogPair() {
       </Show>
     </box>
   )
+}
+
+export function invitationStatus(
+  invitation: { readonly expiresAt: string } | undefined,
+  error: unknown,
+  loading: boolean,
+  now: number,
+) {
+  if (error) return { type: "unavailable" as const }
+  if (!invitation) return { type: loading ? ("loading" as const) : ("unavailable" as const) }
+  if (Date.parse(invitation.expiresAt) <= now) return { type: "expired" as const }
+  return { type: "active" as const }
 }

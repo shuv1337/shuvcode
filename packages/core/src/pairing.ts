@@ -1,7 +1,7 @@
 export * as Pairing from "./pairing"
 
 import { asc, eq, or } from "drizzle-orm"
-import { Context, Data, Duration, Effect, Layer, Semaphore } from "effect"
+import { Context, Data, Duration, Effect, Layer, Schema, Semaphore } from "effect"
 import { Pairing } from "@opencode-ai/schema/pairing"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
@@ -52,7 +52,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Pa
 
 export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
   Effect.gen(function* () {
-    const { db } = yield* Database.Service
+    const database = yield* Database.Service
     const lock = Semaphore.makeUnsafe(1)
     const invitations = new Map<string, { readonly expiresAt: number }>()
 
@@ -100,15 +100,15 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
         )
       }),
       redeem: Effect.fn("Pairing.redeem")(function* (input) {
-        if (!/^scd_v1_[A-Za-z0-9_-]{43}$/.test(input.credential))
+        if (!Schema.is(Pairing.DeviceCredential)(input.credential))
           return yield* new InvalidRequest({ message: "Invalid device credential" })
-        if (input.deviceName !== input.deviceName.trim() || Array.from(input.deviceName).length > 80)
+        if (!Schema.is(Pairing.DeviceName)(input.deviceName))
           return yield* new InvalidRequest({ message: "Invalid device name" })
         const invitationHash = Hash.sha256(input.token)
         const credentialHash = Hash.sha256(input.credential)
         return yield* lock.withPermit(
           Effect.gen(function* () {
-            const existing = yield* db
+            const existing = yield* database.db
               .select()
               .from(PairingDeviceTable)
               .where(
@@ -135,26 +135,29 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
               invitations.delete(invitationHash)
               return yield* new InvitationUnavailable({ message: "Pairing invitation is unavailable" })
             }
-            invitations.delete(invitationHash)
             const deviceID = Pairing.DeviceID.create()
-            yield* db
-              .insert(PairingDeviceTable)
-              .values({
-                id: deviceID,
-                request_id: input.requestID,
-                name: input.deviceName,
-                credential_hash: credentialHash,
-                invitation_hash: invitationHash,
-              })
-              .run()
+            yield* database.db
+              .transaction((tx) =>
+                tx
+                  .insert(PairingDeviceTable)
+                  .values({
+                    id: deviceID,
+                    request_id: input.requestID,
+                    name: input.deviceName,
+                    credential_hash: credentialHash,
+                    invitation_hash: invitationHash,
+                  })
+                  .run(),
+              )
               .pipe(Effect.orDie)
+            invitations.delete(invitationHash)
             return { deviceID }
           }),
         )
       }),
       authenticate: Effect.fn("Pairing.authenticate")(function* (credential) {
-        if (!/^scd_v1_[A-Za-z0-9_-]{43}$/.test(credential)) return
-        const row = yield* db
+        if (!Schema.is(Pairing.DeviceCredential)(credential)) return
+        const row = yield* database.db
           .select({ id: PairingDeviceTable.id, time_revoked: PairingDeviceTable.time_revoked })
           .from(PairingDeviceTable)
           .where(eq(PairingDeviceTable.credential_hash, Hash.sha256(credential)))
@@ -164,7 +167,7 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
         return { type: "device" as const, deviceID: row.id }
       }),
       list: Effect.fn("Pairing.list")(function* () {
-        return (yield* db
+        return (yield* database.db
           .select()
           .from(PairingDeviceTable)
           .orderBy(asc(PairingDeviceTable.time_created))
@@ -172,7 +175,7 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
           .pipe(Effect.orDie)).map(rowDevice)
       }),
       revoke: Effect.fn("Pairing.revoke")(function* (deviceID) {
-        const row = yield* db
+        const row = yield* database.db
           .select({ id: PairingDeviceTable.id, time_revoked: PairingDeviceTable.time_revoked })
           .from(PairingDeviceTable)
           .where(eq(PairingDeviceTable.id, deviceID))
@@ -180,7 +183,7 @@ export const make = (ttl: Duration.Input = DEFAULT_TTL, capacity = CAPACITY) =>
           .pipe(Effect.orDie)
         if (!row) return yield* new DeviceNotFound({ deviceID, message: "Pairing device not found" })
         if (row.time_revoked !== null) return
-        yield* db
+        yield* database.db
           .update(PairingDeviceTable)
           .set({ time_revoked: Date.now() })
           .where(eq(PairingDeviceTable.id, deviceID))

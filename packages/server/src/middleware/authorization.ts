@@ -65,13 +65,13 @@ export const authorizationLayer = Layer.effect(
         const principal = bearer ? yield* pairing.authenticate(bearer) : undefined
         if (principal?.type === "device") {
           if (
-            Capabilities.requiresAdministrator(url.pathname) ||
+            Capabilities.requiresAdministrator(request.method, url.pathname) ||
             !Capabilities.allowsMobile(request.method, url.pathname)
           )
             return yield* new ForbiddenError({ message: "Administrator access required" })
           return yield* effect.pipe(Effect.provideService(Principal, principal))
         }
-        if (!ServerAuth.required(config) && !Capabilities.requiresAdministrator(url.pathname))
+        if (!ServerAuth.required(config) && !Capabilities.requiresAdministrator(request.method, url.pathname))
           return yield* effect.pipe(Effect.provideService(Principal, { type: "unauthenticated", reason: "embedded" }))
         yield* HttpEffect.appendPreResponseHandler((_request, response) =>
           Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", WWW_AUTHENTICATE)),

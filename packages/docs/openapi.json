@@ -11532,7 +11532,18 @@
             ]
           },
           "deviceName": {
-            "type": "string"
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+              },
+              {
+                "minLength": 1
+              },
+              {
+                "maxLength": 80
+              }
+            ]
           },
           "credential": {
             "type": "string",
@@ -11635,7 +11646,18 @@
             ]
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+              },
+              {
+                "minLength": 1
+              },
+              {
+                "maxLength": 80
+              }
+            ]
           },
           "createdAt": {
             "type": "string",
