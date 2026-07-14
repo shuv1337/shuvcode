@@ -1090,6 +1090,7 @@ function SessionReasoningGroupView(props: {
   const { theme, syntax } = useTheme()
   const renderer = useRenderer()
   const [expanded, setExpanded] = createSignal(false)
+  const [hover, setHover] = createSignal(false)
   const parts = createMemo<{ message: SessionMessageAssistant; part: SessionMessageAssistantReasoning }[]>(
     (previous) => {
       const next = props.refs.flatMap((ref) => {
@@ -1127,61 +1128,56 @@ function SessionReasoningGroupView(props: {
           <For each={parts()}>{(item) => <ReasoningPart part={item.part} message={item.message} last={false} />}</For>
         }
       >
-        <box paddingLeft={3} flexDirection="column" flexShrink={0}>
-          <box
+        <box flexDirection="column" flexShrink={0}>
+          <InlineToolRow
+            icon={expanded() ? "-" : "+"}
+            color={
+              !props.completed
+                ? theme.text
+                : hover() || expanded()
+                  ? theme.warning
+                  : RGBA.fromValues(theme.warning.r, theme.warning.g, theme.warning.b, theme.thinkingOpacity)
+            }
+            complete={props.completed}
+            pending={latest() ? `Thinking: ${latest()}` : "Thinking"}
+            spinner={!props.completed}
+            onMouseOver={() => setHover(true)}
+            onMouseOut={() => setHover(false)}
             onMouseUp={() => {
               if (renderer.getSelection()?.getSelectedText()) return
               setExpanded((value) => !value)
             }}
           >
-            <Show
-              when={props.completed}
-              fallback={<Spinner color={theme.warning}>{latest() ? `Thinking: ${latest()}` : "Thinking"}</Spinner>}
-            >
-              <Show
-                when={expanded()}
-                fallback={
-                  <text fg={theme.warning} wrapMode="none">
-                    + Thought
-                    <Show when={latest()}>: {latest()}</Show>
-                    <Show when={parts().length > 1}> · {parts().length} steps</Show>
-                    <Show when={duration()}> · {Locale.duration(duration())}</Show>
-                  </text>
-                }
-              >
-                <text fg={theme.warning} wrapMode="none">
-                  - Thought
-                  <Show when={parts().length > 1}> · {parts().length} steps</Show>
-                  <Show when={duration()}> · {Locale.duration(duration())}</Show>
-                </text>
-              </Show>
-            </Show>
-          </box>
+            {props.completed ? "Thought" : latest() ? `Thinking: ${latest()}` : "Thinking"}
+            <Show when={props.completed && !expanded() && latest()}>: {latest()}</Show>
+            <Show when={props.completed && parts().length > 1}> · {parts().length} steps</Show>
+            <Show when={props.completed && duration()}> · {Locale.duration(duration())}</Show>
+          </InlineToolRow>
           <Show when={expanded()}>
-            <For each={parts()}>
-              {(item) => {
-                const content = createMemo(() => item.part.text.replace("[REDACTED]", "").trim())
-                const summary = createMemo(() => reasoningSummary(content()))
-                const markdown = createMemo(() => {
-                  if (!summary().title) return content()
-                  if (!summary().body) return `**${summary().title}**`
-                  return `**${summary().title}** · ${summary().body}`
-                })
-                return (
+            <box paddingLeft={3}>
+              <For each={parts()}>
+                {(item) => (
                   <box marginTop={1}>
-                    <code
-                      filetype="markdown"
-                      drawUnstyledText={false}
-                      streaming={false}
-                      syntaxStyle={syntax()}
-                      content={markdown()}
-                      conceal={ctx.markdownMode() === "rendered"}
-                      fg={theme.textMuted}
-                    />
+                    <box
+                      border={["left"]}
+                      customBorderChars={SplitBorder.customBorderChars}
+                      borderColor={theme.backgroundElement}
+                      paddingLeft={1}
+                    >
+                      <code
+                        filetype="markdown"
+                        drawUnstyledText={false}
+                        streaming={false}
+                        syntaxStyle={syntax()}
+                        content={item.part.text.replace("[REDACTED]", "").trim()}
+                        conceal={ctx.markdownMode() === "rendered"}
+                        fg={theme.textMuted}
+                      />
+                    </box>
                   </box>
-                )
-              }}
-            </For>
+                )}
+              </For>
+            </box>
           </Show>
         </box>
       </Show>
@@ -1814,26 +1810,40 @@ function ReasoningPart(props: {
   return (
     <Show when={content()}>
       <box paddingLeft={3} flexDirection="column" flexShrink={0}>
-        <box onMouseUp={toggle}>
-          <ReasoningHeader
-            toggleable={inMinimal()}
-            open={!inMinimal() || expanded()}
-            done={isDone()}
-            title={summary().title}
-            duration={isDone() ? Locale.duration(duration()) : undefined}
-          />
-        </box>
-        <Show when={(!inMinimal() || expanded()) && summary().body}>
-          <box paddingLeft={inMinimal() ? 2 : 0} marginTop={1}>
-            <code
-              filetype="markdown"
-              drawUnstyledText={false}
-              streaming={true}
-              syntaxStyle={syntax()}
-              content={summary().body}
-              conceal={ctx.markdownMode() === "rendered"}
-              fg={theme.textMuted}
+        <box
+          border={!inMinimal() || expanded() ? ["left"] : undefined}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={theme.backgroundElement}
+          paddingLeft={!inMinimal() || expanded() ? 1 : 0}
+        >
+          <box onMouseUp={toggle}>
+            <ReasoningHeader
+              toggleable={inMinimal()}
+              open={!inMinimal() || expanded()}
+              done={isDone()}
+              title={inMinimal() && !expanded() ? summary().title : null}
+              duration={isDone() ? Locale.duration(duration()) : undefined}
             />
+          </box>
+        </box>
+        <Show when={!inMinimal() || expanded()}>
+          <box marginTop={1}>
+            <box
+              border={["left"]}
+              customBorderChars={SplitBorder.customBorderChars}
+              borderColor={theme.backgroundElement}
+              paddingLeft={inMinimal() ? 3 : 1}
+            >
+              <code
+                filetype="markdown"
+                drawUnstyledText={false}
+                streaming={true}
+                syntaxStyle={syntax()}
+                content={content()}
+                conceal={ctx.markdownMode() === "rendered"}
+                fg={theme.textMuted}
+              />
+            </box>
           </box>
         </Show>
       </box>
