@@ -18,6 +18,7 @@ import { createStore, produce, reconcile as reconcileStore } from "solid-js/stor
 import { useConfig } from "../config"
 import { useClient } from "../context/client"
 import { useData } from "../context/data"
+import { Keymap } from "../context/keymap"
 import { useRoute } from "../context/route"
 import { useTuiLifecycle } from "../context/runtime"
 import { builtins } from "./builtins"
@@ -59,6 +60,8 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
   const data = useData()
   const route = useRoute()
   const config = useConfig()
+  const keymap = Keymap.use()
+  const shortcuts = Keymap.useShortcuts()
   const lifecycle = useTuiLifecycle()
   const directory = config.path ? path.dirname(config.path) : process.cwd()
   const [store, setStore] = createStore({
@@ -81,6 +84,12 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       options: item.options ?? {},
       client: client.api,
       data,
+      keymap: {
+        layer: Keymap.createLayer,
+        dispatch: keymap.dispatch,
+        shortcut: shortcuts.get,
+        mode: keymap.mode,
+      },
       ui: {
         router: {
           register(page) {
