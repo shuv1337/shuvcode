@@ -105,7 +105,7 @@ export interface UI {
 }
 
 export interface Context {
-  readonly options: Record<string, any>
+  readonly options: Readonly<Record<string, unknown>>
   readonly client: OpenCodeClient
   readonly data: Data
   readonly ui: UI
