@@ -5,6 +5,7 @@ import path from "path"
 import { DialogSelect, type DialogSelectOption } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
 import { useClient } from "../context/client"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useData } from "../context/data"
 import { abbreviateHome } from "../runtime"
@@ -13,7 +14,6 @@ import { Locale } from "../util/locale"
 import { errorMessage } from "../util/error"
 import { isRecord } from "../util/record"
 import { useToast } from "../ui/toast"
-import { useCommandShortcut } from "../keymap"
 import { useProject } from "../context/project"
 import { Spinner } from "./spinner"
 import { DialogWorkspaceFileChanges } from "./dialog-workspace-file-changes"
@@ -45,12 +45,12 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
   const route = useRoute()
   const toast = useToast()
   const paths = useTuiPaths()
+  const shortcuts = Keymap.useShortcuts()
   const [working, setWorking] = createSignal(Boolean(props.initialRemoving))
   const [toDelete, setToDelete] = createSignal<string>()
   const [removing, setRemoving] = createSignal(props.initialRemoving)
   const [replacementCurrent, setReplacementCurrent] = createSignal<string>()
   const [loadError, setLoadError] = createSignal<unknown>()
-  const deleteHint = useCommandShortcut("dialog.move_session.delete")
   onMount(() => dialog.setSize("xlarge"))
 
   function reopen(initialRemoving?: string) {
@@ -175,7 +175,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
         titleView: isRemoving ? (
           <span style={{ fg: theme.error }}>Deleting {item.location}</span>
         ) : deleting ? (
-          <span style={{ fg: theme.text }}>Press {deleteHint()} again to confirm</span>
+          <span style={{ fg: theme.text }}>Press {shortcuts.get("dialog.move_session.delete")} again to confirm</span>
         ) : suffix ? (
           <>
             {visible.slice(0, split)}

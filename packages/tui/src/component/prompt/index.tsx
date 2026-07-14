@@ -450,7 +450,7 @@ export function Prompt(props: PromptProps) {
         title: "Open editor",
         category: "Session",
         name: "prompt.editor",
-        slashName: "editor",
+        slash: { name: "editor" },
         run: async () => {
           dialog.clear()
 
@@ -498,7 +498,7 @@ export function Prompt(props: PromptProps) {
         title: "Skills",
         name: "prompt.skills",
         category: "Prompt",
-        slashName: "skills",
+        slash: { name: "skills" },
         run: () => {
           dialog.replace(() => (
             <DialogSkill
@@ -520,7 +520,7 @@ export function Prompt(props: PromptProps) {
         desc: "Move to another project dir",
         name: "session.move",
         category: "Session",
-        slashName: "move",
+        slash: { name: "move" },
         run: () => {
           move.open()
         },
@@ -537,7 +537,7 @@ export function Prompt(props: PromptProps) {
 
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
-    bindings: config.keybinds.gather("prompt.palette", [
+    bindings: [
       "prompt.submit",
       "prompt.editor",
       "prompt.editor_context.clear",
@@ -548,7 +548,7 @@ export function Prompt(props: PromptProps) {
       "session.interrupt",
       "session.background",
       "session.move",
-    ]),
+    ].flatMap((command) => config.keybinds.get(command)),
   }))
 
   const ref: PromptRef = {
@@ -1188,10 +1188,7 @@ export function Prompt(props: PromptProps) {
     }
 
     const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-    if (
-      (lineCount >= 3 || pastedContent.length > 150) &&
-      config.prompt?.paste !== "full"
-    ) {
+    if ((lineCount >= 3 || pastedContent.length > 150) && config.prompt?.paste !== "full") {
       pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
       return
     }
@@ -1298,10 +1295,7 @@ export function Prompt(props: PromptProps) {
   })
 
   const spinnerDef = createMemo(() => {
-    const agent =
-      status() === "running"
-        ? local.agent.current()
-        : local.agent.current()
+    const agent = status() === "running" ? local.agent.current() : local.agent.current()
     const color = agent ? local.agent.color(agent.id) : theme.border
     return {
       frames: createFrames({

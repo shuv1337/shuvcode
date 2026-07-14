@@ -5,7 +5,7 @@ import { useTheme } from "../../context/theme"
 import { SplitBorder } from "../../ui/border"
 import { Locale } from "../../util/locale"
 import { useTerminalDimensions } from "@opentui/solid"
-import { useCommandShortcut, useOpencodeKeymap } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 import { contextUsage } from "../../util/session"
 
 const money = new Intl.NumberFormat("en-US", {
@@ -47,10 +47,8 @@ export function SubagentFooter() {
   })
 
   const { theme } = useTheme()
-  const keymap = useOpencodeKeymap()
-  const parentShortcut = useCommandShortcut("session.parent")
-  const previousShortcut = useCommandShortcut("session.child.previous")
-  const nextShortcut = useCommandShortcut("session.child.next")
+  const keymap = Keymap.use()
+  const shortcuts = Keymap.useShortcuts()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   useTerminalDimensions()
 
@@ -84,31 +82,31 @@ export function SubagentFooter() {
             <box
               onMouseOver={() => setHover("parent")}
               onMouseOut={() => setHover(null)}
-              onMouseUp={() => keymap.dispatchCommand("session.parent")}
+              onMouseUp={() => keymap.dispatch("session.parent")}
               backgroundColor={hover() === "parent" ? theme.backgroundElement : theme.backgroundPanel}
             >
               <text fg={theme.text}>
-                Parent <span style={{ fg: theme.textMuted }}>{parentShortcut()}</span>
+                Parent <span style={{ fg: theme.textMuted }}>{shortcuts.get("session.parent")}</span>
               </text>
             </box>
             <box
               onMouseOver={() => setHover("prev")}
               onMouseOut={() => setHover(null)}
-              onMouseUp={() => keymap.dispatchCommand("session.child.previous")}
+              onMouseUp={() => keymap.dispatch("session.child.previous")}
               backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
             >
               <text fg={theme.text}>
-                Prev <span style={{ fg: theme.textMuted }}>{previousShortcut()}</span>
+                Prev <span style={{ fg: theme.textMuted }}>{shortcuts.get("session.child.previous")}</span>
               </text>
             </box>
             <box
               onMouseOver={() => setHover("next")}
               onMouseOut={() => setHover(null)}
-              onMouseUp={() => keymap.dispatchCommand("session.child.next")}
+              onMouseUp={() => keymap.dispatch("session.child.next")}
               backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
             >
               <text fg={theme.text}>
-                Next <span style={{ fg: theme.textMuted }}>{nextShortcut()}</span>
+                Next <span style={{ fg: theme.textMuted }}>{shortcuts.get("session.child.next")}</span>
               </text>
             </box>
           </box>

@@ -258,7 +258,7 @@ const tui: TuiPlugin = async (api) => {
         },
       },
     ],
-    bindings: api.tuiConfig.keybinds.gather("plugins.palette", ["plugins.list", "plugins.install"]),
+    bindings: ["plugins.list", "plugins.install"].flatMap((command) => api.tuiConfig.keybinds.get(command)),
   })
 }
 

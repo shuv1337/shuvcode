@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { useBindings } from "../keymap"
 
 export type DialogAlertProps = {
   title: string
@@ -13,13 +13,14 @@ export function DialogAlert(props: DialogAlertProps) {
   const dialog = useDialog()
   const { theme } = useTheme()
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "return",
-        desc: "Confirm alert",
+        bind: "return",
+        title: "Confirm alert",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           props.onConfirm?.()
           dialog.clear()
         },

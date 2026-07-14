@@ -1,59 +1,46 @@
-import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
-import type { BuiltinTuiPlugin } from "../builtins"
+import { Plugin } from "@opencode-ai/plugin/v2/tui"
 import { createMemo, Show } from "solid-js"
-import { useData } from "../../context/data"
+import { useTheme } from "../../context/theme"
 import { contextUsage } from "../../util/session"
-
-const id = "internal:sidebar-context"
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 })
 
-function View(props: { api: TuiPluginApi; session_id: string }) {
-  const data = useData()
-  const theme = () => props.api.theme.current
-  const msg = createMemo(() => data.session.message.list(props.session_id))
-  const session = createMemo(() => data.session.get(props.session_id))
-  const cost = createMemo(() => data.session.cost(props.session_id))
+function View(props: { context: Plugin.Context; sessionID: string }) {
+  const { theme } = useTheme()
+  const msg = createMemo(() => props.context.data.session.message.list(props.sessionID))
+  const session = createMemo(() => props.context.data.session.get(props.sessionID))
+  const cost = createMemo(() => props.context.data.session.cost(props.sessionID))
 
-  const state = createMemo(() => contextUsage(msg(), data.location.model.list(session()?.location), session()?.revert?.messageID))
+  const state = createMemo(() =>
+    contextUsage(msg(), props.context.data.location.model.list(session()?.location), session()?.revert?.messageID),
+  )
 
   return (
     <box>
-      <text fg={theme().text}>
+      <text fg={theme.text}>
         <b>Context</b>
       </text>
-      <Show when={state()} fallback={<text fg={theme().textMuted}>Not measured</text>}>
+      <Show when={state()} fallback={<text fg={theme.textMuted}>Not measured</text>}>
         {(value) => (
           <>
-            <text fg={theme().textMuted}>{value().tokens.toLocaleString()} tokens</text>
+            <text fg={theme.textMuted}>{value().tokens.toLocaleString()} tokens</text>
             <Show when={value().percent !== undefined}>
-              <text fg={theme().textMuted}>{value().percent}% used</text>
+              <text fg={theme.textMuted}>{value().percent}% used</text>
             </Show>
           </>
         )}
       </Show>
-      <text fg={theme().textMuted}>{money.format(cost())} spent</text>
+      <text fg={theme.textMuted}>{money.format(cost())} spent</text>
     </box>
   )
 }
 
-const tui: TuiPlugin = async (api) => {
-  api.slots.register({
-    order: 100,
-    slots: {
-      sidebar_content(_ctx, props) {
-        return <View api={api} session_id={props.session_id} />
-      },
-    },
-  })
-}
-
-const plugin: BuiltinTuiPlugin = {
-  id,
-  tui,
-}
-
-export default plugin
+export default Plugin.define({
+  id: "internal:sidebar-context",
+  setup(context) {
+    context.ui.slot("sidebar.content", (props) => <View context={context} sessionID={props.sessionID} />)
+  },
+})

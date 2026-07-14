@@ -2,9 +2,9 @@ import { useDialog } from "../ui/dialog"
 import { DialogSelect } from "../ui/dialog-select"
 import { createMemo, createSignal } from "solid-js"
 import { Locale } from "../util/locale"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { usePromptStash, type StashEntry } from "./prompt/stash"
-import { useCommandShortcut } from "../keymap"
 
 function getRelativeTime(timestamp: number): string {
   const now = Date.now()
@@ -30,9 +30,9 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
   const dialog = useDialog()
   const stash = usePromptStash()
   const { theme } = useTheme()
+  const shortcuts = Keymap.useShortcuts()
 
   const [toDelete, setToDelete] = createSignal<number>()
-  const deleteHint = useCommandShortcut("stash.delete")
 
   const options = createMemo(() => {
     const entries = stash.list()
@@ -42,7 +42,9 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
         const isDeleting = toDelete() === index
         const lineCount = (entry.prompt.text.match(/\n/g)?.length ?? 0) + 1
         return {
-          title: isDeleting ? `Press ${deleteHint()} again to confirm` : getStashPreview(entry.prompt.text),
+          title: isDeleting
+            ? `Press ${shortcuts.get("stash.delete")} again to confirm`
+            : getStashPreview(entry.prompt.text),
           bg: isDeleting ? theme.error : undefined,
           value: index,
           description: getRelativeTime(entry.timestamp),

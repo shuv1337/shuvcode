@@ -9,8 +9,8 @@ import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useClipboard } from "../context/clipboard"
 import { useData } from "../context/data"
 import { useClient } from "../context/client"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useBindings } from "../keymap"
 import { useDialog } from "../ui/dialog"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
@@ -278,13 +278,14 @@ function OAuthAuto(props: {
   let timer: ReturnType<typeof setTimeout> | undefined
   let settled = false
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "c",
-        desc: "Copy authorization details",
+        bind: "c",
+        title: "Copy authorization details",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           const value = props.attempt.instructions.match(/[A-Z0-9]{4}-[A-Z0-9]{4,5}/)?.[0] ?? props.attempt.url
           clipboard
             .write?.(value)

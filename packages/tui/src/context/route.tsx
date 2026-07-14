@@ -17,6 +17,7 @@ export type SessionRoute = {
 export type PluginRoute = {
   type: "plugin"
   id: string
+  name: string
   data?: Record<string, unknown>
 }
 
@@ -47,8 +48,14 @@ function initialRoute(value: unknown): Route | undefined {
   if (value.type === "session" && "sessionID" in value && typeof value.sessionID === "string") {
     return { type: "session", sessionID: value.sessionID }
   }
-  if (value.type === "plugin" && "id" in value && typeof value.id === "string") {
-    return { type: "plugin", id: value.id }
+  if (
+    value.type === "plugin" &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "name" in value &&
+    typeof value.name === "string"
+  ) {
+    return { type: "plugin", id: value.id, name: value.name }
   }
 }
 

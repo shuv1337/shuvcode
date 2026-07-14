@@ -1,7 +1,6 @@
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Global } from "@opencode-ai/core/global"
 import { run } from "@opencode-ai/tui"
-import { loadBuiltinPlugins } from "@opencode-ai/tui/builtins"
 import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
 import { Config } from "../../config"
@@ -9,6 +8,7 @@ import { Effect, Option } from "effect"
 import { Server } from "../../services/server"
 import { Updater } from "../../services/updater"
 import { UpdatePreflight } from "../../services/update-preflight"
+import { Npm } from "@opencode-ai/core/npm"
 
 export default Runtime.handler(Commands, (input) =>
   Effect.gen(function* () {
@@ -36,7 +36,7 @@ export default Runtime.handler(Commands, (input) =>
     )
     preflight.loading()
     const config = yield* Config.Service
-    let disposeSlots: (() => void) | undefined
+    const npm = yield* Npm.Service
     const context = yield* Effect.context()
     const runFork = Effect.runForkWith(context)
     const runPromise = Effect.runPromiseWith(context)
@@ -44,8 +44,13 @@ export default Runtime.handler(Commands, (input) =>
       server,
       args: { continue: input.continue, sessionID: Option.getOrUndefined(input.session) },
       config: {
+        path: config.path,
         get: () => runPromise(config.get()),
         update: (update) => runPromise(config.update(update)),
+      },
+      packages: {
+        resolve: (spec) =>
+          runPromise(npm.add(spec, { subpaths: ["tui"] }).pipe(Effect.map((result) => result.entrypoint))),
       },
       terminalHandoff: () => preflight.finish(),
       log: (level, message, tags) => {
@@ -58,14 +63,6 @@ export default Runtime.handler(Commands, (input) =>
                 ? Effect.logError(message, tags)
                 : Effect.logInfo(message, tags)
         runFork(effect)
-      },
-      pluginHost: {
-        async start(pluginInput) {
-          disposeSlots = await loadBuiltinPlugins(pluginInput.api, pluginInput.runtime)
-        },
-        async dispose() {
-          disposeSlots?.()
-        },
       },
     }).pipe(Effect.provide(AppNodeBuilder.build(Global.node)))
   }),

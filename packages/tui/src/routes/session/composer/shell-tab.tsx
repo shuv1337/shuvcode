@@ -5,7 +5,7 @@ import { useData } from "../../../context/data"
 import { useLocation } from "../../../context/location"
 import { useClient } from "../../../context/client"
 import { useTheme, selectedForeground } from "../../../context/theme"
-import { useBindings, useCommandShortcut } from "../../../keymap"
+import { Keymap } from "../../../context/keymap"
 import { useComposerTab } from "./index"
 
 export function ShellTab(props: { sessionID: string }) {
@@ -15,7 +15,7 @@ export function ShellTab(props: { sessionID: string }) {
   const { theme } = useTheme()
   const fg = selectedForeground(theme)
   const composer = useComposerTab()
-  const killHint = useCommandShortcut("composer.shell.kill")
+  const shortcuts = Keymap.useShortcuts()
 
   const entries = createMemo(() =>
     data.shell
@@ -47,19 +47,21 @@ export function ShellTab(props: { sessionID: string }) {
     const cleanup = composer.register({
       id: "shell",
       label: "Shell",
-      hints: () => (selectedEntry() ? [{ label: "kill", shortcut: killHint() }] : []),
+      hints: () =>
+        selectedEntry() ? [{ label: "kill", shortcut: shortcuts.get("composer.shell.kill") ?? "" }] : [],
     })
     onCleanup(cleanup)
   })
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     mode: "composer",
     enabled: () => composer.active("shell"),
     commands: [
       {
-        name: "composer.shell.up",
+        id: "composer.shell.up",
         title: "Previous shell",
-        category: "Composer",
+        group: "Composer",
+        bind: "up",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -67,9 +69,10 @@ export function ShellTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.shell.down",
+        id: "composer.shell.down",
         title: "Next shell",
-        category: "Composer",
+        group: "Composer",
+        bind: "down",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -77,9 +80,10 @@ export function ShellTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.shell.kill",
+        id: "composer.shell.kill",
         title: "Kill shell command",
-        category: "Composer",
+        group: "Composer",
+        bind: "ctrl+d",
         run() {
           const entry = selectedEntry()
           if (!entry) return
@@ -90,11 +94,6 @@ export function ShellTab(props: { sessionID: string }) {
           })
         },
       },
-    ],
-    bindings: [
-      { key: "up", desc: "Previous shell", group: "Shell", cmd: "composer.shell.up" },
-      { key: "down", desc: "Next shell", group: "Shell", cmd: "composer.shell.down" },
-      { key: "ctrl+d", desc: "Kill shell command", group: "Shell", cmd: "composer.shell.kill" },
     ],
   }))
 

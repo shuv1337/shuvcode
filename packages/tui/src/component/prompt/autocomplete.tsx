@@ -19,7 +19,8 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "../../util/locale"
 import type { PromptInfo, PromptPartRef } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
-import { useBindings, useCommandSlashes, useOpencodeModeStack } from "../../keymap"
+import { useBindings, useCommandSlashes } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 import { displayCharAt, mentionTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/client"
 
@@ -88,7 +89,7 @@ export function Autocomplete(props: {
   const data = useData()
   const project = useProject()
   const slashes = useCommandSlashes()
-  const modeStack = useOpencodeModeStack()
+  const keymap = Keymap.use()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
   const frecency = useFrecency()
@@ -106,7 +107,7 @@ export function Autocomplete(props: {
 
   createEffect(() => {
     if (!store.visible) return
-    const popMode = modeStack.push("autocomplete")
+    const popMode = keymap.mode.push("autocomplete")
     onCleanup(popMode)
   })
 
@@ -627,13 +628,13 @@ export function Autocomplete(props: {
         },
       },
     ],
-    bindings: config.keybinds.gather("prompt.autocomplete", [
+    bindings: [
       "prompt.autocomplete.prev",
       "prompt.autocomplete.next",
       "prompt.autocomplete.hide",
       "prompt.autocomplete.select",
       "prompt.autocomplete.complete",
-    ]),
+    ].flatMap((command) => config.keybinds.get(command)),
   }))
 
   function show(mode: "@" | "/") {

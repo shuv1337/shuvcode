@@ -358,9 +358,9 @@ function WhichKeyPanel(props: {
         },
       },
     ],
-    bindings: pendingMode()
-      ? props.api.tuiConfig.keybinds.gather("which-key.scroll", scrollCommands)
-      : props.api.tuiConfig.keybinds.gather("which-key.panel", panelCommands),
+    bindings: (pendingMode() ? scrollCommands : panelCommands).flatMap((command) =>
+      props.api.tuiConfig.keybinds.get(command),
+    ),
   }))
 
   createEffect(() => {
@@ -568,7 +568,7 @@ const tui: TuiPlugin = async (api) => {
         },
       },
     ],
-    bindings: api.tuiConfig.keybinds.gather("which-key.toggle", toggleCommands),
+    bindings: toggleCommands.flatMap((command) => api.tuiConfig.keybinds.get(command)),
   })
 
   api.slots.register({

@@ -1,9 +1,9 @@
 import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
-import { useBindings } from "../keymap"
 
 export function DialogSessionDeleteFailed(props: {
   session: string
@@ -40,13 +40,24 @@ export function DialogSessionDeleteFailed(props: {
     if (!props.onDone) dialog.clear()
   }
 
-  useBindings(() => ({
-    bindings: [
-      { key: "return", desc: "Confirm recovery option", group: "Dialog", cmd: () => void confirm() },
-      { key: "left", desc: "Delete broken session", group: "Dialog", cmd: () => setStore("active", "delete") },
-      { key: "up", desc: "Delete broken session", group: "Dialog", cmd: () => setStore("active", "delete") },
-      { key: "right", desc: "Restore broken session", group: "Dialog", cmd: () => setStore("active", "restore") },
-      { key: "down", desc: "Restore broken session", group: "Dialog", cmd: () => setStore("active", "restore") },
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
+      { bind: "return", title: "Confirm recovery option", group: "Dialog", run: () => void confirm() },
+      { bind: "left", title: "Delete broken session", group: "Dialog", run: () => setStore("active", "delete") },
+      { bind: "up", title: "Delete broken session", group: "Dialog", run: () => setStore("active", "delete") },
+      {
+        bind: "right",
+        title: "Restore broken session",
+        group: "Dialog",
+        run: () => setStore("active", "restore"),
+      },
+      {
+        bind: "down",
+        title: "Restore broken session",
+        group: "Dialog",
+        run: () => setStore("active", "restore"),
+      },
     ],
   }))
 

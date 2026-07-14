@@ -1,11 +1,11 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { batch, createContext, createEffect, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { Flag } from "@opencode-ai/core/flag/flag"
-import { useBindings, useOpencodeModeStack } from "../keymap"
 import { useClipboard } from "../context/clipboard"
 
 export function Dialog(
@@ -79,11 +79,11 @@ function init() {
   })
 
   const renderer = useRenderer()
-  const modeStack = useOpencodeModeStack()
+  const keymap = Keymap.use()
 
   createEffect(() => {
     if (store.stack.length === 0) return
-    const popMode = modeStack.push("modal")
+    const popMode = keymap.mode.push("modal")
     onCleanup(popMode)
   })
 
@@ -106,14 +106,15 @@ function init() {
     }, 1)
   }
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
+    mode: "modal",
     enabled: store.stack.length > 0 && !renderer.getSelection()?.getSelectedText(),
-    bindings: [
+    commands: [
       {
-        key: "escape",
-        desc: "Close dialog",
+        bind: "escape",
+        title: "Close dialog",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           if (renderer.getSelection()) {
             renderer.clearSelection()
           }
@@ -124,10 +125,10 @@ function init() {
         },
       },
       {
-        key: "ctrl+c",
-        desc: "Close dialog",
+        bind: "ctrl+c",
+        title: "Close dialog",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           if (renderer.getSelection()) {
             renderer.clearSelection()
           }

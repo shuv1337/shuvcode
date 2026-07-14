@@ -56,8 +56,7 @@ function toCommand(item: TuiCommand, dialog: LegacyDialog) {
     suggested: item.suggested,
     hidden: item.hidden,
     enabled: item.enabled,
-    slashName: item.slash?.name,
-    slashAliases: item.slash?.aliases,
+    slash: item.slash,
     run() {
       return item.onSelect?.(dialog)
     },

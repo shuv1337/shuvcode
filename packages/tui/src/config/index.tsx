@@ -7,6 +7,7 @@ import { createStore, reconcile } from "solid-js/store"
 import { TuiKeybind } from "./keybind"
 
 export interface Interface {
+  readonly path?: string
   readonly get: () => Promise<Info>
   readonly update: (update: (draft: any) => void) => Promise<Info>
 }
@@ -71,12 +72,9 @@ export const Info = Schema.Struct({
         Schema.Number.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(1)),
       ).annotate({ description: "Attention sound volume from 0 to 1" }),
       sound_pack: Schema.optional(Schema.String).annotate({ description: "Active attention sound pack ID" }),
-      sounds: Schema.optional(
-        Schema.Record(
-          AttentionSoundName,
-          Schema.optionalKey(Schema.String),
-        ),
-      ).annotate({ description: "Sound file overrides by attention event" }),
+      sounds: Schema.optional(Schema.Record(AttentionSoundName, Schema.optionalKey(Schema.String))).annotate({
+        description: "Sound file overrides by attention event",
+      }),
     }),
   ).annotate({ description: "System notification and sound settings" }),
   diffs: Schema.optional(
@@ -181,6 +179,7 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
 
 const ConfigContext = createContext<{
   data: Resolved
+  path?: string
   update: Interface["update"]
 }>()
 
@@ -199,7 +198,7 @@ export function ConfigProvider(props: {
     return info
   }
   return (
-    <ConfigContext.Provider value={{ data: config, update }}>{props.children}</ConfigContext.Provider>
+    <ConfigContext.Provider value={{ data: config, path: host?.path, update }}>{props.children}</ConfigContext.Provider>
   )
 }
 

@@ -23,7 +23,7 @@ function isHostSlotPlugin(value: unknown): value is HostSlotPlugin<Record<string
 }
 
 export function createSlots() {
-  const empty: SlotView = () => null
+  const empty: SlotView = (props) => props.children ?? null
   const [view, setView] = createSignal<SlotView>(empty)
   const Slot: SlotView = (props) => view()(props)
 

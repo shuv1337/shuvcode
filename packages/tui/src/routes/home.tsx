@@ -12,6 +12,7 @@ import { HomeSessionDestinationProvider } from "./home/session-destination"
 import { useData } from "../context/data"
 import { LocationProvider } from "../context/location"
 import { FormPrompt } from "./session/form"
+import { PluginSlot } from "../plugin/context"
 
 let once = false
 const placeholder = {
@@ -84,26 +85,18 @@ export function Home() {
               />
             </pluginRuntime.Slot>
           </box>
-          <pluginRuntime.Slot name="home_bottom" />
+          <PluginSlot name="home.bottom" />
           <box flexGrow={1} minHeight={0} />
           <Toast />
         </box>
         <box width="100%" flexShrink={0}>
-          <pluginRuntime.Slot name="home_footer" mode="single_winner" />
+          <PluginSlot name="home.footer" />
         </box>
         <Show when={forms()[0]?.id} keyed>
           {(_) => {
             const form = forms()[0]
             return form ? (
-              <box
-                position="absolute"
-                zIndex={2000}
-                left={0}
-                right={0}
-                bottom={1}
-                paddingLeft={2}
-                paddingRight={2}
-              >
+              <box position="absolute" zIndex={2000} left={0} right={0} bottom={1} paddingLeft={2} paddingRight={2}>
                 <box width="100%">
                   <FormPrompt form={form} />
                 </box>

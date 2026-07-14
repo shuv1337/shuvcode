@@ -11,8 +11,7 @@ import { useClient } from "../../context/client"
 import { useClipboard } from "../../context/clipboard"
 import { SplitBorder } from "../../ui/border"
 import { useToast } from "../../ui/toast"
-import { useConfig } from "../../config"
-import { useBindings, useOpencodeModeStack } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 
 const FORM_MODE = "form"
 
@@ -150,8 +149,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
   const { theme } = useTheme()
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
-  const config = useConfig().data
-  const modeStack = useOpencodeModeStack()
+  const keymap = Keymap.use()
   const clipboard = useClipboard()
   const toast = useToast()
   const configuredFields = props.form.fields.filter(isField)
@@ -555,16 +553,16 @@ export function FormPrompt(props: { form: FormWithLocation }) {
       })
   }
 
-  onMount(() => onCleanup(modeStack.push(FORM_MODE)))
+  onMount(() => onCleanup(keymap.mode.push(FORM_MODE)))
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     mode: FORM_MODE,
     enabled: (store.editing || textual()) && !confirm(),
     commands: [
       {
-        name: "prompt.clear",
+        id: "prompt.clear",
         title: "Clear answer edit",
-        category: "Form",
+        group: "Form",
         run() {
           const text = textarea?.plainText ?? ""
           if (!text) {
@@ -574,13 +572,11 @@ export function FormPrompt(props: { form: FormWithLocation }) {
           textarea?.setText("")
         },
       },
-    ],
-    bindings: [
       {
-        key: "escape",
-        desc: "Cancel answer edit",
+        bind: "escape",
+        title: "Cancel answer edit",
         group: "Form",
-        cmd: () => {
+        run: () => {
           if (textual()) {
             void client.api.form.cancel(
               { sessionID: props.form.sessionID, formID: props.form.id },
@@ -591,30 +587,29 @@ export function FormPrompt(props: { form: FormWithLocation }) {
           setStore("editing", false)
         },
       },
-      ...config.keybinds.get("prompt.clear"),
       {
-        key: "tab",
-        desc: "Next field",
+        bind: "tab",
+        title: "Next field",
         group: "Form",
-        cmd: () => {
+        run: () => {
           const text = textarea?.plainText?.trim() ?? ""
           submitInput(text)
         },
       },
       {
-        key: "shift+tab",
-        desc: "Previous field",
+        bind: "shift+tab",
+        title: "Previous field",
         group: "Form",
-        cmd: () => {
+        run: () => {
           const text = textarea?.plainText?.trim() ?? ""
           submitInput(text, -1)
         },
       },
       {
-        key: "return",
-        desc: "Submit answer edit",
+        bind: "return",
+        title: "Submit answer edit",
         group: "Form",
-        cmd: () => {
+        run: () => {
           const text = textarea?.plainText?.trim() ?? ""
           const current = answerField()
           if (!current) return
@@ -634,7 +629,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
     ],
   }))
 
-  useBindings(() => {
+  Keymap.createLayer(() => {
     const total = rows().length + (custom() ? 1 : 0)
     const max = Math.min(total, 9)
     const external = externalField()
@@ -644,118 +639,113 @@ export function FormPrompt(props: { form: FormWithLocation }) {
       enabled: !store.editing && !textual(),
       commands: [
         {
-          name: "app.exit",
+          id: "app.exit",
           title: "Dismiss form",
-          category: "Form",
+          group: "Form",
           run: cancel,
         },
-      ],
-      bindings: [
         {
-          key: "left",
-          desc: "Previous field",
+          bind: "left",
+          title: "Previous field",
           group: "Form",
-          cmd: () => selectTab((store.tab - 1 + tabs()) % tabs()),
+          run: () => selectTab((store.tab - 1 + tabs()) % tabs()),
         },
         {
-          key: "h",
-          desc: "Previous field",
+          bind: "h",
+          title: "Previous field",
           group: "Form",
-          cmd: () => selectTab((store.tab - 1 + tabs()) % tabs()),
+          run: () => selectTab((store.tab - 1 + tabs()) % tabs()),
         },
-        { key: "right", desc: "Next field", group: "Form", cmd: () => selectTab((store.tab + 1) % tabs()) },
-        { key: "l", desc: "Next field", group: "Form", cmd: () => selectTab((store.tab + 1) % tabs()) },
+        { bind: "right", title: "Next field", group: "Form", run: () => selectTab((store.tab + 1) % tabs()) },
+        { bind: "l", title: "Next field", group: "Form", run: () => selectTab((store.tab + 1) % tabs()) },
         {
-          key: "tab",
-          desc: "Next field",
+          bind: "tab",
+          title: "Next field",
           group: "Form",
-          cmd: () => selectTab((store.tab + 1) % tabs()),
+          run: () => selectTab((store.tab + 1) % tabs()),
         },
         {
-          key: "shift+tab",
-          desc: "Previous field",
+          bind: "shift+tab",
+          title: "Previous field",
           group: "Form",
-          cmd: () => selectTab((store.tab - 1 + tabs()) % tabs()),
+          run: () => selectTab((store.tab - 1 + tabs()) % tabs()),
         },
         ...(external
           ? [
               {
-                key: "return",
-                desc:
+                bind: "return",
+                title:
                   store.answers[external.key] === true
                     ? "Continue"
                     : store.externalReady[external.key]
                       ? "Confirm completion"
                       : "Open link",
                 group: "Form",
-                cmd: acknowledgeExternal,
+                run: acknowledgeExternal,
               },
-              { key: "c", desc: "Copy link", group: "Form", cmd: copyExternal },
-              { key: "escape", desc: "Dismiss form", group: "Form", cmd: cancel },
-              ...config.keybinds.get("app.exit"),
+              { bind: "c", title: "Copy link", group: "Form", run: copyExternal },
+              { bind: "escape", title: "Dismiss form", group: "Form", run: cancel },
             ]
           : confirm()
             ? [
                 {
-                  key: "return",
-                  desc: "Submit form",
+                  bind: "return",
+                  title: "Submit form",
                   group: "Form",
-                  cmd: submit,
+                  run: submit,
                 },
                 {
-                  key: "escape",
-                  desc: "Dismiss form",
+                  bind: "escape",
+                  title: "Dismiss form",
                   group: "Form",
-                  cmd: cancel,
+                  run: cancel,
                 },
-                { key: "up", desc: "Scroll review", group: "Form", cmd: () => review?.scrollBy(-1) },
-                { key: "k", desc: "Scroll review", group: "Form", cmd: () => review?.scrollBy(-1) },
-                { key: "down", desc: "Scroll review", group: "Form", cmd: () => review?.scrollBy(1) },
-                { key: "j", desc: "Scroll review", group: "Form", cmd: () => review?.scrollBy(1) },
-                ...config.keybinds.get("app.exit"),
+                { bind: "up", title: "Scroll review", group: "Form", run: () => review?.scrollBy(-1) },
+                { bind: "k", title: "Scroll review", group: "Form", run: () => review?.scrollBy(-1) },
+                { bind: "down", title: "Scroll review", group: "Form", run: () => review?.scrollBy(1) },
+                { bind: "j", title: "Scroll review", group: "Form", run: () => review?.scrollBy(1) },
               ]
             : [
                 ...Array.from({ length: max }, (_, index) => ({
-                  key: String(index + 1),
-                  desc: `Select answer ${index + 1}`,
+                  bind: String(index + 1),
+                  title: `Select answer ${index + 1}`,
                   group: "Form",
-                  cmd: () => {
+                  run: () => {
                     setStore("selected", index)
                     selectOption()
                   },
                 })),
                 {
-                  key: "up",
-                  desc: "Previous answer",
+                  bind: "up",
+                  title: "Previous answer",
                   group: "Form",
-                  cmd: () => setStore("selected", (store.selected - 1 + total) % total),
+                  run: () => setStore("selected", (store.selected - 1 + total) % total),
                 },
                 {
-                  key: "k",
-                  desc: "Previous answer",
+                  bind: "k",
+                  title: "Previous answer",
                   group: "Form",
-                  cmd: () => setStore("selected", (store.selected - 1 + total) % total),
+                  run: () => setStore("selected", (store.selected - 1 + total) % total),
                 },
                 {
-                  key: "down",
-                  desc: "Next answer",
+                  bind: "down",
+                  title: "Next answer",
                   group: "Form",
-                  cmd: () => setStore("selected", (store.selected + 1) % total),
+                  run: () => setStore("selected", (store.selected + 1) % total),
                 },
                 {
-                  key: "j",
-                  desc: "Next answer",
+                  bind: "j",
+                  title: "Next answer",
                   group: "Form",
-                  cmd: () => setStore("selected", (store.selected + 1) % total),
+                  run: () => setStore("selected", (store.selected + 1) % total),
                 },
-                { key: "return", desc: "Select answer", group: "Form", cmd: () => selectOption() },
+                { bind: "return", title: "Select answer", group: "Form", run: () => selectOption() },
                 {
-                  key: "escape",
-                  desc: "Dismiss form",
+                  bind: "escape",
+                  title: "Dismiss form",
                   group: "Form",
-                  cmd: cancel,
+                  run: cancel,
                 },
-                ...config.keybinds.get("app.exit"),
               ]),
       ],
     }

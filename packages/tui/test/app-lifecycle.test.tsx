@@ -1,5 +1,4 @@
 import { expect, mock, test } from "bun:test"
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Effect } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -11,37 +10,29 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
   const core = await import("@opentui/core")
   mock.module("@opentui/core", () => ({ ...core, createCliRenderer: async () => setup.renderer }))
   const titles: string[] = []
+  let started!: () => void
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
     titles.push(title)
+    if (title === "OpenCode") started()
     setTitle(title)
   }
   const listeners = new Set(process.listeners("SIGHUP"))
   const events = createEventStream()
   const calls = createFetch(undefined, events)
   const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
-  let started!: () => void
-  const ready = new Promise<void>((resolve) => {
-    started = resolve
-  })
-  let disposes = 0
-
   try {
     const { run } = await import("../src/app")
     const task = Effect.runPromise(
       run({
         server: { endpoint: { url: server.url.toString() } },
         config: { get: async () => ({}), update: async () => ({}) },
+        packages: { resolve: async () => undefined },
         args: {},
         log: () => {},
-        pluginHost: {
-          async start() {
-            started()
-          },
-          async dispose() {
-            disposes++
-          },
-        },
       }).pipe(Effect.provide(AppNodeBuilder.build(Global.node))),
     )
     await ready
@@ -50,7 +41,6 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
 
     expect(setup.renderer.isDestroyed).toBe(true)
     expect(titles.at(-1)).toBe("")
-    expect(disposes).toBe(1)
     expect(process.listeners("SIGHUP").every((listener) => listeners.has(listener))).toBe(true)
   } finally {
     if (!setup.renderer.isDestroyed) setup.renderer.destroy()
@@ -101,12 +91,6 @@ test("session lifecycle updates the terminal title and prints the epilogue after
   const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
   const originalWrite = process.stdout.write.bind(process.stdout)
   let stdout = ""
-  let api: TuiPluginApi | undefined
-  let started!: () => void
-  const ready = new Promise<void>((resolve) => {
-    started = resolve
-  })
-
   process.stdout.write = ((chunk: string | Uint8Array) => {
     stdout += String(chunk)
     return true
@@ -118,19 +102,12 @@ test("session lifecycle updates the terminal title and prints the epilogue after
       run({
         server: { endpoint: { url: server.url.toString() } },
         config: { get: async () => ({}), update: async () => ({}) },
+        packages: { resolve: async () => undefined },
         args: { sessionID: "dummy" },
         log: () => {},
-        pluginHost: {
-          async start(input) {
-            api = input.api
-            started()
-          },
-          async dispose() {},
-        },
       }).pipe(Effect.provide(AppNodeBuilder.build(Global.node))),
     )
 
-    await ready
     await initialTitleSet
     events.emit({
       id: "evt_renamed",
@@ -140,7 +117,7 @@ test("session lifecycle updates the terminal title and prints the epilogue after
       data: { sessionID: "dummy", title: "Renamed session" },
     })
     await renamedTitleSet
-    api?.keymap.dispatchCommand("app.exit")
+    setup.renderer.destroy()
     await task
 
     expect(stdout).toContain("Renamed session")

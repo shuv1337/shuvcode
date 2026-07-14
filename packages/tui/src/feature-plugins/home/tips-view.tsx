@@ -1,12 +1,11 @@
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
 import { createMemo, For, type Accessor } from "solid-js"
 import { DEFAULT_THEMES, useTheme } from "../../context/theme"
-import { useCommandShortcut } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 
 const themeCount = Object.keys(DEFAULT_THEMES).length
 
 type TipPart = { text: string; highlight: boolean }
-type TipShortcut = Accessor<string>
+type TipShortcut = Accessor<string | undefined>
 type Shortcuts = {
   agentCycle: TipShortcut
   childFirst: TipShortcut
@@ -74,61 +73,54 @@ function shortcutText(value: string) {
   return `{highlight}${value}{/highlight}`
 }
 
-function commandText(command: string, shortcut: string) {
+function commandText(command: string, shortcut: string | undefined) {
   if (!shortcut) return shortcutText(command)
   return `${shortcutText(command)} or ${shortcutText(shortcut)}`
 }
 
-function press(shortcut: string, text: string) {
+function press(shortcut: string | undefined, text: string) {
   if (!shortcut) return undefined
   return `Press ${shortcutText(shortcut)} ${text}`
 }
 
-function configShortcut(api: TuiPluginApi, command: string): TipShortcut {
-  return () =>
-    api.tuiConfig.keybinds
-      .get(command)
-      .map((binding) => api.keys.formatSequence(Array.from(api.keymap.parseKeySequence(binding.key))))
-      .filter(Boolean)
-      .join(", ")
-}
-
-export function Tips(props: { api: TuiPluginApi; connected?: boolean }) {
+export function Tips(props: { connected?: boolean }) {
   const theme = useTheme().theme
+  const keymap = Keymap.useShortcuts()
   const tipOffset = Math.random()
+  const shortcut = (id: string) => () => keymap.get(id)
   const shortcuts: Shortcuts = {
-    agentCycle: useCommandShortcut("agent.cycle"),
-    childFirst: configShortcut(props.api, "session.child.first"),
-    childNext: configShortcut(props.api, "session.child.next"),
-    childPrevious: configShortcut(props.api, "session.child.previous"),
-    commandList: useCommandShortcut("command.palette.show"),
-    editorOpen: useCommandShortcut("prompt.editor"),
-    helpShow: useCommandShortcut("help.show"),
-    inputClear: useCommandShortcut("prompt.clear"),
-    inputNewline: useCommandShortcut("input.newline"),
-    inputPaste: useCommandShortcut("prompt.paste"),
-    inputUndo: useCommandShortcut("input.undo"),
-    leader: configShortcut(props.api, "leader"),
-    messagesCopy: configShortcut(props.api, "messages.copy"),
-    messagesFirst: configShortcut(props.api, "session.first"),
-    messagesLast: configShortcut(props.api, "session.last"),
-    messagesPageDown: configShortcut(props.api, "session.page.down"),
-    messagesPageUp: configShortcut(props.api, "session.page.up"),
-    modelCycleRecent: useCommandShortcut("model.cycle_recent"),
-    modelList: useCommandShortcut("model.list"),
-    sessionExport: configShortcut(props.api, "session.export"),
-    sessionInterrupt: configShortcut(props.api, "session.interrupt"),
-    sessionList: useCommandShortcut("session.list"),
-    sessionNew: useCommandShortcut("session.new"),
-    sessionParent: configShortcut(props.api, "session.parent"),
-    sessionPinToggle: configShortcut(props.api, "session.pin.toggle"),
-    sessionQuickSwitch1: useCommandShortcut("session.quick_switch.1"),
-    sessionQuickSwitch9: useCommandShortcut("session.quick_switch.9"),
-    sessionSidebarToggle: configShortcut(props.api, "session.sidebar.toggle"),
-    sessionTimeline: configShortcut(props.api, "session.timeline"),
-    statusView: useCommandShortcut("opencode.status"),
-    terminalSuspend: useCommandShortcut("terminal.suspend"),
-    themeList: useCommandShortcut("theme.switch"),
+    agentCycle: shortcut("agent.cycle"),
+    childFirst: shortcut("session.child.first"),
+    childNext: shortcut("session.child.next"),
+    childPrevious: shortcut("session.child.previous"),
+    commandList: shortcut("command.palette.show"),
+    editorOpen: shortcut("prompt.editor"),
+    helpShow: shortcut("help.show"),
+    inputClear: shortcut("prompt.clear"),
+    inputNewline: shortcut("input.newline"),
+    inputPaste: shortcut("prompt.paste"),
+    inputUndo: shortcut("input.undo"),
+    leader: shortcut("leader"),
+    messagesCopy: shortcut("messages.copy"),
+    messagesFirst: shortcut("session.first"),
+    messagesLast: shortcut("session.last"),
+    messagesPageDown: shortcut("session.page.down"),
+    messagesPageUp: shortcut("session.page.up"),
+    modelCycleRecent: shortcut("model.cycle_recent"),
+    modelList: shortcut("model.list"),
+    sessionExport: shortcut("session.export"),
+    sessionInterrupt: shortcut("session.interrupt"),
+    sessionList: shortcut("session.list"),
+    sessionNew: shortcut("session.new"),
+    sessionParent: shortcut("session.parent"),
+    sessionPinToggle: shortcut("session.pin.toggle"),
+    sessionQuickSwitch1: shortcut("session.quick_switch.1"),
+    sessionQuickSwitch9: shortcut("session.quick_switch.9"),
+    sessionSidebarToggle: shortcut("session.sidebar.toggle"),
+    sessionTimeline: shortcut("session.timeline"),
+    statusView: shortcut("opencode.status"),
+    terminalSuspend: shortcut("terminal.suspend"),
+    themeList: shortcut("theme.switch"),
   }
   const tip = createMemo(() => {
     if (props.connected === false) return NO_MODELS_TIP
@@ -175,22 +167,30 @@ const TIPS: Tip[] = [
   (shortcuts) => `Use ${commandText("/new", shortcuts.sessionNew())} to start a fresh conversation session`,
   (shortcuts) => `Use ${commandText("/sessions", shortcuts.sessionList())} to list, pin, and continue sessions`,
   (shortcuts) => press(shortcuts.sessionPinToggle(), "in the session list to pin one at the top"),
-  (shortcuts) =>
-    shortcuts.sessionQuickSwitch1() && shortcuts.sessionQuickSwitch9()
-      ? `Use ${shortcutText(shortcuts.sessionQuickSwitch1())} through ${shortcutText(shortcuts.sessionQuickSwitch9())} to switch pinned sessions`
-      : undefined,
+  (shortcuts) => {
+    const first = shortcuts.sessionQuickSwitch1()
+    const last = shortcuts.sessionQuickSwitch9()
+    if (!first || !last) return undefined
+    return `Use ${shortcutText(first)} through ${shortcutText(last)} to switch pinned sessions`
+  },
   "Run {highlight}/compact{/highlight} to summarize long sessions near context limits",
   (shortcuts) => `Use ${commandText("/export", shortcuts.sessionExport())} to save the conversation as Markdown`,
   (shortcuts) => press(shortcuts.messagesCopy(), "to copy the assistant's last message to clipboard"),
   (shortcuts) => press(shortcuts.commandList(), "to see all available actions and commands"),
   "Run {highlight}/connect{/highlight} to add API keys for 75+ supported LLM providers",
-  (shortcuts) => `The leader key is ${shortcutText(shortcuts.leader())}; combine with other keys for quick actions`,
+  (shortcuts) => {
+    const leader = shortcuts.leader()
+    if (!leader) return undefined
+    return `The leader key is ${shortcutText(leader)}; combine with other keys for quick actions`
+  },
   (shortcuts) => press(shortcuts.modelCycleRecent(), "to quickly switch between recently used models"),
   (shortcuts) => press(shortcuts.sessionSidebarToggle(), "in a session to show or hide the sidebar panel"),
-  (shortcuts) =>
-    shortcuts.messagesPageUp() && shortcuts.messagesPageDown()
-      ? `Use ${shortcutText(shortcuts.messagesPageUp())}/${shortcutText(shortcuts.messagesPageDown())} to navigate through conversation history`
-      : undefined,
+  (shortcuts) => {
+    const up = shortcuts.messagesPageUp()
+    const down = shortcuts.messagesPageDown()
+    if (!up || !down) return undefined
+    return `Use ${shortcutText(up)}/${shortcutText(down)} to navigate through conversation history`
+  },
   (shortcuts) => press(shortcuts.messagesFirst(), "to jump to the beginning of the conversation"),
   (shortcuts) => press(shortcuts.messagesLast(), "to jump to the most recent message"),
   (shortcuts) => press(shortcuts.inputNewline(), "to add newlines in your prompt"),
@@ -204,7 +204,7 @@ const TIPS: Tip[] = [
       shortcuts.childFirst(),
       shortcuts.childPrevious(),
       shortcuts.childNext(),
-    ].filter(Boolean)
+    ].filter((item): item is string => Boolean(item))
     if (!items.length) return undefined
     return `Use ${items.map(shortcutText).join(" / ")} for parent/child sessions`
   },
@@ -267,10 +267,12 @@ const TIPS: Tip[] = [
   (shortcuts) => `Use ${commandText("/timeline", shortcuts.sessionTimeline())} to jump to specific messages`,
   (shortcuts) => `Use ${commandText("/status", shortcuts.statusView())} to see system status info`,
   "Enable {highlight}scroll.acceleration{/highlight} in {highlight}cli.json{/highlight} for smooth scrolling",
-  (shortcuts) =>
-    shortcuts.commandList()
-      ? `Toggle username display in chat via the command palette (${shortcutText(shortcuts.commandList())})`
-      : "Toggle username display in chat via the command palette",
+  (shortcuts) => {
+    const commandList = shortcuts.commandList()
+    return commandList
+      ? `Toggle username display in chat via the command palette (${shortcutText(commandList)})`
+      : "Toggle username display in chat via the command palette"
+  },
   "Run {highlight}docker run -it --rm ghcr.io/anomalyco/opencode{/highlight} in a container",
   "Use {highlight}/connect{/highlight} with OpenCode Zen for curated, tested models",
   "Commit your project's {highlight}AGENTS.md{/highlight} file to Git for team sharing",

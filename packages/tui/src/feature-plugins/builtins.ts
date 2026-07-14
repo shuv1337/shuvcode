@@ -1,16 +1,9 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { PluginRuntime } from "../plugin/runtime"
-import HomeFooter from "./home/footer"
-import HomeTips from "./home/tips"
-import SidebarContext from "./sidebar/context"
-import SidebarFooter from "./sidebar/footer"
-import SidebarLsp from "./sidebar/lsp"
-import SidebarMcp from "./sidebar/mcp"
 import DiffViewer from "./system/diff-viewer"
 import Notifications from "./system/notifications"
 import PluginManager from "./system/plugins"
 import WhichKey from "./system/which-key"
-import Scrap from "./system/scrap"
 
 export type BuiltinTuiPlugin = Omit<TuiPluginModule, "id"> & {
   id: string
@@ -19,25 +12,10 @@ export type BuiltinTuiPlugin = Omit<TuiPluginModule, "id"> & {
 }
 
 export function createBuiltinPlugins(): BuiltinTuiPlugin[] {
-  return [
-    HomeFooter,
-    HomeTips,
-    SidebarContext,
-    SidebarMcp,
-    SidebarLsp,
-    SidebarFooter,
-    Notifications,
-    PluginManager,
-    WhichKey,
-    Scrap,
-    DiffViewer,
-  ]
+  return [Notifications, PluginManager, WhichKey, DiffViewer]
 }
 
-export async function loadBuiltinPlugins(
-  api: TuiPluginApi,
-  runtime: PluginRuntime,
-) {
+export async function loadBuiltinPlugins(api: TuiPluginApi, runtime: PluginRuntime) {
   const slots = runtime.setupSlots(api)
   const dispose: Array<() => void> = []
 

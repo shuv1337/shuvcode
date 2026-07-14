@@ -281,16 +281,16 @@ export function DialogConfig() {
       footerHints={[{ title: "←/→", label: "change" }]}
       bindings={[
         {
-          key: "left",
-          desc: "Previous value",
+          bind: "left",
+          title: "Previous value",
           group: "Settings",
-          cmd: () => void change(-1),
+          run: () => void change(-1),
         },
         {
-          key: "right",
-          desc: "Next value",
+          bind: "right",
+          title: "Next value",
           group: "Settings",
-          cmd: () => void change(1),
+          run: () => void change(1),
         },
       ]}
     />

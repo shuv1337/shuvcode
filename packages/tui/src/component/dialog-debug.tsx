@@ -1,13 +1,13 @@
 import { TextAttributes } from "@opentui/core"
 import { createMemo, createSignal, For } from "solid-js"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { useRoute } from "../context/route"
 import { useLocal } from "../context/local"
 import { useClipboard } from "../context/clipboard"
 import { useToast } from "../ui/toast"
-import { useBindings } from "../keymap"
 import { describeOS, describeTerminal } from "../util/system"
 
 export function DialogDebug() {
@@ -46,8 +46,9 @@ export function DialogDebug() {
       .catch(toast.error)
   }
 
-  useBindings(() => ({
-    bindings: [{ key: "return", desc: "Copy debug info", group: "Dialog", cmd: copy }],
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [{ bind: "return", title: "Copy debug info", group: "Dialog", run: copy }],
   }))
 
   return (

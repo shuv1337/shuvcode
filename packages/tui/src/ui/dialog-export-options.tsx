@@ -1,9 +1,9 @@
 import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For, Show } from "solid-js"
-import { useBindings } from "../keymap"
 
 export type ExportFormat = "markdown" | "json"
 
@@ -43,13 +43,14 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     if (store.active === "copy" || store.active === "export") confirm(store.active)
   }
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "tab",
-        desc: "Next export option",
+        bind: "tab",
+        title: "Next export option",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           const order: Active[] =
             store.format === "markdown"
               ? ["markdown", "json", "thinking", "copy", "export"]
@@ -58,10 +59,10 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
         },
       },
       {
-        key: "return",
-        desc: "Select export option",
+        bind: "return",
+        title: "Select export option",
         group: "Dialog",
-        cmd: activate,
+        run: activate,
       },
     ],
   }))

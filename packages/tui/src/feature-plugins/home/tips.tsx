@@ -1,66 +1,51 @@
-import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
-import type { BuiltinTuiPlugin } from "../builtins"
+import { Plugin } from "@opencode-ai/plugin/v2/tui"
 import { createMemo, Show } from "solid-js"
 import { Tips } from "./tips-view"
-import { useBindings } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 import { useData } from "../../context/data"
 import { hasConnectedProvider } from "../../util/connected-provider"
 import { useConfig } from "../../config"
+import { useDialog } from "../../ui/dialog"
 
-const id = "internal:home-tips"
-
-function View(props: { api: TuiPluginApi; hidden: boolean; show: boolean; connected: boolean }) {
+function View() {
   const config = useConfig()
-  useBindings(() => ({
+  const data = useData()
+  const dialog = useDialog()
+  const hidden = createMemo(() => !(config.data.hints?.tips ?? true))
+  const first = createMemo(() => data.session.list().length === 0)
+  const connected = createMemo(() => hasConnectedProvider(data.location.integration.list() ?? []))
+  const show = createMemo(() => (!first() || !connected()) && !hidden())
+
+  Keymap.createLayer(() => ({
     commands: [
       {
-        name: "tips.toggle",
-        title: props.hidden ? "Show tips" : "Hide tips",
-        category: "System",
-        namespace: "palette",
-        hidden: true,
+        id: "tips.toggle",
+        title: hidden() ? "Show tips" : "Hide tips",
+        group: "System",
         run() {
           void config
             .update((draft) => {
-              draft.hints = { ...draft.hints, tips: props.hidden }
+              draft.hints = { ...draft.hints, tips: hidden() }
             })
             .catch(() => {})
-          props.api.ui.dialog.clear()
+          dialog.clear()
         },
       },
     ],
-    bindings: props.api.tuiConfig.keybinds.get("tips.toggle"),
   }))
 
   return (
     <box width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
-      <Show when={props.show}>
-        <Tips api={props.api} connected={props.connected} />
+      <Show when={show()}>
+        <Tips connected={connected()} />
       </Show>
     </box>
   )
 }
 
-const tui: TuiPlugin = async (api) => {
-  api.slots.register({
-    order: 100,
-    slots: {
-      home_bottom() {
-        const data = useData()
-        const config = useConfig().data
-        const hidden = createMemo(() => !(config.hints?.tips ?? true))
-        const first = createMemo(() => api.state.session.count() === 0)
-        const connected = createMemo(() => hasConnectedProvider(data.location.integration.list() ?? []))
-        const show = createMemo(() => (!first() || !connected()) && !hidden())
-        return <View api={api} hidden={hidden()} show={show()} connected={connected()} />
-      },
-    },
-  })
-}
-
-const plugin: BuiltinTuiPlugin = {
-  id,
-  tui,
-}
-
-export default plugin
+export default Plugin.define({
+  id: "internal:home-tips",
+  setup(context) {
+    context.ui.slot("home.bottom", () => <View />)
+  },
+})
