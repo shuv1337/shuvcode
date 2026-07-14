@@ -28,6 +28,7 @@
     "./providers/openai/responses": "./src/providers/openai/responses.ts",
     "./providers/openai/chat": "./src/providers/openai/chat.ts",
     "./providers/openai-compatible": "./src/providers/openai-compatible.ts",
+    "./providers/openai-compatible/responses": "./src/providers/openai-compatible-responses.ts",
     "./providers/openai-compatible-profile": "./src/providers/openai-compatible-profile.ts",
     "./providers/openrouter": "./src/providers/openrouter.ts",
     "./providers/xai": "./src/providers/xai.ts",
@@ -37,6 +38,7 @@
     "./protocols/gemini": "./src/protocols/gemini.ts",
     "./protocols/openai-chat": "./src/protocols/openai-chat.ts",
     "./protocols/openai-compatible-chat": "./src/protocols/openai-compatible-chat.ts",
+    "./protocols/openai-compatible-responses": "./src/protocols/openai-compatible-responses.ts",
     "./protocols/openai-responses": "./src/protocols/openai-responses.ts"
   },
   "devDependencies": {

@@ -11,7 +11,12 @@ import {
   XAI,
 } from "@opencode-ai/llm/providers"
 import * as GitHubCopilot from "@opencode-ai/llm/providers/github-copilot"
-import { OpenAIChat, OpenAICompatibleChat, OpenAIResponses } from "@opencode-ai/llm/protocols"
+import {
+  OpenAIChat,
+  OpenAICompatibleChat,
+  OpenAICompatibleResponses,
+  OpenAIResponses,
+} from "@opencode-ai/llm/protocols"
 import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-messages"
 
 describe("public exports", () => {
@@ -28,12 +33,17 @@ describe("public exports", () => {
     expect(Protocol.make).toBeFunction()
   })
 
-  test("provider barrels expose user-facing facades", () => {
+  test("provider barrels expose user-facing facades", async () => {
+    const { OpenAICompatibleResponses } = await import("@opencode-ai/llm/providers")
+
     expect(OpenAI.model).toBeFunction()
     expect(OpenAI.provider.responses).toBe(OpenAI.responses)
     expect(OpenAI.provider.responsesWebSocket).toBe(OpenAI.responsesWebSocket)
     expect(OpenAI.configure({ apiKey: "fixture" }).responses).toBeFunction()
     expect(OpenAICompatible.deepseek.model).toBeFunction()
+    expect(
+      OpenAICompatibleResponses.configure({ baseURL: "https://responses.test/v1" }).model("fixture").route.id,
+    ).toBe("openai-compatible-responses")
     expect(CloudflareAIGateway.configure).toBeFunction()
     expect(CloudflareAIGateway.configure({ accountId: "fixture", gatewayApiKey: "fixture" }).model).toBeFunction()
     expect(CloudflareWorkersAI.configure).toBeFunction()
@@ -68,6 +78,7 @@ describe("public exports", () => {
   test("protocol barrels expose supported low-level routes", () => {
     expect(OpenAIChat.route.id).toBe("openai-chat")
     expect(OpenAICompatibleChat.route.id).toBe("openai-compatible-chat")
+    expect(OpenAICompatibleResponses.route.id).toBe("openai-compatible-responses")
     expect(OpenAIResponses.route.id).toBe("openai-responses")
     expect(OpenAIResponses.webSocketRoute.id).toBe("openai-responses-websocket")
     expect(AnthropicMessages.route.id).toBe("anthropic-messages")
