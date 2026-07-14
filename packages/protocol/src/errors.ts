@@ -165,6 +165,24 @@ export class ForbiddenError extends Schema.TaggedErrorClass<ForbiddenError>()(
   { httpApiStatus: 403 },
 ) {}
 
+export class PairingConflictError extends Schema.TaggedErrorClass<PairingConflictError>()(
+  "PairingConflictError",
+  { message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
+export class PairingInvitationUnavailableError extends Schema.TaggedErrorClass<PairingInvitationUnavailableError>()(
+  "PairingInvitationUnavailableError",
+  { message: Schema.String },
+  { httpApiStatus: 410 },
+) {}
+
+export class PairingDeviceNotFoundError extends Schema.TaggedErrorClass<PairingDeviceNotFoundError>()(
+  "PairingDeviceNotFoundError",
+  { deviceID: Schema.String, message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+
 export class PtyNotFoundError extends Schema.TaggedErrorClass<PtyNotFoundError>()(
   "PtyNotFoundError",
   {

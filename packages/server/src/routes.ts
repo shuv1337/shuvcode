@@ -6,6 +6,7 @@ import { EventV2 } from "@opencode-ai/core/event"
 import { EventLogger } from "@opencode-ai/core/event-logger"
 import { Observability } from "@opencode-ai/core/observability"
 import { Credential } from "@opencode-ai/core/credential"
+import { Pairing } from "@opencode-ai/core/pairing"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
@@ -23,7 +24,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { Api } from "./api"
 import { ServerAuth } from "./auth"
 import { handlers } from "./handlers"
-import { authorizationLayer } from "./middleware/authorization"
+import { authorizationLayer, Principal } from "./middleware/authorization"
 import { schemaErrorLayer } from "./middleware/schema-error"
 import { PtyEnvironment } from "./pty-environment"
 import { layer } from "./location"
@@ -46,6 +47,7 @@ const applicationServices = LayerNode.group([
   PermissionSaved.node,
   PtyTicket.node,
   Credential.node,
+  Pairing.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
   SessionRestart.node,
@@ -91,16 +93,17 @@ function makeRoutes<AuthError, AuthServices>(
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
-      const requestServices = Layer.merge(
-        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service)(context)),
+      const requestServices = Layer.mergeAll(
+        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, Pairing.Service)(context)),
         ServerInfo.layer(serviceURLs),
+        Layer.succeed(Principal, { type: "unauthenticated", reason: "embedded" }),
       )
       return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
         Layer.provide(layer),
-        Layer.provide(authorizationLayer),
+        Layer.provide(authorizationLayer.pipe(Layer.provide(services))),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
         Layer.provide(Observability.layer),

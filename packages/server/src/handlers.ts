@@ -27,10 +27,12 @@ import { ProjectHandler } from "./handlers/project"
 import { ProjectCopyHandler } from "./handlers/project-copy"
 import { VcsHandler } from "./handlers/vcs"
 import { EventFeed } from "./event-feed"
+import { PairingHandler } from "./handlers/pairing"
 
 export const handlers = Layer.mergeAll(
   HealthHandler,
   ServerHandler,
+  PairingHandler,
   DebugHandler,
   LocationHandler,
   AgentHandler,

@@ -54,7 +54,7 @@ import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
 import { DialogConfig } from "./component/dialog-config"
 import { DialogDebug } from "./component/dialog-debug"
-import { DialogPair, type DialogPairCredentials } from "./component/dialog-pair"
+import { DialogPair } from "./component/dialog-pair"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
@@ -345,35 +345,25 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                           <PermissionProvider>
                                             <ProjectProvider>
                                               <DataProvider>
-                                                  <ThemeProvider mode={mode}>
-                                                    <LocalProvider>
-                                                      <PromptStashProvider>
-                                                        <DialogProvider>
-                                                          <FrecencyProvider>
-                                                            <PromptHistoryProvider>
-                                                              <PromptRefProvider>
-                                                                <EditorContextProvider>
-                                                                  <LocationProvider>
-                                                                    <App
-                                                                      pluginHost={input.pluginHost}
-                                                                      pair={
-                                                                        input.server.endpoint.auth
-                                                                          ? input.server.endpoint.auth
-                                                                          : {
-                                                                              username: "opencode",
-                                                                              password: "",
-                                                                            }
-                                                                      }
-                                                                    />
-                                                                  </LocationProvider>
-                                                                </EditorContextProvider>
-                                                              </PromptRefProvider>
-                                                            </PromptHistoryProvider>
-                                                          </FrecencyProvider>
-                                                        </DialogProvider>
-                                                      </PromptStashProvider>
-                                                    </LocalProvider>
-                                                  </ThemeProvider>
+                                                <ThemeProvider mode={mode}>
+                                                  <LocalProvider>
+                                                    <PromptStashProvider>
+                                                      <DialogProvider>
+                                                        <FrecencyProvider>
+                                                          <PromptHistoryProvider>
+                                                            <PromptRefProvider>
+                                                              <EditorContextProvider>
+                                                                <LocationProvider>
+                                                                  <App pluginHost={input.pluginHost} />
+                                                                </LocationProvider>
+                                                              </EditorContextProvider>
+                                                            </PromptRefProvider>
+                                                          </PromptHistoryProvider>
+                                                        </FrecencyProvider>
+                                                      </DialogProvider>
+                                                    </PromptStashProvider>
+                                                  </LocalProvider>
+                                                </ThemeProvider>
                                               </DataProvider>
                                             </ProjectProvider>
                                           </PermissionProvider>
@@ -411,10 +401,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
-function App(props: {
-  pluginHost: TuiPluginHost
-  pair?: DialogPairCredentials
-}) {
+function App(props: { pluginHost: TuiPluginHost }) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const configState = useConfig()
@@ -811,7 +798,7 @@ function App(props: {
         title: "Pair device",
         slashName: "pair",
         run: () => {
-          dialog.replace(() => <DialogPair credentials={props.pair} />)
+          dialog.replace(() => <DialogPair />)
         },
         category: "System",
       },

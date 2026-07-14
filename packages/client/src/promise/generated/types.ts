@@ -1,5 +1,17 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
+export type PairingInvitation = { v: 1; kind: "shuvcode.pair"; urls: Array<string>; token: string; expiresAt: string }
+
+export type PairingRedeemResponse = { deviceID: string }
+
+export type PairingDevice = {
+  deviceID: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  revokedAt?: string | null
+}
+
 export type ModelRef = { id: string; providerID: string; variant?: string }
 
 export type ProviderSettings = { [x: string]: JsonValue }
@@ -2326,6 +2338,10 @@ export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly m
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnauthorizedError"
 
+export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
+export const isForbiddenError = (value: unknown): value is ForbiddenError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
+
 export type InvalidRequestError = {
   readonly _tag: "InvalidRequestError"
   readonly message: string
@@ -2334,6 +2350,36 @@ export type InvalidRequestError = {
 }
 export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
+
+export type ServiceUnavailableError = {
+  readonly _tag: "ServiceUnavailableError"
+  readonly message: string
+  readonly service?: string | undefined
+}
+export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
+
+export type PairingConflictError = { readonly _tag: "PairingConflictError"; readonly message: string }
+export const isPairingConflictError = (value: unknown): value is PairingConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PairingConflictError"
+
+export type PairingInvitationUnavailableError = {
+  readonly _tag: "PairingInvitationUnavailableError"
+  readonly message: string
+}
+export const isPairingInvitationUnavailableError = (value: unknown): value is PairingInvitationUnavailableError =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  value["_tag"] === "PairingInvitationUnavailableError"
+
+export type PairingDeviceNotFoundError = {
+  readonly _tag: "PairingDeviceNotFoundError"
+  readonly deviceID: string
+  readonly message: string
+}
+export const isPairingDeviceNotFoundError = (value: unknown): value is PairingDeviceNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "PairingDeviceNotFoundError"
 
 export type InvalidCursorError = { readonly _tag: "InvalidCursorError"; readonly message: string }
 export const isInvalidCursorError = (value: unknown): value is InvalidCursorError =>
@@ -2387,14 +2433,6 @@ export type SkillNotFoundError = {
 }
 export const isSkillNotFoundError = (value: unknown): value is SkillNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SkillNotFoundError"
-
-export type ServiceUnavailableError = {
-  readonly _tag: "ServiceUnavailableError"
-  readonly message: string
-  readonly service?: string | undefined
-}
-export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
 
 export type SessionBusyError = {
   readonly _tag: "SessionBusyError"
@@ -2486,6 +2524,43 @@ export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
 export type HealthGetOutput = { healthy: true; version: string; pid: number }
 
 export type ServerGetOutput = { urls: Array<string> }
+
+export type PairingInvitationCreateOutput = PairingInvitation
+
+export type PairingRedeemInput = {
+  readonly token: {
+    readonly token: string
+    readonly requestID: string
+    readonly deviceName: string
+    readonly credential: string
+  }["token"]
+  readonly requestID: {
+    readonly token: string
+    readonly requestID: string
+    readonly deviceName: string
+    readonly credential: string
+  }["requestID"]
+  readonly deviceName: {
+    readonly token: string
+    readonly requestID: string
+    readonly deviceName: string
+    readonly credential: string
+  }["deviceName"]
+  readonly credential: {
+    readonly token: string
+    readonly requestID: string
+    readonly deviceName: string
+    readonly credential: string
+  }["credential"]
+}
+
+export type PairingRedeemOutput = PairingRedeemResponse
+
+export type PairingDeviceListOutput = Array<PairingDevice>
+
+export type PairingDeviceRevokeInput = { readonly deviceID: { readonly deviceID: string }["deviceID"] }
+
+export type PairingDeviceRevokeOutput = void
 
 export type LocationGetInput = {
   readonly location?: {

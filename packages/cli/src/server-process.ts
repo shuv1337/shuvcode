@@ -66,6 +66,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
         port: Option.fromNullishOr(options.port ?? config.port),
         password,
         restartContinuity: options.mode === "service",
+        advertisedURLs: config.advertisedUrls,
       }).pipe(Effect.provide(Logger.layer([], { mergeWithExisting: false })))
       if (lockScope !== undefined) {
         yield* register(address, password)

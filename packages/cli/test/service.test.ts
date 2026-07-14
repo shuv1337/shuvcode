@@ -21,13 +21,17 @@ test("local channel stores service config with the local service filename", asyn
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-"))
   try {
     await Effect.runPromise(
-      ServiceConfig.set("hostname", "127.0.0.2").pipe(
+      Effect.gen(function* () {
+        yield* ServiceConfig.set("hostname", "127.0.0.2")
+        yield* ServiceConfig.set("advertised-urls", "https://shuvdev.example:10001,http://127.0.0.1:4096")
+      }).pipe(
         Effect.provide(Global.layerWith({ config: path.join(root, "config"), state: path.join(root, "state") })),
         Effect.provide(NodeFileSystem.layer),
       ),
     )
     expect(await Bun.file(path.join(root, "config", "service-local.json")).json()).toEqual({
       hostname: "127.0.0.2",
+      advertisedUrls: ["https://shuvdev.example:10001", "http://127.0.0.1:4096"],
     })
     expect(await Bun.file(path.join(root, "config", "service.json")).exists()).toBe(false)
   } finally {

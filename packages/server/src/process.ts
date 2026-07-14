@@ -16,6 +16,7 @@ export type Options = {
   readonly port: Option.Option<number>
   readonly password: string
   readonly restartContinuity?: boolean
+  readonly advertisedURLs?: ReadonlyArray<string>
 }
 
 const ReadinessApi = HttpApi.make("readiness").add(HealthGroup)
@@ -50,6 +51,8 @@ function bind(options: Options, port: number) {
   const server = createServer()
   return Layer.build(
     createRoutes(options.password, () => {
+      if (options.advertisedURLs && options.advertisedURLs.length > 0)
+        return ServerInfo.advertisedURLs(options.advertisedURLs)
       const address = server.address()
       if (address === null || typeof address === "string") return []
       const host = address.family === "IPv6" ? `[${address.address}]` : address.address

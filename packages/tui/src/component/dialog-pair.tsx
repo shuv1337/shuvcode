@@ -7,76 +7,46 @@ import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { errorMessage } from "../util/error"
 
-export type DialogPairCredentials = {
-  readonly username: string
-  readonly password: string
-}
-
-export function DialogPair(props: { credentials?: DialogPairCredentials }) {
+export function DialogPair() {
   const sdk = useSDK()
   const dialog = useDialog()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
   const [loadError, setLoadError] = createSignal<unknown>()
-  const [showPassword, setShowPassword] = createSignal(false)
-  const [passwordHover, setPasswordHover] = createSignal(false)
+  const [revoking, setRevoking] = createSignal<string>()
 
   dialog.setSize("large")
   dialog.setCentered(true)
 
-  const [server] = createResource(() =>
-    sdk.api.server
-      .get()
-      .catch((error) => {
-        setLoadError(error)
-        return undefined
-      }),
+  const [invitation, invitationActions] = createResource(() =>
+    sdk.api.pairing.invitation.create().catch((error) => {
+      setLoadError(error)
+      return undefined
+    }),
   )
-  const info = createMemo(() => {
-    const current = server()
-    if (!current) return
-    return {
-      urls: current.urls,
-      username: props.credentials?.username ?? "opencode",
-      password: props.credentials?.password ?? "",
-    }
-  })
+  const [devices, deviceActions] = createResource(() => sdk.api.pairing.device.list())
+  const info = createMemo(() => invitation())
   const horizontal = createMemo(() => dimensions().width >= 96)
   const content = () => {
     const value = info()
     if (!value) return
     return (
-      <box
-        flexDirection={horizontal() ? "row" : "column"}
-        alignItems={horizontal() ? "flex-start" : "center"}
-        gap={2}
-      >
+      <box flexDirection={horizontal() ? "row" : "column"} alignItems={horizontal() ? "flex-start" : "center"} gap={2}>
         <box width={horizontal() ? 29 : "100%"} flexShrink={0} gap={1}>
           <box>
             <text fg={theme.textMuted}>URLs</text>
             <For each={value.urls}>{(url) => <text fg={theme.text}>{url}</text>}</For>
           </box>
           <box>
-            <text fg={theme.textMuted}>Username</text>
-            <text fg={theme.text}>{value.username}</text>
+            <text fg={theme.textMuted}>Expires</text>
+            <text fg={theme.text}>{value.expiresAt}</text>
           </box>
-          <box>
-            <text fg={theme.textMuted}>Password</text>
-            <text
-              fg={passwordHover() ? theme.text : theme.textMuted}
-              wrapMode="word"
-              onMouseOver={() => setPasswordHover(true)}
-              onMouseOut={() => setPasswordHover(false)}
-              onMouseUp={() => setShowPassword((current) => !current)}
-            >
-              {showPassword() ? value.password : "************"}
-            </text>
-          </box>
-          <Show
-            when={value.urls.some((url) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname))}
-          >
+          <text fg={theme.primary} onMouseUp={() => invitationActions.refetch()}>
+            Regenerate invitation
+          </text>
+          <Show when={value.urls.some((url) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname))}>
             <text fg={theme.textMuted} wrapMode="word">
-              Run `opencode service set hostname 0.0.0.0` to access the service remotely.
+              Configure `shuvcode service set advertised-urls https://host` for Tailscale Serve or a reverse proxy.
             </text>
           </Show>
         </box>
@@ -87,6 +57,36 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
           alignItems={horizontal() ? "flex-end" : "center"}
         >
           <text fg={theme.text}>{renderUnicodeCompact(JSON.stringify(value), { border: 1 })}</text>
+        </box>
+        <box width={horizontal() ? 34 : "100%"} flexShrink={0} gap={1}>
+          <text fg={theme.textMuted}>Paired devices</text>
+          <Show when={(devices()?.length ?? 0) > 0} fallback={<text fg={theme.textMuted}>No paired devices</text>}>
+            <For each={devices()}>
+              {(device) => (
+                <box flexDirection="row" justifyContent="space-between">
+                  <box>
+                    <text fg={theme.text}>{device.name}</text>
+                    <text fg={theme.textMuted}>{device.revokedAt ? "revoked" : device.deviceID}</text>
+                  </box>
+                  <Show when={!device.revokedAt}>
+                    <text
+                      fg={theme.error}
+                      onMouseUp={() => {
+                        setRevoking(device.deviceID)
+                        sdk.api.pairing.device
+                          .revoke({ deviceID: device.deviceID })
+                          .then(() => deviceActions.refetch())
+                          .catch(setLoadError)
+                          .finally(() => setRevoking(undefined))
+                      }}
+                    >
+                      {revoking() === device.deviceID ? "Revoking..." : "Revoke"}
+                    </text>
+                  </Show>
+                </box>
+              )}
+            </For>
+          </Show>
         </box>
       </box>
     )
@@ -102,9 +102,7 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
           esc
         </text>
       </box>
-      <Show when={loadError()}>
-        {(error) => <text fg={theme.error}>{errorMessage(error())}</text>}
-      </Show>
+      <Show when={loadError()}>{(error) => <text fg={theme.error}>{errorMessage(error())}</text>}</Show>
       <Show when={info()} fallback={<text fg={theme.textMuted}>Loading server information...</text>}>
         <Show
           when={dimensions().height >= 36}
