@@ -395,6 +395,78 @@ describe("SessionV2.prompt", () => {
     }),
   )
 
+  it.effect("materializes loopback HTTP attachments without persisting their URI", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const session = yield* SessionV2.Service
+      const bytes = Buffer.from("loopback attachment\n")
+      const server = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            hostname: "127.0.0.1",
+            port: 0,
+            fetch: () => new Response(bytes, { headers: { "content-length": String(bytes.byteLength) } }),
+          }),
+        ),
+        (server) => Effect.sync(() => server.stop(true)),
+      )
+      const uri = `http://127.0.0.1:${server.port}/opaque-attachment`
+
+      const message = yield* session.prompt({
+        sessionID,
+        text: "Inspect this",
+        files: [{ uri, name: "note.txt" }],
+        resume: false,
+      })
+
+      expect(message.data.files).toEqual([
+        {
+          data: bytes.toString("base64"),
+          mime: "text/plain",
+          source: { type: "inline" },
+          name: "note.txt",
+        },
+      ])
+      expect(JSON.stringify(message)).not.toContain(uri)
+    }),
+  )
+
+  it.effect("rejects non-loopback and redirected HTTP attachments", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const session = yield* SessionV2.Service
+      const external = "http://192.0.2.1/attachment"
+      const externalError = yield* session
+        .prompt({ sessionID, text: "Inspect", files: [{ uri: external }], resume: false })
+        .pipe(Effect.flip)
+      expect(externalError).toMatchObject({
+        _tag: "Session.AttachmentError",
+        uri: external,
+        message: `Unsupported attachment URI: ${external}`,
+      })
+
+      const server = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.serve({
+            hostname: "127.0.0.1",
+            port: 0,
+            fetch: () => Response.redirect("http://127.0.0.1:1/redirected"),
+          }),
+        ),
+        (server) => Effect.sync(() => server.stop(true)),
+      )
+      const redirected = `http://127.0.0.1:${server.port}/attachment`
+      const redirectError = yield* session
+        .prompt({ sessionID, text: "Inspect", files: [{ uri: redirected }], resume: false })
+        .pipe(Effect.flip)
+      expect(redirectError).toMatchObject({
+        _tag: "Session.AttachmentError",
+        uri: redirected,
+        message: `Unable to read attachment: ${redirected}`,
+      })
+    }),
+  )
+
   it.effect("rejects malformed base64 data URLs", () =>
     Effect.gen(function* () {
       yield* setup
