@@ -1092,32 +1092,28 @@ function SessionReasoningGroupView(props: {
   const renderer = useRenderer()
   const [expanded, setExpanded] = createSignal(false)
   const [hover, setHover] = createSignal(false)
-  const parts = createMemo<{ message: SessionMessageAssistant; part: SessionMessageAssistantReasoning }[]>(
-    (previous) => {
-      const next = props.refs.flatMap((ref) => {
-        const message = props.message(ref.messageID)
-        if (message?.type !== "assistant") return []
-        const part = resolvePart(message, ref.partID)
-        if (part?.type !== "reasoning" || !part.text.replace("[REDACTED]", "").trim()) return []
-        return [{ message, part }]
-      })
-      return next.length > 0 ? next : previous
-    },
-    [] as { message: SessionMessageAssistant; part: SessionMessageAssistantReasoning }[],
+  const parts = createMemo(() =>
+    props.refs.flatMap((ref) => {
+      const message = props.message(ref.messageID)
+      if (message?.type !== "assistant") return []
+      const part = resolvePart(message, ref.partID)
+      if (part?.type !== "reasoning" || !reasoningContent(part)) return []
+      return [{ message, part }]
+    }),
   )
   const latest = createMemo((previous: string | null) => {
     const item = parts().at(-1)
     if (!item) return previous
-    const title = reasoningSummary(item.part.text.replace("[REDACTED]", "").trim()).title
+    const title = reasoningSummary(reasoningContent(item.part)).title
     if (title) return title
     if (item.part.time?.completed !== undefined || item.message.time.completed !== undefined) return null
     return previous
   }, null)
   const duration = createMemo(() =>
     parts().reduce((total, item) => {
-      const end = item.part.time?.completed ?? item.message.time.completed
-      const start = item.part.time?.created ?? item.message.time.created
-      return total + (end === undefined ? 0 : Math.max(0, end - start))
+      const start = item.part.time?.created
+      const end = item.part.time?.completed
+      return total + (start === undefined || end === undefined ? 0 : Math.max(0, end - start))
     }, 0),
   )
 
@@ -1125,9 +1121,7 @@ function SessionReasoningGroupView(props: {
     <Show when={parts().length > 0}>
       <Show
         when={ctx.thinkingMode() === "hide"}
-        fallback={
-          <For each={parts()}>{(item) => <ReasoningPart part={item.part} message={item.message} last={false} />}</For>
-        }
+        fallback={<For each={props.refs}>{(ref) => <SessionPartView partRef={ref} message={props.message} />}</For>}
       >
         <box flexDirection="column" flexShrink={0}>
           <InlineToolRow
@@ -1156,27 +1150,45 @@ function SessionReasoningGroupView(props: {
           </InlineToolRow>
           <Show when={expanded()}>
             <box paddingLeft={3}>
-              <For each={parts()}>
-                {(item) => (
-                  <box marginTop={1}>
-                    <box
-                      border={["left"]}
-                      customBorderChars={SplitBorder.customBorderChars}
-                      borderColor={theme.backgroundElement}
-                      paddingLeft={1}
-                    >
-                      <code
-                        filetype="markdown"
-                        drawUnstyledText={false}
-                        streaming={false}
-                        syntaxStyle={syntax()}
-                        content={item.part.text.replace("[REDACTED]", "").trim()}
-                        conceal={ctx.markdownMode() === "rendered"}
-                        fg={theme.textMuted}
-                      />
-                    </box>
-                  </box>
-                )}
+              <For each={props.refs}>
+                {(ref) => {
+                  const message = createMemo(() => {
+                    const item = props.message(ref.messageID)
+                    return item?.type === "assistant" ? item : undefined
+                  })
+                  const part = createMemo(() => {
+                    const item = message()
+                    if (!item) return undefined
+                    const part = resolvePart(item, ref.partID)
+                    return part?.type === "reasoning" ? part : undefined
+                  })
+                  const content = createMemo(() => {
+                    const item = part()
+                    return item ? reasoningContent(item) : ""
+                  })
+                  return (
+                    <Show when={content()}>
+                      <box marginTop={1}>
+                        <box
+                          border={["left"]}
+                          customBorderChars={SplitBorder.customBorderChars}
+                          borderColor={theme.backgroundElement}
+                          paddingLeft={1}
+                        >
+                          <code
+                            filetype="markdown"
+                            drawUnstyledText={false}
+                            streaming={part()?.time?.completed === undefined && message()?.time.completed === undefined}
+                            syntaxStyle={syntax()}
+                            content={content()}
+                            conceal={ctx.markdownMode() === "rendered"}
+                            fg={theme.textMuted}
+                          />
+                        </box>
+                      </box>
+                    </Show>
+                  )
+                }}
               </For>
             </box>
           </Show>
@@ -1789,10 +1801,7 @@ function ReasoningPart(props: {
   // layout never shifts. Click to open the full markdown block, click to close.
   const [expanded, setExpanded] = createSignal(false)
 
-  const content = createMemo(() => {
-    // OpenRouter encrypts some reasoning blocks; drop the placeholder.
-    return props.part.text.replace("[REDACTED]", "").trim()
-  })
+  const content = createMemo(() => reasoningContent(props.part))
   const isDone = createMemo(
     () => props.part.time?.completed !== undefined || props.message.time.completed !== undefined,
   )
@@ -1850,6 +1859,11 @@ function ReasoningPart(props: {
       </box>
     </Show>
   )
+}
+
+function reasoningContent(part: SessionMessageAssistantReasoning) {
+  // OpenRouter encrypts some reasoning blocks; drop the placeholder.
+  return part.text.replace("[REDACTED]", "").trim()
 }
 
 function ReasoningHeader(props: {
