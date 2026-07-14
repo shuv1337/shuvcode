@@ -1,7 +1,7 @@
 // Client data layer: apply server events and cache API reads into a Solid store.
 // Prefer straightforward projection. Do not add generation counters, stale-response
 // merges, live/history overlays, or other race machinery here—last write wins.
-// Reconnect may re-bootstrap; that is enough. UI and the server own ordering concerns.
+// Reconnect invalidates cached reads; active UI owners decide what to sync again.
 
 import type {
   AgentInfo,
@@ -31,7 +31,7 @@ import type { Plugin } from "@opencode-ai/plugin/v2/tui"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
-import { createSignal, onCleanup } from "solid-js"
+import { createEffect, createSignal, onCleanup } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
 
@@ -66,11 +66,10 @@ type Store = {
     // true root is not yet loaded). The value is a flat deduplicated list of every
     // session ID in that family, including the key itself once its info arrives.
     family: Record<string, string[]>
-    status: Record<string, DataSessionStatus>
+    active: Record<string, DataSessionStatus>
     message: Record<string, SessionMessageInfo[]>
     pending: Record<string, SessionPendingInfo[]>
     input: Record<string, string[]>
-    compaction: Record<string, string[]>
     permission: Record<string, PermissionV2Request[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
     form: Record<string, FormWithLocation[]>
@@ -89,6 +88,37 @@ function locationQuery(ref?: LocationRef) {
   return ref ? { directory: ref.directory, workspace: ref.workspaceID } : undefined
 }
 
+function createSync() {
+  const state = new Map<string, true | Promise<void>>()
+  return {
+    run(key: string, load: () => Promise<void>) {
+      const active = state.get(key)
+      if (active === true) return Promise.resolve()
+      if (active) return active
+      const pending = load()
+        .then(() => {
+          if (state.get(key) === pending) state.set(key, true)
+        })
+        .finally(() => {
+          if (state.get(key) === pending) state.delete(key)
+        })
+      state.set(key, pending)
+      return pending
+    },
+    complete(key: string) {
+      if (state.has(key)) return
+      state.set(key, true)
+    },
+    invalidate(key?: string) {
+      if (key) {
+        state.delete(key)
+        return
+      }
+      state.clear()
+    },
+  }
+}
+
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",
   init: () => {
@@ -96,11 +126,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       session: {
         info: {},
         family: {},
-        status: {},
+        active: {},
         message: {},
         pending: {},
         input: {},
-        compaction: {},
         permission: {},
         form: {},
       },
@@ -115,16 +144,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       directory: process.cwd(),
     })
     const messageIndex = new Map<string, Map<string, number>>()
-    let bootstrapping: Promise<void> | undefined
-    let connected = false
+    const sync = createSync()
 
-    function setSessionStatus(sessionID: string, status: DataSessionStatus) {
-      setStore("session", "status", sessionID, status)
-    }
-
-    function addCompaction(sessionID: string, inputID: string) {
-      if (store.session.compaction[sessionID]?.includes(inputID)) return
-      setStore("session", "compaction", sessionID, [...(store.session.compaction[sessionID] ?? []), inputID])
+    function setSessionActive(sessionID: string, status: DataSessionStatus) {
+      setStore("session", "active", sessionID, status)
     }
 
     function addPending(item: SessionPendingInfo) {
@@ -139,16 +162,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         "pending",
         sessionID,
         (store.session.pending[sessionID] ?? []).filter((item) => item.id !== inputID),
-      )
-    }
-
-    function removeCompaction(sessionID: string, inputID?: string) {
-      if (!inputID || !store.session.compaction[sessionID]?.includes(inputID)) return
-      setStore(
-        "session",
-        "compaction",
-        sessionID,
-        store.session.compaction[sessionID].filter((id) => id !== inputID),
       )
     }
 
@@ -226,7 +239,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       return current
     }
 
-    // Register one session into the family index. Idempotent: refreshing an
+    // Register one session into the family index. Idempotent: syncing an
     // existing session never duplicates its ID. When a tentative family keyed by
     // sessionID exists (descendants arrived while sessionID's own info was
     // absent) but sessionID turns out to have a parent, fold the orphan subtree
@@ -254,15 +267,19 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
 
     function removeSession(sessionID: string) {
       messageIndex.delete(sessionID)
+      sync.invalidate(`session:${sessionID}`)
+      sync.invalidate(`session.pending:${sessionID}`)
+      sync.invalidate(`session.message:${sessionID}`)
+      sync.invalidate(`session.permission:${sessionID}`)
+      sync.invalidate(`session.form:${sessionID}:`)
       setStore(
         "session",
         produce((draft) => {
           delete draft.info[sessionID]
-          delete draft.status[sessionID]
+          delete draft.active[sessionID]
           delete draft.message[sessionID]
           delete draft.pending[sessionID]
           delete draft.input[sessionID]
-          delete draft.compaction[sessionID]
           delete draft.permission[sessionID]
           delete draft.form[sessionID]
           for (const [rootID, family] of Object.entries(draft.family)) {
@@ -277,7 +294,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     function handleEvent(event: OpenCodeEvent) {
       switch (event.type) {
         case "session.created":
-          void result.session.refresh(event.data.sessionID)
+          result.session.invalidate(event.data.sessionID)
+          void result.session.sync(event.data.sessionID)
           break
         case "session.deleted":
           removeSession(event.data.sessionID)
@@ -290,19 +308,21 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             })
           break
         case "catalog.updated":
-          void Promise.all([
-            result.location.model.refresh(event.location),
-            result.location.provider.refresh(event.location),
-          ])
+          result.location.model.invalidate(event.location)
+          result.location.provider.invalidate(event.location)
+          void Promise.all([result.location.model.sync(event.location), result.location.provider.sync(event.location)])
           break
         case "agent.updated":
-          void result.location.agent.refresh(event.location)
+          result.location.agent.invalidate(event.location)
+          void result.location.agent.sync(event.location)
           break
         case "command.updated":
-          void result.location.command.refresh(event.location)
+          result.location.command.invalidate(event.location)
+          void result.location.command.sync(event.location)
           break
         case "skill.updated":
-          void result.location.skill.refresh(event.location)
+          result.location.skill.invalidate(event.location)
+          void result.location.skill.sync(event.location)
           break
         case "session.agent.selected":
           if (store.session.info[event.data.sessionID])
@@ -666,7 +686,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           })
           break
         case "session.execution.started":
-          setSessionStatus(event.data.sessionID, "running")
+          setSessionActive(event.data.sessionID, "running")
           break
         case "session.compaction.admitted":
           addPending({
@@ -676,11 +696,9 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             timeCreated: event.created,
             type: "compaction",
           })
-          addCompaction(event.data.sessionID, event.data.inputID)
           break
         case "session.compaction.started":
           removePending(event.data.sessionID, event.data.inputID)
-          removeCompaction(event.data.sessionID, event.data.inputID)
           message.update(event.data.sessionID, (draft, index) => {
             message.append(draft, index, {
               id: event.data.inputID ?? messageIDFromEvent(event.id),
@@ -696,7 +714,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         case "session.execution.succeeded":
         case "session.execution.failed":
         case "session.execution.interrupted":
-          setSessionStatus(event.data.sessionID, "idle")
+          setSessionActive(event.data.sessionID, "idle")
           message.update(event.data.sessionID, (draft) => {
             const currentAssistant = message.activeAssistant(draft)
             if (currentAssistant) currentAssistant.retry = undefined
@@ -758,7 +776,6 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           break
         case "session.compaction.failed":
           removePending(event.data.sessionID, event.data.inputID)
-          removeCompaction(event.data.sessionID, event.data.inputID)
           message.update(event.data.sessionID, (draft, index) => {
             const position = draft.findLastIndex((item) => item.type === "compaction" && item.status === "running")
             const current = draft[position]
@@ -837,22 +854,28 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           )
           break
         case "reference.updated":
-          void result.location.reference.refresh()
+          result.location.reference.invalidate()
+          void result.location.reference.sync()
           break
         case "integration.updated":
+          result.location.integration.invalidate(event.location)
+          result.location.model.invalidate(event.location)
+          result.location.provider.invalidate(event.location)
           void Promise.all([
-            result.location.integration.refresh(event.location),
-            result.location.model.refresh(event.location),
-            result.location.provider.refresh(event.location),
+            result.location.integration.sync(event.location),
+            result.location.model.sync(event.location),
+            result.location.provider.sync(event.location),
           ])
           break
         // Authenticating an MCP integration reconnects its server, which emits mcp.status.changed,
-        // so the mcp list refreshes here rather than off integration.updated.
+        // so the mcp list syncs here rather than off integration.updated.
         case "mcp.status.changed":
-          void result.location.mcp.server.refresh(event.location)
+          result.location.mcp.server.invalidate(event.location)
+          void result.location.mcp.server.sync(event.location)
           break
         case "mcp.resources.changed":
-          void result.location.mcp.resource.refresh(event.location)
+          result.location.mcp.resource.invalidate(event.location)
+          void result.location.mcp.resource.sync(event.location)
           break
       }
     }
@@ -883,7 +906,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           )
         },
         status(sessionID: string) {
-          return store.session.status[sessionID] ?? "idle"
+          return store.session.active[sessionID] ?? "idle"
         },
         input: {
           list(sessionID: string) {
@@ -893,38 +916,34 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.session.input[sessionID]?.includes(inputID) ?? false
           },
         },
-        compaction: {
-          list(sessionID: string) {
-            return store.session.compaction[sessionID] ?? []
-          },
-          async refresh(sessionID: string) {
-            await result.session.pending.refresh(sessionID)
-          },
-        },
         pending: {
           list(sessionID: string) {
             return store.session.pending[sessionID] ?? []
           },
-          async refresh(sessionID: string) {
-            const pending = await client.api.session.pending.list({ sessionID })
-            setStore("session", "pending", sessionID, reconcile(pending))
-            setStore(
-              "session",
-              "input",
-              sessionID,
-              reconcile(pending.filter((item) => item.type !== "compaction").map((item) => item.id)),
-            )
-            setStore(
-              "session",
-              "compaction",
-              sessionID,
-              reconcile(pending.filter((item) => item.type === "compaction").map((item) => item.id)),
-            )
+          sync(sessionID: string) {
+            return sync.run(`session.pending:${sessionID}`, async () => {
+              const pending = await client.api.session.pending.list({ sessionID })
+              setStore("session", "pending", sessionID, reconcile(pending))
+              setStore(
+                "session",
+                "input",
+                sessionID,
+                reconcile(pending.filter((item) => item.type !== "compaction").map((item) => item.id)),
+              )
+            })
+          },
+          invalidate(sessionID: string) {
+            sync.invalidate(`session.pending:${sessionID}`)
           },
         },
-        async refresh(sessionID: string) {
-          setStore("session", "info", sessionID, await client.api.session.get({ sessionID }))
-          registerSession(sessionID)
+        sync(sessionID: string) {
+          return sync.run(`session:${sessionID}`, async () => {
+            setStore("session", "info", sessionID, await client.api.session.get({ sessionID }))
+            registerSession(sessionID)
+          })
+        },
+        invalidate(sessionID: string) {
+          sync.invalidate(`session:${sessionID}`)
         },
         message: {
           list(sessionID: string) {
@@ -935,18 +954,30 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             const position = messageIndex.get(sessionID)?.get(messageID)
             return position === undefined ? undefined : messages?.[position]
           },
-          async refresh(sessionID: string) {
-            const messages = (await client.api.message.list({ sessionID, limit: 200, order: "desc" })).data.toReversed()
-            messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
-            setStore("session", "message", sessionID, reconcile(messages))
+          sync(sessionID: string) {
+            return sync.run(`session.message:${sessionID}`, async () => {
+              const messages = (
+                await client.api.message.list({ sessionID, limit: 200, order: "desc" })
+              ).data.toReversed()
+              messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
+              setStore("session", "message", sessionID, reconcile(messages))
+            })
+          },
+          invalidate(sessionID: string) {
+            sync.invalidate(`session.message:${sessionID}`)
           },
         },
         permission: {
           list(sessionID: string) {
             return store.session.permission[sessionID]
           },
-          async refresh(sessionID: string) {
-            setStore("session", "permission", sessionID, await client.api.permission.list({ sessionID }))
+          sync(sessionID: string) {
+            return sync.run(`session.permission:${sessionID}`, async () => {
+              setStore("session", "permission", sessionID, await client.api.permission.list({ sessionID }))
+            })
+          },
+          invalidate(sessionID: string) {
+            sync.invalidate(`session.permission:${sessionID}`)
           },
         },
         form: {
@@ -957,23 +988,33 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             const key = locationKey(ref)
             return forms?.filter((form) => form.location && locationKey(form.location) === key)
           },
-          async refresh(sessionID: string, ref?: LocationRef) {
-            if (sessionID === "global") {
-              const response = await client.api.form.request.list({ location: locationQuery(ref ?? defaultLocation()) })
-              const location = {
-                directory: response.location.directory,
-                workspaceID: response.location.workspaceID,
+          sync(sessionID: string, ref?: LocationRef) {
+            const key = `session.form:${sessionID}:${sessionID === "global" ? locationKey(ref ?? defaultLocation()) : ""}`
+            return sync.run(key, async () => {
+              if (sessionID === "global") {
+                const response = await client.api.form.request.list({
+                  location: locationQuery(ref ?? defaultLocation()),
+                })
+                const location = {
+                  directory: response.location.directory,
+                  workspaceID: response.location.workspaceID,
+                }
+                const locationID = locationKey(location)
+                setStore("session", "form", sessionID, [
+                  ...(store.session.form[sessionID] ?? []).filter(
+                    (form) => form.location && locationKey(form.location) !== locationID,
+                  ),
+                  ...response.data.filter((form) => form.sessionID === "global").map((form) => ({ ...form, location })),
+                ])
+                return
               }
-              const key = locationKey(location)
-              setStore("session", "form", sessionID, [
-                ...(store.session.form[sessionID] ?? []).filter(
-                  (form) => form.location && locationKey(form.location) !== key,
-                ),
-                ...response.data.filter((form) => form.sessionID === "global").map((form) => ({ ...form, location })),
-              ])
-              return
-            }
-            setStore("session", "form", sessionID, await client.api.form.list({ sessionID }))
+              setStore("session", "form", sessionID, await client.api.form.list({ sessionID }))
+            })
+          },
+          invalidate(sessionID: string, ref?: LocationRef) {
+            sync.invalidate(
+              `session.form:${sessionID}:${sessionID === "global" ? locationKey(ref ?? defaultLocation()) : ""}`,
+            )
           },
         },
       },
@@ -982,8 +1023,13 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           list(projectID: string) {
             return store.project.permission[projectID]
           },
-          async refresh(projectID: string) {
-            setStore("project", "permission", projectID, await client.api.permission.saved.list({ projectID }))
+          sync(projectID: string) {
+            return sync.run(`project.permission:${projectID}`, async () => {
+              setStore("project", "permission", projectID, await client.api.permission.saved.list({ projectID }))
+            })
+          },
+          invalidate(projectID: string) {
+            sync.invalidate(`project.permission:${projectID}`)
           },
         },
       },
@@ -996,53 +1042,109 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             .map((data) => data.shell?.[id])
             .find((shell) => shell !== undefined)
         },
-        async refresh(ref?: LocationRef) {
-          const result = await client.api.shell.list({ location: locationQuery(ref) })
-          const key = locationKey(result.location)
-          setStore("location", key, {
-            ...store.location[key],
-            shell: Object.fromEntries(result.data.map((info) => [info.id, info])),
+        sync(ref?: LocationRef) {
+          const id = locationKey(ref ?? defaultLocation())
+          return sync.run(`location.shell:${id}`, async () => {
+            const response = await client.api.shell.list({ location: locationQuery(ref ?? defaultLocation()) })
+            const key = locationKey(response.location)
+            setStore("location", key, {
+              ...store.location[key],
+              shell: Object.fromEntries(response.data.map((info) => [info.id, info])),
+            })
           })
+        },
+        invalidate(ref?: LocationRef) {
+          sync.invalidate(`location.shell:${locationKey(ref ?? defaultLocation())}`)
         },
       },
       location: {
         default() {
           return defaultLocation()
         },
-        async refresh(ref?: LocationRef) {
-          const location = await client.api.location.get({ location: locationQuery(ref ?? defaultLocation()) })
-          const key = locationKey(location)
-          if (!store.location[key]) setStore("location", key, {})
-          if (!ref) setDefaultLocation({ directory: location.directory, workspaceID: location.workspaceID })
+        async sync(ref?: LocationRef) {
+          const current = ref ?? defaultLocation()
+          await sync.run(`location:${locationKey(current)}`, async () => {
+            const location = await client.api.location.get({ location: locationQuery(current) })
+            const key = locationKey(location)
+            if (!store.location[key]) setStore("location", key, {})
+            if (!ref) setDefaultLocation({ directory: location.directory, workspaceID: location.workspaceID })
+          })
+          const location = ref ?? defaultLocation()
+          await Promise.all([
+            result.location.agent.sync(location),
+            result.location.command.sync(location),
+            result.location.integration.sync(location),
+            result.location.mcp.server.sync(location),
+            result.location.mcp.resource.sync(location),
+            result.location.model.sync(location),
+            result.location.provider.sync(location),
+            result.location.reference.sync(location),
+            result.location.skill.sync(location),
+            result.shell.sync(location),
+            result.session.form.sync("global", location),
+          ])
+        },
+        invalidate(ref?: LocationRef) {
+          const location = ref ?? defaultLocation()
+          sync.invalidate(`location:${locationKey(location)}`)
+          result.location.agent.invalidate(location)
+          result.location.command.invalidate(location)
+          result.location.integration.invalidate(location)
+          result.location.mcp.server.invalidate(location)
+          result.location.mcp.resource.invalidate(location)
+          result.location.model.invalidate(location)
+          result.location.provider.invalidate(location)
+          result.location.reference.invalidate(location)
+          result.location.skill.invalidate(location)
+          result.shell.invalidate(location)
+          result.session.form.invalidate("global", location)
         },
         agent: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.agent
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.agent.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], agent: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.agent:${id}`, async () => {
+              const response = await client.api.agent.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], agent: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.agent:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         command: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.command
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.command.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], command: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.command:${id}`, async () => {
+              const response = await client.api.command.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], command: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.command:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         integration: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.integration
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.integration.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], integration: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.integration:${id}`, async () => {
+              const response = await client.api.integration.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], integration: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.integration:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         mcp: {
@@ -1050,26 +1152,40 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             list(location?: LocationRef) {
               return store.location[locationKey(location ?? defaultLocation())]?.mcp?.server
             },
-            async refresh(ref?: LocationRef) {
-              const result = await client.api.mcp.list({ location: locationQuery(ref ?? defaultLocation()) })
-              const key = locationKey(result.location)
-              setStore("location", key, {
-                ...store.location[key],
-                mcp: { ...store.location[key]?.mcp, server: result.data },
+            sync(ref?: LocationRef) {
+              const id = locationKey(ref ?? defaultLocation())
+              return sync.run(`location.mcp.server:${id}`, async () => {
+                const response = await client.api.mcp.list({ location: locationQuery(ref ?? defaultLocation()) })
+                const key = locationKey(response.location)
+                setStore("location", key, {
+                  ...store.location[key],
+                  mcp: { ...store.location[key]?.mcp, server: response.data },
+                })
               })
+            },
+            invalidate(ref?: LocationRef) {
+              sync.invalidate(`location.mcp.server:${locationKey(ref ?? defaultLocation())}`)
             },
           },
           resource: {
             list(location?: LocationRef) {
               return store.location[locationKey(location ?? defaultLocation())]?.mcp?.resource
             },
-            async refresh(ref?: LocationRef) {
-              const result = await client.api.mcp.resource.catalog({ location: locationQuery(ref ?? defaultLocation()) })
-              const key = locationKey(result.location)
-              setStore("location", key, {
-                ...store.location[key],
-                mcp: { ...store.location[key]?.mcp, resource: result.data.resources },
+            sync(ref?: LocationRef) {
+              const id = locationKey(ref ?? defaultLocation())
+              return sync.run(`location.mcp.resource:${id}`, async () => {
+                const response = await client.api.mcp.resource.catalog({
+                  location: locationQuery(ref ?? defaultLocation()),
+                })
+                const key = locationKey(response.location)
+                setStore("location", key, {
+                  ...store.location[key],
+                  mcp: { ...store.location[key]?.mcp, resource: response.data.resources },
+                })
               })
+            },
+            invalidate(ref?: LocationRef) {
+              sync.invalidate(`location.mcp.resource:${locationKey(ref ?? defaultLocation())}`)
             },
           },
         },
@@ -1077,153 +1193,109 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.model
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.model.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], model: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.model:${id}`, async () => {
+              const response = await client.api.model.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], model: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.model:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         provider: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.provider
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.provider.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], provider: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.provider:${id}`, async () => {
+              const response = await client.api.provider.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], provider: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.provider:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         reference: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.reference
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.reference.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], reference: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.reference:${id}`, async () => {
+              const response = await client.api.reference.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], reference: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.reference:${locationKey(ref ?? defaultLocation())}`)
           },
         },
         skill: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.skill
           },
-          async refresh(ref?: LocationRef) {
-            const result = await client.api.skill.list({ location: locationQuery(ref ?? defaultLocation()) })
-            const key = locationKey(result.location)
-            setStore("location", key, { ...store.location[key], skill: result.data })
+          sync(ref?: LocationRef) {
+            const id = locationKey(ref ?? defaultLocation())
+            return sync.run(`location.skill:${id}`, async () => {
+              const response = await client.api.skill.list({ location: locationQuery(ref ?? defaultLocation()) })
+              const key = locationKey(response.location)
+              setStore("location", key, { ...store.location[key], skill: response.data })
+            })
+          },
+          invalidate(ref?: LocationRef) {
+            sync.invalidate(`location.skill:${locationKey(ref ?? defaultLocation())}`)
           },
         },
       },
     }
     result satisfies Plugin.Context["data"]
 
-    async function bootstrap() {
-      if (bootstrapping) return bootstrapping
-      bootstrapping = Promise.allSettled([
-        client.api.session
-          .list({
-            limit: 50,
-            order: "desc",
-            directory: defaultLocation().directory,
-            workspace: defaultLocation().workspaceID,
-          })
-          .then((response) => {
-            setStore(
-              "session",
-              "info",
-              produce((draft) => {
-                for (const session of response.data) draft[session.id] = session
-              }),
-            )
-            for (const session of response.data) registerSession(session.id)
-          }),
-        client.api.permission.request.list({ location: locationQuery(defaultLocation()) }).then((response) => {
-          const permissions = response.data.reduce<Record<string, PermissionV2Request[]>>(
-            (result, request) => ({
-              ...result,
-              [request.sessionID]: [...(result[request.sessionID] ?? []), request],
-            }),
-            {},
-          )
-          setStore("session", "permission", reconcile(permissions))
-        }),
-        client.api.form.request.list({ location: locationQuery(defaultLocation()) }).then((response) => {
-          const location = {
-            directory: response.location.directory,
-            workspaceID: response.location.workspaceID,
-          }
-          const forms = response.data.reduce<Record<string, FormWithLocation[]>>(
-            (result, form) => ({
-              ...result,
-              [form.sessionID]: [
-                ...(result[form.sessionID] ?? []),
-                form.sessionID === "global" ? { ...form, location } : form,
-              ],
-            }),
-            {},
-          )
-          setStore("session", "form", reconcile(forms))
-        }),
-        result.location.refresh(),
-        result.location.agent.refresh(),
-        result.location.integration.refresh(),
-        result.location.mcp.server.refresh(),
-        result.location.mcp.resource.refresh(),
-        result.location.model.refresh(),
-        result.location.provider.refresh(),
-        result.location.reference.refresh(),
-        result.location.command.refresh(),
-        result.location.skill.refresh(),
-        result.shell.refresh(),
-      ])
-        .then(async (settled) => {
-          for (const failure of settled.filter((item) => item.status === "rejected"))
-            console.error("Failed to refresh default location data", failure.reason)
-          const key = locationKey(defaultLocation())
-          const locations = new Map(
-            Object.values(store.session.info).map(
-              (session) => [locationKey(session.location), session.location] as const,
-            ),
-          )
-          const refreshed = await Promise.allSettled(
-            Array.from(locations)
-              .filter(([location]) => location !== key)
-              .map(([, location]) => result.session.form.refresh("global", location)),
-          )
-          for (const failure of refreshed.filter((item) => item.status === "rejected"))
-            console.error("Failed to refresh global forms", failure.reason)
-        })
-        .finally(() => {
-          bootstrapping = undefined
-        })
-      return bootstrapping
-    }
-
-    function refreshActive() {
-      void client.api.session
-        .active()
-        .then((active) => {
-          setStore(
-            "session",
-            "status",
-            reconcile(Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, "running" as const]))),
-          )
-        })
-        .catch(() => undefined)
-    }
+    createEffect(() => {
+      if (client.connection.status() === "connected") return
+      sync.invalidate()
+    })
 
     onCleanup(
       client.event.listen(({ details }) => {
         if (details.type === "server.connected") {
-          const messages = connected ? Object.keys(store.session.message) : []
-          const compactions = connected ? Object.keys(store.session.compaction) : []
-          connected = true
-          refreshActive()
-          void Promise.allSettled([
-            bootstrap(),
-            ...messages.map(result.session.message.refresh),
-            ...compactions.map(result.session.compaction.refresh),
-          ])
+          void client.api.session
+            .active()
+            .then((active) => {
+              setStore(
+                "session",
+                "active",
+                reconcile(Object.fromEntries(Object.keys(active).map((sessionID) => [sessionID, "running" as const]))),
+              )
+            })
+            .catch(() => undefined)
+          void client.api.session
+            .list({
+              limit: 50,
+              order: "desc",
+              directory: defaultLocation().directory,
+              workspace: defaultLocation().workspaceID,
+            })
+            .then((response) => {
+              setStore(
+                "session",
+                "info",
+                produce((draft) => {
+                  for (const session of response.data) draft[session.id] = session
+                }),
+              )
+              for (const session of response.data) {
+                sync.complete(`session:${session.id}`)
+                registerSession(session.id)
+              }
+            })
+            .catch((error) => console.error("Failed to preload sessions", error))
           return
         }
         handleEvent(details)

@@ -2,6 +2,7 @@ import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/c
 import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useData } from "../../context/data"
+import { useClient } from "../../context/client"
 
 export type PartRef = {
   messageID: string
@@ -29,6 +30,7 @@ export type SessionRow =
 
 export function createSessionRows(sessionID: Accessor<string>) {
   const data = useData()
+  const client = useClient()
   const [rows, setRows] = createStore<SessionRow[]>([])
   const revertBoundary = () => data.session.get(sessionID())?.revert?.messageID
 
@@ -42,9 +44,10 @@ export function createSessionRows(sessionID: Accessor<string>) {
     rows.splice(
       position === -1 ? rows.length : position,
       0,
-      ...data.session.compaction
+      ...data.session.pending
         .list(sessionID())
-        .map((inputID): SessionRow => ({ type: "compaction-queued", inputID })),
+        .filter((item) => item.type === "compaction")
+        .map((item): SessionRow => ({ type: "compaction-queued", inputID: item.id })),
     )
     return rows
   }
@@ -67,10 +70,11 @@ export function createSessionRows(sessionID: Accessor<string>) {
   })
 
   createEffect(
-    on(sessionID, (id) => {
+    on([sessionID, () => client.connection.status()], ([id, status]) => {
+      if (status !== "connected") return
       setRows(reconcile(reduce()))
-      void data.session.compaction.refresh(id).catch(() => undefined)
-      void data.session.message.refresh(id).then(
+      void data.session.pending.sync(id).catch(() => undefined)
+      void data.session.message.sync(id).then(
         () => {
           if (sessionID() !== id) return
           setRows(reconcile(reduce()))
@@ -89,7 +93,11 @@ export function createSessionRows(sessionID: Accessor<string>) {
 
   createEffect(
     on(
-      () => data.session.compaction.list(sessionID()).map((inputID) => inputID),
+      () =>
+        data.session.pending
+          .list(sessionID())
+          .filter((item) => item.type === "compaction")
+          .map((item) => item.id),
       () => setRows(reconcile(reduce())),
     ),
   )

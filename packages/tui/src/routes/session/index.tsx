@@ -184,23 +184,22 @@ export function Session() {
   const rows = createSessionRows(() => route.sessionID)
 
   createEffect(
-    on(descendantSessionIDs, (sessionIDs) => {
+    on([descendantSessionIDs, () => client.connection.status()], ([sessionIDs, status]) => {
+      if (status !== "connected") return
       void Promise.all(
-        sessionIDs.flatMap((sessionID) => [
-          data.session.permission.refresh(sessionID),
-          data.session.form.refresh(sessionID),
-        ]),
+        sessionIDs.flatMap((sessionID) => [data.session.permission.sync(sessionID), data.session.form.sync(sessionID)]),
       )
     }),
   )
 
   createEffect(() => {
+    if (client.connection.status() !== "connected") return
     const sessionID = route.sessionID
     void (async () => {
       await Promise.all([
-        data.session.refresh(sessionID),
-        data.session.permission.refresh(sessionID),
-        data.session.form.refresh(sessionID),
+        data.session.sync(sessionID),
+        data.session.permission.sync(sessionID),
+        data.session.form.sync(sessionID),
       ])
       const info = data.session.get(sessionID)
       if (!info) {
@@ -212,13 +211,6 @@ export function Session() {
         navigate({ type: "home" })
         return
       }
-      void data.session.form.refresh("global", info.location).catch((error) =>
-        toast.show({
-          message: `Failed to refresh global forms: ${errorMessage(error)}`,
-          variant: "error",
-          duration: 5000,
-        }),
-      )
       project.workspace.set(info.location.workspaceID)
       editor.reconnect(info.location.directory)
       if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)

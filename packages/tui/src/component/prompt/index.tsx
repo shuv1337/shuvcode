@@ -1055,7 +1055,7 @@ export function Prompt(props: PromptProps) {
     } else {
       move.startSubmit()
       if (!session) {
-        await data.session.refresh(sessionID)
+        await data.session.sync(sessionID)
         session = data.session.get(sessionID)
       }
       if (session?.agent !== agent.id) {

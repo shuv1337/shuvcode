@@ -25,7 +25,7 @@ export function DialogSkill(props: DialogSkillProps) {
       .then(async () => {
         const current = data.location.skill.list(props.location)
         if (current) return current
-        await data.location.skill.refresh(props.location)
+        await data.location.skill.sync(props.location)
         return data.location.skill.list(props.location) ?? []
       })
       // Catch so the rejected resource never reaches the memo below: reading

@@ -467,11 +467,10 @@ async function connected(
   toast: ReturnType<typeof useToast>,
   onConnected?: OnIntegrationConnected,
 ) {
-  await Promise.all([
-    data.location.integration.refresh(),
-    data.location.model.refresh(),
-    data.location.provider.refresh(),
-  ])
+  data.location.integration.invalidate()
+  data.location.model.invalidate()
+  data.location.provider.invalidate()
+  await Promise.all([data.location.integration.sync(), data.location.model.sync(), data.location.provider.sync()])
   toast.show({ variant: "success", message: `Connected ${integration.name}` })
   if (onConnected) {
     onConnected(providerID(data, integration.id))
@@ -498,11 +497,10 @@ async function disconnected(
   dialog: ReturnType<typeof useDialog>,
   toast: ReturnType<typeof useToast>,
 ) {
-  await Promise.all([
-    data.location.integration.refresh(),
-    data.location.model.refresh(),
-    data.location.provider.refresh(),
-  ])
+  data.location.integration.invalidate()
+  data.location.model.invalidate()
+  data.location.provider.invalidate()
+  await Promise.all([data.location.integration.sync(), data.location.model.sync(), data.location.provider.sync()])
   toast.show({ variant: "success", message: `Disconnected ${name}` })
   dialog.clear()
 }

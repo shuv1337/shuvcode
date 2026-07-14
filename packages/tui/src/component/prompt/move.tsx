@@ -42,7 +42,7 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
       const directory = result.directory
       if (!directory) throw new Error("No project copy directory returned")
 
-      // Call a location-based route to make sure it's bootstrapped before moving on.
+      // Call a location-based route to initialize it before moving on.
       await client.api.location.get({ location: { directory } })
 
       setProgress("Creating session")
@@ -139,7 +139,7 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
   async function resolveSession(sessionID: string) {
     const session = data.session.get(sessionID)
     if (session) return session
-    await data.session.refresh(sessionID).catch(() => undefined)
+    await data.session.sync(sessionID).catch(() => undefined)
     return data.session.get(sessionID)
   }
 

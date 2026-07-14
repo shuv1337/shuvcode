@@ -24,7 +24,8 @@ import type { JSX } from "@opentui/solid"
 
 interface LocationCollection<Value> {
   list(location?: LocationRef): Value[] | undefined
-  refresh(location?: LocationRef): Promise<void>
+  sync(location?: LocationRef): Promise<void>
+  invalidate(location?: LocationRef): void
 }
 
 export interface Data {
@@ -42,37 +43,45 @@ export interface Data {
     status(sessionID: string): "idle" | "running"
     readonly pending: {
       list(sessionID: string): SessionPendingInfo[]
-      refresh(sessionID: string): Promise<void>
+      sync(sessionID: string): Promise<void>
+      invalidate(sessionID: string): void
     }
-    refresh(sessionID: string): Promise<void>
+    sync(sessionID: string): Promise<void>
+    invalidate(sessionID: string): void
     readonly message: {
       list(sessionID: string): SessionMessageInfo[]
       get(sessionID: string, messageID: string): SessionMessageInfo | undefined
-      refresh(sessionID: string): Promise<void>
+      sync(sessionID: string): Promise<void>
+      invalidate(sessionID: string): void
     }
     readonly permission: {
       list(sessionID: string): PermissionV2Request[] | undefined
-      refresh(sessionID: string): Promise<void>
+      sync(sessionID: string): Promise<void>
+      invalidate(sessionID: string): void
     }
     readonly form: {
       list(sessionID: string, location?: LocationRef): Array<FormInfo & { readonly location?: LocationRef }> | undefined
-      refresh(sessionID: string, location?: LocationRef): Promise<void>
+      sync(sessionID: string, location?: LocationRef): Promise<void>
+      invalidate(sessionID: string, location?: LocationRef): void
     }
   }
   readonly project: {
     readonly permission: {
       list(projectID: string): PermissionSavedInfo[] | undefined
-      refresh(projectID: string): Promise<void>
+      sync(projectID: string): Promise<void>
+      invalidate(projectID: string): void
     }
   }
   readonly shell: {
     list(location?: LocationRef): ShellInfo[]
     get(id: string): ShellInfo | undefined
-    refresh(location?: LocationRef): Promise<void>
+    sync(location?: LocationRef): Promise<void>
+    invalidate(location?: LocationRef): void
   }
   readonly location: {
     default(): LocationRef
-    refresh(location?: LocationRef): Promise<void>
+    sync(location?: LocationRef): Promise<void>
+    invalidate(location?: LocationRef): void
     readonly agent: LocationCollection<AgentInfo>
     readonly command: LocationCollection<CommandInfo>
     readonly integration: LocationCollection<IntegrationInfo>
