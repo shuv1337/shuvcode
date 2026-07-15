@@ -9,7 +9,7 @@ import { Authentication } from "./authentication"
 export const authorizationLayer = Layer.effect(
   Authorization,
   Effect.gen(function* () {
-    const authentication = yield* Authentication.Service
+    const authentication = yield* Authentication.make
     return Authorization.of((effect) =>
       authentication.withPrincipal(
         Effect.gen(function* () {
@@ -30,4 +30,4 @@ export const authorizationLayer = Layer.effect(
       ),
     )
   }),
-).pipe(Layer.provide(Authentication.layer))
+)

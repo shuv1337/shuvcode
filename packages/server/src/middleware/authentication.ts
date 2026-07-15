@@ -5,7 +5,7 @@ import { UnauthorizedError } from "@opencode-ai/protocol/errors"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
 import { Capabilities } from "@opencode-ai/protocol/capabilities"
 import { Principal, type PrincipalInfo } from "@opencode-ai/protocol/middleware/authorization"
-import { Context, Effect, Encoding, Layer, Redacted } from "effect"
+import { Context, Effect, Encoding, Layer, Option, Redacted } from "effect"
 import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { ServerAuth } from "../auth"
 
@@ -20,33 +20,31 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ServerAuthentication") {}
 
-export const layer = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const config = yield* ServerAuth.Config
-    const pairing = yield* Pairing.Service
-    return Service.of({
-      withPrincipal: (effect) =>
-        Effect.gen(function* () {
-          const request = yield* HttpServerRequest.HttpServerRequest
-          const url = new URL(request.url, "http://localhost")
-          if (hasPtyConnectTicketURL(url))
-            return yield* provide(effect, { type: "unauthenticated", reason: "pty-ticket" })
-          if (Capabilities.isPairingRedemption(request.method, url.pathname))
-            return yield* provide(effect, { type: "unauthenticated", reason: "pairing-redemption" })
-          if (ServerAuth.authorized(yield* credentialFromRequest(request), config))
-            return yield* provide(effect, { type: "administrator" })
-          const bearer = bearerFromRequest(request)
-          const principal = bearer ? yield* pairing.authenticate(bearer) : undefined
-          if (principal) return yield* provide(effect, principal)
-          if (!ServerAuth.required(config))
-            return yield* provide(effect, { type: "unauthenticated", reason: "embedded" })
-          yield* challenge
-          return yield* new UnauthorizedError({ message: "Authentication required" })
-        }),
-    })
-  }),
-)
+export const make = Effect.gen(function* () {
+  const config = yield* ServerAuth.Config
+  const pairing = yield* Effect.serviceOption(Pairing.Service)
+  return Service.of({
+    withPrincipal: (effect) =>
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest
+        const url = new URL(request.url, "http://localhost")
+        if (hasPtyConnectTicketURL(url))
+          return yield* provide(effect, { type: "unauthenticated", reason: "pty-ticket" })
+        if (Capabilities.isPairingRedemption(request.method, url.pathname))
+          return yield* provide(effect, { type: "unauthenticated", reason: "pairing-redemption" })
+        if (ServerAuth.authorized(yield* credentialFromRequest(request), config))
+          return yield* provide(effect, { type: "administrator" })
+        const bearer = bearerFromRequest(request)
+        const principal = bearer && Option.isSome(pairing) ? yield* pairing.value.authenticate(bearer) : undefined
+        if (principal) return yield* provide(effect, principal)
+        if (!ServerAuth.required(config)) return yield* provide(effect, { type: "unauthenticated", reason: "embedded" })
+        yield* challenge
+        return yield* new UnauthorizedError({ message: "Authentication required" })
+      }),
+  })
+})
+
+export const layer = Layer.effect(Service, make)
 
 export const challenge = HttpEffect.appendPreResponseHandler((_request, response) =>
   Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", WWW_AUTHENTICATE)),
