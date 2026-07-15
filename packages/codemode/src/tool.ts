@@ -50,8 +50,13 @@ export type Options<I extends SchemaType, O extends SchemaType | undefined, R = 
   readonly run: (input: InputType<I>) => Effect.Effect<ResultType<O>, unknown, R>
 }
 
+// Object.hasOwn: an inherited _tag must not classify a namespace as a Definition.
 export const isDefinition = <R = never>(value: unknown): value is Definition<R> =>
-  typeof value === "object" && value !== null && "_tag" in value && value._tag === "CodeModeTool"
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  Object.hasOwn(value, "_tag") &&
+  value._tag === "CodeModeTool"
 
 /**
  * Defines one schema-described tool available to a CodeMode program through `tools.*`.

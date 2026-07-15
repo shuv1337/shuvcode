@@ -75,6 +75,10 @@ is decoded before `run` is invoked; an Effect Schema `output` is decoded and cop
 Schemas only shape the model-visible signature. Without `output` the signature advertises `Promise<unknown>`.
 Descriptions and schemas are model-visible contract; keep authorization in `run`.
 
+Dots in tool names are namespace separators: `{ "issues.list": tool }` exposes `tools.issues.list(...)`, exactly like
+`{ issues: { list: tool } }`. Other non-identifier characters render with bracket notation, e.g.
+`tools.context7["resolve-library-id"](...)`.
+
 ### `CodeMode.execute` and `CodeMode.make`
 
 `CodeMode.execute({ ...options, code })` runs once and is equivalent to `CodeMode.make(options).execute(code)`. A
