@@ -1,6 +1,6 @@
 // Per-tool display rules shared across `opencode run` output paths.
 //
-// Each known tool (bash, edit, write, task, etc.) has a ToolRule that controls
+// Each known tool (shell, edit, write, task, etc.) has a ToolRule that controls
 // five display hooks:
 //
 //   view       → visibility policy for progress/final scrollback entries and
@@ -114,7 +114,7 @@ type ToolPermissionCtx = {
 
 type ToolName =
   | "invalid"
-  | "bash"
+  | "shell"
   | "write"
   | "edit"
   | "patch"
@@ -648,7 +648,7 @@ function scrollBashProgress(p: ToolProps): string {
   return fmt(out)
 }
 
-function scrollBashFinal(p: ToolProps): string {
+function scrollShellFinal(p: ToolProps): string {
   if (p.frame.status === "error") {
     return fail(p.frame)
   }
@@ -657,13 +657,13 @@ function scrollBashFinal(p: ToolProps): string {
   const time = span(p.frame.state)
   if (code === undefined) {
     if (!time) {
-      return "bash completed"
+      return "shell completed"
     }
 
-    return `bash completed · ${time}`
+    return `shell completed · ${time}`
   }
 
-  return `bash completed (exit ${code})${time ? ` · ${time}` : ""}`
+  return `shell completed (exit ${code})${time ? ` · ${time}` : ""}`
 }
 
 function scrollReadStart(p: ToolProps): string {
@@ -976,16 +976,16 @@ const TOOL_RULES = {
       start: () => "",
     },
   },
-  bash: {
+  shell: {
     view: {
       output: true,
       final: false,
     },
-    run: runBash,
+    run: runShell,
     scroll: {
       start: scrollBashStart,
       progress: scrollBashProgress,
-      final: scrollBashFinal,
+      final: scrollShellFinal,
     },
     permission: permBash,
   },
@@ -1202,7 +1202,7 @@ export function toolFrame(commit: StreamCommit, raw: string): ToolFrame {
   }
 }
 
-function runBash(p: ToolProps): ToolInline {
+function runShell(p: ToolProps): ToolInline {
   return {
     icon: "$",
     title: p.input.command || "",

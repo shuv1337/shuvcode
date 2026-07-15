@@ -218,7 +218,7 @@ function shellCommit(
     kind: "tool",
     source: "tool",
     partID: `shell:${callID}`,
-    tool: "bash",
+    tool: "shell",
     shell: { callID, command },
     ...next,
   }
