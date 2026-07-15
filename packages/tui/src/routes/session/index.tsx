@@ -2408,9 +2408,6 @@ function Shell(props: ToolProps) {
         <Show when={shellID()}>
           <StatusBadge>Background</StatusBadge>
         </Show>
-        <Show when={expandable()}>
-          <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
-        </Show>
       </box>
     </BlockTool>
   )
