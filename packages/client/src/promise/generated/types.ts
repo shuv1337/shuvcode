@@ -1,10 +1,6 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
-export type ServiceStatus =
-  | { type: "starting" }
-  | { type: "ready" }
-  | { type: "stopping"; targetVersion?: string | null }
-  | { type: "failed"; message: string; action: string }
+export type ServiceHealth = { healthy: true; version: string; pid: number }
 
 export type ServiceStopResponse = { accepted: boolean }
 
@@ -504,14 +500,6 @@ export type VcsFileStatus = {
   additions: number
   deletions: number
   status: "added" | "deleted" | "modified"
-}
-
-export type ServiceHealth = {
-  healthy: true
-  version: string
-  pid: number
-  instanceID?: string | null
-  status?: ServiceStatus
 }
 
 export type SessionMessageModelSelected = {
@@ -2501,10 +2489,7 @@ export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
 
 export type HealthGetOutput = ServiceHealth
 
-export type HealthStopInput = {
-  readonly instanceID: { readonly instanceID: string; readonly targetVersion?: string | undefined }["instanceID"]
-  readonly targetVersion?: { readonly instanceID: string; readonly targetVersion?: string | undefined }["targetVersion"]
-}
+export type HealthStopInput = { readonly instanceID: { readonly instanceID: string }["instanceID"] }
 
 export type HealthStopOutput = ServiceStopResponse
 

@@ -48,23 +48,11 @@ const server = Bun.serve({
     }
     if (mode === "legacy") return Response.json({ healthy: true })
     if (mode === "starting" && !(await Bun.file(registration + ".release").exists()))
-      return Response.json(
-        { healthy: true, version, pid: process.pid, instanceID: id, status: { type: "starting" } },
-        { status: 503 },
-      )
+      return Response.json({ healthy: true, version, pid: process.pid }, { status: 503 })
     if (mode === "failed-owner")
-      return Response.json(
-        {
-          healthy: true,
-          version,
-          pid: process.pid,
-          instanceID: id,
-          status: { type: "failed", message: "Could not open the database.", action: "Check the service logs." },
-        },
-        { status: 503 },
-      )
+      return Response.json({ healthy: true, version, pid: process.pid }, { status: 500 })
     if (mode === "starting" || mode === "graceful" || mode === "reject-stop")
-      return Response.json({ healthy: true, version, pid: process.pid, instanceID: id, status: { type: "ready" } })
+      return Response.json({ healthy: true, version, pid: process.pid })
     return Response.json({ healthy: true, version, pid: process.pid })
   },
 })

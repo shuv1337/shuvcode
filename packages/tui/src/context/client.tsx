@@ -1,7 +1,6 @@
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
-import type { Service } from "@opencode-ai/client/effect"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
-import { createSignal, onCleanup, onMount } from "solid-js"
+import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { errorMessage } from "../util/error"
 import { createSimpleContext } from "./helper"
@@ -19,7 +18,7 @@ export type ClientConnectionEvent = {
 }
 
 type ManagedService = {
-  reconnect: (onStatus: (status: Service.Status) => void, signal: AbortSignal) => Promise<{ api: OpenCodeClient }>
+  reconnect: (signal: AbortSignal) => Promise<{ api: OpenCodeClient }>
   restart: () => Promise<void>
 }
 
@@ -43,7 +42,6 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
       status: "connecting",
       attempt: 0,
     })
-    const [service, setService] = createSignal<Service.Status>()
     let stream: AbortController | undefined
 
     function record(status: ClientConnectionEvent["data"]["status"], attempt: number, error?: string) {
@@ -81,7 +79,6 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
             log.info("event stream connected")
             events.emit(first.value.type, first.value)
             setConnection({ status: "connected", attempt: 0, error: undefined })
-            setService(undefined)
             while (!abort.signal.aborted && !controller.signal.aborted) {
               const event = await iterator.next()
               if (abort.signal.aborted || controller.signal.aborted) return undefined
@@ -116,7 +113,7 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
           // moved (service restarted on a new port) or need starting. Static
           // transports (--server, standalone) resolve to the same address.
           if (props.service) {
-            const next = await props.service.reconnect(setService, controller.signal).catch((error) => {
+            const next = await props.service.reconnect(controller.signal).catch((error) => {
               if (!controller.signal.aborted)
                 log.info("server resolution failed", {
                   attempt,
@@ -158,9 +155,6 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
         },
         error() {
           return connection.error
-        },
-        service() {
-          return service()
         },
         internal: {
           history() {

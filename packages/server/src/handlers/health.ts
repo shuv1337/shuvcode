@@ -10,7 +10,6 @@ export const HealthHandler = HttpApiBuilder.group(Api, "server.health", (handler
         healthy: true as const,
         version: InstallationVersion,
         pid: process.pid,
-        status: { type: "ready" },
       }),
     )
     .handle("health.stop", () => Effect.succeed({ accepted: false })),

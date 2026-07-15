@@ -21,8 +21,8 @@ export default Runtime.handler(Commands, (input) =>
     const server = yield* ServerConnection.resolve({
       server: Option.getOrUndefined(input.server),
       standalone: input.standalone,
-      onStart: (reason, existing) => {
-        if (reason === "version-mismatch" && preflight.begin(existing?.version)) return
+      onStart: (reason, previousVersion) => {
+        if (reason === "version-mismatch" && preflight.begin(previousVersion)) return
         process.stderr.write(
           reason === "version-mismatch"
             ? "Restarting background server (version mismatch)...\n"
@@ -48,7 +48,7 @@ export default Runtime.handler(Commands, (input) =>
         endpoint: server.endpoint,
         service: service
           ? {
-              reconnect: (onStatus, signal) => runServicePromise(service.reconnect(onStatus), { signal }),
+              reconnect: (signal) => runServicePromise(service.reconnect(), { signal }),
               restart: () => runServicePromise(service.restart()),
             }
           : undefined,

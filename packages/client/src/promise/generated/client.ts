@@ -339,7 +339,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/service/stop`,
-            body: { instanceID: input["instanceID"], targetVersion: input["targetVersion"] },
+            body: { instanceID: input["instanceID"] },
             successStatus: 200,
             declaredStatuses: [401, 400],
             empty: false,

@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Service } from "../src/effect/index"
+import { Service, type StartReason } from "../src/effect/service"
 
 const fixture = join(import.meta.dir, "fixture/service.ts")
 const processes: Bun.Subprocess[] = []
@@ -23,7 +23,7 @@ test("a concurrent same-version start cannot invalidate a resolved endpoint", as
   await waitForFile(registration)
   const original = await Bun.file(registration).json()
 
-  const starts: Service.StartReason[] = []
+  const starts: StartReason[] = []
   const first = run(
     Service.start({
       file: registration,
@@ -43,7 +43,6 @@ test("a concurrent same-version start cannot invalidate a resolved endpoint", as
   expect(starts).toEqual([])
   expect(await Bun.file(registration).json()).toEqual(original)
   expect(await health(resolved.url)).toEqual({ healthy: true, version: "test", pid: original.pid })
-  expect(await run(Service.status({ file: registration }))).toEqual({ type: "ready", version: "test" })
 })
 
 test("waits for a registered service to finish starting", async () => {
@@ -51,15 +50,10 @@ test("waits for a registered service to finish starting", async () => {
   const registration = join(directory, "service.json")
   const process = spawn(registration, "starting")
   await waitForFile(registration)
-  const statuses: Service.Status[] = []
-  const result = run(
-    Service.start({ file: registration, version: "test", command: [], onStatus: (status) => statuses.push(status) }),
-  )
+  const result = run(Service.start({ file: registration, version: "test", command: [] }))
 
   await Bun.sleep(500)
   expect(process.exitCode).toBe(null)
-  expect(statuses).toContainEqual({ type: "starting", version: "test" })
-  expect(statuses.filter((status) => status.type === "starting")).toHaveLength(1)
   await writeFile(registration + ".release", "")
   expect((await result).url).toBe((await Bun.file(registration).json()).url)
 })
@@ -70,23 +64,22 @@ test("reports a failed registered service without spawning", async () => {
   const process = spawn(registration, "failed-owner")
   await waitForFile(registration)
 
-  await expect(run(Service.start({ file: registration, version: "test", command: [] }))).rejects.toMatchObject({
-    message: "Could not open the database.",
-    action: "Check the service logs.",
-  })
+  await expect(run(Service.start({ file: registration, version: "test", command: [] }))).rejects.toThrow(
+    "Background service failed to start",
+  )
   expect(process.exitCode).toBe(null)
 })
 
-test("requests graceful replacement of the exact service instance", async () => {
+test("requests graceful stop of the exact service instance", async () => {
   const directory = await temp()
   const registration = join(directory, "service.json")
   const process = spawn(registration, "graceful")
   await waitForFile(registration)
   const info = await Bun.file(registration).json()
 
-  await run(Service.stop({ file: registration }, { targetVersion: "next" }))
+  await run(Service.stop({ file: registration }))
   await process.exited
-  expect(await Bun.file(registration + ".stop").json()).toEqual({ instanceID: info.id, targetVersion: "next" })
+  expect(await Bun.file(registration + ".stop").json()).toEqual({ instanceID: info.id })
 })
 
 test("does not spawn contenders while an incompatible service rejects replacement", async () => {
@@ -120,7 +113,7 @@ test("a legacy health response is still replaced", async () => {
   const existing = spawn(registration, "legacy")
   await waitForFile(registration)
 
-  const starts: Service.StartReason[] = []
+  const starts: StartReason[] = []
   const result = run(Service.start({ file: registration, command: [], onStart: (reason) => starts.push(reason) }))
 
   await expect(result).rejects.toThrow("Missing service command")

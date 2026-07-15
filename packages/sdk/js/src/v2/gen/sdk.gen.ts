@@ -179,7 +179,7 @@ import type {
   QuestionReplyErrors,
   QuestionReplyResponses,
   QuestionV2Reply,
-  ServiceStopRequestV2,
+  ServiceStopRequest,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -5091,11 +5091,11 @@ export class Health extends HeyApiClient {
    */
   public stop<ThrowOnError extends boolean = false>(
     parameters: {
-      serviceStopRequestV2: ServiceStopRequestV2
+      serviceStopRequest: ServiceStopRequest
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{ args: [{ key: "serviceStopRequestV2", map: "body" }] }])
+    const params = buildClientParams([parameters], [{ args: [{ key: "serviceStopRequest", map: "body" }] }])
     return (options?.client ?? this.client).post<V2HealthStopResponses, V2HealthStopErrors, ThrowOnError>({
       url: "/api/service/stop",
       ...options,

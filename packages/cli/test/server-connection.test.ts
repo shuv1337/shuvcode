@@ -19,8 +19,6 @@ test("resolution groups Effect-native lifecycle operations only for the managed 
         healthy: true,
         version: InstallationVersion,
         pid: process.pid,
-        instanceID: id,
-        status: { type: "ready" },
       })
     },
   })
@@ -45,9 +43,9 @@ test("resolution groups Effect-native lifecycle operations only for the managed 
     expect(resolved.endpoint.url).toBe(server.url.toString())
     expect(resolved.service).toBeDefined()
     if (!resolved.service) throw new Error("Expected managed service capabilities")
-    expect(Effect.isEffect(resolved.service.reconnect(() => {}))).toBe(true)
+    expect(Effect.isEffect(resolved.service.reconnect())).toBe(true)
     expect(Effect.isEffect(resolved.service.restart())).toBe(true)
-    expect(await runPromise(resolved.service.reconnect(() => {}))).toEqual(resolved.endpoint)
+    expect(await runPromise(resolved.service.reconnect())).toEqual(resolved.endpoint)
 
     const explicit = await runPromise(ServerConnection.resolve({ server: server.url.toString() }))
     expect(explicit.endpoint.url).toBe(server.url.toString())

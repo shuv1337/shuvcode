@@ -1,4 +1,4 @@
-import { Service } from "@opencode-ai/client/effect"
+import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Effect, Schema, Stream } from "effect"
@@ -46,7 +46,7 @@ const makeEndpoint = Effect.fn("cli.standalone.endpoint")(
       url: ready.url,
       auth: { type: "basic" as const, username: "opencode", password },
       pid: proc.pid,
-    } satisfies Service.Endpoint & { readonly pid: number }
+    } satisfies Endpoint & { readonly pid: number }
   },
   Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)),
 )

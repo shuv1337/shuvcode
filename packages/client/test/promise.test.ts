@@ -71,10 +71,10 @@ test("health.stop sends exact replacement identity", async () => {
     },
   })
 
-  expect(await client.health.stop({ instanceID: "instance", targetVersion: "next" })).toEqual({ accepted: true })
+  expect(await client.health.stop({ instanceID: "instance" })).toEqual({ accepted: true })
   expect(request?.method).toBe("POST")
   expect(request?.url).toBe("http://localhost:3000/api/service/stop")
-  expect(await request?.json()).toEqual({ instanceID: "instance", targetVersion: "next" })
+  expect(await request?.json()).toEqual({ instanceID: "instance" })
 })
 
 test("MCP resource catalog uses the public HTTP contract", async () => {

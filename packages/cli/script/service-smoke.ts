@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { Schema } from "effect"
 import fs from "node:fs/promises"
@@ -37,8 +37,7 @@ try {
   const headers = { authorization: "Basic " + credential }
   const token = encodeURIComponent(credential)
   const health = await waitForReady(info.url, headers)
-  if (health.pid !== info.pid || health.instanceID !== info.id)
-    throw new Error("Health identity does not match registration")
+  if (health.pid !== info.pid) throw new Error("Health process does not match registration")
   const tokenHealth = await fetch(
     new URL(`/api/health?auth_token=${token}`, info.url),
     { signal: AbortSignal.timeout(5_000) },
@@ -75,7 +74,7 @@ try {
     await fetch(new URL("/api/service/stop", info.url), {
       method: "POST",
       headers: { ...headers, "content-type": "application/json" },
-      body: JSON.stringify({ instanceID: info.id, targetVersion: "smoke-next" }),
+      body: JSON.stringify({ instanceID: info.id }),
       signal: AbortSignal.timeout(5_000),
     }).then((response) => response.json()),
   )
@@ -120,19 +119,11 @@ async function waitForRegistration() {
 async function waitForReady(url: string, headers: HeadersInit) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
-    const health = await fetch(new URL("/api/health", url), {
+    const response = await fetch(new URL("/api/health", url), {
       headers,
       signal: AbortSignal.timeout(1_000),
-    })
-      .then((response) => response.json())
-      .then(Schema.decodeUnknownPromise(ServiceStatus.Health))
-      .catch(() => undefined)
-    if (health === undefined) {
-      await Bun.sleep(25)
-      continue
-    }
-    if (health.status.type === "ready") return health
-    if (health.status.type === "failed") throw new Error(health.status.message)
+    }).catch(() => undefined)
+    if (response?.ok) return Schema.decodeUnknownPromise(ServiceStatus.Health)(await response.json())
     await Bun.sleep(25)
   }
   throw new Error("Compiled service did not become ready")

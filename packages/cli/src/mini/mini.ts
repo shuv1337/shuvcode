@@ -1,4 +1,4 @@
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { ServerConnection } from "../services/server-connection"
 import { waitForCatalogReady } from "./catalog.shared"

@@ -1,5 +1,5 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventTable } from "@opencode-ai/core/event/sql"
@@ -146,11 +146,10 @@ test("concurrent service processes elect one server", async () => {
       await fetch(new URL("/api/health", info.url), {
         headers: { authorization: "Basic " + btoa(`opencode:${info.password}`) },
       }).then((response) => response.json()),
-    ).toMatchObject({
+    ).toEqual({
       healthy: true,
+      version: info.version,
       pid: info.pid,
-      instanceID: info.id,
-      status: { type: "ready" },
     })
     const blockedTemp = registration + "." + info.id + ".tmp"
     await fs.mkdir(blockedTemp)
@@ -193,7 +192,7 @@ test("concurrent service processes elect one server", async () => {
     ).toEqual({ timeSuspended: null })
     expect(await waitForExecutionStart(database, sessionID)).toBe(1)
     await Effect.runPromise(
-      Service.stop({ file: registration }, { targetVersion: "next" }).pipe(Effect.provide(NodeFileSystem.layer)),
+      Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)),
     )
     await winner?.exited
   } finally {
@@ -227,19 +226,6 @@ test("a failed service stays registered and owns the lock until stopped", async 
 
   try {
     const info = await waitForInfo(registration)
-    const status = await Effect.runPromise(
-      Service.status({ file: registration }).pipe(
-        Effect.filterOrFail((status) => status.type === "failed"),
-        Effect.retry(Schedule.spaced("50 millis").pipe(Schedule.both(Schedule.recurs(200)))),
-        Effect.provide(NodeFileSystem.layer),
-      ),
-    )
-    expect(status).toEqual({
-      type: "failed",
-      version: info.version,
-      message: "The background service could not start.",
-      action: "Run `opencode service restart` after checking the service logs.",
-    })
     expect(owner.exitCode).toBe(null)
 
     const contender = Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" })

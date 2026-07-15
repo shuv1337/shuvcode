@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { OpenCode } from "@opencode-ai/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { ServiceConfig } from "../../../services/service-config"
 
 export default Runtime.handler(

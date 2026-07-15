@@ -1,4 +1,4 @@
-import { Service } from "@opencode-ai/client/effect"
+import { Service, type Endpoint, type StartOptions } from "@opencode-ai/client/effect/service"
 import { ClientError, isUnauthorizedError, OpenCode } from "@opencode-ai/client/promise"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Effect, Redacted } from "effect"
@@ -10,11 +10,11 @@ export type Args = {
   readonly server?: string
   readonly standalone?: boolean
   readonly mismatch?: "replace" | "ignore" | "error"
-  readonly onStart?: Service.StartOptions["onStart"]
+  readonly onStart?: StartOptions["onStart"]
 }
 
 export type Resolved = {
-  readonly endpoint: Service.Endpoint
+  readonly endpoint: Endpoint
   readonly service?: ReturnType<typeof managedService>
 }
 
@@ -26,7 +26,7 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
     const endpoint = {
       url: args.server,
       auth: password ? { type: "basic" as const, username: "opencode", password: Redacted.value(password) } : undefined,
-    } satisfies Service.Endpoint
+    } satisfies Endpoint
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     const health = yield* Effect.tryPromise({
       try: () => client.health.get({ signal: AbortSignal.timeout(5_000) }),
@@ -49,20 +49,20 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
   } satisfies Resolved
 })
 
-function managedService(options: Service.StartOptions) {
+function managedService(options: StartOptions) {
   const reconnectOptions = { ...options, version: undefined }
   return {
-    reconnect: (onStatus: (status: Service.Status) => void) => Service.start({ ...reconnectOptions, onStatus }),
+    reconnect: () => Service.start(reconnectOptions),
     restart: () =>
       Effect.gen(function* () {
-        yield* Service.stop(options, { targetVersion: options.version })
+        yield* Service.stop(options)
         yield* Service.start(options)
       }),
   }
 }
 
 const resolveManaged = Effect.fnUntraced(function* (
-  options: Service.StartOptions,
+  options: StartOptions,
   mismatch: NonNullable<Args["mismatch"]>,
 ) {
   if (mismatch === "replace") return yield* Service.start(options)
@@ -76,7 +76,7 @@ const resolveManaged = Effect.fnUntraced(function* (
   return yield* Service.start(options)
 })
 
-function connectError(endpoint: Service.Endpoint, cause: unknown) {
+function connectError(endpoint: Endpoint, cause: unknown) {
   if (isUnauthorizedError(cause)) {
     return new Error(
       endpoint.auth === undefined

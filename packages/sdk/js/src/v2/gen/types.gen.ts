@@ -2795,29 +2795,10 @@ export type WorkspaceWarpError = {
   }
 }
 
-export type ServiceStatus =
-  | {
-      type: "starting"
-    }
-  | {
-      type: "ready"
-    }
-  | {
-      type: "stopping"
-      targetVersion?: string
-    }
-  | {
-      type: "failed"
-      message: string
-      action: string
-    }
-
 export type ServiceHealth = {
   healthy: true
   version: string
   pid: number
-  instanceID?: string
-  status?: ServiceStatus
 }
 
 export type UnauthorizedError = {
@@ -2827,7 +2808,6 @@ export type UnauthorizedError = {
 
 export type ServiceStopRequest = {
   instanceID: string
-  targetVersion?: string
 }
 
 export type ServiceStopResponse = {
@@ -8141,29 +8121,10 @@ export type BadRequestError = {
   }
 }
 
-export type ServiceStatusV2 =
-  | {
-      type: "starting"
-    }
-  | {
-      type: "ready"
-    }
-  | {
-      type: "stopping"
-      targetVersion?: string | null
-    }
-  | {
-      type: "failed"
-      message: string
-      action: string
-    }
-
 export type ServiceHealthV2 = {
   healthy: true
   version: string
   pid: number
-  instanceID?: string | null
-  status?: ServiceStatusV2
 }
 
 export type InvalidRequestErrorV2 = {
@@ -8171,11 +8132,6 @@ export type InvalidRequestErrorV2 = {
   message: string
   kind?: string | null
   field?: string | null
-}
-
-export type ServiceStopRequestV2 = {
-  instanceID: string
-  targetVersion?: string | null
 }
 
 export type SessionsResponseV2 = {
@@ -15183,7 +15139,7 @@ export type V2HealthGetResponses = {
 export type V2HealthGetResponse = V2HealthGetResponses[keyof V2HealthGetResponses]
 
 export type V2HealthStopData = {
-  body: ServiceStopRequestV2
+  body: ServiceStopRequest
   path?: never
   query?: never
   url: "/api/service/stop"

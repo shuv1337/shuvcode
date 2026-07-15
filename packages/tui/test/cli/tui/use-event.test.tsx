@@ -1,7 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, expect, test } from "bun:test"
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client"
-import type { Service } from "@opencode-ai/client/effect"
 import { testRender } from "@opentui/solid"
 import { onMount } from "solid-js"
 import { ClientProvider, useClient } from "../../../src/context/client"
@@ -53,7 +52,7 @@ function update(version: string): OpenCodeEvent {
 }
 
 async function mount(
-  reconnect?: (onStatus: (status: Service.Status) => void, signal: AbortSignal) => Promise<{ api: OpenCodeClient }>,
+  reconnect?: (signal: AbortSignal) => Promise<{ api: OpenCodeClient }>,
   log?: LogSink,
 ) {
   const events = createEventStream()
@@ -279,48 +278,10 @@ describe("useEvent", () => {
     }
   })
 
-  test("reports service status while endpoint resolution is pending", async () => {
-    const replacementEvents = createEventStream()
-    const replacement = { api: createApi(createFetch(undefined, replacementEvents).fetch) }
-    let report!: (status: Service.Status) => void
-    let resolve!: (value: typeof replacement) => void
-    const endpoint = new Promise<typeof replacement>((done) => {
-      resolve = done
-    })
-    const { app, events, client } = await mount(async (onStatus) => {
-      report = onStatus
-      onStatus({ type: "starting", version: "2.0.0" })
-      return endpoint
-    })
-
-    try {
-      await wait(() => client.connection.status() === "connected")
-      events.disconnect()
-      await wait(
-        () => client.connection.status() === "reconnecting" && client.connection.service()?.type === "starting",
-      )
-      expect(client.connection.service()).toEqual({ type: "starting", version: "2.0.0" })
-
-      report({ type: "failed", message: "Could not open the database.", action: "Check the service logs." })
-      await wait(() => client.connection.service()?.type === "failed")
-      expect(client.connection.service()).toEqual({
-        type: "failed",
-        message: "Could not open the database.",
-        action: "Check the service logs.",
-      })
-
-      resolve(replacement)
-      await wait(() => client.connection.status() === "connected")
-      expect(client.connection.service()).toBeUndefined()
-    } finally {
-      app.renderer.destroy()
-    }
-  })
-
   test("cancels pending endpoint resolution on cleanup", async () => {
     let aborted = false
     const { app, events, client } = await mount(
-      (_onStatus, signal) =>
+      (signal) =>
         new Promise((_, reject) => {
           signal.addEventListener(
             "abort",

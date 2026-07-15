@@ -19,8 +19,10 @@
     ".": "./src/promise/index.ts",
     "./promise": "./src/promise/index.ts",
     "./promise/api": "./src/promise/api.ts",
+    "./service": "./src/promise/service.ts",
     "./effect": "./src/effect/index.ts",
-    "./effect/api": "./src/effect/api.ts"
+    "./effect/api": "./src/effect/api.ts",
+    "./effect/service": "./src/effect/service.ts"
   },
   "scripts": {
     "build": "bun run script/build-package.ts",

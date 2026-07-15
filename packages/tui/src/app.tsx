@@ -1,7 +1,7 @@
 import { render, TimeToFirstDraw, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { registerOpencodeSpinner } from "./component/register-spinner"
 import { Deferred, Effect } from "effect"
-import { Service } from "@opencode-ai/client/effect"
+import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
 import { OpenCode } from "@opencode-ai/client"
 import { Global } from "@opencode-ai/core/global"
 import { Flag } from "@opencode-ai/core/flag/flag"
@@ -138,9 +138,9 @@ const appBindingCommands = [
 
 export type TuiInput = {
   server: {
-    endpoint: Service.Endpoint
+    endpoint: Endpoint
     service?: {
-      reconnect: (onStatus: (status: Service.Status) => void, signal: AbortSignal) => Promise<Service.Endpoint>
+      reconnect: (signal: AbortSignal) => Promise<Endpoint>
       restart: () => Promise<void>
     }
   }
@@ -189,8 +189,8 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   const managed = input.server.service
   const service = managed
     ? {
-        reconnect: async (onStatus: (status: Service.Status) => void, signal: AbortSignal) => {
-          const endpoint = await managed.reconnect(onStatus, signal)
+        reconnect: async (signal: AbortSignal) => {
+          const endpoint = await managed.reconnect(signal)
           const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
           return { api: OpenCode.make(next) }
         },
@@ -1114,7 +1114,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         <StartupLoading ready={plugins.ready} />
       </Show>
       <Show when={showReconnecting()}>
-        <Reconnecting status={client.connection.service()} />
+        <Reconnecting />
       </Show>
       <Toast />
     </box>

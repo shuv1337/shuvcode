@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit, Option } from "effect"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { AppProcess } from "@opencode-ai/core/process"
 import { Commands } from "../../commands"

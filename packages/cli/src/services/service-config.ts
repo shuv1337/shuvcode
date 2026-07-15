@@ -1,12 +1,12 @@
 import { Global } from "@opencode-ai/core/global"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Hash } from "@opencode-ai/core/util/hash"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { Effect, FileSystem, Option, Schema } from "effect"
 import { randomBytes } from "crypto"
 import path from "path"
 
-// The CLI's service configuration file, plus the Service.Options binding that
+// The CLI's service configuration file, plus the Service.StartOptions binding that
 // points the client package's service operations at this CLI: which
 // registration file (by channel), which version, and how to spawn opencode.
 

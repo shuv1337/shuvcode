@@ -17,14 +17,9 @@ const Endpoint0_0 = (raw: RawClient["server.health"]) => () =>
   raw["health.get"]({}).pipe(Effect.mapError(mapClientError))
 
 type Endpoint0_1Request = Parameters<RawClient["server.health"]["health.stop"]>[0]
-type Endpoint0_1Input = {
-  readonly instanceID: Endpoint0_1Request["payload"]["instanceID"]
-  readonly targetVersion?: Endpoint0_1Request["payload"]["targetVersion"]
-}
+type Endpoint0_1Input = { readonly instanceID: Endpoint0_1Request["payload"]["instanceID"] }
 const Endpoint0_1 = (raw: RawClient["server.health"]) => (input: Endpoint0_1Input) =>
-  raw["health.stop"]({ payload: { instanceID: input["instanceID"], targetVersion: input["targetVersion"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["health.stop"]({ payload: { instanceID: input["instanceID"] } }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroup0 = (raw: RawClient["server.health"]) => ({ get: Endpoint0_0(raw), stop: Endpoint0_1(raw) })
 

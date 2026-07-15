@@ -1,6 +1,7 @@
 export * as ServerProcess from "./process"
 
 import { NodeHttpServer, NodeHttpServerRequest } from "@effect/platform-node"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
@@ -45,7 +46,7 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
   const applicationScope = yield* Scope.fork(parentScope)
   yield* Effect.addFinalizer(() =>
     status
-      .beginStopping()
+      .beginStopping
       .pipe(
         Effect.andThen(Ref.set(application, Option.none())),
         Effect.andThen(Effect.sync(() => bound.server.closeAllConnections())),
@@ -73,22 +74,17 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
   }).pipe(
     Effect.catchCause((cause) => {
       if (!options.service || Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause)
-      return status
-        .fail({
-          message: "The background service could not start.",
-          action: "Run `opencode service restart` after checking the service logs.",
-        })
-        .pipe(
-          Effect.andThen(
-            Scope.close(applicationScope, Exit.failCause(cause)).pipe(
-              Effect.catchCause((cleanupCause) =>
-                Effect.logError("failed to clean up background service boot", { cause: cleanupCause }),
-              ),
+      return status.fail.pipe(
+        Effect.andThen(
+          Scope.close(applicationScope, Exit.failCause(cause)).pipe(
+            Effect.catchCause((cleanupCause) =>
+              Effect.logError("failed to clean up background service boot", { cause: cleanupCause }),
             ),
           ),
-          Effect.andThen(Effect.logError("background service boot failed", { cause })),
-          Effect.andThen(Effect.never),
-        )
+        ),
+        Effect.andThen(Effect.logError("background service boot failed", { cause })),
+        Effect.andThen(Effect.never),
+      )
     }),
   )
   if (!options.service) return yield* boot
@@ -189,18 +185,21 @@ const control = Effect.fnUntraced(function* (
 })
 
 const healthResponse = Effect.fnUntraced(function* (status: Status.Interface) {
-  const health = yield* status.health
-  return HttpServerResponse.jsonUnsafe(health, {
-    status: health.status.type === "ready" ? 200 : 503,
-    headers:
-      health.status.type === "starting" || health.status.type === "stopping" ? { "retry-after": "1" } : undefined,
+  const state = yield* status.current
+  return HttpServerResponse.jsonUnsafe({ healthy: true, version: InstallationVersion, pid: process.pid }, {
+    status: state.type === "ready" ? 200 : state.type === "failed" ? 500 : 503,
+    headers: state.type === "starting" || state.type === "stopping" ? { "retry-after": "1" } : undefined,
   })
 })
 
-function unavailable(status: ServiceStatus.State) {
+function unavailable(status: Status.State) {
   if (status.type === "failed")
     return HttpServerResponse.jsonUnsafe(
-      { code: "service_failed", message: status.message, action: status.action },
+      {
+        code: "service_failed",
+        message: "The background service could not start.",
+        action: "Run `opencode service restart` after checking the service logs.",
+      },
       { status: 503 },
     )
   return HttpServerResponse.jsonUnsafe(

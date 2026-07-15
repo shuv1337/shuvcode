@@ -1,4 +1,4 @@
-import { Service } from "@opencode-ai/client/effect"
+import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Model } from "@opencode-ai/schema/model"
@@ -55,7 +55,7 @@ async function run(input: RunCommandInput) {
   return execute(input, prepared, input.server.endpoint)
 }
 
-async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Service.Endpoint) {
+async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint) {
   const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   const requestedDirectory = prepared.directory ?? (await client.location.get()).directory
   if (!requestedDirectory) fail("Failed to resolve server directory")

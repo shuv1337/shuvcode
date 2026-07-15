@@ -1,6 +1,6 @@
 import { EOL } from "os"
 import { Effect } from "effect"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { OpenCode } from "@opencode-ai/client/promise"
 import { renderUnicodeCompact } from "uqr"
 import { Commands } from "../commands"
