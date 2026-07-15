@@ -48,6 +48,16 @@ export function recentModels(
     .map((item) => ({ providerID: item.providerID, modelID: item.modelID }))
 }
 
+export function configuredAgentModelWarning(
+  agent: { id: string; model?: { providerID: string; id: string } },
+  models: { providerID: string; id: string }[] | undefined,
+) {
+  if (!agent.model) return
+  if (!models) return
+  if (models.some((item) => item.providerID === agent.model?.providerID && item.id === agent.model.id)) return
+  return `Agent ${agent.id}'s configured model ${agent.model.providerID}/${agent.model.id} is not valid`
+}
+
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
   name: "Local",
   init: () => {
@@ -495,11 +505,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     createEffect(() => {
       const value = agent.current()
-      if (!value?.model) return
-      if (isModelValid({ providerID: value.model.providerID, modelID: value.model.id })) return
+      if (!value) return
+      const message = configuredAgentModelWarning(value, data.location.model.list())
+      if (!message) return
       toast.show({
         variant: "warning",
-        message: `Agent ${value.id}'s configured model ${value.model.providerID}/${value.model.id} is not valid`,
+        message,
         duration: 3000,
       })
     })
