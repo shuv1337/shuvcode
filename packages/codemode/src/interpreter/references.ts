@@ -34,30 +34,51 @@ export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof ErrorConstructorReference ||
   isCodeModeValue(value)
 
-export const containsRuntimeReference = (value: unknown, seen = new Set<object>()): boolean => {
-  if (isRuntimeReference(value)) return true
-  if (value === null || typeof value !== "object") return false
-  if (seen.has(value)) return false
-  seen.add(value)
-  const contains = Array.isArray(value)
-    ? value.some((item) => containsRuntimeReference(item, seen))
-    : Object.values(value).some((item) => containsRuntimeReference(item, seen))
-  seen.delete(value)
-  return contains
+function* childValues(value: object): Generator<unknown> {
+  if (Array.isArray(value)) {
+    const length = value.length
+    for (let index = 0; index < length; index++) yield value[index]
+    return
+  }
+  yield* Object.values(value)
+}
+
+export const containsRuntimeReference = (value: unknown): boolean => {
+  const pending: Array<Iterator<unknown>> = [[value].values()]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const next = pending.at(-1)!.next()
+    if (next.done) {
+      pending.pop()
+      continue
+    }
+    const current = next.value
+    if (isRuntimeReference(current)) return true
+    if (current === null || typeof current !== "object" || seen.has(current)) continue
+    seen.add(current)
+    pending.push(childValues(current))
+  }
+  return false
 }
 
 // CodeMode values are data here, not opaque interpreter references.
-export const containsOpaqueReference = (value: unknown, seen = new Set<object>()): boolean => {
-  if (isCodeModeValue(value)) return false
-  if (isRuntimeReference(value)) return true
-  if (value === null || typeof value !== "object") return false
-  if (seen.has(value)) return false
-  seen.add(value)
-  const contains = Array.isArray(value)
-    ? value.some((item) => containsOpaqueReference(item, seen))
-    : Object.values(value).some((item) => containsOpaqueReference(item, seen))
-  seen.delete(value)
-  return contains
+export const containsOpaqueReference = (value: unknown): boolean => {
+  const pending: Array<Iterator<unknown>> = [[value].values()]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const next = pending.at(-1)!.next()
+    if (next.done) {
+      pending.pop()
+      continue
+    }
+    const current = next.value
+    if (isCodeModeValue(current)) continue
+    if (isRuntimeReference(current)) return true
+    if (current === null || typeof current !== "object" || seen.has(current)) continue
+    seen.add(current)
+    pending.push(childValues(current))
+  }
+  return false
 }
 
 // Reject cycles before mutation so later boundary walks remain safe.
@@ -66,15 +87,22 @@ export const rejectCircularInsertion = (
   value: unknown,
   label: string,
   node: AstNode,
-  seen = new Set<object>(),
 ): void => {
-  if (value === container)
-    throw new InterpreterRuntimeError(`${label} contains a circular value.`, node, "InvalidDataValue")
-  if (value === null || typeof value !== "object" || isRuntimeReference(value) || seen.has(value)) return
-  seen.add(value)
-  const items = Array.isArray(value) ? value : Object.values(value)
-  for (const item of items) rejectCircularInsertion(container, item, label, node, seen)
-  seen.delete(value)
+  const pending: Array<Iterator<unknown>> = [[value].values()]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const next = pending.at(-1)!.next()
+    if (next.done) {
+      pending.pop()
+      continue
+    }
+    const current = next.value
+    if (current === container)
+      throw new InterpreterRuntimeError(`${label} contains a circular value.`, node, "InvalidDataValue")
+    if (current === null || typeof current !== "object" || isRuntimeReference(current) || seen.has(current)) continue
+    seen.add(current)
+    pending.push(Array.isArray(current) ? current[Symbol.iterator]() : childValues(current))
+  }
 }
 
 export const typeofValue = (value: unknown): string => {
