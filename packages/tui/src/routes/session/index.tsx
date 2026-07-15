@@ -2322,6 +2322,7 @@ function BlockTool(props: {
 function Shell(props: ToolProps) {
   const { theme } = useTheme()
   const ctx = use()
+  const client = useClient()
   const data = useData()
   const permission = createMemo(() => {
     const request = data.session.permission.list(ctx.sessionID)?.[0]
@@ -2335,13 +2336,37 @@ function Shell(props: ToolProps) {
   })
   const isRunning = createMemo(() => props.part.state.status === "running" || backgroundRunning())
   const command = createMemo(() => stringValue(props.input.command))
+  const [expanded, setExpanded] = createSignal(false)
+  const [backgroundOutput, setBackgroundOutput] = createSignal("")
+  let loading = false
+  const loadBackgroundOutput = async () => {
+    const id = shellID()
+    if (!id || loading) return
+    loading = true
+    const location = data.session.get(ctx.sessionID)?.location
+    await client.api.shell
+      .output({
+        id,
+        limit: 1024 * 1024,
+        location: location
+          ? { directory: location.directory, workspace: location.workspaceID }
+          : undefined,
+      })
+      .then((response) => setBackgroundOutput(stripAnsi(response.data.output.trim())))
+      .catch(() => undefined)
+    loading = false
+  }
+  createEffect(() => {
+    if (!expanded() || !backgroundRunning()) return
+    const interval = setInterval(() => void loadBackgroundOutput(), 1_000)
+    onCleanup(() => clearInterval(interval))
+  })
   const output = createMemo(() => {
     if (props.part.state.status === "streaming") return ""
-    if (shellID()) return ""
+    if (shellID()) return expanded() ? backgroundOutput() : ""
     const content = props.part.state.content[0]
     return stripAnsi(content?.type === "text" ? content.text.trim() : "")
   })
-  const [expanded, setExpanded] = createSignal(false)
   const maxLines = 10
   const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
   const input = createMemo(() => (command() ? `${isRunning() ? "" : "$ "}${command()}` : ""))
@@ -2351,9 +2376,15 @@ function Shell(props: ToolProps) {
     if (expanded() || !collapsed().overflow) return content()
     return collapsed().output
   })
+  const expandable = createMemo(() => Boolean(shellID()) || collapsed().overflow)
+  const toggle = () => {
+    const next = !expanded()
+    setExpanded(next)
+    if (next) void loadBackgroundOutput()
+  }
 
   return (
-    <BlockTool part={props.part} onClick={collapsed().overflow ? () => setExpanded((prev) => !prev) : undefined}>
+    <BlockTool part={props.part} onClick={expandable() ? toggle : undefined}>
       <box gap={1}>
         <Show
           when={command()}
@@ -2383,7 +2414,7 @@ function Shell(props: ToolProps) {
         <Show when={shellID()}>
           <StatusBadge>Background</StatusBadge>
         </Show>
-        <Show when={collapsed().overflow}>
+        <Show when={expandable()}>
           <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
         </Show>
       </box>

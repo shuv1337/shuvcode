@@ -3,7 +3,7 @@ export * as ShellTool from "./shell"
 import path from "path"
 import { ToolFailure } from "@opencode-ai/llm"
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
-import { Effect, Schema, Scope } from "effect"
+import { Effect, Fiber, Schedule, Schema, Scope } from "effect"
 import { FSUtil } from "../fs-util"
 import { LocationMutation } from "../location-mutation"
 import { PermissionV2 } from "../permission"
@@ -72,7 +72,6 @@ const modelOutput = (output: Output): string | undefined => {
 // TODO: Replace token-based command-argument external-directory advisories with parser-based detection.
 // TODO: Restore PowerShell and cmd-specific invocation/path handling on Windows.
 // TODO: Add plugin shell.env environment augmentation once V2 plugin hooks exist.
-// TODO: Add durable/live progress metadata streaming for long-running commands once V2 tool invocation progress context is wired.
 // TODO: Persist job status and define restart recovery before exposing remote observation.
 // TODO: Add HTTP job observation only after durable status, restart recovery, and authorization are defined.
 // TODO: Revisit process-group cleanup and platform coverage with shell-specific tests if current AppProcess semantics do not fully cover it.
@@ -201,9 +200,18 @@ export const Plugin = {
                   metadata: { sessionID: context.sessionID },
                 })
 
+                const captureShell = Effect.fn("ShellTool.captureShell")(function* () {
+                  const page = yield* shell.output(info.id, { limit: MAX_CAPTURE_BYTES })
+                  const truncated = page.size > page.cursor
+                  const notice = truncated ? `\n\n[output truncated; full output saved to: ${info.file}]` : ""
+                  return {
+                    output: `${page.output || "(no output)"}${notice}`,
+                    truncated,
+                  }
+                })
+
                 const settleShell = Effect.fn("ShellTool.settleShell")(function* () {
                   const final = yield* shell.wait(info.id)
-                  const page = yield* shell.output(info.id, { limit: MAX_CAPTURE_BYTES })
 
                   if (final.status === "timeout") {
                     return {
@@ -215,13 +223,11 @@ export const Plugin = {
                     }
                   }
 
-                  const truncated = page.size > page.cursor
-                  const body = page.output || "(no output)"
-                  const notice = truncated ? `\n\n[output truncated; full output saved to: ${final.file}]` : ""
+                  const capture = yield* captureShell()
                   return {
                     exit: final.exit,
-                    output: `${body}${notice}`,
-                    truncated,
+                    output: capture.output,
+                    truncated: capture.truncated,
                     status: "completed" as const,
                   }
                 })
@@ -250,9 +256,24 @@ export const Plugin = {
                   }
                 }
 
-                const result = yield* runtime.job
-                  .block({ id: job.id, sessionID: context.sessionID })
-                  .pipe(Effect.onInterrupt(() => runtime.job.cancel(job.id).pipe(Effect.ignore)))
+                const progress = yield* Effect.sleep("1 second").pipe(
+                  Effect.andThen(
+                    captureShell().pipe(
+                      Effect.flatMap((capture) =>
+                        context.progress({
+                          structured: { truncated: capture.truncated },
+                          content: [{ type: "text", text: capture.output }],
+                        }),
+                      ),
+                    ),
+                  ),
+                  Effect.repeat(Schedule.forever),
+                  Effect.forkIn(scope, { startImmediately: true }),
+                )
+                const result = yield* runtime.job.block({ id: job.id, sessionID: context.sessionID }).pipe(
+                  Effect.onInterrupt(() => runtime.job.cancel(job.id).pipe(Effect.ignore)),
+                  Effect.ensuring(Fiber.interrupt(progress)),
+                )
                 if (result?.type === "backgrounded") {
                   yield* shell.timeout(info.id, 0)
                   yield* notifyWhenDone(context.sessionID, context.callID, input.command)
