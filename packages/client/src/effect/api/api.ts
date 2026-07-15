@@ -419,7 +419,7 @@ export type IntegrationConnectKeyOperation<E = never> = (
   input: Endpoint10_2Input,
 ) => Effect.Effect<Endpoint10_2Output, E>
 
-type Endpoint10_3Request = Parameters<RawClient["server.integration"]["integration.connect.oauth"]>[0]
+type Endpoint10_3Request = Parameters<RawClient["server.integration"]["integration.oauth.connect"]>[0]
 export type Endpoint10_3Input = {
   readonly integrationID: Endpoint10_3Request["params"]["integrationID"]
   readonly location?: Endpoint10_3Request["query"]["location"]
@@ -427,55 +427,54 @@ export type Endpoint10_3Input = {
   readonly inputs: Endpoint10_3Request["payload"]["inputs"]
   readonly label?: Endpoint10_3Request["payload"]["label"]
 }
-export type Endpoint10_3Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.connect.oauth"]>>
-export type IntegrationConnectOauthOperation<E = never> = (
+export type Endpoint10_3Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.oauth.connect"]>>
+export type IntegrationOauthConnectOperation<E = never> = (
   input: Endpoint10_3Input,
 ) => Effect.Effect<Endpoint10_3Output, E>
 
-type Endpoint10_4Request = Parameters<RawClient["server.integration"]["integration.attempt.status"]>[0]
+type Endpoint10_4Request = Parameters<RawClient["server.integration"]["integration.oauth.status"]>[0]
 export type Endpoint10_4Input = {
+  readonly integrationID: Endpoint10_4Request["params"]["integrationID"]
   readonly attemptID: Endpoint10_4Request["params"]["attemptID"]
   readonly location?: Endpoint10_4Request["query"]["location"]
 }
-export type Endpoint10_4Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.attempt.status"]>>
-export type IntegrationAttemptStatusOperation<E = never> = (
+export type Endpoint10_4Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.oauth.status"]>>
+export type IntegrationOauthStatusOperation<E = never> = (
   input: Endpoint10_4Input,
 ) => Effect.Effect<Endpoint10_4Output, E>
 
-type Endpoint10_5Request = Parameters<RawClient["server.integration"]["integration.attempt.complete"]>[0]
+type Endpoint10_5Request = Parameters<RawClient["server.integration"]["integration.oauth.complete"]>[0]
 export type Endpoint10_5Input = {
+  readonly integrationID: Endpoint10_5Request["params"]["integrationID"]
   readonly attemptID: Endpoint10_5Request["params"]["attemptID"]
   readonly location?: Endpoint10_5Request["query"]["location"]
   readonly code?: Endpoint10_5Request["payload"]["code"]
 }
-export type Endpoint10_5Output = EffectValue<
-  ReturnType<RawClient["server.integration"]["integration.attempt.complete"]>
->
-export type IntegrationAttemptCompleteOperation<E = never> = (
+export type Endpoint10_5Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.oauth.complete"]>>
+export type IntegrationOauthCompleteOperation<E = never> = (
   input: Endpoint10_5Input,
 ) => Effect.Effect<Endpoint10_5Output, E>
 
-type Endpoint10_6Request = Parameters<RawClient["server.integration"]["integration.attempt.cancel"]>[0]
+type Endpoint10_6Request = Parameters<RawClient["server.integration"]["integration.oauth.cancel"]>[0]
 export type Endpoint10_6Input = {
+  readonly integrationID: Endpoint10_6Request["params"]["integrationID"]
   readonly attemptID: Endpoint10_6Request["params"]["attemptID"]
   readonly location?: Endpoint10_6Request["query"]["location"]
 }
-export type Endpoint10_6Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.attempt.cancel"]>>
-export type IntegrationAttemptCancelOperation<E = never> = (
+export type Endpoint10_6Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.oauth.cancel"]>>
+export type IntegrationOauthCancelOperation<E = never> = (
   input: Endpoint10_6Input,
 ) => Effect.Effect<Endpoint10_6Output, E>
 
 export interface IntegrationApi<E = never> {
   readonly list: IntegrationListOperation<E>
   readonly get: IntegrationGetOperation<E>
-  readonly connect: {
-    readonly key: IntegrationConnectKeyOperation<E>
-    readonly oauth: IntegrationConnectOauthOperation<E>
-  }
-  readonly attempt: {
-    readonly status: IntegrationAttemptStatusOperation<E>
-    readonly complete: IntegrationAttemptCompleteOperation<E>
-    readonly cancel: IntegrationAttemptCancelOperation<E>
+  readonly connect: { readonly key: IntegrationConnectKeyOperation<E> }
+  readonly oauth: {
+    readonly connect: IntegrationOauthConnectOperation<E>
+    readonly status: IntegrationOauthStatusOperation<E>
+    readonly complete: IntegrationOauthCompleteOperation<E>
+    readonly cancel: IntegrationOauthCancelOperation<E>
   }
 }
 

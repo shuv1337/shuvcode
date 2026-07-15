@@ -84,14 +84,14 @@ import type {
   IntegrationGetOutput,
   IntegrationConnectKeyInput,
   IntegrationConnectKeyOutput,
-  IntegrationConnectOauthInput,
-  IntegrationConnectOauthOutput,
-  IntegrationAttemptStatusInput,
-  IntegrationAttemptStatusOutput,
-  IntegrationAttemptCompleteInput,
-  IntegrationAttemptCompleteOutput,
-  IntegrationAttemptCancelInput,
-  IntegrationAttemptCancelOutput,
+  IntegrationOauthConnectInput,
+  IntegrationOauthConnectOutput,
+  IntegrationOauthStatusInput,
+  IntegrationOauthStatusOutput,
+  IntegrationOauthCompleteInput,
+  IntegrationOauthCompleteOutput,
+  IntegrationOauthCancelInput,
+  IntegrationOauthCancelOutput,
   McpListInput,
   McpListOutput,
   McpResourceCatalogInput,
@@ -901,8 +901,10 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        oauth: (input: IntegrationConnectOauthInput, requestOptions?: RequestOptions) =>
-          request<IntegrationConnectOauthOutput>(
+      },
+      oauth: {
+        connect: (input: IntegrationOauthConnectInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthConnectOutput>(
             {
               method: "POST",
               path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth`,
@@ -914,13 +916,11 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-      },
-      attempt: {
-        status: (input: IntegrationAttemptStatusInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptStatusOutput>(
+        status: (input: IntegrationOauthStatusInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthStatusOutput>(
             {
               method: "GET",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 200,
               declaredStatuses: [401, 400],
@@ -928,11 +928,11 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        complete: (input: IntegrationAttemptCompleteInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptCompleteOutput>(
+        complete: (input: IntegrationOauthCompleteInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthCompleteOutput>(
             {
               method: "POST",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}/complete`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}/complete`,
               query: { location: input["location"] },
               body: { code: input["code"] },
               successStatus: 204,
@@ -941,11 +941,11 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        cancel: (input: IntegrationAttemptCancelInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptCancelOutput>(
+        cancel: (input: IntegrationOauthCancelInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthCancelOutput>(
             {
               method: "DELETE",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 204,
               declaredStatuses: [401, 400],

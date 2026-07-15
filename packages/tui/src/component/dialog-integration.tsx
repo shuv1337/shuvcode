@@ -1,8 +1,8 @@
 import { TextAttributes } from "@opentui/core"
 import type {
   ConnectionInfo,
-  IntegrationConnectOauthOutput,
   IntegrationInfo,
+  IntegrationOauthConnectOutput,
   IntegrationOAuthMethod,
 } from "@opencode-ai/client"
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
@@ -27,7 +27,7 @@ const INTEGRATION_PRIORITY: Record<string, number> = {
 }
 
 type ConnectMethod = Exclude<IntegrationInfo["methods"][number], { type: "env" }>
-type IntegrationAttempt = IntegrationConnectOauthOutput["data"]
+type IntegrationAttempt = IntegrationOauthConnectOutput["data"]
 type OnIntegrationConnected = (providerID?: string) => void
 
 export function integrationOptions(list: IntegrationInfo[]) {
@@ -227,8 +227,8 @@ function OAuthStarting(props: {
   const toast = useToast()
 
   onMount(() => {
-    void client.api.integration.connect
-      .oauth({
+    void client.api.integration.oauth
+      .connect({
         integrationID: props.integration.id,
         location: location(data),
         methodID: props.method.id,
@@ -297,8 +297,8 @@ function OAuthAuto(props: {
   }))
 
   const poll = () => {
-    void client.api.integration.attempt
-      .status({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth
+      .status({ integrationID: props.integration.id, attemptID: props.attempt.attemptID, location: location(data) })
       .then((result) => {
         const status = result.data
         if (status.status === "pending") {
@@ -324,7 +324,11 @@ function OAuthAuto(props: {
   onCleanup(() => {
     if (timer) clearTimeout(timer)
     if (settled) return
-    void client.api.integration.attempt.cancel({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth.cancel({
+      integrationID: props.integration.id,
+      attemptID: props.attempt.attemptID,
+      location: location(data),
+    })
   })
 
   return (
@@ -354,7 +358,11 @@ function OAuthCode(props: {
 
   onCleanup(() => {
     if (settled) return
-    void client.api.integration.attempt.cancel({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth.cancel({
+      integrationID: props.integration.id,
+      attemptID: props.attempt.attemptID,
+      location: location(data),
+    })
   })
 
   return (
@@ -363,8 +371,13 @@ function OAuthCode(props: {
       placeholder="Authorization code"
       onConfirm={(code) => {
         if (!code) return
-        void client.api.integration.attempt
-          .complete({ attemptID: props.attempt.attemptID, location: location(data), code })
+        void client.api.integration.oauth
+          .complete({
+            integrationID: props.integration.id,
+            attemptID: props.attempt.attemptID,
+            location: location(data),
+            code,
+          })
           .then(() => {
             settled = true
             return connected(props.integration, data, dialog, toast, props.onConnected)

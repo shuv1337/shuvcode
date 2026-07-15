@@ -32,7 +32,7 @@ export default Runtime.handler(
       return yield* Effect.fail(new Error(`MCP server "${input.name}" is not an OAuth-capable remote server`))
 
     const started = yield* Effect.promise(() =>
-      client.integration.connect.oauth({ integrationID: integration.id, methodID: method.id, inputs: {}, location }),
+      client.integration.oauth.connect({ integrationID: integration.id, methodID: method.id, inputs: {}, location }),
     )
     const attempt = started.data
     if (attempt.mode === "code")
@@ -40,7 +40,7 @@ export default Runtime.handler(
 
     process.stdout.write(attempt.instructions + EOL + attempt.url + EOL)
 
-    const result = yield* poll(client, attempt.attemptID)
+    const result = yield* poll(client, integration.id, attempt.attemptID)
     if (result.status === "complete") {
       process.stdout.write(`Authenticated with ${input.name}` + EOL)
       return
@@ -52,15 +52,16 @@ export default Runtime.handler(
 
 const poll = (
   client: OpenCodeClient,
+  integrationID: string,
   attemptID: string,
 ): Effect.Effect<Exclude<IntegrationAttemptStatus, { status: "pending" }>> =>
   Effect.gen(function* () {
-    const status = yield* Effect.promise(() => client.integration.attempt.status({ attemptID, location })).pipe(
-      Effect.map((result) => result.data),
-    )
+    const status = yield* Effect.promise(() =>
+      client.integration.oauth.status({ integrationID, attemptID, location }),
+    ).pipe(Effect.map((result) => result.data))
     if (status.status === "pending") {
       yield* Effect.sleep("1 second")
-      return yield* poll(client, attemptID)
+      return yield* poll(client, integrationID, attemptID)
     }
     return status
   })

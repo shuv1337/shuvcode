@@ -173,21 +173,35 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
             key: input.key,
             label: input.label,
           }),
-        oauth: (input) =>
+      },
+      oauth: {
+        connect: (input) =>
           response(
-            integration.connection.oauth({
+            integration.oauth.connect({
               integrationID: Integration.ID.make(input.integrationID),
               methodID: Integration.MethodID.make(input.methodID),
               inputs: input.inputs,
               label: input.label,
             }),
           ),
-      },
-      attempt: {
-        status: (input) => response(integration.attempt.status(Integration.AttemptID.make(input.attemptID))),
+        status: (input) =>
+          response(
+            integration.oauth.status({
+              integrationID: Integration.ID.make(input.integrationID),
+              attemptID: Integration.AttemptID.make(input.attemptID),
+            }),
+          ),
         complete: (input) =>
-          integration.attempt.complete({ attemptID: Integration.AttemptID.make(input.attemptID), code: input.code }),
-        cancel: (input) => integration.attempt.cancel(Integration.AttemptID.make(input.attemptID)),
+          integration.oauth.complete({
+            integrationID: Integration.ID.make(input.integrationID),
+            attemptID: Integration.AttemptID.make(input.attemptID),
+            code: input.code,
+          }),
+        cancel: (input) =>
+          integration.oauth.cancel({
+            integrationID: Integration.ID.make(input.integrationID),
+            attemptID: Integration.AttemptID.make(input.attemptID),
+          }),
       },
       reload: integration.reload,
       connection: {

@@ -70,7 +70,8 @@ export function fromPromise(plugin: Plugin) {
           catalog: {
             provider: {
               list: (input) => run(host.catalog.provider.list(input)),
-              get: (input) => run(host.catalog.provider.get({ ...input, providerID: Provider.ID.make(input.providerID) })),
+              get: (input) =>
+                run(host.catalog.provider.get({ ...input, providerID: Provider.ID.make(input.providerID) })),
             },
             model: {
               list: (input) => run(host.catalog.model.list(input)),
@@ -96,35 +97,40 @@ export function fromPromise(plugin: Plugin) {
               ),
             connect: {
               key: (input) =>
-                run(host.integration.connect.key({ ...input, integrationID: Integration.ID.make(input.integrationID) })),
-              oauth: (input) =>
                 run(
-                  host.integration.connect.oauth({
+                  host.integration.connect.key({ ...input, integrationID: Integration.ID.make(input.integrationID) }),
+                ),
+            },
+            oauth: {
+              connect: (input) =>
+                run(
+                  host.integration.oauth.connect({
                     ...input,
                     integrationID: Integration.ID.make(input.integrationID),
                     methodID: Integration.MethodID.make(input.methodID),
                   }),
                 ),
-            },
-            attempt: {
               status: (input) =>
                 run(
-                  host.integration.attempt.status({
+                  host.integration.oauth.status({
                     ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
                     attemptID: Integration.AttemptID.make(input.attemptID),
                   }),
                 ),
               complete: (input) =>
                 run(
-                  host.integration.attempt.complete({
+                  host.integration.oauth.complete({
                     ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
                     attemptID: Integration.AttemptID.make(input.attemptID),
                   }),
                 ),
               cancel: (input) =>
                 run(
-                  host.integration.attempt.cancel({
+                  host.integration.oauth.cancel({
                     ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
                     attemptID: Integration.AttemptID.make(input.attemptID),
                   }),
                 ),

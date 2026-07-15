@@ -46,7 +46,7 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
 
   yield* request(() => timeline.pending("Starting authorization..."))
   const started = yield* request((signal) =>
-    client.integration.connect.oauth(
+    client.integration.oauth.connect(
       {
         integrationID,
         methodID: method.id,
@@ -59,8 +59,8 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
   const attempt = started.data
   yield* Effect.addFinalizer(() =>
     request(() =>
-      client.integration.attempt.cancel(
-        { attemptID: attempt.attemptID, location },
+      client.integration.oauth.cancel(
+        { integrationID, attemptID: attempt.attemptID, location },
         { signal: AbortSignal.timeout(5_000) },
       ),
     ).pipe(Effect.ignore),
@@ -75,7 +75,7 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
   }).pipe(Effect.ignore)
   yield* request(() => timeline.pending("Waiting for authorization..."))
 
-  const status = yield* waitForConsoleLogin(client, attempt.attemptID)
+  const status = yield* waitForConsoleLogin(client, integrationID, attempt.attemptID)
   if (status.status === "failed") yield* Effect.fail(new Error(status.message))
   if (status.status === "expired") yield* Effect.fail(new Error("Device code expired"))
 
@@ -85,11 +85,12 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
 
 const waitForConsoleLogin = Effect.fn("cli.console.login.wait")(function* (
   client: OpenCodeClient,
+  integrationID: string,
   attemptID: string,
 ) {
   while (true) {
     const response = yield* request((signal) =>
-      client.integration.attempt.status({ attemptID, location }, { signal }),
+      client.integration.oauth.status({ integrationID, attemptID, location }, { signal }),
     )
     if (response.data.status !== "pending") return response.data
     yield* Effect.sleep(500)

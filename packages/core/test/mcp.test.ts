@@ -187,11 +187,11 @@ function resourceMcpLayer(url: string, onFormCreated?: (form: Form.Info) => Effe
             active: unusedIntegration,
             resolve: unusedIntegration,
             key: unusedIntegration,
-            oauth: unusedIntegration,
             update: unusedIntegration,
             remove: unusedIntegration,
           },
-          attempt: {
+          oauth: {
+            connect: unusedIntegration,
             status: unusedIntegration,
             complete: unusedIntegration,
             cancel: unusedIntegration,

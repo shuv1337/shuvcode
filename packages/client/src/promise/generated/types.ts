@@ -3284,7 +3284,7 @@ export type IntegrationConnectKeyInput = {
 
 export type IntegrationConnectKeyOutput = void
 
-export type IntegrationConnectOauthInput = {
+export type IntegrationOauthConnectInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
@@ -3306,7 +3306,7 @@ export type IntegrationConnectOauthInput = {
   }["label"]
 }
 
-export type IntegrationConnectOauthOutput = {
+export type IntegrationOauthConnectOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: {
     attemptID: string
@@ -3317,36 +3317,39 @@ export type IntegrationConnectOauthOutput = {
   }
 }
 
-export type IntegrationAttemptStatusInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthStatusInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type IntegrationAttemptStatusOutput = {
+export type IntegrationOauthStatusOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: IntegrationAttemptStatus
 }
 
-export type IntegrationAttemptCompleteInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthCompleteInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
   readonly code?: { readonly code?: string | undefined }["code"]
 }
 
-export type IntegrationAttemptCompleteOutput = void
+export type IntegrationOauthCompleteOutput = void
 
-export type IntegrationAttemptCancelInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthCancelInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type IntegrationAttemptCancelOutput = void
+export type IntegrationOauthCancelOutput = void
 
 export type McpListInput = {
   readonly location?: {

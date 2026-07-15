@@ -181,14 +181,14 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({
+      const attempt = yield* integrations.oauth.connect({
         integrationID,
         methodID,
         inputs: {},
         label: "Personal",
       })
       expect(attempt.mode).toBe("code")
-      yield* integrations.attempt.complete({ attemptID: attempt.attemptID, code: "1234" })
+      yield* integrations.oauth.complete({ integrationID, attemptID: attempt.attemptID, code: "1234" })
 
       expect((yield* credentials.list(integrationID))[0]).toEqual(
         expect.objectContaining({
@@ -230,12 +230,17 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
-      expect(yield* integrations.attempt.complete({ attemptID: attempt.attemptID }).pipe(Effect.flip)).toBeInstanceOf(
-        Integration.CodeRequiredError,
-      )
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
+      expect(
+        yield* integrations.oauth.complete({ integrationID, attemptID: attempt.attemptID }).pipe(Effect.flip),
+      ).toBeInstanceOf(Integration.CodeRequiredError)
       expect(closed).toBe(false)
-      yield* integrations.attempt.cancel(attempt.attemptID)
+      yield* integrations.oauth.cancel({
+        integrationID: Integration.ID.make("other"),
+        attemptID: attempt.attemptID,
+      })
+      expect(closed).toBe(false)
+      yield* integrations.oauth.cancel({ integrationID, attemptID: attempt.attemptID })
       expect(closed).toBe(true)
       expect(yield* credentials.list(integrationID)).toEqual([])
     }),
@@ -263,9 +268,9 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
       yield* Effect.yieldNow
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "complete",
         time: attempt.time,
       })
@@ -301,12 +306,12 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
-      const exit = yield* integrations.attempt
-        .complete({ attemptID: attempt.attemptID, code: "1234" })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
+      const exit = yield* integrations.oauth
+        .complete({ integrationID, attemptID: attempt.attemptID, code: "1234" })
         .pipe(Effect.exit)
       expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "failed",
         message: "credential persistence failed",
         time: attempt.time,
@@ -337,11 +342,11 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
       expect(attempt.time.expires - attempt.time.created).toBe(Duration.toMillis(Duration.minutes(10)))
       yield* TestClock.adjust(Duration.minutes(10))
       yield* Effect.yieldNow
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "expired",
         time: attempt.time,
       })

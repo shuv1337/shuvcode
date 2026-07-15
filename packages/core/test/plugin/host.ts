@@ -48,12 +48,12 @@ export function host(overrides: Overrides = {}): PluginContext {
       get: () => Effect.die("unused integration.get"),
       connect: {
         key: () => Effect.die("unused integration.connect.key"),
-        oauth: () => Effect.die("unused integration.connect.oauth"),
       },
-      attempt: {
-        status: () => Effect.die("unused integration.attempt.status"),
-        complete: () => Effect.die("unused integration.attempt.complete"),
-        cancel: () => Effect.die("unused integration.attempt.cancel"),
+      oauth: {
+        connect: () => Effect.die("unused integration.oauth.connect"),
+        status: () => Effect.die("unused integration.oauth.status"),
+        complete: () => Effect.die("unused integration.oauth.complete"),
+        cancel: () => Effect.die("unused integration.oauth.cancel"),
       },
       transform: () => Effect.die("unused integration.transform"),
       reload: () => Effect.die("unused integration.reload"),
@@ -193,12 +193,12 @@ export function integrationHost(integration: Integration.Interface): PluginConte
     get: () => Effect.die("unused integration.get"),
     connect: {
       key: () => Effect.die("unused integration.connect.key"),
-      oauth: () => Effect.die("unused integration.connect.oauth"),
     },
-    attempt: {
-      status: () => Effect.die("unused integration.attempt.status"),
-      complete: () => Effect.die("unused integration.attempt.complete"),
-      cancel: () => Effect.die("unused integration.attempt.cancel"),
+    oauth: {
+      connect: () => Effect.die("unused integration.oauth.connect"),
+      status: () => Effect.die("unused integration.oauth.status"),
+      complete: () => Effect.die("unused integration.oauth.complete"),
+      cancel: () => Effect.die("unused integration.oauth.cancel"),
     },
     reload: integration.reload,
     connection: {
