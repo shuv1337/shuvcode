@@ -53,6 +53,7 @@ import { readLocalAttachment } from "./local-attachment"
 import { useData } from "../../context/data"
 import { useLocation } from "../../context/location"
 import { contextUsage } from "../../util/session"
+import { abbreviateHome } from "../../runtime"
 
 registerOpencodeSpinner()
 
@@ -1293,6 +1294,11 @@ export function Prompt(props: PromptProps) {
     if (!list().length) return undefined
     return `Ask anything... "${list()[store.placeholder % list().length]}"`
   })
+  const locationLabel = createMemo(() => {
+    if (!props.sessionID || status() !== "idle") return
+    const directory = data.session.get(props.sessionID)?.location.directory
+    return directory ? abbreviateHome(directory, paths.home) : undefined
+  })
 
   const spinnerDef = createMemo(() => {
     const agent = status() === "running" ? local.agent.current() : local.agent.current()
@@ -1315,7 +1321,6 @@ export function Prompt(props: PromptProps) {
     }
   })
   const maxHeight = createMemo(() => Math.max(6, Math.floor(dimensions().height / 3)))
-  const moveLabelWidth = createMemo(() => Math.max(12, Math.min(44, dimensions().width - 48)))
 
   return (
     <>
@@ -1515,7 +1520,18 @@ export function Prompt(props: PromptProps) {
                 <text fg={theme.accent}>(new working copy)</text>
               </box>
             </Match>
-            <Match when={true}>{props.hint ?? <text />}</Match>
+            <Match when={true}>
+              <Show
+                when={!props.hint && locationLabel()}
+                fallback={props.hint ?? <text />}
+              >
+                {(location) => (
+                  <text fg={theme.textMuted} wrapMode="none" truncate flexGrow={1} flexShrink={1}>
+                    {location()}
+                  </text>
+                )}
+              </Show>
+            </Match>
           </Switch>
           <box gap={2} flexDirection="row">
             <Show when={editorContextLabelState() !== "none" ? editorFileLabelDisplay() : undefined}>
