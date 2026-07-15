@@ -288,13 +288,14 @@ Admin invitation creation and device list/revoke remain in Shuvcode's generated 
 
 1. Preserve Shuvcode on `127.0.0.1:4096`, ClankerOne on `127.0.0.1:8787`, and its attachment handoff on `127.0.0.1:8788`.
 2. Add a dedicated tailnet-only Tailscale Serve HTTPS listener at port `10001` forwarding to Shuvcode `127.0.0.1:4096`; keep ClankerOne on HTTPS port `10000`. Do not expose port 8788.
-3. Update the ClankerOne-owned deployment and operations material for the additional tailnet listener, configure Shuvcode's advertised URL as `https://<host>.<tailnet>.ts.net:10001` while retaining its loopback bind, and deploy the coordinated server changes without collapsing the two credential domains.
-4. Verify administrator Basic authentication still works for existing tools.
-5. Run ClankerOne's package, bridge health, session, governed attachment, iOS, and live smoke gates against its updated shuvkit pin and the replaced Shuvcode process.
-6. Pair one development device and verify reconnect across app and server restarts.
-7. Revoke that device and prove subsequent requests fail without affecting other clients.
-8. Ship the OpenShuv build for real-device dogfooding.
-9. Keep the legacy credential-bearing QR decoder out of production unless a temporary compatibility decision is made explicitly.
+3. Make Shuvcode the owner of one host-level managed service using the canonical `~/.config/opencode` domain. The interactive TUI, ClankerOne bridge, and OpenShuv must share its sessions, projects, integrations, providers, agents, plugins, MCP servers, skills, and instructions. ClankerOne depends on that service but must not set `OPENCODE_CONFIG_DIR`, override its process, or stop it with the bridge target.
+4. Update the coordinated deployment and operations material for the additional tailnet listener, configure Shuvcode's advertised URL as `https://<host>.<tailnet>.ts.net:10001` while retaining its loopback bind, and deploy the server changes without collapsing the bridge and Shuvcode client credential domains.
+5. Verify administrator Basic authentication still works for existing tools.
+6. Run ClankerOne's package, bridge health, session, governed attachment, iOS, and live smoke gates against its updated shuvkit pin and the replaced Shuvcode process.
+7. Pair one development device and verify reconnect across app and server restarts.
+8. Revoke that device and prove subsequent requests fail without affecting other clients.
+9. Ship the OpenShuv build for real-device dogfooding.
+10. Keep the legacy credential-bearing QR decoder out of production unless a temporary compatibility decision is made explicitly.
 
 ## Verification Gates
 
@@ -336,13 +337,15 @@ Admin invitation creation and device list/revoke remain in Shuvcode's generated 
 - `GET /api/server` advertises `https://<host>.<tailnet>.ts.net:10001` while the Shuvcode process remains bound only to `127.0.0.1:4096`.
 - Tailscale Serve keeps HTTPS 10000 mapped to ClankerOne 8787 and adds HTTPS 10001 mapped to Shuvcode 4096; port 8788 remains unadvertised.
 - Pairing works against the systemd-managed service through the same wrapper and XDG configuration used in production.
+- The systemd-managed service and an ordinary interactive `shuvcode` invocation use the same canonical `~/.config/opencode` configuration and V2 data roots; no caller-specific `OPENCODE_CONFIG_DIR` is present.
+- Sessions created through the TUI, ClankerOne, and OpenShuv appear through the same server session interface, and provider connections made through the TUI are visible to mobile model selection.
 - ClankerOne's Basic-auth bridge path and loopback attachment handoff still pass their M3 compatibility smoke after its governed shuvkit update and the Shuvcode replacement.
 - Logs contain no invitation token, device secret, administrator password, or authorization header.
 - A real device can reconnect after both app termination and server restart.
 
 ## ClankerOne Integration
 
-ClankerOne is managed as part of this multi-project plan. Its repository may receive dependency, deployment, documentation, shared scanner, test, or compatibility changes when they are required to keep the complete system aligned.
+ClankerOne is managed as part of this multi-project plan. Its repository may receive dependency, deployment, documentation, shared scanner, test, or compatibility changes when they are required to keep the complete system aligned. Shuvcode owns the shared host process and canonical configuration domain; ClankerOne owns only its bridge process and bridge state.
 
 Its iOS app authenticates to the ClankerOne bridge with a static Bearer token rather than connecting directly to Shuvcode. A future ClankerOne pairing design may reuse the versioned envelope and scanner components, but the bridge must issue and redeem its own credential type. Shuvcode must not issue credentials that bypass the bridge architecture.
 

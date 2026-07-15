@@ -1,0 +1,16 @@
+[Unit]
+Description=Shared Shuvcode V2 server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/shuvcode serve --service --hostname=127.0.0.1 --port=4096
+Restart=on-failure
+RestartSec=2s
+KillMode=control-group
+TimeoutStopSec=20s
+UMask=0077
+
+[Install]
+WantedBy=default.target
