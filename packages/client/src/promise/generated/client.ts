@@ -1,5 +1,7 @@
 import type {
   HealthGetOutput,
+  HealthStopInput,
+  HealthStopOutput,
   ServerGetOutput,
   LocationGetInput,
   LocationGetOutput,
@@ -332,6 +334,18 @@ export function make(options: ClientOptions) {
           { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
           requestOptions,
         ),
+      stop: (input: HealthStopInput, requestOptions?: RequestOptions) =>
+        request<HealthStopOutput>(
+          {
+            method: "POST",
+            path: `/api/service/stop`,
+            body: { instanceID: input["instanceID"], targetVersion: input["targetVersion"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     server: {
       get: (requestOptions?: RequestOptions) =>
@@ -508,7 +522,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/move`,
-            body: { destination: input["destination"], moveChanges: input["moveChanges"] },
+            body: { directory: input["directory"], workspaceID: input["workspaceID"] },
             successStatus: 204,
             declaredStatuses: [404, 400, 401],
             empty: true,

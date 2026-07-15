@@ -18,7 +18,6 @@ import { EOL, tmpdir } from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
 import { useRoute, useRouteData } from "../../context/route"
 import { createStore } from "solid-js/store"
-import { useProject } from "../../context/project"
 import { useData } from "../../context/data"
 import { SplitBorder } from "../../ui/border"
 import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
@@ -41,7 +40,7 @@ import { Locale } from "../../util/locale"
 import { FilePath } from "../../ui/file-path"
 import { webSearchProviderLabel } from "../../util/tool-display"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { useEditorContext } from "../../context/editor"
 import { openEditor } from "../../editor"
 import { useDialog } from "../../ui/dialog"
@@ -53,7 +52,7 @@ import { Composer } from "./composer"
 import { filetype } from "../../util/filetype"
 import parsers from "../../parsers-config"
 import { errorMessage } from "../../util/error"
-import { Toast, useToast } from "../../ui/toast"
+import { useToast } from "../../ui/toast"
 import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
 import { useEpilogue } from "../../context/epilogue"
@@ -71,50 +70,11 @@ import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
-import { LocationProvider } from "../../context/location"
+import { useLocation } from "../../context/location"
 import { createSessionRows, resolvePart, type PartRef, type SessionRow } from "./rows"
 import { switchLabel } from "../../util/model"
 
 addDefaultParsers(parsers.parsers)
-
-const sessionBindingCommands = [
-  "session.share",
-  "session.rename",
-  "session.timeline",
-  "session.fork",
-  "session.compact",
-  "session.unshare",
-  "session.undo",
-  "session.redo",
-  "session.sidebar.toggle",
-  "session.toggle.thinking",
-  "session.toggle.scrollbar",
-  "session.toggle.exploration_grouping",
-  "session.first",
-  "session.last",
-  "session.messages_last_user",
-  "session.message.next",
-  "session.message.previous",
-  "messages.copy",
-  "session.copy",
-  "session.export",
-  "session.background",
-  "session.child.first",
-  "session.parent",
-  "session.child.next",
-  "session.child.previous",
-] as const
-
-const sessionGlobalBindingCommands = [
-  "session.page.up",
-  "session.page.down",
-  "session.line.up",
-  "session.line.down",
-  "session.half.page.up",
-  "session.half.page.down",
-] as const
-
-const sessionGlobalUnfocusedBindingCommands = ["session.first", "session.last"] as const
 
 const context = createContext<{
   width: number
@@ -145,7 +105,6 @@ export function Session() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const data = useData()
-  const project = useProject()
   const paths = useTuiPaths()
   const configState = useConfig()
   const config = configState.data
@@ -154,6 +113,9 @@ export function Session() {
   const session = createMemo(() => data.session.get(route.sessionID))
   const messages = () => data.session.message.list(route.sessionID)
   const location = createMemo(() => session()?.location)
+  const currentLocation = useLocation()
+
+  createEffect(() => currentLocation.set(location()))
 
   createEffect(() => {
     const title = Locale.truncate(session()?.title ?? "", 50)
@@ -215,28 +177,27 @@ export function Session() {
 
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const toast = useToast()
-  const sdk = useSDK()
+  const client = useClient()
   const editor = useEditorContext()
   const rows = createSessionRows(() => route.sessionID)
 
   createEffect(
-    on(descendantSessionIDs, (sessionIDs) => {
+    on([descendantSessionIDs, () => client.connection.status()], ([sessionIDs, status]) => {
+      if (status !== "connected") return
       void Promise.all(
-        sessionIDs.flatMap((sessionID) => [
-          data.session.permission.refresh(sessionID),
-          data.session.form.refresh(sessionID),
-        ]),
+        sessionIDs.flatMap((sessionID) => [data.session.permission.sync(sessionID), data.session.form.sync(sessionID)]),
       )
     }),
   )
 
   createEffect(() => {
+    if (client.connection.status() !== "connected") return
     const sessionID = route.sessionID
     void (async () => {
       await Promise.all([
-        data.session.refresh(sessionID),
-        data.session.permission.refresh(sessionID),
-        data.session.form.refresh(sessionID),
+        data.session.sync(sessionID),
+        data.session.permission.sync(sessionID),
+        data.session.form.sync(sessionID),
       ])
       const info = data.session.get(sessionID)
       if (!info) {
@@ -248,14 +209,6 @@ export function Session() {
         navigate({ type: "home" })
         return
       }
-      void data.session.form.refresh("global", info.location).catch((error) =>
-        toast.show({
-          message: `Failed to refresh global forms: ${errorMessage(error)}`,
-          variant: "error",
-          duration: 5000,
-        }),
-      )
-      project.workspace.set(info.location.workspaceID)
       editor.reconnect(info.location.directory)
       if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
     })().catch((error) => {
@@ -339,10 +292,96 @@ export function Session() {
     }, 50)
   }
 
-  const sessionCommandList = createMemo(() => [
+  const globalCommands = [
+    {
+      name: "session.page.up",
+      title: "Page up",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(-scroll.height / 2)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.page.down",
+      title: "Page down",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(scroll.height / 2)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.line.up",
+      title: "Line up",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(-1)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.line.down",
+      title: "Line down",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(1)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.half.page.up",
+      title: "Half page up",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(-scroll.height / 4)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.half.page.down",
+      title: "Half page down",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollBy(scroll.height / 4)
+        dialog.clear()
+      },
+    },
+  ]
+
+  const baseAndUnfocusedCommands = [
+    {
+      name: "session.first",
+      title: "First message",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollTo(0)
+        dialog.clear()
+      },
+    },
+    {
+      name: "session.last",
+      title: "Last message",
+      category: "Session",
+      hidden: true,
+      run: () => {
+        scroll.scrollTo(scroll.scrollHeight)
+        dialog.clear()
+      },
+    },
+  ]
+
+  const baseCommands = createMemo(() => [
     {
       title: "Share session",
-      value: "session.share",
+      name: "session.share",
       suggested: route.type === "session",
       category: "Session",
       slash: { name: "share" },
@@ -350,21 +389,21 @@ export function Session() {
     },
     {
       title: "Rename session",
-      value: "session.rename",
+      name: "session.rename",
       category: "Session",
       slash: { name: "rename" },
       run: () => DialogSessionRename.show(dialog, route.sessionID, session()?.title),
     },
     {
       title: "Jump to message",
-      value: "session.timeline",
+      name: "session.timeline",
       category: "Session",
       slash: { name: "timeline" },
       run: () => unavailable("The message timeline"),
     },
     {
       title: "Fork session",
-      value: "session.fork",
+      name: "session.fork",
       category: "Session",
       slash: { name: "fork" },
       run: () => {
@@ -382,20 +421,20 @@ export function Session() {
     },
     {
       title: "Compact session",
-      value: "session.compact",
+      name: "session.compact",
       category: "Session",
       slash: {
         name: "compact",
         aliases: ["summarize"],
       },
       run: () => {
-        void sdk.api.session.compact({ sessionID: route.sessionID })
+        void client.api.session.compact({ sessionID: route.sessionID })
         dialog.clear()
       },
     },
     {
       title: "Unshare session",
-      value: "session.unshare",
+      name: "session.unshare",
       category: "Session",
       enabled: false,
       slash: { name: "unshare" },
@@ -403,7 +442,7 @@ export function Session() {
     },
     {
       title: "Undo previous message",
-      value: "session.undo",
+      name: "session.undo",
       category: "Session",
       slash: { name: "undo" },
       run: () => {
@@ -417,7 +456,7 @@ export function Session() {
           dialog.clear()
           return
         }
-        void sdk.api.session.revert
+        void client.api.session.revert
           .stage({ sessionID: route.sessionID, messageID: message.id })
           .catch((error) => toast.show({ message: errorMessage(error), variant: "error", duration: 5000 }))
         prompt?.set({
@@ -439,13 +478,13 @@ export function Session() {
     },
     {
       title: "Redo",
-      value: "session.redo",
+      name: "session.redo",
       category: "Session",
       enabled: !!session()?.revert?.messageID,
       slash: { name: "redo" },
       run: () => {
         void (async () => {
-          const error = await sdk.api.session.revert.clear({ sessionID: route.sessionID }).then(
+          const error = await client.api.session.revert.clear({ sessionID: route.sessionID }).then(
             () => undefined,
             (error) => error,
           )
@@ -456,7 +495,7 @@ export function Session() {
     },
     {
       title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
-      value: "session.sidebar.toggle",
+      name: "session.sidebar.toggle",
       category: "Session",
       run: () => {
         batch(() => {
@@ -477,7 +516,7 @@ export function Session() {
         if (next === "hide") return "Collapse thinking"
         return "Expand thinking"
       })(),
-      value: "session.toggle.thinking",
+      name: "session.toggle.thinking",
       category: "Session",
       hidden: true,
       slash: {
@@ -495,7 +534,7 @@ export function Session() {
     },
     {
       title: "Toggle session scrollbar",
-      value: "session.toggle.scrollbar",
+      name: "session.toggle.scrollbar",
       category: "Session",
       hidden: true,
       run: () => {
@@ -509,7 +548,7 @@ export function Session() {
     },
     {
       title: groupExploration() ? "Show tool calls individually" : "Group related tool calls",
-      value: "session.toggle.exploration_grouping",
+      name: "session.toggle.exploration_grouping",
       category: "Session",
       hidden: true,
       run: () => {
@@ -522,88 +561,8 @@ export function Session() {
       },
     },
     {
-      title: "Page up",
-      value: "session.page.up",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(-scroll.height / 2)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Page down",
-      value: "session.page.down",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(scroll.height / 2)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line up",
-      value: "session.line.up",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(-1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Line down",
-      value: "session.line.down",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(1)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page up",
-      value: "session.half.page.up",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(-scroll.height / 4)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Half page down",
-      value: "session.half.page.down",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollBy(scroll.height / 4)
-        dialog.clear()
-      },
-    },
-    {
-      title: "First message",
-      value: "session.first",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollTo(0)
-        dialog.clear()
-      },
-    },
-    {
-      title: "Last message",
-      value: "session.last",
-      category: "Session",
-      hidden: true,
-      run: () => {
-        scroll.scrollTo(scroll.scrollHeight)
-        dialog.clear()
-      },
-    },
-    {
       title: "Jump to last user message",
-      value: "session.messages_last_user",
+      name: "session.messages_last_user",
       category: "Session",
       hidden: true,
       run: () => {
@@ -626,21 +585,21 @@ export function Session() {
     },
     {
       title: "Next message",
-      value: "session.message.next",
+      name: "session.message.next",
       category: "Session",
       hidden: true,
       run: () => scrollToMessage("next", dialog),
     },
     {
       title: "Previous message",
-      value: "session.message.previous",
+      name: "session.message.previous",
       category: "Session",
       hidden: true,
       run: () => scrollToMessage("prev", dialog),
     },
     {
       title: "Copy last assistant message",
-      value: "messages.copy",
+      name: "messages.copy",
       category: "Session",
       run: () => {
         const revertID = session()?.revert?.messageID
@@ -682,7 +641,7 @@ export function Session() {
     },
     {
       title: "Copy session transcript",
-      value: "session.copy",
+      name: "session.copy",
       category: "Session",
       slash: {
         name: "copy",
@@ -702,7 +661,7 @@ export function Session() {
     },
     {
       title: "Export session transcript",
-      value: "session.export",
+      name: "session.export",
       category: "Session",
       slash: {
         name: "export",
@@ -722,11 +681,11 @@ export function Session() {
               : await (async () => {
                   if (options.debug) {
                     const events: { readonly created: number }[] = []
-                    for await (const event of sdk.api.session.log({ sessionID: sessionData.id, follow: false })) {
+                    for await (const event of client.api.session.log({ sessionID: sessionData.id, follow: false })) {
                       if (event.type !== "log.synced") events.push(event)
                     }
                     // Durable events stay in aggregate order even when their wall-clock timestamps differ.
-                    sdk.connection.internal.history().forEach((event) => {
+                    client.connection.internal.history().forEach((event) => {
                       const index = events.findIndex((item) => item.created > event.created)
                       if (index === -1) {
                         events.push(event)
@@ -740,7 +699,7 @@ export function Session() {
                   const messages: unknown[] = []
                   let cursor: string | undefined
                   do {
-                    const page = await sdk.api.message.list(
+                    const page = await client.api.message.list(
                       cursor
                         ? { sessionID: sessionData.id, limit: 200, cursor }
                         : { sessionID: sessionData.id, limit: 200, order: "asc" },
@@ -772,17 +731,17 @@ export function Session() {
     },
     {
       title: "Background blocking tools",
-      value: "session.background",
+      name: "session.background",
       category: "Session",
       hidden: true,
       run: () => {
-        void sdk.api.session.background({ sessionID: route.sessionID })
+        void client.api.session.background({ sessionID: route.sessionID })
         dialog.clear()
       },
     },
     {
       title: "Toggle subagent picker",
-      value: "session.child.first",
+      name: "session.child.first",
       category: "Session",
       run: () => {
         if (composer.open || session()?.parentID) setComposer("open", false)
@@ -792,7 +751,7 @@ export function Session() {
     },
     {
       title: "Go to parent session",
-      value: "session.parent",
+      name: "session.parent",
       category: "Session",
       hidden: true,
       enabled: !!session()?.parentID,
@@ -809,7 +768,7 @@ export function Session() {
     },
     {
       title: "Next child session",
-      value: "session.child.next",
+      name: "session.child.next",
       category: "Session",
       hidden: true,
       enabled: !!session()?.parentID,
@@ -817,7 +776,7 @@ export function Session() {
     },
     {
       title: "Previous child session",
-      value: "session.child.previous",
+      name: "session.child.previous",
       category: "Session",
       hidden: true,
       enabled: !!session()?.parentID,
@@ -825,33 +784,25 @@ export function Session() {
     },
   ])
 
-  const sessionCommands = createMemo(() =>
-    sessionCommandList().map((command) => ({
+  useBindings(() => ({
+    commands: [...globalCommands, ...baseAndUnfocusedCommands, ...baseCommands()].map((command) => ({
       namespace: "palette",
-      name: command.value,
-      desc: "description" in command ? command.description : undefined,
-      slashName: "slash" in command ? command.slash?.name : undefined,
-      slashAliases: "slash" in command ? command.slash?.aliases : undefined,
       ...command,
     })),
-  )
-
-  useBindings(() => ({
-    commands: sessionCommands(),
   }))
 
   useBindings(() => ({
-    bindings: config.keybinds.gather("session.global", sessionGlobalBindingCommands),
+    bindings: globalCommands.flatMap((command) => config.keybinds.get(command.name)),
   }))
 
   useBindings(() => ({
     enabled: () => renderer.currentFocusedEditor === null,
-    bindings: config.keybinds.gather("session.global.unfocused", sessionGlobalUnfocusedBindingCommands),
+    bindings: baseAndUnfocusedCommands.flatMap((command) => config.keybinds.get(command.name)),
   }))
 
   useBindings(() => ({
     mode: OPENCODE_BASE_MODE,
-    bindings: config.keybinds.gather("session", sessionBindingCommands),
+    bindings: [...baseAndUnfocusedCommands, ...baseCommands()].flatMap((command) => config.keybinds.get(command.name)),
   }))
 
   // snap to bottom when session changes
@@ -864,133 +815,130 @@ export function Session() {
   )
 
   return (
-    <LocationProvider location={location()}>
-      <context.Provider
-        value={{
-          get width() {
-            return contentWidth()
-          },
-          sessionID: route.sessionID,
-          thinkingMode,
-          showThinking,
-          markdownMode,
-          groupExploration,
-          diffWrapMode,
-          models,
-          config,
-        }}
-      >
-        <box flexDirection="row" flexGrow={1} minHeight={0}>
-          <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
-            <Show when={session()}>
-              <scrollbox
-                ref={(r) => (scroll = r)}
-                viewportOptions={{
-                  paddingRight: showScrollbar() ? 1 : 0,
-                }}
-                verticalScrollbarOptions={{
-                  paddingLeft: 1,
-                  visible: showScrollbar(),
-                  trackOptions: {
-                    backgroundColor: theme.backgroundElement,
-                    foregroundColor: theme.border,
-                  },
-                }}
-                stickyScroll={true}
-                stickyStart="bottom"
-                flexGrow={1}
-                scrollAcceleration={scrollAcceleration()}
-              >
-                <For each={rows}>
-                  {(row) => (
-                    <SessionRowView
-                      row={row}
-                      message={(messageID) => data.session.message.get(route.sessionID, messageID)}
-                    />
-                  )}
-                </For>
-                <BackgroundToolHint messages={messages()} />
-                <Show when={session()?.revert?.messageID}>
-                  <RevertMessage
-                    count={
-                      messages().filter(
-                        (message) => message.id >= session()!.revert!.messageID && message.type === "user",
-                      ).length
-                    }
-                    files={session()!.revert!.files ?? []}
+    <context.Provider
+      value={{
+        get width() {
+          return contentWidth()
+        },
+        sessionID: route.sessionID,
+        thinkingMode,
+        showThinking,
+        markdownMode,
+        groupExploration,
+        diffWrapMode,
+        models,
+        config,
+      }}
+    >
+      <box flexDirection="row" flexGrow={1} minHeight={0}>
+        <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+          <Show when={session()}>
+            <scrollbox
+              ref={(r) => (scroll = r)}
+              viewportOptions={{
+                paddingRight: showScrollbar() ? 1 : 0,
+              }}
+              verticalScrollbarOptions={{
+                paddingLeft: 1,
+                visible: showScrollbar(),
+                trackOptions: {
+                  backgroundColor: theme.backgroundElement,
+                  foregroundColor: theme.border,
+                },
+              }}
+              stickyScroll={true}
+              stickyStart="bottom"
+              flexGrow={1}
+              scrollAcceleration={scrollAcceleration()}
+            >
+              <For each={rows}>
+                {(row) => (
+                  <SessionRowView
+                    row={row}
+                    message={(messageID) => data.session.message.get(route.sessionID, messageID)}
                   />
-                </Show>
-              </scrollbox>
-              <box flexShrink={0}>
-                <Composer
-                  sessionID={route.sessionID}
-                  open={composer.open || (!!session()?.parentID && forms().length === 0)}
-                  defaultTab={composer.tab ?? (session()?.parentID ? "subagents" : undefined)}
-                  onClose={() => setComposer("open", false)}
+                )}
+              </For>
+              <BackgroundToolHint messages={messages()} />
+              <Show when={session()?.revert?.messageID}>
+                <RevertMessage
+                  count={
+                    messages().filter(
+                      (message) => message.id >= session()!.revert!.messageID && message.type === "user",
+                    ).length
+                  }
+                  files={session()!.revert!.files ?? []}
                 />
-                <Switch>
-                  <Match when={composer.open || (!!session()?.parentID && forms().length === 0)}>{null}</Match>
-                  <Match when={permissions().length > 0}>
-                    <PermissionPrompt request={permissions()[0]} directory={session()?.location.directory} />
-                  </Match>
-                  <Match when={forms().length > 0}>
-                    <Show when={forms()[0]?.id} keyed>
-                      {(_) => {
-                        const form = forms()[0]
-                        return form ? <FormPrompt form={form} /> : null
-                      }}
-                    </Show>
-                  </Match>
-                  <Match when={!disabled()}>
-                    <pluginRuntime.Slot
-                      name="session_prompt"
-                      mode="replace"
-                      session_id={route.sessionID}
+              </Show>
+            </scrollbox>
+            <box flexShrink={0}>
+              <Composer
+                sessionID={route.sessionID}
+                open={composer.open || (!!session()?.parentID && forms().length === 0)}
+                defaultTab={composer.tab ?? (session()?.parentID ? "subagents" : undefined)}
+                onClose={() => setComposer("open", false)}
+              />
+              <Switch>
+                <Match when={composer.open || (!!session()?.parentID && forms().length === 0)}>{null}</Match>
+                <Match when={permissions().length > 0}>
+                  <PermissionPrompt request={permissions()[0]} directory={session()?.location.directory} />
+                </Match>
+                <Match when={forms().length > 0}>
+                  <Show when={forms()[0]?.id} keyed>
+                    {(_) => {
+                      const form = forms()[0]
+                      return form ? <FormPrompt form={form} /> : null
+                    }}
+                  </Show>
+                </Match>
+                <Match when={!disabled()}>
+                  <pluginRuntime.Slot
+                    name="session_prompt"
+                    mode="replace"
+                    session_id={route.sessionID}
+                    visible={true}
+                    disabled={false}
+                    on_submit={toBottom}
+                    ref={bind}
+                  >
+                    <Prompt
                       visible={true}
-                      disabled={false}
-                      on_submit={toBottom}
                       ref={bind}
-                    >
-                      <Prompt
-                        visible={true}
-                        ref={bind}
-                        disabled={false}
-                        onSubmit={() => {
-                          toBottom()
-                        }}
-                        sessionID={route.sessionID}
-                        right={<pluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
-                      />
-                    </pluginRuntime.Slot>
-                  </Match>
-                </Switch>
-              </box>
-            </Show>
-            <Toast />
-          </box>
-          <Show when={sidebarVisible()}>
-            <Switch>
-              <Match when={wide()}>
-                <Sidebar sessionID={route.sessionID} />
-              </Match>
-              <Match when={!wide()}>
-                <box
-                  position="absolute"
-                  top={0}
-                  left={0}
-                  right={0}
-                  bottom={0}
-                  alignItems="flex-end"
-                  backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
-                >
-                  <Sidebar sessionID={route.sessionID} />
-                </box>
-              </Match>
-            </Switch>
+                      disabled={false}
+                      onSubmit={() => {
+                        toBottom()
+                      }}
+                      sessionID={route.sessionID}
+                      right={<pluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
+                    />
+                  </pluginRuntime.Slot>
+                </Match>
+              </Switch>
+            </box>
           </Show>
         </box>
-      </context.Provider>
-    </LocationProvider>
+        <Show when={sidebarVisible()}>
+          <Switch>
+            <Match when={wide()}>
+              <Sidebar sessionID={route.sessionID} />
+            </Match>
+            <Match when={!wide()}>
+              <box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                alignItems="flex-end"
+                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+              >
+                <Sidebar sessionID={route.sessionID} />
+              </box>
+            </Match>
+          </Switch>
+        </Show>
+      </box>
+    </context.Provider>
   )
 }
 
@@ -1009,7 +957,10 @@ function SessionRowView(props: { row: SessionRow; message: (messageID: string) =
         <Match when={props.row.type === "part" ? props.row : undefined}>
           {(row) => <SessionPartView partRef={row().ref} message={props.message} />}
         </Match>
-        <Match when={props.row.type === "group" ? props.row : undefined}>
+        <Match when={props.row.type === "group" && props.row.kind === "reasoning" ? props.row : undefined}>
+          {(row) => <SessionReasoningGroupView refs={row().refs} completed={row().completed} message={props.message} />}
+        </Match>
+        <Match when={props.row.type === "group" && props.row.kind === "exploration" ? props.row : undefined}>
           {(row) => (
             <SessionGroupView
               refs={row().refs}
@@ -1115,6 +1066,122 @@ function SessionPartView(props: { partRef: PartRef; message: (messageID: string)
           </Match>
         </Switch>
       )}
+    </Show>
+  )
+}
+
+function SessionReasoningGroupView(props: {
+  refs: PartRef[]
+  completed: boolean
+  message: (messageID: string) => SessionMessageInfo | undefined
+}) {
+  const ctx = use()
+  const { theme, syntax } = useTheme()
+  const renderer = useRenderer()
+  const [expanded, setExpanded] = createSignal(false)
+  const [hover, setHover] = createSignal(false)
+  const parts = createMemo(() =>
+    props.refs.flatMap((ref) => {
+      const message = props.message(ref.messageID)
+      if (message?.type !== "assistant") return []
+      const part = resolvePart(message, ref.partID)
+      if (part?.type !== "reasoning" || !reasoningContent(part)) return []
+      return [{ message, part }]
+    }),
+  )
+  const latest = createMemo((previous: string | null) => {
+    const item = parts().at(-1)
+    if (!item) return previous
+    const title = reasoningSummary(reasoningContent(item.part)).title
+    if (title) return title
+    if (item.part.time?.completed !== undefined || item.message.time.completed !== undefined) return null
+    return previous
+  }, null)
+  const duration = createMemo(() =>
+    parts().reduce((total, item) => {
+      const start = item.part.time?.created
+      const end = item.part.time?.completed
+      return total + (start === undefined || end === undefined ? 0 : Math.max(0, end - start))
+    }, 0),
+  )
+
+  return (
+    <Show when={parts().length > 0}>
+      <Show
+        when={ctx.thinkingMode() === "hide"}
+        fallback={<For each={props.refs}>{(ref) => <SessionPartView partRef={ref} message={props.message} />}</For>}
+      >
+        <box flexDirection="column" flexShrink={0}>
+          <InlineToolRow
+            icon={expanded() ? "-" : "+"}
+            color={
+              !props.completed
+                ? theme.text
+                : hover() || expanded()
+                  ? theme.warning
+                  : RGBA.fromValues(theme.warning.r, theme.warning.g, theme.warning.b, theme.thinkingOpacity)
+            }
+            complete={props.completed}
+            pending={latest() ? `Thinking: ${latest()}` : "Thinking"}
+            spinner={!props.completed}
+            onMouseOver={() => setHover(true)}
+            onMouseOut={() => setHover(false)}
+            onMouseUp={() => {
+              if (renderer.getSelection()?.getSelectedText()) return
+              setExpanded((value) => !value)
+            }}
+          >
+            {props.completed ? "Thought" : latest() ? `Thinking: ${latest()}` : "Thinking"}
+            <Show when={props.completed && !expanded() && latest()}>: {latest()}</Show>
+            <Show when={props.completed && parts().length > 1}> · {parts().length} steps</Show>
+            <Show when={props.completed && duration()}> · {Locale.duration(duration())}</Show>
+          </InlineToolRow>
+          <Show when={expanded()}>
+            <box paddingLeft={3}>
+              <For each={props.refs}>
+                {(ref) => {
+                  const message = createMemo(() => {
+                    const item = props.message(ref.messageID)
+                    return item?.type === "assistant" ? item : undefined
+                  })
+                  const part = createMemo(() => {
+                    const item = message()
+                    if (!item) return undefined
+                    const part = resolvePart(item, ref.partID)
+                    return part?.type === "reasoning" ? part : undefined
+                  })
+                  const content = createMemo(() => {
+                    const item = part()
+                    return item ? reasoningContent(item) : ""
+                  })
+                  return (
+                    <Show when={content()}>
+                      <box marginTop={1}>
+                        <box
+                          border={["left"]}
+                          customBorderChars={SplitBorder.customBorderChars}
+                          borderColor={theme.backgroundElement}
+                          paddingLeft={1}
+                        >
+                          <code
+                            filetype="markdown"
+                            drawUnstyledText={false}
+                            streaming={part()?.time?.completed === undefined && message()?.time.completed === undefined}
+                            syntaxStyle={syntax()}
+                            content={content()}
+                            conceal={ctx.markdownMode() === "rendered"}
+                            fg={theme.textMuted}
+                          />
+                        </box>
+                      </box>
+                    </Show>
+                  )
+                }}
+              </For>
+            </box>
+          </Show>
+        </box>
+      </Show>
     </Show>
   )
 }
@@ -1380,7 +1447,7 @@ function RevertMessage(props: {
   const ctx = use()
   const { theme } = useTheme()
   const route = useRouteData("session")
-  const sdk = useSDK()
+  const client = useClient()
   const toast = useToast()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
@@ -1392,7 +1459,7 @@ function RevertMessage(props: {
       onMouseUp={() => {
         if (renderer.getSelection()?.getSelectedText()) return
         void (async () => {
-          const error = await sdk.api.session.revert.clear({ sessionID: route.sessionID }).then(
+          const error = await client.api.session.revert.clear({ sessionID: route.sessionID }).then(
             () => undefined,
             (error) => error,
           )
@@ -1722,10 +1789,7 @@ function ReasoningPart(props: {
   // layout never shifts. Click to open the full markdown block, click to close.
   const [expanded, setExpanded] = createSignal(false)
 
-  const content = createMemo(() => {
-    // OpenRouter encrypts some reasoning blocks; drop the placeholder.
-    return props.part.text.replace("[REDACTED]", "").trim()
-  })
+  const content = createMemo(() => reasoningContent(props.part))
   const isDone = createMemo(
     () => props.part.time?.completed !== undefined || props.message.time.completed !== undefined,
   )
@@ -1744,31 +1808,50 @@ function ReasoningPart(props: {
   return (
     <Show when={content()}>
       <box paddingLeft={3} flexDirection="column" flexShrink={0}>
-        <box onMouseUp={toggle}>
-          <ReasoningHeader
-            toggleable={inMinimal()}
-            open={!inMinimal() || expanded()}
-            done={isDone()}
-            title={summary().title}
-            duration={isDone() ? Locale.duration(duration()) : undefined}
-          />
-        </box>
-        <Show when={(!inMinimal() || expanded()) && summary().body}>
-          <box paddingLeft={inMinimal() ? 2 : 0} marginTop={1}>
-            <code
-              filetype="markdown"
-              drawUnstyledText={false}
-              streaming={true}
-              syntaxStyle={syntax()}
-              content={summary().body}
-              conceal={ctx.markdownMode() === "rendered"}
-              fg={theme.textMuted}
+        <box
+          border={!inMinimal() || expanded() ? ["left"] : undefined}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={theme.backgroundElement}
+          paddingLeft={!inMinimal() || expanded() ? 1 : 0}
+        >
+          <box onMouseUp={toggle}>
+            <ReasoningHeader
+              toggleable={inMinimal()}
+              open={!inMinimal() || expanded()}
+              done={isDone()}
+              title={inMinimal() && !expanded() ? summary().title : null}
+              duration={isDone() ? Locale.duration(duration()) : undefined}
             />
+          </box>
+        </box>
+        <Show when={!inMinimal() || expanded()}>
+          <box marginTop={1}>
+            <box
+              border={["left"]}
+              customBorderChars={SplitBorder.customBorderChars}
+              borderColor={theme.backgroundElement}
+              paddingLeft={inMinimal() ? 3 : 1}
+            >
+              <code
+                filetype="markdown"
+                drawUnstyledText={false}
+                streaming={true}
+                syntaxStyle={syntax()}
+                content={content()}
+                conceal={ctx.markdownMode() === "rendered"}
+                fg={theme.textMuted}
+              />
+            </box>
           </box>
         </Show>
       </box>
     </Show>
   )
+}
+
+function reasoningContent(part: SessionMessageAssistantReasoning) {
+  // OpenRouter encrypts some reasoning blocks; drop the placeholder.
+  return part.text.replace("[REDACTED]", "").trim()
 }
 
 function ReasoningHeader(props: {
@@ -1978,6 +2061,7 @@ function InlineTool(props: {
   pending: string
   failure?: string
   spinner?: boolean
+  status?: JSX.Element
   children: JSX.Element
   part: SessionMessageAssistantTool
   onClick?: () => void
@@ -2028,6 +2112,7 @@ function InlineTool(props: {
       pending={props.pending}
       failure={props.failure}
       spinner={props.spinner}
+      status={props.status}
       onMouseOver={() => clickable() && setHover(true)}
       onMouseOut={() => setHover(false)}
       onMouseUp={() => {
@@ -2057,6 +2142,7 @@ export function InlineToolRow(props: {
   pending: string
   failure?: string
   spinner?: boolean
+  status?: JSX.Element
   children: JSX.Element
   onMouseOver?: () => void
   onMouseOut?: () => void
@@ -2066,7 +2152,16 @@ export function InlineToolRow(props: {
     <box paddingLeft={3} onMouseOver={props.onMouseOver} onMouseOut={props.onMouseOut} onMouseUp={props.onMouseUp}>
       <Switch>
         <Match when={props.spinner}>
-          <Spinner color={props.color} children={props.children} />
+          <Show when={props.status} fallback={<Spinner color={props.color} children={props.children} />}>
+            {(status) => (
+              <box flexDirection="row" gap={1}>
+                <Spinner color={props.color} />
+                <InlineToolLabel color={props.color} status={status()}>
+                  {props.children}
+                </InlineToolLabel>
+              </box>
+            )}
+          </Show>
         </Match>
         <Match when={true}>
           <Show fallback={<Spinner color={props.color}>{props.pending}</Spinner>} when={props.complete || props.failed}>
@@ -2078,13 +2173,28 @@ export function InlineToolRow(props: {
               >
                 {props.icon}
               </text>
-              <text
-                flexGrow={1}
-                fg={props.failed ? props.errorColor : props.color}
-                attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+              <Show
+                when={props.status}
+                fallback={
+                  <text
+                    flexGrow={1}
+                    fg={props.failed ? props.errorColor : props.color}
+                    attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+                  >
+                    {props.failed && !props.complete ? (props.failure ?? props.children) : props.children}
+                  </text>
+                }
               >
-                {props.failed && !props.complete ? (props.failure ?? props.children) : props.children}
-              </text>
+                {(status) => (
+                  <InlineToolLabel
+                    color={props.failed ? props.errorColor : props.color}
+                    denied={props.denied}
+                    status={status()}
+                  >
+                    {props.failed && !props.complete ? (props.failure ?? props.children) : props.children}
+                  </InlineToolLabel>
+                )}
+              </Show>
             </box>
           </Show>
         </Match>
@@ -2095,6 +2205,32 @@ export function InlineToolRow(props: {
         </box>
       </Show>
     </box>
+  )
+}
+
+function InlineToolLabel(props: { color?: RGBA; denied?: boolean; status: JSX.Element; children: JSX.Element }) {
+  return (
+    <box flexDirection="row" flexWrap="wrap" columnGap={1} flexGrow={1}>
+      <text
+        maxWidth="100%"
+        flexShrink={0}
+        fg={props.color}
+        attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+      >
+        {props.children}
+      </text>
+      {props.status}
+    </box>
+  )
+}
+
+function StatusBadge(props: { children: string }) {
+  const { theme } = useTheme()
+  return (
+    <text flexShrink={0} bg={theme.backgroundElement} fg={theme.textMuted}>
+      {" "}
+      {props.children}{" "}
+    </text>
   )
 }
 
@@ -2182,6 +2318,7 @@ function BlockTool(props: {
 function Shell(props: ToolProps) {
   const { theme } = useTheme()
   const ctx = use()
+  const client = useClient()
   const data = useData()
   const permission = createMemo(() => {
     const request = data.session.permission.list(ctx.sessionID)?.[0]
@@ -2195,13 +2332,35 @@ function Shell(props: ToolProps) {
   })
   const isRunning = createMemo(() => props.part.state.status === "running" || backgroundRunning())
   const command = createMemo(() => stringValue(props.input.command))
+  const [expanded, setExpanded] = createSignal(false)
+  const [backgroundOutput, setBackgroundOutput] = createSignal("")
+  let loading = false
+  const loadBackgroundOutput = async () => {
+    const id = shellID()
+    if (!id || loading) return
+    loading = true
+    const location = data.session.get(ctx.sessionID)?.location
+    await client.api.shell
+      .output({
+        id,
+        limit: 1024 * 1024,
+        location: location ? { directory: location.directory, workspace: location.workspaceID } : undefined,
+      })
+      .then((response) => setBackgroundOutput(stripAnsi(response.data.output.trim())))
+      .catch(() => undefined)
+    loading = false
+  }
+  createEffect(() => {
+    if (!expanded() || !backgroundRunning()) return
+    const interval = setInterval(() => void loadBackgroundOutput(), 1_000)
+    onCleanup(() => clearInterval(interval))
+  })
   const output = createMemo(() => {
     if (props.part.state.status === "streaming") return ""
-    if (shellID()) return ""
+    if (shellID()) return expanded() ? backgroundOutput() : ""
     const content = props.part.state.content[0]
     return stripAnsi(content?.type === "text" ? content.text.trim() : "")
   })
-  const [expanded, setExpanded] = createSignal(false)
   const maxLines = 10
   const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
   const input = createMemo(() => (command() ? `${isRunning() ? "" : "$ "}${command()}` : ""))
@@ -2211,9 +2370,15 @@ function Shell(props: ToolProps) {
     if (expanded() || !collapsed().overflow) return content()
     return collapsed().output
   })
+  const expandable = createMemo(() => Boolean(shellID()) || collapsed().overflow)
+  const toggle = () => {
+    const next = !expanded()
+    setExpanded(next)
+    if (next) void loadBackgroundOutput()
+  }
 
   return (
-    <BlockTool part={props.part} onClick={collapsed().overflow ? () => setExpanded((prev) => !prev) : undefined}>
+    <BlockTool part={props.part} onClick={expandable() ? toggle : undefined}>
       <box gap={1}>
         <Show
           when={command()}
@@ -2241,11 +2406,9 @@ function Shell(props: ToolProps) {
           </Show>
         </Show>
         <Show when={shellID()}>
-          <text>
-            <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> Background </span>
-          </text>
+          <StatusBadge>Background</StatusBadge>
         </Show>
-        <Show when={collapsed().overflow}>
+        <Show when={expandable()}>
           <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
         </Show>
       </box>
@@ -2368,8 +2531,10 @@ function WebSearch(props: ToolProps) {
 function Subagent(props: ToolProps) {
   const { navigate } = useRoute()
   const data = useData()
-  const sessionID = createMemo(() => stringValue(props.metadata.sessionID) ?? stringValue(props.metadata.sessionId))
-  const description = createMemo(() => stringValue(props.input.description))
+  const input = createMemo(() => (typeof props.part.state.input === "string" ? {} : props.part.state.input))
+  const metadata = createMemo(() => (props.part.state.status === "streaming" ? {} : props.part.state.structured))
+  const sessionID = createMemo(() => stringValue(metadata().sessionID) ?? stringValue(metadata().sessionId))
+  const description = createMemo(() => stringValue(input().description))
   const isRunning = createMemo(() => {
     const id = sessionID()
     return props.part.state.status === "running" || Boolean(id && data.session.status(id) === "running")
@@ -2386,18 +2551,15 @@ function Subagent(props: ToolProps) {
         const id = sessionID()
         if (id) navigate({ type: "session", sessionID: id })
       }}
+      status={
+        input().background === true || metadata().status === "running" ? (
+          <StatusBadge>Background</StatusBadge>
+        ) : undefined
+      }
     >
-      {formatSubagentTitle(
-        Locale.titlecase(stringValue(props.input.agent) ?? stringValue(props.input.subagent_type) ?? "General"),
-        description() ?? "Subagent",
-        props.input.background === true || props.metadata.status === "running",
-      )}
+      {`${Locale.titlecase(stringValue(input().agent) ?? stringValue(input().subagent_type) ?? "General")} Subagent — ${description() ?? "Subagent"}`}
     </InlineTool>
   )
-}
-
-export function formatSubagentTitle(agent: string, description: string, background: boolean) {
-  return `${agent} Subagent — ${description}${background ? " [background]" : ""}`
 }
 
 export function formatSubagentRetry(attempt: number, message: string) {

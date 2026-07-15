@@ -21,6 +21,7 @@ import { Money } from "./money.js"
 import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
 import { SessionPending } from "./session-pending.js"
+import { Project } from "./project.js"
 
 export { FileAttachment }
 
@@ -69,6 +70,7 @@ export const Moved = Event.durable({
   schema: {
     ...Base,
     location: Location.Ref,
+    projectID: Project.ID.pipe(optional),
     subpath: RelativePath.pipe(optional),
   },
 })

@@ -3,7 +3,7 @@ import { createStore } from "solid-js/store"
 import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../../../context/theme"
 import { SplitBorder } from "../../../ui/border"
-import { useBindings, useOpencodeModeStack } from "../../../keymap"
+import { Keymap } from "../../../context/keymap"
 import { SubagentsTab } from "./subagents-tab"
 import { ShellTab } from "./shell-tab"
 
@@ -75,10 +75,10 @@ export function Composer(props: ComposerProps) {
     },
   }
 
-  const modeStack = useOpencodeModeStack()
+  const keymap = Keymap.use()
   createEffect(() => {
     if (!props.open) return
-    const popMode = modeStack.push("composer")
+    const popMode = keymap.mode.push("composer")
     onCleanup(popMode)
   })
 
@@ -89,18 +89,18 @@ export function Composer(props: ComposerProps) {
     setStore("active", tabs[(idx + dir + tabs.length) % tabs.length].id)
   }
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     mode: "composer",
     enabled: () => props.open,
-    bindings: [
-      { key: "left", desc: "Previous tab", group: "Composer", cmd: () => switchTab(-1) },
-      { key: "right", desc: "Next tab", group: "Composer", cmd: () => switchTab(1) },
-      { key: "escape", desc: "Close composer", group: "Composer", cmd: close },
+    commands: [
+      { bind: "left", title: "Previous tab", group: "Composer", run: () => switchTab(-1) },
+      { bind: "right", title: "Next tab", group: "Composer", run: () => switchTab(1) },
+      { bind: "escape", title: "Close composer", group: "Composer", run: close },
       {
-        key: "<leader>down",
-        desc: "Toggle composer",
+        bind: "<leader>down",
+        title: "Toggle composer",
         group: "Composer",
-        cmd: close,
+        run: close,
       },
     ],
   }))

@@ -1,12 +1,5 @@
-import {
-  InputRenderable,
-  RGBA,
-  ScrollBoxRenderable,
-  TextAttributes,
-  type KeyEvent,
-  type Renderable,
-} from "@opentui/core"
-import type { Binding } from "@opentui/keymap"
+import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
+import { Keymap, type KeymapCommand } from "../context/keymap"
 import { useTheme, selectedForeground } from "../context/theme"
 import { entries, filter, flatMap, groupBy, pipe } from "remeda"
 import { batch, createEffect, createMemo, createSignal, For, Show, type JSX, on, onCleanup } from "solid-js"
@@ -18,7 +11,7 @@ import { useDialog, type DialogContext } from "./dialog"
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useConfig } from "../config"
-import { formatKeyBindings, useBindings, useKeymapSelector } from "../keymap"
+import { formatKeyBindings, useKeymapSelector } from "../keymap"
 
 export interface DialogSelectProps<T> {
   title: string
@@ -26,6 +19,7 @@ export interface DialogSelectProps<T> {
   placeholder?: string
   footer?: JSX.Element
   emptyView?: JSX.Element
+  noMatchView?: JSX.Element
   options: DialogSelectOption<T>[]
   flat?: boolean
   ref?: (ref: DialogSelectRef<T>) => void
@@ -42,7 +36,7 @@ export interface DialogSelectProps<T> {
     label: string
     side?: "left" | "right"
   }[]
-  bindings?: readonly Binding<Renderable, KeyEvent>[]
+  bindings?: readonly KeymapCommand[]
   current?: T
   focusCurrent?: boolean
 }
@@ -155,11 +149,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       .filter((item) => item.label),
     ...(props.footerHints ?? []),
   ])
-  const actionItems = createMemo(() =>
+  const actionItems = () =>
     visibleActions()
       .filter(isActionItem)
-      .filter((item) => !isActionDisabled(item)),
-  )
+      .filter((item) => !isActionDisabled(item))
 
   createEffect(() => {
     const index = focusedAction()
@@ -385,51 +378,52 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     })
   }
 
-  useBindings(() => {
+  Keymap.createLayer(() => {
     const visible = shownActions()
 
     return {
+      mode: "modal",
       commands: [
         {
-          name: "dialog.select.prev",
+          id: "dialog.select.prev",
           title: "Previous item",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             setStore("input", "keyboard")
             move(-1)
           },
         },
         {
-          name: "dialog.select.next",
+          id: "dialog.select.next",
           title: "Next item",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             setStore("input", "keyboard")
             move(1)
           },
         },
         {
-          name: "dialog.select.page_up",
+          id: "dialog.select.page_up",
           title: "Page up",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             setStore("input", "keyboard")
             move(-10)
           },
         },
         {
-          name: "dialog.select.page_down",
+          id: "dialog.select.page_down",
           title: "Page down",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             setStore("input", "keyboard")
             move(10)
           },
         },
         {
-          name: "dialog.select.home",
+          id: "dialog.select.home",
           title: "First item",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             if (props.locked) return
             setStore("input", "keyboard")
@@ -437,9 +431,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           },
         },
         {
-          name: "dialog.select.end",
+          id: "dialog.select.end",
           title: "Last item",
-          category: "Dialog",
+          group: "Dialog",
           run() {
             if (props.locked) return
             setStore("input", "keyboard")
@@ -447,49 +441,34 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           },
         },
         {
-          name: "dialog.select.submit",
+          id: "dialog.select.submit",
           title: "Select item",
-          category: "Dialog",
+          group: "Dialog",
           run: submit,
         },
         ...visible.map((item) => ({
-          name: item.command,
+          id: item.command,
           title: item.title,
-          category: "Dialog",
+          group: "Dialog",
           run: () => trigger(item),
         })),
-      ],
-      bindings: [
-        ...config.keybinds.gather("dialog.select", [
-          "dialog.select.prev",
-          "dialog.select.next",
-          "dialog.select.page_up",
-          "dialog.select.page_down",
-          "dialog.select.home",
-          "dialog.select.end",
-          "dialog.select.submit",
-        ]),
-        ...visible.flatMap((item) => config.keybinds.get(item.command)),
         ...(visible.length
           ? [
               {
-                key: "tab",
-                desc: "Next dialog action",
+                bind: "tab",
+                title: "Next dialog action",
                 group: "Dialog",
-                cmd: () => moveAction(1),
+                run: () => moveAction(1),
               },
               {
-                key: "shift+tab",
-                desc: "Previous dialog action",
+                bind: "shift+tab",
+                title: "Previous dialog action",
                 group: "Dialog",
-                cmd: () => moveAction(-1),
+                run: () => moveAction(-1),
               },
             ]
           : []),
-        ...(props.bindings ?? []).filter((binding) => {
-          if (typeof binding.cmd !== "string") return true
-          return visible.some((item) => item.command === binding.cmd)
-        }),
+        ...(props.bindings ?? []),
       ],
     }
   })
@@ -616,11 +595,22 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <Show
           when={grouped().length > 0}
           fallback={
-            props.emptyView ?? (
-              <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-                <text fg={theme.textMuted}>No results found</text>
-              </box>
-            )
+            <Show
+              when={props.renderFilter !== false && store.filter.length > 0}
+              fallback={
+                props.emptyView ?? (
+                  <box paddingLeft={4} paddingRight={4} paddingTop={1}>
+                    <text fg={theme.textMuted}>No items available</text>
+                  </box>
+                )
+              }
+            >
+              {props.noMatchView ?? (
+                <box paddingLeft={4} paddingRight={4} paddingTop={1}>
+                  <text fg={theme.textMuted}>No results found</text>
+                </box>
+              )}
+            </Show>
           }
         >
           <scrollbox

@@ -34,13 +34,22 @@ export const boundedData = (value: unknown, label: string): unknown => copyIn(va
 export const coerceToString = (value: unknown): string => {
   if (value === null) return "null"
   if (value === undefined) return "undefined"
-  if (value instanceof SandboxDate)
+  if (value instanceof CodeModeDate)
     return Number.isFinite(value.time) ? new Date(value.time).toISOString() : "Invalid Date"
-  if (value instanceof SandboxRegExp) return `/${value.regex.source}/${value.regex.flags}`
-  if (value instanceof SandboxMap) return "[object Map]"
-  if (value instanceof SandboxSet) return "[object Set]"
-  if (value instanceof SandboxURL) return value.url.href
-  if (value instanceof SandboxURLSearchParams) return value.params.toString()
+  if (value instanceof CodeModeRegExp) return `/${value.regex.source}/${value.regex.flags}`
+  if (value instanceof CodeModeMap) return "[object Map]"
+  if (value instanceof CodeModeSet) return "[object Set]"
+  if (value instanceof CodeModeURL) return value.url.href
+  if (value instanceof CodeModeURLSearchParams) return value.params.toString()
+  if (errorBrandName(value) !== undefined) {
+    // Match Error.prototype.toString: "name: message", or just one when the other is empty.
+    const error = value as { name?: unknown; message?: unknown }
+    const name = typeof error.name === "string" ? error.name : "Error"
+    const message = typeof error.message === "string" ? error.message : ""
+    if (message === "") return name
+    if (name === "") return message
+    return `${name}: ${message}`
+  }
   if (typeof value === "object") {
     return Array.isArray(value)
       ? value.map((item) => (item === null || item === undefined ? "" : coerceToString(item))).join(",")
@@ -50,14 +59,16 @@ export const coerceToString = (value: unknown): string => {
 }
 
 export const coerceToNumber = (value: unknown): number => {
-  if (value instanceof SandboxDate) return value.time
-  if (isSandboxValue(value)) return Number.NaN
+  if (value instanceof CodeModeDate) return value.time
+  if (isCodeModeValue(value)) return Number.NaN
   return value !== null && typeof value === "object" && !Array.isArray(value) ? Number.NaN : Number(value)
 }
 
 export const invokeCoercion = (ref: CoercionFunction, args: Array<unknown>, node: AstNode): unknown => {
   const raw = args[0]
-  if (isSandboxValue(raw)) {
+  // Error values are plain SafeObjects; the boundedData path below would strip their brand.
+  if (ref.name === "String" && errorBrandName(raw) !== undefined) return coerceToString(raw)
+  if (isCodeModeValue(raw)) {
     if (ref.name === "Boolean") return true
     if (ref.name === "Number") return coerceToNumber(raw)
     if (ref.name === "String") return coerceToString(raw)
@@ -80,11 +91,11 @@ export const invokeCoercion = (ref: CoercionFunction, args: Array<unknown>, node
 import { type AstNode, CoercionFunction, InterpreterRuntimeError } from "../interpreter/model.js"
 import { copyIn, type SafeObject } from "../tool-runtime.js"
 import {
-  isSandboxValue,
-  SandboxDate,
-  SandboxMap,
-  SandboxRegExp,
-  SandboxSet,
-  SandboxURL,
-  SandboxURLSearchParams,
+  isCodeModeValue,
+  CodeModeDate,
+  CodeModeMap,
+  CodeModeRegExp,
+  CodeModeSet,
+  CodeModeURL,
+  CodeModeURLSearchParams,
 } from "../values.js"

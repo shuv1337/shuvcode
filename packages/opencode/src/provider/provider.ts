@@ -1266,6 +1266,14 @@ export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
       // @ts-expect-error dead V1 expects raw model IDs inside normalized ModelsDev data.
       const id = `${model.id}-${mode}`
       const base = fromModelsDevModel(provider, model)
+      const providerOptions = (
+        opts as {
+          readonly provider?: {
+            readonly body?: Record<string, unknown>
+            readonly headers?: Record<string, string>
+          }
+        }
+      ).provider
       models[id] = {
         ...base,
         id: ModelV2.ID.make(id),
@@ -1273,18 +1281,8 @@ export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
         name: `${model.name} ${mode[0].toUpperCase()}${mode.slice(1)}`,
         // @ts-expect-error dead V1 expects raw mode costs inside normalized ModelsDev data.
         cost: opts.cost ? mergeDeep(base.cost, cost(opts.cost)) : base.cost,
-        // @ts-expect-error dead V1 expects raw mode provider bodies inside normalized ModelsDev data.
-        options: opts.provider?.body
-          ? Object.fromEntries(
-              // @ts-expect-error dead V1 expects raw mode provider bodies inside normalized ModelsDev data.
-              Object.entries(opts.provider.body).map(([k, v]) => [
-                k.replace(/_([a-z])/g, (_, c) => c.toUpperCase()),
-                v,
-              ]),
-            )
-          : base.options,
-        // @ts-expect-error dead V1 expects raw mode headers inside normalized ModelsDev data.
-        headers: opts.provider?.headers ?? base.headers,
+        options: modeOptions(base, providerOptions?.body),
+        headers: providerOptions?.headers ?? base.headers,
       }
     }
   }
@@ -1296,6 +1294,17 @@ export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
     options: {},
     models,
   }
+}
+
+function modeOptions(model: Model, body: Record<string, unknown> | undefined) {
+  if (!body) return model.options
+  const options = Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()), value]),
+  )
+  const reasoning = body.reasoning
+  if (model.api.npm !== "@ai-sdk/openai" || !isRecord(reasoning) || typeof reasoning.mode !== "string") return options
+  const { reasoning: _, ...rest } = options
+  return { ...rest, reasoningMode: reasoning.mode }
 }
 
 function modelSuggestions(provider: Info | undefined, modelID: ModelV2.ID, enableExperimentalModels: boolean) {

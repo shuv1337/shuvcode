@@ -1,6 +1,6 @@
 import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useBindings } from "../keymap"
 import { useDialog, type DialogContext } from "./dialog"
 
 export function DialogExportResult(props: { path: string; onClose?: () => void }) {
@@ -12,13 +12,14 @@ export function DialogExportResult(props: { path: string; onClose?: () => void }
     dialog.clear()
   }
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "return",
-        desc: "Close export result",
+        bind: "return",
+        title: "Close export result",
         group: "Dialog",
-        cmd: close,
+        run: close,
       },
     ],
   }))
@@ -37,12 +38,7 @@ export function DialogExportResult(props: { path: string; onClose?: () => void }
         <text fg={theme.text}>{props.path}</text>
       </box>
       <box flexDirection="row" justifyContent="flex-end" gap={1} paddingBottom={1}>
-        <box
-          paddingLeft={3}
-          paddingRight={3}
-          backgroundColor={theme.primary}
-          onMouseUp={close}
-        >
+        <box paddingLeft={3} paddingRight={3} backgroundColor={theme.primary} onMouseUp={close}>
           <text fg={theme.selectedListItemText}>Close</text>
         </box>
       </box>

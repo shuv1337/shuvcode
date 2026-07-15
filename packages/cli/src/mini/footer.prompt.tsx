@@ -1164,13 +1164,13 @@ export function createPromptState(input: PromptInput): PromptState {
         },
       },
     ],
-    bindings: input.tuiConfig.keybinds.gather("run.prompt.autocomplete", [
+    bindings: [
       "prompt.autocomplete.prev",
       "prompt.autocomplete.next",
       "prompt.autocomplete.hide",
       "prompt.autocomplete.select",
       "prompt.autocomplete.complete",
-    ]),
+    ].flatMap((command) => input.tuiConfig.keybinds.get(command)),
   }))
 
   const onKeyDown = (event: KeyEvent) => {

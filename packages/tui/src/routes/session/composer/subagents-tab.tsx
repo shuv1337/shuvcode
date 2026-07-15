@@ -3,10 +3,10 @@ import { createStore } from "solid-js/store"
 import { TextAttributes, RGBA, ScrollBoxRenderable } from "@opentui/core"
 import { useRoute, useRouteData } from "../../../context/route"
 import { useData } from "../../../context/data"
-import { useSDK } from "../../../context/sdk"
+import { useClient } from "../../../context/client"
 import { useTheme, selectedForeground } from "../../../context/theme"
 import { Locale } from "../../../util/locale"
-import { useBindings, useCommandShortcut } from "../../../keymap"
+import { Keymap } from "../../../context/keymap"
 import { useComposerTab } from "./index"
 
 interface SubagentEntry {
@@ -20,12 +20,12 @@ interface SubagentEntry {
 export function SubagentsTab(props: { sessionID: string }) {
   const route = useRouteData("session")
   const data = useData()
-  const sdk = useSDK()
+  const client = useClient()
   const { theme } = useTheme()
   const fg = selectedForeground(theme)
   const navigate = useRoute().navigate
   const composer = useComposerTab()
-  const interruptHint = useCommandShortcut("composer.subagent.interrupt")
+  const shortcuts = Keymap.useShortcuts()
 
   const session = createMemo(() => data.session.get(props.sessionID))
 
@@ -133,7 +133,7 @@ export function SubagentsTab(props: { sessionID: string }) {
       hints: () => {
         const entry = selectedEntry()
         if (!entry || entry.status !== "running") return []
-        return [{ label: "interrupt", shortcut: interruptHint() }]
+        return [{ label: "interrupt", shortcut: shortcuts.get("composer.subagent.interrupt") ?? "" }]
       },
       onClose: () => {
         const parentID = session()?.parentID
@@ -143,14 +143,15 @@ export function SubagentsTab(props: { sessionID: string }) {
     onCleanup(cleanup)
   })
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     mode: "composer",
     enabled: () => composer.active("subagents"),
     commands: [
       {
-        name: "composer.subagent.up",
+        id: "composer.subagent.up",
         title: "Previous subagent",
-        category: "Composer",
+        group: "Composer",
+        bind: "up",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -158,9 +159,10 @@ export function SubagentsTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.subagent.down",
+        id: "composer.subagent.down",
         title: "Next subagent",
-        category: "Composer",
+        group: "Composer",
+        bind: "down",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -168,30 +170,26 @@ export function SubagentsTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.subagent.select",
+        id: "composer.subagent.select",
         title: "Navigate to subagent",
-        category: "Composer",
+        group: "Composer",
+        bind: "return",
         run() {
           const entry = entries()[store.selected]
           if (entry) navigate({ type: "session", sessionID: entry.sessionID })
         },
       },
       {
-        name: "composer.subagent.interrupt",
+        id: "composer.subagent.interrupt",
         title: "Interrupt subagent",
-        category: "Composer",
+        group: "Composer",
+        bind: "ctrl+d",
         run() {
           const entry = selectedEntry()
           if (!entry || entry.status !== "running") return
-          void sdk.api.session.interrupt({ sessionID: entry.sessionID })
+          void client.api.session.interrupt({ sessionID: entry.sessionID })
         },
       },
-    ],
-    bindings: [
-      { key: "up", desc: "Previous subagent", group: "Subagents", cmd: "composer.subagent.up" },
-      { key: "down", desc: "Next subagent", group: "Subagents", cmd: "composer.subagent.down" },
-      { key: "return", desc: "Navigate to subagent", group: "Subagents", cmd: "composer.subagent.select" },
-      { key: "ctrl+d", desc: "Interrupt subagent", group: "Subagents", cmd: "composer.subagent.interrupt" },
     ],
   }))
 

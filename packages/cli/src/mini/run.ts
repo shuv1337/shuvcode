@@ -2,13 +2,13 @@ import { Service } from "@opencode-ai/client/effect"
 import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Model } from "@opencode-ai/schema/model"
-import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { open } from "node:fs/promises"
 import path from "node:path"
 import { Server } from "../services/server"
 import { loadRunAgents, waitForCatalogReady } from "./catalog.shared"
 import { runNonInteractivePrompt } from "./noninteractive"
 import { toolInlineInfo } from "./tool"
+import type { MiniToolPart } from "./types"
 import { UI } from "./ui"
 
 export type RunCommandInput = {
@@ -224,7 +224,7 @@ function isBinaryContent(bytes: Uint8Array) {
   return bytes.reduce((count, byte) => count + Number(byte < 9 || (byte > 13 && byte < 32)), 0) / bytes.length > 0.3
 }
 
-async function renderTool(part: ToolPart) {
+async function renderTool(part: MiniToolPart) {
   const info = toolInlineInfo(part)
   if (info.mode === "block") {
     UI.empty()
@@ -240,7 +240,7 @@ async function renderTool(part: ToolPart) {
   )
 }
 
-async function renderToolError(part: ToolPart) {
+async function renderToolError(part: MiniToolPart) {
   const info = toolInlineInfo(part)
   UI.println(UI.Style.TEXT_NORMAL + "✗", UI.Style.TEXT_NORMAL + `${info.title} failed`)
 }

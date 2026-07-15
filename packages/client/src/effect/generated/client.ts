@@ -16,7 +16,17 @@ const mapClientError = <E>(error: E) =>
 const Endpoint0_0 = (raw: RawClient["server.health"]) => () =>
   raw["health.get"]({}).pipe(Effect.mapError(mapClientError))
 
-const adaptGroup0 = (raw: RawClient["server.health"]) => ({ get: Endpoint0_0(raw) })
+type Endpoint0_1Request = Parameters<RawClient["server.health"]["health.stop"]>[0]
+type Endpoint0_1Input = {
+  readonly instanceID: Endpoint0_1Request["payload"]["instanceID"]
+  readonly targetVersion?: Endpoint0_1Request["payload"]["targetVersion"]
+}
+const Endpoint0_1 = (raw: RawClient["server.health"]) => (input: Endpoint0_1Input) =>
+  raw["health.stop"]({ payload: { instanceID: input["instanceID"], targetVersion: input["targetVersion"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroup0 = (raw: RawClient["server.health"]) => ({ get: Endpoint0_0(raw), stop: Endpoint0_1(raw) })
 
 const Endpoint1_0 = (raw: RawClient["server.server"]) => () =>
   raw["server.get"]({}).pipe(Effect.mapError(mapClientError))
@@ -149,13 +159,13 @@ const Endpoint5_8 = (raw: RawClient["server.session"]) => (input: Endpoint5_8Inp
 type Endpoint5_9Request = Parameters<RawClient["server.session"]["session.move"]>[0]
 type Endpoint5_9Input = {
   readonly sessionID: Endpoint5_9Request["params"]["sessionID"]
-  readonly destination: Endpoint5_9Request["payload"]["destination"]
-  readonly moveChanges?: Endpoint5_9Request["payload"]["moveChanges"]
+  readonly directory: Endpoint5_9Request["payload"]["directory"]
+  readonly workspaceID?: Endpoint5_9Request["payload"]["workspaceID"]
 }
 const Endpoint5_9 = (raw: RawClient["server.session"]) => (input: Endpoint5_9Input) =>
   raw["session.move"]({
     params: { sessionID: input["sessionID"] },
-    payload: { destination: input["destination"], moveChanges: input["moveChanges"] },
+    payload: { directory: input["directory"], workspaceID: input["workspaceID"] },
   }).pipe(Effect.mapError(mapClientError))
 
 type Endpoint5_10Request = Parameters<RawClient["server.session"]["session.prompt"]>[0]

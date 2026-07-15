@@ -164,9 +164,11 @@ packages/llm/src/
     bedrock-converse.ts
     bedrock-event-stream.ts framing for AWS event-stream binary frames
     openai-compatible-chat.ts route that reuses OpenAIChat.protocol, no canonical URL
+    openai-compatible-responses.ts route that reuses OpenAIResponses.protocol, no canonical URL
     utils/                  per-protocol helpers (auth, cache, media, tool-stream, ...)
   providers/
-    openai-compatible.ts    generic compatible helper + family model helpers
+    openai-compatible.ts    generic Chat helper + family model helpers
+    openai-compatible-responses.ts generic Responses helper
     openai-compatible-profile.ts family defaults (deepseek, togetherai, ...)
     azure.ts / amazon-bedrock.ts / cloudflare.ts / github-copilot.ts / google.ts / xai.ts / openai.ts / anthropic.ts / openrouter.ts
   tool.ts                   typed tool() helper

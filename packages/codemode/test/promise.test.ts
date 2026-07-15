@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Effect, Schema } from "effect"
+import { Deferred, Effect, Schema } from "effect"
 import { CodeMode, Tool, toolError } from "../src/index.js"
 
 // Wave 5 acceptance suite: first-class promise values. Un-awaited tool calls start eagerly on
@@ -17,21 +17,73 @@ type Trace = {
 
 const makeTrace = (): Trace => ({ starts: [], active: 0, maxActive: 0, completed: 0, interrupted: 0 })
 
-/** Echoes `id` after `ms` milliseconds, recording start order, live concurrency, and interruption. */
-const sleepyTool = (trace: Trace) =>
+/**
+ * Deterministic tool set: ordering and interruption are structural, never temporal.
+ *
+ * - `echo` settles immediately with its id.
+ * - `gated` blocks until `open` releases the same id. Tool fibers start eagerly at the
+ *   call site, so several gated calls are provably live at once before any `open` runs.
+ * - `pending` never settles; tests assert its interruption instead of racing a timer.
+ *
+ * Real clocks remain only in the wall-clock timeout tests (`timeoutMs`, `stubborn`
+ * cleanup), where elapsed time is the behavior under test.
+ */
+const echoTool = (trace: Trace) =>
   Tool.make({
-    description: "Echo an id after a delay",
-    input: Schema.Struct({ id: Schema.Number, ms: Schema.optionalKey(Schema.Number) }),
+    description: "Echo an id immediately",
+    input: Schema.Struct({ id: Schema.Number }),
     output: Schema.Number,
-    run: ({ id, ms }) =>
+    run: ({ id }) =>
+      Effect.sync(() => {
+        trace.starts.push(id)
+        trace.completed += 1
+        return id
+      }),
+  })
+
+const gatedTool = (trace: Trace, gate: (id: number) => Deferred.Deferred<void>) =>
+  Tool.make({
+    description: "Echo an id once its gate opens",
+    input: Schema.Struct({ id: Schema.Number }),
+    output: Schema.Number,
+    run: ({ id }) =>
       Effect.gen(function* () {
         trace.starts.push(id)
         trace.active += 1
         trace.maxActive = Math.max(trace.maxActive, trace.active)
-        yield* Effect.sleep(ms ?? 20)
+        yield* Deferred.await(gate(id))
         trace.active -= 1
         trace.completed += 1
         return id
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            trace.active -= 1
+            trace.interrupted += 1
+          }),
+        ),
+      ),
+  })
+
+const openTool = (gate: (id: number) => Deferred.Deferred<void>) =>
+  Tool.make({
+    description: "Open the gate for an id",
+    input: Schema.Struct({ id: Schema.Number }),
+    output: Schema.Boolean,
+    run: ({ id }) => Deferred.succeed(gate(id), undefined),
+  })
+
+const pendingTool = (trace: Trace) =>
+  Tool.make({
+    description: "Never settle",
+    input: Schema.Struct({ id: Schema.Number }),
+    output: Schema.Number,
+    run: ({ id }) =>
+      Effect.gen(function* () {
+        trace.starts.push(id)
+        trace.active += 1
+        trace.maxActive = Math.max(trace.maxActive, trace.active)
+        return yield* Effect.never
       }).pipe(
         Effect.onInterrupt(() =>
           Effect.sync(() => {
@@ -58,7 +110,7 @@ const interruptedTool = Tool.make({
 
 const completedTool = (trace: Trace) =>
   Tool.make({
-    description: "Return the number of completed sleepy calls",
+    description: "Return the number of completed calls",
     input: Schema.Struct({}),
     output: Schema.Number,
     run: () => Effect.succeed(trace.completed),
@@ -88,11 +140,22 @@ const run = (
   options: { trace?: Trace; limits?: CodeMode.ExecutionLimits } = {},
 ): Promise<CodeMode.Result> => {
   const trace = options.trace ?? makeTrace()
+  const gates = new Map<number, Deferred.Deferred<void>>()
+  const gate = (id: number): Deferred.Deferred<void> => {
+    const existing = gates.get(id)
+    if (existing) return existing
+    const created = Deferred.makeUnsafe<void>()
+    gates.set(id, created)
+    return created
+  }
   return Effect.runPromise(
     CodeMode.execute({
       tools: {
         host: {
-          sleepy: sleepyTool(trace),
+          echo: echoTool(trace),
+          gated: gatedTool(trace, gate),
+          open: openTool(gate),
+          pending: pendingTool(trace),
           fail: failingTool,
           interrupt: interruptedTool,
           completed: completedTool(trace),
@@ -122,7 +185,7 @@ describe("first-class promise values", () => {
     expect(
       await value(`
         const load = async (id) => {
-          const result = await tools.host.sleepy({ id, ms: 20 })
+          const result = await tools.host.echo({ id })
           return [id, result]
         }
         const first = load(1)
@@ -158,8 +221,10 @@ describe("first-class promise values", () => {
     const trace = makeTrace()
     const result = await value(
       `
-        const a = tools.host.sleepy({ id: 1, ms: 40 })
-        const b = tools.host.sleepy({ id: 2, ms: 40 })
+        const a = tools.host.gated({ id: 1 })
+        const b = tools.host.gated({ id: 2 })
+        await tools.host.open({ id: 1 })
+        await tools.host.open({ id: 2 })
         const rb = await b
         const ra = await a
         return [ra, rb]
@@ -174,7 +239,7 @@ describe("first-class promise values", () => {
 
   test("awaiting the same promise twice settles once and never re-runs the call", async () => {
     const result = await run(`
-      const p = tools.host.sleepy({ id: 7 })
+      const p = tools.host.echo({ id: 7 })
       const x = await p
       const y = await p
       return [x, y]
@@ -182,7 +247,7 @@ describe("first-class promise values", () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value).toEqual([7, 7])
-    expect(result.toolCalls).toStrictEqual([{ name: "host.sleepy" }])
+    expect(result.toolCalls).toStrictEqual([{ name: "host.echo" }])
   })
 
   test("await of a non-promise value passes it through unchanged", async () => {
@@ -193,7 +258,7 @@ describe("first-class promise values", () => {
   })
 
   test("returning an un-awaited tool call resolves it (async-function return semantics)", async () => {
-    expect(await value(`return tools.host.sleepy({ id: 9 })`)).toBe(9)
+    expect(await value(`return tools.host.echo({ id: 9 })`)).toBe(9)
   })
 
   test("typeof a promise is 'object', and console.log renders it sensibly", async () => {
@@ -228,7 +293,7 @@ describe("first-class promise values", () => {
     const trace = makeTrace()
     const result = await run(
       `
-        tools.host.sleepy({ id: 1, ms: 30 })
+        tools.host.pending({ id: 1 })
         return "done"
       `,
       { trace },
@@ -307,7 +372,7 @@ describe("first-class promise values", () => {
     const result = await run(
       `
         const run = async () => {
-          await tools.host.sleepy({ id: 1, ms: 60000 })
+          await tools.host.pending({ id: 1 })
           tools.host.fail({})
         }
         run()
@@ -373,7 +438,7 @@ describe("first-class promise values", () => {
     const trace = makeTrace()
     const result = await run(
       `
-        tools.host.sleepy({ id: 1, ms: 1_000 })
+        tools.host.pending({ id: 1 })
         throw new Error("boom")
       `,
       { trace },
@@ -392,8 +457,8 @@ describe("first-class promise values", () => {
       await value(
         `
           const launch = async () => {
-            tools.host.sleepy({ id: 1, ms: 60000 })
-            Promise.all([tools.host.sleepy({ id: 2, ms: 60000 })])
+            tools.host.pending({ id: 1 })
+            Promise.all([tools.host.pending({ id: 2 })])
             return "returned"
           }
           return await launch()
@@ -411,7 +476,7 @@ describe("first-class promise values", () => {
 
 describe("promises at data boundaries", () => {
   test("returning an un-awaited promise inside data is a clear await-hinting diagnostic", async () => {
-    const diagnostic = await error(`return { result: tools.host.sleepy({ id: 1 }) }`)
+    const diagnostic = await error(`return { result: tools.host.echo({ id: 1 }) }`)
     expect(diagnostic.kind).toBe("InvalidDataValue")
     expect(diagnostic.message).toContain("un-awaited Promise")
     expect(diagnostic.message).toContain("await tools.ns.tool(...)")
@@ -427,7 +492,7 @@ describe("promises at data boundaries", () => {
     const trace = makeTrace()
     const result = await run(
       `
-        const pending = tools.host.sleepy({ id: 1, ms: 60_000 })
+        const pending = tools.host.pending({ id: 1 })
         return { pending }
       `,
       { trace, limits: { timeoutMs: 100 } },
@@ -440,7 +505,7 @@ describe("promises at data boundaries", () => {
   })
 
   test("passing an un-awaited promise as a tool argument is a clear diagnostic", async () => {
-    const diagnostic = await error(`return await tools.host.sleepy({ id: tools.host.sleepy({ id: 1 }) })`)
+    const diagnostic = await error(`return await tools.host.echo({ id: tools.host.echo({ id: 1 }) })`)
     expect(diagnostic.kind).toBe("InvalidDataValue")
     expect(diagnostic.message).toContain("un-awaited Promise")
   })
@@ -475,8 +540,10 @@ describe("Promise.all over arbitrary arrays", () => {
     expect(
       await value(
         `
-          const first = Promise.all([tools.host.sleepy({ id: 1, ms: 40 })])
-          const second = Promise.all([tools.host.sleepy({ id: 2, ms: 40 })])
+          const first = Promise.all([tools.host.gated({ id: 1 })])
+          const second = Promise.all([tools.host.gated({ id: 2 })])
+          await tools.host.open({ id: 1 })
+          await tools.host.open({ id: 2 })
           return [await first, await second]
         `,
         { trace },
@@ -502,19 +569,19 @@ describe("Promise.all over arbitrary arrays", () => {
 
   test("awaiting an aggregate repeatedly does not rerun its members", async () => {
     const result = await run(`
-      const aggregate = Promise.all([tools.host.sleepy({ id: 7 })])
+      const aggregate = Promise.all([tools.host.echo({ id: 7 })])
       return [await aggregate, await aggregate]
     `)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value).toEqual([[7], [7]])
-    expect(result.toolCalls).toStrictEqual([{ name: "host.sleepy" }])
+    expect(result.toolCalls).toStrictEqual([{ name: "host.echo" }])
   })
 
   test("mixes promises and plain values, preserving order", async () => {
     expect(
       await value(`
-      return await Promise.all([tools.host.sleepy({ id: 1 }), "plain", tools.host.sleepy({ id: 2 }), 42])
+      return await Promise.all([tools.host.echo({ id: 1 }), "plain", tools.host.echo({ id: 2 }), 42])
     `),
     ).toEqual([1, "plain", 2, 42])
   })
@@ -523,9 +590,9 @@ describe("Promise.all over arbitrary arrays", () => {
     expect(
       await value(`
       const calls = []
-      calls.push(tools.host.sleepy({ id: 1 }))
+      calls.push(tools.host.echo({ id: 1 }))
       calls.push(7)
-      const more = [tools.host.sleepy({ id: 2 })]
+      const more = [tools.host.echo({ id: 2 })]
       const batch = [...calls, ...more, "x"]
       return await Promise.all(batch)
     `),
@@ -537,7 +604,9 @@ describe("Promise.all over arbitrary arrays", () => {
     const result = await value(
       `
         const ids = [1, 2, 3, 4]
-        return await Promise.all(ids.map((id) => tools.host.sleepy({ id, ms: 40 })))
+        const calls = ids.map((id) => tools.host.gated({ id }))
+        for (const id of ids) await tools.host.open({ id })
+        return await Promise.all(calls)
       `,
       { trace },
     )
@@ -552,7 +621,9 @@ describe("Promise.all over arbitrary arrays", () => {
     const result = await value(
       `
         const ids = [1, 2, 3, 4]
-        return await Promise.all(ids.map(async (id) => await tools.host.sleepy({ id, ms: 40 })))
+        const calls = ids.map(async (id) => await tools.host.gated({ id }))
+        for (const id of ids) await tools.host.open({ id })
+        return await Promise.all(calls)
       `,
       { trace },
     )
@@ -566,7 +637,9 @@ describe("Promise.all over arbitrary arrays", () => {
       `
         const ids = []
         for (let i = 0; i < 20; i += 1) ids.push(i)
-        const results = await Promise.all(ids.map((id) => tools.host.sleepy({ id, ms: 10 })))
+        const calls = ids.map((id) => tools.host.gated({ id }))
+        for (const id of ids) await tools.host.open({ id })
+        const results = await Promise.all(calls)
         return results.length
       `,
       { trace },
@@ -582,7 +655,7 @@ describe("Promise.all over arbitrary arrays", () => {
   test("rejects with the first failure, catchable in-program", async () => {
     const result = await run(`
       try {
-        await Promise.all([tools.host.sleepy({ id: 1 }), tools.host.fail({})])
+        await Promise.all([tools.host.echo({ id: 1 }), tools.host.fail({})])
         return "no"
       } catch (e) {
         return e.message
@@ -601,7 +674,7 @@ describe("Promise.all over arbitrary arrays", () => {
         `
           try {
             await Promise.all([
-              tools.host.sleepy({ id: 1, ms: 100 }),
+              tools.host.pending({ id: 1 }),
               tools.host.fail({}),
             ])
             return -1
@@ -623,11 +696,12 @@ describe("Promise.all over arbitrary arrays", () => {
     expect(
       await value(
         `
-          const slow = tools.host.sleepy({ id: 1, ms: 40 })
+          const slow = tools.host.gated({ id: 1 })
           try {
             await Promise.all([slow, tools.host.fail({})])
             return "no"
           } catch {}
+          await tools.host.open({ id: 1 })
           return await slow
         `,
         { trace },
@@ -643,7 +717,7 @@ describe("Promise.all over arbitrary arrays", () => {
       await value(
         `
           const failLater = async () => {
-            await tools.host.sleepy({ id: 1, ms: 40 })
+            await tools.host.pending({ id: 1 })
             throw new Error("later")
           }
           const aggregate = Promise.all([Promise.reject(new Error("first")), failLater()])
@@ -668,7 +742,7 @@ describe("Promise.all over arbitrary arrays", () => {
 
   test("exceeding maxToolCalls inside Promise.all is a ToolCallLimitExceeded diagnostic", async () => {
     const diagnostic = await error(
-      `return await Promise.all([tools.host.sleepy({ id: 1 }), tools.host.sleepy({ id: 2 }), tools.host.sleepy({ id: 3 })])`,
+      `return await Promise.all([tools.host.echo({ id: 1 }), tools.host.echo({ id: 2 }), tools.host.echo({ id: 3 })])`,
       { limits: { maxToolCalls: 2 } },
     )
     expect(diagnostic.kind).toBe("ToolCallLimitExceeded")
@@ -680,7 +754,7 @@ describe("Promise.allSettled", () => {
     expect(
       await value(`
       return await Promise.allSettled([
-        tools.host.sleepy({ id: 5 }),
+        tools.host.echo({ id: 5 }),
         tools.host.fail({}),
         "plain",
         Promise.reject(new Error("boom")),
@@ -711,8 +785,8 @@ describe("Promise.race", () => {
     const trace = makeTrace()
     const result = await value(
       `
-        const fast = tools.host.sleepy({ id: 1, ms: 10 })
-        const slow = tools.host.sleepy({ id: 2, ms: 40 })
+        const fast = tools.host.echo({ id: 1 })
+        const slow = tools.host.pending({ id: 2 })
         return await Promise.race([fast, slow])
       `,
       { trace },
@@ -726,9 +800,10 @@ describe("Promise.race", () => {
   test("a direct loser remains awaitable after the race settles", async () => {
     expect(
       await value(`
-      const fast = tools.host.sleepy({ id: 1, ms: 10 })
-      const slow = tools.host.sleepy({ id: 2, ms: 40 })
+      const fast = tools.host.echo({ id: 1 })
+      const slow = tools.host.gated({ id: 2 })
       const winner = await Promise.race([fast, slow])
+      await tools.host.open({ id: 2 })
       return { winner, loser: await slow }
     `),
     ).toEqual({ winner: 1, loser: 2 })
@@ -740,8 +815,8 @@ describe("Promise.race", () => {
       await value(
         `
           const nested = Promise.all([
-            tools.host.sleepy({ id: 1, ms: 40 }),
-            tools.host.sleepy({ id: 2, ms: 40 }),
+            tools.host.pending({ id: 1 }),
+            tools.host.pending({ id: 2 }),
           ])
           return await Promise.race(["immediate", nested])
         `,
@@ -757,7 +832,7 @@ describe("Promise.race", () => {
     expect(
       await value(`
       try {
-        await Promise.race([tools.host.fail({}), tools.host.sleepy({ id: 1, ms: 40 })])
+        await Promise.race([tools.host.fail({}), tools.host.pending({ id: 1 })])
         return "no"
       } catch (e) {
         return e.message
@@ -768,9 +843,9 @@ describe("Promise.race", () => {
 
   test("a plain value wins over pending promises", async () => {
     const trace = makeTrace()
-    expect(
-      await value(`return await Promise.race([tools.host.sleepy({ id: 1, ms: 40 }), "immediate"])`, { trace }),
-    ).toBe("immediate")
+    expect(await value(`return await Promise.race([tools.host.pending({ id: 1 }), "immediate"])`, { trace })).toBe(
+      "immediate",
+    )
     expect(trace.completed).toBe(0)
     expect(trace.interrupted).toBe(1)
   })
@@ -793,7 +868,7 @@ describe("Promise.resolve / Promise.reject", () => {
   test("resolve wraps plain values and passes promises through", async () => {
     expect(await value(`return await Promise.resolve(42)`)).toBe(42)
     expect(await value(`return await Promise.resolve(Promise.resolve("nested"))`)).toBe("nested")
-    expect(await value(`return await Promise.resolve(tools.host.sleepy({ id: 3 }))`)).toBe(3)
+    expect(await value(`return await Promise.resolve(tools.host.echo({ id: 3 }))`)).toBe(3)
     expect(await value(`const promise = Promise.resolve(1); return [promise].includes(Promise.resolve(promise))`)).toBe(
       true,
     )
@@ -816,7 +891,7 @@ describe("Promise.resolve / Promise.reject", () => {
     expect(
       await value(`
         const rejected = Promise.reject(new Error("handled"))
-        await tools.host.sleepy({ id: 1 })
+        await tools.host.echo({ id: 1 })
         try {
           await rejected
           return "no"
@@ -846,8 +921,8 @@ describe("timeout interruption of forked calls", () => {
     const trace = makeTrace()
     const result = await run(
       `
-        const a = tools.host.sleepy({ id: 1, ms: 60000 })
-        const b = tools.host.sleepy({ id: 2, ms: 60000 })
+        const a = tools.host.pending({ id: 1 })
+        const b = tools.host.pending({ id: 2 })
         return await a
       `,
       { trace, limits: { timeoutMs: 100 } },
@@ -864,7 +939,7 @@ describe("timeout interruption of forked calls", () => {
   test("the timeout also interrupts calls inside Promise.all", async () => {
     const trace = makeTrace()
     const result = await run(
-      `return await Promise.all([tools.host.sleepy({ id: 1, ms: 60000 }), tools.host.sleepy({ id: 2, ms: 60000 })])`,
+      `return await Promise.all([tools.host.pending({ id: 1 }), tools.host.pending({ id: 2 })])`,
       { trace, limits: { timeoutMs: 100 } },
     )
     expect(result.ok).toBe(false)
@@ -875,7 +950,7 @@ describe("timeout interruption of forked calls", () => {
 
   test("a non-settling race loser cannot hold the execution to the timeout", async () => {
     const trace = makeTrace()
-    const result = await run(`return await Promise.race(["winner", tools.host.sleepy({ id: 1, ms: 60000 })])`, {
+    const result = await run(`return await Promise.race(["winner", tools.host.pending({ id: 1 })])`, {
       trace,
       limits: { timeoutMs: 100 },
     })
@@ -940,8 +1015,8 @@ describe("promise chaining", () => {
     expect(
       await value(`
         return await tools.host
-          .sleepy({ id: 2 })
-          .then((id) => tools.host.sleepy({ id: id + 1 }))
+          .echo({ id: 2 })
+          .then((id) => tools.host.echo({ id: id + 1 }))
           .then((id) => id * 10)
       `),
     ).toBe(30)
@@ -966,7 +1041,7 @@ describe("promise chaining", () => {
       await value(`
         return [
           await tools.host.fail({}).catch((error) => error.message),
-          await tools.host.sleepy({ id: 4 }).catch(() => "unused"),
+          await tools.host.echo({ id: 4 }).catch(() => "unused"),
         ]
       `),
     ).toEqual(["Lookup refused", 4])
@@ -976,7 +1051,7 @@ describe("promise chaining", () => {
     expect(
       await value(`
         const events = []
-        const result = await tools.host.sleepy({ id: 5 }).finally(() => events.push("cleanup"))
+        const result = await tools.host.echo({ id: 5 }).finally(() => events.push("cleanup"))
         return [result, events]
       `),
     ).toEqual([5, ["cleanup"]])
@@ -1008,13 +1083,14 @@ describe("promise chaining", () => {
     expect(result.warnings).toBeUndefined()
   })
 
-  test("non-plain-function handlers fail loudly instead of being ignored", async () => {
-    const diagnostic = await error(`return await tools.host.sleepy({ id: 1 }).then(tools.host.completed)`)
-    expect(diagnostic.message).toContain("Promise.prototype.then handlers must be plain functions")
+  test("unsupported callable handlers fail loudly with a wrap hint", async () => {
+    const diagnostic = await error(`return await tools.host.echo({ id: 1 }).then(tools.host.completed)`)
+    expect(diagnostic.message).toContain("Promise.prototype.then cannot use this callable as a handler")
+    expect(diagnostic.message).toContain("wrap it in an arrow function")
   })
 
   test("chaining methods are opaque references until called", async () => {
-    expect(await value(`return typeof tools.host.sleepy({ id: 1 }).then`)).toBe("function")
+    expect(await value(`return typeof tools.host.echo({ id: 1 }).then`)).toBe("function")
   })
 })
 
@@ -1039,7 +1115,7 @@ describe("combinator settlement timing", () => {
     // cannot beat it into rejection.
     expect(
       await value(`
-        const pending = tools.host.sleepy({ id: 9, ms: 60000 })
+        const pending = tools.host.pending({ id: 9 })
         const winner = await Promise.race([Promise.all([Promise.resolve(1)]), Promise.resolve(2)])
         try {
           const raced = await Promise.race([Promise.all([Promise.reject("x"), pending]), Promise.resolve("ok")])
@@ -1054,7 +1130,7 @@ describe("combinator settlement timing", () => {
 
 describe("unsupported promise surface", () => {
   test("other property reads on a promise hint at the missing await", async () => {
-    const diagnostic = await error(`return tools.host.sleepy({ id: 1 }).value`)
+    const diagnostic = await error(`return tools.host.echo({ id: 1 }).value`)
     expect(diagnostic.kind).toBe("InvalidDataValue")
     expect(diagnostic.message).toContain("un-awaited Promise")
     expect(diagnostic.message).toContain("await it first")
@@ -1074,8 +1150,8 @@ describe("Promise.any", () => {
       `
         const winner = await Promise.any([
           tools.host.fail({}),
-          tools.host.sleepy({ id: 1, ms: 5 }),
-          tools.host.sleepy({ id: 2, ms: 60000 }),
+          tools.host.echo({ id: 1 }),
+          tools.host.pending({ id: 2 }),
         ])
         return winner
       `,
@@ -1141,7 +1217,7 @@ describe("promise construction", () => {
           const id = await gate
           return id * 2
         })()
-        openGate(await tools.host.sleepy({ id: 21, ms: 5 }))
+        openGate(await tools.host.echo({ id: 21 }))
         return await worker
       `),
     ).toBe(42)
@@ -1151,7 +1227,7 @@ describe("promise construction", () => {
     expect(
       await value(`
         const bridged = new Promise((resolve, reject) => {
-          tools.host.sleepy({ id: 7, ms: 5 }).then(resolve, reject)
+          tools.host.echo({ id: 7 }).then(resolve, reject)
         })
         return await bridged
       `),
@@ -1163,7 +1239,7 @@ describe("promise construction", () => {
       await value(`
         let settle
         const manual = new Promise((resolve) => { settle = resolve })
-        const race = Promise.race([manual, tools.host.sleepy({ id: 3, ms: 60000 })])
+        const race = Promise.race([manual, tools.host.pending({ id: 3 })])
         const all = Promise.all([manual, "plain"])
         const any = Promise.any([manual, new Promise(() => {})])
         settle("manual")
@@ -1193,7 +1269,7 @@ describe("promise construction", () => {
     expect(
       await value(`
         const result = new Promise(async (resolve) => {
-          const id = await tools.host.sleepy({ id: 5, ms: 5 })
+          const id = await tools.host.echo({ id: 5 })
           resolve(id * 2)
         })
         return await result

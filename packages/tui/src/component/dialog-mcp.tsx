@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { useData } from "../context/data"
+import { Keymap } from "../context/keymap"
 import { pipe, sortBy } from "remeda"
 import { DialogSelect } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
@@ -11,7 +12,6 @@ import { useToast } from "../ui/toast"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { useConfig } from "../config"
 import { getScrollAcceleration } from "../util/scroll"
-import { useBindings } from "../keymap"
 
 // Sort by how much attention a server needs: auth prompts first, then failures,
 // then healthy servers, and intentionally-off servers last.
@@ -134,8 +134,9 @@ function DialogMcpError(props: { server: McpServer; onBack: () => void }) {
       .catch(toast.error)
   }
 
-  useBindings(() => ({
-    bindings: [{ key: "escape", desc: "Back to MCP servers", group: "Dialog", cmd: props.onBack }],
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [{ bind: "escape", title: "Back to MCP servers", group: "Dialog", run: props.onBack }],
   }))
 
   useKeyboard((event) => {

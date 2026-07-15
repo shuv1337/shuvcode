@@ -9,40 +9,33 @@ import {
   outputTypeScript,
 } from "./tool-schema.js"
 import { isDefinition as isToolDefinition, type Definition } from "./tool.js"
+import type { Tools } from "./tools.js"
 import {
-  SandboxDate,
-  SandboxMap,
-  SandboxPromise,
-  SandboxRegExp,
-  SandboxSet,
-  SandboxURL,
-  SandboxURLSearchParams,
+  CodeModeDate,
+  CodeModeMap,
+  CodeModePromise,
+  CodeModeRegExp,
+  CodeModeSet,
+  CodeModeURL,
+  CodeModeURLSearchParams,
 } from "./values.js"
 
 const estimateTokens = (input: string) => Math.max(0, Math.round(input.length / 4))
 
-export type HostTool<R = never> = (...args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
+export type Services<T> = ServicesOf<T, []>
 
-export type HostTools<R = never> = {
-  [name: string]: HostTool<R> | Definition<R> | HostTools<R>
-}
-
-export type Services<Tools> = ServicesOf<Tools, []>
-
-type ServicesOf<Tools, Depth extends ReadonlyArray<unknown>> = Depth["length"] extends 8
+type ServicesOf<T, Depth extends ReadonlyArray<unknown>> = Depth["length"] extends 8
   ? never
-  : Tools extends (...args: Array<unknown>) => Effect.Effect<unknown, unknown, infer R>
+  : T extends {
+        readonly _tag: "CodeModeTool"
+        readonly run: (input: unknown) => Effect.Effect<unknown, unknown, infer R>
+      }
     ? R
-    : Tools extends {
-          readonly _tag: "CodeModeTool"
-          readonly run: (input: unknown) => Effect.Effect<unknown, unknown, infer R>
-        }
-      ? R
-      : Tools extends object
-        ? string extends keyof Tools
-          ? ServicesOf<Tools[string], [...Depth, unknown]>
-          : ServicesOf<Tools[keyof Tools], [...Depth, unknown]>
-        : never
+    : T extends object
+      ? string extends keyof T
+        ? ServicesOf<T[string], [...Depth, unknown]>
+        : ServicesOf<T[keyof T], [...Depth, unknown]>
+      : never
 
 export type ToolCall = {
   readonly name: string
@@ -125,7 +118,7 @@ export class ToolRuntimeError extends Error {
   }
 }
 
-const isDefinition = <R>(value: HostTool<R> | Definition<R> | HostTools<R>): value is Definition<R> =>
+const isDefinition = <R>(value: Definition<R> | Tools<R>): value is Definition<R> =>
   isToolDefinition<R>(value)
 
 const runHost = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, ToolError, R> =>
@@ -141,16 +134,16 @@ const blockedMemberNames = new Set(["__proto__", "constructor", "prototype"])
 
 export const isBlockedMember = (name: string): boolean => blockedMemberNames.has(name)
 
-// Checkpoint mode preserves sandbox values; boundary mode JSON-normalizes them.
-export const copyIn = (value: unknown, label: string, preserveSandboxValues = false): unknown =>
-  copyBounded(value, label, 0, new Set(), preserveSandboxValues)
+// Checkpoint mode preserves CodeMode values; boundary mode JSON-normalizes them.
+export const copyIn = (value: unknown, label: string, preserveCodeModeValues = false): unknown =>
+  copyBounded(value, label, 0, new Set(), preserveCodeModeValues)
 
 const copyBounded = (
   value: unknown,
   label: string,
   depth: number,
   seen: Set<object>,
-  preserveSandboxValues: boolean,
+  preserveCodeModeValues: boolean,
 ): unknown => {
   if (depth > MAX_VALUE_DEPTH) {
     throw new ToolRuntimeError("InvalidDataValue", `${label} exceeds the maximum value depth of ${MAX_VALUE_DEPTH}.`)
@@ -169,55 +162,55 @@ const copyBounded = (
     throw new ToolRuntimeError("InvalidDataValue", `${label} must contain data only.`)
   }
 
-  if (value instanceof SandboxPromise) {
+  if (value instanceof CodeModePromise) {
     throw new ToolRuntimeError(
       "InvalidDataValue",
       `${label} contains an un-awaited Promise; await tool calls (e.g. \`const result = await tools.ns.tool(...)\`) before using their results.`,
     )
   }
 
-  if (preserveSandboxValues) {
+  if (preserveCodeModeValues) {
     if (
-      value instanceof SandboxDate ||
-      value instanceof SandboxRegExp ||
-      value instanceof SandboxMap ||
-      value instanceof SandboxSet ||
-      value instanceof SandboxURL ||
-      value instanceof SandboxURLSearchParams
+      value instanceof CodeModeDate ||
+      value instanceof CodeModeRegExp ||
+      value instanceof CodeModeMap ||
+      value instanceof CodeModeSet ||
+      value instanceof CodeModeURL ||
+      value instanceof CodeModeURLSearchParams
     ) {
       return value
     }
-    if (value instanceof Date) return new SandboxDate(value.getTime())
-    if (value instanceof RegExp) return new SandboxRegExp(value.source, value.flags)
+    if (value instanceof Date) return new CodeModeDate(value.getTime())
+    if (value instanceof RegExp) return new CodeModeRegExp(value.source, value.flags)
     if (value instanceof Map) {
-      const wrapped = new SandboxMap()
+      const wrapped = new CodeModeMap()
       for (const [key, item] of value.entries()) {
         wrapped.map.set(copyBounded(key, label, depth + 1, seen, true), copyBounded(item, label, depth + 1, seen, true))
       }
       return wrapped
     }
     if (value instanceof Set) {
-      const wrapped = new SandboxSet()
+      const wrapped = new CodeModeSet()
       for (const item of value.values()) wrapped.set.add(copyBounded(item, label, depth + 1, seen, true))
       return wrapped
     }
-    if (value instanceof URL) return new SandboxURL(new URL(value.href))
-    if (value instanceof URLSearchParams) return new SandboxURLSearchParams(new URLSearchParams(value))
+    if (value instanceof URL) return new CodeModeURL(new URL(value.href))
+    if (value instanceof URLSearchParams) return new CodeModeURLSearchParams(new URLSearchParams(value))
   }
 
-  if (value instanceof SandboxDate) {
+  if (value instanceof CodeModeDate) {
     return Number.isFinite(value.time) ? new Date(value.time).toISOString() : null
   }
   if (value instanceof Date) {
     return Number.isFinite(value.getTime()) ? value.toISOString() : null
   }
-  if (value instanceof SandboxURL) return value.url.href
+  if (value instanceof CodeModeURL) return value.url.href
   if (value instanceof URL) return value.href
   if (
-    value instanceof SandboxRegExp ||
-    value instanceof SandboxMap ||
-    value instanceof SandboxSet ||
-    value instanceof SandboxURLSearchParams ||
+    value instanceof CodeModeRegExp ||
+    value instanceof CodeModeMap ||
+    value instanceof CodeModeSet ||
+    value instanceof CodeModeURLSearchParams ||
     value instanceof RegExp ||
     value instanceof Map ||
     value instanceof Set ||
@@ -233,8 +226,8 @@ const copyBounded = (
   seen.add(value)
 
   if (Array.isArray(value)) {
-    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveSandboxValues))
-    if (preserveSandboxValues) {
+    const copied = value.map((item) => copyBounded(item, label, depth + 1, seen, preserveCodeModeValues))
+    if (preserveCodeModeValues) {
       // Checkpoint copies retain array metadata that boundary copies omit.
       for (const [key, item] of Object.entries(value)) {
         if (Object.hasOwn(copied, key)) continue
@@ -258,7 +251,7 @@ const copyBounded = (
     if (isBlockedMember(key)) {
       throw new ToolRuntimeError("InvalidDataValue", `${label} contains blocked property '${key}'.`)
     }
-    copied[key] = copyBounded(item, label, depth + 1, seen, preserveSandboxValues)
+    copied[key] = copyBounded(item, label, depth + 1, seen, preserveCodeModeValues)
   }
   seen.delete(value)
   return copied
@@ -270,7 +263,8 @@ export const copyOut = (value: unknown, undefinedAsNull = false): unknown => {
     return null
   }
   if (Array.isArray(value)) {
-    return value.map((item) => copyOut(item, undefinedAsNull))
+    // Array.from densifies holes so sparse arrays normalize at the boundary like JSON does.
+    return Array.from(value, (item) => copyOut(item, undefinedAsNull))
   }
 
   if (value !== null && typeof value === "object" && !(value instanceof ToolReference)) {
@@ -281,13 +275,13 @@ export const copyOut = (value: unknown, undefinedAsNull = false): unknown => {
 }
 
 const definitions = <R>(
-  tools: HostTools<R>,
+  tools: Tools<R>,
   path: ReadonlyArray<string> = [],
 ): Array<{ path: string; definition: Definition<R> }> =>
   Object.entries(tools).flatMap(([name, value]) => {
     const next = [...path, name]
     if (isDefinition(value)) return [{ path: next.join("."), definition: value }]
-    return typeof value === "function" ? [] : definitions(value, next)
+    return definitions(value, next)
   })
 
 const describeDefinition = <R>(path: string, definition: Definition<R>): ToolDescription => ({
@@ -296,7 +290,7 @@ const describeDefinition = <R>(path: string, definition: Definition<R>): ToolDes
   signature: `${toolExpression(path)}(input: ${inputTypeScript(definition, true)}): Promise<${outputTypeScript(definition, true)}>`,
 })
 
-const visibleDefinitions = <R>(tools: HostTools<R>) =>
+const visibleDefinitions = <R>(tools: Tools<R>) =>
   definitions(tools).map(({ path, definition }) => ({
     path,
     definition,
@@ -414,11 +408,11 @@ const toSearchEntry = <R>(path: string, definition: Definition<R>, description: 
     .toLowerCase(),
 })
 
-export const searchIndex = <R>(tools: HostTools<R>): ReadonlyArray<SearchEntry> =>
+export const searchIndex = <R>(tools: Tools<R>): ReadonlyArray<SearchEntry> =>
   visibleDefinitions(tools).map(({ path, definition, description }) => toSearchEntry(path, definition, description))
 
 // Budget signatures round-robin so every namespace remains visible.
-export const prepare = <R>(tools: HostTools<R>, catalogBudget = defaultCatalogBudget): DiscoveryPlan => {
+export const prepare = <R>(tools: Tools<R>, catalogBudget = defaultCatalogBudget): DiscoveryPlan => {
   if (!Number.isSafeInteger(catalogBudget) || catalogBudget < 0) {
     throw new RangeError("discovery.catalogBudget must be a non-negative safe integer")
   }
@@ -561,43 +555,33 @@ export const prepare = <R>(tools: HostTools<R>, catalogBudget = defaultCatalogBu
   }
 }
 
-const namespaceKeys = <R>(tools: HostTools<R>, path: ReadonlyArray<string>): ReadonlyArray<string> => {
-  let value: HostTool<R> | Definition<R> | HostTools<R> = tools
+const namespaceKeys = <R>(tools: Tools<R>, path: ReadonlyArray<string>): ReadonlyArray<string> => {
+  let value: Definition<R> | Tools<R> = tools
   for (const segment of path) {
-    if (
-      isBlockedMember(segment) ||
-      typeof value === "function" ||
-      isDefinition(value) ||
-      !Object.hasOwn(value, segment)
-    ) {
+    if (isBlockedMember(segment) || isDefinition(value) || !Object.hasOwn(value, segment)) {
       throw new ToolRuntimeError("UnknownTool", `Unknown tool namespace '${path.join(".")}'.`, [
         "Object.keys(tools) lists the available namespaces; search({ query }) finds described tools.",
       ])
     }
-    value = value[segment] as HostTool<R> | Definition<R> | HostTools<R>
+    value = value[segment] as Definition<R> | Tools<R>
   }
-  if (typeof value === "function" || isDefinition(value)) return []
+  if (isDefinition(value)) return []
   return Object.keys(value)
 }
 
-const resolve = <R>(tools: HostTools<R>, path: ReadonlyArray<string>): HostTool<R> | Definition<R> => {
-  let value: HostTool<R> | Definition<R> | HostTools<R> = tools
+const resolve = <R>(tools: Tools<R>, path: ReadonlyArray<string>): Definition<R> => {
+  let value: Definition<R> | Tools<R> = tools
 
   for (const segment of path) {
-    if (
-      isBlockedMember(segment) ||
-      typeof value === "function" ||
-      isDefinition(value) ||
-      !Object.hasOwn(value, segment)
-    ) {
+    if (isBlockedMember(segment) || isDefinition(value) || !Object.hasOwn(value, segment)) {
       throw new ToolRuntimeError("UnknownTool", `Unknown tool '${path.join(".")}'.`, [
         "Use search({ query }) to find available described tools.",
       ])
     }
-    value = value[segment] as HostTool<R> | Definition<R> | HostTools<R>
+    value = value[segment] as Definition<R> | Tools<R>
   }
 
-  if (typeof value !== "function" && !isDefinition(value)) {
+  if (!isDefinition(value)) {
     throw new ToolRuntimeError("UnknownTool", `Tool '${path.join(".")}' is not callable.`)
   }
 
@@ -613,7 +597,7 @@ export type ToolRuntime<R = never> = {
 }
 
 export const make = <R>(
-  tools: HostTools<R>,
+  tools: Tools<R>,
   maxToolCalls: number | undefined,
   searchIndex: ReadonlyArray<SearchEntry>,
   hooks?: ToolCallHooks<R>,
@@ -700,14 +684,7 @@ export const make = <R>(
         const name = path.join(".")
         const externalArgs = args.map((arg) => copyOut(copyIn(arg, `Arguments for tool '${name}'`)))
         const tool = resolve(tools, path)
-        if (isDefinition(tool)) return yield* invokeDefinition(name, tool, externalArgs)
-        const index = yield* recordAndObserve(name, externalArgs)
-        return yield* observeEnd(
-          Effect.gen(function* () {
-            return yield* decodeOutput(yield* runHost(Effect.suspend(() => tool(...externalArgs))), name)
-          }),
-          { index, name, input: externalArgs },
-        )
+        return yield* invokeDefinition(name, tool, externalArgs)
       }),
   }
 }
