@@ -43,6 +43,7 @@ const it = testEffect(
       EventV2.node,
       ProjectDirectories.node,
       Project.node,
+      SessionV2.node,
       SessionProjector.node,
       SessionStore.node,
     ]),
@@ -137,7 +138,6 @@ describe("MoveSession", () => {
       yield* Effect.promise(() => initRepo(root.path))
       const source = abs(yield* Effect.promise(() => fs.realpath(root.path)))
       const destination = abs(path.join(source, "packages"))
-      yield* Effect.promise(() => fs.mkdir(destination))
       yield* Effect.promise(() => fs.writeFile(path.join(source, "tracked.txt"), "changed\n"))
       yield* Effect.promise(() => fs.writeFile(path.join(source, "untracked.txt"), "new\n"))
 
@@ -164,8 +164,14 @@ describe("MoveSession", () => {
         .run()
         .pipe(Effect.orDie)
 
+      const missing = yield* SessionV2.Service.use((service) =>
+        service.move({ sessionID, directory: abs("packages") }).pipe(Effect.flip),
+      )
+      expect(missing._tag).toBe("Session.DestinationNotFoundError")
+      yield* Effect.promise(() => fs.mkdir(destination))
+
       yield* MoveSession.Service.use((service) =>
-        service.moveSession({ sessionID, destination: { directory: destination }, moveChanges: true }),
+        service.moveSession({ sessionID, destination: { directory: abs("packages") }, moveChanges: true }),
       )
 
       expect(yield* Effect.promise(() => fs.readFile(path.join(source, "tracked.txt"), "utf8"))).toBe("changed\n")
@@ -177,6 +183,58 @@ describe("MoveSession", () => {
           .where(eq(SessionTable.id, sessionID))
           .get(),
       ).toEqual({ directory: destination, path: "packages" })
+    }),
+  )
+
+  it.live("moves a session to another project", () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+      )
+      yield* Effect.promise(() => initRepo(root.path))
+      const source = abs(yield* Effect.promise(() => fs.realpath(root.path)))
+      const destination = abs(`${root.path}-other-project`)
+      yield* Effect.acquireRelease(
+        Effect.promise(() => fs.mkdir(destination, { recursive: true })),
+        () => Effect.promise(() => fs.rm(destination, { recursive: true, force: true })),
+      )
+
+      const projectID = (yield* Project.Service.use((service) => service.resolve(source))).id
+      const destinationProjectID = (yield* Project.Service.use((service) => service.resolve(destination))).id
+      const sessionID = SessionV2.ID.make("ses_move_project")
+      const { db } = yield* Database.Service
+      yield* db
+        .insert(ProjectTable)
+        .values({ id: projectID, worktree: source, sandboxes: [], time_created: 1, time_updated: 1 })
+        .run()
+        .pipe(Effect.orDie)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: projectID,
+          slug: "move-project",
+          directory: source,
+          title: "move project",
+          version: "test",
+          time_created: 1,
+          time_updated: 1,
+        })
+        .run()
+        .pipe(Effect.orDie)
+
+      yield* SessionV2.Service.use((service) =>
+        service.move({ sessionID, directory: destination }),
+      )
+
+      expect(
+        yield* db
+          .select({ projectID: SessionTable.project_id, directory: SessionTable.directory })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, sessionID))
+          .get(),
+      ).toEqual({ projectID: destinationProjectID, directory: destination })
     }),
   )
 

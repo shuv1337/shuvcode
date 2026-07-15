@@ -43,6 +43,7 @@ import { SkillV2 } from "./skill"
 import { Job } from "./job"
 import { CommandV2 } from "./command"
 import { Shell } from "./shell"
+import { Global } from "./global"
 import { Shell as ShellSchema } from "@opencode-ai/schema/shell"
 import { KeyedMutex } from "./effect/keyed-mutex"
 import { fileURLToPath } from "url"
@@ -146,6 +147,16 @@ export class BusyError extends Schema.TaggedErrorClass<BusyError>()("Session.Bus
 export class SkillNotFoundError extends Schema.TaggedErrorClass<SkillNotFoundError>()("Session.SkillNotFoundError", {
   skill: SkillV2.ID,
 }) {}
+
+export class DestinationNotFoundError extends Schema.TaggedErrorClass<DestinationNotFoundError>()(
+  "Session.DestinationNotFoundError",
+  { directory: AbsolutePath },
+) {}
+
+export class DestinationNotDirectoryError extends Schema.TaggedErrorClass<DestinationNotDirectoryError>()(
+  "Session.DestinationNotDirectoryError",
+  { directory: AbsolutePath },
+) {}
 export const MessageNotFoundError = SessionRevert.MessageNotFoundError
 export type MessageNotFoundError = SessionRevert.MessageNotFoundError
 
@@ -159,6 +170,8 @@ export type Error =
   | CompactionConflictError
   | BusyError
   | SkillNotFoundError
+  | DestinationNotFoundError
+  | DestinationNotDirectoryError
   | CommandV2.NotFoundError
   | CommandV2.EvaluationError
   | MessageNotFoundError
@@ -215,6 +228,11 @@ export interface Interface {
     model: ModelV2.Ref
   }) => Effect.Effect<void, NotFoundError>
   readonly rename: (input: { sessionID: SessionSchema.ID; title: string }) => Effect.Effect<void, NotFoundError>
+  readonly move: (input: {
+    sessionID: SessionSchema.ID
+    directory: AbsolutePath
+    workspaceID?: Location.Ref["workspaceID"]
+  }) => Effect.Effect<void, NotFoundError | DestinationNotFoundError | DestinationNotDirectoryError>
   readonly prompt: (input: {
     id?: SessionMessage.ID
     sessionID: SessionSchema.ID
@@ -288,6 +306,7 @@ const layer = Layer.effect(
     const db = database.db
     const events = yield* EventV2.Service
     const projects = yield* ProjectV2.Service
+    const global = yield* Global.Service
     const execution = yield* SessionExecution.Service
     const store = yield* SessionStore.Service
     const locations = yield* LocationServiceMap.Service
@@ -673,6 +692,38 @@ const layer = Layer.effect(
           title: input.title,
         })
       }),
+      move: Effect.fn("V2Session.move")(function* (input) {
+        const current = yield* result.get(input.sessionID)
+        const value = input.directory.trim()
+        const expanded =
+          value === "~" ? global.home : value.startsWith("~/") ? path.join(global.home, value.slice(2)) : value
+        const directory = AbsolutePath.make(path.resolve(current.location.directory, expanded))
+        const info = yield* fs.stat(directory).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        if (!info) return yield* new DestinationNotFoundError({ directory })
+        if (info.type !== "Directory") return yield* new DestinationNotDirectoryError({ directory })
+        if (
+          current.location.directory === directory &&
+          current.location.workspaceID === input.workspaceID
+        )
+          return
+        const project = yield* projects.resolve(directory)
+        yield* db
+          .insert(ProjectTable)
+          .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
+          .onConflictDoNothing()
+          .run()
+          .pipe(Effect.orDie)
+        if ((yield* execution.active).has(input.sessionID)) {
+          yield* execution.interrupt(input.sessionID)
+          yield* execution.awaitIdle(input.sessionID)
+        }
+        yield* events.publish(SessionEvent.Moved, {
+          sessionID: input.sessionID,
+          location: Location.Ref.make({ directory, workspaceID: input.workspaceID }),
+          projectID: project.id,
+          subpath: RelativePath.make(path.relative(project.directory, directory).replaceAll("\\", "/")),
+        })
+      }),
       compact: Effect.fn("V2Session.compact")(function* (input) {
         yield* result.get(input.sessionID)
         const inputID = input.id ?? SessionMessage.ID.create()
@@ -949,5 +1000,6 @@ export const node = makeGlobalNode({
     LocationServiceMap.node,
     SessionProjector.node,
     FSUtil.node,
+    Global.node,
   ],
 })

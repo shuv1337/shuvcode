@@ -2,16 +2,15 @@ export * as MoveSession from "./move-session"
 
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { makeGlobalNode } from "../effect/app-node"
-import { EventV2 } from "../event"
+import { FSUtil } from "../fs-util"
 import { Git } from "../git"
-import { Location } from "../location"
+import { Global } from "../global"
 import { ProjectV2 } from "../project"
 import { SessionV2 } from "../session"
-import { SessionEvent } from "../session/event"
 import { SessionExecution } from "../session/execution"
 import { SessionSchema } from "../session/schema"
 import { SessionStore } from "../session/store"
-import { AbsolutePath, RelativePath } from "../schema"
+import { AbsolutePath } from "../schema"
 import path from "path"
 
 export const Destination = Schema.Struct({
@@ -32,6 +31,16 @@ export class DestinationProjectMismatchError extends Schema.TaggedErrorClass<Des
     expected: ProjectV2.ID,
     actual: ProjectV2.ID,
   },
+) {}
+
+export class DestinationNotFoundError extends Schema.TaggedErrorClass<DestinationNotFoundError>()(
+  "MoveSession.DestinationNotFoundError",
+  { directory: AbsolutePath },
+) {}
+
+export class DestinationNotDirectoryError extends Schema.TaggedErrorClass<DestinationNotDirectoryError>()(
+  "MoveSession.DestinationNotDirectoryError",
+  { directory: AbsolutePath },
 ) {}
 
 export class ApplyChangesError extends Schema.TaggedErrorClass<ApplyChangesError>()("MoveSession.ApplyChangesError", {
@@ -57,6 +66,10 @@ export class ResetSourceChangesError extends Schema.TaggedErrorClass<ResetSource
 export type Error =
   | SessionV2.NotFoundError
   | DestinationProjectMismatchError
+  | DestinationNotFoundError
+  | DestinationNotDirectoryError
+  | SessionV2.DestinationNotFoundError
+  | SessionV2.DestinationNotDirectoryError
   | CaptureChangesError
   | ApplyChangesError
   | ResetSourceChangesError
@@ -71,23 +84,29 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const git = yield* Git.Service
-    const events = yield* EventV2.Service
+    const fs = yield* FSUtil.Service
+    const global = yield* Global.Service
     const project = yield* ProjectV2.Service
     const sessions = yield* SessionStore.Service
+    const session = yield* SessionV2.Service
     const execution = yield* SessionExecution.Service
 
     const moveSession = Effect.fn("MoveSession.moveSession")(function* (input: Input) {
       const current = yield* sessions.get(input.sessionID)
       if (!current) return yield* new SessionV2.NotFoundError({ sessionID: input.sessionID })
-      const directory = AbsolutePath.make(input.destination.directory)
+      const value = input.destination.directory.trim()
+      const expanded = value === "~" ? global.home : value.startsWith("~/") ? path.join(global.home, value.slice(2)) : value
+      const directory = AbsolutePath.make(path.resolve(current.location.directory, expanded))
+      const destinationInfo = yield* fs.stat(directory).pipe(Effect.catch(() => Effect.succeed(undefined)))
+      if (!destinationInfo) return yield* new DestinationNotFoundError({ directory })
+      if (destinationInfo.type !== "Directory") return yield* new DestinationNotDirectoryError({ directory })
       if (current.location.directory === directory) return
 
       const source = yield* project.resolve(current.location.directory)
       const destination = yield* project.resolve(directory)
-      if (current.projectID !== destination.id) {
+      if (input.moveChanges && current.projectID !== destination.id) {
         return yield* new DestinationProjectMismatchError({ expected: current.projectID, actual: destination.id })
       }
-
       // A move must not race active execution: a mid-drain relocation would let
       // the source Location dispatch a request assembled under stale instructions
       // and history. Serialize like removal does — stop the drain, then move.
@@ -111,10 +130,9 @@ const layer = Layer.effect(
           .pipe(Effect.mapError((error) => new ApplyChangesError({ message: error.message })))
       }
 
-      yield* events.publish(SessionEvent.Moved, {
+      yield* session.move({
         sessionID: input.sessionID,
-        location: Location.Ref.make({ directory }),
-        subpath: RelativePath.make(path.relative(destination.directory, directory).replaceAll("\\", "/")),
+        directory,
       })
 
       if (patch) {
@@ -151,5 +169,13 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [Git.node, EventV2.node, ProjectV2.node, SessionStore.node, SessionExecution.node],
+  deps: [
+    FSUtil.node,
+    Git.node,
+    Global.node,
+    ProjectV2.node,
+    SessionV2.node,
+    SessionStore.node,
+    SessionExecution.node,
+  ],
 })

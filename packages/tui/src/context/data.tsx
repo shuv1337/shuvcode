@@ -368,6 +368,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         case "session.moved":
           if (store.session.info[event.data.sessionID]) {
             setStore("session", "info", event.data.sessionID, "location", event.data.location)
+            if (event.data.projectID)
+              setStore("session", "info", event.data.sessionID, "projectID", event.data.projectID)
             setStore("session", "info", event.data.sessionID, "subpath", event.data.subpath)
           }
           break

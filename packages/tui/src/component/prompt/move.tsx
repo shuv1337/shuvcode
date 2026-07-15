@@ -6,7 +6,6 @@ import { useDialog } from "../../ui/dialog"
 import { useClient } from "../../context/client"
 import { useToast } from "../../ui/toast"
 import { DialogMoveSession, type MoveSessionSelection } from "../dialog-move-session"
-import { DialogWorkspaceFileChanges } from "../dialog-workspace-file-changes"
 import { useData } from "../../context/data"
 
 function moveReminderText(directory: string) {
@@ -94,12 +93,6 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
   }
 
   async function moveExistingSession(sessionID: string, selection: MoveSessionSelection) {
-    const session = await resolveSession(sessionID)
-    const status = await client.api.vcs
-      .status({ location: session?.location.directory ? { directory: session.location.directory } : undefined })
-      .catch(() => undefined)
-    const choice = status?.data?.length ? await DialogWorkspaceFileChanges.show(dialog, status.data) : "no"
-    if (!choice) return
     dialog.clear()
     const directory = selection.type === "new" ? await create(selection.name) : selection.directory
     if (!directory) {
@@ -109,7 +102,7 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
     }
     setProgress("Moving session")
     try {
-      await client.api.session.move({ sessionID, destination: { directory }, moveChanges: choice === "yes" })
+      await client.api.session.move({ sessionID, directory })
       await client.api.session
         .synthetic({ sessionID, text: moveReminderText(directory), resume: false })
         .catch(() => undefined)

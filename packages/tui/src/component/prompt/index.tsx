@@ -52,6 +52,7 @@ import { usePromptMove } from "./move"
 import { readLocalAttachment } from "./local-attachment"
 import { useData } from "../../context/data"
 import { useLocation } from "../../context/location"
+import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { contextUsage } from "../../util/session"
 import { abbreviateHome } from "../../runtime"
 
@@ -137,6 +138,18 @@ function formatEditorContext(selection: EditorSelection) {
 
 let stashed: { prompt: PromptInfo; cursor: number } | undefined
 
+function argumentSlash(input: string, commands: readonly KeymapCommand[]) {
+  if (!input.startsWith("/")) return
+  const separator = input.search(/\s/)
+  const name = input.slice(1, separator === -1 ? undefined : separator)
+  const command = commands.find(
+    (command) =>
+      command.slash?.arguments && (command.slash.name === name || command.slash.aliases?.includes(name) === true),
+  )
+  if (!command) return
+  return { command, input: separator === -1 ? "" : input.slice(separator + 1) }
+}
+
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
   let anchor: BoxRenderable
@@ -152,6 +165,7 @@ export function Prompt(props: PromptProps) {
   const editor = useEditorContext()
   const route = useRoute()
   const data = useData()
+  const keymapCommands = Keymap.useCommands()
   const currentLocation = useLocation()
   const config = useConfig().data
   const dialog = useDialog()
@@ -218,6 +232,30 @@ export function Prompt(props: PromptProps) {
       (props.sessionID ? data.session.get(props.sessionID)?.projectID : undefined) ?? data.location.info()?.project.id,
     sessionID: () => props.sessionID,
   })
+  Keymap.createLayer(() => ({
+    mode: "global",
+    enabled: props.sessionID !== undefined,
+    commands: [
+      {
+        id: "session.cd",
+        title: "Change working directory",
+        slash: { name: "cd", arguments: true },
+        run: async (input) => {
+          const sessionID = props.sessionID
+          if (!sessionID) return
+          if (!input?.trim()) {
+            toast.show({ message: "Directory is required", variant: "error" })
+            return
+          }
+          await client.api.session
+            .move({ sessionID, directory: input })
+            .catch((error) =>
+              toast.show({ title: "Failed to change directory", message: errorMessage(error), variant: "error" }),
+            )
+        },
+      },
+    ],
+  }))
   const [cursorVersion, setCursorVersion] = createSignal(0)
   const currentProviderLabel = createMemo(() => local.model.parsed().provider)
   const connected = useConnected()
@@ -946,6 +984,12 @@ export function Prompt(props: PromptProps) {
     const trimmed = store.prompt.text.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
       void exit()
+      return true
+    }
+    const slash = argumentSlash(store.prompt.text, keymapCommands())
+    if (slash) {
+      clearPrompt()
+      await slash.command.run(slash.input)
       return true
     }
     const agent = local.agent.current()

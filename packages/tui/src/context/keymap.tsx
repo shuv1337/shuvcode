@@ -23,6 +23,7 @@ declare module "@opentui/keymap" {
     slash?: {
       name: string
       aliases?: string[]
+      arguments?: true
     }
   }
 }
@@ -32,13 +33,28 @@ const MODE = { key: "opencode.mode", base: "base" } as const
 type OpenTuiKeymap = Parameters<typeof KeymapProvider>[0]["keymap"]
 type Mode = ReturnType<typeof createMode>
 
-const Context = createContext<{ readonly keymap: OpenTuiKeymap; readonly mode: Mode }>()
+const Context = createContext<{
+  readonly keymap: OpenTuiKeymap
+  readonly mode: Mode
+  readonly dispatch: (id: string, input?: string) => void
+  readonly input: (id: string) => string | undefined
+}>()
 
 function Provider(props: ParentProps) {
   const renderer = useRenderer()
   const config = useConfig()
   const keymap = createDefaultOpenTuiKeymap(renderer)
   const mode = createMode(keymap)
+  let invocation: { readonly id: string; readonly input?: string } | undefined
+  const dispatch = (id: string, input?: string) => {
+    const previous = invocation
+    invocation = { id, input }
+    try {
+      keymap.dispatchCommand(id)
+    } finally {
+      invocation = previous
+    }
+  }
   const dispose = [
     registerCommaBindings(keymap),
     keymap.appendBindingExpander((context) => {
@@ -114,7 +130,11 @@ function Provider(props: ParentProps) {
   })
   return (
     <KeymapProvider keymap={keymap}>
-      <Context.Provider value={{ keymap, mode }}>{props.children}</Context.Provider>
+      <Context.Provider
+        value={{ keymap, mode, dispatch, input: (id) => (invocation?.id === id ? invocation.input : undefined) }}
+      >
+        {props.children}
+      </Context.Provider>
     </KeymapProvider>
   )
 }
@@ -123,7 +143,7 @@ export type { KeymapCommand, KeymapLayer } from "@opencode-ai/plugin/v2/tui/cont
 
 export interface Keymap {
   /** Dispatches a reachable command by ID. */
-  dispatch(id: string): void
+  dispatch(id: string, input?: string): void
   /** Controls mutually exclusive OpenCode input modes. */
   readonly mode: {
     /** Returns the active mode. */
@@ -136,15 +156,15 @@ export interface Keymap {
 function use(): Keymap {
   const value = useValue()
   return {
-    dispatch(id) {
-      value.keymap.dispatchCommand(id)
+    dispatch(id, input) {
+      value.dispatch(id, input)
     },
     mode: value.mode,
   }
 }
 
 function createLayer(input: () => KeymapLayer) {
-  useValue()
+  const value = useValue()
   const config = useConfig()
   useBindings(() => {
     const layer = input()
@@ -174,11 +194,12 @@ function createLayer(input: () => KeymapLayer) {
       ...options,
       ...(mode === "global" ? {} : { mode: mode ?? MODE.base }),
       commands: grouped.named.map((command) => {
-        const { id, description, group, palette, bind, ...definition } = command
+        const { id, description, group, palette, bind, run, ...definition } = command
         return {
           ...definition,
           name: id,
           opencode: command,
+          run: () => run(value.input(id)),
           ...(description === undefined ? {} : { desc: description }),
           ...(group === undefined ? {} : { category: group }),
           ...(palette === undefined ? {} : { namespace: "palette" }),
@@ -262,8 +283,8 @@ function useCommands(): Accessor<readonly KeymapCommand[]> {
         }
         return {
           ...command,
-          run: () => {
-            value.keymap.dispatchCommand(entry.command.name)
+          run: (input?: string) => {
+            value.dispatch(entry.command.name, input)
           },
         }
       }),

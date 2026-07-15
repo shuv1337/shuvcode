@@ -8,7 +8,6 @@ import { Observability } from "@opencode-ai/core/observability"
 import { Credential } from "@opencode-ai/core/credential"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
-import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Job } from "@opencode-ai/core/job"
@@ -38,7 +37,6 @@ const applicationServices = LayerNode.group([
   httpClient,
   ToolOutputStore.cleanupNode,
   Job.node,
-  MoveSession.node,
   Project.node,
   SessionV2.node,
   PluginRuntime.providerNode,

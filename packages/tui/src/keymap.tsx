@@ -24,6 +24,7 @@ declare module "@opentui/keymap" {
     slash?: {
       name: string
       aliases?: string[]
+      arguments?: true
     }
   }
 }

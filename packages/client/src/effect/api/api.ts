@@ -130,8 +130,8 @@ export type SessionRenameOperation<E = never> = (input: Endpoint5_8Input) => Eff
 type Endpoint5_9Request = Parameters<RawClient["server.session"]["session.move"]>[0]
 export type Endpoint5_9Input = {
   readonly sessionID: Endpoint5_9Request["params"]["sessionID"]
-  readonly destination: Endpoint5_9Request["payload"]["destination"]
-  readonly moveChanges?: Endpoint5_9Request["payload"]["moveChanges"]
+  readonly directory: Endpoint5_9Request["payload"]["directory"]
+  readonly workspaceID?: Endpoint5_9Request["payload"]["workspaceID"]
 }
 export type Endpoint5_9Output = EffectValue<ReturnType<RawClient["server.session"]["session.move"]>>
 export type SessionMoveOperation<E = never> = (input: Endpoint5_9Input) => Effect.Effect<Endpoint5_9Output, E>

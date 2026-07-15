@@ -179,6 +179,7 @@ import type {
   QuestionReplyErrors,
   QuestionReplyResponses,
   QuestionV2Reply,
+  ServiceStopRequestV2,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -291,6 +292,8 @@ import type {
   V2GenerateTextResponses,
   V2HealthGetErrors,
   V2HealthGetResponses,
+  V2HealthStopErrors,
+  V2HealthStopResponses,
   V2IntegrationAttemptCancelErrors,
   V2IntegrationAttemptCancelResponses,
   V2IntegrationAttemptCompleteErrors,
@@ -5072,12 +5075,36 @@ export class Health extends HeyApiClient {
   /**
    * Check server health
    *
-   * Check whether the API server is ready to accept requests.
+   * Report the owning server process and its application status.
    */
   public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<V2HealthGetResponses, V2HealthGetErrors, ThrowOnError>({
       url: "/api/health",
       ...options,
+    })
+  }
+
+  /**
+   * Stop the managed server
+   *
+   * Request graceful shutdown of one exact managed server instance.
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters: {
+      serviceStopRequestV2: ServiceStopRequestV2
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "serviceStopRequestV2", map: "body" }] }])
+    return (options?.client ?? this.client).post<V2HealthStopResponses, V2HealthStopErrors, ThrowOnError>({
+      url: "/api/service/stop",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -6117,10 +6144,7 @@ export class Session3 extends HeyApiClient {
   public move<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
-      destination?: {
-        directory: string
-      }
-      moveChanges?: boolean | null
+      locationRefV2: LocationRefV2
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6130,8 +6154,7 @@ export class Session3 extends HeyApiClient {
         {
           args: [
             { in: "path", key: "sessionID" },
-            { in: "body", key: "destination" },
-            { in: "body", key: "moveChanges" },
+            { key: "locationRefV2", map: "body" },
           ],
         },
       ],

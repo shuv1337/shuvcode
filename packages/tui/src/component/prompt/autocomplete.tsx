@@ -427,14 +427,23 @@ export function Autocomplete(props: {
       ),
   )
 
+  function insertSlash(name: string) {
+    const newText = `/${name} `
+    const cursor = props.input().logicalCursor
+    props.input().deleteRange(0, 0, cursor.row, cursor.col)
+    props.input().insertText(newText)
+    props.input().cursorOffset = Bun.stringWidth(newText)
+  }
+
   const commands = createMemo((): AutocompleteOption[] => {
     const results: AutocompleteOption[] = keymapCommands().flatMap((command) => {
-      if (!command.slash) return []
+      const slash = command.slash
+      if (!slash) return []
       return {
-        display: `/${command.slash.name}`,
+        display: `/${slash.name}`,
         description: command.description ?? command.title,
-        aliases: command.slash.aliases?.map((alias) => `/${alias}`),
-        onSelect: command.run,
+        aliases: slash.aliases?.map((alias) => `/${alias}`),
+        onSelect: slash.arguments ? () => insertSlash(slash.name) : command.run,
       }
     })
     const commandNames = new Set<string>()
@@ -444,13 +453,7 @@ export function Autocomplete(props: {
       results.push({
         display: "/" + serverCommand.name,
         description: serverCommand.description,
-        onSelect: () => {
-          const newText = "/" + serverCommand.name + " "
-          const cursor = props.input().logicalCursor
-          props.input().deleteRange(0, 0, cursor.row, cursor.col)
-          props.input().insertText(newText)
-          props.input().cursorOffset = Bun.stringWidth(newText)
-        },
+        onSelect: () => insertSlash(serverCommand.name),
       })
     }
 
@@ -460,13 +463,7 @@ export function Autocomplete(props: {
       results.push({
         display: "/" + skill.id,
         description: skill.description,
-        onSelect: () => {
-          const newText = "/" + skill.id + " "
-          const cursor = props.input().logicalCursor
-          props.input().deleteRange(0, 0, cursor.row, cursor.col)
-          props.input().insertText(newText)
-          props.input().cursorOffset = Bun.stringWidth(newText)
-        },
+        onSelect: () => insertSlash(skill.id),
       })
     }
 

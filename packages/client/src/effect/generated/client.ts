@@ -159,13 +159,13 @@ const Endpoint5_8 = (raw: RawClient["server.session"]) => (input: Endpoint5_8Inp
 type Endpoint5_9Request = Parameters<RawClient["server.session"]["session.move"]>[0]
 type Endpoint5_9Input = {
   readonly sessionID: Endpoint5_9Request["params"]["sessionID"]
-  readonly destination: Endpoint5_9Request["payload"]["destination"]
-  readonly moveChanges?: Endpoint5_9Request["payload"]["moveChanges"]
+  readonly directory: Endpoint5_9Request["payload"]["directory"]
+  readonly workspaceID?: Endpoint5_9Request["payload"]["workspaceID"]
 }
 const Endpoint5_9 = (raw: RawClient["server.session"]) => (input: Endpoint5_9Input) =>
   raw["session.move"]({
     params: { sessionID: input["sessionID"] },
-    payload: { destination: input["destination"], moveChanges: input["moveChanges"] },
+    payload: { directory: input["directory"], workspaceID: input["workspaceID"] },
   }).pipe(Effect.mapError(mapClientError))
 
 type Endpoint5_10Request = Parameters<RawClient["server.session"]["session.prompt"]>[0]

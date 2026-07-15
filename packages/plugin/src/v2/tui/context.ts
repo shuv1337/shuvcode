@@ -134,11 +134,13 @@ export interface KeymapCommand {
   readonly slash?: {
     readonly name: string
     readonly aliases?: string[]
+    /** Keeps the slash command in the prompt and passes its raw input to run. */
+    readonly arguments?: true
   }
   /** Promotes the command in discovery UI. */
   readonly suggested?: boolean | (() => boolean)
   /** Executes the command. Return false to let keymap dispatch continue. */
-  readonly run: () => void | false | Promise<void>
+  readonly run: (input?: string) => void | false | Promise<void>
 }
 
 export interface KeymapLayer {
@@ -160,7 +162,7 @@ export interface Keymap {
   /** Creates a reactive keymap layer owned by the calling component. */
   layer(input: () => KeymapLayer): void
   /** Dispatches a reachable command by ID. */
-  dispatch(id: string): void
+  dispatch(id: string, input?: string): void
   /** Returns the formatted shortcut for a registered command. */
   shortcut(id: string): string | undefined
   /** Controls mutually exclusive OpenCode input modes. */
