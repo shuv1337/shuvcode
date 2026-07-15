@@ -20,7 +20,12 @@ cd "$root"
 test "$(git branch --show-current)" = "integration-v2"
 test -z "$(git status --porcelain)"
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/integration-v2)"
-test "$(bun --version)" = "1.3.14"
+bun_bin=$(command -v bun || true)
+if [[ -z "$bun_bin" && -x "$HOME/.bun/bin/bun" ]]; then
+  bun_bin="$HOME/.bun/bin/bun"
+fi
+test -n "$bun_bin"
+test "$("$bun_bin" --version)" = "1.3.14"
 
 sha=$(git rev-parse HEAD)
 if [[ "$mode" == "--check" ]]; then
@@ -37,7 +42,7 @@ case "$(uname -m)" in
 esac
 
 cd packages/cli
-bun run script/build.ts --single --skip-install
+"$bun_bin" run script/build.ts --single --skip-install
 built="$PWD/dist/$target/bin/shuvcode"
 destination="$HOME/.local/lib/shuvcode/$sha"
 install -d -m 0755 "$destination"
