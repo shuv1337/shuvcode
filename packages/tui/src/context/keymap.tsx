@@ -255,7 +255,6 @@ function useCommands(): Accessor<readonly KeymapCommand[]> {
               : undefined,
           palette: entry.command.namespace === "palette" ? true : undefined,
           slash: entry.command.slash,
-          hidden: typeof entry.command.hidden === "boolean" ? entry.command.hidden : undefined,
           suggested:
             typeof entry.command.suggested === "boolean" || typeof entry.command.suggested === "function"
               ? (entry.command.suggested as boolean | (() => boolean))

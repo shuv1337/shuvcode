@@ -16,7 +16,7 @@ export function CommandPaletteDialog() {
   const shortcuts = Keymap.useShortcuts()
   const options = createMemo(() =>
     commands().flatMap((command) => {
-      if (!command.id || !command.palette || command.hidden || command.id === COMMAND_PALETTE_COMMAND) return []
+      if (!command.id || !command.palette || command.id === COMMAND_PALETTE_COMMAND) return []
       return {
         title: command.title ?? command.id,
         description: command.description,
