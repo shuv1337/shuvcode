@@ -5,7 +5,12 @@ import { Credential } from "@opencode-ai/core/credential"
 import { Integration } from "@opencode-ai/core/integration"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
-import type { IntegrationEnvMethod, IntegrationKeyMethod, IntegrationOAuthMethod } from "@opencode-ai/sdk/v2/types"
+import type {
+  IntegrationCommandMethod,
+  IntegrationEnvMethod,
+  IntegrationKeyMethod,
+  IntegrationOAuthMethod,
+} from "@opencode-ai/sdk/v2/types"
 import { Effect, Stream } from "effect"
 
 type Overrides = Partial<Omit<PluginContext, "options" | "session">> & {
@@ -54,6 +59,11 @@ export function host(overrides: Overrides = {}): PluginContext {
         status: () => Effect.die("unused integration.oauth.status"),
         complete: () => Effect.die("unused integration.oauth.complete"),
         cancel: () => Effect.die("unused integration.oauth.cancel"),
+      },
+      command: {
+        connect: () => Effect.die("unused integration.command.connect"),
+        status: () => Effect.die("unused integration.command.status"),
+        cancel: () => Effect.die("unused integration.command.cancel"),
       },
       transform: () => Effect.die("unused integration.transform"),
       reload: () => Effect.die("unused integration.reload"),
@@ -200,6 +210,11 @@ export function integrationHost(integration: Integration.Interface): PluginConte
       complete: () => Effect.die("unused integration.oauth.complete"),
       cancel: () => Effect.die("unused integration.oauth.cancel"),
     },
+    command: {
+      connect: () => Effect.die("unused integration.command.connect"),
+      status: () => Effect.die("unused integration.command.status"),
+      cancel: () => Effect.die("unused integration.command.cancel"),
+    },
     reload: integration.reload,
     connection: {
       active: (id) => integration.connection.active(Integration.ID.make(id)),
@@ -281,6 +296,17 @@ export function integrationHost(integration: Integration.Interface): PluginConte
                 })
                 return
               }
+              if (input.method.type === "command") {
+                draft.method.update({
+                  integrationID: Integration.ID.make(input.integrationID),
+                  method: {
+                    ...input.method,
+                    id: Integration.MethodID.make(input.method.id),
+                    command: [...input.method.command],
+                  },
+                })
+                return
+              }
               draft.method.update({
                 integrationID: Integration.ID.make(input.integrationID),
                 method: input.method,
@@ -296,6 +322,7 @@ export function integrationHost(integration: Integration.Interface): PluginConte
 function method(value: Integration.Method) {
   if (value.type === "env") return { type: value.type, names: [...value.names] }
   if (value.type === "key") return { type: value.type, label: value.label }
+  if (value.type === "command") return { ...value, command: [...value.command] }
   return {
     type: value.type,
     id: value.id,
@@ -308,10 +335,17 @@ function method(value: Integration.Method) {
 }
 
 function internalMethod(
-  value: IntegrationOAuthMethod | IntegrationKeyMethod | IntegrationEnvMethod,
+  value: IntegrationOAuthMethod | IntegrationCommandMethod | IntegrationKeyMethod | IntegrationEnvMethod,
 ): Integration.Method {
   if (value.type === "env") return value
   if (value.type === "key") return value
+  if (value.type === "command") {
+    return {
+      ...value,
+      id: Integration.MethodID.make(value.id),
+      command: [...value.command],
+    }
+  }
   return {
     ...value,
     id: Integration.MethodID.make(value.id),

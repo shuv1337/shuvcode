@@ -294,6 +294,12 @@ import type {
   V2HealthGetResponses,
   V2HealthStopErrors,
   V2HealthStopResponses,
+  V2IntegrationCommandCancelErrors,
+  V2IntegrationCommandCancelResponses,
+  V2IntegrationCommandConnectErrors,
+  V2IntegrationCommandConnectResponses,
+  V2IntegrationCommandStatusErrors,
+  V2IntegrationCommandStatusResponses,
   V2IntegrationConnectKeyErrors,
   V2IntegrationConnectKeyResponses,
   V2IntegrationGetErrors,
@@ -7005,6 +7011,132 @@ export class Oauth2 extends HeyApiClient {
   }
 }
 
+export class Command2 extends HeyApiClient {
+  /**
+   * Begin command connection
+   *
+   * Start a command authentication attempt.
+   */
+  public connect<ThrowOnError extends boolean = false>(
+    parameters: {
+      integrationID: string
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      methodID?: string
+      label?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "integrationID" },
+            { in: "query", key: "location" },
+            { in: "body", key: "methodID" },
+            { in: "body", key: "label" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      V2IntegrationCommandConnectResponses,
+      V2IntegrationCommandConnectErrors,
+      ThrowOnError
+    >({
+      url: "/api/integration/{integrationID}/connect/command",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel command connection
+   *
+   * Cancel a command authentication attempt and terminate its process.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      integrationID: string
+      attemptID: string
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "integrationID" },
+            { in: "path", key: "attemptID" },
+            { in: "query", key: "location" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      V2IntegrationCommandCancelResponses,
+      V2IntegrationCommandCancelErrors,
+      ThrowOnError
+    >({
+      url: "/api/integration/{integrationID}/connect/command/{attemptID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get command attempt status
+   *
+   * Poll the current status and output of a command authentication attempt.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      integrationID: string
+      attemptID: string
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "integrationID" },
+            { in: "path", key: "attemptID" },
+            { in: "query", key: "location" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      V2IntegrationCommandStatusResponses,
+      V2IntegrationCommandStatusErrors,
+      ThrowOnError
+    >({
+      url: "/api/integration/{integrationID}/connect/command/{attemptID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Integration extends HeyApiClient {
   /**
    * List integrations
@@ -7069,6 +7201,11 @@ export class Integration extends HeyApiClient {
   private _oauth?: Oauth2
   get oauth(): Oauth2 {
     return (this._oauth ??= new Oauth2({ client: this.client }))
+  }
+
+  private _command?: Command2
+  get command(): Command2 {
+    return (this._command ??= new Command2({ client: this.client }))
   }
 }
 
@@ -7492,7 +7629,7 @@ export class Fs extends HeyApiClient {
   }
 }
 
-export class Command2 extends HeyApiClient {
+export class Command3 extends HeyApiClient {
   /**
    * List commands
    *
@@ -8393,9 +8530,9 @@ export class V2 extends HeyApiClient {
     return (this._fs ??= new Fs({ client: this.client }))
   }
 
-  private _command?: Command2
-  get command(): Command2 {
-    return (this._command ??= new Command2({ client: this.client }))
+  private _command?: Command3
+  get command(): Command3 {
+    return (this._command ??= new Command3({ client: this.client }))
   }
 
   private _skill?: Skill

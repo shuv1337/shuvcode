@@ -3195,7 +3195,11 @@ export type IntegrationInputs = {
   [key: string]: string
 }
 
-export type IntegrationMethod = IntegrationOAuthMethod | IntegrationKeyMethod | IntegrationEnvMethod
+export type IntegrationMethod =
+  | IntegrationOAuthMethod
+  | IntegrationCommandMethod
+  | IntegrationKeyMethod
+  | IntegrationEnvMethod
 
 export type IntegrationRef = {
   id: string
@@ -5708,6 +5712,13 @@ export type IntegrationOAuthMethod = {
   prompts?: Array<IntegrationTextPrompt | IntegrationSelectPrompt>
 }
 
+export type IntegrationCommandMethod = {
+  id: string
+  type: "command"
+  label: string
+  command: Array<string>
+}
+
 export type IntegrationKeyMethod = {
   type: "key"
   label?: string
@@ -5752,6 +5763,46 @@ export type IntegrationAttempt = {
 export type IntegrationAttemptStatus =
   | {
       status: "pending"
+      time: {
+        created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+        expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+  | {
+      status: "complete"
+      time: {
+        created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+        expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+  | {
+      status: "failed"
+      message: string
+      time: {
+        created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+        expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+  | {
+      status: "expired"
+      time: {
+        created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+        expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      }
+    }
+
+export type IntegrationCommandAttempt = {
+  attemptID: string
+  time: {
+    created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+}
+
+export type IntegrationCommandAttemptStatus =
+  | {
+      status: "pending"
+      message?: string
       time: {
         created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
         expires: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -17010,6 +17061,129 @@ export type V2IntegrationOauthCompleteResponses = {
 
 export type V2IntegrationOauthCompleteResponse =
   V2IntegrationOauthCompleteResponses[keyof V2IntegrationOauthCompleteResponses]
+
+export type V2IntegrationCommandConnectData = {
+  body: {
+    methodID: string
+    label?: string | null
+  }
+  path: {
+    integrationID: string
+  }
+  query?: {
+    location?: {
+      directory?: string | null
+      workspace?: string | null
+    } | null
+  }
+  url: "/api/integration/{integrationID}/connect/command"
+}
+
+export type V2IntegrationCommandConnectErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestErrorV2
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2IntegrationCommandConnectError =
+  V2IntegrationCommandConnectErrors[keyof V2IntegrationCommandConnectErrors]
+
+export type V2IntegrationCommandConnectResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfoV2
+    data: IntegrationCommandAttempt
+  }
+}
+
+export type V2IntegrationCommandConnectResponse =
+  V2IntegrationCommandConnectResponses[keyof V2IntegrationCommandConnectResponses]
+
+export type V2IntegrationCommandCancelData = {
+  body?: never
+  path: {
+    integrationID: string
+    attemptID: string
+  }
+  query?: {
+    location?: {
+      directory?: string | null
+      workspace?: string | null
+    } | null
+  }
+  url: "/api/integration/{integrationID}/connect/command/{attemptID}"
+}
+
+export type V2IntegrationCommandCancelErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestErrorV2
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2IntegrationCommandCancelError = V2IntegrationCommandCancelErrors[keyof V2IntegrationCommandCancelErrors]
+
+export type V2IntegrationCommandCancelResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2IntegrationCommandCancelResponse =
+  V2IntegrationCommandCancelResponses[keyof V2IntegrationCommandCancelResponses]
+
+export type V2IntegrationCommandStatusData = {
+  body?: never
+  path: {
+    integrationID: string
+    attemptID: string
+  }
+  query?: {
+    location?: {
+      directory?: string | null
+      workspace?: string | null
+    } | null
+  }
+  url: "/api/integration/{integrationID}/connect/command/{attemptID}"
+}
+
+export type V2IntegrationCommandStatusErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestErrorV2
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2IntegrationCommandStatusError = V2IntegrationCommandStatusErrors[keyof V2IntegrationCommandStatusErrors]
+
+export type V2IntegrationCommandStatusResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfoV2
+    data: IntegrationCommandAttemptStatus
+  }
+}
+
+export type V2IntegrationCommandStatusResponse =
+  V2IntegrationCommandStatusResponses[keyof V2IntegrationCommandStatusResponses]
 
 export type V2McpListData = {
   body?: never

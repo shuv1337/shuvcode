@@ -196,6 +196,11 @@ function resourceMcpLayer(url: string, onFormCreated?: (form: Form.Info) => Effe
             complete: unusedIntegration,
             cancel: unusedIntegration,
           },
+          command: {
+            connect: unusedIntegration,
+            status: unusedIntegration,
+            cancel: unusedIntegration,
+          },
         }),
         Layer.mock(Credential.Service, {}),
       ),

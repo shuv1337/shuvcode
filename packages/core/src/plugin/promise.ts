@@ -135,6 +135,32 @@ export function fromPromise(plugin: Plugin) {
                   }),
                 ),
             },
+            command: {
+              connect: (input) =>
+                run(
+                  host.integration.command.connect({
+                    ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
+                    methodID: Integration.MethodID.make(input.methodID),
+                  }),
+                ),
+              status: (input) =>
+                run(
+                  host.integration.command.status({
+                    ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
+                    attemptID: Integration.AttemptID.make(input.attemptID),
+                  }),
+                ),
+              cancel: (input) =>
+                run(
+                  host.integration.command.cancel({
+                    ...input,
+                    integrationID: Integration.ID.make(input.integrationID),
+                    attemptID: Integration.AttemptID.make(input.attemptID),
+                  }),
+                ),
+            },
             transform: transform(host.integration),
             reload: () => run(host.integration.reload()),
             connection: {

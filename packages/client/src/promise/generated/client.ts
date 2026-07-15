@@ -92,6 +92,12 @@ import type {
   IntegrationOauthCompleteOutput,
   IntegrationOauthCancelInput,
   IntegrationOauthCancelOutput,
+  IntegrationCommandConnectInput,
+  IntegrationCommandConnectOutput,
+  IntegrationCommandStatusInput,
+  IntegrationCommandStatusOutput,
+  IntegrationCommandCancelInput,
+  IntegrationCommandCancelOutput,
   McpListInput,
   McpListOutput,
   McpResourceCatalogInput,
@@ -946,6 +952,45 @@ export function make(options: ClientOptions) {
             {
               method: "DELETE",
               path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
+              query: { location: input["location"] },
+              successStatus: 204,
+              declaredStatuses: [401, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
+      command: {
+        connect: (input: IntegrationCommandConnectInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandConnectOutput>(
+            {
+              method: "POST",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command`,
+              query: { location: input["location"] },
+              body: { methodID: input["methodID"], label: input["label"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        status: (input: IntegrationCommandStatusInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandStatusOutput>(
+            {
+              method: "GET",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command/${encodeURIComponent(input.attemptID)}`,
+              query: { location: input["location"] },
+              successStatus: 200,
+              declaredStatuses: [401, 400],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        cancel: (input: IntegrationCommandCancelInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandCancelOutput>(
+            {
+              method: "DELETE",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 204,
               declaredStatuses: [401, 400],

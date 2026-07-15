@@ -466,6 +466,40 @@ export type IntegrationOauthCancelOperation<E = never> = (
   input: Endpoint10_6Input,
 ) => Effect.Effect<Endpoint10_6Output, E>
 
+type Endpoint10_7Request = Parameters<RawClient["server.integration"]["integration.command.connect"]>[0]
+export type Endpoint10_7Input = {
+  readonly integrationID: Endpoint10_7Request["params"]["integrationID"]
+  readonly location?: Endpoint10_7Request["query"]["location"]
+  readonly methodID: Endpoint10_7Request["payload"]["methodID"]
+  readonly label?: Endpoint10_7Request["payload"]["label"]
+}
+export type Endpoint10_7Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.command.connect"]>>
+export type IntegrationCommandConnectOperation<E = never> = (
+  input: Endpoint10_7Input,
+) => Effect.Effect<Endpoint10_7Output, E>
+
+type Endpoint10_8Request = Parameters<RawClient["server.integration"]["integration.command.status"]>[0]
+export type Endpoint10_8Input = {
+  readonly integrationID: Endpoint10_8Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_8Request["params"]["attemptID"]
+  readonly location?: Endpoint10_8Request["query"]["location"]
+}
+export type Endpoint10_8Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.command.status"]>>
+export type IntegrationCommandStatusOperation<E = never> = (
+  input: Endpoint10_8Input,
+) => Effect.Effect<Endpoint10_8Output, E>
+
+type Endpoint10_9Request = Parameters<RawClient["server.integration"]["integration.command.cancel"]>[0]
+export type Endpoint10_9Input = {
+  readonly integrationID: Endpoint10_9Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_9Request["params"]["attemptID"]
+  readonly location?: Endpoint10_9Request["query"]["location"]
+}
+export type Endpoint10_9Output = EffectValue<ReturnType<RawClient["server.integration"]["integration.command.cancel"]>>
+export type IntegrationCommandCancelOperation<E = never> = (
+  input: Endpoint10_9Input,
+) => Effect.Effect<Endpoint10_9Output, E>
+
 export interface IntegrationApi<E = never> {
   readonly list: IntegrationListOperation<E>
   readonly get: IntegrationGetOperation<E>
@@ -475,6 +509,11 @@ export interface IntegrationApi<E = never> {
     readonly status: IntegrationOauthStatusOperation<E>
     readonly complete: IntegrationOauthCompleteOperation<E>
     readonly cancel: IntegrationOauthCancelOperation<E>
+  }
+  readonly command: {
+    readonly connect: IntegrationCommandConnectOperation<E>
+    readonly status: IntegrationCommandStatusOperation<E>
+    readonly cancel: IntegrationCommandCancelOperation<E>
   }
 }
 

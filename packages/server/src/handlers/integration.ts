@@ -114,5 +114,43 @@ export const IntegrationHandler = HttpApiBuilder.group(Api, "server.integration"
           return HttpApiSchema.NoContent.make()
         }),
       )
+      .handle(
+        "integration.command.connect",
+        Effect.fn(function* (ctx) {
+          const service = yield* Integration.Service
+          return yield* response(
+            authorize(
+              service.command.connect({
+                integrationID: ctx.params.integrationID,
+                methodID: ctx.payload.methodID,
+                label: ctx.payload.label,
+              }),
+            ),
+          )
+        }),
+      )
+      .handle(
+        "integration.command.status",
+        Effect.fn(function* (ctx) {
+          const service = yield* Integration.Service
+          return yield* response(
+            service.command.status({
+              integrationID: ctx.params.integrationID,
+              attemptID: ctx.params.attemptID,
+            }),
+          )
+        }),
+      )
+      .handle(
+        "integration.command.cancel",
+        Effect.fn(function* (ctx) {
+          const service = yield* Integration.Service
+          yield* service.command.cancel({
+            integrationID: ctx.params.integrationID,
+            attemptID: ctx.params.attemptID,
+          })
+          return HttpApiSchema.NoContent.make()
+        }),
+      )
   }),
 )

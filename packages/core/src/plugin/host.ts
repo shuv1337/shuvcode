@@ -203,6 +203,28 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
             attemptID: Integration.AttemptID.make(input.attemptID),
           }),
       },
+      command: {
+        connect: (input) =>
+          response(
+            integration.command.connect({
+              integrationID: Integration.ID.make(input.integrationID),
+              methodID: Integration.MethodID.make(input.methodID),
+              label: input.label,
+            }),
+          ),
+        status: (input) =>
+          response(
+            integration.command.status({
+              integrationID: Integration.ID.make(input.integrationID),
+              attemptID: Integration.AttemptID.make(input.attemptID),
+            }),
+          ),
+        cancel: (input) =>
+          integration.command.cancel({
+            integrationID: Integration.ID.make(input.integrationID),
+            attemptID: Integration.AttemptID.make(input.attemptID),
+          }),
+      },
       reload: integration.reload,
       connection: {
         active: (id) => integration.connection.active(Integration.ID.make(id)),
@@ -278,6 +300,13 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
                   draft.method.update({
                     integrationID: Integration.ID.make(input.integrationID),
                     method: { type: "env", names: input.method.names },
+                  })
+                  return
+                }
+                if (input.method.type === "command") {
+                  draft.method.update({
+                    integrationID: Integration.ID.make(input.integrationID),
+                    method: Schema.decodeUnknownSync(Integration.CommandMethod)(input.method),
                   })
                   return
                 }

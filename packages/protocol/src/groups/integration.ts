@@ -129,6 +129,56 @@ export const IntegrationGroup = HttpApiGroup.make("server.integration")
         }),
       ),
   )
+  .add(
+    HttpApiEndpoint.post("integration.command.connect", "/api/integration/:integrationID/connect/command", {
+      params: { integrationID: Integration.ID },
+      query: LocationQuery,
+      payload: Schema.Struct({
+        methodID: Integration.MethodID,
+        label: Schema.optional(Schema.String),
+      }),
+      success: Location.response(Integration.CommandAttempt),
+      error: InvalidRequestError,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.integration.command.connect",
+          summary: "Begin command connection",
+          description: "Start a command authentication attempt.",
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.get("integration.command.status", "/api/integration/:integrationID/connect/command/:attemptID", {
+      params: { integrationID: Integration.ID, attemptID: Integration.AttemptID },
+      query: LocationQuery,
+      success: Location.response(Integration.CommandAttemptStatus),
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.integration.command.status",
+          summary: "Get command attempt status",
+          description: "Poll the current status and output of a command authentication attempt.",
+        }),
+      ),
+  )
+  .add(
+    HttpApiEndpoint.delete("integration.command.cancel", "/api/integration/:integrationID/connect/command/:attemptID", {
+      params: { integrationID: Integration.ID, attemptID: Integration.AttemptID },
+      query: LocationQuery,
+      success: HttpApiSchema.NoContent,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.integration.command.cancel",
+          summary: "Cancel command connection",
+          description: "Cancel a command authentication attempt and terminate its process.",
+        }),
+      ),
+  )
   .annotateMerge(
     OpenApi.annotations({ title: "integration", description: "Integration discovery and authentication routes." }),
   )

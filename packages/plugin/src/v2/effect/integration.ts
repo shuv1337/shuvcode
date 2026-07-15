@@ -2,6 +2,7 @@ import type {
   ConnectionInfo,
   CredentialOAuth,
   CredentialValue,
+  IntegrationCommandMethod,
   IntegrationEnvMethod,
   IntegrationInputs,
   IntegrationKeyMethod,
@@ -35,6 +36,10 @@ export type IntegrationOAuthMethodRegistration = {
 }
 export type IntegrationMethodRegistration =
   | IntegrationOAuthMethodRegistration
+  | {
+      readonly integrationID: string
+      readonly method: IntegrationCommandMethod
+    }
   | {
       readonly integrationID: string
       readonly method: IntegrationKeyMethod

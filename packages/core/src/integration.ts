@@ -12,6 +12,7 @@ import {
   Schedule,
   Schema,
   Scope,
+  Stream,
   SynchronizedRef,
   Types,
 } from "effect"
@@ -20,6 +21,8 @@ import { Credential } from "./credential"
 import { State } from "./state"
 import { EventV2 } from "./event"
 import { IntegrationConnection } from "./integration/connection"
+import { AppProcess } from "./process"
+import { ChildProcess } from "effect/unstable/process"
 
 export const ID = Integration.ID
 export type ID = Integration.ID
@@ -44,6 +47,9 @@ export type Prompt = Integration.Prompt
 
 export const OAuthMethod = Integration.OAuthMethod
 export type OAuthMethod = Integration.OAuthMethod
+
+export const CommandMethod = Integration.CommandMethod
+export type CommandMethod = Integration.CommandMethod
 
 export const KeyMethod = Integration.KeyMethod
 export type KeyMethod = Integration.KeyMethod
@@ -87,18 +93,29 @@ export interface KeyImplementation {
   readonly method: KeyMethod
 }
 
+export interface CommandImplementation {
+  readonly integrationID: ID
+  readonly method: CommandMethod
+}
+
 export interface EnvImplementation {
   readonly integrationID: ID
   readonly method: EnvMethod
 }
 
-export type Implementation = OAuthImplementation | KeyImplementation | EnvImplementation
+export type Implementation = OAuthImplementation | CommandImplementation | KeyImplementation | EnvImplementation
 
 export const Attempt = Integration.Attempt
 export type Attempt = Integration.Attempt
 
 export const AttemptStatus = Integration.AttemptStatus
 export type AttemptStatus = typeof AttemptStatus.Type
+
+export const CommandAttempt = Integration.CommandAttempt
+export type CommandAttempt = Integration.CommandAttempt
+
+export const CommandAttemptStatus = Integration.CommandAttemptStatus
+export type CommandAttemptStatus = Integration.CommandAttemptStatus
 
 export class CodeRequiredError extends Schema.TaggedErrorClass<CodeRequiredError>()("Integration.CodeRequired", {
   attemptID: AttemptID,
@@ -189,6 +206,18 @@ export interface Interface extends State.Transformable<Draft> {
     /** Cancels an attempt and releases its resources. */
     readonly cancel: (input: { readonly integrationID: ID; readonly attemptID: AttemptID }) => Effect.Effect<void>
   }
+  readonly command: {
+    readonly connect: (input: {
+      readonly integrationID: ID
+      readonly methodID: MethodID
+      readonly label?: string
+    }) => Effect.Effect<CommandAttempt, AuthorizationError>
+    readonly status: (input: {
+      readonly integrationID: ID
+      readonly attemptID: AttemptID
+    }) => Effect.Effect<CommandAttemptStatus>
+    readonly cancel: (input: { readonly integrationID: ID; readonly attemptID: AttemptID }) => Effect.Effect<void>
+  }
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Integration") {}
@@ -218,13 +247,33 @@ type TerminalAttempt = {
 }
 type AttemptEntry = PendingAttempt | TerminalAttempt
 
+type PendingCommandAttempt = {
+  status: "pending"
+  integrationID: ID
+  label?: string
+  message?: string
+  persisting: boolean
+  scope: Scope.Closeable
+  time: AttemptTime
+}
+type TerminalCommandAttempt = {
+  status: "complete" | "failed" | "expired"
+  integrationID: ID
+  message?: string
+  removeAt: number
+  time: AttemptTime
+}
+type CommandAttemptEntry = PendingCommandAttempt | TerminalCommandAttempt
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const credentials = yield* Credential.Service
     const events = yield* EventV2.Service
+    const processes = yield* AppProcess.Service
     const scope = yield* Scope.Scope
     const attempts = SynchronizedRef.makeUnsafe(new Map<AttemptID, AttemptEntry>())
+    const commandAttempts = SynchronizedRef.makeUnsafe(new Map<AttemptID, CommandAttemptEntry>())
     const state = State.create<Data, Draft>({
       name: "integration",
       initial: () => ({ integrations: new Map<ID, Entry>() }),
@@ -258,8 +307,11 @@ const layer = Layer.effect(
             }
             const index = current.methods.findIndex((method) => {
               if (method.type !== implementation.method.type) return false
-              if (method.type !== "oauth" || implementation.method.type !== "oauth") return true
-              return method.id === implementation.method.id
+              if (method.type === "oauth" && implementation.method.type === "oauth")
+                return method.id === implementation.method.id
+              if (method.type === "command" && implementation.method.type === "command")
+                return method.id === implementation.method.id
+              return true
             })
             if (index === -1) current.methods.push(implementation.method as Types.DeepMutable<Method>)
             else current.methods[index] = implementation.method as Types.DeepMutable<Method>
@@ -275,8 +327,9 @@ const layer = Layer.effect(
             if (!current) return
             const index = current.methods.findIndex((candidate) => {
               if (candidate.type !== method.type) return false
-              if (candidate.type !== "oauth" || method.type !== "oauth") return true
-              return candidate.id === method.id
+              if (candidate.type === "oauth" && method.type === "oauth") return candidate.id === method.id
+              if (candidate.type === "command" && method.type === "command") return candidate.id === method.id
+              return true
             })
             if (index !== -1) current.methods.splice(index, 1)
             if (method.type === "oauth") current.implementations.delete(method.id)
@@ -385,6 +438,61 @@ const layer = Layer.effect(
       )
     })
 
+    const settleCommand = Effect.fnUntraced(function* (attemptID: AttemptID, exit: Exit.Exit<string, unknown>) {
+      return yield* Effect.uninterruptible(
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis
+          const attempt = yield* SynchronizedRef.modify(commandAttempts, (current) => {
+            const match = current.get(attemptID)
+            if (!match || match.status !== "pending" || match.persisting) return [undefined, current]
+            const next = Exit.isSuccess(exit)
+              ? { ...match, persisting: true }
+              : {
+                  status: "failed" as const,
+                  integrationID: match.integrationID,
+                  message: message(exit.cause),
+                  time: match.time,
+                  removeAt: now + terminalRetention,
+                }
+            return [match, new Map(current).set(attemptID, next)]
+          })
+          if (!attempt) return
+          if (Exit.isFailure(exit)) {
+            yield* close(attempt.scope)
+            return
+          }
+
+          const persistence = yield* credentials
+            .create({
+              integrationID: attempt.integrationID,
+              label: attempt.label,
+              value: Credential.Key.make({ type: "key", key: exit.value }),
+            })
+            .pipe(Effect.asVoid, Effect.exit)
+          const settledAt = yield* Clock.currentTimeMillis
+          const terminal: TerminalCommandAttempt = Exit.isSuccess(persistence)
+            ? {
+                status: "complete",
+                integrationID: attempt.integrationID,
+                time: attempt.time,
+                removeAt: settledAt + terminalRetention,
+              }
+            : {
+                status: "failed",
+                integrationID: attempt.integrationID,
+                message: message(persistence.cause),
+                time: attempt.time,
+                removeAt: settledAt + terminalRetention,
+              }
+          yield* SynchronizedRef.update(commandAttempts, (current) => new Map(current).set(attemptID, terminal))
+          yield* close(attempt.scope)
+          if (Exit.isFailure(persistence)) return
+          yield* events.publish(Event.ConnectionUpdated, { integrationID: attempt.integrationID })
+          yield* events.publish(Event.Updated, {})
+        }),
+      )
+    })
+
     const scrub = Effect.fnUntraced(function* () {
       const now = yield* Clock.currentTimeMillis
       const expired = yield* SynchronizedRef.modify(attempts, (current) => {
@@ -408,7 +516,31 @@ const layer = Layer.effect(
       yield* Effect.forEach(expired, close, { discard: true })
     })
 
+    const scrubCommands = Effect.fnUntraced(function* () {
+      const now = yield* Clock.currentTimeMillis
+      const expired = yield* SynchronizedRef.modify(commandAttempts, (current) => {
+        const next = new Map(current)
+        const scopes: Scope.Closeable[] = []
+        for (const [id, attempt] of current) {
+          if (attempt.status === "pending" && !attempt.persisting && attempt.time.expires <= now) {
+            scopes.push(attempt.scope)
+            next.set(id, {
+              status: "expired",
+              integrationID: attempt.integrationID,
+              time: attempt.time,
+              removeAt: now + terminalRetention,
+            })
+            continue
+          }
+          if (attempt.status !== "pending" && attempt.removeAt <= now) next.delete(id)
+        }
+        return [scopes, next]
+      })
+      yield* Effect.forEach(expired, close, { discard: true })
+    })
+
     yield* scrub().pipe(Effect.repeat(Schedule.spaced(scrubInterval)), Effect.forkIn(scope))
+    yield* scrubCommands().pipe(Effect.repeat(Schedule.spaced(scrubInterval)), Effect.forkIn(scope))
 
     const connectOAuth = Effect.fn("Integration.oauth.connect")(function* (input: {
       readonly integrationID: ID
@@ -455,6 +587,66 @@ const layer = Layer.effect(
         mode: authorization.mode,
         time,
       })
+    })
+
+    const connectCommand = Effect.fn("Integration.command.connect")(function* (input: {
+      readonly integrationID: ID
+      readonly methodID: MethodID
+      readonly label?: string
+    }) {
+      const method = state
+        .get()
+        .integrations.get(input.integrationID)
+        ?.methods.find((method) => method.type === "command" && method.id === input.methodID)
+      if (!method || method.type !== "command" || !method.command[0]) {
+        return yield* Effect.die(new Error(`Command method not found: ${input.integrationID}/${input.methodID}`))
+      }
+
+      const attemptScope = yield* Scope.fork(scope)
+      const attemptID = AttemptID.create()
+      const created = yield* Clock.currentTimeMillis
+      const time = { created, expires: created + attemptLifetime }
+      yield* SynchronizedRef.update(commandAttempts, (current) =>
+        new Map(current).set(attemptID, {
+          status: "pending",
+          integrationID: input.integrationID,
+          label: input.label,
+          persisting: false,
+          scope: attemptScope,
+          time,
+        }),
+      )
+
+      yield* processes
+        .runStream(
+          ChildProcess.make(method.command[0], method.command.slice(1), {
+            extendEnv: true,
+            stdin: "ignore",
+          }),
+          { okExitCodes: [0] },
+        )
+        .pipe(
+          Stream.tap((line) =>
+            SynchronizedRef.update(commandAttempts, (current) => {
+              const attempt = current.get(attemptID)
+              if (!attempt || attempt.status !== "pending") return current
+              const message = attempt.message ? `${attempt.message}\n${line}` : line
+              return new Map(current).set(attemptID, { ...attempt, message })
+            }),
+          ),
+          Stream.runCollect,
+          Effect.flatMap((lines) => {
+            const credential = Array.from(lines).at(-1)
+            return credential
+              ? Effect.succeed(credential)
+              : Effect.fail(new Error("Authentication command returned no credential"))
+          }),
+          Effect.exit,
+          Effect.flatMap((exit) => settleCommand(attemptID, exit)),
+          Effect.forkIn(attemptScope, { startImmediately: true }),
+        )
+
+      return CommandAttempt.make({ attemptID, time })
     })
 
     return Service.of({
@@ -572,8 +764,42 @@ const layer = Layer.effect(
           if (attempt) yield* Scope.close(attempt.scope, Exit.void)
         }),
       },
+      command: {
+        connect: connectCommand,
+        status: Effect.fn("Integration.command.status")(function* (input) {
+          const attempt = (yield* SynchronizedRef.get(commandAttempts)).get(input.attemptID)
+          if (!attempt || attempt.integrationID !== input.integrationID)
+            return yield* Effect.die(new Error(`Command attempt not found: ${input.attemptID}`))
+          if (attempt.status === "pending") {
+            return {
+              status: attempt.status,
+              ...(attempt.message ? { message: attempt.message } : {}),
+              time: attempt.time,
+            }
+          }
+          if (attempt.status === "failed") {
+            return { status: attempt.status, message: attempt.message ?? "Authentication failed", time: attempt.time }
+          }
+          return { status: attempt.status, time: attempt.time }
+        }),
+        cancel: Effect.fn("Integration.command.cancel")(function* (input) {
+          const attempt = yield* SynchronizedRef.modify(commandAttempts, (current) => {
+            const match = current.get(input.attemptID)
+            if (!match || match.integrationID !== input.integrationID || match.status !== "pending" || match.persisting)
+              return [undefined, current]
+            const next = new Map(current)
+            next.delete(input.attemptID)
+            return [match, next]
+          })
+          if (attempt) yield* Scope.close(attempt.scope, Exit.void)
+        }),
+      },
     })
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer, deps: [Credential.node, EventV2.node] })
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [Credential.node, EventV2.node, AppProcess.node],
+})

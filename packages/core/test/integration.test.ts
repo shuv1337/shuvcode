@@ -29,6 +29,20 @@ const failingIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([Integration.node, EventV2.node]), [[Credential.node, failingCredentialNode]]),
 )
 
+function eventually<A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  predicate: (value: A) => boolean,
+  remaining = 1000,
+): Effect.Effect<A, E | Error, R> {
+  return Effect.gen(function* () {
+    const value = yield* effect
+    if (predicate(value)) return value
+    if (remaining === 0) return yield* Effect.fail(new Error("Timed out waiting for value"))
+    yield* Effect.promise(() => Bun.sleep(1))
+    return yield* eventually(effect, predicate, remaining - 1)
+  })
+}
+
 describe("Integration", () => {
   it.effect("registers integrations through the editor", () =>
     Effect.gen(function* () {
@@ -148,6 +162,51 @@ describe("Integration", () => {
         }),
       ])
       expect((yield* Fiber.join(updated)).length).toBe(1)
+    }),
+  )
+
+  it.live("runs command authentication and stores the final output line", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("company")
+      const methodID = Integration.MethodID.make("login")
+      yield* integrations.transform((editor) =>
+        editor.method.update({
+          integrationID,
+          method: {
+            id: methodID,
+            type: "command",
+            label: "Log in",
+            command: [
+              process.execPath,
+              "-e",
+              'console.log("https://example.com/login"); await Bun.sleep(50); console.log("secret")',
+            ],
+          },
+        }),
+      )
+
+      const attempt = yield* integrations.command.connect({ integrationID, methodID, label: "Work" })
+      const pending = yield* eventually(
+        integrations.command.status({ integrationID, attemptID: attempt.attemptID }),
+        (status) => status.status === "pending" && status.message?.includes("https://example.com/login") === true,
+      )
+      expect(pending).toMatchObject({ status: "pending", message: "https://example.com/login" })
+
+      expect(
+        yield* eventually(
+          integrations.command.status({ integrationID, attemptID: attempt.attemptID }),
+          (status) => status.status === "complete",
+        ),
+      ).toEqual({ status: "complete", time: attempt.time })
+      expect(yield* credentials.list(integrationID)).toEqual([
+        expect.objectContaining({
+          integrationID,
+          label: "Work",
+          value: Credential.Key.make({ type: "key", key: "secret" }),
+        }),
+      ])
     }),
   )
 

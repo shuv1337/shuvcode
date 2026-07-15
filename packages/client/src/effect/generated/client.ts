@@ -571,6 +571,44 @@ const Endpoint10_6 = (raw: RawClient["server.integration"]) => (input: Endpoint1
     query: { location: input["location"] },
   }).pipe(Effect.mapError(mapClientError))
 
+type Endpoint10_7Request = Parameters<RawClient["server.integration"]["integration.command.connect"]>[0]
+type Endpoint10_7Input = {
+  readonly integrationID: Endpoint10_7Request["params"]["integrationID"]
+  readonly location?: Endpoint10_7Request["query"]["location"]
+  readonly methodID: Endpoint10_7Request["payload"]["methodID"]
+  readonly label?: Endpoint10_7Request["payload"]["label"]
+}
+const Endpoint10_7 = (raw: RawClient["server.integration"]) => (input: Endpoint10_7Input) =>
+  raw["integration.command.connect"]({
+    params: { integrationID: input["integrationID"] },
+    query: { location: input["location"] },
+    payload: { methodID: input["methodID"], label: input["label"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint10_8Request = Parameters<RawClient["server.integration"]["integration.command.status"]>[0]
+type Endpoint10_8Input = {
+  readonly integrationID: Endpoint10_8Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_8Request["params"]["attemptID"]
+  readonly location?: Endpoint10_8Request["query"]["location"]
+}
+const Endpoint10_8 = (raw: RawClient["server.integration"]) => (input: Endpoint10_8Input) =>
+  raw["integration.command.status"]({
+    params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
+    query: { location: input["location"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint10_9Request = Parameters<RawClient["server.integration"]["integration.command.cancel"]>[0]
+type Endpoint10_9Input = {
+  readonly integrationID: Endpoint10_9Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_9Request["params"]["attemptID"]
+  readonly location?: Endpoint10_9Request["query"]["location"]
+}
+const Endpoint10_9 = (raw: RawClient["server.integration"]) => (input: Endpoint10_9Input) =>
+  raw["integration.command.cancel"]({
+    params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
+    query: { location: input["location"] },
+  }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroup10 = (raw: RawClient["server.integration"]) => ({
   list: Endpoint10_0(raw),
   get: Endpoint10_1(raw),
@@ -581,6 +619,7 @@ const adaptGroup10 = (raw: RawClient["server.integration"]) => ({
     complete: Endpoint10_5(raw),
     cancel: Endpoint10_6(raw),
   },
+  command: { connect: Endpoint10_7(raw), status: Endpoint10_8(raw), cancel: Endpoint10_9(raw) },
 })
 
 type Endpoint11_0Request = Parameters<RawClient["server.mcp"]["mcp.list"]>[0]
