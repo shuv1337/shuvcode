@@ -7,7 +7,6 @@ import { useRoute } from "../context/route"
 import { useData } from "../context/data"
 import { Keymap } from "../context/keymap"
 import { Locale } from "../util/locale"
-import { useProject } from "../context/project"
 import { useTheme } from "../context/theme"
 import { useClient } from "../context/client"
 import { useLocal } from "../context/local"
@@ -21,7 +20,6 @@ export function DialogSessionList() {
   const dialog = useDialog()
   const route = useRoute()
   const data = useData()
-  const project = useProject()
   const { theme } = useTheme()
   const client = useClient()
   const local = useLocal()
@@ -33,15 +31,16 @@ export function DialogSessionList() {
 
   const [searchResults] = createResource(search, async (query) => {
     if (!query) return
-    const location = data.location.default()
     try {
+      if (!data.location.info()) await data.location.sync()
+      const current = data.location.info()
+      if (!current) throw new Error("Location unavailable")
       const response = await client.api.session.list({
+        project: current.project.id,
         search: query,
         limit: 50,
         order: "desc",
         parentID: null,
-        directory: location.directory,
-        workspace: location.workspaceID,
       })
       return { query, sessions: response.data, error: undefined }
     } catch (error) {
@@ -101,7 +100,8 @@ export function DialogSessionList() {
 
     const option = (session: SessionInfo, category: string) => {
       const directory = session.location.directory
-      const footer = directory !== project.data.project.mainDir ? Locale.truncate(path.basename(directory), 20) : ""
+      const footer =
+        directory !== data.location.info()?.project.directory ? Locale.truncate(path.basename(directory), 20) : ""
       const slot = slotByID.get(session.id)
       const deleting = toDelete() === session.id
       return {

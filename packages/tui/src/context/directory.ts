@@ -1,13 +1,13 @@
 import { createMemo } from "solid-js"
-import { useProject } from "./project"
+import { useData } from "./data"
 import { abbreviateHome } from "../runtime"
 import { useTuiPaths } from "./runtime"
 
 export function useDirectory() {
-  const project = useProject()
+  const data = useData()
   const paths = useTuiPaths()
   return createMemo(() => {
-    const directory = project.instance.path().directory || paths.cwd
+    const directory = data.location.info()?.directory ?? data.location.default().directory ?? paths.cwd
     return abbreviateHome(directory, paths.home)
   })
 }

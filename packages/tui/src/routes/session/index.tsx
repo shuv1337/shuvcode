@@ -18,7 +18,6 @@ import { EOL, tmpdir } from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
 import { useRoute, useRouteData } from "../../context/route"
 import { createStore } from "solid-js/store"
-import { useProject } from "../../context/project"
 import { useData } from "../../context/data"
 import { SplitBorder } from "../../ui/border"
 import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
@@ -71,7 +70,7 @@ import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
-import { useSetLocation } from "../../context/location"
+import { useLocation } from "../../context/location"
 import { createSessionRows, resolvePart, type PartRef, type SessionRow } from "./rows"
 import { switchLabel } from "../../util/model"
 
@@ -106,7 +105,6 @@ export function Session() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const data = useData()
-  const project = useProject()
   const paths = useTuiPaths()
   const configState = useConfig()
   const config = configState.data
@@ -115,9 +113,9 @@ export function Session() {
   const session = createMemo(() => data.session.get(route.sessionID))
   const messages = () => data.session.message.list(route.sessionID)
   const location = createMemo(() => session()?.location)
-  const setLocation = useSetLocation()
+  const currentLocation = useLocation()
 
-  createEffect(() => setLocation(location()))
+  createEffect(() => currentLocation.set(location()))
 
   createEffect(() => {
     const title = Locale.truncate(session()?.title ?? "", 50)
@@ -211,7 +209,6 @@ export function Session() {
         navigate({ type: "home" })
         return
       }
-      project.workspace.set(info.location.workspaceID)
       editor.reconnect(info.location.directory)
       if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
     })().catch((error) => {
@@ -2348,9 +2345,7 @@ function Shell(props: ToolProps) {
       .output({
         id,
         limit: 1024 * 1024,
-        location: location
-          ? { directory: location.directory, workspace: location.workspaceID }
-          : undefined,
+        location: location ? { directory: location.directory, workspace: location.workspaceID } : undefined,
       })
       .then((response) => setBackgroundOutput(stripAnsi(response.data.output.trim())))
       .catch(() => undefined)

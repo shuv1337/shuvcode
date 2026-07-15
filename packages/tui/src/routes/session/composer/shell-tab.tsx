@@ -18,9 +18,7 @@ export function ShellTab(props: { sessionID: string }) {
   const shortcuts = Keymap.useShortcuts()
 
   const entries = createMemo(() =>
-    data.shell
-      .list()
-      .filter((shell) => shell.metadata.sessionID === props.sessionID && shell.status === "running"),
+    data.shell.list().filter((shell) => shell.metadata.sessionID === props.sessionID && shell.status === "running"),
   )
 
   const [store, setStore] = createStore({ selected: 0 })
@@ -47,8 +45,7 @@ export function ShellTab(props: { sessionID: string }) {
     const cleanup = composer.register({
       id: "shell",
       label: "Shell",
-      hints: () =>
-        selectedEntry() ? [{ label: "kill", shortcut: shortcuts.get("composer.shell.kill") ?? "" }] : [],
+      hints: () => (selectedEntry() ? [{ label: "kill", shortcut: shortcuts.get("composer.shell.kill") ?? "" }] : []),
     })
     onCleanup(cleanup)
   })
@@ -87,7 +84,7 @@ export function ShellTab(props: { sessionID: string }) {
         run() {
           const entry = selectedEntry()
           if (!entry) return
-          const ref = location()
+          const ref = location.current
           void client.api.shell.remove({
             id: entry.id,
             location: ref ? { directory: ref.directory, workspace: ref.workspaceID } : undefined,
@@ -99,11 +96,7 @@ export function ShellTab(props: { sessionID: string }) {
 
   return (
     <Show when={composer.active("shell")}>
-      <scrollbox
-        scrollbarOptions={{ visible: false }}
-        maxHeight={5}
-        ref={(r: ScrollBoxRenderable) => (scroll = r)}
-      >
+      <scrollbox scrollbarOptions={{ visible: false }} maxHeight={5} ref={(r: ScrollBoxRenderable) => (scroll = r)}>
         <Show when={entries().length > 0} fallback={<text fg={theme.textMuted}> No shell commands</text>}>
           <For each={entries()}>
             {(shell, index) => {

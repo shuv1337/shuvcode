@@ -23,7 +23,6 @@ import { useClipboard } from "../../context/clipboard"
 import { Spinner } from "../spinner"
 import { useClient } from "../../context/client"
 import { useRoute } from "../../context/route"
-import { useProject } from "../../context/project"
 import { useEvent } from "../../context/event"
 import { editorSelectionKey, useEditorContext, type EditorSelection } from "../../context/editor"
 import { normalizePromptContent, openEditor } from "../../editor"
@@ -151,7 +150,6 @@ export function Prompt(props: PromptProps) {
   const client = useClient()
   const editor = useEditorContext()
   const route = useRoute()
-  const project = useProject()
   const data = useData()
   const currentLocation = useLocation()
   const config = useConfig().data
@@ -165,7 +163,8 @@ export function Prompt(props: PromptProps) {
       .filter((id) => id !== props.sessionID && data.session.status(id) === "running").length
   })
   const runningShells = createMemo(
-    () => data.shell.list(currentLocation()).filter((shell) => shell.metadata.sessionID === props.sessionID).length,
+    () =>
+      data.shell.list(currentLocation.current).filter((shell) => shell.metadata.sessionID === props.sessionID).length,
   )
   const history = usePromptHistory()
   const stash = usePromptStash()
@@ -214,7 +213,8 @@ export function Prompt(props: PromptProps) {
   const editorContextLabelState = createMemo(() => editor.labelState())
   const [auto, setAuto] = createSignal<AutocompleteRef>()
   const move = usePromptMove({
-    projectID: () => (props.sessionID ? data.session.get(props.sessionID)?.projectID : undefined) ?? project.project(),
+    projectID: () =>
+      (props.sessionID ? data.session.get(props.sessionID)?.projectID : undefined) ?? data.location.info()?.project.id,
     sessionID: () => props.sessionID,
   })
   const [cursorVersion, setCursorVersion] = createSignal(0)
@@ -244,7 +244,7 @@ export function Prompt(props: PromptProps) {
   const event = useEvent()
 
   event.on("tui.prompt.append", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+    if (workspace !== (currentLocation.current?.workspaceID ?? data.location.default().workspaceID)) return
     if (!input || input.isDestroyed) return
     input.insertText(evt.data.text)
     setTimeout(() => {
@@ -465,8 +465,8 @@ export function Prompt(props: PromptProps) {
             renderer,
             value,
             cwd:
-              (project.instance.path().worktree === "/" ? undefined : project.instance.path().worktree) ||
-              project.instance.directory() ||
+              (data.location.info()?.project.directory === "/" ? undefined : data.location.info()?.project.directory) ||
+              data.location.default().directory ||
               paths.cwd,
           })
           if (!content) return
@@ -502,7 +502,7 @@ export function Prompt(props: PromptProps) {
         run: () => {
           dialog.replace(() => (
             <DialogSkill
-              location={currentLocation()}
+              location={currentLocation.current}
               onSelect={(skill) => {
                 input.setText(`/${skill} `)
                 setStore("prompt", {
@@ -1016,7 +1016,7 @@ export function Prompt(props: PromptProps) {
       setStore("mode", "normal")
     } else if (
       inputText.startsWith("/") &&
-      (data.location.command.list(currentLocation()) ?? []).some(
+      (data.location.command.list(currentLocation.current) ?? []).some(
         (command) => command.name === inputText.split("\n")[0].split(" ")[0].slice(1),
       )
     ) {
@@ -1043,7 +1043,7 @@ export function Prompt(props: PromptProps) {
         })
     } else if (
       inputText.startsWith("/") &&
-      (data.location.skill.list(currentLocation()) ?? []).some(
+      (data.location.skill.list(currentLocation.current) ?? []).some(
         (skill) => skill.slash === true && skill.id === inputText.split("\n")[0].split(" ")[0].slice(1),
       )
     ) {

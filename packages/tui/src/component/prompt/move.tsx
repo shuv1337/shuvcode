@@ -7,7 +7,6 @@ import { useClient } from "../../context/client"
 import { useToast } from "../../ui/toast"
 import { DialogMoveSession, type MoveSessionSelection } from "../dialog-move-session"
 import { DialogWorkspaceFileChanges } from "../dialog-workspace-file-changes"
-import { useProject } from "../../context/project"
 import { useData } from "../../context/data"
 
 function moveReminderText(directory: string) {
@@ -18,7 +17,6 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
   const dialog = useDialog()
   const client = useClient()
   const toast = useToast()
-  const project = useProject()
   const data = useData()
   const paths = useTuiPaths()
   const [creating, setCreating] = createSignal(false)
@@ -34,7 +32,7 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
     try {
       const result = await client.api.projectCopy.create({
         projectID,
-        location: { directory: project.instance.directory() || paths.cwd },
+        location: { directory: data.location.info()?.directory || paths.cwd },
         strategy: "git_worktree",
         directory: path.join(paths.worktree, projectID.slice(0, 6)),
         name,
@@ -77,8 +75,8 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
               }
             : {
                 type: "directory",
-                directory: project.instance.directory(),
-                subdirectory: project.instance.directory() !== project.instance.path().worktree,
+                directory: data.location.default().directory,
+                subdirectory: data.location.default().directory !== data.location.info()?.project.directory,
               })
         }
         onCurrentChange={setDestination}
@@ -130,8 +128,10 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
     if (projectID) return projectID
     const sessionID = input.sessionID()
     if (sessionID) return (await resolveSession(sessionID))?.projectID
+    const current = data.location.info()
+    if (current) return current.project.id
     return client.api.project
-      .current({ location: { directory: project.instance.directory() || paths.cwd } })
+      .current({ location: { directory: data.location.default().directory || paths.cwd } })
       .then((project) => project.id)
       .catch(() => undefined)
   }

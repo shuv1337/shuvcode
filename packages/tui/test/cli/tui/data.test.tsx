@@ -5,10 +5,9 @@ import type { OpenCodeEvent } from "@opencode-ai/client"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { EventV2 } from "@opencode-ai/core/event"
 import { createEffect, onMount, type ParentProps } from "solid-js"
-import { ProjectProvider } from "../../../src/context/project"
 import { ClientProvider, useClient } from "../../../src/context/client"
 import { DataProvider as DataProviderBase, useData } from "../../../src/context/data"
-import { LocationProvider, useSetLocation } from "../../../src/context/location"
+import { LocationProvider, useLocation } from "../../../src/context/location"
 import { createSessionRows, type SessionRow } from "../../../src/routes/session/rows"
 import { createApi, createEventStream, createFetch, directory, json } from "../../fixture/tui-client"
 import { TestTuiContexts } from "../../fixture/tui-environment"
@@ -44,10 +43,14 @@ function DataProvider(props: ParentProps) {
   )
 }
 
+function ProjectProvider(props: ParentProps) {
+  return props.children
+}
+
 function SyncLocation() {
   const data = useData()
-  const setLocation = useSetLocation()
-  createEffect(() => setLocation(data.location.default()))
+  const location = useLocation()
+  createEffect(() => location.set(data.location.default()))
   return null
 }
 

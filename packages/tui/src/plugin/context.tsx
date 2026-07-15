@@ -85,7 +85,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
     const context: Context = {
       options: item.options ?? {},
       get location() {
-        return location()
+        return location.current
       },
       client: client.api,
       data,

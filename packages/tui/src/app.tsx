@@ -42,14 +42,13 @@ import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogIntegration } from "./component/dialog-integration"
 import { ErrorComponent } from "./component/error-component"
 import { PluginRouteMissing } from "./component/plugin-route-missing"
-import { ProjectProvider, useProject } from "./context/project"
 import { EditorContextProvider } from "./context/editor"
 import { useEvent } from "./context/event"
 import { ClientProvider, useClient } from "./context/client"
 import { StartupLoading } from "./component/startup-loading"
 import { Reconnecting } from "./component/reconnecting"
 import { DataProvider, useData } from "./context/data"
-import { LocationProvider } from "./context/location"
+import { LocationProvider, useLocation } from "./context/location"
 import { LocalProvider, useLocal } from "./context/local"
 import { PermissionProvider } from "./context/permission"
 import { DialogModel } from "./component/dialog-model"
@@ -327,40 +326,38 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                         <PluginRuntimeProvider value={pluginRuntime}>
                                           <ClientProvider api={api} reconnect={reconnect} reload={input.server.reload}>
                                             <PermissionProvider>
-                                              <ProjectProvider>
-                                                <DataProvider>
-                                                  <LocationProvider>
-                                                    <ThemeProvider mode={mode}>
-                                                      <LocalProvider>
-                                                        <PromptStashProvider>
-                                                          <DialogProvider>
-                                                            <FrecencyProvider>
-                                                              <PromptHistoryProvider>
-                                                                <PromptRefProvider>
-                                                                  <EditorContextProvider>
-                                                                    <PluginProvider packages={input.packages}>
-                                                                      <App
-                                                                        pair={
-                                                                          input.server.endpoint.auth
-                                                                            ? input.server.endpoint.auth
-                                                                            : {
-                                                                                username: "opencode",
-                                                                                password: "",
-                                                                              }
-                                                                        }
-                                                                      />
-                                                                    </PluginProvider>
-                                                                  </EditorContextProvider>
-                                                                </PromptRefProvider>
-                                                              </PromptHistoryProvider>
-                                                            </FrecencyProvider>
-                                                          </DialogProvider>
-                                                        </PromptStashProvider>
-                                                      </LocalProvider>
-                                                    </ThemeProvider>
-                                                  </LocationProvider>
-                                                </DataProvider>
-                                              </ProjectProvider>
+                                              <DataProvider>
+                                                <LocationProvider>
+                                                  <ThemeProvider mode={mode}>
+                                                    <LocalProvider>
+                                                      <PromptStashProvider>
+                                                        <DialogProvider>
+                                                          <FrecencyProvider>
+                                                            <PromptHistoryProvider>
+                                                              <PromptRefProvider>
+                                                                <EditorContextProvider>
+                                                                  <PluginProvider packages={input.packages}>
+                                                                    <App
+                                                                      pair={
+                                                                        input.server.endpoint.auth
+                                                                          ? input.server.endpoint.auth
+                                                                          : {
+                                                                              username: "opencode",
+                                                                              password: "",
+                                                                            }
+                                                                      }
+                                                                    />
+                                                                  </PluginProvider>
+                                                                </EditorContextProvider>
+                                                              </PromptRefProvider>
+                                                            </PromptHistoryProvider>
+                                                          </FrecencyProvider>
+                                                        </DialogProvider>
+                                                      </PromptStashProvider>
+                                                    </LocalProvider>
+                                                  </ThemeProvider>
+                                                </LocationProvider>
+                                              </DataProvider>
                                             </PermissionProvider>
                                           </ClientProvider>
                                         </PluginRuntimeProvider>
@@ -413,7 +410,7 @@ function App(props: { pair?: DialogPairCredentials }) {
   const themeState = useTheme()
   const { theme, mode, setMode, locked, lock, unlock } = themeState
   const data = useData()
-  const project = useProject()
+  const location = useLocation()
   const exit = useExit()
   const promptRef = usePromptRef()
   const pluginRuntime = usePluginRuntime()
@@ -988,12 +985,12 @@ function App(props: { pair?: DialogPairCredentials }) {
   }))
 
   event.on("tui.command.execute", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
     keymap.dispatchCommand(evt.data.command)
   })
 
   event.on("tui.toast.show", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
     toast.show({
       title: evt.data.title,
       message: evt.data.message,
@@ -1003,13 +1000,14 @@ function App(props: { pair?: DialogPairCredentials }) {
   })
 
   event.on("plugin.updated", (_evt, { directory, workspace }) => {
-    if (directory !== project.instance.directory()) return
-    if (workspace !== project.workspace.current()) return
+    const current = location.current ?? data.location.default()
+    if (directory !== current.directory) return
+    if (workspace !== current.workspaceID) return
     toast.show({ variant: "success", message: "Plugins reloaded" })
   })
 
   event.on("tui.session.select", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
     route.navigate({
       type: "session",
       sessionID: evt.data.sessionID,
@@ -1027,7 +1025,7 @@ function App(props: { pair?: DialogPairCredentials }) {
   })
 
   event.on("session.error", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
     const error = evt.data.error
     if (error && typeof error === "object" && error.name === "MessageAbortedError") return
     const message = errorMessage(error)

@@ -7,8 +7,8 @@ export function usePathFormatter() {
   const paths = useTuiPaths()
   const location = useLocation()
   return {
-    path: () => location()?.directory || paths.cwd,
-    format: (input?: string) => formatPath(input, location()?.directory || paths.cwd, paths.home),
+    path: () => location.current?.directory || paths.cwd,
+    format: (input?: string) => formatPath(input, location.current?.directory || paths.cwd, paths.home),
   }
 }
 

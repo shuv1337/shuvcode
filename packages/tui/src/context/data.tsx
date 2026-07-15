@@ -9,6 +9,7 @@ import type {
   FormInfo,
   IntegrationInfo,
   LocationRef,
+  LocationGetOutput,
   McpResource,
   McpServer,
   ModelInfo,
@@ -43,6 +44,7 @@ const messageIDFromEvent = (eventID: string) => eventID.replace(/^evt_/, "msg_")
 export type FormWithLocation = FormInfo & { readonly location?: LocationRef }
 
 type LocationData = {
+  info?: LocationGetOutput
   agent?: AgentInfo[]
   command?: CommandInfo[]
   integration?: IntegrationInfo[]
@@ -1058,6 +1060,9 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         },
       },
       location: {
+        info(ref?: LocationRef) {
+          return store.location[locationKey(ref ?? defaultLocation())]?.info
+        },
         default() {
           return defaultLocation()
         },
@@ -1067,7 +1072,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             const location = await client.api.location.get({ location: locationQuery(current) })
             const key = locationKey(location)
             if (!store.location[key]) setStore("location", key, {})
-            if (!ref) setDefaultLocation({ directory: location.directory, workspaceID: location.workspaceID })
+            setStore("location", key, "info", location)
+            if (!ref) {
+              setDefaultLocation({ directory: location.directory, workspaceID: location.workspaceID })
+            }
           })
           const location = ref ?? defaultLocation()
           await Promise.all([
@@ -1275,12 +1283,16 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
               )
             })
             .catch(() => undefined)
-          void client.api.session
-            .list({
-              limit: 50,
-              order: "desc",
-              directory: defaultLocation().directory,
-              workspace: defaultLocation().workspaceID,
+          void client.api.location
+            .get({ location: locationQuery(defaultLocation()) })
+            .then((location) => {
+              const key = locationKey(location)
+              setStore("location", key, { ...store.location[key], info: location })
+              return client.api.session.list({
+                project: location.project.id,
+                limit: 50,
+                order: "desc",
+              })
             })
             .then((response) => {
               setStore(

@@ -9,7 +9,7 @@ import { useLocal } from "../context/local"
 import { usePluginRuntime } from "../plugin/runtime"
 import { useEditorContext } from "../context/editor"
 import { useData } from "../context/data"
-import { useSetLocation } from "../context/location"
+import { useLocation } from "../context/location"
 import { FormPrompt } from "./session/form"
 import { PluginSlot } from "../plugin/context"
 
@@ -28,12 +28,12 @@ export function Home() {
   const local = useLocal()
   const editor = useEditorContext()
   const data = useData()
-  const setLocation = useSetLocation()
+  const location = useLocation()
   // Global MCP elicitations can arrive without a session route, so keep them reachable from Home.
   const forms = createMemo(() => data.session.form.list("global", data.location.default()) ?? [])
   let sent = false
 
-  createEffect(() => setLocation(data.location.default()))
+  createEffect(() => location.set(data.location.default()))
 
   onMount(() => {
     editor.clearSelection()
