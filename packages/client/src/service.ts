@@ -21,15 +21,15 @@ export type DiscoverOptions = {
   readonly version?: string
 }
 
-/** Reason a new service process must be started. */
-export type StartReason = "missing" | "version-mismatch"
+/** Reason ensuring the service requires a new process. */
+export type EnsureReason = "missing" | "version-mismatch"
 
 /** Options used to ensure the local OpenCode service is running. */
-export type StartOptions = DiscoverOptions & {
+export type EnsureOptions = DiscoverOptions & {
   /** Service command and arguments. Defaults to `opencode serve --service`. */
   readonly command?: ReadonlyArray<string>
   /** Called once before spawning a new service process. */
-  readonly onStart?: (reason: StartReason, previousVersion?: string) => void
+  readonly onStart?: (reason: EnsureReason, previousVersion?: string) => void
 }
 
 /** Options used to stop the local OpenCode service. */

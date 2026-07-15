@@ -35,7 +35,7 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
   yield* request(() => timeline.intro("Log in"))
   yield* request(() => timeline.pending("Connecting to OpenCode..."))
 
-  const endpoint = yield* Service.start(yield* ServiceConfig.options())
+  const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
   const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   const found = yield* request((signal) => client.integration.get({ integrationID, location }, { signal }))
   const integration = yield* required(found.data, "OpenCode Console integration is unavailable")

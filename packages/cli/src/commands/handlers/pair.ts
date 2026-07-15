@@ -10,7 +10,7 @@ import { ServiceConfig } from "../../services/service-config"
 export default Runtime.handler(
   Commands.commands.pair,
   Effect.fn("cli.pair")(function* () {
-    const endpoint = yield* Service.start(yield* ServiceConfig.options())
+    const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
     const password = yield* ServiceConfig.password()
     const server = yield* Effect.tryPromise(() =>
       OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) }).server.get(),

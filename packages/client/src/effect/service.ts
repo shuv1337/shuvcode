@@ -6,7 +6,7 @@ import { join } from "node:path"
 import type {
   DiscoverOptions,
   Endpoint,
-  StartOptions,
+  EnsureOptions,
   StopOptions,
 } from "../service.js"
 
@@ -28,7 +28,7 @@ type Contender = {
 }
 
 // Read-only lookup: registration file plus health check and version gate.
-// Never spawns; escalation to start() is the caller's policy.
+// Never spawns; escalation to ensure() is the caller's policy.
 /** Discover a healthy, compatible local service without starting one. */
 export const discover = Effect.fn("service.discover")(function* (options: DiscoverOptions = {}) {
   return (yield* discoverLocal(options))?.endpoint
@@ -45,7 +45,7 @@ const discoverLocal = Effect.fnUntraced(function* (options: DiscoverOptions) {
 // version-mismatched one, and otherwise spawns small contenders until a server
 // becomes discoverable. A contender is never killed merely for slow startup.
 /** Ensure a healthy, compatible local service is running. */
-export const start = Effect.fn("service.start")(function* (options: StartOptions = {}) {
+export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOptions = {}) {
   const contenders = new Set<Contender>()
   let announced = false
   let lastSpawn = 0
@@ -219,7 +219,7 @@ const find = Effect.fnUntraced(function* (options: { readonly file?: string }) {
   return (yield* registered(options.file, true)).service
 })
 
-// 50ms cadence bounded at ~5s, shared by stop escalation and each start
+// 50ms cadence bounded at ~5s, shared by stop escalation and each ensure
 // discovery window.
 const poll = Schedule.spaced("50 millis").pipe(Schedule.both(Schedule.recurs(100)))
 
@@ -280,4 +280,4 @@ const requestStop = Effect.fnUntraced(function* (service: LocalService) {
 })
 
 /** Effect-based local service lifecycle operations. */
-export const Service = { discover, start, stop, headers, Info }
+export const Service = { discover, ensure, stop, headers, Info }

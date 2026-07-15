@@ -6,7 +6,7 @@ import type {
   DiscoverOptions,
   Endpoint,
   Info,
-  StartOptions,
+  EnsureOptions,
   StopOptions,
 } from "../service.js"
 import type { ServiceHealth, ServiceStopResponse } from "./generated/types.js"
@@ -37,7 +37,7 @@ async function discoverLocal(options: DiscoverOptions) {
 }
 
 /** Ensure a healthy, compatible local service is running. */
-export async function start(options: StartOptions = {}): Promise<Endpoint> {
+export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
   const contenders = new Set<Contender>()
   let announced = false
   let lastSpawn = 0
@@ -249,4 +249,4 @@ function delay(milliseconds: number) {
 }
 
 /** Promise-based local service lifecycle operations. */
-export const Service = { discover, start, stop, headers }
+export const Service = { discover, ensure, stop, headers }

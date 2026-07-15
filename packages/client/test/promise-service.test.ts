@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Service, type StartReason } from "../src/promise/service"
+import { Service, type EnsureReason } from "../src/promise/service"
 
 const fixture = join(import.meta.dir, "fixture/service.ts")
 const processes: Bun.Subprocess[] = []
@@ -23,12 +23,12 @@ test("discovers a registered service", async () => {
   expect(await Service.discover({ file: registration, version: "other" })).toBeUndefined()
 })
 
-test("starts a missing service with native promises", async () => {
+test("ensures a missing service with native promises", async () => {
   const directory = await temp()
   const registration = join(directory, "service.json")
-  const starts: StartReason[] = []
+  const starts: EnsureReason[] = []
 
-  const endpoint = await Service.start({
+  const endpoint = await Service.ensure({
     file: registration,
     version: "test",
     command: [process.execPath, fixture, registration, "coordinated"],
@@ -47,7 +47,7 @@ test("starts a missing service with native promises", async () => {
 test("reports a failed registered service", async () => {
   const registration = await setup("failed-owner")
 
-  await expect(Service.start({ file: registration, version: "test", command: [] })).rejects.toThrow(
+  await expect(Service.ensure({ file: registration, version: "test", command: [] })).rejects.toThrow(
     "Background service failed to start",
   )
 })

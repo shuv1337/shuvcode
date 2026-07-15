@@ -14,7 +14,7 @@ export default Runtime.handler(
   Effect.fn("cli.mcp.logout")(function* (input) {
     const options = yield* ServiceConfig.options()
     const found = yield* Service.discover(options)
-    const endpoint = found ?? (yield* Service.start(options))
+    const endpoint = found ?? (yield* Service.ensure(options))
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
 
     const integration = yield* resolveIntegration(client, input.name, location)

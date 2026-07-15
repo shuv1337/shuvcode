@@ -1,4 +1,4 @@
-import { Service, type Endpoint, type StartOptions } from "@opencode-ai/client/effect/service"
+import { Service, type Endpoint, type EnsureOptions } from "@opencode-ai/client/effect/service"
 import { ClientError, isUnauthorizedError, OpenCode } from "@opencode-ai/client/promise"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Effect, Redacted } from "effect"
@@ -10,7 +10,7 @@ export type Args = {
   readonly server?: string
   readonly standalone?: boolean
   readonly mismatch?: "replace" | "ignore" | "error"
-  readonly onStart?: StartOptions["onStart"]
+  readonly onStart?: EnsureOptions["onStart"]
 }
 
 export type Resolved = {
@@ -49,31 +49,31 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
   } satisfies Resolved
 })
 
-function managedService(options: StartOptions) {
+function managedService(options: EnsureOptions) {
   const reconnectOptions = { ...options, version: undefined }
   return {
-    reconnect: () => Service.start(reconnectOptions),
+    reconnect: () => Service.ensure(reconnectOptions),
     restart: () =>
       Effect.gen(function* () {
         yield* Service.stop(options)
-        yield* Service.start(options)
+        yield* Service.ensure(options)
       }),
   }
 }
 
 const resolveManaged = Effect.fnUntraced(function* (
-  options: StartOptions,
+  options: EnsureOptions,
   mismatch: NonNullable<Args["mismatch"]>,
 ) {
-  if (mismatch === "replace") return yield* Service.start(options)
-  if (mismatch === "ignore") return yield* Service.start({ ...options, version: undefined })
+  if (mismatch === "replace") return yield* Service.ensure(options)
+  if (mismatch === "ignore") return yield* Service.ensure({ ...options, version: undefined })
 
   const compatible = yield* Service.discover(options)
   if (compatible !== undefined) return compatible
   const existing = yield* Service.discover({ ...options, version: undefined })
   if (existing !== undefined)
     return yield* Effect.fail(new Error("Background server version does not match this client"))
-  return yield* Service.start(options)
+  return yield* Service.ensure(options)
 })
 
 function connectError(endpoint: Endpoint, cause: unknown) {

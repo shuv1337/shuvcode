@@ -10,7 +10,7 @@ export default Runtime.handler(
   Effect.fn("cli.service.restart")(function* () {
     const options = yield* ServiceConfig.options()
     yield* Service.stop(options)
-    const transport = yield* Service.start(options)
+    const transport = yield* Service.ensure(options)
     process.stdout.write(transport.url + EOL)
   }),
 )
