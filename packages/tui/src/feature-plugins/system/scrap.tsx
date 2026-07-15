@@ -1,24 +1,41 @@
-import type { TuiPlugin, TuiPluginApi } from "@opencode-ai/plugin/tui"
+import { Plugin } from "@opencode-ai/plugin/v2/tui"
 import { useTerminalDimensions } from "@opentui/solid"
+import { Keymap } from "../../context/keymap"
 import { useTheme } from "../../context/theme"
-import { useBindings } from "../../keymap"
-import type { BuiltinTuiPlugin } from "../builtins"
+import { useDialog } from "../../ui/dialog"
 
-const id = "internal:scrap"
-const route = "scrap"
+function Commands(props: { context: Plugin.Context }) {
+  const dialog = useDialog()
+  Keymap.createLayer(() => ({
+    mode: "global",
+    commands: [
+      {
+        id: "app.scrap",
+        title: "Open scrap screen",
+        group: "Debug",
+        palette: true,
+        run() {
+          props.context.ui.router.navigate({ type: "plugin", name: "scrap" })
+          dialog.clear()
+        },
+      },
+    ],
+  }))
+  return null
+}
 
-function Scrap(props: { api: TuiPluginApi }) {
+function Scrap(props: { context: Plugin.Context }) {
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    commands: [
       {
-        key: "escape",
-        desc: "Back home",
+        bind: "escape",
+        title: "Back home",
         group: "Scrap",
-        cmd() {
-          props.api.route.navigate("home")
+        run() {
+          props.context.ui.router.navigate({ type: "home" })
         },
       },
     ],
@@ -43,24 +60,10 @@ function Scrap(props: { api: TuiPluginApi }) {
   )
 }
 
-const tui: TuiPlugin = async (api) => {
-  api.route.register([{ name: route, render: () => <Scrap api={api} /> }])
-  api.keymap.registerLayer({
-    commands: [
-      {
-        name: "app.scrap",
-        title: "Open scrap screen",
-        category: "Debug",
-        namespace: "palette",
-        run() {
-          api.route.navigate(route)
-          api.ui.dialog.clear()
-        },
-      },
-    ],
-  })
-}
-
-const plugin: BuiltinTuiPlugin = { id, tui }
-
-export default plugin
+export default Plugin.define({
+  id: "opencode.scrap",
+  setup(context) {
+    context.ui.router.register({ name: "scrap", render: () => <Scrap context={context} /> })
+    context.ui.slot("app", () => <Commands context={context} />)
+  },
+})

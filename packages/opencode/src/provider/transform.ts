@@ -761,7 +761,7 @@ export function variants(model: Provider.Model): Record<string, Record<string, a
     }
 
     case "@ai-sdk/gateway":
-      if (model.id.includes("anthropic")) {
+      if (model.api.id.includes("anthropic")) {
         if (adaptiveEfforts) {
           return Object.fromEntries(
             adaptiveEfforts.map((effort) => [
@@ -794,8 +794,8 @@ export function variants(model: Provider.Model): Record<string, Record<string, a
           },
         }
       }
-      if (model.id.includes("google")) {
-        if (id.includes("2.5")) {
+      if (model.api.id.includes("google")) {
+        if (model.api.id.includes("2.5")) {
           return {
             high: {
               thinkingConfig: {
@@ -806,7 +806,7 @@ export function variants(model: Provider.Model): Record<string, Record<string, a
             max: {
               thinkingConfig: {
                 includeThoughts: true,
-                thinkingBudget: googleThinkingBudgetMax(id),
+                thinkingBudget: googleThinkingBudgetMax(model.api.id.toLowerCase()),
               },
             },
           }
@@ -1104,7 +1104,8 @@ export function options(input: {
     input.model.providerID === "openai" ||
     input.model.api.npm === "@ai-sdk/openai" ||
     input.model.api.npm === "@ai-sdk/github-copilot" ||
-    input.model.api.npm === "@ai-sdk/amazon-bedrock/mantle"
+    input.model.api.npm === "@ai-sdk/amazon-bedrock/mantle" ||
+    input.model.api.npm === "@ai-sdk/xai"
   ) {
     result["store"] = false
   }
@@ -1259,7 +1260,8 @@ export function smallOptions(model: Provider.Model) {
   if (
     model.providerID === "openai" ||
     model.api.npm === "@ai-sdk/openai" ||
-    model.api.npm === "@ai-sdk/github-copilot"
+    model.api.npm === "@ai-sdk/github-copilot" ||
+    model.api.npm === "@ai-sdk/xai"
   ) {
     const base = { store: false }
     return mergeDeep(base, small)

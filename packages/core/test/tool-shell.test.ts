@@ -166,6 +166,10 @@ const overflowCommand = (bytes: number) =>
   isWindows
     ? `[Console]::Out.Write(('x' * ${bytes})); Start-Sleep -Milliseconds 100`
     : `head -c ${bytes} /dev/zero | tr '\\0' 'x'`
+const progressOverflowCommand = (bytes: number) =>
+  isWindows
+    ? `[Console]::Out.Write(('x' * ${bytes})); Start-Sleep -Milliseconds 1500`
+    : `head -c ${bytes} /dev/zero | tr '\\0' 'x'; sleep 1.5`
 
 const withSession = <A, E, R>(directory: string, body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
@@ -413,6 +417,35 @@ describe("ShellTool", () => {
     ),
   )
 
+  it.live("reports bounded output progress for a running command", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        const bytes = ShellTool.MAX_CAPTURE_BYTES + 1024
+        return withSession(tmp.path, (registry) =>
+          Effect.gen(function* () {
+            const progress: ToolRegistry.Progress[] = []
+            yield* settleTool(registry, {
+              ...call({ command: progressOverflowCommand(bytes) }, "call-progress"),
+              progress: (update) => Effect.sync(() => progress.push(update)),
+            })
+
+            expect(progress).toHaveLength(1)
+            expect(progress[0]?.structured).toEqual({ truncated: true })
+            const content = progress[0]?.content[0]
+            expect(content?.type).toBe("text")
+            if (content?.type !== "text") return
+            expect(content.text.indexOf("\n\n[output truncated; full output saved to:")).toBe(
+              ShellTool.MAX_CAPTURE_BYTES,
+            )
+          }),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
+    ),
+  )
+
   it.live("returns a useful timeout settlement", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
@@ -572,7 +605,6 @@ test("keeps locked deferred parity TODOs visible", async () => {
     "Replace token-based command-argument external-directory advisories with parser-based detection.",
     "Restore PowerShell and cmd-specific invocation/path handling on Windows.",
     "Add plugin shell.env environment augmentation once V2 plugin hooks exist.",
-    "Add durable/live progress metadata streaming for long-running commands once V2 tool invocation progress context is wired.",
     "Persist job status and define restart recovery before exposing remote observation.",
     "Revisit process-group cleanup and platform coverage with shell-specific tests if current AppProcess semantics do not fully cover it.",
     "Revisit binary output handling if stdout/stderr decoding is text-only.",

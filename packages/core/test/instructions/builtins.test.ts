@@ -7,6 +7,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Global } from "@opencode-ai/core/global"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { InstructionBuiltIns } from "@opencode-ai/core/instructions/builtins"
+import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { location } from "../fixture/location"
 import { testEffect } from "../lib/effect"
 import { readInitial, readUpdate } from "../lib/instructions"
@@ -14,6 +15,7 @@ import { readInitial, readUpdate } from "../lib/instructions"
 const directory = AbsolutePath.make(FSUtil.resolve("/repo/packages/core"))
 const projectDirectory = AbsolutePath.make(FSUtil.resolve("/repo"))
 const timestamp = Date.parse("2026-06-03T12:00:00.000Z")
+const sessionID = SessionSchema.ID.make("ses_builtin_test")
 const localDate = (time: number) => new Date(time).toDateString()
 const locationLayer = Layer.succeed(
   Location.Service,
@@ -36,12 +38,13 @@ describe("InstructionBuiltIns", () => {
     Effect.gen(function* () {
       yield* TestClock.setTime(timestamp)
       const context = yield* InstructionBuiltIns.Service
-      const initialized = yield* readInitial(yield* context.load())
+      const initialized = yield* readInitial(yield* context.load(sessionID))
 
       expect(initialized.text).toBe(
         [
           "Here is some useful information about the environment you are running in:",
           "<env>",
+          `  Session ID: ${sessionID}`,
           `  Working directory: ${directory}`,
           `  Workspace root folder: ${projectDirectory}`,
           "  Is directory a git repo: yes",
@@ -58,10 +61,10 @@ describe("InstructionBuiltIns", () => {
     Effect.gen(function* () {
       yield* TestClock.setTime(timestamp)
       const context = yield* InstructionBuiltIns.Service
-      const initialized = yield* readInitial(yield* context.load())
+      const initialized = yield* readInitial(yield* context.load(sessionID))
 
       yield* TestClock.setTime(timestamp + 24 * 60 * 60 * 1000)
-      const refreshed = yield* readUpdate(yield* context.load(), initialized)
+      const refreshed = yield* readUpdate(yield* context.load(sessionID), initialized)
 
       expect(refreshed.text).toBe(`Today's date is now: ${localDate(timestamp + 24 * 60 * 60 * 1000)}`)
     }),
@@ -71,10 +74,10 @@ describe("InstructionBuiltIns", () => {
     Effect.gen(function* () {
       yield* TestClock.setTime(timestamp)
       const context = yield* InstructionBuiltIns.Service
-      const initialized = yield* readInitial(yield* context.load())
+      const initialized = yield* readInitial(yield* context.load(sessionID))
 
       yield* TestClock.setTime(timestamp + 60 * 60 * 1000)
-      expect((yield* readUpdate(yield* context.load(), initialized)).changed).toBe(false)
+      expect((yield* readUpdate(yield* context.load(sessionID), initialized)).changed).toBe(false)
     }),
   )
 })

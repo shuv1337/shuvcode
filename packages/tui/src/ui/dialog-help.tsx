@@ -1,17 +1,18 @@
 import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog } from "./dialog"
-import { useBindings, useCommandShortcut } from "../keymap"
 
 export function DialogHelp() {
   const dialog = useDialog()
   const { theme } = useTheme()
-  const commandShortcut = useCommandShortcut("command.palette.show")
+  const shortcuts = Keymap.useShortcuts()
 
-  useBindings(() => ({
-    bindings: [
-      { key: "return", desc: "Close help", group: "Dialog", cmd: () => dialog.clear() },
-      { key: "escape", desc: "Close help", group: "Dialog", cmd: () => dialog.clear() },
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
+      { bind: "return", title: "Close help", group: "Dialog", run: () => dialog.clear() },
+      { bind: "escape", title: "Close help", group: "Dialog", run: () => dialog.clear() },
     ],
   }))
 
@@ -27,7 +28,7 @@ export function DialogHelp() {
       </box>
       <box paddingBottom={1}>
         <text fg={theme.textMuted}>
-          Press {commandShortcut()} to see all available actions and commands in any context.
+          Press {shortcuts.get("command.palette.show")} to see all available actions and commands in any context.
         </text>
       </box>
       <box flexDirection="row" justifyContent="flex-end" paddingBottom={1}>

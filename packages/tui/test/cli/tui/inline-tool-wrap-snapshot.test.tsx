@@ -3,7 +3,6 @@ import { For } from "solid-js"
 import { testRender, type JSX } from "@opentui/solid"
 import {
   formatSubagentRetry,
-  formatSubagentTitle,
   InlineToolRow,
   parseApplyPatchFiles,
   parseDiagnostics,
@@ -99,7 +98,16 @@ function ReminderAlignmentFixture() {
   )
 }
 
+function TrailingStatusFixture() {
+  return (
+    <InlineToolRow icon=":" complete={true} pending="" status={<text flexShrink={0}> Background </text>}>
+      Explore Subagent — Inspect renderer status styling
+    </InlineToolRow>
+  )
+}
+
 async function renderFrame(component: () => JSX.Element, options: { width: number; height: number }) {
+  testSetup?.renderer.destroy()
   testSetup = await testRender(component, options)
   await testSetup.renderOnce()
   await testSetup.renderOnce()
@@ -142,6 +150,15 @@ describe("TUI inline tool wrapping", () => {
     )
   })
 
+  test("wraps a trailing status as one padded item", async () => {
+    expect(await renderFrame(() => <TrailingStatusFixture />, { width: 70, height: 2 })).toBe(
+      "   : Explore Subagent — Inspect renderer status styling  Background",
+    )
+    expect(await renderFrame(() => <TrailingStatusFixture />, { width: 62, height: 2 })).toBe(
+      "   : Explore Subagent — Inspect renderer status styling\n      Background",
+    )
+  })
+
   test("filters malformed nested tool wire data", () => {
     expect(
       parseApplyPatchFiles([
@@ -178,13 +195,6 @@ describe("TUI inline tool wrapping", () => {
         "a.ts",
       ),
     ).toEqual([{ message: "valid", range: { start: { line: 2, character: 3 } } }])
-  })
-
-  test("keeps background state attached to the subagent identity", () => {
-    expect(formatSubagentTitle("Explore", "Inspect renderer", false)).toBe("Explore Subagent — Inspect renderer")
-    expect(formatSubagentTitle("Explore", "Inspect renderer", true)).toBe(
-      "Explore Subagent — Inspect renderer [background]",
-    )
   })
 
   test("keeps retry status ahead of wrapping messages", () => {

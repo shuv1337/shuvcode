@@ -497,6 +497,7 @@ const layer = Layer.effectDiscard(
           .set({
             directory: event.data.location.directory,
             path: event.data.subpath,
+            ...(event.data.projectID ? { project_id: event.data.projectID } : {}),
             workspace_id: event.data.location.workspaceID ? WorkspaceV2.ID.make(event.data.location.workspaceID) : null,
             time_updated: DateTime.toEpochMillis(event.created),
           })

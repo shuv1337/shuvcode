@@ -9,7 +9,6 @@ import { Credential } from "@opencode-ai/core/credential"
 import { Pairing } from "@opencode-ai/core/pairing"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
-import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Job } from "@opencode-ai/core/job"
@@ -39,7 +38,6 @@ const applicationServices = LayerNode.group([
   httpClient,
   ToolOutputStore.cleanupNode,
   Job.node,
-  MoveSession.node,
   Project.node,
   SessionV2.node,
   PluginRuntime.providerNode,
@@ -78,14 +76,9 @@ function makeRoutes<AuthError, AuthServices>(
   const serviceLayer = simulateEnabled()
     ? Layer.unwrap(
         Effect.gen(function* () {
-          const { simulationReplacements, startDriveServer } = yield* Effect.promise(
-            () => import("@opencode-ai/simulation/backend"),
-          )
-          if (driveEnabled()) startDriveServer()
-          return AppNodeBuilder.build(applicationServices, [
-            ...replacements,
-            ...(simulateEnabled() ? simulationReplacements : []),
-          ])
+          const { simulationReplacements } = yield* Effect.promise(() => import("@opencode-ai/simulation/backend"))
+          const simulation = yield* simulationReplacements()
+          return AppNodeBuilder.build(applicationServices, [...replacements, ...simulation])
         }),
       )
     : AppNodeBuilder.build(applicationServices, replacements)
@@ -119,10 +112,5 @@ function simulateEnabled() {
   return !!process.env.OPENCODE_SIMULATE
 }
 
-function driveEnabled() {
-  return !!process.env.OPENCODE_DRIVE
-}
-
-export const routes = createRoutes()
-
-export const webHandler = () => HttpRouter.toWebHandler(routes.pipe(Layer.provide(HttpServer.layerServices)))
+export const webHandler = () =>
+  HttpRouter.toWebHandler(createRoutes().pipe(Layer.provide(HttpServer.layerServices)))

@@ -1,6 +1,5 @@
 import { SessionV2 } from "@opencode-ai/core/session"
 import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
-import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
@@ -25,7 +24,6 @@ const DefaultSessionsLimit = 50
 export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handlers) =>
   Effect.gen(function* () {
     const session = yield* SessionV2.Service
-    const moveSession = yield* MoveSession.Service
 
     return handlers
       .handle(
@@ -206,11 +204,11 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.move",
         Effect.fn(function* (ctx) {
-          yield* moveSession
-            .moveSession({
+          yield* session
+            .move({
               sessionID: ctx.params.sessionID,
-              destination: ctx.payload.destination,
-              moveChanges: ctx.payload.moveChanges,
+              directory: ctx.payload.directory,
+              workspaceID: ctx.payload.workspaceID,
             })
             .pipe(
               Effect.catchTag("Session.NotFoundError", (error) =>
@@ -221,22 +219,11 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                   }),
                 ),
               ),
-              Effect.catchTag("MoveSession.DestinationProjectMismatchError", () =>
-                Effect.fail(new InvalidRequestError({ message: "Destination directory belongs to another project" })),
+              Effect.catchTag("Session.DestinationNotFoundError", (error) =>
+                Effect.fail(new InvalidRequestError({ message: `Directory does not exist: ${error.directory}` })),
               ),
-              Effect.catchTag("MoveSession.ApplyChangesError", () =>
-                Effect.fail(
-                  new InvalidRequestError({
-                    message:
-                      "Unable to apply your changes in the destination directory. The files may conflict with existing changes.",
-                  }),
-                ),
-              ),
-              Effect.catchTag("MoveSession.CaptureChangesError", (error) =>
-                Effect.fail(new InvalidRequestError({ message: error.message })),
-              ),
-              Effect.catchTag("MoveSession.ResetSourceChangesError", (error) =>
-                Effect.fail(new InvalidRequestError({ message: error.message })),
+              Effect.catchTag("Session.DestinationNotDirectoryError", (error) =>
+                Effect.fail(new InvalidRequestError({ message: `Not a directory: ${error.directory}` })),
               ),
             )
           return HttpApiSchema.NoContent.make()

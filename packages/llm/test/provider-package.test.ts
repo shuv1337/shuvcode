@@ -9,6 +9,7 @@ describe("provider package entrypoints", () => {
       import("@opencode-ai/llm/providers/openai/chat"),
       import("@opencode-ai/llm/providers/anthropic"),
       import("@opencode-ai/llm/providers/openai-compatible"),
+      import("@opencode-ai/llm/providers/openai-compatible/responses"),
       import("@opencode-ai/llm/providers/amazon-bedrock"),
       import("@opencode-ai/llm/providers/azure"),
       import("@opencode-ai/llm/providers/azure/responses"),
@@ -18,7 +19,7 @@ describe("provider package entrypoints", () => {
 
     for (const module of modules) expect(module.model).toBeFunction()
     expect(modules[0].model).toBe(modules[1].model)
-    expect(modules[6].model).toBe(modules[7].model)
+    expect(modules[7].model).toBe(modules[8].model)
   })
 
   test("maps package settings onto the executable model", () => {
@@ -40,6 +41,32 @@ describe("provider package entrypoints", () => {
   test("selects transport without changing the semantic API", () => {
     expect(model("gpt-5", { apiKey: "fixture" }).route.id).toBe("openai-responses")
     expect(model("gpt-5", { apiKey: "fixture", transport: "websocket" }).route.id).toBe("openai-responses-websocket")
+  })
+
+  test("maps OpenAI-compatible Responses settings onto the executable model", async () => {
+    const OpenAICompatibleResponses = await import("@opencode-ai/llm/providers/openai-compatible/responses")
+    const selected = OpenAICompatibleResponses.model("custom-model", {
+      apiKey: "fixture",
+      baseURL: "https://responses.example.test/v1",
+      provider: "example",
+      headers: { "x-application": "opencode" },
+      body: { service_tier: "priority" },
+      limits: { context: 200_000, output: 64_000 },
+      providerOptions: { openai: { reasoningEffort: "low", store: true } },
+    })
+
+    expect(String(selected.provider)).toBe("example")
+    expect(selected.route.id).toBe("openai-compatible-responses")
+    expect(selected.route.endpoint).toMatchObject({
+      baseURL: "https://responses.example.test/v1",
+      path: "/responses",
+    })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.http?.body).toEqual({ service_tier: "priority" })
+    expect(selected.route.defaults.limits).toEqual({ context: 200_000, output: 64_000 })
+    expect(selected.route.defaults.providerOptions).toEqual({
+      openai: { reasoningEffort: "low", store: true },
+    })
   })
 
   test("maps legacy OpenAI organization and project settings to headers", () => {

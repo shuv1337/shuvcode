@@ -15,10 +15,14 @@
 // Per-child interruption uses `v2.session.interrupt(childID)`. Per-child
 // backgrounding is intentionally absent: subagent jobs block the parent
 // session, so only whole-session `v2.session.background(parentID)` exists.
-import type { EventSubscribeOutput, OpenCodeClient } from "@opencode-ai/client/promise"
-import type { SessionMessageAssistantTool, SessionMessageInfo, ToolPart } from "@opencode-ai/sdk/v2"
+import type {
+  EventSubscribeOutput,
+  OpenCodeClient,
+  SessionMessageAssistantTool,
+  SessionMessageInfo,
+} from "@opencode-ai/client/promise"
 import { Locale } from "@opencode-ai/tui/util/locale"
-import type { FooterSubagentDetail, FooterSubagentState, FooterSubagentTab, StreamCommit } from "./types"
+import type { FooterSubagentDetail, FooterSubagentState, FooterSubagentTab, MiniToolPart, StreamCommit } from "./types"
 
 const CHILD_MESSAGE_LIMIT = 80
 const CHILD_FRAME_LIMIT = 80
@@ -32,11 +36,11 @@ export function outputText(content: ReadonlyArray<{ type: string; text?: string 
   return content.flatMap((item) => (item.type === "text" && item.text ? [item.text] : [])).join("\n")
 }
 
-export function legacyTool(input: {
+export function miniTool(input: {
   sessionID: string
   messageID: string
   tool: SessionMessageAssistantTool
-}): ToolPart {
+}): MiniToolPart {
   const tool = input.tool
   const providerCall =
     tool.executed === undefined && tool.providerState === undefined
@@ -109,7 +113,7 @@ export function legacyTool(input: {
   }
 }
 
-export function toolCommit(part: ToolPart, phase: "start" | "progress" | "final"): StreamCommit {
+export function toolCommit(part: MiniToolPart, phase: "start" | "progress" | "final"): StreamCommit {
   const status = part.state.status
   const text =
     status === "running"
@@ -310,7 +314,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
   }
 
   const childTool = (child: ChildState, item: SessionMessageAssistantTool, messageID: string) => {
-    const part = legacyTool({
+    const part = miniTool({
       sessionID: child.sessionID,
       messageID,
       tool: item,

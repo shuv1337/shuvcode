@@ -3,7 +3,7 @@ import { useData } from "../../context/data"
 import { DialogSelect } from "../../ui/dialog-select"
 import { useClipboard } from "../../context/clipboard"
 import { useToast } from "../../ui/toast"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { errorMessage } from "../../util/error"
 import { DialogFork } from "./dialog-fork"
 import type { PromptInfo } from "../../prompt/history"
@@ -16,7 +16,7 @@ export function DialogMessage(props: {
   const data = useData()
   const clipboard = useClipboard()
   const toast = useToast()
-  const sdk = useSDK()
+  const client = useClient()
   const message = createMemo(() => data.session.message.get(props.sessionID, props.messageID))
 
   return (
@@ -45,7 +45,7 @@ export function DialogMessage(props: {
                 pasted: [],
               })
             }
-            void sdk.api.session.revert
+            void client.api.session.revert
               .stage({ sessionID: props.sessionID, messageID: props.messageID })
               .catch((error) => toast.show({ message: errorMessage(error), variant: "error", duration: 5000 }))
             dialog.clear()

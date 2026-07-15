@@ -2,13 +2,13 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { renderUnicodeCompact } from "uqr"
-import { useSDK } from "../context/sdk"
+import { useClient } from "../context/client"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { errorMessage } from "../util/error"
 
 export function DialogPair() {
-  const sdk = useSDK()
+  const client = useClient()
   const dialog = useDialog()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
@@ -19,8 +19,8 @@ export function DialogPair() {
   dialog.setSize("large")
   dialog.setCentered(true)
 
-  const [invitation, invitationActions] = createResource(() => sdk.api.pairing.invitation.create())
-  const [devices, deviceActions] = createResource(() => sdk.api.pairing.device.list())
+  const [invitation, invitationActions] = createResource(() => client.api.pairing.invitation.create())
+  const [devices, deviceActions] = createResource(() => client.api.pairing.device.list())
   const clock = setInterval(() => setNow(Date.now()), 1_000)
   onCleanup(() => clearInterval(clock))
   const status = createMemo(() => invitationStatus(invitation(), invitation.error, invitation.loading, now()))
@@ -72,7 +72,7 @@ export function DialogPair() {
                       fg={theme.error}
                       onMouseUp={() => {
                         setRevoking(device.deviceID)
-                        sdk.api.pairing.device
+                        client.api.pairing.device
                           .revoke({ deviceID: device.deviceID })
                           .then(() => deviceActions.refetch())
                           .catch(setActionError)

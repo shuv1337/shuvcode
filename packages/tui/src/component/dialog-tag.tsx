@@ -1,14 +1,14 @@
 import { createMemo, createResource } from "solid-js"
 import { DialogSelect } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
-import { useProject } from "../context/project"
-import { useSDK } from "../context/sdk"
+import { useClient } from "../context/client"
+import { useData } from "../context/data"
 import { createStore } from "solid-js/store"
 
 export function DialogTag(props: { onSelect?: (value: string) => void }) {
-  const sdk = useSDK()
+  const client = useClient()
   const dialog = useDialog()
-  const project = useProject()
+  const data = useData()
 
   const [store] = createStore({
     filter: "",
@@ -17,12 +17,15 @@ export function DialogTag(props: { onSelect?: (value: string) => void }) {
   const [files] = createResource(
     () => [store.filter],
     async () => {
-      const result = await sdk.api.file
+      const result = await client.api.file
         .find({
           query: store.filter,
           type: "file",
           limit: 5,
-          location: { workspace: project.workspace.current() },
+          location: {
+            directory: data.location.default().directory,
+            workspace: data.location.default().workspaceID,
+          },
         })
         .catch(() => undefined)
       return result?.data.map((item) => item.path) ?? []

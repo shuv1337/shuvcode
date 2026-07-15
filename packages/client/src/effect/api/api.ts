@@ -10,8 +10,17 @@ type StreamValue<A> = A extends Stream.Stream<infer Success, any, any> ? Success
 export type Endpoint0_0Output = EffectValue<ReturnType<RawClient["server.health"]["health.get"]>>
 export type HealthGetOperation<E = never> = () => Effect.Effect<Endpoint0_0Output, E>
 
+type Endpoint0_1Request = Parameters<RawClient["server.health"]["health.stop"]>[0]
+export type Endpoint0_1Input = {
+  readonly instanceID: Endpoint0_1Request["payload"]["instanceID"]
+  readonly targetVersion?: Endpoint0_1Request["payload"]["targetVersion"]
+}
+export type Endpoint0_1Output = EffectValue<ReturnType<RawClient["server.health"]["health.stop"]>>
+export type HealthStopOperation<E = never> = (input: Endpoint0_1Input) => Effect.Effect<Endpoint0_1Output, E>
+
 export interface HealthApi<E = never> {
   readonly get: HealthGetOperation<E>
+  readonly stop: HealthStopOperation<E>
 }
 
 export type Endpoint1_0Output = EffectValue<ReturnType<RawClient["server.server"]["server.get"]>>
@@ -148,8 +157,8 @@ export type SessionRenameOperation<E = never> = (input: Endpoint6_8Input) => Eff
 type Endpoint6_9Request = Parameters<RawClient["server.session"]["session.move"]>[0]
 export type Endpoint6_9Input = {
   readonly sessionID: Endpoint6_9Request["params"]["sessionID"]
-  readonly destination: Endpoint6_9Request["payload"]["destination"]
-  readonly moveChanges?: Endpoint6_9Request["payload"]["moveChanges"]
+  readonly directory: Endpoint6_9Request["payload"]["directory"]
+  readonly workspaceID?: Endpoint6_9Request["payload"]["workspaceID"]
 }
 export type Endpoint6_9Output = EffectValue<ReturnType<RawClient["server.session"]["session.move"]>>
 export type SessionMoveOperation<E = never> = (input: Endpoint6_9Input) => Effect.Effect<Endpoint6_9Output, E>

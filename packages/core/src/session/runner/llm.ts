@@ -51,6 +51,7 @@ import { AgentNotFoundError, StepFailedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
 import { PluginSupervisor } from "../../plugin/supervisor"
+import { SessionModelHeaders } from "../model-headers"
 
 type StepTokens = {
   readonly input: number
@@ -144,7 +145,7 @@ const layer = Layer.effect(
     const loadInstructions = (agent: AgentV2.Selection, sessionID: SessionSchema.ID) =>
       Effect.all(
         [
-          builtins.load(),
+          builtins.load(sessionID),
           discovery.load(),
           skillGuidance.load(agent),
           referenceGuidance.load(),
@@ -186,7 +187,7 @@ const layer = Layer.effect(
       const providerMetadataKey = model.route.providerMetadataKey ?? model.provider
       const history = yield* SessionHistory.entriesForRunner(db, session.id, instructions)
       const context = history.entries.map((entry) => entry.message)
-      const compactionInput = { sessionID: session.id, messages: context, model }
+      const compactionInput = { session, messages: context, model }
       if (compaction.required(compactionInput) && !(yield* SessionPending.compaction(db, session.id))) {
         const compacted = yield* compaction.compact(compactionInput)
         if (compacted.status === "completed") return { _tag: "RestartAfterCompaction", step: currentStep } as const
@@ -197,6 +198,9 @@ const layer = Layer.effect(
       const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const request = LLM.request({
         model,
+        http: {
+          headers: SessionModelHeaders.make(session),
+        },
         providerOptions: { openai: { promptCacheKey } },
         system: [agentInfo.system ? agentInfo.system : SessionRunnerSystemPrompt.provider(model), history.initial]
           .filter((part): part is string => part !== undefined && part.length > 0)
@@ -257,8 +261,18 @@ const layer = Layer.effect(
                   toolMaterialization.settle({
                     sessionID: session.id,
                     agent: agent.id,
-                    assistantMessageID,
+                    messageID: assistantMessageID,
                     call: event,
+                    progress: (update) =>
+                      serialized(
+                        events.publish(SessionEvent.Tool.Progress, {
+                          sessionID: session.id,
+                          assistantMessageID,
+                          callID: event.id,
+                          structured: { ...update.structured },
+                          content: [...update.content],
+                        }),
+                      ),
                   }),
                 ).pipe(
                   Effect.flatMap((settlement) =>
@@ -323,7 +337,7 @@ const layer = Layer.effect(
             recoverOverflow &&
             !publisher.hasRetryEvidence() &&
             isContextOverflowFailure(overflowFailure ?? streamFailure) &&
-            (yield* restore(recoverOverflow({ sessionID: session.id, messages: context, model }))).status ===
+            (yield* restore(recoverOverflow({ session, messages: context, model }))).status ===
               "completed"
           )
             return { _tag: "RestartAfterOverflowCompaction", step: currentStep } as const

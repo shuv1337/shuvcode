@@ -5,7 +5,7 @@ import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/s
 import type { TextareaRenderable } from "@opentui/core"
 import { useTheme, selectedForeground } from "../../context/theme"
 import type { PermissionV2Request } from "@opencode-ai/client"
-import { useSDK } from "../../context/sdk"
+import { useClient } from "../../context/client"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
 import { filetype } from "../../util/filetype"
@@ -13,7 +13,7 @@ import { Locale } from "../../util/locale"
 import { webSearchProviderLabel } from "../../util/tool-display"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useConfig } from "../../config"
-import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
+import { Keymap } from "../../context/keymap"
 import { usePathFormatter } from "../../context/path-format"
 
 type PermissionStage = "permission" | "always" | "reject"
@@ -135,7 +135,7 @@ function TextBody(props: { title: string; description?: string; icon?: string })
 }
 
 export function PermissionPrompt(props: { request: PermissionV2Request; directory?: string }) {
-  const sdk = useSDK()
+  const client = useClient()
   const data = useData()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
@@ -187,7 +187,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
-            void sdk.api.permission.reply({
+            void client.api.permission.reply({
               sessionID: props.request.sessionID,
               reply: "always",
               requestID: props.request.id,
@@ -198,7 +198,7 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
       <Match when={store.stage === "reject"}>
         <RejectPrompt
           onConfirm={(message) => {
-            void sdk.api.permission.reply({
+            void client.api.permission.reply({
               sessionID: props.request.sessionID,
               reply: "reject",
               requestID: props.request.id,
@@ -444,14 +444,14 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
                     setStore("stage", "reject")
                     return
                   }
-                  void sdk.api.permission.reply({
+                  void client.api.permission.reply({
                     sessionID: props.request.sessionID,
                     reply: "reject",
                     requestID: props.request.id,
                   })
                   return
                 }
-                void sdk.api.permission.reply({
+                void client.api.permission.reply({
                   sessionID: props.request.sessionID,
                   reply: "once",
                   requestID: props.request.id,
@@ -470,29 +470,25 @@ export function PermissionPrompt(props: { request: PermissionV2Request; director
 function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: () => void }) {
   let input: TextareaRenderable
   const { theme } = useTheme()
-  const config = useConfig().data
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
+  Keymap.createLayer(() => ({
+    mode: "base",
     commands: [
       {
-        name: "app.exit",
+        id: "app.exit",
         title: "Cancel permission rejection",
-        category: "Permission",
+        group: "Permission",
         run() {
           props.onCancel()
         },
       },
-    ],
-    bindings: [
-      { key: "escape", desc: "Cancel permission rejection", group: "Permission", cmd: () => props.onCancel() },
-      ...config.keybinds.get("app.exit"),
+      { bind: "escape", title: "Cancel permission rejection", group: "Permission", run: () => props.onCancel() },
       {
-        key: "return",
-        desc: "Confirm permission rejection",
+        bind: "return",
+        title: "Confirm permission rejection",
         group: "Permission",
-        cmd: () => props.onConfirm(input.plainText),
+        run: () => props.onConfirm(input.plainText),
       },
     ],
   }))
@@ -558,7 +554,6 @@ function Prompt<const T extends Record<string, string>>(props: {
   onSelect: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
-  const config = useConfig().data
   const dimensions = useTerminalDimensions()
   const keys = Object.keys(props.options) as (keyof T)[]
   const [store, setStore] = createStore({
@@ -566,89 +561,91 @@ function Prompt<const T extends Record<string, string>>(props: {
     expanded: false,
   })
   const narrow = createMemo(() => dimensions().width < 80)
-  const fullscreenHint = useCommandShortcut("permission.prompt.fullscreen")
+  const shortcuts = Keymap.useShortcuts()
 
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
+  Keymap.createLayer(() => ({
+    mode: "base",
     commands: [
       {
-        name: "app.exit",
+        id: "app.exit",
         title: "Reject permission",
-        category: "Permission",
+        group: "Permission",
+        bind: false,
         run() {
           if (!props.escapeKey) return
           props.onSelect(props.escapeKey)
         },
       },
       {
-        name: "permission.prompt.fullscreen",
+        id: "permission.prompt.fullscreen",
         title: "Toggle permission fullscreen",
-        category: "Permission",
+        group: "Permission",
+        bind: false,
         run() {
           if (!props.fullscreen) return
           setStore("expanded", (v) => !v)
         },
       },
-    ],
-    bindings: [
       {
-        key: "left",
-        desc: "Previous permission option",
+        bind: "left",
+        title: "Previous permission option",
         group: "Permission",
-        cmd: () => {
+        run: () => {
           const idx = keys.indexOf(store.selected)
           const next = keys[(idx - 1 + keys.length) % keys.length]
           setStore("selected", next)
         },
       },
       {
-        key: "h",
-        desc: "Previous permission option",
+        bind: "h",
+        title: "Previous permission option",
         group: "Permission",
-        cmd: () => {
+        run: () => {
           const idx = keys.indexOf(store.selected)
           const next = keys[(idx - 1 + keys.length) % keys.length]
           setStore("selected", next)
         },
       },
       {
-        key: "right",
-        desc: "Next permission option",
+        bind: "right",
+        title: "Next permission option",
         group: "Permission",
-        cmd: () => {
+        run: () => {
           const idx = keys.indexOf(store.selected)
           const next = keys[(idx + 1) % keys.length]
           setStore("selected", next)
         },
       },
       {
-        key: "l",
-        desc: "Next permission option",
+        bind: "l",
+        title: "Next permission option",
         group: "Permission",
-        cmd: () => {
+        run: () => {
           const idx = keys.indexOf(store.selected)
           const next = keys[(idx + 1) % keys.length]
           setStore("selected", next)
         },
       },
       {
-        key: "return",
-        desc: "Select permission option",
+        bind: "return",
+        title: "Select permission option",
         group: "Permission",
-        cmd: () => props.onSelect(store.selected),
+        run: () => props.onSelect(store.selected),
       },
       ...(props.escapeKey
         ? [
             {
-              key: "escape",
-              desc: "Reject permission",
+              bind: "escape",
+              title: "Reject permission",
               group: "Permission",
-              cmd: () => props.onSelect(props.escapeKey!),
+              run: () => props.onSelect(props.escapeKey!),
             },
           ]
         : []),
-      ...(props.escapeKey ? config.keybinds.get("app.exit") : []),
-      ...(props.fullscreen ? config.keybinds.get("permission.prompt.fullscreen") : []),
+    ],
+    bindings: [
+      ...(props.escapeKey ? ["app.exit"] : []),
+      ...(props.fullscreen ? ["permission.prompt.fullscreen"] : []),
     ],
   }))
 
@@ -723,7 +720,7 @@ function Prompt<const T extends Record<string, string>>(props: {
         <box flexDirection="row" gap={2} flexShrink={0}>
           <Show when={props.fullscreen}>
             <text fg={theme.text}>
-              {fullscreenHint()} <span style={{ fg: theme.textMuted }}>{hint()}</span>
+              {shortcuts.get("permission.prompt.fullscreen")} <span style={{ fg: theme.textMuted }}>{hint()}</span>
             </text>
           </Show>
           <text fg={theme.text}>

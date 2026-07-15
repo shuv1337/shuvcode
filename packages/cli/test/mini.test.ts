@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import path from "node:path"
 import { mergeInteractiveInput, mergeNonInteractiveInput, parseRunModel, pickRunModel } from "../src/mini"
+import { toolInlineInfo, toolView } from "../src/mini/tool"
 
 async function cli(args: string[]) {
   const child = Bun.spawn([process.execPath, "run", "src/index.ts", ...args], {
@@ -18,6 +19,23 @@ async function cli(args: string[]) {
 }
 
 describe("mini command", () => {
+  test("renders the renamed shell tool with the shell rule", () => {
+    const part = {
+      id: "part-shell",
+      sessionID: "session-shell",
+      messageID: "message-shell",
+      callID: "call-shell",
+      tool: "shell",
+      state: {
+        status: "pending" as const,
+        input: { command: "pwd" },
+      },
+    } as const
+
+    expect(toolView(part.tool)).toEqual({ output: true, final: false })
+    expect(toolInlineInfo(part)).toMatchObject({ icon: "$", title: "pwd", mode: "block" })
+  })
+
   test("uses piped stdin as the initial prompt", () => {
     expect(mergeInteractiveInput("from stdin", undefined)).toBe("from stdin")
     expect(mergeInteractiveInput("from stdin", "from flag")).toBe("from stdin\nfrom flag")

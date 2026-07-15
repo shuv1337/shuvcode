@@ -18,9 +18,14 @@ export type TuiStartup = Readonly<{
   skipInitialLoading: boolean
 }>
 
+export type TuiLifecycle = Readonly<{
+  add(finalizer: () => Promise<void>): () => void
+}>
+
 const PathsContext = createContext<TuiPaths>()
 const TerminalEnvironmentContext = createContext<TuiTerminalEnvironment>()
 const StartupContext = createContext<TuiStartup>()
+const LifecycleContext = createContext<TuiLifecycle>()
 
 function provider<T>(context: ReturnType<typeof createContext<T>>, value: T, children: () => JSX.Element) {
   return createComponent(context.Provider, {
@@ -43,6 +48,10 @@ export function TuiStartupProvider(props: { value: TuiStartup; children: JSX.Ele
   return provider(StartupContext, props.value, () => props.children)
 }
 
+export function TuiLifecycleProvider(props: { value: TuiLifecycle; children: JSX.Element }) {
+  return provider(LifecycleContext, props.value, () => props.children)
+}
+
 function required<T>(context: ReturnType<typeof createContext<T>>, name: string) {
   const value = useContext(context)
   if (!value) throw new Error(`${name} is missing`)
@@ -59,4 +68,8 @@ export function useTuiTerminalEnvironment() {
 
 export function useTuiStartup() {
   return required(StartupContext, "TuiStartupProvider")
+}
+
+export function useTuiLifecycle() {
+  return required(LifecycleContext, "TuiLifecycleProvider")
 }

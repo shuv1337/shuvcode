@@ -40,14 +40,6 @@ const settings: Setting[] = [
     labels: ["off", "on"],
   },
   {
-    title: "Tips",
-    category: "Appearance",
-    path: ["hints", "tips"],
-    default: true,
-    values: [false, true],
-    labels: ["off", "on"],
-  },
-  {
     title: "Onboarding",
     category: "Appearance",
     path: ["hints", "onboarding"],
@@ -281,16 +273,16 @@ export function DialogConfig() {
       footerHints={[{ title: "←/→", label: "change" }]}
       bindings={[
         {
-          key: "left",
-          desc: "Previous value",
+          bind: "left",
+          title: "Previous value",
           group: "Settings",
-          cmd: () => void change(-1),
+          run: () => void change(-1),
         },
         {
-          key: "right",
-          desc: "Next value",
+          bind: "right",
+          title: "Next value",
           group: "Settings",
-          cmd: () => void change(1),
+          run: () => void change(1),
         },
       ]}
     />

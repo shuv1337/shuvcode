@@ -1,4 +1,4 @@
-import type { TuiPluginApi, TuiRouteDefinition } from "@opencode-ai/plugin/tui"
+import type { TuiRouteDefinition } from "@opencode-ai/plugin/tui"
 import { createSignal } from "solid-js"
 
 type RouteEntry = {
@@ -38,15 +38,3 @@ export function createPluginRoutes() {
 }
 
 export type PluginRoutes = ReturnType<typeof createPluginRoutes>
-
-export function createTuiApi(input: Omit<TuiPluginApi, "lifecycle">): TuiPluginApi {
-  return {
-    ...input,
-    lifecycle: {
-      signal: new AbortController().signal,
-      onDispose() {
-        return () => {}
-      },
-    },
-  }
-}

@@ -1,5 +1,13 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
+export type ServiceStatus =
+  | { type: "starting" }
+  | { type: "ready" }
+  | { type: "stopping"; targetVersion?: string | null }
+  | { type: "failed"; message: string; action: string }
+
+export type ServiceStopResponse = { accepted: boolean }
+
 export type PairingInvitation = { v: 1; kind: "shuvcode.pair"; urls: Array<string>; token: string; expiresAt: string }
 
 export type PairingRedeemResponse = { deviceID: string }
@@ -510,6 +518,14 @@ export type VcsFileStatus = {
   status: "added" | "deleted" | "modified"
 }
 
+export type ServiceHealth = {
+  healthy: true
+  version: string
+  pid: number
+  instanceID?: string | null
+  status?: ServiceStatus
+}
+
 export type SessionMessageModelSelected = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -563,7 +579,7 @@ export type SessionMoved = {
   type: "session.moved"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
-  data: { sessionID: string; location: LocationRef; subpath?: string }
+  data: { sessionID: string; location: LocationRef; projectID?: string; subpath?: string }
 }
 
 export type SessionRenamed = {
@@ -2521,7 +2537,14 @@ export type ProjectCopyError = {
 export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
   typeof value === "object" && value !== null && "name" in value && value["name"] === "ProjectCopyError"
 
-export type HealthGetOutput = { healthy: true; version: string; pid: number }
+export type HealthGetOutput = ServiceHealth
+
+export type HealthStopInput = {
+  readonly instanceID: { readonly instanceID: string; readonly targetVersion?: string | undefined }["instanceID"]
+  readonly targetVersion?: { readonly instanceID: string; readonly targetVersion?: string | undefined }["targetVersion"]
+}
+
+export type HealthStopOutput = ServiceStopResponse
 
 export type ServerGetOutput = { urls: Array<string> }
 
@@ -2767,14 +2790,8 @@ export type SessionRenameOutput = void
 
 export type SessionMoveInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly destination: {
-    readonly destination: { readonly directory: string }
-    readonly moveChanges?: boolean | undefined
-  }["destination"]
-  readonly moveChanges?: {
-    readonly destination: { readonly directory: string }
-    readonly moveChanges?: boolean | undefined
-  }["moveChanges"]
+  readonly directory: { readonly directory: string; readonly workspaceID?: string }["directory"]
+  readonly workspaceID?: { readonly directory: string; readonly workspaceID?: string }["workspaceID"]
 }
 
 export type SessionMoveOutput = void

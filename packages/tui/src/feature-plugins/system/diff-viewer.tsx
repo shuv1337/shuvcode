@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
-import type { TuiPlugin, TuiPluginApi, TuiRouteCurrent } from "@opencode-ai/plugin/tui"
-import type { FileDiffInfo, FileDiffLegacyInfo } from "@opencode-ai/client"
+import type { FileDiffInfo } from "@opencode-ai/client"
+import { Plugin } from "@opencode-ai/plugin/v2/tui"
+import type { KeymapCommand, Route } from "@opencode-ai/plugin/v2/tui/context"
 import {
   TextAttributes,
   type BorderSides,
@@ -9,14 +10,13 @@ import {
   type ScrollBoxRenderable,
 } from "@opentui/core"
 import { LANGUAGE_EXTENSIONS } from "../../util/filetype"
-import { useBindings, useCommandShortcut } from "../../keymap"
 import { useTheme } from "../../context/theme"
-import { useSDK } from "../../context/sdk"
 import { useTerminalDimensions } from "@opentui/solid"
 import path from "path"
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { DiffViewerFileTree } from "./diff-viewer-file-tree"
 import { Panel, PanelGroup, Separator } from "./diff-viewer-ui"
+import { useDialog } from "../../ui/dialog"
 import { DialogSelect } from "../../ui/dialog-select"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useConfig } from "../../config"
@@ -42,7 +42,7 @@ const MIN_SPLIT_WIDTH = 100
 const FILE_TREE_WIDTH = 32
 const PLAIN_TEXT_FILETYPE = "opencode-plain-text"
 const VCS_DIFF_CONTEXT_LINES = 12
-type DiffMode = "working" | "branch" | "last-turn"
+type DiffMode = "working" | "branch"
 type DiffViewerFocus = "patches" | "files"
 type DiffView = "split" | "unified"
 type SelectedHunk = { readonly fileIndex: number; readonly hunkIndex: number; readonly scrollTop: number }
@@ -55,20 +55,14 @@ type DiffFile = {
   readonly status: "added" | "deleted" | "modified"
 }
 
-const normalizeDiffs = (diffs: readonly (FileDiffInfo | FileDiffLegacyInfo)[]): DiffFile[] =>
-  diffs.flatMap((item) =>
-    item.file
-      ? [
-          {
-            file: item.file,
-            patch: item.patch,
-            additions: item.additions,
-            deletions: item.deletions,
-            status: item.status ?? "modified",
-          } satisfies DiffFile,
-        ]
-      : [],
-  )
+const normalizeDiffs = (diffs: readonly FileDiffInfo[]): DiffFile[] =>
+  diffs.map((item) => ({
+    file: item.file,
+    patch: item.patch,
+    additions: item.additions,
+    deletions: item.deletions,
+    status: item.status,
+  }))
 
 function filetype(input?: string) {
   if (!input) return "none"
@@ -82,57 +76,46 @@ function storedView(value: unknown): DiffView | undefined {
 }
 
 function diffSourceLabel(mode: DiffMode) {
-  if (mode === "last-turn") return "last turn"
   if (mode === "branch") return "main branch"
   return "working tree"
 }
 
-function DiffViewer(props: { api: TuiPluginApi }) {
+function DiffViewer(props: { context: Plugin.Context }) {
   const dimensions = useTerminalDimensions()
-  const sdk = useSDK()
   const config = useConfig()
+  const dialog = useDialog()
   const themeState = useTheme()
-  const theme = () => props.api.theme.current
-  const params = () =>
-    ("params" in props.api.route.current ? props.api.route.current.params : undefined) as
+  const theme = () => themeState.theme
+  const params = () => {
+    const route = props.context.ui.router.current()
+    return (route.type === "plugin" ? route.data : undefined) as
       | {
           mode?: DiffMode
           sessionID?: string
-          messageID?: string
-          returnRoute?: TuiRouteCurrent
+          returnRoute?: Route
         }
       | undefined
+  }
   const mode = () => params()?.mode ?? "working"
   const diffInput = createMemo(() => {
     const sessionID = params()?.sessionID
     return {
       mode: mode(),
       sessionID,
-      messageID: params()?.messageID,
-      directory: sessionID ? props.api.state.session.get(sessionID)?.directory : undefined,
+      location: sessionID
+        ? (props.context.data.session.get(sessionID)?.location ?? props.context.data.location.default())
+        : props.context.data.location.default(),
     }
   })
   const [diff] = createResource(diffInput, async (input) => {
-    if (input.mode === "last-turn") {
-      const sessionID = input.sessionID
-      if (!sessionID) return []
-      const result = await props.api.client.session.diff(
-        { sessionID, messageID: input.messageID },
-        { throwOnError: true },
-      )
-      return normalizeDiffs(result.data ?? [])
-    }
-
-    const result = await sdk.api.vcs.diff(
-      {
-        location: input.directory ? { directory: input.directory } : undefined,
-        mode: input.mode,
-        context: VCS_DIFF_CONTEXT_LINES,
-      },
-    )
+    const result = await props.context.client.vcs.diff({
+      location: input.location,
+      mode: input.mode,
+      context: VCS_DIFF_CONTEXT_LINES,
+    })
     return normalizeDiffs(result.data ?? [])
   })
-  const files = createMemo(() => diff() ?? [])
+  const files = createMemo(() => (diff.error ? [] : (diff() ?? [])))
   const [focus, setFocus] = createSignal<DiffViewerFocus>("patches")
   const [fileTreeEnabled, setFileTreeEnabled] = createSignal(config.data.diffs?.tree ?? true)
   const showFileTree = createMemo(() => showDiffViewerFileTree(fileTreeEnabled(), files().length))
@@ -141,8 +124,8 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   const patchLeftBorder = createMemo<BorderSides[]>(() => (showFileTree() ? ["left"] : []))
   const splitAvailable = createMemo(() => patchPaneWidth() >= MIN_SPLIT_WIDTH)
   const defaultView = createMemo(() => {
-    if (props.api.tuiConfig.diffs?.view === "unified") return "unified"
-    if (props.api.tuiConfig.diffs?.view === "split") return "split"
+    if (config.data.diffs?.view === "unified") return "unified"
+    if (config.data.diffs?.view === "split") return "split"
     return splitAvailable() ? "split" : "unified"
   })
   const [viewOverride, setViewOverride] = createSignal<DiffView | undefined>(storedView(config.data.diffs?.view))
@@ -154,21 +137,22 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   const [activePatchFileIndex, setActivePatchFileIndex] = createSignal<number | undefined>()
   const [selectedFileIndex, setSelectedFileIndex] = createSignal<number | undefined>()
   const [reviewedFileNames, setReviewedFileNames] = createSignal<ReadonlySet<string>>(new Set())
-  const patchScrollAcceleration = createMemo(() => getScrollAcceleration(props.api.tuiConfig))
+  const patchScrollAcceleration = createMemo(() => getScrollAcceleration(config.data))
   const fileRows = createMemo(() => flattenFileTree(fileTree(), expandedFileNodes()))
   const patchFileIndexes = createMemo(() => orderedPatchFileIndexes(flattenFileTree(fileTree())))
   const focusRunner = (input: Record<DiffViewerFocus, () => void>) => () => input[focus()]()
-  const switchFocusShortcut = useCommandShortcut("diff.switch_focus")
-  const nextHunkShortcut = useCommandShortcut("diff.next_hunk")
-  const previousHunkShortcut = useCommandShortcut("diff.previous_hunk")
-  const nextFileShortcut = useCommandShortcut("diff.next_file")
-  const previousFileShortcut = useCommandShortcut("diff.previous_file")
-  const toggleFileTreeShortcut = useCommandShortcut("diff.toggle_file_tree")
-  const singlePatchShortcut = useCommandShortcut("diff.single_patch")
-  const switchSourceShortcut = useCommandShortcut("diff.switch_source")
-  const toggleViewShortcut = useCommandShortcut("diff.toggle_view")
-  const markReviewedShortcut = useCommandShortcut("diff.mark_reviewed")
-  const helpShortcut = useCommandShortcut("diff.help")
+  const shortcut = (id: string) => () => props.context.keymap.shortcut(id)
+  const switchFocusShortcut = shortcut("diff.switch_focus")
+  const nextHunkShortcut = shortcut("diff.next_hunk")
+  const previousHunkShortcut = shortcut("diff.previous_hunk")
+  const nextFileShortcut = shortcut("diff.next_file")
+  const previousFileShortcut = shortcut("diff.previous_file")
+  const toggleFileTreeShortcut = shortcut("diff.toggle_file_tree")
+  const singlePatchShortcut = shortcut("diff.single_patch")
+  const switchSourceShortcut = shortcut("diff.switch_source")
+  const toggleViewShortcut = shortcut("diff.toggle_view")
+  const markReviewedShortcut = shortcut("diff.mark_reviewed")
+  const helpShortcut = shortcut("diff.help")
   let scroll: ScrollBoxRenderable | undefined
   const patchNodeByFileIndex = new Map<number, BoxRenderable>()
   const diffNodeByFileIndex = new Map<number, DiffRenderable>()
@@ -176,7 +160,7 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   const [pendingPatchScrollFileIndex, setPendingPatchScrollFileIndex] = createSignal<number | undefined>()
   const [patchFillerHeight, setPatchFillerHeight] = createSignal(0)
 
-  onCleanup(() => props.api.ui.dialog.clear())
+  onCleanup(() => dialog.clear())
 
   createEffect(() => {
     setExpandedFileNodes(allExpandedFileTreeDirectories(fileTree()))
@@ -433,25 +417,24 @@ function DiffViewer(props: { api: TuiPluginApi }) {
     })
   }
 
-  const commands = [
-    {
-      name: "diff.close",
-      title: "Close diff viewer",
-      category: "VCS",
-      run() {
-        const returnRoute = params()?.returnRoute
-        props.api.ui.dialog.clear()
+  const close = () => {
+    const returnRoute = params()?.returnRoute
+    dialog.clear()
+    props.context.ui.router.navigate(returnRoute ?? { type: "home" })
+  }
 
-        props.api.route.navigate(
-          returnRoute?.name ?? "home",
-          returnRoute && "params" in returnRoute ? returnRoute.params : undefined,
-        )
-      },
+  const commands: KeymapCommand[] = [
+    {
+      id: "diff.close",
+      title: "Close diff viewer",
+      group: "VCS",
+      run: close,
     },
     {
-      name: "diff.down",
+      id: "diff.down",
       title: "Move diff viewer down",
-      category: "VCS",
+      group: "VCS",
+      bind: "j,down",
       run: focusRunner({
         files() {
           moveFileSelection(1)
@@ -463,9 +446,10 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.up",
+      id: "diff.up",
       title: "Move diff viewer up",
-      category: "VCS",
+      group: "VCS",
+      bind: "k,up",
       run: focusRunner({
         files() {
           moveFileSelection(-1)
@@ -477,9 +461,10 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.page.down",
+      id: "diff.page.down",
       title: "Page diff viewer down",
-      category: "VCS",
+      group: "VCS",
+      bind: "pagedown,ctrl+f",
       run: focusRunner({
         files() {
           moveFileSelection(8)
@@ -491,9 +476,10 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.page.up",
+      id: "diff.page.up",
       title: "Page diff viewer up",
-      category: "VCS",
+      group: "VCS",
+      bind: "pageup,ctrl+b",
       run: focusRunner({
         files() {
           moveFileSelection(-8)
@@ -505,9 +491,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.toggle",
+      id: "diff.toggle",
       title: "Toggle diff viewer item",
-      category: "VCS",
+      group: "VCS",
       run: focusRunner({
         files() {
           toggleSelectedFileTreeRow()
@@ -516,9 +502,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.expand",
+      id: "diff.expand",
       title: "Expand diff viewer item",
-      category: "VCS",
+      group: "VCS",
       run: focusRunner({
         files() {
           const highlighted = highlightedFileNode()
@@ -534,9 +520,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.expand_all",
+      id: "diff.expand_all",
       title: "Expand all diff viewer folders",
-      category: "VCS",
+      group: "VCS",
       run: focusRunner({
         files() {
           setExpandedFileNodes(allExpandedFileTreeDirectories(fileTree()))
@@ -545,9 +531,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.collapse",
+      id: "diff.collapse",
       title: "Collapse diff viewer item",
-      category: "VCS",
+      group: "VCS",
       run: focusRunner({
         files() {
           const highlighted = highlightedFileNode()
@@ -564,49 +550,50 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       }),
     },
     {
-      name: "diff.next_hunk",
+      id: "diff.next_hunk",
       title: "Jump to next diff hunk",
-      category: "VCS",
+      group: "VCS",
       run() {
         jumpRelativeHunk(1)
       },
     },
     {
-      name: "diff.previous_hunk",
+      id: "diff.previous_hunk",
       title: "Jump to previous diff hunk",
-      category: "VCS",
+      group: "VCS",
       run() {
         jumpRelativeHunk(-1)
       },
     },
     {
-      name: "diff.next_file",
+      id: "diff.next_file",
       title: "Jump to next diff file",
-      category: "VCS",
+      group: "VCS",
       run() {
         jumpRelativePatchFile(1)
       },
     },
     {
-      name: "diff.previous_file",
+      id: "diff.previous_file",
       title: "Jump to previous diff file",
-      category: "VCS",
+      group: "VCS",
       run() {
         jumpRelativePatchFile(-1)
       },
     },
     {
-      name: "diff.mark_reviewed",
+      id: "diff.mark_reviewed",
       title: "Toggle selected diff file reviewed",
-      category: "VCS",
+      group: "VCS",
+      bind: "m",
       run() {
         toggleSelectedFileReviewed()
       },
     },
     {
-      name: "diff.switch_focus",
+      id: "diff.switch_focus",
       title: "Switch diff viewer focus",
-      category: "VCS",
+      group: "VCS",
       run() {
         if (!showFileTree()) return
         setFocus((current) => {
@@ -617,10 +604,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       },
     },
     {
-      name: "diff.toggle_file_tree",
+      id: "diff.toggle_file_tree",
       title: "Toggle diff viewer file tree",
-      category: "VCS",
-      hidden: true,
+      group: "VCS",
       run() {
         const next = !fileTreeEnabled()
         if (!next) setFocus("patches")
@@ -633,10 +619,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       },
     },
     {
-      name: "diff.single_patch",
+      id: "diff.single_patch",
       title: "Toggle single patch view",
-      category: "VCS",
-      hidden: true,
+      group: "VCS",
       run() {
         setSelectedHunk(undefined)
         if (!singlePatch()) {
@@ -669,18 +654,17 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       },
     },
     {
-      name: "diff.switch_source",
+      id: "diff.switch_source",
       title: "Switch diff viewer source",
-      category: "VCS",
+      group: "VCS",
       run() {
         openSwitchDiffDialog()
       },
     },
     {
-      name: "diff.toggle_view",
+      id: "diff.toggle_view",
       title: "Toggle diff viewer split or unified view",
-      category: "VCS",
-      hidden: true,
+      group: "VCS",
       run() {
         if (!splitAvailable()) return
         setSelectedHunk(undefined)
@@ -694,9 +678,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       },
     },
     {
-      name: "diff.help",
+      id: "diff.help",
       title: "Show more diff viewer shortcuts",
-      category: "VCS",
+      group: "VCS",
       run() {
         openHelpDialog()
       },
@@ -704,32 +688,22 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   ]
 
   const switchDiffOptions = createMemo(() => {
-    const vcs = props.api.state.vcs
     return [
       {
         title: "Working tree",
         value: "working" as const,
         description: "Show current git changes",
       },
-      ...(vcs?.branch && vcs.default_branch && vcs.branch !== vcs.default_branch
-        ? [
-            {
-              title: "Main branch",
-              value: "branch" as const,
-              description: "Show changes compared to main branch",
-            },
-          ]
-        : []),
       {
-        title: "Last turn",
-        value: "last-turn" as const,
-        description: "Show changes from the last assistant turn",
+        title: "Main branch",
+        value: "branch" as const,
+        description: "Show changes compared to main branch",
       },
     ]
   })
 
   const openSwitchDiffDialog = () => {
-    props.api.ui.dialog.replace(() => (
+    dialog.replace(() => (
       <DialogSelect
         title="Switch source"
         skipFilter={true}
@@ -739,11 +713,14 @@ function DiffViewer(props: { api: TuiPluginApi }) {
           ...option,
           onSelect(dialog) {
             dialog.clear()
-            props.api.route.navigate(ROUTE, {
-              mode: option.value,
-              sessionID: params()?.sessionID,
-              messageID: params()?.messageID,
-              returnRoute: params()?.returnRoute,
+            props.context.ui.router.navigate({
+              type: "plugin",
+              name: ROUTE,
+              data: {
+                mode: option.value,
+                sessionID: params()?.sessionID,
+                returnRoute: params()?.returnRoute,
+              },
             })
           },
         }))}
@@ -752,23 +729,12 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   }
 
   const openHelpDialog = () => {
-    props.api.ui.dialog.replace(() => <DiffViewerHelpDialog />)
-    props.api.ui.dialog.setSize("large")
+    dialog.replace(() => <DiffViewerHelpDialog context={props.context} />)
+    dialog.setSize("large")
   }
 
-  useBindings(() => ({
+  props.context.keymap.layer(() => ({
     commands,
-    bindings: [
-      { key: "j,down", cmd: "diff.down", desc: "Move diff viewer down" },
-      { key: "k,up", cmd: "diff.up", desc: "Move diff viewer up" },
-      { key: "pagedown,ctrl+f", cmd: "diff.page.down", desc: "Page diff viewer down" },
-      { key: "pageup,ctrl+b", cmd: "diff.page.up", desc: "Page diff viewer up" },
-      { key: "m", cmd: "diff.mark_reviewed", desc: "Mark selected file reviewed" },
-      ...props.api.tuiConfig.keybinds.gather(
-        "diff",
-        commands.map((command) => command.name),
-      ),
-    ],
   }))
 
   return (
@@ -778,9 +744,11 @@ function DiffViewer(props: { api: TuiPluginApi }) {
           <text fg={theme().text}>Diff </text>
           <text fg={theme().textMuted}>{diffSourceLabel(mode())}</text>
           <box flexGrow={1} />
-          <text fg={theme().textMuted}>
-            {files().length} {files().length === 1 ? "file" : "files"}
-          </text>
+          <Show when={!diff.loading && !diff.error}>
+            <text fg={theme().textMuted}>
+              {files().length} {files().length === 1 ? "file" : "files"}
+            </text>
+          </Show>
         </Panel>
 
         <box flexGrow={1} minHeight={0}>
@@ -788,19 +756,19 @@ function DiffViewer(props: { api: TuiPluginApi }) {
             <Match when={diff.loading}>
               <Separator axis="x" />
               <box flexGrow={1} paddingLeft={1}>
-                <text fg={theme().textMuted}>Loading diff...</text>
-              </box>
-            </Match>
-            <Match when={!diff.loading && files().length === 0}>
-              <Separator axis="x" />
-              <box flexGrow={1} paddingLeft={1}>
-                <text fg={theme().textMuted}>No diff!</text>
+                <text fg={theme().textMuted}>Loading diff…</text>
               </box>
             </Match>
             <Match when={!diff.loading && diff.error}>
               <Separator axis="x" />
               <box flexGrow={1} paddingLeft={1}>
-                <text fg={theme().error}>Failed to load diff</text>
+                <text fg={theme().error}>Could not load diff. Reopen the diff viewer to try again.</text>
+              </box>
+            </Match>
+            <Match when={!diff.loading && files().length === 0}>
+              <Separator axis="x" />
+              <box flexGrow={1} paddingLeft={1}>
+                <text fg={theme().textMuted}>No changes to show</text>
               </box>
             </Match>
             <Match when={!diff.loading}>
@@ -965,8 +933,9 @@ function DiffViewer(props: { api: TuiPluginApi }) {
   )
 }
 
-function DiffViewerHelpDialog() {
+function DiffViewerHelpDialog(props: { context: Plugin.Context }) {
   const { theme } = useTheme()
+  const shortcut = (id: string) => () => props.context.keymap.shortcut(id)
   const rows = [
     {
       shortcut: () => "q",
@@ -974,57 +943,57 @@ function DiffViewerHelpDialog() {
       description: "Quit the diff viewer",
     },
     {
-      shortcut: useCommandShortcut("diff.switch_focus"),
+      shortcut: shortcut("diff.switch_focus"),
       action: "Focus file tree",
       description: "Move keyboard focus between the file tree and patch pane",
     },
     {
-      shortcut: useCommandShortcut("diff.next_hunk"),
+      shortcut: shortcut("diff.next_hunk"),
       action: "Next hunk",
       description: "Jump to the next diff hunk",
     },
     {
-      shortcut: useCommandShortcut("diff.previous_hunk"),
+      shortcut: shortcut("diff.previous_hunk"),
       action: "Previous hunk",
       description: "Jump to the previous diff hunk",
     },
     {
-      shortcut: useCommandShortcut("diff.next_file"),
+      shortcut: shortcut("diff.next_file"),
       action: "Next file",
       description: "Select the next changed file in file-tree order",
     },
     {
-      shortcut: useCommandShortcut("diff.previous_file"),
+      shortcut: shortcut("diff.previous_file"),
       action: "Previous file",
       description: "Select the previous changed file in file-tree order",
     },
     {
-      shortcut: useCommandShortcut("diff.toggle_file_tree"),
+      shortcut: shortcut("diff.toggle_file_tree"),
       action: "Toggle file tree",
       description: "Show or hide the file tree sidebar",
     },
     {
-      shortcut: useCommandShortcut("diff.single_patch"),
+      shortcut: shortcut("diff.single_patch"),
       action: "Toggle patches",
       description: "Switch between one selected patch and all patches",
     },
     {
-      shortcut: useCommandShortcut("diff.switch_source"),
+      shortcut: shortcut("diff.switch_source"),
       action: "Switch source",
-      description: "Choose working tree, main branch, or last-turn changes",
+      description: "Choose working tree or main branch changes",
     },
     {
-      shortcut: useCommandShortcut("diff.toggle_view"),
+      shortcut: shortcut("diff.toggle_view"),
       action: "Toggle view",
       description: "Switch between split and unified diff layout",
     },
     {
-      shortcut: useCommandShortcut("diff.expand_all"),
+      shortcut: shortcut("diff.expand_all"),
       action: "Expand all folders",
       description: "Open every folder in the file tree",
     },
     {
-      shortcut: useCommandShortcut("diff.mark_reviewed"),
+      shortcut: shortcut("diff.mark_reviewed"),
       action: "Mark reviewed",
       description: "Toggle reviewed state for the selected file",
     },
@@ -1064,36 +1033,54 @@ function DiffViewerHelpDialog() {
   )
 }
 
-const tui: TuiPlugin = async (api) => {
-  api.route.register([
-    {
-      name: ROUTE,
-      render: () => <DiffViewer api={api} />,
-    },
-  ])
-
-  api.keymap.registerLayer({
+function Commands(props: { context: Plugin.Context }) {
+  const dialog = useDialog()
+  props.context.keymap.layer(() => ({
+    mode: "global",
     commands: [
       {
-        name: "diff.open",
+        id: "diff.open",
         title: "Open diff viewer",
-        slashName: "diff",
-        category: "VCS",
-        namespace: "palette",
+        slash: { name: "diff" },
+        group: "VCS",
+        palette: true,
         run() {
-          api.route.navigate(ROUTE, {
-            mode: "working",
-            sessionID: "params" in api.route.current ? api.route.current.params?.sessionID : undefined,
-            returnRoute: api.route.current,
+          const route = props.context.ui.router.current()
+          const returnRoute: Route =
+            route.type === "home"
+              ? { type: "home" }
+              : route.type === "session"
+                ? { type: "session", sessionID: route.sessionID }
+                : {
+                    type: "plugin",
+                    id: route.id,
+                    name: route.name,
+                    ...(route.data ? { data: { ...route.data } } : {}),
+                  }
+          props.context.ui.router.navigate({
+            type: "plugin",
+            name: ROUTE,
+            data: {
+              mode: "working",
+              sessionID: route.type === "session" ? route.sessionID : undefined,
+              returnRoute,
+            },
           })
-          api.ui.dialog.clear()
+          dialog.clear()
         },
       },
     ],
-  })
+  }))
+  return null
 }
 
-export default {
+export default Plugin.define({
   id: "diff-viewer",
-  tui,
-}
+  setup(context) {
+    context.ui.router.register({
+      name: ROUTE,
+      render: () => <DiffViewer context={context} />,
+    })
+    context.ui.slot("app", () => <Commands context={context} />)
+  },
+})

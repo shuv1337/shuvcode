@@ -438,7 +438,7 @@ type TuiConfigView = {
     markdown?: "source" | "rendered"
     grouping?: "auto" | "none"
   }
-  hints?: { tips?: boolean; onboarding?: boolean }
+  hints?: { onboarding?: boolean }
   animations?: boolean
   mouse: boolean
   keybinds: TuiBindingLookupView

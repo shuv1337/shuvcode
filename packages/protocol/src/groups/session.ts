@@ -272,10 +272,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.move", "/api/session/:sessionID/move", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({
-          destination: Schema.Struct({ directory: AbsolutePath }),
-          moveChanges: Schema.Boolean.pipe(Schema.optional),
-        }),
+        payload: Location.Ref,
         success: HttpApiSchema.NoContent,
         error: [SessionNotFoundError, InvalidRequestError],
       })

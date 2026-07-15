@@ -36,7 +36,7 @@ test("legacy page key aliases compile as page keys", async () => {
     })
     const offKeymap = registerOpencodeKeymap(keymap, renderer, config)
     const offLayer = keymap.registerLayer({
-      bindings: config.keybinds.gather("session", ["session.page.up", "session.page.down"]),
+      bindings: ["session.page.up", "session.page.down"].flatMap((command) => config.keybinds.get(command)),
     })
     const bindings = keymap.getCommandBindings({
       visibility: "registered",
@@ -79,7 +79,7 @@ test("formats navigation keys as arrows", async () => {
     const offKeymap = registerOpencodeKeymap(keymap, renderer, config)
     const commands = ["session.parent", "session.child.first", "session.child.previous", "session.child.next"]
     const offLayer = keymap.registerLayer({
-      bindings: config.keybinds.gather("test.arrows", commands),
+      bindings: commands.flatMap((command) => config.keybinds.get(command)),
     })
     const bindings = keymap.getCommandBindings({ visibility: "registered", commands })
     commands.forEach((command) => {
@@ -125,17 +125,14 @@ test("mode-less bindings stay active when opencode mode changes", async () => {
         { name: "session.page.up", run() {} },
         { name: "session.first", run() {} },
       ],
-      bindings: config.keybinds.gather("test.global", [
-        "session.list",
-        "session.new",
-        "session.page.up",
-        "session.first",
-      ]),
+      bindings: ["session.list", "session.new", "session.page.up", "session.first"].flatMap((command) =>
+        config.keybinds.get(command),
+      ),
     })
     const offBase = keymap.registerLayer({
       mode: OPENCODE_BASE_MODE,
       commands: [{ name: "model.list", run() {} }],
-      bindings: config.keybinds.gather("test.base", ["model.list"]),
+      bindings: config.keybinds.get("model.list"),
     })
     const activeCounts = () =>
       Object.fromEntries(

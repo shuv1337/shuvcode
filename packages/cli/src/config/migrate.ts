@@ -116,14 +116,11 @@ export function migrateV1(legacy: TuiConfigV1.Info | undefined, kv: Record<strin
               : { grouping: kv.exploration_grouping ? ("auto" as const) : ("none" as const) }),
           },
         }),
-    ...(kv.tips_hidden === undefined && kv.dismissed_getting_started === undefined
+    ...(kv.dismissed_getting_started === undefined
       ? {}
       : {
           hints: {
-            ...(kv.tips_hidden === undefined ? {} : { tips: !kv.tips_hidden }),
-            ...(kv.dismissed_getting_started === undefined
-              ? {}
-              : { onboarding: !kv.dismissed_getting_started }),
+            onboarding: !kv.dismissed_getting_started,
           },
         }),
     ...(kv.animations_enabled === undefined ? {} : { animations: kv.animations_enabled }),

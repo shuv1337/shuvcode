@@ -1,22 +1,20 @@
-import { fileURLToPath } from "node:url"
-import { GlobalFonts, createCanvas } from "@napi-rs/canvas"
+/// <reference path="../assets.d.ts" />
+import { GlobalFonts, createCanvas, type SKRSContext2D } from "@napi-rs/canvas"
 import { TextAttributes, type CapturedFrame, type CliRenderer, type RGBA } from "@opentui/core"
+import regularFont from "@fontsource/commit-mono/files/commit-mono-latin-400-normal.woff2" with { type: "file" }
+import boldFont from "@fontsource/commit-mono/files/commit-mono-latin-700-normal.woff2" with { type: "file" }
+import italicFont from "@fontsource/commit-mono/files/commit-mono-latin-400-italic.woff2" with { type: "file" }
+import boldItalicFont from "@fontsource/commit-mono/files/commit-mono-latin-700-italic.woff2" with { type: "file" }
 
 const CellWidth = 10
 const CellHeight = 20
 const FontSize = 16
 const FontFamily = "OpenCode Mono"
 
-for (const file of [
-  "adwaita-mono-latin-400-normal.woff2",
-  "adwaita-mono-latin-700-normal.woff2",
-  "adwaita-mono-latin-400-italic.woff2",
-  "adwaita-mono-latin-700-italic.woff2",
-]) {
-  GlobalFonts.registerFromPath(
-    fileURLToPath(import.meta.resolve(`@fontsource/adwaita-mono/files/${file}`)),
-    FontFamily,
-  )
+for (const file of [regularFont, boldFont, italicFont, boldItalicFont]) {
+  const font = Buffer.from(await Bun.file(file).arrayBuffer())
+  if (!GlobalFonts.register(font, FontFamily))
+    throw new Error(`Failed to register screenshot font: ${file}`)
 }
 
 export function screenshot(renderer: CliRenderer) {
@@ -54,13 +52,17 @@ export function screenshotFrame(frame: CapturedFrame) {
         }
         if (!hidden && char.codePointAt(0) !== 0x0a00) {
           context.fillStyle = color(foreground, attributes & TextAttributes.DIM ? 0.55 : 1)
-          context.font = `${attributes & TextAttributes.ITALIC ? "italic " : ""}${attributes & TextAttributes.BOLD ? "bold " : ""}${FontSize}px "${FontFamily}"`
-          context.fillText(char, column * CellWidth, row * CellHeight + 1)
+          const x = column * CellWidth
+          const y = row * CellHeight
+          if (!drawBlockElement(context, char, x, y, cells)) {
+            context.font = `${attributes & TextAttributes.ITALIC ? "italic " : ""}${attributes & TextAttributes.BOLD ? "bold " : ""}${FontSize}px "${FontFamily}"`
+            context.fillText(char, x, y + 1)
+          }
           if (attributes & TextAttributes.UNDERLINE) {
-            context.fillRect(column * CellWidth, row * CellHeight + 17, cells * CellWidth, 1)
+            context.fillRect(x, y + 17, cells * CellWidth, 1)
           }
           if (attributes & TextAttributes.STRIKETHROUGH) {
-            context.fillRect(column * CellWidth, row * CellHeight + 10, cells * CellWidth, 1)
+            context.fillRect(x, y + 10, cells * CellWidth, 1)
           }
         }
         column += cells
@@ -81,6 +83,15 @@ export function screenshotFrame(frame: CapturedFrame) {
     height: canvas.height,
     data: canvas.toBuffer("image/png"),
   }
+}
+
+function drawBlockElement(context: SKRSContext2D, char: string, x: number, y: number, cells: number) {
+  const width = cells * CellWidth
+  if (char === "█") context.fillRect(x, y, width, CellHeight)
+  else if (char === "▀") context.fillRect(x, y, width, CellHeight / 2)
+  else if (char === "▄") context.fillRect(x, y + CellHeight / 2, width, CellHeight / 2)
+  else return false
+  return true
 }
 
 function color(value: RGBA, opacity = 1) {

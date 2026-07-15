@@ -1,11 +1,11 @@
 import { RGBA, TextAttributes } from "@opentui/core"
 import open from "open"
 import { createSignal } from "solid-js"
+import { Keymap } from "../context/keymap"
 import { selectedForeground, useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "../ui/dialog"
 import { Link } from "../ui/link"
 import { BgPulse } from "./bg-pulse"
-import { useBindings } from "../keymap"
 
 const GO_URL = "https://opencode.ai/go"
 const PAD_X = 3
@@ -44,31 +44,32 @@ export function DialogRetryAction(props: DialogRetryActionProps) {
   const textBg = () => (showGoTreatment() ? panelOverlay(theme.backgroundPanel) : undefined)
   const [selected, setSelected] = createSignal<"dismiss" | "action">("action")
 
-  useBindings(() => ({
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "left",
-        desc: "Previous retry option",
+        bind: "left",
+        title: "Previous retry option",
         group: "Dialog",
-        cmd: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
+        run: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
       },
       {
-        key: "right",
-        desc: "Next retry option",
+        bind: "right",
+        title: "Next retry option",
         group: "Dialog",
-        cmd: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
+        run: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
       },
       {
-        key: "tab",
-        desc: "Next retry option",
+        bind: "tab",
+        title: "Next retry option",
         group: "Dialog",
-        cmd: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
+        run: () => setSelected((value) => (value === "action" ? "dismiss" : "action")),
       },
       {
-        key: "return",
-        desc: "Confirm retry option",
+        bind: "return",
+        title: "Confirm retry option",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           if (selected() === "action") runAction(props, dialog)
           else dismiss(props, dialog)
         },

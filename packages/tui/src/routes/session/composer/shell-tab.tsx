@@ -3,24 +3,22 @@ import { createStore } from "solid-js/store"
 import { TextAttributes, RGBA, ScrollBoxRenderable } from "@opentui/core"
 import { useData } from "../../../context/data"
 import { useLocation } from "../../../context/location"
-import { useSDK } from "../../../context/sdk"
+import { useClient } from "../../../context/client"
 import { useTheme, selectedForeground } from "../../../context/theme"
-import { useBindings, useCommandShortcut } from "../../../keymap"
+import { Keymap } from "../../../context/keymap"
 import { useComposerTab } from "./index"
 
 export function ShellTab(props: { sessionID: string }) {
   const data = useData()
   const location = useLocation()
-  const sdk = useSDK()
+  const client = useClient()
   const { theme } = useTheme()
   const fg = selectedForeground(theme)
   const composer = useComposerTab()
-  const killHint = useCommandShortcut("composer.shell.kill")
+  const shortcuts = Keymap.useShortcuts()
 
   const entries = createMemo(() =>
-    data.shell
-      .list()
-      .filter((shell) => shell.metadata.sessionID === props.sessionID && shell.status === "running"),
+    data.shell.list().filter((shell) => shell.metadata.sessionID === props.sessionID && shell.status === "running"),
   )
 
   const [store, setStore] = createStore({ selected: 0 })
@@ -47,19 +45,20 @@ export function ShellTab(props: { sessionID: string }) {
     const cleanup = composer.register({
       id: "shell",
       label: "Shell",
-      hints: () => (selectedEntry() ? [{ label: "kill", shortcut: killHint() }] : []),
+      hints: () => (selectedEntry() ? [{ label: "kill", shortcut: shortcuts.get("composer.shell.kill") ?? "" }] : []),
     })
     onCleanup(cleanup)
   })
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     mode: "composer",
     enabled: () => composer.active("shell"),
     commands: [
       {
-        name: "composer.shell.up",
+        id: "composer.shell.up",
         title: "Previous shell",
-        category: "Composer",
+        group: "Composer",
+        bind: "up",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -67,9 +66,10 @@ export function ShellTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.shell.down",
+        id: "composer.shell.down",
         title: "Next shell",
-        category: "Composer",
+        group: "Composer",
+        bind: "down",
         run() {
           const list = entries()
           if (list.length === 0) return
@@ -77,34 +77,26 @@ export function ShellTab(props: { sessionID: string }) {
         },
       },
       {
-        name: "composer.shell.kill",
+        id: "composer.shell.kill",
         title: "Kill shell command",
-        category: "Composer",
+        group: "Composer",
+        bind: "ctrl+d",
         run() {
           const entry = selectedEntry()
           if (!entry) return
-          const ref = location()
-          void sdk.api.shell.remove({
+          const ref = location.current
+          void client.api.shell.remove({
             id: entry.id,
             location: ref ? { directory: ref.directory, workspace: ref.workspaceID } : undefined,
           })
         },
       },
     ],
-    bindings: [
-      { key: "up", desc: "Previous shell", group: "Shell", cmd: "composer.shell.up" },
-      { key: "down", desc: "Next shell", group: "Shell", cmd: "composer.shell.down" },
-      { key: "ctrl+d", desc: "Kill shell command", group: "Shell", cmd: "composer.shell.kill" },
-    ],
   }))
 
   return (
     <Show when={composer.active("shell")}>
-      <scrollbox
-        scrollbarOptions={{ visible: false }}
-        maxHeight={5}
-        ref={(r: ScrollBoxRenderable) => (scroll = r)}
-      >
+      <scrollbox scrollbarOptions={{ visible: false }} maxHeight={5} ref={(r: ScrollBoxRenderable) => (scroll = r)}>
         <Show when={entries().length > 0} fallback={<text fg={theme.textMuted}> No shell commands</text>}>
           <For each={entries()}>
             {(shell, index) => {

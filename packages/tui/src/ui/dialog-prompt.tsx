@@ -1,10 +1,9 @@
 import { TextareaRenderable, TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { Show, createEffect, createSignal, onMount, type JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
-import { useConfig } from "../config"
-import { useBindings, useCommandShortcut } from "../keymap"
 
 export type DialogPromptProps = {
   title: string
@@ -20,8 +19,7 @@ export type DialogPromptProps = {
 export function DialogPrompt(props: DialogPromptProps) {
   const dialog = useDialog()
   const { theme } = useTheme()
-  const config = useConfig().data
-  const submitShortcut = useCommandShortcut("dialog.prompt.submit")
+  const shortcuts = Keymap.useShortcuts()
   const [textareaTarget, setTextareaTarget] = createSignal<TextareaRenderable>()
   let textarea: TextareaRenderable
 
@@ -30,20 +28,21 @@ export function DialogPrompt(props: DialogPromptProps) {
     props.onConfirm?.(textarea.plainText)
   }
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
+    mode: "modal",
     target: textareaTarget,
     enabled: textareaTarget() !== undefined && !props.busy,
     // Dialog form semantics must win over the global managed textarea input layer.
     priority: 1,
     commands: [
       {
-        name: "dialog.prompt.submit",
+        id: "dialog.prompt.submit",
         title: "Submit dialog prompt",
-        category: "Dialog",
+        bind: "return",
+        group: "Dialog",
         run: confirm,
       },
     ],
-    bindings: config.keybinds.gather("dialog.prompt", ["dialog.prompt.submit"]),
   }))
 
   onMount(() => {
@@ -103,9 +102,9 @@ export function DialogPrompt(props: DialogPromptProps) {
       </box>
       <box paddingBottom={1} gap={1} flexDirection="row">
         <Show when={!props.busy} fallback={<text fg={theme.textMuted}>processing...</text>}>
-          <Show when={submitShortcut()}>
+          <Show when={shortcuts.get("dialog.prompt.submit")}>
             <text fg={theme.text}>
-              {submitShortcut()} <span style={{ fg: theme.textMuted }}>submit</span>
+              {shortcuts.get("dialog.prompt.submit")} <span style={{ fg: theme.textMuted }}>submit</span>
             </text>
           </Show>
         </Show>

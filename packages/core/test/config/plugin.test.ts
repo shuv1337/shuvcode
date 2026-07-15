@@ -134,7 +134,7 @@ describe("PluginSupervisor config", () => {
     ),
   )
 
-  it.live("loads auto-discovered plugin files and packages", () =>
+  it.live("loads auto-discovered plugin files", () =>
     withLocation(
       undefined,
       Effect.gen(function* () {
@@ -142,9 +142,6 @@ describe("PluginSupervisor config", () => {
         const agents = yield* AgentV2.Service
         expect(yield* agents.get(AgentV2.ID.make("directory"))).toMatchObject({
           description: "Loaded from plugin directory",
-        })
-        expect(yield* agents.get(AgentV2.ID.make("folder"))).toMatchObject({
-          description: "Loaded from plugin folder",
         })
       }),
       true,
@@ -195,7 +192,6 @@ describe("PluginSupervisor config", () => {
         yield* ready()
         const agents = yield* AgentV2.Service
         expect(yield* agents.get(AgentV2.ID.make("directory"))).toBeUndefined()
-        expect(yield* agents.get(AgentV2.ID.make("folder"))).toBeUndefined()
       }),
       true,
     ),

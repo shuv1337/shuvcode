@@ -9,6 +9,7 @@ import { makeLocationNode } from "../effect/app-node"
 import { llmClient } from "../effect/app-node-platform"
 import { SessionEvent } from "./event"
 import type { SessionMessage } from "./message"
+import { SessionModelHeaders } from "./model-headers"
 import { SessionRunnerModel } from "./runner/model"
 import { SessionSchema } from "./schema"
 import { toSessionError } from "./to-session-error"
@@ -16,6 +17,7 @@ import { Token } from "../util/token"
 
 const DEFAULT_BUFFER = 20_000
 const DEFAULT_KEEP_TOKENS = 8_000
+const OUTPUT_TOKEN_MAX = 32_000
 const TOOL_OUTPUT_MAX_CHARS = 2_000
 const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
 <template>
@@ -65,7 +67,7 @@ type Dependencies = {
 }
 
 export type AutoInput = {
-  readonly sessionID: SessionSchema.ID
+  readonly session: SessionSchema.Info
   readonly messages: readonly SessionMessage.Info[]
   readonly model: Model
 }
@@ -77,7 +79,7 @@ export type ManualInput = {
 }
 
 type Plan = {
-  readonly sessionID: SessionSchema.ID
+  readonly session: SessionSchema.Info
   readonly model: Model
   readonly reason: SessionMessage.Compaction["reason"]
   readonly prompt: string
@@ -229,7 +231,7 @@ const make = (dependencies: Dependencies) => {
   })
   const execute = Effect.fn("SessionCompaction.execute")(function* (plan: Plan) {
     yield* dependencies.events.publish(SessionEvent.Compaction.Started, {
-      sessionID: plan.sessionID,
+      sessionID: plan.session.id,
       reason: plan.reason,
       recent: plan.recent,
       inputID: plan.inputID,
@@ -241,6 +243,7 @@ const make = (dependencies: Dependencies) => {
       .stream(
         LLM.request({
           model: plan.model,
+          http: { headers: SessionModelHeaders.make(plan.session) },
           messages: [Message.user(plan.prompt)],
           tools: [],
         }),
@@ -255,7 +258,7 @@ const make = (dependencies: Dependencies) => {
           if (LLMEvent.is.textDelta(event)) {
             chunks.push(event.text)
             return dependencies.events.publish(SessionEvent.Compaction.Delta, {
-              sessionID: plan.sessionID,
+              sessionID: plan.session.id,
               text: event.text,
             })
           }
@@ -269,7 +272,7 @@ const make = (dependencies: Dependencies) => {
         Effect.onInterrupt(() =>
           plan.reason === "auto"
             ? failed({
-                sessionID: plan.sessionID,
+                sessionID: plan.session.id,
                 reason: plan.reason,
                 error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
                 inputID: plan.inputID,
@@ -281,14 +284,14 @@ const make = (dependencies: Dependencies) => {
     if (failure || !summary.trim()) {
       const error = failure ?? { type: "compaction.failed" as const, message: "Compaction produced no summary" }
       return yield* failed({
-        sessionID: plan.sessionID,
+        sessionID: plan.session.id,
         reason: plan.reason,
         error,
         inputID: plan.inputID,
       })
     }
     yield* dependencies.events.publish(SessionEvent.Compaction.Ended, {
-      sessionID: plan.sessionID,
+      sessionID: plan.session.id,
       reason: plan.reason,
       text: summary,
       recent: plan.recent,
@@ -299,14 +302,14 @@ const make = (dependencies: Dependencies) => {
     const content = planContent(input.messages, config.tokens)
     if (content)
       return yield* execute({
-        sessionID: input.sessionID,
+        session: input.session,
         model: input.model,
         reason: "auto",
         ...content,
       })
     const error = { type: "compaction.unavailable" as const, message: "Nothing to compact yet" }
     return yield* failed({
-      sessionID: input.sessionID,
+      sessionID: input.session.id,
       reason: "auto",
       error,
     })
@@ -320,7 +323,7 @@ const make = (dependencies: Dependencies) => {
         message.type === "assistant" && message.tokens !== undefined,
     )
     if (!last) return false
-    const output = input.model.route.defaults.limits?.output ?? 0
+    const output = Math.min(input.model.route.defaults.limits?.output ?? 0, OUTPUT_TOKEN_MAX)
     const used =
       last.tokens.input + last.tokens.output + last.tokens.reasoning + last.tokens.cache.read + last.tokens.cache.write
     if (used <= 0) return false
@@ -347,7 +350,7 @@ const make = (dependencies: Dependencies) => {
     )
     if ("status" in resolved) return resolved
     return yield* execute({
-      sessionID: input.session.id,
+      session: input.session,
       model: resolved.model,
       reason: "manual",
       inputID: input.inputID,
