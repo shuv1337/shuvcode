@@ -135,6 +135,10 @@ export interface KeymapCommand {
     readonly name: string
     readonly aliases?: string[]
   }
+  /** Hides the command from discovery UI. */
+  readonly hidden?: boolean
+  /** Promotes the command in discovery UI. */
+  readonly suggested?: boolean | (() => boolean)
   /** Executes the command. Return false to let keymap dispatch continue. */
   readonly run: () => void | false | Promise<void>
 }

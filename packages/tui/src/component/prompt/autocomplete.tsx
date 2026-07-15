@@ -18,7 +18,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "../../util/locale"
 import type { PromptInfo, PromptPartRef } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
-import { useBindings, useCommandSlashes } from "../../keymap"
+import { useBindings } from "../../keymap"
 import { Keymap } from "../../context/keymap"
 import { displayCharAt, mentionTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/client"
@@ -86,8 +86,8 @@ export function Autocomplete(props: {
   const editor = useEditorContext()
   const client = useClient()
   const data = useData()
-  const slashes = useCommandSlashes()
   const keymap = Keymap.use()
+  const keymapCommands = Keymap.useCommands()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
   const frecency = useFrecency()
@@ -428,7 +428,15 @@ export function Autocomplete(props: {
   )
 
   const commands = createMemo((): AutocompleteOption[] => {
-    const results: AutocompleteOption[] = [...slashes()]
+    const results: AutocompleteOption[] = keymapCommands().flatMap((command) => {
+      if (!command.slash) return []
+      return {
+        display: `/${command.slash.name}`,
+        description: command.description ?? command.title,
+        aliases: command.slash.aliases?.map((alias) => `/${alias}`),
+        onSelect: command.run,
+      }
+    })
     const commandNames = new Set<string>()
 
     for (const serverCommand of data.location.command.list(location.current) ?? []) {

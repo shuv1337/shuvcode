@@ -13,12 +13,14 @@ import {
   formatKeySequence as formatKeySequenceExtra,
 } from "@opentui/keymap/extras"
 import { KeymapProvider, useKeymap, useKeymapSelector, useBindings } from "@opentui/keymap/solid"
-import { createMemo, type Accessor } from "solid-js"
+import type { Accessor } from "solid-js"
 import { useConfig } from "./config"
 import { TuiKeybind } from "./config/keybind"
+import type { KeymapCommand } from "@opencode-ai/plugin/v2/tui/context"
 
 declare module "@opentui/keymap" {
   interface Command {
+    opencode?: KeymapCommand
     slash?: {
       name: string
       aliases?: string[]
@@ -39,13 +41,6 @@ export const useOpencodeKeymap = useKeymap
 
 export type OpenTuiKeymap = ReturnType<typeof useKeymap>
 type OpencodeModeStack = ReturnType<typeof createOpencodeModeStack>
-type CommandSlashEntry = {
-  display: string
-  description?: string
-  aliases?: string[]
-  onSelect: () => void
-}
-type RegisteredCommand = ReturnType<OpenTuiKeymap["getCommands"]>[number]
 type BindingLookup = {
   get(command: string): readonly Binding<Renderable, KeyEvent>[]
 }
@@ -53,10 +48,6 @@ type FormatConfig = { keybinds: BindingLookup }
 type ResolvedKeymapConfig = FormatConfig & ({ leader: { timeout: number } } | { leader_timeout: number })
 
 const modeStacks = new WeakMap<OpenTuiKeymap, OpencodeModeStack>()
-
-function isVisiblePaletteCommand(command: RegisteredCommand) {
-  return command.hidden !== true && command.name !== COMMAND_PALETTE_COMMAND
-}
 
 export function createOpencodeModeStack(keymap: OpenTuiKeymap) {
   keymap.setData(OPENCODE_MODE_KEY, OPENCODE_BASE_MODE)
@@ -266,34 +257,5 @@ export function useCommandShortcut(command: string): Accessor<string> {
       keymap.getCommandBindings({ visibility: "registered", commands: [command] }).get(command)?.[0]?.sequence,
       config,
     ),
-  )
-}
-
-export function useCommandSlashes(): Accessor<readonly CommandSlashEntry[]> {
-  const keymap = useOpencodeKeymap()
-  const entries = useKeymapSelector((keymap: OpenTuiKeymap) =>
-    keymap.getCommandEntries({
-      visibility: "reachable",
-      namespace: "palette",
-      filter: isVisiblePaletteCommand,
-    }),
-  )
-
-  return createMemo<CommandSlashEntry[]>(() =>
-    entries().flatMap((entry) => {
-      const slash = entry.command.slash
-      if (!slash) return []
-      return {
-        display: `/${slash.name}`,
-        description:
-          typeof entry.command.desc === "string"
-            ? entry.command.desc
-            : typeof entry.command.title === "string"
-              ? entry.command.title
-              : undefined,
-        aliases: slash.aliases?.map((alias) => `/${alias}`),
-        onSelect: () => keymap.dispatchCommand(entry.command.name),
-      }
-    }),
   )
 }

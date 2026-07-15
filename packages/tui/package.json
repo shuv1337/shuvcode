@@ -20,7 +20,6 @@
     "./context/epilogue": "./src/context/epilogue.tsx",
     "./context/exit": "./src/context/exit.tsx",
     "./context/log": "./src/context/log.tsx",
-    "./context/project": "./src/context/project.tsx",
     "./context/runtime": "./src/context/runtime.tsx",
     "./context/client": "./src/context/client.tsx",
     "./context/theme": "./src/context/theme.tsx",

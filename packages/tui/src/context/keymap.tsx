@@ -9,7 +9,7 @@ import {
   registerManagedTextareaLayer,
   registerTimedLeader,
 } from "@opentui/keymap/addons/opentui"
-import { formatKeySequence } from "@opentui/keymap/extras"
+import { formatCommandBindings, formatKeySequence } from "@opentui/keymap/extras"
 import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { KeymapProvider, useBindings, useKeymapSelector } from "@opentui/keymap/solid"
 import { useRenderer } from "@opentui/solid"
@@ -19,6 +19,7 @@ import { TuiKeybind } from "../config/keybind"
 
 declare module "@opentui/keymap" {
   interface Command {
+    opencode?: KeymapCommand
     slash?: {
       name: string
       aliases?: string[]
@@ -177,6 +178,7 @@ function createLayer(input: () => KeymapLayer) {
         return {
           ...definition,
           name: id,
+          opencode: command,
           ...(description === undefined ? {} : { desc: description }),
           ...(group === undefined ? {} : { category: group }),
           ...(palette === undefined ? {} : { namespace: "palette" }),
@@ -215,12 +217,21 @@ function useShortcuts() {
     const commands = keymap.getCommands({ visibility: "registered" }).map((command) => command.name)
     const bindings = keymap.getCommandBindings({ visibility: "registered", commands })
     return new Map(
-      commands.map((id) => [id, formatKeySequence(bindings.get(id)?.[0]?.sequence, formatOptions(config.data))]),
+      commands.map((id) => [
+        id,
+        {
+          first: formatKeySequence(bindings.get(id)?.[0]?.sequence, formatOptions(config.data)),
+          all: formatCommandBindings(bindings.get(id) ?? [], formatOptions(config.data)),
+        },
+      ]),
     )
   })
   return {
     get(id: string) {
-      return shortcuts().get(id)
+      return shortcuts().get(id)?.first
+    },
+    all(id: string) {
+      return shortcuts().get(id)?.all
     },
   }
 }
@@ -232,17 +243,31 @@ function useCommands(): Accessor<readonly KeymapCommand[]> {
       .getCommandEntries({
         visibility: "reachable",
       })
-      .map((entry) => ({
-        id: entry.command.name,
-        title: typeof entry.command.title === "string" ? entry.command.title : entry.command.name,
-        description: typeof entry.command.desc === "string" ? entry.command.desc : undefined,
-        group: typeof entry.command.category === "string" ? entry.command.category : undefined,
-        palette: entry.command.namespace === "palette" ? true : undefined,
-        slash: entry.command.slash,
-        run: () => {
-          value.keymap.dispatchCommand(entry.command.name)
-        },
-      })),
+      .map((entry) => {
+        const command = entry.command.opencode ?? {
+          id: entry.command.name,
+          title: typeof entry.command.title === "string" ? entry.command.title : undefined,
+          description: typeof entry.command.desc === "string" ? entry.command.desc : undefined,
+          group: typeof entry.command.category === "string" ? entry.command.category : undefined,
+          enabled:
+            typeof entry.command.enabled === "boolean" || typeof entry.command.enabled === "function"
+              ? (entry.command.enabled as boolean | (() => boolean))
+              : undefined,
+          palette: entry.command.namespace === "palette" ? true : undefined,
+          slash: entry.command.slash,
+          hidden: typeof entry.command.hidden === "boolean" ? entry.command.hidden : undefined,
+          suggested:
+            typeof entry.command.suggested === "boolean" || typeof entry.command.suggested === "function"
+              ? (entry.command.suggested as boolean | (() => boolean))
+              : undefined,
+        }
+        return {
+          ...command,
+          run: () => {
+            value.keymap.dispatchCommand(entry.command.name)
+          },
+        }
+      }),
   )
 }
 
