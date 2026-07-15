@@ -1,13 +1,18 @@
 import { describe, expect } from "bun:test"
+import { Message, SystemPart } from "@opencode-ai/ai"
 import { Effect, Schema } from "effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { PluginV2 } from "@opencode-ai/core/plugin"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { PluginPromise } from "@opencode-ai/core/plugin/promise"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { Plugin } from "@opencode-ai/plugin/v2"
+import type { AIHooks } from "@opencode-ai/plugin/v2/effect/ai"
+import { Model } from "@opencode-ai/schema/model"
+import { Provider } from "@opencode-ai/schema/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -69,6 +74,38 @@ describe("fromPromise", () => {
         description: "Reviews code",
         mode: "subagent",
       })
+    }),
+  )
+
+  it.effect("forwards AI request hooks", () =>
+    Effect.gen(function* () {
+      const plugin = yield* PluginV2.Service
+      const hooks = yield* PluginHooks.Service
+      const host = yield* PluginHost.make(plugin)
+      yield* PluginPromise.fromPromise(
+        Plugin.define({
+          id: "promise-ai-request",
+          setup: async (ctx) => {
+            await ctx.ai.hook("request", (event) => {
+              event.system.push(SystemPart.make("Promise hook"))
+              delete event.tools.echo
+            })
+          },
+        }),
+      ).effect(host)
+      const event: AIHooks["request"] = {
+        sessionID: SessionV2.ID.make("ses_promise_ai_request"),
+        agent: AgentV2.ID.make("build"),
+        model: Model.Ref.make({ providerID: Provider.ID.make("test"), id: Model.ID.make("model") }),
+        system: [SystemPart.make("Initial")],
+        messages: [Message.user("Hello")],
+        tools: { echo: { description: "Echo", input: { type: "object" } } },
+      }
+
+      yield* hooks.trigger("ai", "request", event)
+
+      expect(event.system.map((part) => part.text)).toEqual(["Initial", "Promise hook"])
+      expect(event.tools).toEqual({})
     }),
   )
 

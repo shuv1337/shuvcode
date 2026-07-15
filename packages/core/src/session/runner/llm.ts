@@ -10,6 +10,7 @@ import {
   isContextOverflowFailure,
   type ProviderErrorEvent,
 } from "@opencode-ai/ai"
+import type { AIHooks } from "@opencode-ai/plugin/v2/effect/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Money } from "@opencode-ai/schema/money"
 import { Cause, Effect, Exit, Fiber, FiberSet, Layer, Option, Semaphore, Stream } from "effect"
@@ -51,6 +52,7 @@ import { AgentNotFoundError, StepFailedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
 import { PluginSupervisor } from "../../plugin/supervisor"
+import { PluginHooks } from "../../plugin/hooks"
 import { SessionModelHeaders } from "../model-headers"
 
 type StepTokens = {
@@ -89,6 +91,7 @@ const layer = Layer.effect(
     const llm = yield* LLMClient.Service
     const agents = yield* AgentV2.Service
     const tools = yield* ToolRegistry.Service
+    const hooks = yield* PluginHooks.Service
     const models = yield* SessionRunnerModel.Service
     const store = yield* SessionStore.Service
     const location = yield* Location.Service
@@ -212,6 +215,30 @@ const layer = Layer.effect(
         tools: toolMaterialization?.definitions ?? [],
         toolChoice: isLastStep ? "none" : undefined,
       })
+      const availableTools = new Map(request.tools.map((tool) => [tool.name, tool]))
+      const requestEvent: AIHooks["request"] = {
+        sessionID: session.id,
+        agent: agent.id,
+        model: resolved.ref,
+        system: [...request.system],
+        messages: [...request.messages],
+        tools: Object.fromEntries(
+          request.tools.map((tool) => [tool.name, { description: tool.description, input: { ...tool.inputSchema } }]),
+        ),
+      }
+      // Plugins may reshape the draft but cannot advertise tools excluded by
+      // permissions, registration state, or the selected agent's step limit.
+      yield* hooks.trigger("ai", "request", requestEvent)
+      const hookedRequest = LLM.updateRequest(request, {
+        system: requestEvent.system,
+        messages: requestEvent.messages,
+        tools: Object.entries(requestEvent.tools).flatMap(([name, tool]) => {
+          const registered = availableTools.get(name)
+          if (!registered) return []
+          return [{ ...registered, description: tool.description, inputSchema: tool.input }]
+        }),
+      })
+      const advertisedTools = new Set(hookedRequest.tools.map((tool) => tool.name))
       const toolFibers = yield* FiberSet.make<void, ToolOutputStore.Error>()
       const ownedToolFibers: Array<Fiber.Fiber<void, ToolOutputStore.Error>> = []
       let needsContinuation = false
@@ -232,7 +259,7 @@ const layer = Layer.effect(
       const serialized = <A, E, R>(effect: Effect.Effect<A, E, R>) => publication.withPermit(effect)
       const publish = (event: LLMEvent, error?: SessionError.Error) => serialized(publisher.publish(event, error))
       let overflowFailure: ProviderErrorEvent | undefined
-      const providerStream = llm.stream(request).pipe(
+      const providerStream = llm.stream(hookedRequest).pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
             if (overflowFailure || publisher.hasProviderError()) return
@@ -244,11 +271,13 @@ const layer = Layer.effect(
             }
             yield* publish(event)
             if (event.type !== "tool-call" || event.providerExecuted) return
-            if (!toolMaterialization) {
+            if (!toolMaterialization || (availableTools.has(event.name) && !advertisedTools.has(event.name))) {
               yield* serialized(
                 publisher.failUnsettledTools({
                   type: "tool.execution",
-                  message: "Tools are disabled after the maximum agent steps",
+                  message: toolMaterialization
+                    ? `Tool is not available for this request: ${event.name}`
+                    : "Tools are disabled after the maximum agent steps",
                 }),
               )
               return
@@ -585,6 +614,7 @@ export const node = makeLocationNode({
     llmClient,
     AgentV2.node,
     ToolRegistry.node,
+    PluginHooks.node,
     SessionRunnerModel.node,
     SessionStore.node,
     Location.node,

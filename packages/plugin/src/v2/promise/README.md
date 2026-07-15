@@ -85,10 +85,10 @@ await ctx.aisdk.hook("language", (event) => {
 })
 ```
 
-Session request context is mutable immediately before provider dispatch:
+AI request context is mutable immediately before provider dispatch:
 
 ```ts
-await ctx.session.hook("request", (event) => {
+await ctx.ai.hook("request", (event) => {
   event.tools.read.description = "Read a file using narrow line ranges."
   delete event.tools.write
 })

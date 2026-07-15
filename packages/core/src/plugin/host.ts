@@ -80,6 +80,9 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
           })
         }),
     },
+    ai: {
+      hook: (name, callback) => hooks.register("ai", name, callback),
+    },
     aisdk: {
       hook: (name, callback) => {
         if (name === "sdk") {

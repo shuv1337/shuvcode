@@ -18,6 +18,9 @@ export function host(overrides: Overrides = {}): PluginContext {
       transform: () => Effect.die("unused agent.transform"),
       reload: () => Effect.die("unused agent.reload"),
     },
+    ai: overrides.ai ?? {
+      hook: () => Effect.die("unused ai.hook"),
+    },
     aisdk: overrides.aisdk ?? {
       hook: () => Effect.die("unused aisdk.hook"),
     },

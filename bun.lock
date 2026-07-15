@@ -720,6 +720,7 @@
       "version": "1.17.20",
       "dependencies": {
         "@ai-sdk/provider": "3.0.8",
+        "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/client": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
         "@opencode-ai/sdk": "workspace:*",

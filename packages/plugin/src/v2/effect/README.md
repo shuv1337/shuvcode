@@ -80,14 +80,16 @@ yield *
 
 Hooks run sequentially in registration order. Later hooks observe mutations made by earlier hooks.
 
-Session request context is mutable immediately before provider dispatch:
+AI request context is mutable immediately before provider dispatch:
 
 ```ts
 yield *
-  ctx.session.hook("request", (event) => {
-    event.tools.read.description = "Read a file using narrow line ranges."
-    delete event.tools.write
-  })
+  ctx.ai.hook("request", (event) =>
+    Effect.sync(() => {
+      event.tools.read.description = "Read a file using narrow line ranges."
+      delete event.tools.write
+    }),
+  )
 ```
 
 ## Reloading A Domain

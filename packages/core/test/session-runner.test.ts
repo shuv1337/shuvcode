@@ -3,7 +3,9 @@ import {
   LLMClient,
   LLMError,
   LLMEvent,
+  Message,
   Model,
+  SystemPart,
   ToolFailure,
   TransportReason,
   InvalidProviderOutputReason,
@@ -42,6 +44,7 @@ import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionRunnerSystemPrompt } from "@opencode-ai/core/session/runner/system-prompt"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { QuestionTool } from "@opencode-ai/core/tool/question"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { AgentV2 } from "@opencode-ai/core/agent"
@@ -397,6 +400,7 @@ const it = testEffect(
       AgentV2.node,
       ToolRegistry.node,
       ToolRegistry.toolsNode,
+      PluginHooks.node,
       echoNode,
       SessionRunnerModel.node,
       InstructionBuiltIns.node,
@@ -773,6 +777,32 @@ const verifyPartialFlushOnInterruption = (kind: FragmentKind) =>
   })
 
 describe("SessionRunnerLLM", () => {
+  it.effect("applies AI request hooks without exposing unavailable tools", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const hooks = yield* PluginHooks.Service
+      yield* hooks.register("ai", "request", (event) =>
+        Effect.sync(() => {
+          event.system = [SystemPart.make("Hooked system")]
+          event.messages = [Message.user("Hooked message")]
+          delete event.tools.echo
+          event.tools.unregistered = { description: "Unavailable", input: { type: "object" } }
+        }),
+      )
+      yield* admit(session, "Original message")
+      responses = [reply.tool("call-removed", "echo", { text: "blocked" })]
+
+      yield* session.resume(sessionID)
+
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.system.map((part) => part.text)).toEqual(["Hooked system"])
+      expect(requests[0]?.messages).toEqual([Message.user("Hooked message")])
+      expect(requests[0]?.tools.map((tool) => tool.name)).not.toContain("echo")
+      expect(requests[0]?.tools.map((tool) => tool.name)).not.toContain("unregistered")
+      expect(executions).toEqual([])
+    }),
+  )
+
   it.effect("advertises and executes a location registered tool", () =>
     Effect.gen(function* () {
       const session = yield* setup

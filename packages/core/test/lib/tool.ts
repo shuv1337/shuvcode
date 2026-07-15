@@ -44,6 +44,9 @@ export const registerToolPlugin = <R>(plugin: {
   Effect.gen(function* () {
     const tools = yield* Tools.Service
     const context = host({
+      ai: {
+        hook: () => Effect.succeed({ dispose: Effect.void }),
+      },
       tool: {
         transform: (callback) =>
           Effect.gen(function* () {

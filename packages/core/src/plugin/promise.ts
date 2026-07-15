@@ -63,6 +63,10 @@ export function fromPromise(plugin: Plugin) {
             transform: transform(host.agent),
             reload: () => run(host.agent.reload()),
           },
+          ai: {
+            hook: (name, callback) =>
+              register(host.ai.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
+          },
           aisdk: {
             hook: (name, callback) =>
               register(host.aisdk.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
