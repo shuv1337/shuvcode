@@ -22,19 +22,15 @@ Install the user unit from this repository:
 ```sh
 install -m 0644 deploy/systemd/shuvcode.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now shuvcode.service
-```
-
-The managed server binds loopback. Publish a separate advertised URL when a
-tailnet reverse proxy is used:
-
-```sh
 shuvcode service set hostname 127.0.0.1
 shuvcode service set port 4096
 shuvcode service set advertised-urls https://<host>.<tailnet>.ts.net:10001
-systemctl --user restart shuvcode.service
+systemctl --user enable --now shuvcode.service
 tailscale serve --bg --https=10001 http://127.0.0.1:4096
 ```
+
+The managed server binds loopback. Configure it while stopped, then publish the
+separate advertised URL through the tailnet reverse proxy as shown above.
 
 The bind and advertised URL are deliberately different. Do not widen the bind
 to make a reverse-proxy URL reachable.
