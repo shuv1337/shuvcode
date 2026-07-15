@@ -96,6 +96,9 @@ export const Info = Schema.Struct({
   ).annotate({ description: "Terminal integration settings" }),
   prompt: Schema.optional(
     Schema.Struct({
+      max_width: Schema.optional(
+        Schema.Union([Schema.Int.check(Schema.isGreaterThan(0)), Schema.Literal("auto")]),
+      ).annotate({ description: "Prompt width in columns; 'auto' follows the terminal width" }),
       editor: Schema.optional(Schema.Boolean).annotate({
         description: "Include the active editor file or selection as prompt context",
       }),

@@ -2,7 +2,9 @@ import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import { useTheme } from "../context/theme"
 import { tint } from "../theme/color"
-import { logo } from "../logo"
+import { logo } from "../shuv-logo"
+
+export const defaultLogo = logo
 
 export function Logo() {
   const { theme } = useTheme()
@@ -49,11 +51,11 @@ export function Logo() {
 
   return (
     <box>
-      <For each={logo.left}>
+      <For each={defaultLogo.left}>
         {(line, index) => (
           <box flexDirection="row" gap={1}>
             <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            <box flexDirection="row">{renderLine(logo.right[index()], theme.text, true)}</box>
+            <box flexDirection="row">{renderLine(defaultLogo.right[index()], theme.text, true)}</box>
           </box>
         )}
       </For>
