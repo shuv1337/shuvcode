@@ -1,4 +1,5 @@
 import { Context, Layer } from "effect"
+import { Pairing } from "@opencode-ai/schema/pairing"
 import { networkInterfaces } from "node:os"
 
 export class Service extends Context.Service<Service, { readonly urls: () => ReadonlyArray<string> }>()(
@@ -27,6 +28,10 @@ export function connectionURLs(value: string, requestedHostname?: string) {
         }),
     ),
   ]
+}
+
+export function advertisedURLs(values: ReadonlyArray<string>) {
+  return Pairing.advertisedURLs(values)
 }
 
 export * as ServerInfo from "./server-info"

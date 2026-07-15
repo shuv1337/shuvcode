@@ -2,6 +2,7 @@ export * as ServerProcess from "./process"
 
 import { NodeHttpServer, NodeHttpServerRequest } from "@effect/platform-node"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
+import { Capabilities } from "@opencode-ai/protocol/capabilities"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
 import { Cause, Context, Deferred, Effect, Exit, Layer, Option, Ref, Schema, Scope } from "effect"
@@ -17,6 +18,7 @@ export type Options<E = never, R = never> = {
   readonly hostname: string
   readonly port: Option.Option<number>
   readonly password: string
+  readonly advertisedURLs?: ReadonlyArray<string>
   readonly instanceID: string
   readonly service?: {
     readonly onListen: (address: HttpServer.Address) => Effect.Effect<void, E, R>
@@ -55,6 +57,8 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
   const boot = Effect.gen(function* () {
     const context = yield* Layer.buildWithScope(
       createRoutes(options.password, () => {
+        if (options.advertisedURLs && options.advertisedURLs.length > 0)
+          return ServerInfo.advertisedURLs(options.advertisedURLs)
         const address = bound.server.address()
         if (address === null || typeof address === "string") return []
         const host = address.family === "IPv6" ? `[${address.address}]` : address.address
@@ -136,6 +140,10 @@ function dispatch(
   return Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.url, "http://localhost")
+    const state = yield* status.current
+    const applicationEffect = yield* Ref.get(application)
+    const ready = state.type === "ready" && Option.isSome(applicationEffect)
+    const bearer = /^Bearer\s+\S+$/i.test(request.headers.authorization ?? "")
     const lifecycle =
       request.method === "GET" && url.pathname === "/api/health"
         ? "health"
@@ -143,14 +151,19 @@ function dispatch(
           ? "stop"
           : undefined
     if (lifecycle !== undefined) {
+      if (lifecycle === "health" && ready && bearer) return yield* applicationEffect.value
       if (!(yield* authorizedRequest(request, auth))) return unauthorized()
       return yield* control(request, lifecycle, status, () => Deferred.doneUnsafe(shutdown, Effect.void))
     }
-    const state = yield* status.current
-    const app = yield* Ref.get(application)
-    const ready = state.type === "ready" && Option.isSome(app)
-    if ((!ready || !hasPtyConnectTicketURL(url)) && !(yield* authorizedRequest(request, auth))) return unauthorized()
-    if (ready) return yield* app.value
+    if (
+      ready &&
+      (bearer ||
+        Capabilities.isPairingRedemption(request.method, url.pathname) ||
+        hasPtyConnectTicketURL(url))
+    )
+      return yield* applicationEffect.value
+    if (!(yield* authorizedRequest(request, auth))) return unauthorized()
+    if (ready) return yield* applicationEffect.value
     return unavailable(state)
   })
 }

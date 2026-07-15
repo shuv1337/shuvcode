@@ -35,6 +35,7 @@ export const ClientApi: ClientApiShape = makeDefaultApi({
 export const groupNames = {
   "server.health": "health",
   "server.server": "server",
+  "server.pairing": "pairing",
   "server.debug": "debug",
   "server.location": "location",
   "server.agent": "agent",
@@ -45,6 +46,7 @@ export const groupNames = {
   "server.generate": "generate",
   "server.provider": "provider",
   "server.integration": "integration",
+  "server.mcp": "mcp",
   "server.credential": "credential",
   "server.form": "form",
   "server.permission": "permission",
@@ -54,7 +56,6 @@ export const groupNames = {
   "server.event": "event",
   "server.pty": "pty",
   "server.shell": "shell",
-  "server.mcp": "mcp",
   "server.question": "question",
   "server.reference": "reference",
   "server.project": "project",

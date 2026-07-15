@@ -178,10 +178,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.atMost(100),
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
-        thinking: Flag.boolean("thinking").pipe(
-          Flag.withDescription("Show thinking blocks"),
-          Flag.withDefault(false),
-        ),
+        thinking: Flag.boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
         auto: Flag.boolean("auto").pipe(
           Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
           Flag.withDefault(false),
@@ -211,6 +208,16 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
       ],
     }),
     Spec.make("pair", { description: "Show server pairing information" }),
+    Spec.make("device", {
+      description: "Manage paired mobile devices",
+      commands: [
+        Spec.make("list", { description: "List paired devices" }),
+        Spec.make("revoke", {
+          description: "Revoke a paired device",
+          params: { deviceID: Argument.string("deviceID").pipe(Argument.withDescription("Paired device ID")) },
+        }),
+      ],
+    }),
     Spec.make("serve", {
       description: "Start the v2 API server",
       params: {

@@ -4,6 +4,7 @@ import { Hash } from "@opencode-ai/core/util/hash"
 import { Service } from "@opencode-ai/client/effect"
 import { Effect, FileSystem, Option, Schema } from "effect"
 import { randomBytes } from "crypto"
+import { Pairing } from "@opencode-ai/schema/pairing"
 import path from "path"
 
 // The CLI's service configuration file, plus the Service.Options binding that
@@ -14,10 +15,11 @@ export const Info = Schema.Struct({
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535))),
   password: Schema.optional(Schema.String),
+  advertisedUrls: Schema.optional(Schema.Array(Schema.String)),
 })
 export type Info = typeof Info.Type
 
-const keys = ["hostname", "port", "password"] as const
+const keys = ["hostname", "port", "password", "advertised-urls"] as const
 type Key = (typeof keys)[number]
 
 const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
@@ -58,7 +60,7 @@ export const migrateRegistration = Effect.fnUntraced(function* (
 })
 
 function configKey(key: string): Key {
-  if (key === "hostname" || key === "port" || key === "password") return key
+  if (keys.includes(key as Key)) return key as Key
   throw new Error(`Unknown service config key: ${key}`)
 }
 
@@ -131,6 +133,9 @@ export const get = Effect.fn("cli.service-config.get")(function* (key?: string) 
     case "password": {
       return yield* password()
     }
+    case "advertised-urls": {
+      return ((yield* read()).advertisedUrls ?? []).join(",")
+    }
   }
   throw new Error(`Unknown service config key: ${key}`)
 })
@@ -154,6 +159,16 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
       yield* password(value)
       return
     }
+    case "advertised-urls": {
+      const advertisedUrls = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+      Pairing.advertisedURLs(advertisedUrls)
+      yield* Service.stop(yield* options())
+      yield* write({ ...(yield* read()), advertisedUrls })
+      return
+    }
   }
 })
 
@@ -174,6 +189,12 @@ export const unset = Effect.fn("cli.service-config.unset")(function* (key: strin
     case "password": {
       yield* Service.stop(yield* options())
       const { password: _password, ...next } = yield* read()
+      yield* write(next)
+      return
+    }
+    case "advertised-urls": {
+      yield* Service.stop(yield* options())
+      const { advertisedUrls: _advertisedUrls, ...next } = yield* read()
       yield* write(next)
       return
     }

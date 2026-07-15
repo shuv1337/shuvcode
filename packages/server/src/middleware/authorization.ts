@@ -1,13 +1,11 @@
 import { ServerAuth } from "../auth"
-import { UnauthorizedError } from "@opencode-ai/protocol/errors"
-import { Authorization } from "@opencode-ai/protocol/middleware/authorization"
-export { Authorization } from "@opencode-ai/protocol/middleware/authorization"
-import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
+import { Capabilities } from "@opencode-ai/protocol/capabilities"
+import { ForbiddenError, UnauthorizedError } from "@opencode-ai/protocol/errors"
+import { Authorization, Principal } from "@opencode-ai/protocol/middleware/authorization"
+export { Authorization, Principal } from "@opencode-ai/protocol/middleware/authorization"
 import { Effect, Encoding, Layer, Redacted } from "effect"
-import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
-
-const AUTH_TOKEN_QUERY = "auth_token"
-const WWW_AUTHENTICATE = 'Basic realm="Secure Area"'
+import { HttpServerRequest } from "effect/unstable/http"
+import { Authentication } from "./authentication"
 
 function emptyCredential() {
   return { username: "", password: Redacted.make("") }
@@ -27,8 +25,7 @@ function decodeCredential(input: string) {
 }
 
 function credentialFromRequest(request: HttpServerRequest.HttpServerRequest) {
-  const url = new URL(request.url, "http://localhost")
-  const token = url.searchParams.get(AUTH_TOKEN_QUERY)
+  const token = new URL(request.url, "http://localhost").searchParams.get("auth_token")
   if (token) return decodeCredential(token)
   const match = /^Basic\s+(.+)$/i.exec(request.headers.authorization ?? "")
   if (match) return decodeCredential(match[1])
@@ -42,20 +39,25 @@ export function authorizedRequest(request: HttpServerRequest.HttpServerRequest, 
 export const authorizationLayer = Layer.effect(
   Authorization,
   Effect.gen(function* () {
-    const config = yield* ServerAuth.Config
-    if (!ServerAuth.required(config)) return Authorization.of((effect) => effect)
+    const authentication = yield* Authentication.make
     return Authorization.of((effect) =>
-      Effect.gen(function* () {
-        const request = yield* HttpServerRequest.HttpServerRequest
-        // Browsers cannot set headers on WebSocket upgrades, so a ticketed PTY connect skips
-        // credential checks here; the connect handler consumes and validates the ticket.
-        if (hasPtyConnectTicketURL(new URL(request.url, "http://localhost"))) return yield* effect
-        if (yield* authorizedRequest(request, config)) return yield* effect
-        yield* HttpEffect.appendPreResponseHandler((_request, response) =>
-          Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", WWW_AUTHENTICATE)),
-        )
-        return yield* new UnauthorizedError({ message: "Authentication required" })
-      }),
+      authentication.withPrincipal(
+        Effect.gen(function* () {
+          const request = yield* HttpServerRequest.HttpServerRequest
+          const principal = yield* Principal
+          const url = new URL(request.url, "http://localhost")
+          if (principal.type === "administrator") return yield* effect
+          if (principal.type === "device") {
+            if (!Capabilities.allowsMobile(request.method, url.pathname))
+              return yield* new ForbiddenError({ message: "Administrator access required" })
+            return yield* effect
+          }
+          if (principal.reason !== "embedded") return yield* effect
+          if (!Capabilities.requiresAdministrator(request.method, url.pathname)) return yield* effect
+          yield* Authentication.challenge
+          return yield* new UnauthorizedError({ message: "Authentication required" })
+        }),
+      ),
     )
   }),
 )

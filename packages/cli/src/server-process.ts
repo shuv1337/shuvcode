@@ -65,6 +65,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
         hostname: options.hostname ?? config.hostname ?? "127.0.0.1",
         port: Option.fromNullishOr(options.port ?? config.port),
         password,
+        advertisedURLs: config.advertisedUrls,
         instanceID,
         service:
           serviceOptions === undefined

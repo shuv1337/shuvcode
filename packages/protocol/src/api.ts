@@ -30,6 +30,7 @@ import { CredentialGroup } from "./groups/credential.js"
 import { ProjectGroup } from "./groups/project.js"
 import { ProjectCopyGroup } from "./groups/project-copy.js"
 import { VcsGroup } from "./groups/vcs.js"
+import { PairingGroup } from "./groups/pairing.js"
 
 type LocationGroups<LocationId extends HttpApiMiddleware.AnyId> =
   | HttpApiGroup.AddMiddleware<typeof LocationGroup, LocationId>
@@ -68,9 +69,7 @@ type MixedMiddlewareGroups<
   SessionLocationId extends HttpApiMiddleware.AnyId,
   SessionLocationService,
 > =
-  | ReturnType<
-      typeof makePermissionGroup<LocationId, LocationService, SessionLocationId, SessionLocationService>
-    >
+  | ReturnType<typeof makePermissionGroup<LocationId, LocationService, SessionLocationId, SessionLocationService>>
   | ReturnType<typeof makeQuestionGroup<LocationId, LocationService, SessionLocationId, SessionLocationService>>
 
 type ApiGroups<
@@ -84,6 +83,7 @@ type ApiGroups<
 > =
   | typeof HealthGroup
   | typeof ServerGroup
+  | typeof PairingGroup
   | typeof DebugGroup
   | LocationGroups<LocationId>
   | FormGroups<LocationId, LocationService, FormLocationId, FormLocationService>
@@ -146,6 +146,7 @@ const makeApiFromGroup = <
   HttpApi.make("server")
     .add(HealthGroup)
     .add(ServerGroup)
+    .add(PairingGroup)
     .add(LocationGroup.middleware(locationMiddleware))
     .add(AgentGroup.middleware(locationMiddleware))
     .add(PluginGroup.middleware(locationMiddleware))

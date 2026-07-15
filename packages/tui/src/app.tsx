@@ -57,7 +57,7 @@ import { DialogMcp } from "./component/dialog-mcp"
 import { DialogStatus } from "./component/dialog-status"
 import { DialogConfig } from "./component/dialog-config"
 import { DialogDebug } from "./component/dialog-debug"
-import { DialogPair, type DialogPairCredentials } from "./component/dialog-pair"
+import { DialogPair } from "./component/dialog-pair"
 import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
@@ -337,16 +337,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                               <PromptRefProvider>
                                                                 <EditorContextProvider>
                                                                   <PluginProvider packages={input.packages}>
-                                                                    <App
-                                                                      pair={
-                                                                        input.server.endpoint.auth
-                                                                          ? input.server.endpoint.auth
-                                                                          : {
-                                                                              username: "opencode",
-                                                                              password: "",
-                                                                            }
-                                                                      }
-                                                                    />
+                                                                    <App />
                                                                   </PluginProvider>
                                                                 </EditorContextProvider>
                                                               </PromptRefProvider>
@@ -394,7 +385,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
-function App(props: { pair?: DialogPairCredentials }) {
+function App() {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const config = useConfig()
@@ -753,7 +744,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         title: "Pair device",
         slash: { name: "pair" },
         run: () => {
-          dialog.replace(() => <DialogPair credentials={props.pair} />)
+          dialog.replace(() => <DialogPair />)
         },
         category: "System",
       },
