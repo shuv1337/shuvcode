@@ -11,8 +11,11 @@ not create caller-specific Shuvcode configuration domains.
 - The canonical configuration root is `~/.config/opencode`; neither the unit nor
   an interactive shell sets `OPENCODE_CONFIG_DIR`.
 - Shuvcode's normal XDG data and state roots remain canonical for every caller.
-- `~/.config/opencode/service.json` is private mode `0600` and contains the
-  administrator credential used by trusted loopback clients.
+- The channel-specific service files under `~/.config/opencode` and
+  `~/.local/state/opencode` are private mode `0600`. They contain the
+  administrator credential and managed-service registration used by trusted
+  loopback clients. Use `shuvcode service` commands instead of selecting a file
+  by name.
 - Mobile clients receive independently revocable device credentials through
   pairing. A bridge may keep its own client-facing credential domain while
   using the administrator credential on loopback.
@@ -39,10 +42,17 @@ to make a reverse-proxy URL reachable.
 
 Stop dependent callers, back up both configuration roots, and merge the desired
 server configuration into `~/.config/opencode`. Preserve the active service
-password by moving it into the canonical `service.json`, then update dependent
-loopback clients to the same value without printing it. Remove any systemd
-drop-in that sets `OPENCODE_CONFIG_DIR`, reload the user manager, and restart
-Shuvcode before its dependants.
+password through `shuvcode service`, then update dependent loopback clients to
+the same value without printing it. Remove any systemd drop-in that sets
+`OPENCODE_CONFIG_DIR`, reload the user manager, and restart Shuvcode before its
+dependants.
+
+Migrate plugins as part of the configuration merge. A V1-shaped document keeps
+the singular `plugin` field because the V2 loader migrates the whole document;
+a native V2 document uses `plugins`. Do not rename only that field in an
+otherwise V1 document: it will be ignored during migration. Replace legacy
+plugin entrypoints with their V2 server adapters and verify every required
+integration method after restart.
 
 Provider authentication stored only in a legacy credential file is not a V2
 integration connection. Reconnect those providers through the V2 TUI after the
@@ -62,5 +72,8 @@ shuvcode pair
 
 Verify that interactive TUI sessions and paired mobile sessions appear in the
 same session list, and that every configured V2 provider appears through the
-model endpoint. Logs and verification output must not contain administrator
-passwords, invitation tokens, or device credentials.
+model endpoint. For providers supplied by plugins, verify the required login
+methods too; an Anthropic subscription deployment must advertise an OAuth
+method, not only API-key or environment methods. Logs and verification output
+must not contain administrator passwords, invitation tokens, or device
+credentials.
