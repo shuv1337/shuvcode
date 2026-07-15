@@ -11,6 +11,9 @@ import { useData } from "../context/data"
 import { useLocation } from "../context/location"
 import { FormPrompt } from "./session/form"
 import { PluginSlot } from "../plugin/context"
+import { useTerminalDimensions } from "@opentui/solid"
+import { useConfig } from "../config"
+import { homePromptMaxWidth, showHomeLogo } from "../util/responsive"
 
 let once = false
 const placeholder = {
@@ -28,6 +31,10 @@ export function Home() {
   const editor = useEditorContext()
   const data = useData()
   const location = useLocation()
+  const dimensions = useTerminalDimensions()
+  const config = useConfig().data
+  const promptMaxWidth = createMemo(() => homePromptMaxWidth(dimensions().width, config.prompt?.max_width))
+  const logoVisible = createMemo(() => showHomeLogo(dimensions().width, dimensions().height))
   // Global MCP elicitations can arrive without a session route, so keep them reachable from Home.
   const forms = createMemo(() => data.session.form.list("global", data.location.default()) ?? [])
   let sent = false
@@ -69,13 +76,15 @@ export function Home() {
       <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
-        <box flexShrink={0}>
-          <pluginRuntime.Slot name="home_logo" mode="replace">
-            <Logo />
-          </pluginRuntime.Slot>
-        </box>
-        <box height={1} minHeight={0} flexShrink={1} />
-        <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
+        <Show when={logoVisible()}>
+          <box flexShrink={0}>
+            <pluginRuntime.Slot name="home_logo" mode="replace">
+              <Logo />
+            </pluginRuntime.Slot>
+          </box>
+          <box height={1} minHeight={0} flexShrink={1} />
+        </Show>
+        <box width="100%" maxWidth={promptMaxWidth()} zIndex={1000} paddingTop={1} flexShrink={0}>
           <pluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
             <Prompt
               ref={bind}

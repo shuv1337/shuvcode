@@ -55,6 +55,7 @@ import { useLocation } from "../../context/location"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { contextUsage } from "../../util/session"
 import { abbreviateHome } from "../../runtime"
+import { promptMetadata } from "../../util/responsive"
 
 registerOpencodeSpinner()
 
@@ -257,9 +258,10 @@ export function Prompt(props: PromptProps) {
     ],
   }))
   const [cursorVersion, setCursorVersion] = createSignal(0)
+  const metadata = createMemo(() => promptMetadata(dimensions().width, local.model.parsed().model))
   const currentProviderLabel = createMemo(() => local.model.parsed().provider)
   const connected = useConnected()
-  const hasRightContent = createMemo(() => Boolean(props.right))
+  const hasRightContent = createMemo(() => Boolean(props.right) && !metadata().compact)
 
   function promptModelWarning() {
     toast.show({
@@ -1480,11 +1482,14 @@ export function Prompt(props: PromptProps) {
                           <text
                             flexShrink={0}
                             fg={fadeColor(leader() ? theme.textMuted : theme.text, modelMetaAlpha())}
+                            wrapMode="none"
                           >
-                            {local.model.parsed().model}
+                            {metadata().model}
                           </text>
-                          <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>{currentProviderLabel()}</text>
-                          <Show when={showVariant()}>
+                          <Show when={!metadata().compact}>
+                            <text fg={fadeColor(theme.textMuted, modelMetaAlpha())}>{currentProviderLabel()}</text>
+                          </Show>
+                          <Show when={showVariant() && !metadata().compact}>
                             <text fg={fadeColor(theme.textMuted, variantMetaAlpha())}>·</text>
                             <text>
                               <span style={{ fg: fadeColor(theme.warning, variantMetaAlpha()), bold: true }}>
@@ -1565,10 +1570,7 @@ export function Prompt(props: PromptProps) {
               </box>
             </Match>
             <Match when={true}>
-              <Show
-                when={!props.hint && locationLabel()}
-                fallback={props.hint ?? <text />}
-              >
+              <Show when={!props.hint && locationLabel()} fallback={props.hint ?? <text />}>
                 {(location) => (
                   <text fg={theme.textMuted} wrapMode="none" truncate flexGrow={1} flexShrink={1}>
                     {location()}

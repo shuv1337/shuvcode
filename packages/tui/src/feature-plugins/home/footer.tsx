@@ -6,6 +6,7 @@ import { useTuiPaths } from "../../context/runtime"
 import { useTheme } from "../../context/theme"
 import { abbreviateHome } from "../../runtime"
 import { FilePath } from "../../ui/file-path"
+import { homeFooterLayout } from "../../util/responsive"
 
 function Directory(props: { context: Plugin.Context; maxWidth: number }) {
   const { theme } = useTheme()
@@ -56,6 +57,9 @@ function View(props: { context: Plugin.Context }) {
     const count = list.filter((item) => item.status.status === "connected").length
     return Bun.stringWidth(`⊙ ${count} MCP /status`) + 2
   })
+  const layout = createMemo(() =>
+    homeFooterLayout(dimensions().width, Bun.stringWidth(InstallationVersion), mcpWidth()),
+  )
 
   return (
     <box
@@ -66,13 +70,12 @@ function View(props: { context: Plugin.Context }) {
       paddingRight={2}
       flexDirection="row"
       flexShrink={0}
-      gap={2}
+      gap={layout().gap}
     >
-      <Directory
-        context={props.context}
-        maxWidth={Math.max(2, dimensions().width - 8 - Bun.stringWidth(InstallationVersion) - mcpWidth())}
-      />
-      <Mcp context={props.context} />
+      <Directory context={props.context} maxWidth={layout().directoryWidth} />
+      <Show when={layout().showMcp}>
+        <Mcp context={props.context} />
+      </Show>
       <box flexGrow={1} />
       <box flexShrink={0}>
         <text fg={theme.textMuted}>{InstallationVersion}</text>
