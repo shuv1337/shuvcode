@@ -47,7 +47,6 @@ test("migrates tui and kv config into cli.json", async () => {
       scrollbar_visible: true,
       thinking_mode: "show",
       exploration_grouping: false,
-      tips_hidden: true,
       dismissed_getting_started: true,
       animations_enabled: false,
       skipped_version: "9.9.9",
@@ -75,7 +74,7 @@ test("migrates tui and kv config into cli.json", async () => {
       terminal: { title: false },
       prompt: { editor: false, paste: "full" },
       session: { sidebar: "hide", scrollbar: true, thinking: "show", grouping: "none" },
-      hints: { tips: false, onboarding: false },
+      hints: { onboarding: false },
       animations: false,
       mouse: false,
     })

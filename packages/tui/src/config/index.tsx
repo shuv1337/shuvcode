@@ -123,7 +123,6 @@ export const Info = Schema.Struct({
   ).annotate({ description: "Session transcript presentation settings" }),
   hints: Schema.optional(
     Schema.Struct({
-      tips: Schema.optional(Schema.Boolean).annotate({ description: "Show usage tips on the home screen" }),
       onboarding: Schema.optional(Schema.Boolean).annotate({ description: "Show getting-started guidance" }),
     }),
   ).annotate({ description: "In-product guidance settings" }),

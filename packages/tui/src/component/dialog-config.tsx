@@ -40,14 +40,6 @@ const settings: Setting[] = [
     labels: ["off", "on"],
   },
   {
-    title: "Tips",
-    category: "Appearance",
-    path: ["hints", "tips"],
-    default: true,
-    values: [false, true],
-    labels: ["off", "on"],
-  },
-  {
     title: "Onboarding",
     category: "Appearance",
     path: ["hints", "onboarding"],

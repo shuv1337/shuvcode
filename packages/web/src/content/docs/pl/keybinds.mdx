@@ -99,7 +99,6 @@ OpenCode zawiera listę skrótów klawiszowych, które można dostosować za pom
     "history_next": "down",
     "terminal_suspend": "ctrl+z",
     "terminal_title_toggle": "none",
-    "tips_toggle": "<leader>h",
     "display_thinking": "none"
   }
 }
