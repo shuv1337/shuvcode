@@ -110,6 +110,25 @@ export function matches(harness: Pick<Harness, "screen">, text: string) {
   return harness.screen().includes(text)
 }
 
+export const capture = Effect.fn("SimulationActions.capture")(function* (harness: Harness) {
+  yield* Effect.tryPromise(() => harness.renderOnce())
+  const buffer = harness.renderer.currentRenderBuffer
+  return {
+    cols: buffer.width,
+    rows: buffer.height,
+    cursor: [0, 0] as const,
+    lines: buffer.getSpanLines().map((line) => ({
+      spans: line.spans.map((span) => ({
+        text: span.text,
+        fg: span.fg.toInts(),
+        bg: span.bg.toInts(),
+        attributes: span.attributes,
+        width: span.width,
+      })),
+    })),
+  } satisfies SimulationProtocol.Frontend.CapturedFrame
+})
+
 export const screenshot = Effect.fn("SimulationActions.screenshot")(function* (harness: Harness, name?: string) {
   const filename = name ?? `screenshot-${crypto.randomUUID()}`
   if (!filename || filename.includes("/") || filename.includes("\\") || extname(filename))

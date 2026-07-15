@@ -25,6 +25,17 @@ test("scopes the frontend control server and reports malformed JSON", async () =
           result: { focused: { editor: false }, elements: [] },
         })
 
+        socket.send(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ui.capture" }))
+        expect(yield* Queue.take(messages)).toMatchObject({
+          id: 2,
+          result: {
+            cols: 100,
+            rows: 40,
+            cursor: [0, 0],
+            lines: expect.any(Array),
+          },
+        })
+
         socket.send("{")
         expect(yield* Queue.take(messages)).toMatchObject({
           id: null,

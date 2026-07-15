@@ -95,6 +95,29 @@ export namespace Frontend {
   export const Screenshot = Schema.String
   export type Screenshot = Schema.Schema.Type<typeof Screenshot>
 
+  export const Color = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number, Schema.Number])
+  export type Color = Schema.Schema.Type<typeof Color>
+
+  export const CapturedFrame = Schema.Struct({
+    cols: Schema.Number,
+    rows: Schema.Number,
+    cursor: Schema.Tuple([Schema.Number, Schema.Number]),
+    lines: Schema.Array(
+      Schema.Struct({
+        spans: Schema.Array(
+          Schema.Struct({
+            text: Schema.String,
+            fg: Color,
+            bg: Color,
+            attributes: Schema.Number,
+            width: Schema.Number,
+          }),
+        ),
+      }),
+    ),
+  })
+  export interface CapturedFrame extends Schema.Schema.Type<typeof CapturedFrame> {}
+
   export const RecordingFinish = Schema.String
   export type RecordingFinish = Schema.Schema.Type<typeof RecordingFinish>
 
@@ -142,6 +165,7 @@ export namespace Frontend {
       ...JsonRpc.RequestFields,
       method: Schema.Literals(["ui.enter", "ui.state", "ui.recording.finish"]),
     }),
+    Schema.Struct({ ...JsonRpc.RequestFields, method: Schema.Literal("ui.capture") }),
   ])
   export type Request = Schema.Schema.Type<typeof Request>
   export const decodeRequest = Schema.decodeUnknownSync(Request)

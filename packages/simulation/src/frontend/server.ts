@@ -6,6 +6,8 @@ import { SimulationRenderer } from "./renderer"
 
 function handle(harness: Harness, request: SimulationProtocol.Frontend.Request) {
   switch (request.method) {
+    case "ui.capture":
+      return SimulationActions.capture(harness)
     case "ui.screenshot":
       return SimulationActions.screenshot(harness, request.params?.name)
     case "ui.state":
