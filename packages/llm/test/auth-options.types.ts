@@ -5,10 +5,13 @@ import { Auth as RuntimeAuth } from "../src/route/auth"
 import * as OpenAIChat from "../src/protocols/openai-chat"
 import * as AmazonBedrock from "../src/providers/amazon-bedrock"
 import * as Anthropic from "../src/providers/anthropic"
+import * as AnthropicCompatible from "../src/providers/anthropic-compatible"
 import * as Azure from "../src/providers/azure"
 import * as Cloudflare from "../src/providers/cloudflare"
 import * as GitHubCopilot from "../src/providers/github-copilot"
 import * as Google from "../src/providers/google"
+import * as GoogleVertex from "../src/providers/google-vertex"
+import * as GoogleVertexAnthropic from "../src/providers/google-vertex-anthropic"
 import * as OpenAI from "../src/providers/openai"
 import * as OpenAICompatible from "../src/providers/openai-compatible"
 import * as OpenRouter from "../src/providers/openrouter"
@@ -135,10 +138,56 @@ Azure.configure({ resourceName: "resource", apiKey: "azure-key", auth: RuntimeAu
 Anthropic.configure({ apiKey: "anthropic-key" }).model("claude-haiku")
 // @ts-expect-error Anthropic model selectors only accept model ids.
 Anthropic.configure({ apiKey: "anthropic-key" }).model("claude-haiku", {})
+// @ts-expect-error Anthropic package settings accept only one auth source.
+Anthropic.model("claude-sonnet-4-6", { apiKey: "anthropic-key", authToken: "anthropic-token" })
+
+AnthropicCompatible.configure({
+  apiKey: "messages-key",
+  baseURL: "https://messages.example.com/v1",
+  provider: "example",
+}).model("compatible-model")
+// @ts-expect-error Anthropic-compatible providers require a base URL.
+AnthropicCompatible.configure({ apiKey: "messages-key" })
+// @ts-expect-error Anthropic-compatible model selectors only accept model ids.
+AnthropicCompatible.configure({ baseURL: "https://messages.example.com/v1" }).model("compatible-model", {})
+// @ts-expect-error Anthropic-compatible package settings accept only one auth source.
+AnthropicCompatible.model("compatible-model", {
+  apiKey: "messages-key",
+  authToken: "messages-token",
+  baseURL: "https://messages.example.com/v1",
+})
 
 Google.configure({ apiKey: "google-key" }).model("gemini-2.5-flash")
 // @ts-expect-error Google model selectors only accept model ids.
 Google.configure({ apiKey: "google-key" }).model("gemini-2.5-flash", {})
+
+GoogleVertex.configure({ apiKey: "vertex-key" }).model("gemini-3.5-flash")
+GoogleVertex.configure({ accessToken: "vertex-token", project: "project" }).model("gemini-3.5-flash")
+GoogleVertex.configure({ auth: RuntimeAuth.bearer("vertex-token"), project: "project" }).model("gemini-3.5-flash")
+// @ts-expect-error Vertex Gemini model selectors only accept model ids.
+GoogleVertex.configure({ apiKey: "vertex-key" }).model("gemini-3.5-flash", {})
+// @ts-expect-error Vertex Gemini config accepts only one auth source.
+GoogleVertex.configure({ accessToken: "vertex-token", apiKey: "vertex-key", project: "project" })
+// @ts-expect-error Vertex Gemini package settings accept only one auth source.
+GoogleVertex.model("gemini-3.5-flash", { accessToken: "vertex-token", apiKey: "vertex-key", project: "project" })
+
+GoogleVertexAnthropic.configure({ accessToken: "vertex-token", project: "project" }).model("claude-sonnet-4-6")
+// @ts-expect-error Vertex Anthropic package settings do not accept API keys.
+GoogleVertexAnthropic.model("claude-sonnet-4-6", { apiKey: "vertex-key", project: "project" })
+GoogleVertexAnthropic.configure({ auth: RuntimeAuth.bearer("vertex-token"), project: "project" }).model(
+  "claude-sonnet-4-6",
+)
+GoogleVertexAnthropic.configure({ accessToken: "vertex-token", project: "project" }).model(
+  "claude-sonnet-4-6",
+  // @ts-expect-error Vertex Anthropic model selectors only accept model ids.
+  {},
+)
+GoogleVertexAnthropic.configure({
+  accessToken: "vertex-token",
+  // @ts-expect-error Vertex Anthropic config accepts only one auth source.
+  auth: RuntimeAuth.bearer("vertex-token"),
+  project: "project",
+})
 
 AmazonBedrock.configure({ apiKey: "bedrock-key" }).model("anthropic.claude")
 // @ts-expect-error Bedrock model selectors only accept model ids.

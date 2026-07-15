@@ -8,6 +8,7 @@ describe("provider package entrypoints", () => {
       import("@opencode-ai/llm/providers/openai/responses"),
       import("@opencode-ai/llm/providers/openai/chat"),
       import("@opencode-ai/llm/providers/anthropic"),
+      import("@opencode-ai/llm/providers/anthropic-compatible"),
       import("@opencode-ai/llm/providers/openai-compatible"),
       import("@opencode-ai/llm/providers/openai-compatible/responses"),
       import("@opencode-ai/llm/providers/amazon-bedrock"),
@@ -15,11 +16,13 @@ describe("provider package entrypoints", () => {
       import("@opencode-ai/llm/providers/azure/responses"),
       import("@opencode-ai/llm/providers/azure/chat"),
       import("@opencode-ai/llm/providers/google"),
+      import("@opencode-ai/llm/providers/google-vertex"),
+      import("@opencode-ai/llm/providers/google-vertex/anthropic"),
     ])
 
     for (const module of modules) expect(module.model).toBeFunction()
     expect(modules[0].model).toBe(modules[1].model)
-    expect(modules[7].model).toBe(modules[8].model)
+    expect(modules[8].model).toBe(modules[9].model)
   })
 
   test("maps package settings onto the executable model", () => {
@@ -67,6 +70,53 @@ describe("provider package entrypoints", () => {
     expect(selected.route.defaults.providerOptions).toEqual({
       openai: { reasoningEffort: "low", store: true },
     })
+  })
+
+  test("maps Anthropic-compatible settings onto the executable model", async () => {
+    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    const selected = AnthropicCompatible.model("compatible-model", {
+      apiKey: "fixture",
+      baseURL: "https://messages.example.test/v1",
+      provider: "example",
+      headers: { "x-application": "opencode" },
+      body: { metadata: { user_id: "user_1" } },
+      limits: { context: 200_000, output: 64_000 },
+    })
+
+    expect(String(selected.provider)).toBe("example")
+    expect(selected.route.id).toBe("anthropic-messages")
+    expect(selected.route.endpoint).toMatchObject({
+      baseURL: "https://messages.example.test/v1",
+      path: "/messages",
+    })
+    expect(selected.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(selected.route.defaults.http?.body).toEqual({ metadata: { user_id: "user_1" } })
+    expect(selected.route.defaults.limits).toEqual({ context: 200_000, output: 64_000 })
+  })
+
+  test("requires an Anthropic-compatible base URL at runtime", async () => {
+    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    expect(() =>
+      Reflect.apply(AnthropicCompatible.model, undefined, ["compatible-model", { apiKey: "fixture" }]),
+    ).toThrow("Anthropic-compatible providers require a baseURL")
+  })
+
+  test("rejects conflicting Anthropic-compatible auth settings at runtime", async () => {
+    const Anthropic = await import("@opencode-ai/llm/providers/anthropic")
+    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    expect(() =>
+      Reflect.apply(AnthropicCompatible.model, undefined, [
+        "compatible-model",
+        {
+          apiKey: "fixture",
+          authToken: "token",
+          baseURL: "https://messages.example.test/v1",
+        },
+      ]),
+    ).toThrow("Anthropic-compatible apiKey cannot be combined with authToken")
+    expect(() =>
+      Reflect.apply(Anthropic.model, undefined, ["claude-sonnet-4-6", { apiKey: "fixture", authToken: "token" }]),
+    ).toThrow("Anthropic apiKey cannot be combined with authToken")
   })
 
   test("maps legacy OpenAI organization and project settings to headers", () => {
@@ -125,5 +175,65 @@ describe("provider package entrypoints", () => {
     expect(selected.route.defaults.providerOptions).toEqual({
       gemini: { thinkingConfig: { thinkingBudget: 1_024 } },
     })
+  })
+
+  test("selects Vertex entrypoints with the same model contract", async () => {
+    const GoogleVertex = await import("@opencode-ai/llm/providers/google-vertex")
+    const GoogleVertexAnthropic = await import("@opencode-ai/llm/providers/google-vertex/anthropic")
+    const gemini = GoogleVertex.model("gemini-3.5-flash", {
+      apiKey: "fixture",
+      headers: { "x-application": "opencode" },
+      body: { safetySettings: [] },
+      limits: { context: 1_000_000, output: 65_536 },
+    })
+    const anthropic = GoogleVertexAnthropic.model("claude-sonnet-4-6", {
+      accessToken: "fixture",
+      location: "global",
+      project: "vertex-project",
+    })
+
+    expect(gemini.route.id).toBe("google-vertex-gemini")
+    expect(gemini.route.endpoint.baseURL).toBe("https://aiplatform.googleapis.com/v1/publishers/google")
+    expect(gemini.route.defaults.headers).toEqual({ "x-application": "opencode" })
+    expect(gemini.route.defaults.http?.body).toEqual({ safetySettings: [] })
+    expect(gemini.route.defaults.limits).toEqual({ context: 1_000_000, output: 65_536 })
+    expect(
+      GoogleVertex.model("gemini-3.5-flash", {
+        accessToken: "fixture",
+        location: "eu",
+        project: "vertex-project",
+      }).route.endpoint.baseURL,
+    ).toBe("https://aiplatform.eu.rep.googleapis.com/v1beta1/projects/vertex-project/locations/eu/publishers/google")
+    expect(anthropic.route.id).toBe("google-vertex-anthropic")
+    expect(anthropic.route.endpoint.baseURL).toBe(
+      "https://aiplatform.googleapis.com/v1/projects/vertex-project/locations/global/publishers/anthropic/models",
+    )
+  })
+
+  test("rejects conflicting Vertex auth settings at runtime", async () => {
+    const GoogleVertex = await import("@opencode-ai/llm/providers/google-vertex")
+    const GoogleVertexAnthropic = await import("@opencode-ai/llm/providers/google-vertex/anthropic")
+    const Providers = await import("@opencode-ai/llm/providers")
+    expect(() =>
+      Reflect.apply(GoogleVertex.model, undefined, [
+        "gemini-3.5-flash",
+        { accessToken: "token", apiKey: "fixture", project: "vertex-project" },
+      ]),
+    ).toThrow("Google Vertex apiKey cannot be combined with accessToken or auth")
+    const configured = Reflect.apply(GoogleVertex.configure, undefined, [
+      { accessToken: "token", auth: {}, project: "vertex-project" },
+    ])
+    expect(() => configured.model("gemini-3.5-flash")).toThrow("Google Vertex accessToken cannot be combined with auth")
+    expect(() =>
+      Reflect.apply(GoogleVertexAnthropic.model, undefined, [
+        "claude-sonnet-4-6",
+        { apiKey: "fixture", project: "vertex-project" },
+      ]),
+    ).toThrow("Google Vertex Anthropic does not support API keys")
+    expect(() =>
+      Reflect.apply(Providers.GoogleVertexAnthropic.configure, undefined, [
+        { apiKey: "fixture", project: "vertex-project" },
+      ]),
+    ).toThrow("Google Vertex Anthropic does not support API keys")
   })
 })
