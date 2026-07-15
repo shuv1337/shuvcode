@@ -999,13 +999,6 @@ function App(props: { pair?: DialogPairCredentials }) {
     })
   })
 
-  event.on("plugin.updated", (_evt, { directory, workspace }) => {
-    const current = location.current ?? data.location.default()
-    if (directory !== current.directory) return
-    if (workspace !== current.workspaceID) return
-    toast.show({ variant: "success", message: "Plugins reloaded" })
-  })
-
   event.on("tui.session.select", (evt, { workspace }) => {
     if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
     route.navigate({
