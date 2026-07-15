@@ -15,6 +15,7 @@ import {
   type LLMRequest,
 } from "@opencode-ai/ai"
 import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
+import { Catalog } from "@opencode-ai/core/catalog"
 import { Database } from "@opencode-ai/core/database/database"
 import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -41,10 +42,10 @@ import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator
 import { SessionRunner } from "@opencode-ai/core/session/runner"
 import * as SessionRunnerLLM from "@opencode-ai/core/session/runner/llm"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
-import { SessionRunnerSystemPrompt } from "@opencode-ai/core/session/runner/system-prompt"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
+import { SystemPromptPlugin } from "@opencode-ai/core/plugin/system-prompt"
 import { QuestionTool } from "@opencode-ai/core/tool/question"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { AgentV2 } from "@opencode-ai/core/agent"
@@ -72,6 +73,8 @@ import { Cause, DateTime, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope, S
 import { TestClock } from "effect/testing"
 import { asc, eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
+import { agentHost, catalogHost, host } from "./plugin/host"
+import PROMPT_DEFAULT from "../src/session/runner/prompt/base.txt"
 
 const requests: LLMRequest[] = []
 let response: LLMEvent[] = []
@@ -137,7 +140,7 @@ const reply = {
   ],
 }
 const model = Model.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
-const defaultSystem = SessionRunnerSystemPrompt.provider(model)
+const defaultSystem = PROMPT_DEFAULT
 const replacementModel = Model.make({ id: "replacement", provider: "fake", route: OpenAIChat.route })
 const compactModel = Model.make({
   id: "compact",
@@ -358,6 +361,20 @@ const pluginSupervisor = Layer.succeed(
     flush: Effect.suspend(() => pluginFlushHook),
   }),
 )
+const promptCatalog = Layer.mock(Catalog.Service, {
+  provider: {
+    get: () => Effect.succeed(undefined),
+    all: () => Effect.succeed([]),
+    available: () => Effect.succeed([]),
+  },
+  model: {
+    get: () => Effect.succeed(undefined),
+    all: () => Effect.succeed([]),
+    available: () => Effect.succeed([]),
+    default: () => Effect.succeed(undefined),
+    small: () => Effect.succeed(undefined),
+  },
+})
 const runnerLayer = AppNodeBuilder.build(SessionRunnerLLM.node, [
   [Snapshot.node, Snapshot.noopLayer],
   [LayerNodePlatform.llmClient, client],
@@ -398,6 +415,7 @@ const it = testEffect(
       SessionProjector.node,
       SessionStore.node,
       AgentV2.node,
+      Catalog.node,
       ToolRegistry.node,
       ToolRegistry.toolsNode,
       PluginHooks.node,
@@ -417,6 +435,7 @@ const it = testEffect(
     [
       [LayerNodePlatform.llmClient, client],
       [PermissionV2.node, permission],
+      [Catalog.node, promptCatalog],
       [SessionRunnerModel.node, models],
       [InstructionBuiltIns.node, systemContext],
       [InstructionDiscovery.node, instructionContext],
@@ -455,6 +474,17 @@ const insertSession = (id: SessionV2.ID) =>
 
 const setup = Effect.gen(function* () {
   const { db } = yield* Database.Service
+  const agents = yield* AgentV2.Service
+  const catalog = yield* Catalog.Service
+  const hooks = yield* PluginHooks.Service
+  const pluginHost = host({
+    agent: agentHost(agents),
+    catalog: catalogHost(catalog),
+    session: { hook: (name, callback) => hooks.register("session", name, callback) },
+  })
+  yield* Effect.forEach(SystemPromptPlugin.Plugins, (plugin) => plugin.effect(pluginHost), {
+    discard: true,
+  })
   requests.length = 0
   authorizations.length = 0
   executions.length = 0
@@ -478,7 +508,6 @@ const setup = Effect.gen(function* () {
   toolExecutionsReady = 5
   activeToolExecutions = 0
   maxActiveToolExecutions = 0
-  const agents = yield* AgentV2.Service
   yield* agents.transform((draft) =>
     draft.update(AgentV2.ID.make("build"), (agent) => {
       agent.mode = "primary"
