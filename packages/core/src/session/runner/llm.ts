@@ -145,7 +145,7 @@ const layer = Layer.effect(
     const loadInstructions = (agent: AgentV2.Selection, sessionID: SessionSchema.ID) =>
       Effect.all(
         [
-          builtins.load(),
+          builtins.load(sessionID),
           discovery.load(),
           skillGuidance.load(agent),
           referenceGuidance.load(),
