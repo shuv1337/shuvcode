@@ -25,19 +25,19 @@ export interface AuthInput {
 export interface Credential {
   readonly load: Effect.Effect<Redacted.Redacted, CredentialError>
   readonly orElse: (that: Credential) => Credential
-  readonly bearer: () => Auth
-  readonly header: (name: string) => Auth
+  readonly bearer: () => Definition
+  readonly header: (name: string) => Definition
   readonly pipe: <A>(f: (self: Credential) => A) => A
 }
 
-export interface Auth {
+export interface Definition {
   readonly apply: (input: AuthInput) => Effect.Effect<Headers.Headers, AuthError>
-  readonly andThen: (that: Auth) => Auth
-  readonly orElse: (that: Auth) => Auth
-  readonly pipe: <A>(f: (self: Auth) => A) => A
+  readonly andThen: (that: Definition) => Definition
+  readonly orElse: (that: Definition) => Definition
+  readonly pipe: <A>(f: (self: Definition) => A) => A
 }
 
-export const isAuth = (input: unknown): input is Auth =>
+export const isAuth = (input: unknown): input is Definition =>
   typeof input === "object" && input !== null && "apply" in input && typeof input.apply === "function"
 
 const credential = (load: Effect.Effect<Redacted.Redacted, CredentialError>): Credential => {
@@ -51,8 +51,8 @@ const credential = (load: Effect.Effect<Redacted.Redacted, CredentialError>): Cr
   return self
 }
 
-const auth = (apply: Auth["apply"]): Auth => {
-  const self: Auth = {
+const auth = (apply: Definition["apply"]): Definition => {
+  const self: Definition = {
     apply,
     andThen: (that) =>
       auth((input) => apply(input).pipe(Effect.flatMap((headers) => that.apply({ ...input, headers })))),
@@ -109,15 +109,15 @@ const credentialInput = (source: Secret | Credential) =>
     ? credentialFromSecret(source, "value")
     : source
 
-export function bearer(source: Secret | Credential): Auth
+export function bearer(source: Secret | Credential): Definition
 export function bearer(source: Secret | Credential) {
   return credentialInput(source).bearer()
 }
 
 export const apiKey = bearer
 
-export function header(name: string): (source: Secret | Credential) => Auth
-export function header(name: string, source: Secret | Credential): Auth
+export function header(name: string): (source: Secret | Credential) => Definition
+export function header(name: string, source: Secret | Credential): Definition
 export function header(name: string, source?: Secret | Credential) {
   if (source === undefined) {
     return (next: Secret | Credential) => credentialInput(next).header(name)
@@ -125,8 +125,8 @@ export function header(name: string, source?: Secret | Credential) {
   return credentialInput(source).header(name)
 }
 
-export function bearerHeader(name: string): (source: Secret | Credential) => Auth
-export function bearerHeader(name: string, source: Secret | Credential): Auth
+export function bearerHeader(name: string): (source: Secret | Credential) => Definition
+export function bearerHeader(name: string, source: Secret | Credential): Definition
 export function bearerHeader(name: string, source?: Secret | Credential) {
   const render = (input: Secret | Credential) =>
     fromCredential(credentialInput(input), (secret) => ({ [name]: `Bearer ${secret}` }))
@@ -149,7 +149,7 @@ const toLLMError = (error: AuthError): LLMError => {
 }
 
 export const toEffect =
-  (input: Auth) =>
+  (input: Definition) =>
   (authInput: AuthInput): Effect.Effect<Headers.Headers, LLMError> =>
     input.apply(authInput).pipe(Effect.mapError(toLLMError))
 

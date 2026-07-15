@@ -1,9 +1,9 @@
 import { Cause, Context, Effect, Layer, Schema, Stream } from "effect"
 import * as Option from "effect/Option"
-import { Auth, type Auth as AuthDef } from "./auth"
+import { Auth } from "./auth"
 import { Endpoint, type EndpointPatch } from "./endpoint"
 import { RequestExecutor } from "./executor"
-import type { Framing } from "./framing"
+import { Framing } from "./framing"
 import { HttpTransport } from "./transport"
 import type { Transport, TransportRuntime } from "./transport"
 import { WebSocketExecutor } from "./transport"
@@ -40,8 +40,8 @@ export interface Route<Body, Prepared = unknown> {
   /** ProviderMetadata namespace emitted and consumed by this route. */
   readonly providerMetadataKey?: string
   readonly protocol: ProtocolID
-  readonly endpoint: Endpoint<Body>
-  readonly auth: AuthDef
+  readonly endpoint: Endpoint.Definition<Body>
+  readonly auth: Auth.Definition
   readonly transport: Transport<Body, Prepared, unknown>
   readonly defaults: RouteDefaults
   readonly body: RouteBody<Body>
@@ -86,7 +86,7 @@ export interface RouteDefaultsInput {
 export interface RoutePatch<Body, Prepared> extends RouteDefaultsInput {
   readonly id?: string
   readonly provider?: string | ProviderID
-  readonly auth?: AuthDef
+  readonly auth?: Auth.Definition
   readonly transport?: Transport<Body, Prepared, unknown>
   readonly endpoint?: EndpointPatch<Body>
 }
@@ -122,7 +122,7 @@ const mergeRouteDefaults = (base: RouteDefaults | undefined, patch: RouteDefault
   }
 }
 
-const endpointBaseURL = <Body>(endpoint: Endpoint<Body>) =>
+const endpointBaseURL = <Body>(endpoint: Endpoint.Definition<Body>) =>
   typeof endpoint.baseURL === "string" ? endpoint.baseURL : undefined
 
 const mergeHeaders = (...items: ReadonlyArray<Record<string, string> | undefined>) => {
@@ -192,11 +192,11 @@ export interface MakeInput<Body, Frame, Event, State> {
   /** Semantic API contract — owns body construction, body schema, and parsing. */
   readonly protocol: Protocol<Body, Frame, Event, State>
   /** Where the request is sent. */
-  readonly endpoint: Endpoint<Body>
+  readonly endpoint: Endpoint.Definition<Body>
   /** Per-request transport auth. Provider facades override this via `route.with(...)`. */
-  readonly auth?: AuthDef
+  readonly auth?: Auth.Definition
   /** Stream framing — bytes -> frames before `protocol.stream.event` decoding. */
-  readonly framing: Framing<Frame>
+  readonly framing: Framing.Definition<Frame>
   /** Static / per-request headers added before `auth` runs. */
   readonly headers?: (input: { readonly request: LLMRequest }) => Record<string, string>
   /** Route/request defaults used when compiling requests for this route. */
@@ -213,9 +213,9 @@ export interface MakeTransportInput<Body, Prepared, Frame, Event, State> {
   /** Semantic API contract — owns body construction, body schema, and parsing. */
   readonly protocol: Protocol<Body, Frame, Event, State>
   /** Where the request is sent. */
-  readonly endpoint: Endpoint<Body>
+  readonly endpoint: Endpoint.Definition<Body>
   /** Per-request transport auth. Provider facades override this via `route.with(...)`. */
-  readonly auth?: AuthDef
+  readonly auth?: Auth.Definition
   /** Static / per-request headers added before `auth` runs. */
   readonly headers?: (input: { readonly request: LLMRequest }) => Record<string, string>
   /** Runnable transport route. */

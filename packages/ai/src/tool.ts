@@ -45,7 +45,7 @@ export type ToolToModelOutput<Parameters extends ToolSchema<any>, Success extend
  * Internally each tool also carries memoized codecs and a precomputed
  * `ToolDefinition` so callers do not rebuild them per invocation.
  */
-export interface Tool<Parameters extends ToolSchema<any>, Success extends ToolSchema<any>> {
+export interface Definition<Parameters extends ToolSchema<any>, Success extends ToolSchema<any>> {
   readonly description: string
   readonly parameters: Parameters
   readonly success: Success
@@ -68,9 +68,9 @@ export interface Tool<Parameters extends ToolSchema<any>, Success extends ToolSc
   readonly _definition: ToolDefinitionClass
 }
 
-export type AnyTool = Tool<any, any>
+export type AnyTool = Definition<any, any>
 
-export type ExecutableTool<Parameters extends ToolSchema<any>, Success extends ToolSchema<any>> = Tool<
+export type ExecutableTool<Parameters extends ToolSchema<any>, Success extends ToolSchema<any>> = Definition<
   Parameters,
   Success
 > & {
@@ -145,7 +145,7 @@ export function make<Parameters extends ToolSchema<any>, Success extends ToolSch
   readonly execute?: undefined
   readonly toModelOutput?: ToolToModelOutput<Parameters, Success>
   readonly toStructuredOutput?: (output: Success["Encoded"]) => unknown
-}): Tool<Parameters, Success>
+}): Definition<Parameters, Success>
 export function make(config: {
   readonly description: string
   readonly jsonSchema: JsonSchema.JsonSchema

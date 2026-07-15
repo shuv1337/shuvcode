@@ -6,7 +6,7 @@ const SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
 export type OAuthOptions =
   | { readonly accessToken?: string; readonly auth?: never }
-  | { readonly accessToken?: never; readonly auth?: Auth }
+  | { readonly accessToken?: never; readonly auth?: Auth.Definition }
 
 export type ApiKeyOptions =
   | (OAuthOptions & { readonly apiKey?: never })

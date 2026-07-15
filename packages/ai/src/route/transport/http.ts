@@ -2,7 +2,7 @@ import { Effect, Stream } from "effect"
 import { Headers, HttpClientRequest } from "effect/unstable/http"
 import { Auth } from "../auth"
 import { render as renderEndpoint } from "../endpoint"
-import { Framing, type Framing as FramingDef } from "../framing"
+import { Framing } from "../framing"
 import type { Transport, TransportPrepareInput } from "./index"
 import * as ProviderShared from "../../protocols/shared"
 import { mergeJsonRecords, type LLMRequest } from "../../schema"
@@ -18,7 +18,7 @@ export interface JsonRequestParts<Body = unknown> {
 
 export interface HttpPrepared<Frame> {
   readonly request: HttpClientRequest.HttpClientRequest
-  readonly framing: FramingDef<Frame>
+  readonly framing: Framing.Definition<Frame>
 }
 
 const applyQuery = (url: string, query: Record<string, string> | undefined) => {
@@ -107,7 +107,7 @@ export const jsonRequestParts = <Body>(input: JsonRequestInput<Body>) =>
   })
 
 export interface HttpJsonInput<_Body, Frame> {
-  readonly framing: FramingDef<Frame>
+  readonly framing: Framing.Definition<Frame>
 }
 
 export type HttpJsonPatch<Body, Frame> = Partial<HttpJsonInput<Body, Frame>>

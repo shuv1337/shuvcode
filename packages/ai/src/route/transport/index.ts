@@ -1,6 +1,6 @@
 import type { Effect, Stream } from "effect"
-import type { Endpoint } from "../endpoint"
-import type { Auth } from "../auth"
+import { Endpoint } from "../endpoint"
+import { Auth } from "../auth"
 import type { Interface as RequestExecutorInterface } from "../executor"
 import type { Interface as WebSocketExecutorInterface } from "./websocket"
 import type { LLMError, LLMRequest } from "../../schema"
@@ -23,8 +23,8 @@ export interface Transport<Body, Prepared, Frame> {
 export interface TransportPrepareInput<Body> {
   readonly body: Body
   readonly request: LLMRequest
-  readonly endpoint: Endpoint<Body>
-  readonly auth: Auth
+  readonly endpoint: Endpoint.Definition<Body>
+  readonly auth: Auth.Definition
   readonly encodeBody: (body: Body) => string
   readonly headers?: (input: { readonly request: LLMRequest }) => Record<string, string>
 }

@@ -4,7 +4,7 @@ import { Auth } from "./auth"
 export type ApiKeyMode = "optional" | "required"
 
 export type AuthOverride = {
-  readonly auth: Auth
+  readonly auth: Auth.Definition
   readonly apiKey?: never
 }
 
@@ -44,7 +44,10 @@ export type AtLeastOne<T> = {
  * override, otherwise resolve `apiKey` (option > config var) and apply it as
  * a bearer token.
  */
-export const bearer = (options: ProviderAuthOption<"optional">, envVar: string | ReadonlyArray<string>): Auth => {
+export const bearer = (
+  options: ProviderAuthOption<"optional">,
+  envVar: string | ReadonlyArray<string>,
+): Auth.Definition => {
   if ("auth" in options && options.auth) return options.auth
   return (Array.isArray(envVar) ? envVar : [envVar])
     .reduce(

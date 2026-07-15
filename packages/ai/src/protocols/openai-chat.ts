@@ -160,7 +160,7 @@ export const OpenAIChatEvent = Schema.Struct({
 export type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
 type OpenAIChatRequestMessage = LLMRequest["messages"][number]
 
-interface ParserState {
+export interface ParserState {
   readonly tools: ToolStream.State<number>
   readonly toolCallEvents: ReadonlyArray<LLMEvent>
   readonly usage?: Usage

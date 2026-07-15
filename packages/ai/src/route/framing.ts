@@ -16,12 +16,12 @@ import type { LLMError } from "../schema"
  * The frame type is opaque to this layer; the protocol's `decode` step turns
  * a frame into a typed chunk.
  */
-export interface Framing<Frame> {
+export interface Definition<Frame> {
   readonly id: string
   readonly frame: (bytes: Stream.Stream<Uint8Array, LLMError>) => Stream.Stream<Frame, LLMError>
 }
 
 /** Server-Sent Events framing. Used by every JSON-streaming HTTP provider. */
-export const sse: Framing<string> = { id: "sse", frame: ProviderShared.sseFraming }
+export const sse: Definition<string> = { id: "sse", frame: ProviderShared.sseFraming }
 
 export * as Framing from "./framing"

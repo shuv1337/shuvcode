@@ -18,7 +18,7 @@ export type {
   AnyTool,
   ExecutableTool,
   ExecutableTools,
-  Tool as ToolShape,
+  Definition as ToolShape,
   ToolExecute,
   ToolExecuteContext,
   ToolModelOutputInput,
