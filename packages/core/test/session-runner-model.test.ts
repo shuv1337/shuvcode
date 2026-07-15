@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
-import { LLM, Model } from "@opencode-ai/llm"
-import { LLMClient } from "@opencode-ai/llm/route"
+import { LLM, Model } from "@opencode-ai/ai"
+import { LLMClient } from "@opencode-ai/ai/route"
 import { DateTime, Effect } from "effect"
 import { Money } from "@opencode-ai/schema/money"
 import { Headers } from "effect/unstable/http"
@@ -378,7 +378,7 @@ describe("SessionRunnerModel", () => {
   it.effect("routes native OpenAI provider packages with ChatGPT credentials to the codex backend", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/openai", {
+        model("@opencode-ai/ai/providers/openai", {
           settings: { baseURL: "https://openai.example/v1" },
         }),
         Credential.OAuth.make({
@@ -407,7 +407,7 @@ describe("SessionRunnerModel", () => {
   it.effect("does not route native OpenAI-compatible packages to the codex backend", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/openai-compatible", {
+        model("@opencode-ai/ai/providers/openai-compatible", {
           settings: { baseURL: "https://compatible.example/v1" },
         }),
         Credential.OAuth.make({
@@ -511,7 +511,7 @@ describe("SessionRunnerModel", () => {
         }),
       )
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/custom", {
+        model("@opencode-ai/ai/providers/custom", {
           settings: { region: "test" },
           headers: { "x-package": "header" },
           body: { custom: true },
@@ -519,7 +519,7 @@ describe("SessionRunnerModel", () => {
         undefined,
         {
           loadPackage: (specifier) => {
-            expect(specifier).toBe("@opencode-ai/llm/providers/custom")
+            expect(specifier).toBe("@opencode-ai/ai/providers/custom")
             return Effect.succeed({
               model: (modelID, settings) => {
                 expect(modelID).toBe("api-test-model")
@@ -555,10 +555,10 @@ describe("SessionRunnerModel", () => {
         expires: Date.now() + 60_000,
       })
       const packages = [
-        ["@opencode-ai/llm/providers/google-vertex", "accessToken"],
-        ["@opencode-ai/llm/providers/google-vertex/anthropic", "accessToken"],
-        ["@opencode-ai/llm/providers/anthropic", "authToken"],
-        ["@opencode-ai/llm/providers/anthropic-compatible", "authToken"],
+        ["@opencode-ai/ai/providers/google-vertex", "accessToken"],
+        ["@opencode-ai/ai/providers/google-vertex/anthropic", "accessToken"],
+        ["@opencode-ai/ai/providers/anthropic", "authToken"],
+        ["@opencode-ai/ai/providers/anthropic-compatible", "authToken"],
       ] as const
 
       yield* Effect.forEach(packages, ([specifier, key]) =>
@@ -637,7 +637,7 @@ describe("SessionRunnerModel", () => {
   it.effect("reports whether a catalog model declares a provider package", () =>
     Effect.sync(() => {
       expect(SessionRunnerModel.supported(model(ProviderV2.aisdk("@ai-sdk/openai")))).toBe(true)
-      expect(SessionRunnerModel.supported(model("@opencode-ai/llm/providers/custom"))).toBe(true)
+      expect(SessionRunnerModel.supported(model("@opencode-ai/ai/providers/custom"))).toBe(true)
       expect(SessionRunnerModel.supported(model(undefined))).toBe(false)
     }),
   )

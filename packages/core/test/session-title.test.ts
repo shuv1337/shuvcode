@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
-import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/llm"
-import { OpenAIChat } from "@opencode-ai/llm/protocols"
+import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/ai"
+import { OpenAIChat } from "@opencode-ai/ai/protocols"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"

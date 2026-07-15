@@ -2,7 +2,7 @@ export * as ReadTool from "./read"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { dirname } from "path"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { Effect, Schema } from "effect"
 import { FileSystem } from "../filesystem"
 import { FSUtil } from "../fs-util"

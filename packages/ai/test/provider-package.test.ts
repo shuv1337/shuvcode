@@ -1,23 +1,23 @@
 import { describe, expect, test } from "bun:test"
-import { model } from "@opencode-ai/llm/providers/openai"
+import { model } from "@opencode-ai/ai/providers/openai"
 
 describe("provider package entrypoints", () => {
   test("semantic API aliases expose the same contract", async () => {
     const modules = await Promise.all([
-      import("@opencode-ai/llm/providers/openai"),
-      import("@opencode-ai/llm/providers/openai/responses"),
-      import("@opencode-ai/llm/providers/openai/chat"),
-      import("@opencode-ai/llm/providers/anthropic"),
-      import("@opencode-ai/llm/providers/anthropic-compatible"),
-      import("@opencode-ai/llm/providers/openai-compatible"),
-      import("@opencode-ai/llm/providers/openai-compatible/responses"),
-      import("@opencode-ai/llm/providers/amazon-bedrock"),
-      import("@opencode-ai/llm/providers/azure"),
-      import("@opencode-ai/llm/providers/azure/responses"),
-      import("@opencode-ai/llm/providers/azure/chat"),
-      import("@opencode-ai/llm/providers/google"),
-      import("@opencode-ai/llm/providers/google-vertex"),
-      import("@opencode-ai/llm/providers/google-vertex/anthropic"),
+      import("@opencode-ai/ai/providers/openai"),
+      import("@opencode-ai/ai/providers/openai/responses"),
+      import("@opencode-ai/ai/providers/openai/chat"),
+      import("@opencode-ai/ai/providers/anthropic"),
+      import("@opencode-ai/ai/providers/anthropic-compatible"),
+      import("@opencode-ai/ai/providers/openai-compatible"),
+      import("@opencode-ai/ai/providers/openai-compatible/responses"),
+      import("@opencode-ai/ai/providers/amazon-bedrock"),
+      import("@opencode-ai/ai/providers/azure"),
+      import("@opencode-ai/ai/providers/azure/responses"),
+      import("@opencode-ai/ai/providers/azure/chat"),
+      import("@opencode-ai/ai/providers/google"),
+      import("@opencode-ai/ai/providers/google-vertex"),
+      import("@opencode-ai/ai/providers/google-vertex/anthropic"),
     ])
 
     for (const module of modules) expect(module.model).toBeFunction()
@@ -47,7 +47,7 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps OpenAI-compatible Responses settings onto the executable model", async () => {
-    const OpenAICompatibleResponses = await import("@opencode-ai/llm/providers/openai-compatible/responses")
+    const OpenAICompatibleResponses = await import("@opencode-ai/ai/providers/openai-compatible/responses")
     const selected = OpenAICompatibleResponses.model("custom-model", {
       apiKey: "fixture",
       baseURL: "https://responses.example.test/v1",
@@ -73,7 +73,7 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps Anthropic-compatible settings onto the executable model", async () => {
-    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
     const selected = AnthropicCompatible.model("compatible-model", {
       apiKey: "fixture",
       baseURL: "https://messages.example.test/v1",
@@ -95,15 +95,15 @@ describe("provider package entrypoints", () => {
   })
 
   test("requires an Anthropic-compatible base URL at runtime", async () => {
-    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
     expect(() =>
       Reflect.apply(AnthropicCompatible.model, undefined, ["compatible-model", { apiKey: "fixture" }]),
     ).toThrow("Anthropic-compatible providers require a baseURL")
   })
 
   test("rejects conflicting Anthropic-compatible auth settings at runtime", async () => {
-    const Anthropic = await import("@opencode-ai/llm/providers/anthropic")
-    const AnthropicCompatible = await import("@opencode-ai/llm/providers/anthropic-compatible")
+    const Anthropic = await import("@opencode-ai/ai/providers/anthropic")
+    const AnthropicCompatible = await import("@opencode-ai/ai/providers/anthropic-compatible")
     expect(() =>
       Reflect.apply(AnthropicCompatible.model, undefined, [
         "compatible-model",
@@ -133,9 +133,9 @@ describe("provider package entrypoints", () => {
   })
 
   test("selects Azure API entrypoints with the same model contract", async () => {
-    const Azure = await import("@opencode-ai/llm/providers/azure")
-    const AzureChat = await import("@opencode-ai/llm/providers/azure/chat")
-    const AzureResponses = await import("@opencode-ai/llm/providers/azure/responses")
+    const Azure = await import("@opencode-ai/ai/providers/azure")
+    const AzureChat = await import("@opencode-ai/ai/providers/azure/chat")
+    const AzureResponses = await import("@opencode-ai/ai/providers/azure/responses")
     const settings = {
       apiKey: "fixture",
       resourceName: "opencode-test",
@@ -157,7 +157,7 @@ describe("provider package entrypoints", () => {
   })
 
   test("maps Google package settings onto the Gemini model", async () => {
-    const Google = await import("@opencode-ai/llm/providers/google")
+    const Google = await import("@opencode-ai/ai/providers/google")
     const selected = Google.model("gemini-2.5-flash", {
       apiKey: "fixture",
       baseURL: "https://generativelanguage.test/v1beta",
@@ -178,8 +178,8 @@ describe("provider package entrypoints", () => {
   })
 
   test("selects Vertex entrypoints with the same model contract", async () => {
-    const GoogleVertex = await import("@opencode-ai/llm/providers/google-vertex")
-    const GoogleVertexAnthropic = await import("@opencode-ai/llm/providers/google-vertex/anthropic")
+    const GoogleVertex = await import("@opencode-ai/ai/providers/google-vertex")
+    const GoogleVertexAnthropic = await import("@opencode-ai/ai/providers/google-vertex/anthropic")
     const gemini = GoogleVertex.model("gemini-3.5-flash", {
       apiKey: "fixture",
       headers: { "x-application": "opencode" },
@@ -211,9 +211,9 @@ describe("provider package entrypoints", () => {
   })
 
   test("rejects conflicting Vertex auth settings at runtime", async () => {
-    const GoogleVertex = await import("@opencode-ai/llm/providers/google-vertex")
-    const GoogleVertexAnthropic = await import("@opencode-ai/llm/providers/google-vertex/anthropic")
-    const Providers = await import("@opencode-ai/llm/providers")
+    const GoogleVertex = await import("@opencode-ai/ai/providers/google-vertex")
+    const GoogleVertexAnthropic = await import("@opencode-ai/ai/providers/google-vertex/anthropic")
+    const Providers = await import("@opencode-ai/ai/providers")
     expect(() =>
       Reflect.apply(GoogleVertex.model, undefined, [
         "gemini-3.5-flash",

@@ -25,7 +25,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { LLMEvent } from "@opencode-ai/llm"
+import { LLMEvent } from "@opencode-ai/ai"
 
 const summary = Layer.succeed(
   SessionSummary.Service,

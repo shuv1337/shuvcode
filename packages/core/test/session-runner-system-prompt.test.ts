@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Model } from "@opencode-ai/llm"
-import * as OpenAIChat from "@opencode-ai/llm/protocols/openai-chat"
+import { Model } from "@opencode-ai/ai"
+import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
 import { SessionRunnerSystemPrompt } from "@opencode-ai/core/session/runner/system-prompt"
 
 const prompt = (id: string) =>

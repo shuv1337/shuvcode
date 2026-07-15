@@ -7,7 +7,7 @@
 export * as EditTool from "./edit"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { Effect, Schema } from "effect"

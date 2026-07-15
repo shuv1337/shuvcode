@@ -1,7 +1,7 @@
 export * as WebFetchTool from "./webfetch"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { Duration, Effect, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Parser } from "htmlparser2"

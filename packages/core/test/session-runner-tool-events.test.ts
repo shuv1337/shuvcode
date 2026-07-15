@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
-import { LLMEvent } from "@opencode-ai/llm"
+import { LLMEvent } from "@opencode-ai/ai"
 import { Money } from "@opencode-ai/schema/money"
 import { EventV2 } from "@opencode-ai/core/event"
 import { AgentV2 } from "@opencode-ai/core/agent"

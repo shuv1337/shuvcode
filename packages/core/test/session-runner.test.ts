@@ -11,8 +11,8 @@ import {
   RateLimitReason,
   type LLMClientShape,
   type LLMRequest,
-} from "@opencode-ai/llm"
-import * as OpenAIChat from "@opencode-ai/llm/protocols/openai-chat"
+} from "@opencode-ai/ai"
+import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
 import { Database } from "@opencode-ai/core/database/database"
 import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"

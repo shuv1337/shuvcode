@@ -338,7 +338,7 @@
         "@opencode-ai/codemode": "workspace:*",
         "@opencode-ai/effect-drizzle-sqlite": "workspace:*",
         "@opencode-ai/effect-sqlite-node": "workspace:*",
-        "@opencode-ai/llm": "workspace:*",
+        "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
         "@openrouter/ai-sdk-provider": "2.9.0",
@@ -561,8 +561,8 @@
         "@typescript/native-preview": "catalog:",
       },
     },
-    "packages/llm": {
-      "name": "@opencode-ai/llm",
+    "packages/ai": {
+      "name": "@opencode-ai/ai",
       "version": "1.17.20",
       "dependencies": {
         "@opencode-ai/schema": "workspace:*",
@@ -623,7 +623,7 @@
         "@opencode-ai/cli": "workspace:*",
         "@opencode-ai/client": "workspace:*",
         "@opencode-ai/codemode": "workspace:*",
-        "@opencode-ai/llm": "workspace:*",
+        "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
         "@opencode-ai/protocol": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
@@ -884,7 +884,7 @@
         "@fontsource/commit-mono": "5.2.5",
         "@napi-rs/canvas": "1.0.2",
         "@opencode-ai/core": "workspace:*",
-        "@opencode-ai/llm": "workspace:*",
+        "@opencode-ai/ai": "workspace:*",
         "@opentui/core": "catalog:",
         "effect": "catalog:",
       },
@@ -2204,7 +2204,7 @@
 
     "@opencode-ai/httpapi-codegen": ["@opencode-ai/httpapi-codegen@workspace:packages/httpapi-codegen"],
 
-    "@opencode-ai/llm": ["@opencode-ai/llm@workspace:packages/llm"],
+    "@opencode-ai/ai": ["@opencode-ai/ai@workspace:packages/ai"],
 
     "@opencode-ai/plugin": ["@opencode-ai/plugin@workspace:packages/plugin"],
 
@@ -6862,9 +6862,9 @@
 
     "@opencode-ai/desktop/typescript": ["typescript@5.6.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-hjcS1mhfuyi4WW8IWtjP7brDrG2cuDZukyrYrSauoXGNgx0S7zceP07adYkJycEr56BOUTNPzbInooiN3fn1qw=="],
 
-    "@opencode-ai/llm/@smithy/eventstream-codec": ["@smithy/eventstream-codec@4.2.14", "", { "dependencies": { "@aws-crypto/crc32": "5.2.0", "@smithy/types": "^4.14.1", "@smithy/util-hex-encoding": "^4.2.2", "tslib": "^2.6.2" } }, "sha512-erZq0nOIpzfeZdCyzZjdJb4nVSKLUmSkaQUVkRGQTXs30gyUGeKnrYEg+Xe1W5gE3aReS7IgsvANwVPxSzY6Pw=="],
+    "@opencode-ai/ai/@smithy/eventstream-codec": ["@smithy/eventstream-codec@4.2.14", "", { "dependencies": { "@aws-crypto/crc32": "5.2.0", "@smithy/types": "^4.14.1", "@smithy/util-hex-encoding": "^4.2.2", "tslib": "^2.6.2" } }, "sha512-erZq0nOIpzfeZdCyzZjdJb4nVSKLUmSkaQUVkRGQTXs30gyUGeKnrYEg+Xe1W5gE3aReS7IgsvANwVPxSzY6Pw=="],
 
-    "@opencode-ai/llm/@smithy/util-utf8": ["@smithy/util-utf8@4.2.2", "", { "dependencies": { "@smithy/util-buffer-from": "^4.2.2", "tslib": "^2.6.2" } }, "sha512-75MeYpjdWRe8M5E3AW0O4Cx3UadweS+cwdXjwYGBW5h/gxxnbeZ877sLPX/ZJA9GVTlL/qG0dXP29JWFCD1Ayw=="],
+    "@opencode-ai/ai/@smithy/util-utf8": ["@smithy/util-utf8@4.2.2", "", { "dependencies": { "@smithy/util-buffer-from": "^4.2.2", "tslib": "^2.6.2" } }, "sha512-75MeYpjdWRe8M5E3AW0O4Cx3UadweS+cwdXjwYGBW5h/gxxnbeZ877sLPX/ZJA9GVTlL/qG0dXP29JWFCD1Ayw=="],
 
     "@opencode-ai/script/semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 

@@ -1,14 +1,14 @@
 export * as SessionRunnerModel from "./model"
 
 import { makeLocationNode } from "../../effect/app-node"
-import { Model } from "@opencode-ai/llm"
+import { Model } from "@opencode-ai/ai"
 // ast-grep-ignore: no-star-import
-import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-messages"
+import * as AnthropicMessages from "@opencode-ai/ai/protocols/anthropic-messages"
 // ast-grep-ignore: no-star-import
-import * as OpenAICompatibleChat from "@opencode-ai/llm/protocols/openai-compatible-chat"
+import * as OpenAICompatibleChat from "@opencode-ai/ai/protocols/openai-compatible-chat"
 // ast-grep-ignore: no-star-import
-import * as OpenAIResponses from "@opencode-ai/llm/protocols/openai-responses"
-import { Auth, type AnyRoute } from "@opencode-ai/llm/route"
+import * as OpenAIResponses from "@opencode-ai/ai/protocols/openai-responses"
+import { Auth, type AnyRoute } from "@opencode-ai/ai/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { AISDK } from "../../aisdk"
@@ -256,20 +256,20 @@ export const fromCatalogModel = (
 }
 
 const isNativeOpenAI = (packageName: string | undefined) =>
-  packageName === "@opencode-ai/llm/providers/openai" ||
-  packageName?.startsWith("@opencode-ai/llm/providers/openai/") === true
+  packageName === "@opencode-ai/ai/providers/openai" ||
+  packageName?.startsWith("@opencode-ai/ai/providers/openai/") === true
 
 const nativeCredentialSettings = (specifier: string, credential: Credential.Value | undefined) => {
   if (!credential) return {}
   if (credential.type === "key") return { apiKey: credential.key }
   if (
-    specifier === "@opencode-ai/llm/providers/anthropic" ||
-    specifier === "@opencode-ai/llm/providers/anthropic-compatible"
+    specifier === "@opencode-ai/ai/providers/anthropic" ||
+    specifier === "@opencode-ai/ai/providers/anthropic-compatible"
   )
     return { authToken: credential.access }
   if (
-    specifier === "@opencode-ai/llm/providers/google-vertex" ||
-    specifier.startsWith("@opencode-ai/llm/providers/google-vertex/")
+    specifier === "@opencode-ai/ai/providers/google-vertex" ||
+    specifier.startsWith("@opencode-ai/ai/providers/google-vertex/")
   )
     return { accessToken: credential.access }
   return { apiKey: credential.access }

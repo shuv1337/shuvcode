@@ -9,7 +9,7 @@ import {
   SystemPart,
   isContextOverflowFailure,
   type ProviderErrorEvent,
-} from "@opencode-ai/llm"
+} from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Money } from "@opencode-ai/schema/money"
 import { Cause, Effect, Exit, Fiber, FiberSet, Layer, Option, Semaphore, Stream } from "effect"

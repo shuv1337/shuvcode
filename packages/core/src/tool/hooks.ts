@@ -6,7 +6,7 @@ import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "../session/message"
 import { State } from "../state"
 import { Context, Effect, Layer, Scope } from "effect"
-import type { ToolOutput, ToolResultValue } from "@opencode-ai/llm"
+import type { ToolOutput, ToolResultValue } from "@opencode-ai/ai"
 
 export interface BeforeEvent {
   readonly tool: string

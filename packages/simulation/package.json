@@ -20,7 +20,7 @@
     "@fontsource/commit-mono": "5.2.5",
     "@napi-rs/canvas": "1.0.2",
     "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/llm": "workspace:*",
+    "@opencode-ai/ai": "workspace:*",
     "@opentui/core": "catalog:",
     "effect": "catalog:"
   },

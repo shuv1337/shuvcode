@@ -28,8 +28,8 @@ import {
   type LLMRequest,
   type ToolDefinition,
   type UsageInput,
-} from "@opencode-ai/llm"
-import { Auth, Endpoint, type AnyRoute } from "@opencode-ai/llm/route"
+} from "@opencode-ai/ai"
+import { Auth, Endpoint, type AnyRoute } from "@opencode-ai/ai/route"
 import { Cause, Context, Effect, Layer, Option, Schema, Scope, Stream } from "effect"
 import { ModelV2 } from "./model"
 import { ProviderV2 } from "./provider"

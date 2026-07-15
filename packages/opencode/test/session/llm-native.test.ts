@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { LLMEvent, ToolFailure } from "@opencode-ai/llm"
-import { LLMClient, RequestExecutor, WebSocketExecutor, type LLMClientShape } from "@opencode-ai/llm/route"
+import { LLMEvent, ToolFailure } from "@opencode-ai/ai"
+import { LLMClient, RequestExecutor, WebSocketExecutor, type LLMClientShape } from "@opencode-ai/ai/route"
 import { jsonSchema, tool, type ModelMessage, type Tool } from "ai"
 import { Effect, Fiber, Layer, Stream } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"

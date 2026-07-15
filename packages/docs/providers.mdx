@@ -140,7 +140,7 @@ provider has no Models.dev catalog entries:
     "acme": {
       "name": "Acme Gateway",
       "env": ["ACME_API_KEY"],
-      "package": "@opencode-ai/llm/providers/openai-compatible",
+      "package": "@opencode-ai/ai/providers/openai-compatible",
       "settings": {
         "baseURL": "https://llm.acme.example/v1"
       },
@@ -170,7 +170,7 @@ The `package` field supports two runtime contracts:
 
 | Form | Contract |
 | --- | --- |
-| `"@opencode-ai/llm/providers/openai-compatible"` | A V2 native package exporting `model(modelID, settings)`. An npm specifier or absolute `file://` URL may use the same contract. |
+| `"@opencode-ai/ai/providers/openai-compatible"` | A V2 native package exporting `model(modelID, settings)`. An npm specifier or absolute `file://` URL may use the same contract. |
 | `"aisdk:@ai-sdk/openai-compatible"` | An AI SDK provider package. The `aisdk:` prefix is required. |
 
 Native packages receive the merged `settings` plus the resolved `apiKey`, `headers`, `body`, and `limits`. AI SDK

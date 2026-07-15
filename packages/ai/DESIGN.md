@@ -1,7 +1,7 @@
 # AI Library Design
 
-> Discussion draft. This document describes the intended replacement for the
-> current private `@opencode-ai/llm` API. Names and exact TypeScript signatures
+> Discussion draft. This document describes an intended clean-break redesign of
+> the current private `@opencode-ai/ai` API. Names and exact TypeScript signatures
 > are illustrative until implementation, but the domain boundaries and defaults
 > are deliberate.
 
@@ -1074,7 +1074,6 @@ The redesign intentionally removes or changes these current concepts:
 
 | Current                                 | Proposed                                                    |
 | --------------------------------------- | ----------------------------------------------------------- |
-| `@opencode-ai/llm`                      | `@opencode-ai/ai`                                           |
 | Mandatory `LLM.request({ model, ... })` | Inline calls or model-free portable requests                |
 | `LLM.generate` means one turn           | `LLM.generate` means complete run                           |
 | `LLMClient.generate/stream`             | `LLM.generateTurn/streamTurn` for one turn                  |

@@ -1,6 +1,6 @@
 export * as McpTool from "./mcp"
 
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { Effect, Exit, type JsonSchema, Layer, Scope, Semaphore, Stream } from "effect"
 import { makeLocationNode } from "../effect/app-node"

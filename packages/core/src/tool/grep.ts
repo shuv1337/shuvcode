@@ -1,7 +1,7 @@
 export * as GrepTool from "./grep"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { Effect, Schema } from "effect"
 import path from "path"
 import { FileSystem } from "../filesystem"

@@ -7,7 +7,7 @@ values directly.
 ## Conversation Summary
 
 Kit and Aidan want provider-specific LLM behavior to move out of opencode's AI
-SDK transform path and into `packages/llm` where possible. The goal is not a big
+SDK transform path and into `packages/ai` where possible. The goal is not a big
 generic transform layer; the goal is small composable route definitions backed by
 recorded golden tests.
 
@@ -355,7 +355,7 @@ The package-like OpenAI Responses entrypoint instead keeps transport scoped to
 Responses settings while preserving the same `model(...)` contract:
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/openai/responses"
+import { model } from "@opencode-ai/ai/providers/openai/responses"
 
 model("gpt-4o", { apiKey, transport: "websocket" })
 ```
@@ -364,13 +364,13 @@ Vertex keeps Gemini and Anthropic Messages as separate package-like entrypoints,
 while sharing project/location resolution and ADC authentication internally:
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/google-vertex"
+import { model } from "@opencode-ai/ai/providers/google-vertex"
 
 model("gemini-3.5-flash", { project, location: "global" })
 ```
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/google-vertex/anthropic"
+import { model } from "@opencode-ai/ai/providers/google-vertex/anthropic"
 
 model("claude-sonnet-4-6", { project, location: "global" })
 ```

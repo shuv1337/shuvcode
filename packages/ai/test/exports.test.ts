@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { LLM, LLMClient, Provider } from "@opencode-ai/llm"
-import { Route, Protocol } from "@opencode-ai/llm/route"
-import { Provider as ProviderSubpath } from "@opencode-ai/llm/provider"
+import { LLM, LLMClient, Provider } from "@opencode-ai/ai"
+import { Route, Protocol } from "@opencode-ai/ai/route"
+import { Provider as ProviderSubpath } from "@opencode-ai/ai/provider"
 import {
   CloudflareAIGateway,
   CloudflareWorkersAI,
@@ -9,15 +9,15 @@ import {
   OpenAICompatible,
   OpenRouter,
   XAI,
-} from "@opencode-ai/llm/providers"
-import * as GitHubCopilot from "@opencode-ai/llm/providers/github-copilot"
+} from "@opencode-ai/ai/providers"
+import * as GitHubCopilot from "@opencode-ai/ai/providers/github-copilot"
 import {
   OpenAIChat,
   OpenAICompatibleChat,
   OpenAICompatibleResponses,
   OpenAIResponses,
-} from "@opencode-ai/llm/protocols"
-import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-messages"
+} from "@opencode-ai/ai/protocols"
+import * as AnthropicMessages from "@opencode-ai/ai/protocols/anthropic-messages"
 
 describe("public exports", () => {
   test("root exposes app-facing runtime APIs", () => {
@@ -34,7 +34,7 @@ describe("public exports", () => {
   })
 
   test("provider barrels expose user-facing facades", async () => {
-    const { OpenAICompatibleResponses } = await import("@opencode-ai/llm/providers")
+    const { OpenAICompatibleResponses } = await import("@opencode-ai/ai/providers")
 
     expect(OpenAI.model).toBeFunction()
     expect(OpenAI.provider.responses).toBe(OpenAI.responses)

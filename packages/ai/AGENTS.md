@@ -1,4 +1,4 @@
-# LLM Package Guide
+# AI Package Guide
 
 ## Effect
 
@@ -115,10 +115,10 @@ Keep provider facades small and explicit:
 
 ### Provider Package Entrypoints
 
-Catalog-selected native providers use package-like export paths from `@opencode-ai/llm`. They are internal entrypoints in one npm package, not separately published provider packages. Every entrypoint implements `ProviderPackage.Definition` and exposes `model(modelID, settings)`, where settings are serializable provider configuration plus common `headers`, `body`, and `limits` overlays.
+Catalog-selected native providers use package-like export paths from `@opencode-ai/ai`. They are internal entrypoints in one npm package, not separately published provider packages. Every entrypoint implements `ProviderPackage.Definition` and exposes `model(modelID, settings)`, where settings are serializable provider configuration plus common `headers`, `body`, and `limits` overlays.
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/openai/responses"
+import { model } from "@opencode-ai/ai/providers/openai/responses"
 
 const selected = model("gpt-5", {
   apiKey,
@@ -133,7 +133,7 @@ Do not expose `Route` in provider package settings. Route composition stays an i
 ### Folder layout
 
 ```
-packages/llm/src/
+packages/ai/src/
   schema/                   canonical Schema model, split by concern
     ids.ts                  branded IDs, literal types, ProviderMetadata
     options.ts              Generation/Provider/Http options, Limits, Model, cache policy
@@ -143,7 +143,7 @@ packages/llm/src/
     index.ts                barrel
   llm.ts                    request constructors and convenience helpers
   route/
-    index.ts                @opencode-ai/llm/route advanced barrel
+    index.ts                @opencode-ai/ai/route advanced barrel
     client.ts               Route.make + LLMClient.prepare/stream/generate
     executor.ts             RequestExecutor service + transport error mapping
     protocol.ts             Protocol type + Protocol.make

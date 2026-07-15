@@ -1,11 +1,11 @@
-# @opencode-ai/llm
+# @opencode-ai/ai
 
 Schema-first LLM core for opencode. One typed request, response, event, and tool language; provider quirks live in adapters, not in calling code.
 
 ```ts
 import { Effect } from "effect"
-import { LLM, LLMClient } from "@opencode-ai/llm"
-import { OpenAI } from "@opencode-ai/llm/providers"
+import { LLM, LLMClient } from "@opencode-ai/ai"
+import { OpenAI } from "@opencode-ai/ai/providers"
 
 const model = OpenAI.configure({ apiKey: process.env.OPENAI_API_KEY }).responses("gpt-4o-mini")
 
@@ -95,7 +95,7 @@ Normalized cache usage is read back into `response.usage.cacheReadInputTokens` a
 Provider facades configure endpoint/auth/deployment details first, then expose model selectors that take only a model or deployment id. The selected model carries the executable route value used at runtime.
 
 ```ts
-import { OpenAI, CloudflareAIGateway } from "@opencode-ai/llm/providers"
+import { OpenAI, CloudflareAIGateway } from "@opencode-ai/ai/providers"
 
 const openai = OpenAI.configure({ apiKey: process.env.OPENAI_API_KEY }).responses("gpt-4o-mini")
 const gateway = CloudflareAIGateway.configure({
@@ -108,10 +108,10 @@ Included providers: OpenAI, Anthropic, Google (Gemini), Google Vertex Gemini and
 
 ### Package-like entrypoints
 
-Native catalog integrations load provider behavior through package-like entrypoints. These are export paths from the same `@opencode-ai/llm` npm package, not independently published packages. Each entrypoint exports the same `model(modelID, settings)` contract, and `settings` contains serializable provider configuration plus common `headers`, `body`, and `limits` overlays.
+Native catalog integrations load provider behavior through package-like entrypoints. These are export paths from the same `@opencode-ai/ai` npm package, not independently published packages. Each entrypoint exports the same `model(modelID, settings)` contract, and `settings` contains serializable provider configuration plus common `headers`, `body`, and `limits` overlays.
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/openai/responses"
+import { model } from "@opencode-ai/ai/providers/openai/responses"
 
 const selected = model("gpt-5", {
   apiKey: process.env.OPENAI_API_KEY,
@@ -123,12 +123,12 @@ const selected = model("gpt-5", {
 
 OpenAI Chat and OpenAI Responses are separate semantic entrypoints:
 
-- `@opencode-ai/llm/providers/openai/chat`
-- `@opencode-ai/llm/providers/openai/responses`
-- `@opencode-ai/llm/providers/openai-compatible/responses`
-- `@opencode-ai/llm/providers/anthropic-compatible`
-- `@opencode-ai/llm/providers/google-vertex`
-- `@opencode-ai/llm/providers/google-vertex/anthropic`
+- `@opencode-ai/ai/providers/openai/chat`
+- `@opencode-ai/ai/providers/openai/responses`
+- `@opencode-ai/ai/providers/openai-compatible/responses`
+- `@opencode-ai/ai/providers/anthropic-compatible`
+- `@opencode-ai/ai/providers/google-vertex`
+- `@opencode-ai/ai/providers/google-vertex/anthropic`
 
 Responses HTTP versus WebSocket is a scoped `transport` setting on the OpenAI Responses entrypoint, not another entrypoint. Azure follows the same Chat/Responses split at `providers/azure/chat` and `providers/azure/responses`. Generic OpenAI-compatible Chat remains at `providers/openai-compatible`; compatible Responses is separate at `providers/openai-compatible/responses`. Generic Anthropic Messages-compatible providers use `providers/anthropic-compatible`, which the named Anthropic provider composes. Google Gemini and Amazon Bedrock expose their single native API through their existing provider paths.
 
@@ -137,13 +137,13 @@ Vertex Gemini and Vertex Anthropic are separate products with separate entrypoin
 Tuned Vertex Gemini deployments use model ids shaped like `endpoints/1234567890` and require OAuth or ADC; Vertex express-mode API keys support publisher models only.
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/google-vertex"
+import { model } from "@opencode-ai/ai/providers/google-vertex"
 
 model("gemini-3.5-flash", { project: "my-project", location: "global" })
 ```
 
 ```ts
-import { model } from "@opencode-ai/llm/providers/google-vertex/anthropic"
+import { model } from "@opencode-ai/ai/providers/google-vertex/anthropic"
 
 model("claude-sonnet-4-6", { project: "my-project", location: "global" })
 ```

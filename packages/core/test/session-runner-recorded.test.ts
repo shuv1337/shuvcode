@@ -1,6 +1,6 @@
 import { HttpRecorder } from "@opencode-ai/http-recorder"
-import * as OpenAIChat from "@opencode-ai/llm/protocols/openai-chat"
-import { Auth, LLMClient, RequestExecutor } from "@opencode-ai/llm/route"
+import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
+import { Auth, LLMClient, RequestExecutor } from "@opencode-ai/ai/route"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"

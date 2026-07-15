@@ -1,6 +1,6 @@
 export * as SessionRunnerRetry from "./retry"
 
-import { LLMError } from "@opencode-ai/llm"
+import { LLMError } from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Data, Duration, Effect, Schedule } from "effect"
 import { EventV2 } from "../../event"

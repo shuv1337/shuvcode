@@ -1,6 +1,6 @@
 export * as GlobTool from "./glob"
 
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Effect, Schema } from "effect"
 import path from "path"

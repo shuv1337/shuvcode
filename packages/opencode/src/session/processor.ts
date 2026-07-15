@@ -24,7 +24,7 @@ import { errorMessage } from "@/util/error"
 import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
-import { Usage, type LLMEvent } from "@opencode-ai/llm"
+import { Usage, type LLMEvent } from "@opencode-ai/ai"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"

@@ -1,6 +1,6 @@
 export * as SessionRunnerSystemPrompt from "./system-prompt"
 
-import type { Model } from "@opencode-ai/llm"
+import type { Model } from "@opencode-ai/ai"
 
 import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"

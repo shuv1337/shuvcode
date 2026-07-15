@@ -1,6 +1,6 @@
 export * as SessionTitle from "./title"
 
-import { LLM, LLMClient, LLMError, LLMEvent, Message, type LLMRequest } from "@opencode-ai/llm"
+import { LLM, LLMClient, LLMError, LLMEvent, Message, type LLMRequest } from "@opencode-ai/ai"
 import { Context, DateTime, Effect, Layer, Stream } from "effect"
 import { AgentV2 } from "../agent"
 import { Database } from "../database/database"

@@ -1,12 +1,12 @@
 import { Config, Effect, Formatter, Layer, Schema, Stream } from "effect"
-import { LLM, LLMClient, Message, ProviderID, Tool, ToolRuntime } from "@opencode-ai/llm"
-import { Route, Auth, Endpoint, Framing, Protocol, RequestExecutor, WebSocketExecutor } from "@opencode-ai/llm/route"
-import { OpenAI } from "@opencode-ai/llm/providers"
+import { LLM, LLMClient, Message, ProviderID, Tool, ToolRuntime } from "@opencode-ai/ai"
+import { Route, Auth, Endpoint, Framing, Protocol, RequestExecutor, WebSocketExecutor } from "@opencode-ai/ai/route"
+import { OpenAI } from "@opencode-ai/ai/providers"
 
 /**
  * A runnable walkthrough of the LLM package use-site API.
  *
- * Run from `packages/llm` with an OpenAI key in the environment:
+ * Run from `packages/ai` with an OpenAI key in the environment:
  *
  *   OPENAI_API_KEY=... bun example/tutorial.ts
  *

@@ -87,7 +87,7 @@
     "@opencode-ai/client": "workspace:*",
     "@opencode-ai/cli": "workspace:*",
     "@opencode-ai/codemode": "workspace:*",
-    "@opencode-ai/llm": "workspace:*",
+    "@opencode-ai/ai": "workspace:*",
     "@opencode-ai/plugin": "workspace:*",
     "@opencode-ai/protocol": "workspace:*",
     "@opencode-ai/schema": "workspace:*",

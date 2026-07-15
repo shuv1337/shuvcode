@@ -5,7 +5,7 @@ import {
   ToolResultPart,
   type ContentPart,
   type ProviderMetadata,
-} from "@opencode-ai/llm"
+} from "@opencode-ai/ai"
 import { Option, Schema } from "effect"
 import type { ModelV2 } from "../../model"
 import { SessionMessage } from "../message"
@@ -235,7 +235,7 @@ ${message.recent}
   }
 }
 
-/** Translate projected V2 Session history into canonical @opencode-ai/llm context. */
+/** Translate projected V2 Session history into canonical @opencode-ai/ai context. */
 export const toLLMMessages = (
   messages: readonly SessionMessage.Info[],
   model: ModelV2.Ref,

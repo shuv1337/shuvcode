@@ -3,7 +3,7 @@ export * as ProviderV2 from "./provider"
 import { Effect, Schema } from "effect"
 import { pathToFileURL } from "url"
 import { Provider } from "@opencode-ai/schema/provider"
-import type { ProviderPackageDefinition } from "@opencode-ai/llm"
+import type { ProviderPackageDefinition } from "@opencode-ai/ai"
 import { Npm } from "./npm"
 import type { DeepMutable } from "./schema"
 
@@ -35,7 +35,7 @@ const packages = new Map<string, Promise<unknown>>()
 
 export const loadPackage = Effect.fn("ProviderV2.loadPackage")(function* (specifier: string, npm?: Npm.Interface) {
   const resolved = yield* Effect.sync(() => {
-    if (specifier.startsWith("file://") || specifier.startsWith("@opencode-ai/llm/")) return specifier
+    if (specifier.startsWith("file://") || specifier.startsWith("@opencode-ai/ai/")) return specifier
     try {
       return import.meta.resolve(specifier)
     } catch {

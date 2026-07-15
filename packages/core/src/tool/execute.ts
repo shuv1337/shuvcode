@@ -1,7 +1,7 @@
 export * as ExecuteTool from "./execute"
 
 import { CodeMode, Tool, toolError } from "@opencode-ai/codemode"
-import { ToolOutput } from "@opencode-ai/llm"
+import { ToolOutput } from "@opencode-ai/ai"
 import { Effect, Ref, Schema } from "effect"
 import { definition, make, settle, type AnyTool } from "./tool"
 
