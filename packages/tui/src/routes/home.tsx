@@ -1,7 +1,6 @@
 import { Prompt, type PromptRef } from "../component/prompt"
 import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Logo } from "../component/logo"
-import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useRouteData } from "../context/route"
 import { usePromptRef } from "../context/prompt"
@@ -88,7 +87,6 @@ export function Home() {
         </box>
         <PluginSlot name="home.bottom" />
         <box flexGrow={1} minHeight={0} />
-        <Toast />
       </box>
       <box width="100%" flexShrink={0}>
         <PluginSlot name="home.footer" />

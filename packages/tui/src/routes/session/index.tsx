@@ -52,7 +52,7 @@ import { Composer } from "./composer"
 import { filetype } from "../../util/filetype"
 import parsers from "../../parsers-config"
 import { errorMessage } from "../../util/error"
-import { Toast, useToast } from "../../ui/toast"
+import { useToast } from "../../ui/toast"
 import stripAnsi from "strip-ansi"
 import { usePromptRef } from "../../context/prompt"
 import { useEpilogue } from "../../context/epilogue"
@@ -916,7 +916,6 @@ export function Session() {
               </Switch>
             </box>
           </Show>
-          <Toast />
         </box>
         <Show when={sidebarVisible()}>
           <Switch>

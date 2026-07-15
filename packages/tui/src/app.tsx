@@ -68,7 +68,7 @@ import { Session } from "./routes/session"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
-import { ToastProvider, useToast } from "./ui/toast"
+import { Toast, ToastProvider, useToast } from "./ui/toast"
 import { isDefaultTitle } from "./util/session"
 import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
@@ -1110,6 +1110,7 @@ function App(props: { pair?: DialogPairCredentials }) {
       <Show when={showReconnecting()}>
         <Reconnecting status={client.connection.service()} />
       </Show>
+      <Toast />
     </box>
   )
 }
