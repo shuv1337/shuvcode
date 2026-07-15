@@ -292,6 +292,12 @@ describe("ModelsDevPlugin", () => {
             ModelV2.VariantID.make("high"),
           ])
 
+          const pro = yield* catalog.model.get(ProviderV2.ID.openai, ModelV2.ID.make("gpt-reasoning-pro"))
+          expect(pro).toMatchObject({
+            id: "gpt-reasoning-pro",
+            body: { reasoning: { mode: "pro" } },
+          })
+
           const budgetModel = yield* catalog.model.get(ProviderV2.ID.anthropic, ModelV2.ID.make("claude-budget"))
           expect(budgetModel?.variants).toContainEqual({
             id: ModelV2.VariantID.make("high"),
@@ -299,17 +305,292 @@ describe("ModelsDevPlugin", () => {
           })
           expect(budgetModel?.variants).toContainEqual({
             id: ModelV2.VariantID.make("max"),
-            settings: { thinking: { type: "enabled", budgetTokens: 64000 } },
+            settings: { thinking: { type: "enabled", budgetTokens: 31999 } },
           })
 
           const anthropicEffortModel = yield* catalog.model.get(
             ProviderV2.ID.anthropic,
-            ModelV2.ID.make("claude-effort"),
+            ModelV2.ID.make("claude-opus-4.7"),
           )
-          expect(anthropicEffortModel?.variants).toContainEqual({
-            id: ModelV2.VariantID.make("low"),
-            settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "low" },
-          })
+          expect(anthropicEffortModel?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { thinking: { type: "disabled" } } },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "low" },
+            },
+          ])
+
+          const anthropicToggleModel = yield* catalog.model.get(
+            ProviderV2.ID.anthropic,
+            ModelV2.ID.make("claude-toggle"),
+          )
+          expect(anthropicToggleModel?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { thinking: { type: "disabled" } } },
+            {
+              id: ModelV2.VariantID.make("thinking"),
+              settings: { thinking: { type: "adaptive", display: "summarized" } },
+            },
+          ])
+
+          const opus45 = yield* catalog.model.get(ProviderV2.ID.anthropic, ModelV2.ID.make("claude-opus-4-5"))
+          expect(opus45?.variants).toEqual([
+            { id: ModelV2.VariantID.make("low"), settings: { effort: "low" } },
+            { id: ModelV2.VariantID.make("high"), settings: { effort: "high" } },
+          ])
+
+          const grok = yield* catalog.model.get(ProviderV2.ID.make("xai"), ModelV2.ID.make("grok-4.5"))
+          expect(grok?.variants).toEqual(
+            ["low", "medium", "high"].map((id) => ({
+              id: ModelV2.VariantID.make(id),
+              settings: { reasoningEffort: id },
+            })),
+          )
+
+          const minimax = yield* catalog.model.get(ProviderV2.ID.make("opencode-go"), ModelV2.ID.make("minimax-m3"))
+          expect(minimax?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { thinking: { type: "disabled" } } },
+            {
+              id: ModelV2.VariantID.make("thinking"),
+              settings: { thinking: { type: "adaptive", display: "summarized" } },
+            },
+          ])
+
+          const toggle = yield* catalog.model.get(ProviderV2.ID.make("alibaba"), ModelV2.ID.make("toggle-only"))
+          expect(toggle?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { enableThinking: false } },
+            { id: ModelV2.VariantID.make("thinking"), settings: { enableThinking: true } },
+          ])
+
+          const combined = yield* catalog.model.get(ProviderV2.ID.make("alibaba"), ModelV2.ID.make("toggle-budget"))
+          expect(combined?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { enableThinking: false } },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { enableThinking: true, thinkingBudget: 8000 },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: { enableThinking: true, thinkingBudget: 16000 },
+            },
+          ])
+
+          const gateway = yield* catalog.model.get(ProviderV2.ID.make("vercel"), ModelV2.ID.make("alibaba/qwen-toggle"))
+          expect(gateway?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { enableThinking: false } },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { enableThinking: true, thinkingBudget: 8000 },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: { enableThinking: true, thinkingBudget: 16000 },
+            },
+          ])
+
+          const gatewayNova = yield* catalog.model.get(
+            ProviderV2.ID.make("vercel"),
+            ModelV2.ID.make("amazon/nova-2-lite"),
+          )
+          expect(gatewayNova?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { additionalModelRequestFields: { reasoningConfig: { type: "disabled" } } },
+            },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "high" } },
+            },
+          ])
+
+          const gatewayFallback = yield* catalog.model.get(
+            ProviderV2.ID.make("vercel"),
+            ModelV2.ID.make("deepseek/deepseek-toggle"),
+          )
+          expect(gatewayFallback?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { reasoning: { enabled: false } },
+            },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: { reasoningEffort: "low" },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { reasoningEffort: "high" },
+            },
+          ])
+
+          const openrouter = yield* catalog.model.get(
+            ProviderV2.ID.make("openrouter"),
+            ModelV2.ID.make("openrouter-toggle"),
+          )
+          expect(openrouter?.variants).toEqual([
+            { id: ModelV2.VariantID.make("none"), settings: { reasoning: { enabled: false } } },
+            { id: ModelV2.VariantID.make("thinking"), settings: { reasoning: { enabled: true } } },
+          ])
+
+          const google = yield* catalog.model.get(ProviderV2.ID.make("google"), ModelV2.ID.make("gemini-2.5-flash"))
+          expect(google?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { thinkingConfig: { includeThoughts: false, thinkingBudget: 0 } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { thinkingConfig: { includeThoughts: true, thinkingBudget: 8000 } },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: { thinkingConfig: { includeThoughts: true, thinkingBudget: 16000 } },
+            },
+          ])
+
+          const vertex = yield* catalog.model.get(
+            ProviderV2.ID.make("google-vertex"),
+            ModelV2.ID.make("gemini-2.5-flash-lite"),
+          )
+          expect(vertex?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { thinkingConfig: { includeThoughts: false, thinkingBudget: 0 } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { thinkingConfig: { includeThoughts: true, thinkingBudget: 8000 } },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: { thinkingConfig: { includeThoughts: true, thinkingBudget: 16000 } },
+            },
+          ])
+
+          const bedrock = yield* catalog.model.get(
+            ProviderV2.ID.make("amazon-bedrock"),
+            ModelV2.ID.make("amazon.nova-2-lite-v1:0"),
+          )
+          expect(bedrock?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { additionalModelRequestFields: { reasoningConfig: { type: "disabled" } } },
+            },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "high" } },
+            },
+          ])
+
+          const sapGemini = yield* catalog.model.get(
+            ProviderV2.ID.make("sap-ai-core"),
+            ModelV2.ID.make("gemini-2.5-flash"),
+          )
+          expect(sapGemini?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { modelParams: { thinkingConfig: { includeThoughts: false, thinkingBudget: 0 } } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { modelParams: { thinkingConfig: { includeThoughts: true, thinkingBudget: 8000 } } },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: { modelParams: { thinkingConfig: { includeThoughts: true, thinkingBudget: 16000 } } },
+            },
+          ])
+
+          const sapNova = yield* catalog.model.get(
+            ProviderV2.ID.make("sap-ai-core"),
+            ModelV2.ID.make("amazon--nova-lite"),
+          )
+          expect(sapNova?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: {
+                modelParams: { additionalModelRequestFields: { thinking: { type: "disabled" } } },
+              },
+            },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: {
+                modelParams: { additionalModelRequestFields: { output_config: { effort: "low" } } },
+              },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: {
+                modelParams: { additionalModelRequestFields: { output_config: { effort: "high" } } },
+              },
+            },
+          ])
+
+          const sapCohere = yield* catalog.model.get(
+            ProviderV2.ID.make("sap-ai-core"),
+            ModelV2.ID.make("cohere--command-a-reasoning"),
+          )
+          expect(sapCohere?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("none"),
+              settings: { modelParams: { thinking: { type: "disabled" } } },
+            },
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: { modelParams: { reasoning_effort: "low" } },
+            },
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: { modelParams: { reasoning_effort: "high" } },
+            },
+          ])
+
+          const sapAnthropicEffort = yield* catalog.model.get(
+            ProviderV2.ID.make("sap-ai-core"),
+            ModelV2.ID.make("anthropic--claude-4.7-opus"),
+          )
+          expect(sapAnthropicEffort?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("low"),
+              settings: {
+                modelParams: {
+                  additionalModelRequestFields: {
+                    thinking: { type: "adaptive", display: "summarized" },
+                    output_config: { effort: "low" },
+                  },
+                },
+              },
+            },
+          ])
+
+          const sapAnthropicBudget = yield* catalog.model.get(
+            ProviderV2.ID.make("sap-ai-core"),
+            ModelV2.ID.make("anthropic--claude-4-sonnet"),
+          )
+          expect(sapAnthropicBudget?.variants).toEqual([
+            {
+              id: ModelV2.VariantID.make("high"),
+              settings: {
+                modelParams: {
+                  additionalModelRequestFields: { thinking: { type: "enabled", budget_tokens: 8000 } },
+                },
+              },
+            },
+            {
+              id: ModelV2.VariantID.make("max"),
+              settings: {
+                modelParams: {
+                  additionalModelRequestFields: { thinking: { type: "enabled", budget_tokens: 16000 } },
+                },
+              },
+            },
+          ])
         }).pipe(Effect.provide(AppNodeBuilder.build(ModelsDev.node))),
       (previous) =>
         Effect.sync(() => {
