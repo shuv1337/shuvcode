@@ -30,6 +30,50 @@ This proposal does not introduce a supervisor process, warm candidate server,
 protocol negotiation, idle background restart, or general execution-recovery
 framework.
 
+## Architecture at a Glance
+
+```text
+                       ╭───────────────────╮
+                       │ CLI ServiceConfig │
+                       ╰─────────┬─────────╯
+                                 │
+                                 ▼
+                     ╭──────────────────────╮
+                     │ CLI ServerConnection │
+                     ╰───────────┬──────────╯
+              ╭──────────────────╰───────────────────╮
+              ▼                                      ▼
+╭──────────────────────────╮            ╭─────────────────────────╮
+│ Client Service lifecycle │            │ CLI runPromiseWith seam │
+╰─────────────┬────────────╯            ╰─────────────┬───────────╯
+              ╰─────╮                                 │
+                    ▼                                 ▼
+     ╭────────────────────────────╮            ╭─────────────╮
+     │ Background service process │            │ TUI / Solid │
+     ╰──────────────┬─────────────╯            ╰──────┬──────╯
+                    │                                 │
+                    ╰────────────◀────────────────────╯
+                     ╭───────────────────────╮
+                     │ Server HTTP transport │
+                     ╰───────────┬───────────╯
+                                 │
+                                 ▼
+                       ╭──────────────────╮
+                       │ Core application │
+                       ╰──────────────────╯
+```
+
+| Owner                                            | Responsibility                                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `packages/client/src/effect/service.ts`          | Effect-native discovery, start, and stop lifecycle operations                                       |
+| `packages/cli/src/services/service-config.ts`    | CLI registration path, installed version, and daemon command                                        |
+| `packages/cli/src/services/server-connection.ts` | Resolve an endpoint and, only for the shared service, grouped reconnect and restart Effects         |
+| `packages/cli/src/server-process.ts`             | Daemon election, registration, and server process boot                                              |
+| `packages/server/src/process.ts`                 | HTTP lifecycle shell and application transport                                                      |
+| `packages/core`                                  | Application behavior behind the transport                                                           |
+| CLI default handler                              | Convert lifecycle Effects with the outer `FileSystem` context and pass grouped Promise capabilities |
+| `packages/tui` Solid client context              | Own event-stream reconnect, endpoint replacement, status, and user-triggered restart UI             |
+
 ## Implementation Status
 
 | Area                      | State                                                                 |
@@ -164,19 +208,22 @@ This design gives each concept one authority.
 
 ## System Model
 
-```mermaid
-flowchart LR
-  TUI[Fresh or existing TUI]
-  REG[Registration file]
-  LOCK[Process-held OS service lock]
-  SHELL[Lifecycle shell]
-  APP[OpenCode application]
-
-  TUI -->|discover| REG
-  TUI -->|observe| SHELL
-  TUI -->|normal requests| APP
-  SHELL --> APP
-  LOCK -->|authorizes one owner| SHELL
+```text
+╭───────────────────────╮                              ╭──────────────────────────────╮
+│ Fresh or existing TUI │                              │ Process-held OS service lock │
+╰───────────┬───────────╯                              ╰───────────────┬──────────────╯
+            ╰─────┬ normal requests  observe ───────────────────────╮  │
+                  │ discover               │                        ├──╯ authorizes one owner
+                  ▼                        │                        ▼
+        ╭───────────────────╮              │               ╭─────────────────╮
+        │ Registration file │              │               │ Lifecycle shell │
+        ╰───────────────────╯              │               ╰────────┬────────╯
+                                           │                        │
+                                           ├────────────────────────╯
+                                           ▼
+                               ╭──────────────────────╮
+                               │ OpenCode application │
+                               ╰──────────────────────╯
 ```
 
 The lifecycle shell and application run in the same process. The distinction is
@@ -311,24 +358,39 @@ Windows, where Bun FFI is not available on every shipped architecture. It lives
 alongside the existing utility in `packages/core/src/util`. This primitive is
 the foundation of the design, so the delivery sequence spikes it first.
 
-```mermaid
-flowchart TD
-  A[Contender process starts]
-  B{Acquire service lock?}
-  C[Exit successfully]
-  D[Bind lifecycle shell]
-  E[Write registration]
-  F[Report starting]
-  G[Initialize application]
-  H[Report ready]
-  I[Serve until shutdown]
-
-  A --> B
-  B -->|No| C
-  B -->|Yes| D
-  D --> E --> F --> G
-  G -->|Success| H --> I
-  G -->|Failure| J[Report failed and stay bound]
+```text
+Contender           Lock            Lifecycle              Application
+    │                 │                 │                       │
+    ├─ try acquire ───▶                 │                       │
+    │                 │                 │                       │
+ ╭─ alt: lock held ────────────────────────────────────────────────╮
+ │  │                 │                 │                       │  │
+ │  ◀─ busy ──────────┤                 │                       │  │
+ │  │                 │                 │                       │  │
+ │  ├─────────╮       │                 │                       │  │
+ │  │ exit    │       │                 │                       │  │
+ │  ◀─────────╯       │                 │                       │  │
+ │  │                 │                 │                       │  │
+ ├─ else: lock acquired ───────────────────────────────────────────┤
+ │  │                 │                 │                       │  │
+ │  ◀─ owner ─────────┤                 │                       │  │
+ │  │                 │                 │                       │  │
+ │  ├─ bind, register, starting ────────▶                       │  │
+ │  │                 │                 │                       │  │
+ │  ├─ initialize ──────────────────────────────────────────────▶  │
+ │  │                 │                 │                       │  │
+ │╭─ alt: boot succeeds ──────────────────────────────────────────╮│
+ ││ │                 │                 │                       │ ││
+ ││ │                 │                 ◀─ ready ───────────────┤ ││
+ ││ │                 │                 │                       │ ││
+ │├─ else: boot fails ────────────────────────────────────────────┤│
+ ││ │                 │                 │                       │ ││
+ ││ │                 │                 ◀─ failed, stay bound ──┤ ││
+ ││ │                 │                 │                       │ ││
+ │╰───────────────────────────────────────────────────────────────╯│
+ │  │                 │                 │                       │  │
+ ╰─────────────────────────────────────────────────────────────────╯
+    │                 │                 │                       │
 ```
 
 Lock acquisition by a contender is nonblocking or tightly bounded. A loser

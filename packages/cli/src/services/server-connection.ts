@@ -1,4 +1,3 @@
-import { NodeFileSystem } from "@effect/platform-node"
 import { Service } from "@opencode-ai/client/effect"
 import { ClientError, isUnauthorizedError, OpenCode } from "@opencode-ai/client/promise"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -16,11 +15,10 @@ export type Args = {
 
 export type Resolved = {
   readonly endpoint: Service.Endpoint
-  readonly reconnect?: (onStatus: (status: Service.Status) => void, signal: AbortSignal) => Promise<Service.Endpoint>
-  readonly reload?: () => Promise<void>
+  readonly service?: ReturnType<typeof managedService>
 }
 
-export const resolve = Effect.fn("cli.server.resolve")(function* (args: Args) {
+export const resolve = Effect.fn("cli.server-connection.resolve")(function* (args: Args) {
   if (args.server !== undefined && args.standalone)
     return yield* Effect.fail(new Error("--server and --standalone cannot be combined"))
   if (args.server !== undefined) {
@@ -45,23 +43,23 @@ export const resolve = Effect.fn("cli.server.resolve")(function* (args: Args) {
   }
 
   const options = yield* ServiceConfig.options()
-  const endpoint = yield* resolveManaged({ ...options, onStart: args.onStart }, args.mismatch ?? "replace")
-  const reconnectOptions = { ...options, version: undefined }
   return {
-    endpoint,
-    reconnect: (onStatus, signal) =>
-      Effect.runPromise(Service.start({ ...reconnectOptions, onStatus }).pipe(Effect.provide(NodeFileSystem.layer)), {
-        signal,
-      }),
-    reload: () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* Service.stop(options, { targetVersion: options.version })
-          yield* Service.start(options)
-        }).pipe(Effect.provide(NodeFileSystem.layer)),
-      ),
+    endpoint: yield* resolveManaged({ ...options, onStart: args.onStart }, args.mismatch ?? "replace"),
+    service: managedService(options),
   } satisfies Resolved
 })
+
+function managedService(options: Service.StartOptions) {
+  const reconnectOptions = { ...options, version: undefined }
+  return {
+    reconnect: (onStatus: (status: Service.Status) => void) => Service.start({ ...reconnectOptions, onStatus }),
+    restart: () =>
+      Effect.gen(function* () {
+        yield* Service.stop(options, { targetVersion: options.version })
+        yield* Service.start(options)
+      }),
+  }
+}
 
 const resolveManaged = Effect.fnUntraced(function* (
   options: Service.StartOptions,
@@ -92,4 +90,4 @@ function connectError(endpoint: Service.Endpoint, cause: unknown) {
   return new Error(`Server at ${endpoint.url} did not provide a compatible V2 health response`, { cause })
 }
 
-export * as Server from "./server"
+export * as ServerConnection from "./server-connection"

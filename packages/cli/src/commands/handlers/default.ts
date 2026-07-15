@@ -4,8 +4,8 @@ import { run } from "@opencode-ai/tui"
 import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
 import { Config } from "../../config"
-import { Effect, Option } from "effect"
-import { Server } from "../../services/server"
+import { Context, Effect, FileSystem, Option } from "effect"
+import { ServerConnection } from "../../services/server-connection"
 import { Updater } from "../../services/updater"
 import { UpdatePreflight } from "../../services/update-preflight"
 import { Npm } from "@opencode-ai/core/npm"
@@ -18,7 +18,7 @@ export default Runtime.handler(Commands, (input) =>
     yield* updater.check().pipe(Effect.forkScoped)
     const preflight = UpdatePreflight.make()
     yield* Effect.addFinalizer(() => Effect.promise(() => preflight.close()))
-    const server = yield* Server.resolve({
+    const server = yield* ServerConnection.resolve({
       server: Option.getOrUndefined(input.server),
       standalone: input.standalone,
       onStart: (reason, existing) => {
@@ -37,11 +37,22 @@ export default Runtime.handler(Commands, (input) =>
     preflight.loading()
     const config = yield* Config.Service
     const npm = yield* Npm.Service
-    const context = yield* Effect.context()
+    const fileSystem = yield* FileSystem.FileSystem
+    const runServicePromise = Effect.runPromiseWith(Context.make(FileSystem.FileSystem, fileSystem))
+    const context = yield* Effect.context<FileSystem.FileSystem>()
     const runFork = Effect.runForkWith(context)
     const runPromise = Effect.runPromiseWith(context)
+    const service = server.service
     yield* run({
-      server,
+      server: {
+        endpoint: server.endpoint,
+        service: service
+          ? {
+              reconnect: (onStatus, signal) => runServicePromise(service.reconnect(onStatus), { signal }),
+              restart: () => runServicePromise(service.restart()),
+            }
+          : undefined,
+      },
       args: { continue: input.continue, sessionID: Option.getOrUndefined(input.session) },
       config: {
         path: config.path,
