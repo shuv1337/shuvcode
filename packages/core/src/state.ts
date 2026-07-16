@@ -1,6 +1,6 @@
 export * as State from "./state"
 
-import { Context, Effect, Scope, Semaphore } from "effect"
+import { Clock, Context, Deferred, Effect, Scope, Semaphore } from "effect"
 
 /**
  * A replayable transform applied to a draft during reload.
@@ -34,6 +34,7 @@ type Batch = {
 const CurrentBatch = Context.Reference<Batch | undefined>("@opencode/State/CurrentBatch", {
   defaultValue: () => undefined,
 })
+const reloadDebounce = 500
 
 export function batch<A, E, R>(effect: Effect.Effect<A, E, R>) {
   return Effect.gen(function* () {
@@ -73,6 +74,10 @@ export interface Interface<State, DraftApi> extends Transformable<DraftApi> {
 export function create<State, DraftApi>(options: Options<State, DraftApi>): Interface<State, DraftApi> {
   let state = options.initial()
   let transforms: { run: TransformCallback<DraftApi> }[] = []
+  let generation = 0
+  let requestedAt = 0
+  let running = false
+  let waiters: { generation: number; done: Deferred.Deferred<void> }[] = []
   const semaphore = Semaphore.makeUnsafe(1)
 
   const commit = Effect.fn("State.commit")(function* (next: State) {
@@ -97,7 +102,39 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
     yield* commit(next)
   })
 
-  const reload = () => semaphore.withPermit(materialize())
+  const materializeReload = () => semaphore.withPermit(materialize())
+
+  const rebuild = (): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock
+      const remaining = requestedAt + reloadDebounce - clock.currentTimeMillisUnsafe()
+      if (remaining > 0) yield* Effect.sleep(remaining)
+      if (clock.currentTimeMillisUnsafe() < requestedAt + reloadDebounce) return yield* rebuild()
+
+      const target = generation
+      const exit = yield* materializeReload().pipe(Effect.exit)
+      const completed = waiters.filter((waiter) => waiter.generation <= target)
+      waiters = waiters.filter((waiter) => waiter.generation > target)
+      yield* Effect.forEach(completed, (waiter) => Deferred.done(waiter.done, exit), {
+        concurrency: "unbounded",
+        discard: true,
+      })
+      if (generation > target) return yield* rebuild()
+      running = false
+    })
+
+  const reload = Effect.fnUntraced(function* () {
+    const done = Deferred.makeUnsafe<void>()
+    const clock = yield* Clock.Clock
+    generation++
+    requestedAt = clock.currentTimeMillisUnsafe()
+    waiters.push({ generation, done })
+    if (!running) {
+      running = true
+      yield* rebuild().pipe(Effect.forkDetach)
+    }
+    return yield* Deferred.await(done)
+  })
 
   const result: Interface<State, DraftApi> = {
     get: () => state,
@@ -117,7 +154,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
                 return Effect.gen(function* () {
                   const batch = yield* CurrentBatch
                   if (batch?.active) {
-                    batch.reloads.add(reload)
+                    batch.reloads.add(materializeReload)
                     return
                   }
                   yield* materialize()
@@ -132,8 +169,8 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
           )
           yield* Scope.addFinalizer(scope, dispose)
           const batch = yield* CurrentBatch
-          if (batch?.active) batch.reloads.add(reload)
-          else yield* reload()
+          if (batch?.active) batch.reloads.add(materializeReload)
+          else yield* materializeReload()
           return { dispose }
         }),
       )

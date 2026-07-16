@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { State } from "@opencode-ai/core/state"
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
+import { TestClock } from "effect/testing"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(Layer.empty)
@@ -51,7 +52,9 @@ describe("State", () => {
       expect(state.get().values).toEqual(["first"])
 
       value = "second"
-      yield* state.reload()
+      const reload = yield* state.reload().pipe(Effect.forkChild({ startImmediately: true }))
+      yield* TestClock.adjust("500 millis")
+      yield* Fiber.join(reload)
       expect(state.get().values).toEqual(["second"])
     }),
   )
@@ -110,6 +113,32 @@ describe("State", () => {
       expect(first.get().values).toEqual(["first", "second"])
       expect(second.get().values).toEqual(["third"])
       expect(finalized).toBe(2)
+    }),
+  )
+
+  it.effect("debounces reload bursts", () =>
+    Effect.gen(function* () {
+      let finalized = 0
+      const state = State.create({
+        initial: () => ({ values: [] as string[] }),
+        draft: (draft) => ({ add: (item: string) => draft.values.push(item) }),
+        finalize: () => Effect.sync(() => finalized++),
+      })
+      yield* state.transform((draft) => {
+        draft.add("value")
+      })
+      finalized = 0
+
+      const first = yield* state.reload().pipe(Effect.forkChild({ startImmediately: true }))
+      yield* TestClock.adjust("250 millis")
+      const second = yield* state.reload().pipe(Effect.forkChild({ startImmediately: true }))
+      yield* TestClock.adjust("499 millis")
+      expect(finalized).toBe(0)
+      yield* TestClock.adjust("1 millis")
+      yield* Fiber.join(first)
+      yield* Fiber.join(second)
+
+      expect(finalized).toBe(1)
     }),
   )
 })
