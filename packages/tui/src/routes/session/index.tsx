@@ -68,7 +68,7 @@ import { nextThinkingMode, reasoningSummary, type ThinkingMode } from "../../con
 import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { usePluginRuntime } from "../../plugin/runtime"
-import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
+import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { usePathFormatter } from "../../context/path-format"
 import { useLocation } from "../../context/location"
 import { createSessionRows, messageBoundaryIDs, resolvePart, type PartRef, type SessionRow } from "./rows"
@@ -317,10 +317,10 @@ export function Session() {
 
   const globalCommands = [
     {
-      name: "session.page.up",
+      id: "session.page.up",
       title: "Page up",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 2)
@@ -328,10 +328,10 @@ export function Session() {
       },
     },
     {
-      name: "session.page.down",
+      id: "session.page.down",
       title: "Page down",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(scroll.height / 2)
@@ -339,10 +339,10 @@ export function Session() {
       },
     },
     {
-      name: "session.line.up",
+      id: "session.line.up",
       title: "Line up",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-1)
@@ -350,10 +350,10 @@ export function Session() {
       },
     },
     {
-      name: "session.line.down",
+      id: "session.line.down",
       title: "Line down",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(1)
@@ -361,10 +361,10 @@ export function Session() {
       },
     },
     {
-      name: "session.half.page.up",
+      id: "session.half.page.up",
       title: "Half page up",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 4)
@@ -372,10 +372,10 @@ export function Session() {
       },
     },
     {
-      name: "session.half.page.down",
+      id: "session.half.page.down",
       title: "Half page down",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(scroll.height / 4)
@@ -386,10 +386,10 @@ export function Session() {
 
   const baseAndUnfocusedCommands = [
     {
-      name: "session.first",
+      id: "session.first",
       title: "First message",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollTo(0)
@@ -397,10 +397,10 @@ export function Session() {
       },
     },
     {
-      name: "session.last",
+      id: "session.last",
       title: "Last message",
-      category: "Session",
-      hidden: true,
+      group: "Session",
+      palette: undefined,
       run: () => {
         clearMessageNavigation()
         scroll.scrollTo(scroll.scrollHeight)
@@ -412,30 +412,30 @@ export function Session() {
   const baseCommands = createMemo(() => [
     {
       title: "Share session",
-      name: "session.share",
+      id: "session.share",
       suggested: route.type === "session",
-      category: "Session",
+      group: "Session",
       slash: { name: "share" },
       run: () => unavailable("Sharing"),
     },
     {
       title: "Rename session",
-      name: "session.rename",
-      category: "Session",
+      id: "session.rename",
+      group: "Session",
       slash: { name: "rename" },
       run: () => DialogSessionRename.show(dialog, route.sessionID, session()?.title),
     },
     {
       title: "Jump to message",
-      name: "session.timeline",
-      category: "Session",
+      id: "session.timeline",
+      group: "Session",
       slash: { name: "timeline" },
       run: () => unavailable("The message timeline"),
     },
     {
       title: "Fork session",
-      name: "session.fork",
-      category: "Session",
+      id: "session.fork",
+      group: "Session",
       slash: { name: "fork" },
       run: () => {
         dialog.replace(() => (
@@ -451,8 +451,8 @@ export function Session() {
     },
     {
       title: "Compact session",
-      name: "session.compact",
-      category: "Session",
+      id: "session.compact",
+      group: "Session",
       slash: {
         name: "compact",
         aliases: ["summarize"],
@@ -464,16 +464,16 @@ export function Session() {
     },
     {
       title: "Unshare session",
-      name: "session.unshare",
-      category: "Session",
+      id: "session.unshare",
+      group: "Session",
       enabled: false,
       slash: { name: "unshare" },
       run: () => unavailable("Unsharing"),
     },
     {
       title: "Undo previous message",
-      name: "session.undo",
-      category: "Session",
+      id: "session.undo",
+      group: "Session",
       slash: { name: "undo" },
       run: () => {
         const boundary = session()?.revert?.messageID
@@ -508,8 +508,8 @@ export function Session() {
     },
     {
       title: "Redo",
-      name: "session.redo",
-      category: "Session",
+      id: "session.redo",
+      group: "Session",
       enabled: !!session()?.revert?.messageID,
       slash: { name: "redo" },
       run: () => {
@@ -525,8 +525,8 @@ export function Session() {
     },
     {
       title: sidebarVisible() ? "Hide sidebar" : "Show sidebar",
-      name: "session.sidebar.toggle",
-      category: "Session",
+      id: "session.sidebar.toggle",
+      group: "Session",
       run: () => {
         batch(() => {
           const isVisible = sidebarVisible()
@@ -546,9 +546,9 @@ export function Session() {
         if (next === "hide") return "Collapse thinking"
         return "Expand thinking"
       })(),
-      name: "session.toggle.thinking",
-      category: "Session",
-      hidden: true,
+      id: "session.toggle.thinking",
+      group: "Session",
+      palette: undefined,
       slash: {
         name: "thinking",
         aliases: ["toggle-thinking"],
@@ -564,9 +564,9 @@ export function Session() {
     },
     {
       title: "Toggle session scrollbar",
-      name: "session.toggle.scrollbar",
-      category: "Session",
-      hidden: true,
+      id: "session.toggle.scrollbar",
+      group: "Session",
+      palette: undefined,
       run: () => {
         void configState
           .update((draft) => {
@@ -578,9 +578,9 @@ export function Session() {
     },
     {
       title: groupExploration() ? "Show tool calls individually" : "Group related tool calls",
-      name: "session.toggle.exploration_grouping",
-      category: "Session",
-      hidden: true,
+      id: "session.toggle.exploration_grouping",
+      group: "Session",
+      palette: undefined,
       run: () => {
         void configState
           .update((draft) => {
@@ -592,9 +592,9 @@ export function Session() {
     },
     {
       title: "Jump to last user message",
-      name: "session.messages_last_user",
-      category: "Session",
-      hidden: true,
+      id: "session.messages_last_user",
+      group: "Session",
+      palette: undefined,
       run: () => {
         const messages = data.session.message.list(route.sessionID)
         if (!messages || !messages.length) return
@@ -612,36 +612,36 @@ export function Session() {
     },
     {
       title: "Next message",
-      name: "session.message.next",
-      category: "Session",
-      hidden: true,
+      id: "session.message.next",
+      group: "Session",
+      palette: undefined,
       run: () => scrollToMessage("next", dialog),
     },
     {
       title: "Previous message",
-      name: "session.message.previous",
-      category: "Session",
-      hidden: true,
+      id: "session.message.previous",
+      group: "Session",
+      palette: undefined,
       run: () => scrollToMessage("prev", dialog),
     },
     {
       title: "Next user message",
-      name: "session.message.user.next",
-      category: "Session",
-      hidden: true,
+      id: "session.message.user.next",
+      group: "Session",
+      palette: undefined,
       run: () => scrollToMessage("next", dialog, true),
     },
     {
       title: "Previous user message",
-      name: "session.message.user.previous",
-      category: "Session",
-      hidden: true,
+      id: "session.message.user.previous",
+      group: "Session",
+      palette: undefined,
       run: () => scrollToMessage("prev", dialog, true),
     },
     {
       title: "Copy last assistant message",
-      name: "messages.copy",
-      category: "Session",
+      id: "messages.copy",
+      group: "Session",
       run: () => {
         const revertID = session()?.revert?.messageID
         const lastAssistantMessage = messages().findLast(
@@ -682,8 +682,8 @@ export function Session() {
     },
     {
       title: "Copy session transcript",
-      name: "session.copy",
-      category: "Session",
+      id: "session.copy",
+      group: "Session",
       slash: {
         name: "copy",
       },
@@ -702,8 +702,8 @@ export function Session() {
     },
     {
       title: "Export session transcript",
-      name: "session.export",
-      category: "Session",
+      id: "session.export",
+      group: "Session",
       slash: {
         name: "export",
       },
@@ -772,9 +772,9 @@ export function Session() {
     },
     {
       title: "Background blocking tools",
-      name: "session.background",
-      category: "Session",
-      hidden: true,
+      id: "session.background",
+      group: "Session",
+      palette: undefined,
       run: () => {
         void client.api.session.background({ sessionID: route.sessionID })
         dialog.clear()
@@ -782,8 +782,8 @@ export function Session() {
     },
     {
       title: "Toggle subagent picker",
-      name: "session.child.first",
-      category: "Session",
+      id: "session.child.first",
+      group: "Session",
       run: () => {
         if (composer.open || session()?.parentID) setComposer("open", false)
         else setComposer("open", true)
@@ -792,9 +792,9 @@ export function Session() {
     },
     {
       title: "Go to parent session",
-      name: "session.parent",
-      category: "Session",
-      hidden: true,
+      id: "session.parent",
+      group: "Session",
+      palette: undefined,
       enabled: !!session()?.parentID,
       run: () => {
         const parentID = session()?.parentID
@@ -809,41 +809,46 @@ export function Session() {
     },
     {
       title: "Next subagent",
-      name: "session.child.next",
-      category: "Session",
-      hidden: true,
+      id: "session.child.next",
+      group: "Session",
+      palette: undefined,
       enabled: !!session()?.parentID,
       run: () => unavailable("Subagent navigation"),
     },
     {
       title: "Previous subagent",
-      name: "session.child.previous",
-      category: "Session",
-      hidden: true,
+      id: "session.child.previous",
+      group: "Session",
+      palette: undefined,
       enabled: !!session()?.parentID,
       run: () => unavailable("Subagent navigation"),
     },
   ])
 
-  useBindings(() => ({
-    commands: [...globalCommands, ...baseAndUnfocusedCommands, ...baseCommands()].map((command) => ({
-      namespace: "palette",
-      ...command,
-    })),
+  const commands = createMemo(() =>
+    [...globalCommands, ...baseAndUnfocusedCommands, ...baseCommands()].map(
+      (command) =>
+        ({
+          bind: false,
+          palette: true as const,
+          ...command,
+        }) satisfies KeymapCommand,
+    ),
+  )
+
+  Keymap.createLayer(() => ({
+    mode: "global",
+    commands: commands(),
+    bindings: globalCommands.map((command) => command.id),
   }))
 
-  useBindings(() => ({
-    bindings: globalCommands.flatMap((command) => config.keybinds.get(command.name)),
-  }))
-
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
     enabled: () => renderer.currentFocusedEditor === null,
-    bindings: baseAndUnfocusedCommands.flatMap((command) => config.keybinds.get(command.name)),
+    bindings: baseAndUnfocusedCommands.map((command) => command.id),
   }))
 
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
-    bindings: [...baseAndUnfocusedCommands, ...baseCommands()].flatMap((command) => config.keybinds.get(command.name)),
+  Keymap.createLayer(() => ({
+    bindings: [...baseAndUnfocusedCommands, ...baseCommands()].map((command) => command.id),
   }))
 
   // snap to bottom when session changes
@@ -1040,7 +1045,7 @@ function SessionRowView(props: {
 
 function BackgroundToolHint(props: { messages: SessionMessageInfo[] }) {
   const { themeV2 } = useTheme()
-  const shortcut = useCommandShortcut("session.background")
+  const shortcut = Keymap.useShortcut("session.background")
   const visible = createMemo(() => {
     const current = props.messages.findLast(
       (message): message is SessionMessageAssistant => message.type === "assistant" && !message.time.completed,
@@ -1508,7 +1513,7 @@ function RevertMessage(props: {
   const toast = useToast()
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
-  const redoKey = useCommandShortcut("session.redo")
+  const redoKey = Keymap.useShortcut("session.redo")
   return (
     <box
       onMouseOver={() => setHover(true)}
