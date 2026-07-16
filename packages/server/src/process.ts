@@ -10,6 +10,7 @@ import { HttpMiddleware, HttpRouter, HttpServer, HttpServerRequest, HttpServerRe
 import { createServer } from "node:http"
 import { ServerAuth } from "./auth"
 import { authorizedRequest } from "./middleware/authorization"
+import { withoutParentSpan } from "./request-tracing"
 import { createRoutes } from "./routes"
 import { ServerInfo } from "./server-info"
 import { Status } from "./service-status"
@@ -39,7 +40,10 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
   })
   const bound = yield* listen(options)
   const application = yield* Ref.make(Option.none<App>())
-  yield* bound.http.serve(dispatch(options.password, status, application, shutdown), HttpMiddleware.logger)
+  // Request fibers may continue inbound trace context, but must not inherit the server startup parent.
+  yield* bound.http
+    .serve(dispatch(options.password, status, application, shutdown), HttpMiddleware.logger)
+    .pipe(withoutParentSpan)
   if (options.service) yield* options.service.onListen(bound.http.address)
 
   const parentScope = yield* Scope.Scope
