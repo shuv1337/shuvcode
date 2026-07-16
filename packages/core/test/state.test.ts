@@ -36,7 +36,7 @@ describe("State", () => {
     }),
   )
 
-  it.effect("runs effectful transforms during every reload", () =>
+  it.effect("runs transforms during every reload", () =>
     Effect.gen(function* () {
       let value = "first"
       const state = State.create({
@@ -44,11 +44,9 @@ describe("State", () => {
         draft: (draft) => ({ add: (item: string) => draft.values.push(item) }),
       })
 
-      yield* state.transform((editor) =>
-        Effect.sync(() => {
-          editor.add(value)
-        }),
-      )
+      yield* state.transform((editor) => {
+        editor.add(value)
+      })
       expect(state.get().values).toEqual(["first"])
 
       value = "second"

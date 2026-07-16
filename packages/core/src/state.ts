@@ -6,9 +6,9 @@ import { Clock, Context, Deferred, Effect, Scope, Semaphore } from "effect"
  * A replayable transform applied to a draft during reload.
  *
  * Domain drafts expose readable and writable state while preserving concise
- * plugin/config code. Transforms may perform Effects before returning.
+ * plugin/config code. Transforms synchronously rebuild derived state.
  */
-type TransformCallback<DraftApi> = (draft: DraftApi) => Effect.Effect<void> | void
+type TransformCallback<DraftApi> = (draft: DraftApi) => void
 export type MakeDraft<State, DraftApi> = (state: State) => DraftApi
 
 export interface Registration {
@@ -87,9 +87,8 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
   })
 
   const apply = (transform: TransformCallback<DraftApi>, draft: DraftApi) =>
-    Effect.suspend(() => {
-      const result = transform(draft)
-      return Effect.isEffect(result) ? Effect.asVoid(result).pipe(Effect.orDie) : Effect.void
+    Effect.sync(() => {
+      transform(draft)
     })
 
   const materialize = Effect.fnUntraced(function* () {
