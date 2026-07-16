@@ -641,6 +641,42 @@ test("direct subagent panel renders active subagents", async () => {
   }
 })
 
+test("direct subagent panel closes when moving up from the first item", async () => {
+  const [tabs] = createSignal([
+    subagent({ sessionID: "s-1", label: "Explore", description: "Inspect auth flow" }),
+    subagent({ sessionID: "s-2", label: "General", description: "Write migration plan" }),
+  ])
+  const [current] = createSignal<string | undefined>()
+  let closed = 0
+
+  const app = await testRender(
+    () => (
+      <box width={100} height={RUN_SUBAGENT_PANEL_ROWS}>
+        <RunSubagentSelectBody
+          theme={() => RUN_THEME_FALLBACK.footer}
+          tabs={tabs}
+          current={current}
+          onClose={() => closed++}
+          onSelect={() => {}}
+        />
+      </box>
+    ),
+    { width: 100, height: RUN_SUBAGENT_PANEL_ROWS },
+  )
+
+  try {
+    await app.renderOnce()
+    app.mockInput.pressKey("ARROW_DOWN")
+    app.mockInput.pressKey("ARROW_UP")
+    expect(closed).toBe(0)
+
+    app.mockInput.pressKey("ARROW_UP")
+    expect(closed).toBe(1)
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
 test("direct queued prompt panel renders pending prompt actions", async () => {
   const [prompts] = createSignal([
     { messageID: "m-1", partID: "p-1", prompt: { text: "fix the auth test", parts: [] } },
@@ -1087,7 +1123,7 @@ test("direct footer always offers backgrounding for a foreground subagent", asyn
     const frame = app.captureCharFrame()
 
     expect(frame).toContain("GPT-5")
-    expect(frame).toContain("xhigh · ctrl+b background · ctrl+x down subagents · ctrl+p cmd")
+    expect(frame).toContain("xhigh · ctrl+b background · ↓ subagents · ctrl+p cmd")
     expect(frame).toContain("ctrl+b background")
     expect(frame).not.toContain("queued")
   } finally {
