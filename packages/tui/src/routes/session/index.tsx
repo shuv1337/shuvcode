@@ -71,14 +71,10 @@ import { usePluginRuntime } from "../../plugin/runtime"
 import { OPENCODE_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
 import { useLocation } from "../../context/location"
-import { createSessionRows, messageBoundaryIDs, resolvePart, type PartRef, type SessionRow } from "./rows"
+import { createSessionRows, resolvePart, type PartRef, type SessionRow } from "./rows"
 import { switchLabel } from "../../util/model"
-import { findMessageBoundary, messageNavigationSlack } from "./message-navigation"
 
 addDefaultParsers(parsers.parsers)
-
-// Exclude temporary bottom space when measuring the real transcript height.
-const NAVIGATION_SLACK_ID = "session-navigation-slack"
 
 const context = createContext<{
   width: number
@@ -184,23 +180,6 @@ export function Session() {
   const client = useClient()
   const editor = useEditorContext()
   const rows = createSessionRows(() => route.sessionID)
-  const boundaries = createMemo(() => messageBoundaryIDs(rows, messages()))
-  const [navigationMessage, setNavigationMessage] = createSignal<string>()
-  const [navigationSlack, setNavigationSlack] = createSignal(0)
-
-  const clearMessageNavigation = () => {
-    setNavigationSlack(0)
-    setNavigationMessage(undefined)
-  }
-
-  createEffect(
-    on(
-      () => [dimensions().width, dimensions().height] as const,
-      (_, previous) => {
-        if (previous) clearMessageNavigation()
-      },
-    ),
-  )
 
   createEffect(
     on([descendantSessionIDs, () => client.connection.status()], ([sessionIDs, status]) => {
@@ -260,55 +239,53 @@ export function Session() {
     dialog.clear()
   }
 
-  const alignMessage = (messageID: string, top: number) => {
-    scroll.stickyScroll = false
-    setNavigationMessage(messageID)
-    setNavigationSlack(
-      messageNavigationSlack({
-        top,
-        viewportHeight: scroll.viewport.height,
-        scrollHeight: scroll.scrollHeight,
-        currentSlack: scroll.getRenderable(NAVIGATION_SLACK_ID)?.height ?? 0,
-      }),
-    )
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scroll.isDestroyed || navigationMessage() !== messageID) return
-        scroll.scrollTo(top)
+  // Helper: Find next visible message boundary in direction
+  const findNextVisibleMessage = (direction: "next" | "prev"): string | null => {
+    const children = scroll.getChildren()
+    const messagesList = messages()
+    const scrollTop = scroll.y
+
+    // Get visible messages sorted by position, filtering for valid non-synthetic, non-ignored content
+    const visibleMessages = children
+      .filter((c) => {
+        if (!c.id) return false
+        const message = messagesList.find((m) => m.id === c.id)
+        if (!message) return false
+
+        if (message.type === "user") return Boolean(message.text.trim())
+        return (
+          message.type === "assistant" &&
+          message.content.some((content) => content.type === "text" && content.text.trim())
+        )
       })
-    })
+      .sort((a, b) => a.y - b.y)
+
+    if (visibleMessages.length === 0) return null
+
+    if (direction === "next") {
+      // Find first message below current position
+      return visibleMessages.find((c) => c.y > scrollTop + 10)?.id ?? null
+    }
+    // Find last message above current position
+    return [...visibleMessages].reverse().find((c) => c.y < scrollTop - 10)?.id ?? null
   }
 
-  const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>, userOnly = false) => {
-    const target = findMessageBoundary({
-      direction,
-      children: scroll.getChildren(),
-      messages: messages(),
-      scrollTop: scroll.scrollTop,
-      viewportY: scroll.viewport.y,
-      currentID: navigationMessage(),
-      userOnly,
-    })
+  // Helper: Scroll to message in direction or fallback to page scroll
+  const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
+    const targetID = findNextVisibleMessage(direction)
 
-    if (!target) {
+    if (!targetID) {
+      scroll.scrollBy(direction === "next" ? scroll.height : -scroll.height)
       dialog.clear()
       return
     }
 
-    alignMessage(target.id, target.top)
+    const child = scroll.getChildren().find((c) => c.id === targetID)
+    if (child) scroll.scrollBy(child.y - scroll.y - 1)
     dialog.clear()
   }
 
-  const jumpToMessage = (messageID: string) => {
-    const child = scroll.getRenderable(messageID)
-    if (!child) return
-    const y = scroll.scrollTop + child.y - scroll.viewport.y
-    const message = data.session.message.get(route.sessionID, messageID)
-    alignMessage(messageID, Math.max(0, y - (message?.type === "assistant" ? 1 : 0)))
-  }
-
   function toBottom() {
-    clearMessageNavigation()
     setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
@@ -322,7 +299,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 2)
         dialog.clear()
       },
@@ -333,7 +309,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(scroll.height / 2)
         dialog.clear()
       },
@@ -344,7 +319,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(-1)
         dialog.clear()
       },
@@ -355,7 +329,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(1)
         dialog.clear()
       },
@@ -366,7 +339,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 4)
         dialog.clear()
       },
@@ -377,7 +349,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollBy(scroll.height / 4)
         dialog.clear()
       },
@@ -391,7 +362,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollTo(0)
         dialog.clear()
       },
@@ -402,7 +372,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => {
-        clearMessageNavigation()
         scroll.scrollTo(scroll.scrollHeight)
         dialog.clear()
       },
@@ -443,7 +412,8 @@ export function Session() {
             sessionID={route.sessionID}
             onMove={(messageID) => {
               if (!messageID) return
-              jumpToMessage(messageID)
+              const child = scroll.getChildren().find((child) => child.id === messageID)
+              if (child) scroll.scrollBy(child.y - scroll.y - 1)
             }}
           />
         ))
@@ -604,7 +574,10 @@ export function Session() {
           const message = messages[i]
           if (!message || message.type !== "user" || !message.text.trim()) continue
           {
-            jumpToMessage(message.id)
+            const child = scroll.getChildren().find((child) => {
+              return child.id === message.id
+            })
+            if (child) scroll.scrollBy(child.y - scroll.y - 1)
             break
           }
         }
@@ -623,20 +596,6 @@ export function Session() {
       category: "Session",
       hidden: true,
       run: () => scrollToMessage("prev", dialog),
-    },
-    {
-      title: "Next user message",
-      name: "session.message.user.next",
-      category: "Session",
-      hidden: true,
-      run: () => scrollToMessage("next", dialog, true),
-    },
-    {
-      title: "Previous user message",
-      name: "session.message.user.previous",
-      category: "Session",
-      hidden: true,
-      run: () => scrollToMessage("prev", dialog, true),
     },
     {
       title: "Copy last assistant message",
@@ -851,10 +810,7 @@ export function Session() {
   createEffect(
     on(
       () => route.sessionID,
-      () => {
-        setComposer("open", false)
-        clearMessageNavigation()
-      },
+      () => setComposer("open", false),
     ),
   )
 
@@ -890,17 +846,16 @@ export function Session() {
                   foregroundColor: themeV2.border(),
                 },
               }}
-              stickyScroll={!navigationMessage()}
+              stickyScroll={true}
               stickyStart="bottom"
               flexGrow={1}
               scrollAcceleration={scrollAcceleration()}
             >
               <For each={rows}>
-                {(row, index) => (
+                {(row) => (
                   <SessionRowView
                     row={row}
                     message={(messageID) => data.session.message.get(route.sessionID, messageID)}
-                    boundaryID={boundaries()[index()]}
                   />
                 )}
               </For>
@@ -914,9 +869,6 @@ export function Session() {
                   }
                   files={session()!.revert!.files ?? []}
                 />
-              </Show>
-              <Show when={navigationSlack()}>
-                {(height) => <box id={NAVIGATION_SLACK_ID} height={height()} flexShrink={0} />}
               </Show>
             </scrollbox>
             <box flexShrink={0}>
@@ -990,13 +942,9 @@ export function Session() {
   )
 }
 
-function SessionRowView(props: {
-  row: SessionRow
-  message: (messageID: string) => SessionMessageInfo | undefined
-  boundaryID?: string
-}) {
+function SessionRowView(props: { row: SessionRow; message: (messageID: string) => SessionMessageInfo | undefined }) {
   return (
-    <box id={props.boundaryID} marginTop={1} flexShrink={0}>
+    <box marginTop={1} flexShrink={0}>
       <Switch>
         <Match when={props.row.type === "message" ? props.row : undefined}>
           {(row) => (
@@ -1615,6 +1563,7 @@ function UserMessage(props: { message: SessionMessageUser }) {
   return (
     <Show when={props.message.text.trim() || files().length}>
       <box
+        id={props.message.id}
         border={["left"]}
         borderColor={queued() ? themeV2.border() : color()}
         customBorderChars={SplitBorder.customBorderChars}

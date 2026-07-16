@@ -1,20 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client"
-import { messageBoundaryIDs, reduceSessionRows } from "../../../src/routes/session/rows"
-
-test("assigns assistant boundaries to the first rendered row instead of the first text row", () => {
-  const messages: SessionMessageInfo[] = [
-    { type: "user", id: "user-1", text: "Question", time: { created: 0 } },
-    assistant("assistant-1", [
-      { type: "reasoning", text: "Thinking" },
-      { type: "text", text: "First" },
-      { type: "text", text: "Second" },
-    ]),
-  ]
-  const rows = reduceSessionRows(messages)
-
-  expect(messageBoundaryIDs(rows, messages)).toEqual(["user-1", "assistant-1", undefined, undefined])
-})
+import { reduceSessionRows } from "../../../src/routes/session/rows"
 
 test("groups exploration parts across assistant messages until a delimiter", () => {
   const messages: SessionMessageInfo[] = [
