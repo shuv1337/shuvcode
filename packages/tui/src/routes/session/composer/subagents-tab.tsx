@@ -1,6 +1,6 @@
 import { createMemo, For, Show, createEffect, onMount, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { TextAttributes, RGBA, ScrollBoxRenderable } from "@opentui/core"
+import { TextAttributes, ScrollBoxRenderable } from "@opentui/core"
 import { useRoute, useRouteData } from "../../../context/route"
 import { useData } from "../../../context/data"
 import { useClient } from "../../../context/client"
@@ -216,7 +216,7 @@ export function SubagentsTab(props: { sessionID: string }) {
                   flexDirection="row"
                   paddingLeft={1}
                   paddingRight={1}
-                  backgroundColor={themeV2.background.action.primary(active() ? "focused" : "default")}
+                  backgroundColor={themeV2.background.action.primary({ focused: active(), selected: entry.current })}
                   onMouseOver={() => setStore("selected", index())}
                   onMouseUp={() => {
                     setStore("selected", index())
@@ -225,9 +225,7 @@ export function SubagentsTab(props: { sessionID: string }) {
                 >
                   <box flexGrow={1} minWidth={0} flexDirection="row">
                     <text
-                      fg={themeV2.text.action.primary(
-                        active() ? "focused" : entry.current ? "selected" : "default",
-                      )}
+                      fg={themeV2.text.action.primary({ focused: active(), selected: entry.current })}
                       attributes={active() ? TextAttributes.BOLD : undefined}
                       wrapMode="none"
                     >
@@ -235,7 +233,14 @@ export function SubagentsTab(props: { sessionID: string }) {
                     </text>
                   </box>
                   <Show when={status()}>
-                    <text fg={active() ? themeV2.text.action.primary() : themeV2.text.subdued()} wrapMode="none">
+                    <text
+                      fg={
+                        active()
+                          ? themeV2.text.action.primary({ focused: active(), selected: entry.current })
+                          : themeV2.text.subdued()
+                      }
+                      wrapMode="none"
+                    >
                       {status()}
                     </text>
                   </Show>
