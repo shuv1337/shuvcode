@@ -33,6 +33,7 @@ import { LocationServiceMap } from "./location-service-map"
 import { MessageDecodeError } from "./session/error"
 import { SessionEvent } from "./session/event"
 import { SessionPending } from "./session/pending"
+import { SessionGenerate } from "./session/generate"
 import { Snapshot } from "./snapshot"
 import { SessionRevert } from "./session/revert"
 import { Session } from "@opencode-ai/schema/session"
@@ -176,6 +177,7 @@ export type Error =
   | CommandV2.NotFoundError
   | CommandV2.EvaluationError
   | MessageNotFoundError
+  | SessionGenerate.Error
 
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<{
@@ -244,6 +246,11 @@ export interface Interface {
     delivery?: SessionPending.Delivery
     resume?: boolean
   }) => Effect.Effect<SessionPending.User, NotFoundError | PromptConflictError | AttachmentError>
+  /** Generates text from current Session context without admitting input or mutating history. */
+  readonly generate: (input: {
+    sessionID: SessionSchema.ID
+    prompt: string
+  }) => Effect.Effect<string, NotFoundError | SessionGenerate.Error>
   readonly command: (input: {
     id?: SessionMessage.ID
     sessionID: SessionSchema.ID
@@ -569,6 +576,11 @@ const layer = Layer.effect(
           }),
         ),
       ),
+      generate: Effect.fn("V2Session.generate")(function* (input) {
+        const session = yield* result.get(input.sessionID)
+        const generate = yield* SessionGenerate.Service.pipe(Effect.provide(locations.get(session.location)))
+        return yield* generate.generate(input)
+      }),
       command: Effect.fn("V2Session.command")(function* (input) {
         const session = yield* result.get(input.sessionID)
         const commands = yield* CommandV2.Service.pipe(Effect.provide(locations.get(session.location)))
