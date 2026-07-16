@@ -104,11 +104,7 @@ serviceIt.live("refreshes changed manifests", () =>
         const wellknown = yield* WellKnown.Service
         const events = yield* EventV2.Service
         yield* wellknown.add(server.url.origin)
-        const refreshed = yield* events
-          .subscribe(WellKnown.Event.Updated)
-          .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
         expect(yield* wellknown.refresh()).toBe(false)
-        expect(yield* Fiber.join(refreshed)).toHaveLength(1)
 
         const changed = yield* events
           .subscribe(WellKnown.Event.Updated)

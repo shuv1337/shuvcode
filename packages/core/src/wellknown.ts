@@ -137,22 +137,13 @@ const layer = Layer.effect(
           )
           const next = new Map(entries.map((entry) => [entry.origin, entry]))
           const changed = !isDeepStrictEqual(Ref.getUnsafe(cache), next)
-          if (changed) yield* Ref.set(cache, next)
+          if (!changed) return false
+          yield* Ref.set(cache, next)
           yield* events.publish(Event.Updated, {})
-          return changed
+          return true
         }),
       )
     })
-
-    yield* Effect.sleep("10 minutes").pipe(
-      Effect.andThen(
-        refresh().pipe(
-          Effect.catch((error) => Effect.logWarning("failed to refresh wellknown manifests", { error })),
-        ),
-      ),
-      Effect.forever,
-      Effect.forkScoped({ startImmediately: true }),
-    )
 
     return Service.of({
       entries: load,

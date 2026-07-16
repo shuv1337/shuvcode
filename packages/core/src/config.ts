@@ -367,6 +367,23 @@ const layer = Layer.effect(
       ),
       Effect.forkScoped({ startImmediately: true }),
     )
+    yield* Effect.sleep("10 minutes").pipe(
+      Effect.andThen(
+        Effect.suspend(() => {
+          if (!wellknown.snapshot().length) return Effect.void
+          return Effect.gen(function* () {
+            const changed = yield* wellknown.refresh().pipe(
+              Effect.catch((error) =>
+                Effect.logWarning("failed to refresh wellknown manifests", { error }).pipe(Effect.as(false)),
+              ),
+            )
+            if (!changed) yield* reload()
+          }).pipe(Effect.catchCause((cause) => Effect.logWarning("failed to refresh wellknown config", { cause })))
+        }),
+      ),
+      Effect.forever,
+      Effect.forkScoped({ startImmediately: true }),
+    )
     yield* reconcile(initial)
 
     return Service.of({
