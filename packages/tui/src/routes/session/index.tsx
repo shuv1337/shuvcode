@@ -2279,7 +2279,7 @@ function BlockTool(props: {
       paddingLeft={2}
       gap={1}
       backgroundColor={
-        hover() ? themeV2.background.action.secondary() : themeV2.background()
+        hover() ? themeV2.background.action.secondary("focused") : themeV2.background()
       }
       customBorderChars={SplitBorder.customBorderChars}
       borderColor={themeV2.background()}
