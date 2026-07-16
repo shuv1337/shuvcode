@@ -1279,6 +1279,7 @@ export class Interpreter<R> {
   private evaluateUnaryExpression(node: AstNode): Effect.Effect<unknown, unknown, R> {
     const operator = getString(node, "operator")
     const argument = getNode(node, "argument")
+    if (operator === "delete") return this.evaluateDeleteExpression(argument)
     // Undeclared names short-circuit, but declared TDZ bindings must still throw.
     if (operator === "typeof" && argument.type === "Identifier" && !this.scopes.resolve(getString(argument, "name"))) {
       return Effect.succeed("undefined")
@@ -1730,6 +1731,7 @@ export class Interpreter<R> {
 
   private getMemberReference(
     node: AstNode,
+    operation: "read" | "delete" = "read",
   ): Effect.Effect<
     | MemberReference
     | ToolReference
@@ -1876,6 +1878,7 @@ export class Interpreter<R> {
       }
 
       if (Array.isArray(objectValue)) {
+        if (operation === "delete") return { target: objectValue, key }
         if (
           key !== "length" &&
           !(typeof key === "string" && arrayMethods.has(key)) &&
@@ -1922,6 +1925,29 @@ export class Interpreter<R> {
 
   private writeMember(node: AstNode, value: unknown): Effect.Effect<unknown, unknown, R> {
     return this.modifyMember(node, () => Effect.succeed({ write: true, next: value, result: value }))
+  }
+
+  private evaluateDeleteExpression(argument: AstNode): Effect.Effect<boolean, unknown, R> {
+    const target = argument.type === "ChainExpression" ? getNode(argument, "expression") : argument
+    if (target.type !== "MemberExpression") {
+      throw new InterpreterRuntimeError("Only data fields may be deleted in CodeMode.", argument)
+    }
+    return Effect.map(this.getMemberReference(target, "delete"), (reference) => {
+      if (reference === OptionalShortCircuit) return true
+      if (
+        reference instanceof ComputedValue ||
+        reference === undefined ||
+        reference instanceof ToolReference ||
+        reference instanceof PromiseMethodReference ||
+        reference instanceof PromiseInstanceMethodReference ||
+        reference instanceof IntrinsicReference ||
+        reference instanceof GlobalMethodReference ||
+        reference.target instanceof CodeModeURL
+      ) {
+        throw new InterpreterRuntimeError("Only data fields may be deleted in CodeMode.", target, "InvalidDataValue")
+      }
+      return Reflect.deleteProperty(reference.target, reference.key)
+    })
   }
 
   // Resolve side-effecting object and key expressions exactly once.
