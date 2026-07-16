@@ -4,6 +4,7 @@ import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
 import { InvalidRequestError } from "@opencode-ai/protocol/errors"
 import { response } from "../location"
+import { WellKnown } from "@opencode-ai/core/wellknown"
 
 const authorize = <A, R>(effect: Effect.Effect<A, Integration.AuthorizationError, R>) =>
   effect.pipe(
@@ -31,6 +32,22 @@ export const IntegrationHandler = HttpApiBuilder.group(Api, "server.integration"
         Effect.fn(function* (ctx) {
           const service = yield* Integration.Service
           return yield* response(service.get(ctx.params.integrationID))
+        }),
+      )
+      .handle(
+        "integration.wellknown.add",
+        Effect.fn(function* (ctx) {
+          const wellknown = yield* WellKnown.Service
+          const integration = yield* Integration.Service
+          yield* wellknown
+            .add(ctx.payload.url)
+            .pipe(
+              Effect.mapError(
+                (error) => new InvalidRequestError({ message: error.message, kind: "well_known_discovery" }),
+              ),
+            )
+          yield* integration.reload()
+          return HttpApiSchema.NoContent.make()
         }),
       )
       .handle(

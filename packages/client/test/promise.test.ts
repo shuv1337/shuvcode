@@ -36,7 +36,8 @@ test("exposes every standard HTTP API group", () => {
   expect(Object.keys(client.debug)).toEqual(["location"])
   expect(Object.keys(client.debug.location)).toEqual(["list", "evict"])
   expect(Object.keys(client.message)).toEqual(["list"])
-  expect(Object.keys(client.integration)).toEqual(["list", "get", "connect", "oauth", "command"])
+  expect(Object.keys(client.integration)).toEqual(["list", "get", "wellknown", "connect", "oauth", "command"])
+  expect(Object.keys(client.integration.wellknown)).toEqual(["add"])
   expect(Object.keys(client.integration.connect)).toEqual(["key"])
   expect(Object.keys(client.integration.oauth)).toEqual(["connect", "status", "complete", "cancel"])
   expect(Object.keys(client.integration.command)).toEqual(["connect", "status", "cancel"])
@@ -60,6 +61,28 @@ test("server.get uses the public HTTP contract", async () => {
   expect(await client.server.get()).toEqual({ urls: ["http://192.168.1.10:4096"] })
   expect(request?.method).toBe("GET")
   expect(request?.url).toBe("http://localhost:3000/api/server")
+})
+
+test("experimental wellknown integration add uses the public HTTP contract", async () => {
+  let request: Request | undefined
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input, init) => {
+      request = input instanceof Request ? input : new Request(input, init)
+      return new Response(null, { status: 204 })
+    },
+  })
+
+  await client.integration.wellknown.add({
+    url: "https://example.com",
+    location: { directory: "/tmp/project" },
+  })
+
+  expect(request?.method).toBe("POST")
+  expect(request?.url).toBe(
+    "http://localhost:3000/api/experimental/integration/wellknown?location%5Bdirectory%5D=%2Ftmp%2Fproject",
+  )
+  expect(await request?.json()).toEqual({ url: "https://example.com" })
 })
 
 test("health.stop sends exact replacement identity", async () => {

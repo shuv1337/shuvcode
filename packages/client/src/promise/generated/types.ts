@@ -3304,6 +3304,15 @@ export type IntegrationGetOutput = {
   data: IntegrationInfo | null
 }
 
+export type IntegrationWellknownAddInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly url: { readonly url: string }["url"]
+}
+
+export type IntegrationWellknownAddOutput = void
+
 export type IntegrationConnectKeyInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
   readonly location?: {

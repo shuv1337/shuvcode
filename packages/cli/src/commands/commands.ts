@@ -66,6 +66,17 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         }),
       ],
     }),
+    Spec.make("auth", {
+      description: "Manage authentication",
+      commands: [
+        Spec.make("connect", {
+          description: "Connect to a wellknown authentication provider",
+          params: {
+            url: Argument.string("url").pipe(Argument.withDescription("Wellknown provider URL")),
+          },
+        }),
+      ],
+    }),
     Spec.make("mcp", {
       description: "Manage MCP (Model Context Protocol) servers",
       commands: [
@@ -178,10 +189,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.atMost(100),
         ),
         title: Flag.string("title").pipe(Flag.withDescription("Session title"), Flag.optional),
-        thinking: Flag.boolean("thinking").pipe(
-          Flag.withDescription("Show thinking blocks"),
-          Flag.withDefault(false),
-        ),
+        thinking: Flag.boolean("thinking").pipe(Flag.withDescription("Show thinking blocks"), Flag.withDefault(false)),
         auto: Flag.boolean("auto").pipe(
           Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
           Flag.withDefault(false),

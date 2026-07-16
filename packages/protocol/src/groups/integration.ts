@@ -38,6 +38,22 @@ export const IntegrationGroup = HttpApiGroup.make("server.integration")
       ),
   )
   .add(
+    HttpApiEndpoint.post("integration.wellknown.add", "/api/experimental/integration/wellknown", {
+      query: LocationQuery,
+      payload: Schema.Struct({ url: Schema.String }),
+      success: HttpApiSchema.NoContent,
+      error: InvalidRequestError,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.experimental.integration.wellknown.add",
+          summary: "Add wellknown integration",
+          description: "Discover and persist an experimental wellknown integration source.",
+        }),
+      ),
+  )
+  .add(
     HttpApiEndpoint.post("integration.connect.key", "/api/integration/:integrationID/connect/key", {
       params: { integrationID: Integration.ID },
       query: LocationQuery,

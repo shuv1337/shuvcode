@@ -8,7 +8,9 @@ import { ConfigModel } from "@opencode-ai/core/config/model"
 import { Config as ConfigSchema } from "@opencode-ai/schema/config"
 import { ConfigProvider } from "@opencode-ai/core/config/provider"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { Credential } from "@opencode-ai/core/credential"
 import { ConfigMigrateV1 } from "@opencode-ai/core/v1/config/migrate"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -19,6 +21,8 @@ import { Location } from "@opencode-ai/core/location"
 import { Project } from "@opencode-ai/core/project"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { WellKnown } from "@opencode-ai/core/wellknown"
+import { Integration } from "@opencode-ai/schema/integration"
 import { location } from "../fixture/location"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
@@ -26,12 +30,46 @@ import { testEffect } from "../lib/effect"
 const it = testEffect(Layer.empty)
 const selection = Schema.decodeUnknownSync(ConfigModel.Selection)
 
+const emptyCredentialNode = makeGlobalNode({
+  service: Credential.Service,
+  layer: Layer.succeed(
+    Credential.Service,
+    Credential.Service.of({
+      all: () => Effect.succeed([]),
+      list: () => Effect.succeed([]),
+      get: () => Effect.succeed(undefined),
+      create: () => Effect.die("unused Credential.create"),
+      update: () => Effect.die("unused Credential.update"),
+      remove: () => Effect.die("unused Credential.remove"),
+    }),
+  ),
+  deps: [],
+})
+
+const emptyWellknownNode = makeGlobalNode({
+  service: WellKnown.Service,
+  layer: Layer.succeed(
+    WellKnown.Service,
+    WellKnown.Service.of({
+      entries: () => Effect.succeed([]),
+      snapshot: () => [],
+      add: () => Effect.die("unused Wellknown.add"),
+      remove: () => Effect.die("unused Wellknown.remove"),
+      changes: Stream.empty,
+      resolve: () => Effect.die("unused Wellknown.resolve"),
+    }),
+  ),
+  deps: [],
+})
+
 function testLayer(
   directory: string,
   globalDirectory = path.join(directory, "global"),
   projectDirectory = directory,
   vcs?: Project.Vcs,
   watcher?: Layer.Layer<Watcher.Service>,
+  credentialNode = emptyCredentialNode,
+  wellknownNode = emptyWellknownNode,
 ) {
   const locationLayer = Layer.succeed(
     Location.Service,
@@ -45,6 +83,8 @@ function testLayer(
   return AppNodeBuilder.build(LayerNode.group([Config.node, EventV2.node]), [
     [Location.node, locationLayer],
     [Global.node, Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })],
+    [Credential.node, credentialNode],
+    [WellKnown.node, wellknownNode],
     ...(watcher ? ([[Watcher.node, watcher]] as const) : []),
   ])
 }
@@ -123,6 +163,86 @@ describe("Config", () => {
       expect(Config.latest(entries, "model")).toEqual(selection("openrouter/openai/gpt-5.5"))
       expect(Config.latest(entries, "default_agent")).toBeUndefined()
     }),
+  )
+
+  it.live("loads authenticated wellknown config at highest priority", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) =>
+        Effect.gen(function* () {
+          const global = path.join(tmp.path, "global")
+          const project = path.join(tmp.path, "project")
+          yield* Effect.promise(async () => {
+            await fs.mkdir(global, { recursive: true })
+            await fs.mkdir(project, { recursive: true })
+            await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
+            await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+          })
+
+          const integrationID = Integration.ID.make("https://example.com")
+          let key = "secret"
+          const credentialNode = makeGlobalNode({
+            service: Credential.Service,
+            layer: Layer.succeed(
+              Credential.Service,
+              Credential.Service.of({
+                all: () => Effect.die("unused Credential.all"),
+                list: () =>
+                  Effect.succeed([
+                    new Credential.Info({
+                      id: Credential.ID.create(),
+                      integrationID,
+                      label: "default",
+                      value: Credential.Key.make({ type: "key", key }),
+                    }),
+                  ]),
+                get: () => Effect.die("unused Credential.get"),
+                create: () => Effect.die("unused Credential.create"),
+                update: () => Effect.die("unused Credential.update"),
+                remove: () => Effect.die("unused Credential.remove"),
+              }),
+            ),
+            deps: [],
+          })
+          const entry: WellKnown.Entry = {
+            origin: "https://example.com",
+            integrationID,
+            manifest: { auth: { command: ["login"], env: "TOKEN" } },
+          }
+          const wellknownNode = makeGlobalNode({
+            service: WellKnown.Service,
+            layer: Layer.succeed(
+              WellKnown.Service,
+              WellKnown.Service.of({
+                entries: () => Effect.succeed([entry]),
+                snapshot: () => [entry],
+                add: () => Effect.die("unused Wellknown.add"),
+                remove: () => Effect.die("unused Wellknown.remove"),
+                changes: Stream.empty,
+                resolve: (_entry, variables) => Effect.succeed([{ shell: variables.TOKEN }]),
+              }),
+            ),
+            deps: [],
+          })
+
+          return yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const events = yield* EventV2.Service
+            expect(Config.latest(yield* config.entries(), "shell")).toBe("secret")
+            const updated = yield* events
+              .subscribe(ConfigSchema.Event.Updated)
+              .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
+            yield* Effect.yieldNow
+            key = "next"
+            yield* events.publish(Integration.Event.ConnectionUpdated, { integrationID })
+            expect(yield* Fiber.join(updated)).toHaveLength(1)
+            expect(Config.latest(yield* config.entries(), "shell")).toBe("next")
+          }).pipe(
+            Effect.provide(testLayer(project, global, project, undefined, undefined, credentialNode, wellknownNode)),
+          )
+        }),
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+    ),
   )
 
   it.effect("detects v1 configuration from any v1-only top-level key", () =>
@@ -282,9 +402,7 @@ describe("Config", () => {
             const config = yield* Config.Service
             yield* config.entries()
 
-            expect(targets).toEqual([
-              { type: "directory", path: AbsolutePath.make(path.join(tmp.path, "global")) },
-            ])
+            expect(targets).toEqual([{ type: "directory", path: AbsolutePath.make(path.join(tmp.path, "global")) }])
           }).pipe(Effect.provide(testLayer(tmp.path, undefined, undefined, undefined, watcher)))
         }),
       ),

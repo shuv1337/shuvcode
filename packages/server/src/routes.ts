@@ -16,6 +16,7 @@ import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { WellKnown } from "@opencode-ai/core/wellknown"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Context, Effect, Layer, Option } from "effect"
@@ -44,6 +45,7 @@ const applicationServices = LayerNode.group([
   PermissionSaved.node,
   PtyTicket.node,
   Credential.node,
+  WellKnown.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
   SessionRestart.node,
@@ -85,7 +87,7 @@ function makeRoutes<AuthError, AuthServices>(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
-        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service)(context)),
+        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context)),
         ServerInfo.layer(serviceURLs),
       )
       return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
@@ -109,5 +111,4 @@ function simulateEnabled() {
   return !!process.env.OPENCODE_SIMULATE
 }
 
-export const webHandler = () =>
-  HttpRouter.toWebHandler(createRoutes().pipe(Layer.provide(HttpServer.layerServices)))
+export const webHandler = () => HttpRouter.toWebHandler(createRoutes().pipe(Layer.provide(HttpServer.layerServices)))

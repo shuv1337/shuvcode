@@ -16859,6 +16859,44 @@ export type V2IntegrationGetResponses = {
 
 export type V2IntegrationGetResponse = V2IntegrationGetResponses[keyof V2IntegrationGetResponses]
 
+export type V2ExperimentalIntegrationWellknownAddData = {
+  body: {
+    url: string
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string | null
+      workspace?: string | null
+    } | null
+  }
+  url: "/api/experimental/integration/wellknown"
+}
+
+export type V2ExperimentalIntegrationWellknownAddErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError1 | InvalidRequestErrorV2
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2ExperimentalIntegrationWellknownAddError =
+  V2ExperimentalIntegrationWellknownAddErrors[keyof V2ExperimentalIntegrationWellknownAddErrors]
+
+export type V2ExperimentalIntegrationWellknownAddResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2ExperimentalIntegrationWellknownAddResponse =
+  V2ExperimentalIntegrationWellknownAddResponses[keyof V2ExperimentalIntegrationWellknownAddResponses]
+
 export type V2IntegrationConnectKeyData = {
   body: {
     key: string

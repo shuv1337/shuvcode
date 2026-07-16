@@ -181,7 +181,7 @@ describe("Integration", () => {
             command: [
               process.execPath,
               "-e",
-              'console.log("https://example.com/login"); await Bun.sleep(50); console.log("secret")',
+              'console.error("https://example.com/login"); await Bun.sleep(50); console.log("secret")',
             ],
           },
         }),
@@ -192,7 +192,7 @@ describe("Integration", () => {
         integrations.command.status({ integrationID, attemptID: attempt.attemptID }),
         (status) => status.status === "pending" && status.message?.includes("https://example.com/login") === true,
       )
-      expect(pending).toMatchObject({ status: "pending", message: "https://example.com/login" })
+      expect(pending).toMatchObject({ status: "pending", message: "https://example.com/login\n" })
 
       expect(
         yield* eventually(

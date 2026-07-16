@@ -82,6 +82,8 @@ import type {
   IntegrationListOutput,
   IntegrationGetInput,
   IntegrationGetOutput,
+  IntegrationWellknownAddInput,
+  IntegrationWellknownAddOutput,
   IntegrationConnectKeyInput,
   IntegrationConnectKeyOutput,
   IntegrationOauthConnectInput,
@@ -893,6 +895,21 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      wellknown: {
+        add: (input: IntegrationWellknownAddInput, requestOptions?: RequestOptions) =>
+          request<IntegrationWellknownAddOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/integration/wellknown`,
+              query: { location: input["location"] },
+              body: { url: input["url"] },
+              successStatus: 204,
+              declaredStatuses: [400, 401],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       connect: {
         key: (input: IntegrationConnectKeyInput, requestOptions?: RequestOptions) =>
           request<IntegrationConnectKeyOutput>(

@@ -5,7 +5,7 @@ import type { Transform } from "./registration.js"
 
 export type { IntegrationDraft, IntegrationMethodRegistration }
 
-export interface IntegrationDomain extends IntegrationApi {
+export interface IntegrationDomain extends Omit<IntegrationApi, "wellknown"> {
   readonly transform: Transform<IntegrationDraft>
   readonly reload: () => Promise<void>
   readonly connection: {

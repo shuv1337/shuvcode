@@ -185,6 +185,8 @@ function CommandStarting(props: {
   const dialog = useDialog()
   const client = useClient()
   const toast = useToast()
+  let closed = false
+  let handedOff = false
 
   onMount(() => {
     void client.api.integration.command
@@ -193,7 +195,16 @@ function CommandStarting(props: {
         methodID: props.method.id,
         location: location(data),
       })
-      .then((result) =>
+      .then((result) => {
+        if (closed) {
+          void client.api.integration.command.cancel({
+            integrationID: props.integration.id,
+            attemptID: result.data.attemptID,
+            location: location(data),
+          })
+          return
+        }
+        handedOff = true
         dialog.replace(() => (
           <CommandPending
             integration={props.integration}
@@ -201,12 +212,16 @@ function CommandStarting(props: {
             attempt={result.data}
             onConnected={props.onConnected}
           />
-        )),
-      )
+        ))
+      })
       .catch((cause) => {
+        if (closed) return
         toast.show({ variant: "error", message: message(cause) })
         dialog.clear()
       })
+  })
+  onCleanup(() => {
+    if (!handedOff) closed = true
   })
 
   return <CommandView title={props.method.label} output="" message="Starting command..." />
@@ -275,9 +290,10 @@ function CommandPending(props: {
 function CommandView(props: { title: string; output: string; message: string }) {
   const dialog = useDialog()
   const { theme } = useTheme()
+  onMount(() => dialog.setSize("large"))
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between">
+    <box gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
           {props.title}
         </text>
@@ -285,10 +301,12 @@ function CommandView(props: { title: string; output: string; message: string }) 
           esc close
         </text>
       </box>
-      <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-        <text fg={theme.text}>{props.output}</text>
+      <box backgroundColor={theme.backgroundElement} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
+        <text fg={theme.text}>{props.output.trim()}</text>
       </box>
-      <text fg={theme.textMuted}>{props.message}</text>
+      <box paddingLeft={2} paddingRight={2}>
+        <text fg={theme.textMuted}>{props.message}</text>
+      </box>
     </box>
   )
 }

@@ -504,106 +504,116 @@ const Endpoint10_1 = (raw: RawClient["server.integration"]) => (input: Endpoint1
     query: { location: input["location"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_2Request = Parameters<RawClient["server.integration"]["integration.connect.key"]>[0]
+type Endpoint10_2Request = Parameters<RawClient["server.integration"]["integration.wellknown.add"]>[0]
 type Endpoint10_2Input = {
-  readonly integrationID: Endpoint10_2Request["params"]["integrationID"]
   readonly location?: Endpoint10_2Request["query"]["location"]
-  readonly key: Endpoint10_2Request["payload"]["key"]
-  readonly label?: Endpoint10_2Request["payload"]["label"]
+  readonly url: Endpoint10_2Request["payload"]["url"]
 }
 const Endpoint10_2 = (raw: RawClient["server.integration"]) => (input: Endpoint10_2Input) =>
+  raw["integration.wellknown.add"]({ query: { location: input["location"] }, payload: { url: input["url"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type Endpoint10_3Request = Parameters<RawClient["server.integration"]["integration.connect.key"]>[0]
+type Endpoint10_3Input = {
+  readonly integrationID: Endpoint10_3Request["params"]["integrationID"]
+  readonly location?: Endpoint10_3Request["query"]["location"]
+  readonly key: Endpoint10_3Request["payload"]["key"]
+  readonly label?: Endpoint10_3Request["payload"]["label"]
+}
+const Endpoint10_3 = (raw: RawClient["server.integration"]) => (input: Endpoint10_3Input) =>
   raw["integration.connect.key"]({
     params: { integrationID: input["integrationID"] },
     query: { location: input["location"] },
     payload: { key: input["key"], label: input["label"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_3Request = Parameters<RawClient["server.integration"]["integration.oauth.connect"]>[0]
-type Endpoint10_3Input = {
-  readonly integrationID: Endpoint10_3Request["params"]["integrationID"]
-  readonly location?: Endpoint10_3Request["query"]["location"]
-  readonly methodID: Endpoint10_3Request["payload"]["methodID"]
-  readonly inputs: Endpoint10_3Request["payload"]["inputs"]
-  readonly label?: Endpoint10_3Request["payload"]["label"]
+type Endpoint10_4Request = Parameters<RawClient["server.integration"]["integration.oauth.connect"]>[0]
+type Endpoint10_4Input = {
+  readonly integrationID: Endpoint10_4Request["params"]["integrationID"]
+  readonly location?: Endpoint10_4Request["query"]["location"]
+  readonly methodID: Endpoint10_4Request["payload"]["methodID"]
+  readonly inputs: Endpoint10_4Request["payload"]["inputs"]
+  readonly label?: Endpoint10_4Request["payload"]["label"]
 }
-const Endpoint10_3 = (raw: RawClient["server.integration"]) => (input: Endpoint10_3Input) =>
+const Endpoint10_4 = (raw: RawClient["server.integration"]) => (input: Endpoint10_4Input) =>
   raw["integration.oauth.connect"]({
     params: { integrationID: input["integrationID"] },
     query: { location: input["location"] },
     payload: { methodID: input["methodID"], inputs: input["inputs"], label: input["label"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_4Request = Parameters<RawClient["server.integration"]["integration.oauth.status"]>[0]
-type Endpoint10_4Input = {
-  readonly integrationID: Endpoint10_4Request["params"]["integrationID"]
-  readonly attemptID: Endpoint10_4Request["params"]["attemptID"]
-  readonly location?: Endpoint10_4Request["query"]["location"]
+type Endpoint10_5Request = Parameters<RawClient["server.integration"]["integration.oauth.status"]>[0]
+type Endpoint10_5Input = {
+  readonly integrationID: Endpoint10_5Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_5Request["params"]["attemptID"]
+  readonly location?: Endpoint10_5Request["query"]["location"]
 }
-const Endpoint10_4 = (raw: RawClient["server.integration"]) => (input: Endpoint10_4Input) =>
+const Endpoint10_5 = (raw: RawClient["server.integration"]) => (input: Endpoint10_5Input) =>
   raw["integration.oauth.status"]({
     params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
     query: { location: input["location"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_5Request = Parameters<RawClient["server.integration"]["integration.oauth.complete"]>[0]
-type Endpoint10_5Input = {
-  readonly integrationID: Endpoint10_5Request["params"]["integrationID"]
-  readonly attemptID: Endpoint10_5Request["params"]["attemptID"]
-  readonly location?: Endpoint10_5Request["query"]["location"]
-  readonly code?: Endpoint10_5Request["payload"]["code"]
+type Endpoint10_6Request = Parameters<RawClient["server.integration"]["integration.oauth.complete"]>[0]
+type Endpoint10_6Input = {
+  readonly integrationID: Endpoint10_6Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_6Request["params"]["attemptID"]
+  readonly location?: Endpoint10_6Request["query"]["location"]
+  readonly code?: Endpoint10_6Request["payload"]["code"]
 }
-const Endpoint10_5 = (raw: RawClient["server.integration"]) => (input: Endpoint10_5Input) =>
+const Endpoint10_6 = (raw: RawClient["server.integration"]) => (input: Endpoint10_6Input) =>
   raw["integration.oauth.complete"]({
     params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
     query: { location: input["location"] },
     payload: { code: input["code"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_6Request = Parameters<RawClient["server.integration"]["integration.oauth.cancel"]>[0]
-type Endpoint10_6Input = {
-  readonly integrationID: Endpoint10_6Request["params"]["integrationID"]
-  readonly attemptID: Endpoint10_6Request["params"]["attemptID"]
-  readonly location?: Endpoint10_6Request["query"]["location"]
+type Endpoint10_7Request = Parameters<RawClient["server.integration"]["integration.oauth.cancel"]>[0]
+type Endpoint10_7Input = {
+  readonly integrationID: Endpoint10_7Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_7Request["params"]["attemptID"]
+  readonly location?: Endpoint10_7Request["query"]["location"]
 }
-const Endpoint10_6 = (raw: RawClient["server.integration"]) => (input: Endpoint10_6Input) =>
+const Endpoint10_7 = (raw: RawClient["server.integration"]) => (input: Endpoint10_7Input) =>
   raw["integration.oauth.cancel"]({
     params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
     query: { location: input["location"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_7Request = Parameters<RawClient["server.integration"]["integration.command.connect"]>[0]
-type Endpoint10_7Input = {
-  readonly integrationID: Endpoint10_7Request["params"]["integrationID"]
-  readonly location?: Endpoint10_7Request["query"]["location"]
-  readonly methodID: Endpoint10_7Request["payload"]["methodID"]
-  readonly label?: Endpoint10_7Request["payload"]["label"]
+type Endpoint10_8Request = Parameters<RawClient["server.integration"]["integration.command.connect"]>[0]
+type Endpoint10_8Input = {
+  readonly integrationID: Endpoint10_8Request["params"]["integrationID"]
+  readonly location?: Endpoint10_8Request["query"]["location"]
+  readonly methodID: Endpoint10_8Request["payload"]["methodID"]
+  readonly label?: Endpoint10_8Request["payload"]["label"]
 }
-const Endpoint10_7 = (raw: RawClient["server.integration"]) => (input: Endpoint10_7Input) =>
+const Endpoint10_8 = (raw: RawClient["server.integration"]) => (input: Endpoint10_8Input) =>
   raw["integration.command.connect"]({
     params: { integrationID: input["integrationID"] },
     query: { location: input["location"] },
     payload: { methodID: input["methodID"], label: input["label"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type Endpoint10_8Request = Parameters<RawClient["server.integration"]["integration.command.status"]>[0]
-type Endpoint10_8Input = {
-  readonly integrationID: Endpoint10_8Request["params"]["integrationID"]
-  readonly attemptID: Endpoint10_8Request["params"]["attemptID"]
-  readonly location?: Endpoint10_8Request["query"]["location"]
-}
-const Endpoint10_8 = (raw: RawClient["server.integration"]) => (input: Endpoint10_8Input) =>
-  raw["integration.command.status"]({
-    params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
-    query: { location: input["location"] },
-  }).pipe(Effect.mapError(mapClientError))
-
-type Endpoint10_9Request = Parameters<RawClient["server.integration"]["integration.command.cancel"]>[0]
+type Endpoint10_9Request = Parameters<RawClient["server.integration"]["integration.command.status"]>[0]
 type Endpoint10_9Input = {
   readonly integrationID: Endpoint10_9Request["params"]["integrationID"]
   readonly attemptID: Endpoint10_9Request["params"]["attemptID"]
   readonly location?: Endpoint10_9Request["query"]["location"]
 }
 const Endpoint10_9 = (raw: RawClient["server.integration"]) => (input: Endpoint10_9Input) =>
+  raw["integration.command.status"]({
+    params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
+    query: { location: input["location"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint10_10Request = Parameters<RawClient["server.integration"]["integration.command.cancel"]>[0]
+type Endpoint10_10Input = {
+  readonly integrationID: Endpoint10_10Request["params"]["integrationID"]
+  readonly attemptID: Endpoint10_10Request["params"]["attemptID"]
+  readonly location?: Endpoint10_10Request["query"]["location"]
+}
+const Endpoint10_10 = (raw: RawClient["server.integration"]) => (input: Endpoint10_10Input) =>
   raw["integration.command.cancel"]({
     params: { integrationID: input["integrationID"], attemptID: input["attemptID"] },
     query: { location: input["location"] },
@@ -612,14 +622,15 @@ const Endpoint10_9 = (raw: RawClient["server.integration"]) => (input: Endpoint1
 const adaptGroup10 = (raw: RawClient["server.integration"]) => ({
   list: Endpoint10_0(raw),
   get: Endpoint10_1(raw),
-  connect: { key: Endpoint10_2(raw) },
+  wellknown: { add: Endpoint10_2(raw) },
+  connect: { key: Endpoint10_3(raw) },
   oauth: {
-    connect: Endpoint10_3(raw),
-    status: Endpoint10_4(raw),
-    complete: Endpoint10_5(raw),
-    cancel: Endpoint10_6(raw),
+    connect: Endpoint10_4(raw),
+    status: Endpoint10_5(raw),
+    complete: Endpoint10_6(raw),
+    cancel: Endpoint10_7(raw),
   },
-  command: { connect: Endpoint10_7(raw), status: Endpoint10_8(raw), cancel: Endpoint10_9(raw) },
+  command: { connect: Endpoint10_8(raw), status: Endpoint10_9(raw), cancel: Endpoint10_10(raw) },
 })
 
 type Endpoint11_0Request = Parameters<RawClient["server.mcp"]["mcp.list"]>[0]

@@ -8,6 +8,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Fiber,
   Layer,
   Schedule,
   Schema,
@@ -617,34 +618,40 @@ const layer = Layer.effect(
         }),
       )
 
-      yield* processes
-        .runStream(
+      yield* Effect.gen(function* () {
+        const handle = yield* processes.spawn(
           ChildProcess.make(method.command[0], method.command.slice(1), {
             extendEnv: true,
             stdin: "ignore",
           }),
-          { okExitCodes: [0] },
         )
-        .pipe(
-          Stream.tap((line) =>
+        const stdout = yield* AppProcess.collectStream(handle.stdout, undefined).pipe(Effect.forkScoped)
+        yield* handle.stderr.pipe(
+          Stream.decodeText,
+          Stream.tap((chunk) =>
             SynchronizedRef.update(commandAttempts, (current) => {
               const attempt = current.get(attemptID)
               if (!attempt || attempt.status !== "pending") return current
-              const message = attempt.message ? `${attempt.message}\n${line}` : line
+              const message = (attempt.message ?? "") + chunk
               return new Map(current).set(attemptID, { ...attempt, message })
             }),
           ),
-          Stream.runCollect,
-          Effect.flatMap((lines) => {
-            const credential = Array.from(lines).at(-1)
-            return credential
-              ? Effect.succeed(credential)
-              : Effect.fail(new Error("Authentication command returned no credential"))
-          }),
-          Effect.exit,
-          Effect.flatMap((exit) => settleCommand(attemptID, exit)),
-          Effect.forkIn(attemptScope, { startImmediately: true }),
+          Stream.runDrain,
         )
+        const exitCode = yield* handle.exitCode
+        if (exitCode !== 0) {
+          const attempt = (yield* SynchronizedRef.get(commandAttempts)).get(attemptID)
+          return yield* Effect.fail(new Error(attempt?.message?.trim() || `Authentication command exited ${exitCode}`))
+        }
+        const credential = (yield* Fiber.join(stdout)).buffer.toString("utf8").trim()
+        if (!credential) return yield* Effect.fail(new Error("Authentication command returned no credential"))
+        return credential
+      }).pipe(
+        Scope.provide(attemptScope),
+        Effect.exit,
+        Effect.flatMap((exit) => settleCommand(attemptID, exit)),
+        Effect.forkIn(attemptScope, { startImmediately: true }),
+      )
 
       return CommandAttempt.make({ attemptID, time })
     })

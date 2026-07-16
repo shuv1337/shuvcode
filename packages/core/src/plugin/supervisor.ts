@@ -35,6 +35,7 @@ import { SkillV2 } from "../skill"
 import { ReadToolFileSystem } from "../tool/read-filesystem"
 import { ToolRegistry } from "../tool/registry"
 import { WebSearchTool } from "../tool/websearch"
+import { WellKnown } from "../wellknown"
 import { PluginInternal } from "./internal"
 import { PluginRuntime } from "./runtime"
 import { SdkPlugins } from "./sdk"
@@ -163,9 +164,7 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
   if (!entrypoint) return
   // Bun currently ignores query parameters when caching file:// imports.
   const source =
-    operation.mtime === undefined
-      ? entrypoint
-      : `${operation.target.replaceAll("\\", "/")}?mtime=${operation.mtime}`
+    operation.mtime === undefined ? entrypoint : `${operation.target.replaceAll("\\", "/")}?mtime=${operation.mtime}`
   yield* Effect.log({ msg: "loading plugin", id: operation.target, entrypoint: source })
   const mod = yield* Effect.promise(() => import(source))
   const value = (yield* Schema.decodeUnknownEffect(PluginModule)(mod)).default
@@ -296,6 +295,7 @@ export const node = makeLocationNode({
     SkillV2.node,
     ToolRegistry.toolsNode,
     WebSearchTool.configNode,
+    WellKnown.node,
   ],
 })
 

@@ -280,6 +280,8 @@ import type {
   V2DebugLocationListResponses,
   V2EventSubscribeErrors,
   V2EventSubscribeResponses,
+  V2ExperimentalIntegrationWellknownAddErrors,
+  V2ExperimentalIntegrationWellknownAddResponses,
   V2FormRequestListErrors,
   V2FormRequestListResponses,
   V2FsFindErrors,
@@ -7209,6 +7211,64 @@ export class Integration extends HeyApiClient {
   }
 }
 
+export class Wellknown extends HeyApiClient {
+  /**
+   * Add wellknown integration
+   *
+   * Discover and persist an experimental wellknown integration source.
+   */
+  public add<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string | null
+        workspace?: string | null
+      } | null
+      url?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "url" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      V2ExperimentalIntegrationWellknownAddResponses,
+      V2ExperimentalIntegrationWellknownAddErrors,
+      ThrowOnError
+    >({
+      url: "/api/experimental/integration/wellknown",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Integration2 extends HeyApiClient {
+  private _wellknown?: Wellknown
+  get wellknown(): Wellknown {
+    return (this._wellknown ??= new Wellknown({ client: this.client }))
+  }
+}
+
+export class Experimental2 extends HeyApiClient {
+  private _integration?: Integration2
+  get integration(): Integration2 {
+    return (this._integration ??= new Integration2({ client: this.client }))
+  }
+}
+
 export class Resource2 extends HeyApiClient {
   /**
    * List MCP resources
@@ -8498,6 +8558,11 @@ export class V2 extends HeyApiClient {
   private _integration?: Integration
   get integration(): Integration {
     return (this._integration ??= new Integration({ client: this.client }))
+  }
+
+  private _experimental?: Experimental2
+  get experimental(): Experimental2 {
+    return (this._experimental ??= new Experimental2({ client: this.client }))
   }
 
   private _mcp?: Mcp2
