@@ -99,12 +99,66 @@ describe("H4: typeof on an undeclared identifier is 'undefined'", () => {
   })
 })
 
+describe("CodeMode lexical scope integration", () => {
+  test("keeps self, cross, and destructuring defaults in the TDZ", async () => {
+    expect(
+      await value(`
+        const outer = 1
+        const errors = []
+        try { const first = second, second = 2 } catch (error) { errors.push(error.name) }
+        try { const [first = second, second = 2] = [] } catch (error) { errors.push(error.name) }
+        return errors
+      `),
+    ).toEqual(["ReferenceError", "ReferenceError"])
+  })
+
+  test("keeps typeof and constant assignment inside the TDZ", async () => {
+    expect(
+      await value(`
+        const errors = []
+        try { { errors.push(typeof item); let item } } catch (error) { errors.push(error.name) }
+        try { { constant = 1; const constant = 2 } } catch (error) { errors.push(error.name) }
+        return errors
+      `),
+    ).toEqual(["ReferenceError", "ReferenceError"])
+  })
+
+  test("shadows builtins from the start of the program scope", async () => {
+    expect(
+      await value(`
+        let observed
+        try { observed = typeof Promise } catch (error) { observed = error.name }
+        const Promise = 1
+        return observed
+      `),
+    ).toBe("ReferenceError")
+  })
+
+  test("keeps classic for initializers inside the header TDZ", async () => {
+    expect(
+      await value(`
+        let index = 1
+        try { for (let index = index; index < 2; index++) {} } catch (error) { return error.name }
+      `),
+    ).toBe("ReferenceError")
+  })
+
+  test("removes loop scopes when per-iteration initialization fails", async () => {
+    expect(
+      await value(`
+        const value = "outer"
+        try { for (let [value] of [1]) {} } catch {}
+        return value
+      `),
+    ).toBe("outer")
+  })
+})
+
 describe("unary void", () => {
   test("evaluates its operand and returns undefined", async () => {
-    expect(await value(`let count = 0; const result = void (count += 1); return [count, result === undefined]`)).toEqual([
-      1,
-      true,
-    ])
+    expect(
+      await value(`let count = 0; const result = void (count += 1); return [count, result === undefined]`),
+    ).toEqual([1, true])
   })
 
   test("discards opaque values", async () => {
@@ -137,12 +191,11 @@ describe("property deletion", () => {
   })
 
   test("deleting an array index creates a hole without changing its length", async () => {
-    expect(await value(`const values = [1, 2, 3]; const removed = delete values[1]; return [removed, values.length, 1 in values, values]`)).toEqual([
-      true,
-      3,
-      false,
-      [1, null, 3],
-    ])
+    expect(
+      await value(
+        `const values = [1, 2, 3]; const removed = delete values[1]; return [removed, values.length, 1 in values, values]`,
+      ),
+    ).toEqual([true, 3, false, [1, null, 3]])
   })
 
   test("array length is not configurable", async () => {
