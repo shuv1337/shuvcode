@@ -144,10 +144,29 @@ test("resolves matched action variants and states", () => {
   const theme = resolveTheme(light)
 
   expect(theme.text.action.primary.pressed).toBeInstanceOf(RGBA)
+  expect(theme.text.action.primary.hovered).toBeInstanceOf(RGBA)
   expect(theme.text.action.primary.selected).toBeInstanceOf(RGBA)
   expect(theme.background.action.primary.pressed).toBeInstanceOf(RGBA)
+  expect(theme.background.action.primary.hovered).toBeInstanceOf(RGBA)
   expect(theme.background.action.primary.selected).toBeInstanceOf(RGBA)
   expect(theme.background.action.destructive.disabled).toBeInstanceOf(RGBA)
+  expect(theme.background.formfield.hovered).toBeInstanceOf(RGBA)
+})
+
+test("resolves elevated hover surfaces from direct colors", () => {
+  const theme = resolveThemeFile(
+    {
+      version: 2,
+      light: { background: { surface: { offset: "#123456", overlay: "#234567" } } },
+      dark: {},
+    },
+    "light",
+  )
+
+  expect(theme.contexts["@context:elevated"]?.background.default.toInts()).toEqual([18, 52, 86, 255])
+  expect(theme.contexts["@context:elevated"]?.background.action.primary.hovered.toInts()).toEqual([
+    35, 69, 103, 255,
+  ])
 })
 
 test("resolves transparent colors", () => {

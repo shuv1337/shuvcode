@@ -29,17 +29,24 @@ test("provides reactive property, variant, state, and context accessors", () => 
   expect(theme.increase(unmatched, 1)).toBe(unmatched)
   expect(theme.text.subdued()).toBe(resolved().text.subdued)
   expect(theme.text.action()).toBe(resolved().text.action.primary.default)
+  expect(theme.text.action("hovered")).toBe(resolved().text.action.primary.hovered)
   expect(theme.text.action("pressed")).toBe(resolved().text.action.primary.pressed)
   expect(theme.text.action("selected")).toBe(resolved().text.action.primary.selected)
   expect(theme.background.action("selected")).toBe(resolved().background.action.primary.selected)
+  expect(theme.background.action("hovered")).toBe(resolved().background.action.primary.hovered)
   expect(theme.background.action({ selected: true })).toBe(resolved().background.action.primary.selected)
+  expect(theme.background.action({ selected: true, hovered: true })).toBe(
+    resolved().background.action.primary.selected,
+  )
   expect(theme.background.action({ focused: true, selected: true })).toBe(
     resolved().background.action.primary.focused,
   )
   expect(theme.background.action({ pressed: true, focused: true, selected: true })).toBe(
     resolved().background.action.primary.pressed,
   )
-  expect(theme.background.action({ disabled: true, pressed: true, focused: true, selected: true })).toBe(
+  expect(
+    theme.background.action({ disabled: true, pressed: true, focused: true, selected: true, hovered: true }),
+  ).toBe(
     resolved().background.action.primary.disabled,
   )
   expect(theme.background.action({ disabled: false, selected: false })).toBe(
@@ -48,6 +55,16 @@ test("provides reactive property, variant, state, and context accessors", () => 
   expect(theme.background.action.destructive("disabled")).toBe(
     resolved().background.action.destructive.disabled,
   )
+  expect(theme.background.formfield("hovered")).toBe(resolved().background.formfield.hovered)
+  expect(theme.background.formfield({ selected: true, hovered: true })).toBe(
+    resolved().background.formfield.selected,
+  )
+  expect(theme.background.formfield({ focused: true, selected: true, hovered: true })).toBe(
+    resolved().background.formfield.focused,
+  )
+  expect(
+    theme.background.formfield({ disabled: true, pressed: true, focused: true, selected: true, hovered: true }),
+  ).toBe(resolved().background.formfield.disabled)
   expect(theme.background.surface.offset()).toBe(resolved().background.surface.offset)
   expect(theme.background.surface.overlay()).toBe(resolved().background.surface.overlay)
   expect(theme.scrollbar()).toBe(resolved().scrollbar.default)
@@ -58,6 +75,7 @@ test("provides reactive property, variant, state, and context accessors", () => 
   expect(theme.background.action("focused")).toBe(
     resolved().contexts["@context:elevated"]!.background.action.primary.focused,
   )
+  expect(theme.background.action("hovered")).toBe(resolved().background.surface.overlay)
   expect(theme.background.formfield("selected")).toBe(
     resolved().contexts["@context:elevated"]!.background.formfield.selected,
   )

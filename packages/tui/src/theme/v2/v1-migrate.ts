@@ -60,6 +60,7 @@ function migrateMode(theme: Theme, mode: "light" | "dark"): ThemeFile["light"] {
       },
       formfield: {
         default: text,
+        $hovered: primary,
         $focused: primary,
         $pressed: primary,
         $disabled: textMuted,
@@ -79,7 +80,7 @@ function migrateMode(theme: Theme, mode: "light" | "dark"): ThemeFile["light"] {
         overlay: backgroundMenu,
       },
       action: {
-        primary: { default: "transparent", $focused: primary, $selected: primary },
+        primary: { default: "transparent", $hovered: backgroundPanel, $focused: primary, $selected: primary },
         destructive: { default: color("error") },
       },
       formfield: {
@@ -142,7 +143,12 @@ function migrateMode(theme: Theme, mode: "light" | "dark"): ThemeFile["light"] {
       imageText: color("markdownImageText"),
       codeBlock: color("markdownCodeBlock"),
     },
-    "@context:elevated": { background: { default: "$background.surface.offset" } },
+    "@context:elevated": {
+      background: {
+        default: "$background.surface.offset",
+        action: { primary: { $hovered: "$background.surface.overlay" } },
+      },
+    },
     "@context:overlay": { background: { default: "$background.surface.overlay" } },
   }
 }

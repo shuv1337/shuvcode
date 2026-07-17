@@ -2,14 +2,12 @@ import type { RGBA } from "@opentui/core"
 import type { Accessor } from "solid-js"
 import type {
   ActionVariant,
-  FormfieldState,
   ResolvedActionState,
-  ResolvedFormfieldState,
   ResolvedThemeView,
 } from "./index"
 import { ActionState, HueStep } from "./schema"
 
-export type ActionStates = Partial<Record<ActionState, boolean>>
+type StateFlags = Partial<Record<ActionState, boolean>>
 
 export function createComponentTheme(current: Accessor<ResolvedThemeView>) {
   const textAction = actions((variant, state) => current().text.action[variant][state])
@@ -124,18 +122,21 @@ export function createComponentTheme(current: Accessor<ResolvedThemeView>) {
 }
 
 function actions(get: (variant: ActionVariant, state: ResolvedActionState) => RGBA) {
-  const action = (variant: ActionVariant) => (states: ActionState | "default" | ActionStates = "default") => {
-    if (typeof states === "string") return get(variant, states)
-    return get(variant, ActionState.literals.find((state) => states[state]) ?? "default")
-  }
-  const primary = action("primary")
+  const primary = stateful((state) => get("primary", state))
   return Object.assign(primary, {
-    destructive: action("destructive"),
+    destructive: stateful((state) => get("destructive", state)),
   })
 }
 
-function formfield(get: (state: ResolvedFormfieldState) => RGBA) {
-  return (state: FormfieldState | "default" = "default") => get(state)
+function formfield(get: (state: ResolvedActionState) => RGBA) {
+  return stateful(get)
+}
+
+function stateful(get: (state: ResolvedActionState) => RGBA) {
+  return (states: ActionState | "default" | StateFlags = "default") => {
+    if (typeof states === "string") return get(states)
+    return get(ActionState.literals.find((state) => states[state]) ?? "default")
+  }
 }
 
 export type ComponentTheme = ReturnType<typeof createComponentTheme>

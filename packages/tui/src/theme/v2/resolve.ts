@@ -8,7 +8,6 @@ import {
   ActionVariant,
   BaseHue,
   FeedbackKind,
-  FormfieldState,
   HueAlias,
   HueStep,
   ThemeDefinition,
@@ -244,7 +243,7 @@ function createResolver(source: Record<string, unknown>) {
 function resolvedKey(key: string) {
   if (!key.startsWith("$")) return key
   const state = key.slice(1)
-  return ([...ActionState.literals, ...FormfieldState.literals] as readonly string[]).includes(state) ? state : key
+  return (ActionState.literals as readonly string[]).includes(state) ? state : key
 }
 
 function read(source: Record<string, unknown>, path: string) {
