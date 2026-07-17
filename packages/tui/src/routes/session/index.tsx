@@ -928,6 +928,7 @@ export function Session() {
               </Show>
             </scrollbox>
             <box flexShrink={0}>
+              <PluginSlot name="session.composer.top" input={{ sessionID: route.sessionID }} />
               <Composer
                 sessionID={route.sessionID}
                 open={composer.open || (!!session()?.parentID && forms().length === 0)}
