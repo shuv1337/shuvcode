@@ -2,6 +2,7 @@ import type { RGBA } from "@opentui/core"
 import type { Accessor } from "solid-js"
 import type {
   ActionVariant,
+  Mode,
   ResolvedActionState,
   ResolvedThemeView,
 } from "./index"
@@ -9,7 +10,7 @@ import { ActionState, HueStep } from "./schema"
 
 type StateFlags = Partial<Record<ActionState, boolean>>
 
-export function createComponentTheme(current: Accessor<ResolvedThemeView>) {
+export function createComponentTheme(current: Accessor<ResolvedThemeView>, mode: Accessor<Mode>) {
   const textAction = actions((variant, state) => current().text.action[variant][state])
   const backgroundAction = actions((variant, state) => current().background.action[variant][state])
   const textFormfield = formfield((state) => current().text.formfield[state])
@@ -78,6 +79,7 @@ export function createComponentTheme(current: Accessor<ResolvedThemeView>) {
     hue,
     increase: (color: RGBA, amount = 1) => current().increase(color, amount),
     decrease: (color: RGBA, amount = 1) => current().decrease(color, amount),
+    raise: (color: RGBA) => (mode() === "light" ? current().increase(color) : current().decrease(color)),
     text,
     background,
     border: () => current().border.default,

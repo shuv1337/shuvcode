@@ -9,17 +9,19 @@ import type { ContextKey } from "../../../src/theme/v2"
 
 test("provides reactive property, variant, state, and context accessors", () => {
   const [resolved, setResolved] = createSignal(resolveTheme(selectTheme(DEFAULT_THEME, "light")))
+  const [mode, setMode] = createSignal<"light" | "dark">("light")
   const [context, setContext] = createSignal<ContextKey>()
   const theme = createComponentTheme(() => {
     const key = context()
     return key ? resolved().contexts[key] ?? resolved() : resolved()
-  })
+  }, mode)
 
   expect(theme.text()).toBe(resolved().text.default)
   expect(theme.hue.accent(500)).toBe(resolved().hue.accent[500])
   expect(theme.hue.interactive(500)).toBe(resolved().hue.interactive[500])
   expect(theme.hue.gray(200)).toBe(resolved().hue.gray[200])
   expect(theme.increase(theme.background.surface.offset(), 1)).toBe(resolved().hue.neutral[300])
+  expect(theme.raise(theme.background.surface.offset())).toBe(resolved().hue.neutral[300])
   expect(theme.decrease(theme.hue.red(300), 2)).toBe(resolved().hue.red[100])
   expect(theme.increase(theme.hue.red(900), 3)).toBe(resolved().hue.red[900])
   expect(theme.decrease(theme.hue.red(100), 3)).toBe(resolved().hue.red[100])
@@ -81,6 +83,8 @@ test("provides reactive property, variant, state, and context accessors", () => 
   )
 
   setResolved(resolveTheme(selectTheme(DEFAULT_THEME, "dark")))
+  setMode("dark")
   expect(theme.text()).toBe(resolved().contexts["@context:elevated"]!.text.default)
   expect(theme.decrease(theme.background.surface.offset(), 1)).toBe(resolved().hue.neutral[700])
+  expect(theme.raise(theme.background.surface.offset())).toBe(resolved().hue.neutral[700])
 })
