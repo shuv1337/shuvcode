@@ -1033,7 +1033,8 @@ const SHELL_MAX_CAPTURE_BYTES = 1024 * 1024
 export const node = makeGlobalNode({
   service: Service,
   layer: layer.pipe(Layer.orDie),
-  deps: [
+  // Defer the execution node across the Session/runner module cycle until the graph is compiled.
+  deps: () => [
     Job.node,
     Database.node,
     EventV2.node,
