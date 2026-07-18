@@ -111,6 +111,7 @@ export function Session() {
   const route = useRouteData("session")
   const { navigate } = useRoute()
   const data = useData()
+  const local = useLocal()
   const paths = useTuiPaths()
   const configState = useConfig()
   const config = configState.data
@@ -184,6 +185,24 @@ export function Session() {
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const toast = useToast()
   const client = useClient()
+  const autoApproved = new Set<string>()
+  createEffect(() => {
+    if (local.permission.mode !== "auto") return
+    permissions().forEach((request) => {
+      if (autoApproved.has(request.id)) return
+      autoApproved.add(request.id)
+      void client.api.permission
+        .reply({
+          sessionID: request.sessionID,
+          reply: "once",
+          requestID: request.id,
+        })
+        .catch((error) => {
+          autoApproved.delete(request.id)
+          toast.error(error)
+        })
+    })
+  })
   const editor = useEditorContext()
   const rows = createSessionRows(() => route.sessionID)
   const boundaries = createMemo(() => messageBoundaryIDs(rows, messages()))
