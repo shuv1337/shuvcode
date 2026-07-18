@@ -32,12 +32,23 @@ async function publishDistribution(input: { root: string; name: string; binary: 
   if (!version) throw new Error(`No binary packages found for ${input.name}`)
 
   await $`mkdir -p ${input.root}/${input.name}/bin`
-  await $`cp ./bin/opencode2.cjs ${input.root}/${input.name}/bin/${input.binary}`
+  await $`cp ./script/postinstall.mjs ${input.root}/${input.name}/postinstall.mjs`
+  await Bun.file(`${input.root}/${input.name}/bin/${input.binary}.exe`).write(
+    [
+      `echo "Error: ${input.name}'s postinstall script was not run." >&2`,
+      'echo "" >&2',
+      'echo "This occurs when installation scripts are disabled." >&2',
+      'echo "Run the package postinstall script or reinstall with scripts enabled." >&2',
+      "exit 1",
+      "",
+    ].join("\n"),
+  )
   await Bun.file(`${input.root}/${input.name}/package.json`).write(
     JSON.stringify(
       {
         name: input.name,
-        bin: { [input.binary]: `./bin/${input.binary}` },
+        bin: { [input.binary]: `./bin/${input.binary}.exe` },
+        scripts: { postinstall: "node ./postinstall.mjs" },
         version,
         license: pkg.license,
         repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },

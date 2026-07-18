@@ -1,4 +1,4 @@
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { run } from "@opencode-ai/tui"
 import { Commands } from "../commands"
@@ -75,6 +75,6 @@ export default Runtime.handler(Commands, (input) =>
                 : Effect.logInfo(message, tags)
         runFork(effect)
       },
-    }).pipe(Effect.provide(AppNodeBuilder.build(Global.node)))
+    }).pipe(Effect.provide(LayerNode.compile(Global.node)))
   }),
 )

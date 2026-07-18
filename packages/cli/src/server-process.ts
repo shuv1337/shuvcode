@@ -2,7 +2,6 @@ export * as ServerProcess from "./server-process"
 
 import { NodeServices } from "@effect/platform-node"
 import { Service, type DiscoverOptions, type Info } from "@opencode-ai/client/effect/service"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -27,7 +26,7 @@ export type Options = {
 export const run = Effect.fnUntraced(function* (options: Options) {
   return yield* processEffect(options).pipe(
     Effect.provide(Updater.layer),
-    Effect.provide(AppNodeBuilder.build(LayerNode.group([Global.node, AppProcess.node]))),
+    Effect.provide(LayerNode.compile(LayerNode.group([Global.node, AppProcess.node]))),
     Effect.provide(NodeServices.layer),
   )
 })

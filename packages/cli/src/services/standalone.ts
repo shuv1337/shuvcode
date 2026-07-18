@@ -1,6 +1,6 @@
 import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Deferred, Effect, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { randomBytes } from "node:crypto"
@@ -53,7 +53,7 @@ const makeEndpoint = Effect.fn("cli.standalone.endpoint")(
       pid: proc.pid,
     } satisfies Endpoint & { readonly pid: number }
   },
-  Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)),
+  Effect.provide(LayerNode.compile(CrossSpawnSpawner.node)),
 )
 
 export function start(options: Options = {}) {

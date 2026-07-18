@@ -8,7 +8,6 @@
 // variant and the persisted file.
 import path from "path"
 import { FSUtil } from "@opencode-ai/core/fs-util"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Context, Effect, Layer } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
@@ -203,7 +202,7 @@ const node = makeGlobalNode({ service: Service, layer, deps: [FSUtil.node] })
 
 /** @internal Exported for testing. */
 export function createVariantRuntime(replacements?: readonly LayerNode.Replacement[]): VariantRuntime {
-  const runtime = makeRuntime(Service, AppNodeBuilder.build(node, replacements))
+  const runtime = makeRuntime(Service, LayerNode.compile(node, replacements))
   return {
     resolveSavedVariant: (model) => runtime.runPromise((svc) => svc.resolveSavedVariant(model)).catch(() => undefined),
     saveVariant: (model, variant) => runtime.runPromise((svc) => svc.saveVariant(model, variant)).catch(() => {}),

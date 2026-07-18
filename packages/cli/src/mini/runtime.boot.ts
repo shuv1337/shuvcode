@@ -7,8 +7,8 @@
 // none block each other.
 import { Context, Effect, Layer } from "effect"
 import { resolve } from "@opencode-ai/tui/config/v1"
-import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import { loadRunProviders } from "./catalog.shared"
 import { resolveCurrentSession, sessionHistory } from "./session.shared"
@@ -130,7 +130,7 @@ const layer = Layer.effect(
 )
 
 const node = makeGlobalNode({ service: Service, layer, deps: [] })
-const runtime = makeRuntime(Service, AppNodeBuilder.build(node))
+const runtime = makeRuntime(Service, LayerNode.compile(node))
 
 // Fetches available variants and context limits for every provider/model pair.
 export async function resolveModelInfo(
