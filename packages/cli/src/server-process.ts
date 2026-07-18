@@ -54,7 +54,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
       }
       const password =
         options.mode === "service"
-          ? yield* ServiceConfig.password()
+          ? config.password || randomBytes(32).toString("base64url")
           : environmentPassword
             ? Redacted.value(environmentPassword)
             : randomBytes(32).toString("base64url")
@@ -69,7 +69,11 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           serviceOptions === undefined
             ? undefined
             : {
-                onListen: (address, shutdown) => register(address, password, instanceID, serviceOptions.file, shutdown),
+                onListen: (address, shutdown) =>
+                  Effect.gen(function* () {
+                    if (!config.password) yield* ServiceConfig.password(password)
+                    return yield* register(address, password, instanceID, serviceOptions.file, shutdown)
+                  }),
               },
       }).pipe(
         Effect.provide(Logger.layer([], { mergeWithExisting: false })),
@@ -154,8 +158,8 @@ const register = Effect.fnUntraced(function* (
 const recognizeIncumbent = Effect.fnUntraced(function* (options: DiscoverOptions, hostname: string, port: number) {
   const found = yield* Service.incumbent({ ...options, url: serviceURL(hostname, port) }).pipe(
     Effect.filterOrFail((value) => value !== undefined),
-    Effect.retry(Schedule.max([Schedule.spaced("100 millis"), Schedule.recurs(60)])),
-    Effect.option,
+    Effect.retry(Schedule.spaced("100 millis")),
+    Effect.timeoutOption("15 seconds"),
   )
   return Option.isSome(found)
 })

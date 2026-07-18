@@ -4,6 +4,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventTable } from "@opencode-ai/core/event/sql"
 import { Global } from "@opencode-ai/core/global"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -212,9 +213,10 @@ test("concurrent service processes elect one server", async () => {
   const command = [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"]
   const registration = path.join(root, "state", "opencode", "service-local.json")
   const port = await availablePort()
+  const config = path.join(root, "config", "opencode", "service-local.json")
   await fs.mkdir(path.join(root, "config", "opencode"), { recursive: true })
-  await fs.writeFile(path.join(root, "config", "opencode", "service-local.json"), JSON.stringify({ port }))
-  const processes = Array.from({ length: 10 }, () => Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" }))
+  await fs.writeFile(config, JSON.stringify({ port }))
+  const processes = Array.from({ length: 10 }, () => Bun.spawn(command, { env, stderr: "pipe", stdout: "pipe" }))
 
   try {
     const info = await waitForInfo(registration)
@@ -225,8 +227,18 @@ test("concurrent service processes elect one server", async () => {
     )
 
     expect(exited).toEqual(losers.map(() => true))
+    const errors = await Promise.all(
+      losers.map(
+        async (process) => (await new Response(process.stdout).text()) + (await new Response(process.stderr).text()),
+      ),
+    )
+    expect(
+      losers.map((process) => process.exitCode),
+      errors.filter(Boolean).join("\n"),
+    ).toEqual(losers.map(() => 0))
     expect(winner?.exitCode).toBe(null)
     expect(new URL(info.url).port).toBe(String(port))
+    expect((await Bun.file(config).json()).password).toBe(info.password)
     expect(await Bun.file(registration + ".lock").exists()).toBe(false)
     expect(
       await fetch(new URL("/api/health", info.url), {
@@ -244,6 +256,7 @@ test("concurrent service processes elect one server", async () => {
         Bun.sleep(10_000).then(() => false),
       ])
       expect(contenderExited).toBe(true)
+      expect(contender.exitCode).toBe(0)
       expect((await waitForInfo(registration)).id).toBe(info.id)
     } finally {
       contender.kill("SIGTERM")
@@ -265,14 +278,11 @@ test("concurrent service processes elect one server", async () => {
     expect(await waitForExecutionStart(database, sessionID)).toBe(1)
     await Effect.runPromise(Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)))
     await winner?.exited
+    expect(await Bun.file(registration).exists()).toBe(false)
   } finally {
     processes.forEach((process) => process.kill("SIGTERM"))
     await Promise.all(processes.map((process) => process.exited))
-    try {
-      expect(await Bun.file(registration).exists()).toBe(false)
-    } finally {
-      await fs.rm(root, { recursive: true, force: true })
-    }
+    await fs.rm(root, { recursive: true, force: true })
   }
 }, 120_000)
 
@@ -281,8 +291,9 @@ test("configured managed service port overrides the channel default", async () =
   const port = await availablePort()
   const env = serviceEnv(root)
   const registration = path.join(root, "state", "opencode", "service-local.json")
+  const config = path.join(root, "config", "opencode", "service-local.json")
   await fs.mkdir(path.join(root, "config", "opencode"), { recursive: true })
-  await fs.writeFile(path.join(root, "config", "opencode", "service-local.json"), JSON.stringify({ port }))
+  await fs.writeFile(config, JSON.stringify({ port, password: "" }))
   const owner = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
     env,
     stderr: "pipe",
@@ -291,6 +302,8 @@ test("configured managed service port overrides the channel default", async () =
   try {
     const info = await waitForInfo(registration)
     expect(new URL(info.url).port).toBe(String(port))
+    expect(info.password).not.toBe("")
+    expect((await Bun.file(config).json()).password).toBe(info.password)
     await Effect.runPromise(Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)))
     await owner.exited
   } finally {
@@ -302,7 +315,7 @@ test("configured managed service port overrides the channel default", async () =
 
 test("unrelated managed port occupancy reports an actionable conflict", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-conflict-"))
-  const listener = Bun.serve({ port: 0, fetch: () => new Response("unrelated") })
+  const listener = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("unrelated") })
   const port = listener.port
   const registration = path.join(root, "state", "opencode", "service-local.json")
   await fs.mkdir(path.join(root, "config", "opencode"), { recursive: true })
@@ -325,6 +338,109 @@ test("unrelated managed port occupancy reports an actionable conflict", async ()
     await fs.rm(root, { recursive: true, force: true })
   }
 }, 30_000)
+
+test("unresponsive managed port occupancy reports a bounded conflict", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-unresponsive-conflict-"))
+  const recognizing = Promise.withResolvers<void>()
+  const requests = { count: 0 }
+  using listener = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch() {
+      requests.count += 1
+      if (requests.count === 2) recognizing.resolve()
+      return new Promise<Response>(() => {})
+    },
+  })
+  const registration = path.join(root, "state", "opencode", "service-local.json")
+  await fs.mkdir(path.join(root, "config", "opencode"), { recursive: true })
+  await fs.mkdir(path.dirname(registration), { recursive: true })
+  await fs.writeFile(
+    path.join(root, "config", "opencode", "service-local.json"),
+    JSON.stringify({ port: listener.port }),
+  )
+  const stale = {
+    id: "stale",
+    version: InstallationVersion,
+    url: "http://127.0.0.1:1",
+    pid: process.pid,
+    password: "stale",
+  }
+  await fs.writeFile(registration, JSON.stringify(stale))
+  const contender = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
+    env: serviceEnv(root),
+    stderr: "pipe",
+    stdout: "pipe",
+  })
+
+  try {
+    expect(await Promise.race([recognizing.promise.then(() => true), Bun.sleep(20_000).then(() => false)])).toBe(true)
+    const exitCode = await Promise.race([contender.exited, Bun.sleep(20_000).then(() => undefined)])
+    expect(exitCode).toBe(1)
+    const output = (await new Response(contender.stdout).text()) + (await new Response(contender.stderr).text())
+    expect(output).toContain(`Managed service port ${listener.port} on 127.0.0.1 is already in use by another process`)
+    expect(await Bun.file(registration).json()).toEqual(stale)
+  } finally {
+    contender.kill("SIGTERM")
+    await contender.exited
+    await fs.rm(root, { recursive: true, force: true })
+  }
+}, 45_000)
+
+test("port contender recognizes an incumbent registered during the bind race", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-bind-race-"))
+  const recognizing = Promise.withResolvers<void>()
+  const requests = { count: 0 }
+  using listener = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch() {
+      requests.count += 1
+      if (requests.count === 2) recognizing.resolve()
+      return Response.json({ healthy: true, version: InstallationVersion, pid: process.pid }, { status: 503 })
+    },
+  })
+  const registration = path.join(root, "state", "opencode", "service-local.json")
+  const config = path.join(root, "config", "opencode", "service-local.json")
+  await fs.mkdir(path.dirname(config), { recursive: true })
+  await fs.writeFile(config, JSON.stringify({ port: listener.port }))
+  await fs.mkdir(path.dirname(registration), { recursive: true })
+  await fs.writeFile(
+    registration,
+    JSON.stringify({
+      id: "stale",
+      version: InstallationVersion,
+      url: "http://127.0.0.1:1",
+      pid: 2_147_483_647,
+      password: "stale",
+    }),
+  )
+  const contender = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
+    env: serviceEnv(root),
+    stderr: "pipe",
+    stdout: "ignore",
+  })
+
+  try {
+    expect(await Promise.race([recognizing.promise.then(() => true), Bun.sleep(20_000).then(() => false)])).toBe(true)
+    await Bun.sleep(8_000)
+    const info = {
+      id: "incumbent",
+      version: InstallationVersion,
+      url: `http://127.0.0.1:${listener.port}`,
+      pid: process.pid,
+      password: "incumbent",
+    }
+    await fs.writeFile(registration, JSON.stringify(info))
+
+    expect(await Promise.race([contender.exited, Bun.sleep(20_000).then(() => undefined)])).toBe(0)
+    expect(await Bun.file(registration).json()).toEqual(info)
+  } finally {
+    contender.kill("SIGTERM")
+    await contender.exited
+    await fs.rm(root, { recursive: true, force: true })
+  }
+}, 45_000)
 
 test("stale dead registration is replaced after binding the selected port", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-stale-"))
@@ -375,10 +491,12 @@ test("a failed service stays registered and owns the selected port until stopped
 
   try {
     const info = await waitForInfo(registration)
+    await waitForFailed(info)
     expect(owner.exitCode).toBe(null)
 
     const contender = Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" })
     expect(await Promise.race([contender.exited.then(() => true), Bun.sleep(10_000).then(() => false)])).toBe(true)
+    expect(contender.exitCode).toBe(0)
     expect((await waitForInfo(registration)).id).toBe(info.id)
     expect(owner.exitCode).toBe(null)
 
