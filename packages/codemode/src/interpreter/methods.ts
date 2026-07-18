@@ -12,7 +12,7 @@ import {
   PromiseNamespace,
   UriFunction,
 } from "./model.js"
-import { rejectCircularInsertion, typeofValue } from "./references.js"
+import { containsOpaqueReference, rejectCircularInsertion, typeofValue } from "./references.js"
 import { isBlockedMember, type SafeObject } from "../tool-runtime.js"
 import {
   CodeModeDate,
@@ -137,21 +137,31 @@ export const invokeGlobalMethod = (ref: GlobalMethodReference, args: Array<unkno
   return invokeJsonMethod(ref.name, args, node)
 }
 
+const requireDataArgument = (name: string, index: number, arg: unknown, node: AstNode): unknown => {
+  if (containsOpaqueReference(arg)) {
+    throw new InterpreterRuntimeError(
+      `String.${name} expects argument ${index + 1} to be a data value.`,
+      node,
+      "InvalidDataValue",
+    )
+  }
+  return arg
+}
+
 const invokeStringMethod = (value: string, name: string, args: Array<unknown>, node: AstNode): unknown => {
-  const str = (index: number): string => {
-    const arg = args[index]
-    if (typeof arg !== "string")
-      throw new InterpreterRuntimeError(`String.${name} expects argument ${index + 1} to be a string.`, node)
-    return arg
-  }
-  const num = (index: number): number => {
-    const arg = args[index]
-    if (typeof arg !== "number")
-      throw new InterpreterRuntimeError(`String.${name} expects argument ${index + 1} to be a number.`, node)
-    return arg
-  }
+  // Coerce arguments like native JS; opaque runtime references still reject.
+  const str = (index: number): string => coerceToString(requireDataArgument(name, index, args[index], node))
+  const num = (index: number): number => coerceToNumber(requireDataArgument(name, index, args[index], node))
   const optNum = (index: number): number | undefined => (args[index] === undefined ? undefined : num(index))
   const optStr = (index: number): string | undefined => (args[index] === undefined ? undefined : str(index))
+  const rejectRegex = (): void => {
+    if (args[0] instanceof CodeModeRegExp) {
+      throw new InterpreterRuntimeError(
+        `String.${name} cannot take a regular expression; use regex.test(string) or String.search instead.`,
+        node,
+      ).as("TypeError")
+    }
+  }
 
   let result: unknown
   switch (name) {
@@ -187,8 +197,11 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       break
     }
     case "split": {
-      if (args.length === 0) {
-        result = [value]
+      // Native: an undefined separator returns the whole string, not a split on "undefined",
+      // unless the limit truncates to zero.
+      if (args[0] === undefined) {
+        const requestedLimit = optNum(1)
+        result = requestedLimit !== undefined && requestedLimit >>> 0 === 0 ? [] : [value]
         break
       }
       if (args[0] instanceof CodeModeRegExp) {
@@ -203,12 +216,15 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       result = value.slice(optNum(0), optNum(1))
       break
     case "includes":
+      rejectRegex()
       result = value.includes(str(0), optNum(1))
       break
     case "startsWith":
+      rejectRegex()
       result = value.startsWith(str(0), optNum(1))
       break
     case "endsWith":
+      rejectRegex()
       result = value.endsWith(str(0), optNum(1))
       break
     case "indexOf":
@@ -263,7 +279,7 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
     case "repeat": {
       const count = num(0)
       if (!Number.isFinite(count) || count < 0)
-        throw new InterpreterRuntimeError("String.repeat expects a finite non-negative count.", node)
+        throw new InterpreterRuntimeError("String.repeat expects a finite non-negative count.", node).as("RangeError")
       result = value.repeat(count)
       break
     }
@@ -300,6 +316,8 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
   }
   return boundedData(result, `String.${name} result`)
 }
+
+export const arrayStatics = new Set(["isArray", "of", "from"])
 
 const invokeArrayStatic = (name: string, args: Array<unknown>, node: AstNode): unknown => {
   switch (name) {
@@ -400,11 +418,9 @@ const invokeStringReplacer = <R>(
     if (name === "replace") value.replace(pattern.regex, collect)
     else value.replaceAll(pattern.regex, collect)
   } else {
-    if (typeof pattern !== "string") {
-      throw new InterpreterRuntimeError(`String.${name} expects argument 1 to be a string.`, node)
-    }
-    if (name === "replace") value.replace(pattern, collect)
-    else value.replaceAll(pattern, collect)
+    const search = coerceToString(requireDataArgument(name, 0, pattern, node))
+    if (name === "replace") value.replace(search, collect)
+    else value.replaceAll(search, collect)
   }
 
   return Effect.gen(function* () {
