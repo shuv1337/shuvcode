@@ -258,11 +258,23 @@ describe("H1: NaN/Infinity flow as intermediates and normalize to null at the bo
 
   test("copyOut normalizes non-finite numbers to null (the shared return + tool-arg boundary)", () => {
     // Tool-call arguments funnel through copyOut too, so this one function pins both boundaries.
-    expect(ToolRuntime.copyOut(NaN)).toBeNull()
-    expect(ToolRuntime.copyOut(Infinity)).toBeNull()
-    expect(ToolRuntime.copyOut(-Infinity)).toBeNull()
-    expect(ToolRuntime.copyOut(42)).toBe(42)
-    expect(ToolRuntime.copyOut({ a: NaN, b: [Infinity, 1] })).toEqual({ a: null, b: [null, 1] })
+    expect(ToolRuntime.copyOut(NaN, "json")).toBeNull()
+    expect(ToolRuntime.copyOut(Infinity, "json")).toBeNull()
+    expect(ToolRuntime.copyOut(-Infinity, "nullify")).toBeNull()
+    expect(ToolRuntime.copyOut(42, "json")).toBe(42)
+    expect(ToolRuntime.copyOut({ a: NaN, b: [Infinity, 1] }, "json")).toEqual({ a: null, b: [null, 1] })
+  })
+})
+
+describe("copyOut undefined handling per boundary mode", () => {
+  test("json mode mirrors JSON.stringify for undefined", () => {
+    expect(ToolRuntime.copyOut({ q: undefined, keep: 1 }, "json")).toStrictEqual({ keep: 1 })
+    expect(ToolRuntime.copyOut([1, undefined, 2], "json")).toStrictEqual([1, null, 2])
+    expect(ToolRuntime.copyOut({ nested: { a: undefined, b: [undefined] } }, "json")).toStrictEqual({
+      nested: { b: [null] },
+    })
+    expect(ToolRuntime.copyOut(undefined, "json")).toBeUndefined()
+    expect(ToolRuntime.copyOut({ a: undefined }, "nullify")).toStrictEqual({ a: null })
   })
 })
 
