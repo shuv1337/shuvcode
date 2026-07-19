@@ -2,7 +2,7 @@
 //
 // Direct mode uses a split-footer terminal layout: immutable scrollback for the
 // session transcript, and a mutable footer for prompt input, status, and
-// permission/question UI. Every module in run/* shares these types to stay
+// permission/form UI. Every module in run/* shares these types to stay
 // aligned on that two-lane model.
 //
 // Data flow through the system:
@@ -12,12 +12,16 @@
 //       → footer.ts queues commits and patches the footer view
 //         → OpenTUI split-footer renderer writes to terminal
 import type {
+  FormAnswer,
+  FormInfo,
   OpenCodeClient,
+  LocationGetOutput,
+  LocationRef,
   PermissionV2Request,
-  QuestionV2Request,
   ReferenceListOutput,
+  SessionMessageAssistantTool,
 } from "@opencode-ai/client/promise"
-import type { TuiConfig } from "../config/v1"
+import type { Config } from "../config"
 import type { CliRenderer } from "@opentui/core"
 
 export type RunFilePart = {
@@ -47,63 +51,25 @@ export type RunCommand = {
   name: string
   description?: string
   source?: string
-  template?: string
-  hints?: unknown[]
-  agent?: string
-  model?: {
-    [key: string]: unknown
-  }
-  subtask?: boolean
 }
 
 export type RunProviderModel = {
-  id: string
-  providerID: string
-  api?: {
-    [key: string]: unknown
-  }
   name?: string
-  capabilities?: {
-    [key: string]: unknown
-  }
   cost?: {
     input: number
-    output?: number
-    cache?: {
-      read: number
-      write: number
-    }
-  }
-  limit?: {
-    context: number
-    input?: number
-    output?: number
   }
   status?: string
-  options?: {
-    [key: string]: unknown
-  }
-  headers?: {
-    [key: string]: string
-  }
-  release_date?: string
   variants?: Record<string, unknown>
 }
 
 export type RunProvider = {
   id: string
   name: string
-  source?: string
-  env?: string[]
-  options?: {
-    [key: string]: unknown
-  }
   models: Record<string, RunProviderModel>
 }
 
 export type RunPrompt = {
   messageID?: string
-  partID?: string
   text: string
   parts: RunPromptPart[]
   mode?: "shell"
@@ -117,14 +83,12 @@ export type RunPrompt = {
 
 export type FooterQueuedPrompt = {
   messageID: string
-  partID: string
   prompt: RunPrompt
 }
 
 export type RunAgent = {
   id: string
   name: string
-  description?: string
   mode: "subagent" | "primary" | "all"
   hidden: boolean
 }
@@ -133,25 +97,17 @@ export type RunReference = ReferenceListOutput["data"][number]
 
 export type RunInput = {
   sdk: OpenCodeClient
-  directory: string
-  sessionID: string
-  sessionTitle?: string
-  resume?: boolean
-  replay?: boolean
-  replayLimit?: number
+  location: LocationGetOutput
   agent: string | undefined
   model: PromptModel | undefined
   variant: string | undefined
   files: RunFilePart[]
-  initialInput?: string
-  thinking: boolean
   demo?: boolean
 }
 
 export type MiniHost = {
   terminal: {
     stdin: NodeJS.ReadStream
-    cleanup(): void
   }
   platform: NodeJS.Platform
   stdout: {
@@ -170,8 +126,6 @@ export type MiniHost = {
   }
   paths: {
     home: string
-    state: string
-    log: string
   }
   signals: {
     sigint: {
@@ -186,9 +140,6 @@ export type MiniHost = {
     now(): number
   }
   diagnostics: {
-    pid: number
-    cwd: string
-    argv: readonly string[]
     trace?: {
       write(type: string, data?: unknown): void
     }
@@ -212,7 +163,6 @@ export type FooterState = {
   status: string
   queue: number
   model: string
-  duration: string
   usage: string
   first: boolean
   interrupt: number
@@ -222,8 +172,6 @@ export type FooterState = {
 // A partial update to FooterState. The footer merges this onto the current state.
 export type FooterPatch = Partial<FooterState>
 
-export type RunDiffStyle = "auto" | "stacked"
-
 export type TurnSummary = {
   agent: string
   model: string
@@ -231,7 +179,6 @@ export type TurnSummary = {
 }
 
 export type ScrollbackOptions = {
-  diffStyle?: RunDiffStyle
   suppressBackgrounds?: boolean
 }
 
@@ -295,6 +242,8 @@ export type MiniToolState =
       time: { start: number; end: number }
     }
 
+// Retained only for the noninteractive run JSON/V1 compatibility boundary.
+// Interactive Mini commits carry SessionMessageAssistantTool directly.
 export type MiniToolPart = {
   id: string
   sessionID: string
@@ -303,6 +252,14 @@ export type MiniToolPart = {
   callID: string
   tool: string
   state: MiniToolState
+}
+
+export type MiniPermissionRequest = PermissionV2Request & {
+  tool?: SessionMessageAssistantTool
+}
+
+export type MiniFormRequest = FormInfo & {
+  location?: LocationRef
 }
 
 export type EntryLayout = "inline" | "block"
@@ -320,8 +277,8 @@ export type RunEntryBody =
 // "prompt".
 export type FooterView =
   | { type: "prompt" }
-  | { type: "permission"; request: PermissionV2Request }
-  | { type: "question"; request: QuestionV2Request }
+  | { type: "permission"; request: MiniPermissionRequest }
+  | { type: "form"; request: MiniFormRequest }
 
 export type FooterPromptRoute =
   | { type: "composer" }
@@ -335,27 +292,23 @@ export type FooterPromptRoute =
 
 export type FooterSubagentTab = {
   sessionID: string
-  partID: string
-  callID: string
   label: string
   description: string
   status: "running" | "completed" | "cancelled" | "error"
   background?: boolean
   title?: string
-  toolCalls?: number
   lastUpdatedAt: number
 }
 
 export type FooterSubagentDetail = {
-  sessionID: string
   commits: StreamCommit[]
 }
 
 export type FooterSubagentState = {
   tabs: FooterSubagentTab[]
   details: Record<string, FooterSubagentDetail>
-  permissions: PermissionV2Request[]
-  questions: QuestionV2Request[]
+  permissions: MiniPermissionRequest[]
+  forms: MiniFormRequest[]
 }
 
 // The transport emits this alongside scrollback commits so the footer can update in the same frame.
@@ -372,6 +325,10 @@ export type FooterEvent =
   | {
       type: "history"
       history: RunPrompt[]
+    }
+  | {
+      type: "agent"
+      agent: string | undefined
     }
   | {
       type: "catalog"
@@ -410,9 +367,6 @@ export type FooterEvent =
       queue: number
     }
   | {
-      type: "turn.wait"
-    }
-  | {
       type: "turn.idle"
       queue: number
     }
@@ -433,16 +387,22 @@ export type FooterEvent =
       state: FooterSubagentState
     }
 
-export type PermissionReply = Omit<Parameters<OpenCodeClient["permission"]["reply"]>[0], "sessionID">
+export type PermissionReply = Parameters<OpenCodeClient["permission"]["reply"]>[0]
 
-export type QuestionReply = {
-  requestID: string
-  answers: string[][]
+export type FormReply = {
+  sessionID: string
+  formID: string
+  answer: FormAnswer
+  location?: LocationRef
 }
 
-export type QuestionReject = Omit<Parameters<OpenCodeClient["question"]["reject"]>[0], "sessionID">
+export type FormCancel = {
+  sessionID: string
+  formID: string
+  location?: LocationRef
+}
 
-export type RunTuiConfig = Pick<TuiConfig.Resolved, "keybinds" | "leader_timeout" | "diff_style">
+export type RunTuiConfig = Pick<Config.Resolved, "keybinds" | "leader" | "theme" | "session">
 
 // Lifecycle phase of a scrollback entry. "start" opens the entry, "progress"
 // appends content (coalesced in the footer queue), "final" closes it.
@@ -465,29 +425,18 @@ export type StreamCommit = {
   messageID?: string
   partID?: string
   tool?: string
-  part?: MiniToolPart
+  directory?: string
+  part?: SessionMessageAssistantTool
   interrupted?: boolean
   toolState?: StreamToolState
   toolError?: string
   shell?: {
-    callID: string
     command: string
   }
 }
 
-export type LocalReplayAnchor = {
-  kind: EntryKind
-  text: string
-  phase: StreamPhase
-  messageID?: string
-  partID?: string
-  toolState?: StreamToolState
-  visible?: string
-}
-
 export type LocalReplayRow = {
   commit: StreamCommit
-  after?: LocalReplayAnchor
 }
 
 // The public contract between the stream transport / prompt queue and

@@ -1,41 +1,9 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { OpenCode } from "@opencode-ai/client/promise"
-import { runMiniFrontend } from "../../src/mini"
-import { runInteractiveDeferredMode, runInteractiveMode } from "../../src/mini/runtime"
-import type { FooterApi, FooterEvent, MiniHost, RunProvider } from "../../src/mini/types"
-
-const provider: RunProvider = {
-  id: "openai",
-  name: "OpenAI",
-  models: {
-    "gpt-5": {
-      id: "gpt-5",
-      providerID: "openai",
-      name: "Little Frank",
-      capabilities: {
-        tools: true,
-        input: ["text"],
-        output: ["text"],
-      },
-      cost: {
-        input: 0,
-        output: 0,
-        cache: {
-          read: 0,
-          write: 0,
-        },
-      },
-      limit: {
-        context: 128000,
-        output: 8192,
-      },
-      status: "active",
-      variants: {},
-    },
-  },
-}
-
-const transportProviders: RunProvider[][] = []
+import { runInteractiveDeferredMode } from "../../src/mini/runtime"
+import type { LifecycleInput } from "../../src/mini/runtime.lifecycle"
+import type { FooterApi, FooterEvent, MiniHost } from "../../src/mini/types"
+import { createTuiResolvedConfig } from "./fixture/tui-runtime"
 
 function defer<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -51,18 +19,18 @@ function ok<T>(data: T) {
 
 function host(): MiniHost {
   return {
-    terminal: { stdin: process.stdin, cleanup() {} },
+    terminal: { stdin: process.stdin },
     platform: "linux",
     stdout: { write() {} },
     files: { readText: async () => "" },
     editor: { open: async () => undefined },
-    paths: { home: "/home/test", state: "/tmp/state", log: "/tmp/log" },
+    paths: { home: "/home/test" },
     signals: {
       sigint: { subscribe: () => () => {} },
       sigusr2: { subscribe: () => () => {} },
     },
     startup: { showTiming: false, now: () => 0 },
-    diagnostics: { pid: 1, cwd: "/tmp", argv: [] },
+    diagnostics: {},
     preferences: {
       resolveVariant: async () => undefined,
       saveVariant: async () => {},
@@ -123,36 +91,101 @@ function footer(events: FooterEvent[] = []): FooterApi {
 
 afterEach(() => {
   mock.restore()
-  transportProviders.length = 0
 })
 
 describe("run interactive runtime", () => {
-  test("leaves host terminal cleanup to the caller when startup fails before renderer creation", async () => {
+  test("routes form responses to their owners with global location and local settlement", async () => {
     const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
-    const inputHost = host()
-    let cleaned = 0
-    inputHost.terminal.cleanup = () => {
-      cleaned++
-    }
-    inputHost.preferences.resolveVariant = async () => {
-      throw new Error("preference failed")
-    }
+    const api = footer()
+    const streamStarted = defer<void>()
+    let lifecycle!: LifecycleInput
+    const settled: Array<{ sessionID: string; formID: string }> = []
+    spyOn(sdk.provider, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    spyOn(sdk.model, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    spyOn(sdk.agent, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    spyOn(sdk.reference, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    spyOn(sdk.command, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    spyOn(sdk.skill, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
+    const reply = spyOn(sdk.form, "reply").mockImplementation(() => ok(undefined))
 
-    await expect(
-      runMiniFrontend({
-        host: inputHost,
+    const task = runInteractiveDeferredMode(
+      {
+        host: host(),
         sdk,
         directory: "/tmp",
-        resolveAgent: async () => "build",
-        session: async () => ({ id: "ses-never" }),
+        target: async () => ({
+          sessionID: "ses_root",
+          location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp" } },
+          agent: "build",
+          model: { providerID: "test", modelID: "model" },
+          variant: undefined,
+          resume: false,
+        }),
         agent: "build",
-        model: undefined,
+        model: { providerID: "test", modelID: "model" },
         variant: undefined,
         files: [],
         thinking: false,
-      }),
-    ).rejects.toThrow("preference failed")
-    expect(cleaned).toBe(0)
+      },
+      {
+        createRuntimeLifecycle: async (input) => {
+          lifecycle = input
+          return {
+            footer: api,
+            onResize: () => () => {},
+            refreshTheme: () => {},
+            resetForReplay: () => Promise.resolve(),
+            close: () => Promise.resolve(),
+          }
+        },
+        streamTransport: Promise.resolve({
+          createSessionTransport: async () => {
+            streamStarted.resolve()
+            return {
+              runPromptTurn: async () => {},
+              interruptActiveTurn: async () => {},
+              selectSubagent: () => {},
+              settleForm: (sessionID: string, formID: string) => settled.push({ sessionID, formID }),
+              replayOnResize: async () => false,
+              close: async () => {},
+            }
+          },
+          formatUnknownError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+        }),
+      },
+    )
+    await streamStarted.promise
+
+    await lifecycle.onFormReply({
+      sessionID: "global",
+      formID: "frm_global",
+      answer: { value: "yes" },
+      location: { directory: "/remote work", workspaceID: "wrk_1" },
+    })
+    expect(reply).toHaveBeenCalledWith(
+      {
+        sessionID: "global",
+        formID: "frm_global",
+        answer: { value: "yes" },
+        location: { directory: "/remote work", workspaceID: "wrk_1" },
+      },
+      {
+        headers: {
+          "x-opencode-directory": "%2Fremote%20work",
+          "x-opencode-workspace": "wrk_1",
+        },
+      },
+    )
+    expect(settled).toEqual([{ sessionID: "global", formID: "frm_global" }])
+
+    reply.mockImplementationOnce(() => Promise.reject({ _tag: "FormInvalidAnswerError", message: "Invalid answer" }))
+    await expect(
+      lifecycle.onFormReply({ sessionID: "ses_child", formID: "frm_invalid", answer: { value: 3 } }),
+    ).rejects.toEqual({ _tag: "FormInvalidAnswerError", message: "Invalid answer" })
+    expect(settled.some((item) => item.formID === "frm_invalid")).toBe(false)
+
+    api.close()
+    await task
   })
 
   test("resolves the deferred session only after first paint", async () => {
@@ -174,11 +207,18 @@ describe("run interactive runtime", () => {
         host: host(),
         sdk,
         directory: "/tmp",
-        resolveAgent: async () => "build",
-        session: async () => {
+        target: async () => {
           resolved++
           api.close()
-          return { id: "ses-deferred", title: "Deferred" }
+          return {
+            sessionID: "ses-deferred",
+            sessionTitle: "Deferred",
+            location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp" } },
+            agent: "build",
+            model: { providerID: "openai", modelID: "gpt-5" },
+            variant: undefined,
+            resume: false,
+          }
         },
         agent: "build",
         model: { providerID: "openai", modelID: "gpt-5" },
@@ -277,8 +317,15 @@ describe("run interactive runtime", () => {
         host: host(),
         sdk,
         directory: "/tmp",
-        resolveAgent: async () => "build",
-        session: async () => ({ id: "ses-resume", title: "Resume", resume: true }),
+        target: async () => ({
+          sessionID: "ses-resume",
+          sessionTitle: "Resume",
+          location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp" } },
+          agent: "review",
+          model: { providerID: "openai", modelID: "gpt-5" },
+          variant: "high",
+          resume: true,
+        }),
         agent: "build",
         model: undefined,
         variant: undefined,
@@ -308,6 +355,7 @@ describe("run interactive runtime", () => {
       type: "history",
       history: [{ text: "previous prompt", parts: [] }],
     })
+    expect(events).toContainEqual({ type: "agent", agent: "review" })
     expect(events).toContainEqual({
       type: "model",
       model: "Little Frank · OpenAI · high",
@@ -315,294 +363,56 @@ describe("run interactive runtime", () => {
     })
   })
 
-  test("waits for provider metadata before eager replay transport bootstrap", async () => {
-    const providersStarted = defer<void>()
-    const providers = defer<void>()
-    const lifecycleModels: unknown[] = []
-
+  test("aborts deferred resume history on close and uses the cached exit title", async () => {
     const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
-    spyOn(sdk.provider, "list").mockImplementation(async () => {
-      providersStarted.resolve()
-      await providers.promise
-      return ok({
-        location: {
-          directory: "/tmp",
-        },
-        data: [
-          {
-            id: "openai",
-            name: "OpenAI",
-            api: {
-              type: "native",
-              settings: {},
-            },
-            request: {
-              headers: {},
-              body: {},
-            },
-          },
-        ],
-      }) as never
-    })
-    spyOn(sdk.model, "list").mockImplementation(
-      () =>
-        ok({
-          location: {
-            directory: "/tmp",
-          },
-          data: [
-            {
-              id: "gpt-5",
-              providerID: "openai",
-              name: "Little Frank",
-              api: {
-                id: "openai",
-                type: "native",
-                settings: {},
-              },
-              capabilities: {
-                tools: true,
-                input: ["text"],
-                output: ["text"],
-              },
-              request: {
-                headers: {},
-                body: {},
-              },
-              variants: [],
-              time: {
-                released: 1,
-              },
-              cost: [
-                {
-                  input: 0,
-                  output: 0,
-                  cache: {
-                    read: 0,
-                    write: 0,
-                  },
-                },
-              ],
-              status: "active",
-              enabled: true,
-              limit: {
-                context: 128000,
-                output: 8192,
-              },
-            },
-          ],
-        }) as never,
-    )
-    spyOn(sdk.message, "list").mockImplementation(() =>
-      ok({
-        data: [
-          {
-            id: "msg-user-1",
-            type: "user",
-            text: "hello",
-            time: {
-              created: 1,
-            },
-          },
-        ],
-        cursor: {},
-      }),
-    )
-    spyOn(sdk.session, "get").mockImplementation(
-      () =>
-        ok({
-          id: "ses-1",
-          projectID: "pro-1",
-          title: "Session",
-          cost: 0,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: {
-              read: 0,
-              write: 0,
-            },
-          },
-          time: {
-            created: 1,
-            updated: 1,
-          },
-          location: {
-            directory: "/tmp",
-          },
-          model: {
-            providerID: "openai",
-            id: "gpt-5",
-          },
-        }) as never,
-    )
-    spyOn(sdk.agent, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.reference, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.command, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.skill, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-
-    const task = runInteractiveMode(
-      {
-        host: host(),
-        sdk,
-        directory: "/tmp",
-        sessionID: "ses-1",
-        sessionTitle: "Session",
-        resume: true,
-        replay: true,
-        replayLimit: 100,
-        agent: "build",
-        model: undefined,
-        variant: undefined,
-        files: [],
-        thinking: true,
-      },
-      {
-        createRuntimeLifecycle: async (input) => {
-          lifecycleModels.push(input.model)
-          return {
-            footer: footer(),
-            onResize: () => () => {},
-            refreshTheme: () => {},
-            resetForReplay: () => Promise.resolve(),
-            close: () => Promise.resolve(),
-          }
-        },
-        streamTransport: Promise.resolve({
-          createSessionTransport: async (input: { providers?: () => RunProvider[]; footer: FooterApi }) => {
-            transportProviders.push(input.providers?.() ?? [])
-            setTimeout(() => {
-              input.footer.close()
-            }, 0)
-            return {
-              runPromptTurn: async () => {},
-              interruptActiveTurn: async () => {},
-              selectSubagent: () => {},
-              replayOnResize: async () => false,
-              close: async () => {},
-            }
-          },
-          formatUnknownError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-        }),
-      },
-    )
-
-    await providersStarted.promise
-
-    expect(transportProviders).toEqual([])
-
-    providers.resolve()
-
-    await task
-
-    expect(lifecycleModels).toEqual([{ providerID: "openai", modelID: "gpt-5" }])
-    expect(transportProviders).toEqual([[provider]])
-  })
-
-  test("defers catalog-selected model resolution until after first paint", async () => {
-    const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
-    const defaultStarted = defer<void>()
-    const releaseDefault = defer<void>()
-    const lifecycleStarted = defer<void>()
     const painted = defer<void>()
-    const modelShown = defer<void>()
-    let defaultRequested = false
-    const events: FooterEvent[] = []
-    const api = footer(events)
-    api.idle = () => painted.promise
-    const event = api.event
-    api.event = (value) => {
-      event(value)
-      if (value.type !== "model") return
-      modelShown.resolve()
-      api.close()
-    }
-
-    spyOn(sdk.model, "default").mockImplementation(async () => {
-      defaultRequested = true
-      defaultStarted.resolve()
-      await releaseDefault.promise
-      return ok({
-        location: { directory: "/tmp" },
-        data: { id: "catalog-default-test-model", providerID: "openai" },
-      }) as never
-    })
-    spyOn(sdk.provider, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.model, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.agent, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.reference, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.command, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    spyOn(sdk.skill, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-
-    const task = runInteractiveMode(
-      {
-        host: host(),
-        sdk,
-        directory: "/tmp",
-        sessionID: "ses-fresh",
-        resume: false,
-        agent: "build",
-        model: undefined,
-        variant: undefined,
-        files: [],
-        thinking: false,
-      },
-      {
-        createRuntimeLifecycle: async (input) => {
-          expect(input.model).toBeUndefined()
-          lifecycleStarted.resolve()
-          return {
-            footer: api,
-            onResize: () => () => {},
-            refreshTheme: () => {},
-            resetForReplay: () => Promise.resolve(),
-            close: () => Promise.resolve(),
-          }
-        },
-        streamTransport: Promise.resolve({
-          createSessionTransport: async () => ({
-            runPromptTurn: async () => {},
-            interruptActiveTurn: async () => {},
-            selectSubagent: () => {},
-            replayOnResize: async () => false,
-            close: async () => {},
-          }),
-          formatUnknownError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-        }),
-      },
-    )
-
-    await lifecycleStarted.promise
-    expect(defaultRequested).toBe(false)
-    painted.resolve()
-    await defaultStarted.promise
-    releaseDefault.resolve()
-    await modelShown.promise
-    await task
-
-    expect(events.find((event) => event.type === "model")).toEqual({
-      type: "model",
-      model: "catalog-default-test-model · openai",
-      selection: { providerID: "openai", modelID: "catalog-default-test-model" },
-    })
-  })
-
-  test("does not start deferred work after the footer closes", async () => {
-    const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
-    const lifecycleStarted = defer<void>()
-    const painted = defer<void>()
+    const readsStarted = defer<void>()
     const api = footer()
     api.idle = () => painted.promise
-    const defaultModel = spyOn(sdk.model, "default")
+    let reads = 0
+    let aborted = 0
+    let closedTitle: string | undefined
+    const pending = (signal: AbortSignal | undefined) =>
+      new Promise<never>((_resolve, reject) => {
+        reads++
+        if (reads === 2) readsStarted.resolve()
+        signal?.addEventListener(
+          "abort",
+          () => {
+            aborted++
+            reject(new Error("resume history aborted"))
+          },
+          { once: true },
+        )
+      })
+    const messages = spyOn(sdk.message, "list").mockImplementation(
+      (_request, options) => pending(options?.signal) as never,
+    )
+    const session = spyOn(sdk.session, "get").mockImplementation(
+      (_request, options) => pending(options?.signal) as never,
+    )
+    const response = { location: { directory: "/tmp" }, data: [] }
+    spyOn(sdk.provider, "list").mockResolvedValue(response as never)
+    spyOn(sdk.model, "list").mockResolvedValue(response as never)
+    spyOn(sdk.agent, "list").mockResolvedValue(response as never)
+    spyOn(sdk.reference, "list").mockResolvedValue(response as never)
+    spyOn(sdk.command, "list").mockResolvedValue(response as never)
+    spyOn(sdk.skill, "list").mockResolvedValue(response as never)
 
-    const task = runInteractiveMode(
+    const task = runInteractiveDeferredMode(
       {
         host: host(),
         sdk,
         directory: "/tmp",
-        sessionID: "ses-closed",
-        resume: false,
+        target: async () => ({
+          sessionID: "ses-resume-abort",
+          sessionTitle: "Cached title",
+          location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp" } },
+          agent: "build",
+          model: undefined,
+          variant: undefined,
+          resume: true,
+        }),
         agent: "build",
         model: undefined,
         variant: undefined,
@@ -610,168 +420,89 @@ describe("run interactive runtime", () => {
         thinking: false,
       },
       {
-        createRuntimeLifecycle: async () => {
-          lifecycleStarted.resolve()
-          return {
-            footer: api,
-            onResize: () => () => {},
-            refreshTheme: () => {},
-            resetForReplay: () => Promise.resolve(),
-            close: () => Promise.resolve(),
-          }
-        },
+        createRuntimeLifecycle: async () => ({
+          footer: api,
+          onResize: () => () => {},
+          refreshTheme: () => {},
+          resetForReplay: () => Promise.resolve(),
+          close: async (input) => {
+            closedTitle = input.sessionTitle
+          },
+        }),
       },
     )
 
-    await lifecycleStarted.promise
+    painted.resolve()
+    await readsStarted.promise
     api.close()
-    painted.resolve()
     await task
 
-    expect(defaultModel).not.toHaveBeenCalled()
+    expect(aborted).toBe(2)
+    expect(messages).toHaveBeenCalledWith(
+      { sessionID: "ses-resume-abort", limit: 200, order: "desc" },
+      { signal: expect.any(AbortSignal) },
+    )
+    expect(session).toHaveBeenCalledTimes(1)
+    expect(session).toHaveBeenCalledWith({ sessionID: "ses-resume-abort" }, { signal: expect.any(AbortSignal) })
+    expect(closedTitle).toBe("Cached title")
   })
 
-  test("searches files through the V2 file API", async () => {
+  test("adopts the deferred target location for catalogs, files, and runtime placement", async () => {
     const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
+    const lifecycleStarted = defer<void>()
+    const painted = defer<void>()
     const api = footer()
-    const find = spyOn(sdk.file, "find").mockImplementation(
-      () =>
-        ok({
-          location: { directory: "/tmp", project: { id: "proj_1", directory: "/tmp" } },
-          data: [{ path: "src/index.ts", type: "file" }],
-        }) as never,
-    )
+    api.idle = () => painted.promise
+    let targets = 0
+    let getDirectory: (() => string) | undefined
+    let findFiles: ((query: string) => Promise<string[]>) | undefined
+    let transportLocation: unknown
+    const response = { location: { directory: "/session", workspaceID: "work-1" }, data: [] }
+    const providerList = spyOn(sdk.provider, "list").mockResolvedValue(response as never)
+    const modelList = spyOn(sdk.model, "list").mockResolvedValue(response as never)
+    const agentList = spyOn(sdk.agent, "list").mockResolvedValue(response as never)
+    const referenceList = spyOn(sdk.reference, "list").mockResolvedValue(response as never)
+    const commandList = spyOn(sdk.command, "list").mockResolvedValue(response as never)
+    const skillList = spyOn(sdk.skill, "list").mockResolvedValue(response as never)
+    const fileFind = spyOn(sdk.file, "find").mockResolvedValue({
+      location: {
+        directory: "/session",
+        workspaceID: "work-1",
+        project: { id: "pro-1", directory: "/session" },
+      },
+      data: [{ path: "src/index.ts", type: "file" }],
+    } as never)
 
-    await runInteractiveMode(
+    const task = runInteractiveDeferredMode(
       {
         host: host(),
         sdk,
-        directory: "/tmp",
-        sessionID: "ses-files",
-        resume: false,
-        agent: "build",
+        directory: "/launch",
+        target: async () => {
+          targets++
+          return {
+            sessionID: "ses-target",
+            location: {
+              directory: "/session",
+              workspaceID: "work-1",
+              project: { id: "location-project", directory: "/session" },
+            },
+            agent: "review",
+            model: { providerID: "openai", modelID: "gpt-5" },
+            variant: "high",
+            resume: false,
+          }
+        },
+        agent: undefined,
         model: undefined,
         variant: undefined,
         files: [],
-        thinking: false,
       },
       {
         createRuntimeLifecycle: async (input) => {
-          await expect(input.findFiles("index")).resolves.toEqual(["src/index.ts"])
-          api.close()
-          return {
-            footer: api,
-            onResize: () => () => {},
-            refreshTheme: () => {},
-            resetForReplay: () => Promise.resolve(),
-            close: () => Promise.resolve(),
-          }
-        },
-      },
-    )
-
-    expect(find).toHaveBeenCalledWith({ query: "index", type: "file", location: { directory: "/tmp" } })
-  })
-
-  test.skip("retains last-known-good state across failed coalesced refreshes and retries later", async () => {
-    const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
-    const refreshGate = defer<void>()
-    let providerCalls = 0
-    let modelCalls = 0
-    let agentCalls = 0
-    let referenceCalls = 0
-    const events: FooterEvent[] = []
-    const api = footer(events)
-    spyOn(sdk.provider, "list").mockImplementation(async () => {
-      providerCalls++
-      if (providerCalls === 2) {
-        await refreshGate.promise
-        throw new Error("provider refresh failed")
-      }
-      return ok({
-        location: { directory: "/tmp" },
-        data: [
-          {
-            id: "openai",
-            name: providerCalls >= 3 ? "OpenAI refreshed" : "OpenAI",
-            api: { type: "native", settings: {} },
-            request: { headers: {}, body: {} },
-          },
-        ],
-      }) as never
-    })
-    spyOn(sdk.model, "list").mockImplementation(() => {
-      modelCalls++
-      return ok({
-        location: { directory: "/tmp" },
-        data: [
-          {
-            id: "gpt-5",
-            providerID: "openai",
-            name: "Little Frank",
-            api: { id: "openai", type: "native", settings: {} },
-            capabilities: { tools: true, input: ["text"], output: ["text"] },
-            request: { headers: {}, body: {} },
-            variants:
-              modelCalls >= 4 ? [] : [{ id: modelCalls >= 3 ? "high" : "low", settings: {}, headers: {}, body: {} }],
-            time: { released: 1 },
-            cost: [{ input: 0, output: 0, cache: { read: 0, write: 0 } }],
-            status: "active",
-            enabled: true,
-            limit: { context: modelCalls >= 3 ? 256000 : 128000, output: 8192 },
-          },
-        ],
-      }) as never
-    })
-    spyOn(sdk.agent, "list").mockImplementation(async () => {
-      agentCalls++
-      if (agentCalls === 2) throw new Error("agent refresh failed")
-      return ok({
-        location: { directory: "/tmp" },
-        data: [{ id: "build", description: agentCalls >= 3 ? "Refreshed agent" : "Agent", mode: "primary" }],
-      }) as never
-    })
-    spyOn(sdk.reference, "list").mockImplementation(() => {
-      referenceCalls++
-      return ok({
-        location: { directory: "/tmp" },
-        data: [
-          { name: "effect", path: "/effect", description: referenceCalls >= 3 ? "Refreshed reference" : "Reference" },
-        ],
-      }) as never
-    })
-    spyOn(sdk.command, "list").mockImplementation(
-      () => ok({ location: { directory: "/tmp" }, data: [{ name: "check", description: "Check" }] }) as never,
-    )
-    spyOn(sdk.skill, "list").mockImplementation(() => ok({ location: { directory: "/tmp" }, data: [] }) as never)
-    let finalProviders: RunProvider[] = []
-    let finalLimits: Record<string, number> = {}
-    let retainedProviders: RunProvider[] = []
-    let retainedLimits: Record<string, number> = {}
-    let retainedCatalog: FooterEvent | undefined
-    let selectedDefault: unknown
-    let selectDefault: (() => unknown) | undefined
-    let selectVariant: ((variant: string | undefined) => unknown) | undefined
-    let defaultRefreshVariants: FooterEvent | undefined
-
-    await runInteractiveMode(
-      {
-        host: host(),
-        sdk,
-        directory: "/tmp",
-        sessionID: "ses-1",
-        sessionTitle: "Session",
-        resume: false,
-        agent: "build",
-        model: { providerID: "openai", modelID: "gpt-5" },
-        variant: "low",
-        files: [],
-        thinking: false,
-      },
-      {
-        createRuntimeLifecycle: async (input) => {
-          selectDefault = () => input.onVariantSelect?.(undefined)
-          selectVariant = (variant) => input.onVariantSelect?.(variant)
+          getDirectory = input.getDirectory
+          findFiles = input.findFiles
+          lifecycleStarted.resolve()
           return {
             footer: api,
             onResize: () => () => {},
@@ -782,33 +513,8 @@ describe("run interactive runtime", () => {
         },
         streamTransport: Promise.resolve({
           createSessionTransport: async (input) => {
-            while (
-              !events.some(
-                (event) => event.type === "variants" && event.variants.includes("low") && event.current === "low",
-              )
-            )
-              await Bun.sleep(0)
-            selectedDefault = await Promise.resolve(selectDefault?.())
-            input.onCatalogRefresh?.()
-            input.onCatalogRefresh?.()
-            input.onCatalogRefresh?.()
-            while (providerCalls < 2) await Bun.sleep(0)
-            refreshGate.resolve()
-            await new Promise((resolve) => setTimeout(resolve, 0))
-            retainedProviders = input.providers?.() ?? []
-            retainedLimits = input.limits()
-            retainedCatalog = events.filter((event) => event.type === "catalog").at(-1)
-            input.onCatalogRefresh?.()
-            input.onCatalogRefresh?.()
-            while (providerCalls < 3 || modelCalls < 3 || agentCalls < 3) await Bun.sleep(0)
-            await new Promise((resolve) => setTimeout(resolve, 0))
-            defaultRefreshVariants = events.filter((event) => event.type === "variants").at(-1)
-            await Promise.resolve(selectVariant?.("high"))
-            input.onCatalogRefresh?.()
-            while (providerCalls < 4 || modelCalls < 4) await Bun.sleep(0)
-            await new Promise((resolve) => setTimeout(resolve, 0))
-            finalProviders = input.providers?.() ?? []
-            finalLimits = input.limits()
+            transportLocation = input.location
+            await findFiles?.("index")
             setTimeout(() => input.footer.close(), 0)
             return {
               runPromptTurn: async () => {},
@@ -818,33 +524,26 @@ describe("run interactive runtime", () => {
               close: async () => {},
             }
           },
-          formatUnknownError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+          formatUnknownError: (error: unknown) => String(error),
         }),
       },
     )
 
-    expect(providerCalls).toBe(4)
-    expect(modelCalls).toBe(4)
-    expect(retainedProviders[0]?.name).toBe("OpenAI")
-    expect(retainedProviders[0]?.models["gpt-5"]?.variants).toEqual({ low: {} })
-    expect(retainedLimits["openai/gpt-5"]).toBe(128000)
-    expect(retainedCatalog).toMatchObject({
-      agents: [{ name: "build", description: "Agent" }],
-      references: [{ name: "effect", description: "Reference" }],
-    })
-    expect(selectedDefault).toMatchObject({ variant: undefined })
-    expect(defaultRefreshVariants).toMatchObject({ variants: ["high"], current: undefined })
-    expect(finalProviders[0]?.name).toBe("OpenAI refreshed")
-    expect(finalProviders[0]?.models["gpt-5"]?.variants).toEqual({})
-    expect(finalLimits["openai/gpt-5"]).toBe(256000)
-    expect(events.filter((event) => event.type === "variants").at(-1)).toMatchObject({
-      variants: [],
-      current: undefined,
-    })
-    expect(events.filter((event) => event.type === "catalog").at(-1)).toMatchObject({
-      agents: [{ name: "build", description: "Refreshed agent" }],
-      references: [{ name: "effect", description: "Refreshed reference" }],
-      commands: [{ name: "check", description: "Check" }],
-    })
+    await lifecycleStarted.promise
+    expect(targets).toBe(0)
+    expect(getDirectory?.()).toBe("/launch")
+    painted.resolve()
+    await task
+
+    const query = { location: { directory: "/session", workspace: "work-1" } }
+    expect(getDirectory?.()).toBe("/session")
+    expect(transportLocation).toMatchObject({ directory: "/session", workspaceID: "work-1" })
+    expect(providerList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(modelList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(agentList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(referenceList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(commandList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(skillList).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
+    expect(fileFind).toHaveBeenCalledWith({ query: "index", type: "file", ...query })
   })
 })

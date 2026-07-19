@@ -145,11 +145,11 @@ describe("Mini CLI host", () => {
     expect(process.listenerCount("SIGUSR2")).toBe(sigusr2)
   })
 
-  test("passes paths, platform, timing, and diagnostic context", async () => {
+  test("passes frontend host capabilities", async () => {
     const directory = await root()
     const input = host({ stdin: stream(true), cleanup() {} }, directory)
 
-    expect(input.paths).toEqual({ home: directory, state: directory, log: directory })
+    expect(input.paths).toEqual({ home: directory })
     expect(input.platform).toBe(process.platform)
     expect(typeof input.files.readText).toBe("function")
     const file = path.join(directory, "attachment.txt")
@@ -157,7 +157,6 @@ describe("Mini CLI host", () => {
     expect(await input.files.readText(pathToFileURL(file).href)).toBe("attachment contents")
     expect(typeof input.startup.showTiming).toBe("boolean")
     expect(typeof input.startup.now()).toBe("number")
-    expect(input.diagnostics).toMatchObject({ pid: process.pid, cwd: directory })
   })
 
   test("merges, clears, and repairs persisted model variants", async () => {
@@ -185,6 +184,9 @@ describe("Mini CLI host", () => {
       recent: [{ providerID: "anthropic", modelID: "sonnet" }],
       variant: { "openai/gpt-4.1": "low" },
     })
+
+    await Bun.write(file, JSON.stringify({ variant: { "openai/gpt-5": "default" } }))
+    expect(await input.preferences.resolveVariant(model)).toBeUndefined()
 
     await Bun.write(file, "{")
     await input.preferences.saveVariant(model, "high")

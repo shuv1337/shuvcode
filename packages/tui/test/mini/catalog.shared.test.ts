@@ -17,11 +17,14 @@ describe("run catalog shared", () => {
         }) as never,
     )
 
-    await expect(waitForDefaultModel({ sdk: client, directory: "/tmp" })).resolves.toEqual({
+    await expect(waitForDefaultModel({ sdk: client, location: { directory: "/tmp" } })).resolves.toEqual({
       providerID: "openai",
       modelID: "gpt-5",
     })
-    expect(selected).toHaveBeenCalledWith({ location: { directory: "/tmp" } })
+    expect(selected).toHaveBeenCalledWith(
+      { location: { directory: "/tmp", workspace: undefined } },
+      { signal: expect.any(AbortSignal) },
+    )
   })
 
   test("loads visible project references from the current reference catalog", async () => {
@@ -31,23 +34,23 @@ describe("run catalog shared", () => {
         Promise.resolve({
           location: { directory: "/tmp", project: { id: "proj_1", directory: "/tmp" } },
           data: [
-              {
-                name: "effect",
-                path: "/repos/effect",
-                description: "Effect v4 sources",
-                source: { type: "local", path: "/repos/effect" },
-              },
-              {
-                name: "secret",
-                path: "/repos/secret",
-                hidden: true,
-                source: { type: "local", path: "/repos/secret" },
-              },
+            {
+              name: "effect",
+              path: "/repos/effect",
+              description: "Effect v4 sources",
+              source: { type: "local", path: "/repos/effect" },
+            },
+            {
+              name: "secret",
+              path: "/repos/secret",
+              hidden: true,
+              source: { type: "local", path: "/repos/secret" },
+            },
           ],
         }) as never,
     )
 
-    const references = await loadRunReferences(client, "/tmp")
+    const references = await loadRunReferences(client, { directory: "/tmp" })
 
     expect(list).toHaveBeenCalledWith({ location: { directory: "/tmp" } })
     expect(references).toMatchObject([{ name: "effect", path: "/repos/effect", description: "Effect v4 sources" }])
@@ -103,21 +106,9 @@ describe("run catalog shared", () => {
         name: "OpenAI",
         models: {
           "gpt-5": {
-            id: "gpt-5",
-            providerID: "openai",
             name: "Little Frank",
-            capabilities: expect.objectContaining({ tools: true }),
             cost: {
               input: 0,
-              output: 0,
-              cache: {
-                read: 0,
-                write: 0,
-              },
-            },
-            limit: {
-              context: 128000,
-              output: 8192,
             },
             status: "active",
             variants: {

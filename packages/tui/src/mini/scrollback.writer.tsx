@@ -12,11 +12,12 @@ export function entryGroupKey(commit: StreamCommit): string | undefined {
     return undefined
   }
 
+  const part = `${commit.messageID ?? ""}\u0000${commit.partID}`
   if (toolStructuredFinal(commit)) {
-    return `tool:${commit.partID}:final`
+    return `tool:${part}:final`
   }
 
-  return `${commit.kind}:${commit.partID}`
+  return `${commit.kind}:${part}`
 }
 
 export function sameEntryGroup(left: StreamCommit | undefined, right: StreamCommit): boolean {
@@ -47,14 +48,6 @@ export function entryLayout(commit: StreamCommit, body: RunEntryBody = entryBody
     return "inline"
   }
 
-  if (commit.kind === "reasoning") {
-    return "block"
-  }
-
-  if (commit.kind === "error") {
-    return "block"
-  }
-
   return "block"
 }
 
@@ -79,7 +72,6 @@ export function RunEntryContent(props: {
   body?: RunEntryBody
   theme?: RunTheme
   opts?: ScrollbackOptions
-  width?: number
 }) {
   const theme = createMemo(() => props.theme ?? RUN_THEME_FALLBACK)
   const body = createMemo(() => props.body ?? entryBody(props.commit))
@@ -263,13 +255,12 @@ export function entryWriter(input: {
   opts?: ScrollbackOptions
 }): ScrollbackWriter {
   return createScrollbackWriter(
-    (ctx) => (
+    () => (
       <RunEntryContent
         commit={input.commit}
         body={input.body}
         theme={input.theme}
         opts={{ ...input.opts, suppressBackgrounds: true }}
-        width={ctx.width}
       />
     ),
     entryFlags(input.commit),

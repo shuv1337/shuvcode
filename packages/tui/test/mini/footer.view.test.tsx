@@ -3,7 +3,7 @@ import { expect, test } from "bun:test"
 import { BoxRenderable, RGBA, type RootRenderable } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { createSignal } from "solid-js"
-import type { QuestionV2Request } from "@opencode-ai/client/promise"
+import type { FormInfo } from "@opencode-ai/client/promise"
 import { Keymap } from "../../src/context/keymap"
 import {
   RUN_COMMAND_PANEL_ROWS,
@@ -30,7 +30,6 @@ import type {
   RunTuiConfig,
   StreamCommit,
 } from "../../src/mini/types"
-import { RunQuestionBody } from "../../src/mini/footer.question"
 import { selectedCommand } from "../../src/mini/footer.prompt"
 import { RejectField } from "../../src/mini/footer.permission"
 import { createTuiResolvedConfig } from "./fixture/tui-runtime"
@@ -42,8 +41,6 @@ function command(input: { name: string; description: string; source?: "command" 
     name: input.name,
     description: input.description,
     source: input.source,
-    template: "",
-    hints: [],
   } satisfies RunCommand
 }
 
@@ -55,51 +52,11 @@ function model(input: {
   variants?: Record<string, Record<string, never>>
 }) {
   return {
-    id: input.id,
-    providerID: "opencode",
-    api: {
-      id: "opencode",
-      url: "https://opencode.ai",
-      npm: "@ai-sdk/openai-compatible",
-    },
     name: input.name,
-    capabilities: {
-      temperature: true,
-      reasoning: true,
-      attachment: true,
-      toolcall: true,
-      input: {
-        text: true,
-        audio: false,
-        image: true,
-        video: false,
-        pdf: true,
-      },
-      output: {
-        text: true,
-        audio: false,
-        image: false,
-        video: false,
-        pdf: false,
-      },
-      interleaved: false,
-    },
     cost: {
       input: input.cost ?? 1,
-      output: 1,
-      cache: {
-        read: 0,
-        write: 0,
-      },
-    },
-    limit: {
-      context: 128000,
-      output: 8192,
     },
     status: input.status ?? "active",
-    options: {},
-    headers: {},
-    release_date: "2026-01-01",
     variants: input.variants,
   } satisfies RunProvider["models"][string]
 }
@@ -108,9 +65,6 @@ function provider() {
   return {
     id: "opencode",
     name: "opencode",
-    source: "api",
-    env: [],
-    options: {},
     models: {
       "gpt-5": model({ id: "gpt-5", name: "GPT-5", variants: { high: {}, minimal: {} } }),
       "gpt-free": model({ id: "gpt-free", name: "GPT Free", cost: 0 }),
@@ -127,8 +81,6 @@ function subagent(input: {
 }) {
   return {
     sessionID: input.sessionID,
-    partID: `part-${input.sessionID}`,
-    callID: `call-${input.sessionID}`,
     label: input.label,
     description: input.description,
     status: input.status ?? "running",
@@ -142,7 +94,6 @@ function footerState(input: Partial<FooterState> = {}) {
     status: "",
     queue: 0,
     model: "gpt-5",
-    duration: "",
     usage: "",
     first: false,
     interrupt: 0,
@@ -165,11 +116,13 @@ async function renderFooter(
     state?: Partial<FooterState>
     onCycle?: () => void
     onSubmit?: (prompt: RunPrompt) => boolean
+    view?: FooterView
+    onFormReply?: (input: unknown) => void
   } = {},
 ) {
-  const [view] = createSignal<FooterView>({ type: "prompt" })
+  const [view, setView] = createSignal<FooterView>(input.view ?? { type: "prompt" })
   const [subagents] = createSignal<FooterSubagentState>(
-    input.subagents ?? { tabs: [], details: {}, permissions: [], questions: [] },
+    input.subagents ?? { tabs: [], details: {}, permissions: [], forms: [] },
   )
   const state = footerState(input.state)
   const config = input.tuiConfig ?? tuiConfig
@@ -177,7 +130,7 @@ async function renderFooter(
     return (
       <Keymap.Provider config={config}>
         <RunFooterView
-          directory="/tmp"
+          directory={() => "/tmp"}
           findFiles={async () => []}
           agents={() => []}
           references={() => []}
@@ -191,11 +144,10 @@ async function renderFooter(
           subagent={subagents}
           theme={input.theme ?? (() => RUN_THEME_FALLBACK)}
           tuiConfig={config}
-          agent="opencode"
           onSubmit={input.onSubmit ?? (() => true)}
           onPermissionReply={() => {}}
-          onQuestionReply={() => {}}
-          onQuestionReject={() => {}}
+          onFormReply={(value) => input.onFormReply?.(value)}
+          onFormCancel={() => {}}
           onCycle={input.onCycle ?? (() => {})}
           onInterrupt={() => false}
           onEditorOpen={async () => undefined}
@@ -223,6 +175,7 @@ async function renderFooter(
 
   return {
     ...app,
+    setView,
     cleanup() {
       app.renderer.currentFocusedRenderable?.blur()
       app.renderer.currentFocusedEditor?.blur()
@@ -230,6 +183,57 @@ async function renderFooter(
     },
   }
 }
+
+test("direct footer preserves a partial multi-field form draft across permission preemption", async () => {
+  const request: FormInfo = {
+    id: "frm_preempted",
+    sessionID: "ses_child",
+    title: "Deployment",
+    fields: [
+      { key: "service", type: "string", title: "Service", required: true },
+      { key: "notes", type: "string", title: "Notes", required: true },
+    ],
+  }
+  const app = await renderFooter({
+    height: 16,
+    view: { type: "form", request },
+  })
+
+  try {
+    await app.renderOnce()
+    "api".split("").forEach((key) => app.mockInput.pressKey(key))
+    app.mockInput.pressEnter()
+    await app.renderOnce()
+    "keep this draft".split("").forEach((key) => app.mockInput.pressKey(key))
+    expect(app.renderer.currentFocusedEditor?.plainText).toBe("keep this draft")
+
+    app.setView({
+      type: "permission",
+      request: {
+        id: "per_preempting",
+        sessionID: "ses_child",
+        action: "read",
+        resources: ["src/index.ts"],
+      },
+    })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Permission required")
+
+    app.setView({ type: "form", request })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("2/2")
+    expect(app.renderer.currentFocusedEditor?.plainText).toBe("keep this draft")
+
+    app.setView({ type: "prompt" })
+    await app.renderOnce()
+    app.setView({ type: "form", request })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("1/2")
+    expect(app.renderer.currentFocusedEditor?.plainText).toBe("")
+  } finally {
+    app.cleanup()
+  }
+})
 
 function expectPaletteList(list: BoxRenderable, selectedIndex: number) {
   expect(list.backgroundColor.toInts()).toEqual((RUN_THEME_FALLBACK.footer.shade as RGBA).toInts())
@@ -310,13 +314,13 @@ test("run entry content updates when live commit text changes", async () => {
     source: "tool",
     messageID: "msg-1",
     partID: "part-1",
-    tool: "bash",
+    tool: "shell",
   })
 
   const app = await testRender(
     () => (
       <box width={80} height={4}>
-        <RunEntryContent commit={commit()} theme={RUN_THEME_FALLBACK} width={80} />
+        <RunEntryContent commit={commit()} theme={RUN_THEME_FALLBACK} />
       </box>
     ),
     {
@@ -336,7 +340,7 @@ test("run entry content updates when live commit text changes", async () => {
       source: "tool",
       messageID: "msg-1",
       partID: "part-1",
-      tool: "bash",
+      tool: "shell",
     })
     await app.renderOnce()
 
@@ -669,9 +673,7 @@ test("direct subagent panel closes when moving up from the first item", async ()
 })
 
 test("direct queued prompt panel renders pending prompt actions", async () => {
-  const [prompts] = createSignal([
-    { messageID: "m-1", partID: "p-1", prompt: { text: "fix the auth test", parts: [] } },
-  ])
+  const [prompts] = createSignal([{ messageID: "m-1", prompt: { text: "fix the auth test", parts: [] } }])
 
   const app = await testRender(
     () => (
@@ -874,9 +876,11 @@ test("selectedCommand backfills the catalog source for bound drafts", () => {
     source: "skill",
   })
   // Plain commands stay untagged.
-  expect(selectedCommand("/deploy prod", { name: "deploy", arguments: "" }, [
-    command({ name: "deploy", description: "Deploy" }),
-  ])).toEqual({ name: "deploy", arguments: "prod" })
+  expect(
+    selectedCommand("/deploy prod", { name: "deploy", arguments: "" }, [
+      command({ name: "deploy", description: "Deploy" }),
+    ]),
+  ).toEqual({ name: "deploy", arguments: "prod" })
 })
 
 test("direct footer tags skill slash submissions with their catalog source", async () => {
@@ -936,7 +940,9 @@ test.skip("direct footer skill picker inserts an editable bound skill command", 
     app.mockInput.pressEnter()
     await app.renderOnce()
 
-    expect(submits).toEqual([{ text: "/new task", parts: [], command: { name: "new", arguments: "task", source: "skill" } }])
+    expect(submits).toEqual([
+      { text: "/new task", parts: [], command: { name: "new", arguments: "task", source: "skill" } },
+    ])
   } finally {
     app.cleanup()
   }
@@ -981,7 +987,6 @@ test("direct footer shows editable prompts and additional queued work while runn
     status: "",
     queue: 3,
     model: "gpt-5",
-    duration: "",
     usage: "",
     first: false,
     interrupt: 0,
@@ -992,13 +997,13 @@ test("direct footer shows editable prompts and additional queued work while runn
     tabs: [subagent({ sessionID: "s-1", label: "Explore", description: "Inspect auth flow" })],
     details: {},
     permissions: [],
-    questions: [],
+    forms: [],
   })
   function Harness() {
     return (
       <Keymap.Provider config={tuiConfig}>
         <RunFooterView
-          directory="/tmp"
+          directory={() => "/tmp"}
           findFiles={async () => []}
           agents={() => []}
           references={() => []}
@@ -1013,16 +1018,13 @@ test("direct footer shows editable prompts and additional queued work while runn
           state={state}
           view={view}
           subagent={subagents}
-          queuedPrompts={() => [
-            { messageID: "m-queued", partID: "p-queued", prompt: { text: "follow up", parts: [] } },
-          ]}
+          queuedPrompts={() => [{ messageID: "m-queued", prompt: { text: "follow up", parts: [] } }]}
           theme={() => RUN_THEME_FALLBACK}
           tuiConfig={tuiConfig}
-          agent="opencode"
           onSubmit={() => true}
           onPermissionReply={() => {}}
-          onQuestionReply={() => {}}
-          onQuestionReject={() => {}}
+          onFormReply={() => {}}
+          onFormCancel={() => {}}
           onCycle={() => {}}
           onInterrupt={() => false}
           onEditorOpen={async () => undefined}
@@ -1098,7 +1100,7 @@ test("direct footer always offers backgrounding for a foreground subagent", asyn
       tabs: [subagent({ sessionID: "s-1", label: "Explore", description: "Inspect auth flow" })],
       details: {},
       permissions: [],
-      questions: [],
+      forms: [],
     },
     width: 160,
   })
@@ -1125,7 +1127,7 @@ test("direct footer hides the subagent hint when only completed subagents remain
       tabs: [subagent({ sessionID: "s-1", label: "Explore", description: "Inspect auth flow", status: "completed" })],
       details: {},
       permissions: [],
-      questions: [],
+      forms: [],
     },
     width: 160,
   })
@@ -1188,109 +1190,6 @@ test("direct footer mode label keeps left padding without a status pill", async 
     expect(statusline?.startsWith(" BUILD ")).toBe(true)
   } finally {
     app.cleanup()
-  }
-})
-
-test("direct question body separates single-select checkmark from label", async () => {
-  const request = {
-    id: "question-1",
-    sessionID: "session-1",
-    questions: [
-      {
-        question: "Which categorical concept is often described as a universal way to combine two objects?",
-        header: "Universal Product",
-        options: [
-          { label: "Product", description: "A product comes with projections." },
-          { label: "Equalizer", description: "An equalizer selects morphisms where arrows agree." },
-        ],
-      },
-    ],
-  } satisfies QuestionV2Request
-  const replies: unknown[] = []
-
-  const app = await testRender(
-    () => (
-      <box width={100} height={12}>
-        <RunQuestionBody
-          request={request}
-          theme={RUN_THEME_FALLBACK.footer}
-          onReply={(input) => {
-            replies.push(input)
-          }}
-          onReject={() => {}}
-        />
-      </box>
-    ),
-    {
-      width: 100,
-      height: 12,
-    },
-  )
-
-  try {
-    app.mockInput.pressEnter()
-    await app.renderOnce()
-
-    expect(replies).toHaveLength(1)
-    expect(app.captureCharFrame()).toContain("Product ✓")
-  } finally {
-    app.renderer.destroy()
-  }
-})
-
-// OpenTUI currently segfaults while tearing down this textarea-backed keymap renderer.
-// Re-enable after the runtime fix.
-test.skip("direct custom answer submits through keymap return binding", async () => {
-  const question = {
-    id: "question-1",
-    sessionID: "session-1",
-    questions: [
-      {
-        question: "Which answer should I use?",
-        header: "Answer",
-        options: [{ label: "Provided", description: "Use the listed answer." }],
-        custom: true,
-      },
-    ],
-  } satisfies QuestionV2Request
-  const questions: unknown[] = []
-  function Harness() {
-    return (
-      <Keymap.Provider config={tuiConfig}>
-        <RunQuestionBody
-          request={question}
-          theme={RUN_THEME_FALLBACK.footer}
-          onReply={(input) => {
-            questions.push(input)
-          }}
-          onReject={() => {}}
-        />
-      </Keymap.Provider>
-    )
-  }
-
-  const app = await testRender(
-    () => (
-      <box width={100} height={18}>
-        <Harness />
-      </box>
-    ),
-    { width: 100, height: 18, kittyKeyboard: true },
-  )
-
-  try {
-    await app.renderOnce()
-    app.mockInput.pressKey("2")
-    await app.renderOnce()
-    "typed".split("").forEach((key) => app.mockInput.pressKey(key))
-    await app.renderOnce()
-    app.mockInput.pressEnter()
-    await app.renderOnce()
-    expect(questions).toEqual([{ requestID: "question-1", answers: [["typed"]] }])
-  } finally {
-    app.renderer.currentFocusedRenderable?.blur()
-    app.renderer.currentFocusedEditor?.blur()
-    app.renderer.destroy()
   }
 })
 

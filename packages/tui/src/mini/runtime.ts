@@ -1,61 +1,44 @@
 // Top-level orchestrator for `opencode mini`.
 //
 // Wires the boot sequence, lifecycle (renderer + footer), stream transport,
-// and prompt queue together into a single session loop. Two entry points:
-//
-//   runInteractiveMode     -- used when an SDK client already exists (attach mode)
-//   runInteractiveDeferredMode -- paints before resolving its session
-//
-// Both delegate to runInteractiveRuntime, which:
+// and prompt queue together into a single session loop. The frontend paints
+// before resolving its Session, then:
 //   1. resolves TUI config, model info, and session history,
 //   2. creates the split-footer lifecycle (renderer + RunFooter),
 //   3. starts the stream transport (SDK event subscription), lazily for fresh
 //      local sessions,
 //   4. runs the prompt queue until the footer closes.
 import { SessionMessage } from "@opencode-ai/schema/session-message"
+import type { LocationRef } from "@opencode-ai/client/promise"
 import { loadRunAgents, loadRunCommands, loadRunReferences, waitForDefaultModel } from "./catalog.shared"
 import { resolveModelInfo, resolveModelInfoStrict, resolveRunTuiConfig, resolveSessionInfo } from "./runtime.boot"
 import { createRuntimeLifecycle } from "./runtime.lifecycle"
 import { cycleVariant, formatModelLabel, resolveVariant } from "./variant.shared"
-import type {
-  LocalReplayAnchor,
-  LocalReplayRow,
-  MiniHost,
-  RunInput,
-  RunPrompt,
-  RunProvider,
-  RunTuiConfig,
-  StreamCommit,
-} from "./types"
+import type { LocalReplayRow, MiniHost, RunInput, RunPrompt, RunProvider, RunTuiConfig, StreamCommit } from "./types"
 
-/** @internal Exported for testing */
-export { pickVariant, resolveVariant } from "./variant.shared"
-
-/** @internal Exported for testing */
-export { runPromptQueue } from "./runtime.queue"
-
-type BootContext = Pick<
-  RunInput,
-  "sdk" | "directory" | "sessionID" | "sessionTitle" | "resume" | "agent" | "model" | "variant"
->
+type BootContext = Pick<RunInput, "sdk" | "agent" | "model" | "variant"> & {
+  location: LocationRef
+}
 
 type CreateSessionInput = {
+  location: LocationRef
   agent: string | undefined
   model: RunInput["model"]
   variant: string | undefined
 }
 
-type CreateSession = (sdk: RunInput["sdk"], input: CreateSessionInput) => Promise<{ id: string; title?: string }>
+type CreateSession = (sdk: RunInput["sdk"], input: CreateSessionInput, signal?: AbortSignal) => Promise<ResolvedSession>
+type Reconnect = (signal: AbortSignal) => Promise<RunInput["sdk"]>
 
 type RunRuntimeInput = {
   host: MiniHost
   boot: () => Promise<BootContext>
-  afterPaint?: (ctx: BootContext) => Promise<void> | void
-  resolveSession?: (ctx: BootContext) => Promise<ResolvedSession>
-  createSession?: (ctx: BootContext, input: CreateSessionInput) => Promise<ResolvedSession>
+  resolveSession: (sdk: RunInput["sdk"], signal: AbortSignal) => Promise<ResolvedSession>
+  createSession?: CreateSession
+  reconnect?: Reconnect
   files: RunInput["files"]
   initialInput?: string
-  thinking: boolean
+  thinking?: boolean
   replay?: boolean
   replayLimit?: number
   demo?: RunInput["demo"]
@@ -65,16 +48,16 @@ type RunRuntimeInput = {
 export type RunDeferredInput = {
   host: MiniHost
   sdk: RunInput["sdk"]
+  reconnect?: Reconnect
   directory: string
-  resolveAgent: () => Promise<string | undefined>
-  session: (sdk: RunInput["sdk"]) => Promise<{ id: string; title?: string; resume?: boolean } | undefined>
+  target: (sdk: RunInput["sdk"], signal: AbortSignal) => Promise<ResolvedSession>
   createSession?: CreateSession
   agent: RunInput["agent"]
   model: RunInput["model"]
   variant: RunInput["variant"]
   files: RunInput["files"]
   initialInput?: string
-  thinking: boolean
+  thinking?: boolean
   replay?: boolean
   replayLimit?: number
   demo?: RunInput["demo"]
@@ -99,44 +82,30 @@ type StreamState = {
 type RunDemo = ReturnType<(typeof import("./demo"))["createRunDemo"]>
 
 type ResolvedSession = {
+  sdk?: RunInput["sdk"]
   sessionID: string
   sessionTitle?: string
+  location: RunInput["location"]
+  model: RunInput["model"]
+  variant: string | undefined
   agent?: string | undefined
   resume?: boolean
 }
 
-function createSessionResolver(fn?: CreateSession) {
-  if (!fn) {
-    return undefined
-  }
-
-  return async (ctx: BootContext, input: CreateSessionInput): Promise<ResolvedSession> => {
-    const created = await fn(ctx.sdk, input)
-    if (!created.id) {
-      throw new Error("Failed to create session")
-    }
-
-    return {
-      sessionID: created.id,
-      sessionTitle: created.title,
-      agent: input.agent,
-    }
-  }
-}
-
 type RuntimeState = {
+  sdk: RunInput["sdk"]
   shown: boolean
   aborting: boolean
   model: RunInput["model"]
   providers: RunProvider[]
   variants: string[]
-  limits: Record<string, number>
   activeVariant: string | undefined
   sessionID: string
   history: RunPrompt[]
   localRows: LocalReplayRow[]
   sessionTitle?: string
   agent: string | undefined
+  location: LocationRef
   switching?: Promise<void>
   demo?: RunDemo
   selectSubagent?: (sessionID: string | undefined) => void
@@ -144,12 +113,10 @@ type RuntimeState = {
   stream?: Promise<StreamState>
 }
 
-function hasSession(input: RunRuntimeInput, state: RuntimeState) {
-  return !input.resolveSession || !!state.sessionID
-}
-
-function eagerStream(input: RunRuntimeInput, ctx: BootContext) {
-  return ctx.resume === true || !input.resolveSession || !!input.demo
+type ClientAttempt = {
+  sdk: RunInput["sdk"]
+  generation: number
+  signal: AbortSignal
 }
 
 function variantsFor(providers: RunProvider[], model: RunInput["model"]) {
@@ -160,22 +127,42 @@ function variantsFor(providers: RunProvider[], model: RunInput["model"]) {
   return Object.keys(providers.find((item) => item.id === model.providerID)?.models?.[model.modelID]?.variants ?? {})
 }
 
+function formRequestOptions(location: LocationRef | undefined) {
+  if (!location) return
+  return {
+    headers: {
+      "x-opencode-directory": encodeURIComponent(location.directory),
+      ...(location.workspaceID ? { "x-opencode-workspace": location.workspaceID } : {}),
+    },
+  }
+}
+
+function formAlreadySettled(error: unknown) {
+  return !!error && typeof error === "object" && Reflect.get(error, "_tag") === "FormAlreadySettledError"
+}
+
 const RESIZE_DELAY = 250
 const LOCAL_REPLAY_ROW_LIMIT = 100
 
-async function resolveExitTitle(
-  ctx: BootContext,
-  input: RunRuntimeInput,
-  state: RuntimeState,
-): Promise<string | undefined> {
-  if (!state.shown || !hasSession(input, state)) {
-    return undefined
-  }
-
-  return ctx.sdk.session
-    .get({ sessionID: state.sessionID })
-    .then((session) => session.title)
-    .catch(() => undefined)
+function abortable<A>(task: Promise<A>, signal: AbortSignal): Promise<A | undefined> {
+  if (signal.aborted) return Promise.resolve(undefined)
+  return new Promise((resolve) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort)
+      resolve(undefined)
+    }
+    signal.addEventListener("abort", abort, { once: true })
+    void task.then(
+      (value) => {
+        signal.removeEventListener("abort", abort)
+        resolve(value)
+      },
+      () => {
+        signal.removeEventListener("abort", abort)
+        resolve(undefined)
+      },
+    )
+  })
 }
 
 // Core runtime loop. Boot resolves the SDK context, then we set up the
@@ -189,74 +176,43 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
   const log = input.host.diagnostics.trace
   const tuiConfigTask = resolveRunTuiConfig(input.tuiConfig, input.host.platform)
   const ctx = await input.boot()
-  const sessionTask =
-    ctx.resume === true
-      ? resolveSessionInfo(ctx.sdk, ctx.sessionID, ctx.model)
-      : Promise.resolve({
-          first: true,
-          history: [],
-          model: undefined,
-          variant: undefined,
-        })
-  const savedTask = input.host.preferences.resolveVariant(ctx.model)
-  const [session, savedVariant] = await Promise.all([sessionTask, savedTask])
+  const runtimeController = new AbortController()
+  const session = {
+    first: true,
+    history: [] as RunPrompt[],
+    model: undefined as RunInput["model"],
+    variant: undefined as string | undefined,
+  }
+  const savedVariant = await input.host.preferences.resolveVariant(ctx.model)
   const state: RuntimeState = {
+    sdk: ctx.sdk,
     shown: !session.first,
     aborting: false,
     model: ctx.model ?? session.model,
     providers: [],
     variants: [],
-    limits: {},
     activeVariant: resolveVariant(ctx.variant, session.variant, savedVariant, []),
-    sessionID: ctx.sessionID,
+    sessionID: "",
     history: [...session.history],
     localRows: [],
-    sessionTitle: ctx.sessionTitle,
     agent: ctx.agent,
+    location: ctx.location,
   }
-  const loadModel = async () => {
-    if (state.model) {
-      return {
-        model: state.model,
-        savedVariant,
-        boot: true,
-        info: await resolveModelInfo(ctx.sdk, ctx.directory, state.model),
-      }
-    }
-
-    const model = await waitForDefaultModel({
-      sdk: ctx.sdk,
-      directory: ctx.directory,
-      active: () => !footer.isClosed,
-    })
-    if (footer.isClosed) return
-    const [fallbackSavedVariant, info] = await Promise.all([
-      input.host.preferences.resolveVariant(model),
-      resolveModelInfo(ctx.sdk, ctx.directory, model),
-    ])
-    if (!model || state.model) {
-      return {
-        model: state.model,
-        savedVariant: undefined,
-        boot: false,
-        info,
-      }
-    }
-
-    state.model = model
-    return {
-      model,
-      savedVariant: fallbackSavedVariant,
-      boot: true,
-      info,
-    }
+  const settleForm = async (sessionID: string, formID: string) => {
+    if (!state.stream) return
+    const stream = await state.stream
+    stream.handle.settleForm?.(sessionID, formID)
   }
   const shell = await (deps.createRuntimeLifecycle ?? createRuntimeLifecycle)({
     host: input.host,
-    directory: ctx.directory,
+    getDirectory: () => state.location.directory,
     findFiles: (query) =>
-      ctx.sdk.file
-        .find({ query, type: "file", location: { directory: ctx.directory } })
+      state.sdk.file
+        .find({
+          query,
+          type: "file",
+          location: { directory: state.location.directory, workspace: state.location.workspaceID },
+        })
         .then((result) => result.data.map((file) => file.path))
         .catch(() => []),
     agents: [],
@@ -276,25 +232,25 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       }
 
       log?.write("send.permission.reply", next)
-      await ctx.sdk.permission.reply({ sessionID: state.sessionID, ...next })
+      await state.sdk.permission.reply(next)
     },
-    onQuestionReply: async (next) => {
-      if (state.demo?.questionReply(next)) {
-        return
+    onFormReply: async (next) => {
+      if (state.demo?.formReply(next)) return
+      try {
+        await state.sdk.form.reply(next, formRequestOptions(next.sessionID === "global" ? next.location : undefined))
+      } catch (error) {
+        if (!formAlreadySettled(error)) throw error
       }
-
-      await ctx.sdk.question.reply({
-        sessionID: state.sessionID,
-        requestID: next.requestID,
-        answers: next.answers ?? [],
-      })
+      await settleForm(next.sessionID, next.formID)
     },
-    onQuestionReject: async (next) => {
-      if (state.demo?.questionReject(next)) {
-        return
+    onFormCancel: async (next) => {
+      if (state.demo?.formCancel(next)) return
+      try {
+        await state.sdk.form.cancel(next, formRequestOptions(next.sessionID === "global" ? next.location : undefined))
+      } catch (error) {
+        if (!formAlreadySettled(error)) throw error
       }
-
-      await ctx.sdk.question.reject({ sessionID: state.sessionID, ...next })
+      await settleForm(next.sessionID, next.formID)
     },
     onCycleVariant: () => {
       if (!state.model || state.variants.length === 0) {
@@ -325,7 +281,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
           return
         }
 
-        state.activeVariant = resolveVariant(ctx.variant, undefined, saved, state.variants)
+        state.activeVariant = resolveVariant(undefined, undefined, saved, state.variants)
       })
       state.switching = switching
       await switching
@@ -368,7 +324,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       }
     },
     onInterrupt: () => {
-      if (!hasSession(input, state) || state.aborting) {
+      if (!state.sessionID || state.aborting) {
         return false
       }
 
@@ -376,7 +332,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       void (
         state.stream
           ? state.stream.then((item) => item.handle.interruptActiveTurn())
-          : ctx.sdk.session.interrupt({ sessionID: state.sessionID })
+          : state.sdk.session.interrupt({ sessionID: state.sessionID })
       )
         .catch(() => {})
         .finally(() => {
@@ -385,16 +341,16 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       return true
     },
     onBackground: () => {
-      if (!hasSession(input, state)) {
+      if (!state.sessionID) {
         return
       }
 
       log?.write("send.background", { sessionID: state.sessionID })
-      void ctx.sdk.session.background({ sessionID: state.sessionID }).catch(() => {})
+      void state.sdk.session.background({ sessionID: state.sessionID }).catch(() => {})
     },
     onSubagentInterrupt: (sessionID) => {
       log?.write("send.subagent.interrupt", { sessionID })
-      void ctx.sdk.session.interrupt({ sessionID }).catch(() => {})
+      void state.sdk.session.interrupt({ sessionID }).catch(() => {})
     },
     onSubagentSelect: (sessionID) => {
       state.selectSubagent?.(sessionID)
@@ -403,10 +359,43 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       })
     },
   })
+  const tuiConfig = await tuiConfigTask
+  const thinking = input.thinking ?? tuiConfig.session?.thinking !== "hide"
   const footer = shell.footer
   const firstPaint = footer.idle().catch(() => {})
+  const offRuntimeClose = footer.onClose(() => runtimeController.abort())
+  let clientGeneration = 0
+  let clientController = new AbortController()
+  let modelAttempt: AbortController | undefined
+  let modelLoad: Promise<void> | undefined
+  let modelLoadQueued = false
+  let modelLoadStarted = false
+
+  const updateClient = (sdk: RunInput["sdk"]) => {
+    if (state.sdk === sdk) return
+    state.sdk = sdk
+    clientGeneration++
+    clientController.abort()
+    clientController = new AbortController()
+    modelAttempt?.abort()
+    if (modelLoadStarted && !state.model) void requestModelLoad()
+  }
+
+  const clientAttempt = (signal?: AbortSignal): ClientAttempt => ({
+    sdk: state.sdk,
+    generation: clientGeneration,
+    signal: AbortSignal.any(
+      signal
+        ? [runtimeController.signal, clientController.signal, signal]
+        : [runtimeController.signal, clientController.signal],
+    ),
+  })
+
+  const currentClient = (attempt: ClientAttempt) =>
+    !footer.isClosed && !attempt.signal.aborted && attempt.generation === clientGeneration && attempt.sdk === state.sdk
+
   const ensureSession = () => {
-    if (!input.resolveSession || state.sessionID) {
+    if (state.sessionID) {
       return Promise.resolve()
     }
 
@@ -414,39 +403,130 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       return state.session
     }
 
-    state.session = input.resolveSession(ctx).then(async (next) => {
-      state.sessionID = next.sessionID
-      state.sessionTitle = next.sessionTitle ?? state.sessionTitle
-      state.agent = next.agent
-      if (!next.resume) return
-      const resumed = await resolveSessionInfo(ctx.sdk, next.sessionID, ctx.model)
-      session.first = resumed.first
-      session.history = resumed.history
-      session.model = resumed.model
-      session.variant = resumed.variant
-      state.shown = !resumed.first
-      state.history = [...resumed.history]
-      state.model = ctx.model ?? resumed.model
-      const resumedSavedVariant = state.model ? await input.host.preferences.resolveVariant(state.model) : undefined
-      state.activeVariant = resolveVariant(ctx.variant, resumed.variant, resumedSavedVariant, [])
-      session.variant = state.activeVariant
-      footer.event({ type: "history", history: resumed.history })
-      footer.event({ type: "first", first: resumed.first })
+    const task = input
+      .resolveSession(state.sdk, runtimeController.signal)
+      .then(async (next) => {
+        if (next.sdk) updateClient(next.sdk)
+        if (footer.isClosed || runtimeController.signal.aborted) return
+        state.sessionID = next.sessionID
+        state.sessionTitle = next.sessionTitle ?? state.sessionTitle
+        state.agent = next.agent
+        state.location = next.location
+        state.model = next.model
+        state.activeVariant = next.variant
+        footer.event({ type: "agent", agent: state.agent })
+        if (!next.resume) return
+        const resumed = await resolveSessionInfo(state.sdk, next.sessionID, next.model, runtimeController.signal)
+        if (footer.isClosed || runtimeController.signal.aborted) return
+        session.first = resumed.first
+        session.history = resumed.history
+        session.model = resumed.model
+        session.variant = resumed.variant
+        state.shown = !resumed.first
+        state.history = [...resumed.history]
+        state.model = next.model ?? resumed.model
+        const resumedSavedVariant = state.model ? await input.host.preferences.resolveVariant(state.model) : undefined
+        state.activeVariant = resolveVariant(next.variant, resumed.variant, resumedSavedVariant, [])
+        session.variant = state.activeVariant
+        footer.event({ type: "history", history: resumed.history })
+        footer.event({ type: "first", first: resumed.first })
+        if (footer.isClosed || runtimeController.signal.aborted) return
+        await shell.resetForReplay({
+          sessionTitle: state.sessionTitle,
+          sessionID: state.sessionID,
+          history: state.history,
+        })
+      })
+      .catch((error) => {
+        if (footer.isClosed || runtimeController.signal.aborted) return
+        throw error
+      })
+    state.session = task
+    void task.catch(() => {
+      if (state.session === task) state.session = undefined
     })
-    return state.session
+    return task
   }
+
+  const currentModelLoad = (generation: number, sdk: RunInput["sdk"]) =>
+    !footer.isClosed && !runtimeController.signal.aborted && generation === clientGeneration && sdk === state.sdk
+
+  const loadCurrentModel = async () => {
+    const generation = clientGeneration
+    const sdk = state.sdk
+    const selected = state.model
+    const controller = new AbortController()
+    const signal = AbortSignal.any([runtimeController.signal, controller.signal])
+    modelAttempt = controller
+    try {
+      if (selected) {
+        const info = await abortable(resolveModelInfo(sdk, state.location, signal), signal)
+        if (
+          !info ||
+          !currentModelLoad(generation, sdk) ||
+          state.model?.providerID !== selected.providerID ||
+          state.model.modelID !== selected.modelID
+        )
+          return
+        applyModelInfo(info, session.variant, { sdk, generation, signal }, true, savedVariant)
+        return
+      }
+
+      const model = await waitForDefaultModel({
+        sdk,
+        location: state.location,
+        active: () => currentModelLoad(generation, sdk),
+        signal,
+      })
+      if (!currentModelLoad(generation, sdk)) return
+      const [fallbackSavedVariant, info] = await Promise.all([
+        input.host.preferences.resolveVariant(model),
+        abortable(resolveModelInfo(sdk, state.location, signal), signal),
+      ])
+      if (!info || !currentModelLoad(generation, sdk)) return
+      if (model && !state.model) state.model = model
+      const boot = !!model && state.model?.providerID === model.providerID && state.model.modelID === model.modelID
+      applyModelInfo(
+        info,
+        boot ? session.variant : state.activeVariant,
+        { sdk, generation, signal },
+        boot,
+        fallbackSavedVariant,
+      )
+    } finally {
+      if (modelAttempt === controller) modelAttempt = undefined
+    }
+  }
+
+  function requestModelLoad(): Promise<void> {
+    modelLoadQueued = true
+    if (modelLoad || footer.isClosed) return modelLoad ?? Promise.resolve()
+    const task = (async () => {
+      while (modelLoadQueued && !footer.isClosed) {
+        modelLoadQueued = false
+        await loadCurrentModel()
+      }
+    })()
+    modelLoad = task
+    const cleanup = () => {
+      if (modelLoad === task) modelLoad = undefined
+      if (modelLoadQueued && !footer.isClosed) void requestModelLoad()
+    }
+    void task.then(cleanup, cleanup)
+    return task
+  }
+
   const modelTask = firstPaint.then(async () => {
     if (footer.isClosed) return
     await ensureSession()
     if (footer.isClosed) return
-    return loadModel()
+    modelLoadStarted = true
+    return requestModelLoad()
   })
-  const rememberLocal = (commit: StreamCommit, after?: LocalReplayAnchor) => {
+  const rememberLocal = (commit: StreamCommit) => {
     const last = state.localRows.at(-1)
     if (
       last &&
-      !after &&
-      !last.after &&
       (commit.kind === "assistant" || commit.kind === "reasoning") &&
       last.commit.kind === commit.kind &&
       last.commit.source === commit.source &&
@@ -457,17 +537,18 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       state.localRows = [...state.localRows.slice(0, -1), { commit }]
       return
     }
-    state.localRows = [...state.localRows, { commit, after }].slice(-LOCAL_REPLAY_ROW_LIMIT)
+    state.localRows = [...state.localRows, { commit }].slice(-LOCAL_REPLAY_ROW_LIMIT)
   }
 
-  const applyCatalog = (catalog: {
-    agents: Awaited<ReturnType<typeof loadRunAgents>>
-    references: Awaited<ReturnType<typeof loadRunReferences>>
-    commands: Awaited<ReturnType<typeof loadRunCommands>>
-  }) => {
-    if (footer.isClosed) {
-      return
-    }
+  const applyCatalog = (
+    catalog: {
+      agents: Awaited<ReturnType<typeof loadRunAgents>>
+      references: Awaited<ReturnType<typeof loadRunReferences>>
+      commands: Awaited<ReturnType<typeof loadRunCommands>>
+    },
+    attempt: ClientAttempt,
+  ) => {
+    if (!currentClient(attempt)) return
     footer.event({
       type: "catalog",
       agents: catalog.agents,
@@ -476,34 +557,37 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     })
   }
 
-  const fetchCatalog = async () => {
+  const fetchCatalog = async (attempt: ClientAttempt) => {
     const [agents, references, commands] = await Promise.all([
-      loadRunAgents(ctx.sdk, ctx.directory),
-      loadRunReferences(ctx.sdk, ctx.directory),
-      loadRunCommands(ctx.sdk, ctx.directory),
+      loadRunAgents(attempt.sdk, state.location, attempt.signal),
+      loadRunReferences(attempt.sdk, state.location, attempt.signal),
+      loadRunCommands(attempt.sdk, state.location, attempt.signal),
     ])
     return { agents, references, commands }
   }
 
-  const loadCatalog = async () => {
-    applyCatalog(
-      await Promise.all([
-        loadRunAgents(ctx.sdk, ctx.directory).catch(() => []),
-        loadRunReferences(ctx.sdk, ctx.directory).catch(() => []),
-        loadRunCommands(ctx.sdk, ctx.directory).catch(() => []),
+  const loadCatalog = async (attempt: ClientAttempt) => {
+    const catalog = await abortable(
+      Promise.all([
+        loadRunAgents(attempt.sdk, state.location, attempt.signal).catch(() => []),
+        loadRunReferences(attempt.sdk, state.location, attempt.signal).catch(() => []),
+        loadRunCommands(attempt.sdk, state.location, attempt.signal).catch(() => []),
       ]).then(([agents, references, commands]) => ({ agents, references, commands })),
+      attempt.signal,
     )
+    if (catalog) applyCatalog(catalog, attempt)
   }
 
-  const applyModelInfo = (
+  function applyModelInfo(
     info: Awaited<ReturnType<typeof resolveModelInfo>>,
     current: string | undefined,
+    attempt: ClientAttempt,
     boot = false,
     saved = savedVariant,
-  ) => {
+  ) {
+    if (!currentClient(attempt)) return
     state.providers = info.providers
     state.variants = variantsFor(state.providers, state.model)
-    state.limits = info.limits
     state.activeVariant = boot
       ? resolveVariant(ctx.variant, current, saved, state.variants)
       : current && !state.variants.includes(current)
@@ -520,30 +604,62 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       })
   }
 
-  let catalogRefresh: Promise<void> | undefined
-  let catalogRefreshQueued = false
-  const requestCatalogRefresh = () => {
-    catalogRefreshQueued = true
-    if (catalogRefresh || footer.isClosed) return
-    catalogRefresh = (async () => {
-      await Promise.all([modelTask, initialCatalog])
-      while (catalogRefreshQueued && !footer.isClosed) {
-        catalogRefreshQueued = false
-        const [catalog, info] = await Promise.allSettled([
-          fetchCatalog(),
-          resolveModelInfoStrict(ctx.sdk, ctx.directory, state.model),
-        ])
-        if (catalog.status === "fulfilled") applyCatalog(catalog.value)
-        if (info.status === "fulfilled") applyModelInfo(info.value, state.activeVariant)
+  let catalogRefresh:
+    | {
+        attempt: ClientAttempt
+        source: AbortSignal | undefined
+        queued: boolean
+        task: Promise<void>
       }
-    })().finally(() => {
+    | undefined
+  const requestCatalogRefresh = (signal?: AbortSignal): Promise<void> => {
+    const attempt = clientAttempt(signal)
+    if (!currentClient(attempt)) return Promise.resolve()
+    const running = catalogRefresh
+    if (
+      running &&
+      !running.attempt.signal.aborted &&
+      running.attempt.generation === attempt.generation &&
+      running.attempt.sdk === attempt.sdk
+    ) {
+      running.queued = true
+      return running.task
+    }
+
+    const refresh = {
+      attempt,
+      source: signal,
+      queued: true,
+      task: Promise.resolve(),
+    }
+    const task = (async () => {
+      await Promise.all([abortable(modelTask, attempt.signal), abortable(initialCatalog, attempt.signal)])
+      while (refresh.queued && currentClient(attempt)) {
+        refresh.queued = false
+        const [catalog, info] = await Promise.all([
+          abortable(fetchCatalog(attempt), attempt.signal),
+          abortable(resolveModelInfoStrict(attempt.sdk, state.location, attempt.signal), attempt.signal),
+        ])
+        if (!currentClient(attempt)) return
+        if (catalog) applyCatalog(catalog, attempt)
+        if (info) applyModelInfo(info, state.activeVariant, attempt)
+      }
+    })()
+    refresh.task = task
+    catalogRefresh = refresh
+    const cleanup = () => {
+      if (catalogRefresh !== refresh) return
       catalogRefresh = undefined
-      if (catalogRefreshQueued) requestCatalogRefresh()
-    })
-    void catalogRefresh.catch(() => {})
+      if (refresh.queued && currentClient(attempt)) void requestCatalogRefresh(refresh.source)
+    }
+    void task.then(cleanup, cleanup)
+    return task
   }
 
-  const initialCatalog = firstPaint.then(() => (footer.isClosed ? undefined : loadCatalog())).catch(() => {})
+  const initialCatalog = firstPaint
+    .then(() => (footer.isClosed ? undefined : ensureSession()))
+    .then(() => (footer.isClosed ? undefined : loadCatalog(clientAttempt())))
+    .catch(() => {})
   void initialCatalog
 
   if (input.host.startup.showTiming) {
@@ -563,7 +679,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     return createRunDemo({
       footer,
       sessionID: state.sessionID,
-      thinking: input.thinking,
+      thinking,
     })
   }
 
@@ -574,21 +690,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       state.demo = await createDemo()
     }
   }
-
-  if (input.afterPaint) {
-    void firstPaint.then(() => (footer.isClosed ? undefined : input.afterPaint?.(ctx))).catch(() => {})
-  }
-
-  void modelTask.then((result) => {
-    if (!result) return
-    const current = state.model
-    const boot =
-      result.boot &&
-      !!current &&
-      current.providerID === result.model?.providerID &&
-      current.modelID === result.model.modelID
-    applyModelInfo(result.info, boot ? session.variant : state.activeVariant, boot, result.savedVariant)
-  })
 
   let streamTask = deps.streamTransport
   const loadStreamTransport = () => {
@@ -615,15 +716,15 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       }
 
       const handle = await mod.createSessionTransport({
-        sdk: ctx.sdk,
+        sdk: state.sdk,
+        reconnect: input.reconnect,
+        onClient: updateClient,
         readTextFile: input.host.files.readText,
-        directory: ctx.directory,
+        location: state.location,
         sessionID: state.sessionID,
-        thinking: input.thinking,
+        thinking,
         replay: input.replay,
         replayLimit: input.replayLimit,
-        limits: () => state.limits,
-        providers: () => state.providers,
         footer,
         onCommit: rememberLocal,
         trace: log,
@@ -714,11 +815,17 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         ? async () => {
             try {
               await state.switching?.catch(() => {})
-              const created = await createSession(ctx, {
-                agent: state.agent,
-                model: state.model,
-                variant: state.activeVariant,
-              })
+              const created = await createSession(
+                state.sdk,
+                {
+                  location: state.location,
+                  agent: state.agent,
+                  model: state.model,
+                  variant: state.activeVariant,
+                },
+                runtimeController.signal,
+              )
+              if (!created.sessionID) throw new Error("Failed to create session")
               await footer.idle().catch(() => {})
               await state.stream?.then((item) => item.handle.close()).catch(() => {})
               state.stream = undefined
@@ -728,6 +835,10 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
               state.sessionID = created.sessionID
               state.sessionTitle = created.sessionTitle
               state.agent = created.agent ?? state.agent
+              state.location = created.location
+              state.model = created.model
+              state.activeVariant = created.variant
+              footer.event({ type: "agent", agent: state.agent })
               state.history = []
               state.localRows = []
               includeFiles = true
@@ -741,7 +852,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
                   tabs: [],
                   details: {},
                   permissions: [],
-                  questions: [],
+                  forms: [],
                 },
               })
               footer.event({ type: "stream.view", view: { type: "prompt" } })
@@ -749,7 +860,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
                 type: "stream.patch",
                 patch: {
                   phase: "idle",
-                  duration: "",
                   usage: "",
                   first: true,
                 },
@@ -788,7 +898,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
 
         await state.switching?.catch(() => {})
 
-        let outputAnchor: LocalReplayAnchor | undefined
         try {
           const next = await ensureStream()
           await next.handle.runPromptTurn({
@@ -798,9 +907,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
             prompt,
             files: input.files,
             includeFiles,
-            onVisibleOutput: (anchor) => {
-              outputAnchor = anchor
-            },
             signal,
           })
           if (prompt.messageID) {
@@ -826,7 +932,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
             source: "system",
             messageID: prompt.messageID,
           } as const
-          rememberLocal(commit, outputAnchor)
+          rememberLocal(commit)
           footer.append(commit)
         }
       },
@@ -834,20 +940,11 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
   }
 
   try {
-    const eager = eagerStream(input, ctx)
-    if (eager) {
+    if (input.demo) {
       await firstPaint
       if (footer.isClosed) return
-      if (input.replay && state.shown) {
-        // Replay commits immutable scrollback rows, so wait for provider names
-        // before bootstrapping existing session history.
-        await modelTask
-      }
-
       await ensureStream()
-    }
-
-    if (!eager && input.resolveSession) {
+    } else {
       void firstPaint
         .then(() => {
           if (footer.isClosed) {
@@ -869,11 +966,12 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       await state.stream?.then((item) => item.handle.close()).catch(() => {})
     }
   } finally {
-    const title = await resolveExitTitle(ctx, input, state)
+    runtimeController.abort()
+    offRuntimeClose()
 
     await shell.close({
-      showExit: state.shown && hasSession(input, state),
-      sessionTitle: title,
+      showExit: state.shown && !!state.sessionID,
+      sessionTitle: state.sessionTitle,
       sessionID: state.sessionID,
       history: state.history,
     })
@@ -884,7 +982,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
 // generated client with a transport that is still acquiring a daemon.
 export async function runInteractiveDeferredMode(input: RunDeferredInput, deps?: RunRuntimeDeps): Promise<void> {
   const sdk = input.sdk
-  let session: Promise<ResolvedSession> | undefined
 
   return runInteractiveRuntime(
     {
@@ -896,69 +993,18 @@ export async function runInteractiveDeferredMode(input: RunDeferredInput, deps?:
       replayLimit: input.replayLimit,
       demo: input.demo,
       tuiConfig: input.tuiConfig,
-      resolveSession: () => {
-        if (session) {
-          return session
-        }
-
-        session = Promise.all([input.resolveAgent(), input.session(sdk)]).then(([agent, next]) => {
-          if (!next?.id) {
-            throw new Error("Session not found")
-          }
-
-          return {
-            sessionID: next.id,
-            sessionTitle: next.title,
-            agent,
-            resume: next.resume,
-          }
-        })
-        return session
-      },
-      createSession: createSessionResolver(input.createSession),
+      reconnect: input.reconnect,
+      resolveSession: input.target,
+      createSession: input.createSession,
       boot: async () => {
         return {
           sdk,
-          directory: input.directory,
-          sessionID: "",
-          sessionTitle: undefined,
-          resume: false,
+          location: { directory: input.directory },
           agent: input.agent,
           model: input.model,
           variant: input.variant,
         }
       },
-    },
-    deps,
-  )
-}
-
-// Attach mode. Uses the caller-provided SDK client directly.
-export async function runInteractiveMode(
-  input: RunInput & { host: MiniHost; createSession?: CreateSession; tuiConfig?: RunTuiConfig | Promise<RunTuiConfig> },
-  deps?: RunRuntimeDeps,
-): Promise<void> {
-  return runInteractiveRuntime(
-    {
-      host: input.host,
-      files: input.files,
-      initialInput: input.initialInput,
-      thinking: input.thinking,
-      replay: input.replay,
-      replayLimit: input.replayLimit,
-      demo: input.demo,
-      tuiConfig: input.tuiConfig,
-      boot: async () => ({
-        sdk: input.sdk,
-        directory: input.directory,
-        sessionID: input.sessionID,
-        sessionTitle: input.sessionTitle,
-        resume: input.resume,
-        agent: input.agent,
-        model: input.model,
-        variant: input.variant,
-      }),
-      createSession: createSessionResolver(input.createSession),
     },
     deps,
   )

@@ -47,7 +47,8 @@ function preferences(statePath: string): MiniHost["preferences"] {
   return {
     async resolveVariant(model) {
       if (!model) return
-      return (await read()).variant?.[variantKey(model)]
+      const variant = (await read()).variant?.[variantKey(model)]
+      return variant === "default" ? undefined : variant
     },
     async saveVariant(model, variant) {
       if (!model) return
@@ -78,7 +79,7 @@ function signal(name: "SIGINT" | "SIGUSR2"): MiniHost["signals"]["sigint"] {
 
 function createTrace(
   logPath: string,
-  diagnostics: Pick<MiniHost["diagnostics"], "pid" | "cwd" | "argv">,
+  diagnostics: { pid: number; cwd: string; argv: string[] },
 ): MiniHost["diagnostics"]["trace"] {
   if (!process.env.OPENCODE_DIRECT_TRACE) return
   const stamp = new Date()
@@ -162,7 +163,7 @@ export async function usingInteractiveStdin<T>(
 export function createMiniHost(input: {
   terminal: InteractiveStdin
   directory: string
-  paths?: MiniHost["paths"]
+  paths?: { home: string; state: string; log: string }
 }): MiniHost {
   const paths = input.paths ?? {
     home: Global.Path.home,
@@ -175,7 +176,7 @@ export function createMiniHost(input: {
     argv: process.argv.slice(2),
   }
   return {
-    terminal: input.terminal,
+    terminal: { stdin: input.terminal.stdin },
     platform: process.platform,
     stdout: {
       write(value) {
@@ -191,7 +192,7 @@ export function createMiniHost(input: {
         return openEditor(options)
       },
     },
-    paths,
+    paths: { home: paths.home },
     signals: {
       sigint: signal("SIGINT"),
       sigusr2: signal("SIGUSR2"),
@@ -201,7 +202,6 @@ export function createMiniHost(input: {
       now: () => performance.now(),
     },
     diagnostics: {
-      ...diagnostics,
       trace: createTrace(paths.log, diagnostics),
     },
     preferences: preferences(paths.state),

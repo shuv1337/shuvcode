@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { testRender } from "@opentui/solid"
 import { Keymap } from "../../src/context/keymap"
-import { resolve } from "../../src/config/v1"
+import { resolve } from "../../src/config"
 import { expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { RunFooterView } from "../../src/mini/footer.view"
@@ -14,7 +14,6 @@ test("down opens subagents from an empty prompt", async () => {
     status: "",
     queue: 0,
     model: "gpt-5",
-    duration: "",
     usage: "",
     first: false,
     interrupt: 0,
@@ -25,8 +24,6 @@ test("down opens subagents from an empty prompt", async () => {
     tabs: [
       {
         sessionID: "subagent-1",
-        partID: "part-1",
-        callID: "call-1",
         label: "Explore",
         description: "Inspect the keymap",
         status: "running",
@@ -35,7 +32,7 @@ test("down opens subagents from an empty prompt", async () => {
     ],
     details: {},
     permissions: [],
-    questions: [],
+    forms: [],
   })
   const config = resolve(
     { keybinds: { editor_open: "none", session_queued_prompts: "none" } },
@@ -45,7 +42,7 @@ test("down opens subagents from an empty prompt", async () => {
     return (
       <Keymap.Provider config={config}>
         <RunFooterView
-          directory="/tmp"
+          directory={() => "/tmp"}
           findFiles={async () => []}
           agents={() => []}
           references={() => []}
@@ -59,11 +56,10 @@ test("down opens subagents from an empty prompt", async () => {
           subagent={subagents}
           theme={() => RUN_THEME_FALLBACK}
           tuiConfig={config}
-          agent="opencode"
           onSubmit={() => true}
           onPermissionReply={() => {}}
-          onQuestionReply={() => {}}
-          onQuestionReject={() => {}}
+          onFormReply={() => {}}
+          onFormCancel={() => {}}
           onCycle={() => {}}
           onInterrupt={() => false}
           onEditorOpen={async () => undefined}

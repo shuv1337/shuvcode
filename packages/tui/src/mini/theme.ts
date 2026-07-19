@@ -7,7 +7,7 @@
 // palette if detection fails.
 import { RGBA, SyntaxStyle, type CliRenderer, type ColorInput, type TerminalColors } from "@opentui/core"
 import type { TuiThemeCurrent } from "@opencode-ai/plugin/tui"
-import type { EntryKind } from "./types"
+import type { EntryKind, RunTuiConfig } from "./types"
 
 type Tone = {
   body: ColorInput
@@ -20,7 +20,6 @@ export type RunSplashTheme = {
   left: ColorInput
   right: ColorInput
   leftShadow: ColorInput
-  rightShadow: ColorInput
 }
 
 export type RunFooterTheme = {
@@ -28,7 +27,6 @@ export type RunFooterTheme = {
   selected: ColorInput
   selectedText: ColorInput
   warning: ColorInput
-  success: ColorInput
   error: ColorInput
   muted: ColorInput
   text: ColorInput
@@ -42,12 +40,9 @@ export type RunFooterTheme = {
 }
 
 export type RunBlockTheme = {
-  highlight: ColorInput
-  warning: ColorInput
   text: ColorInput
   muted: ColorInput
   syntax?: SyntaxStyle
-  diffAdded: ColorInput
   diffRemoved: ColorInput
   diffAddedBg: ColorInput
   diffRemovedBg: ColorInput
@@ -460,7 +455,6 @@ function splashTheme(theme: TuiThemeCurrent, indexed: RGBA[]): RunSplashTheme {
     left,
     right,
     leftShadow: splashShadow(indexed, theme.background, left, 0.14),
-    rightShadow: splashShadow(indexed, theme.background, right, 0.14),
   }
 }
 
@@ -490,7 +484,6 @@ function map(
       selected: footerTheme.backgroundElement,
       selectedText: footerTheme.selectedListItemText,
       warning: footerTheme.warning,
-      success: footerTheme.success,
       error: footerTheme.error,
       muted: footerTheme.textMuted,
       text: footerTheme.text,
@@ -525,12 +518,9 @@ function map(
     },
     splash,
     block: {
-      highlight: scrollbackTheme.primary,
-      warning: scrollbackTheme.warning,
       text: scrollbackTheme.text,
       muted: scrollbackTheme.textMuted,
       syntax,
-      diffAdded: scrollbackTheme.diffAdded,
       diffRemoved: scrollbackTheme.diffRemoved,
       diffAddedBg: transparent,
       diffRemovedBg: transparent,
@@ -572,7 +562,6 @@ export const RUN_THEME_FALLBACK: RunTheme = {
     selected: seed.text,
     selectedText: seed.panel,
     warning: seed.warning,
-    success: seed.success,
     error: seed.error,
     muted: seed.muted,
     text: seed.text,
@@ -596,14 +585,10 @@ export const RUN_THEME_FALLBACK: RunTheme = {
     left: fallbackSplashLeft,
     right: fallbackSplashRight,
     leftShadow: splashShadow(fallbackSplashIndexed, RGBA.fromValues(0, 0, 0, 0), fallbackSplashLeft, 0.14),
-    rightShadow: splashShadow(fallbackSplashIndexed, RGBA.fromValues(0, 0, 0, 0), fallbackSplashRight, 0.14),
   },
   block: {
-    highlight: seed.highlight,
-    warning: seed.warning,
     text: seed.text,
     muted: seed.muted,
-    diffAdded: seed.success,
     diffRemoved: seed.error,
     diffAddedBg: alpha(seed.success, 0.18),
     diffRemovedBg: alpha(seed.error, 0.18),
@@ -616,7 +601,7 @@ export const RUN_THEME_FALLBACK: RunTheme = {
   },
 }
 
-export async function resolveRunTheme(renderer: CliRenderer): Promise<RunTheme> {
+export async function resolveRunTheme(renderer: CliRenderer, config?: RunTuiConfig["theme"]): Promise<RunTheme> {
   try {
     const colors = await renderer.getPalette({
       size: 256,
@@ -628,19 +613,21 @@ export async function resolveRunTheme(renderer: CliRenderer): Promise<RunTheme> 
 
     // Palette-only terminal reloads can leave renderer.themeMode stale, but
     // ANSI slot zero is not the terminal background when OSC 11 is absent.
-    const pick = colors.defaultBackground
-      ? mode(RGBA.fromHex(colors.defaultBackground))
-      : (renderer.themeMode ?? mode(RGBA.fromHex(bg)))
-    const footerTheme = resolveTheme(generateSystem(colors, pick), pick)
-    const indexed = indexedPalette(colors, 256)
-    const scrollbackTheme = quantizeTheme(footerTheme, indexed)
+    const pick =
+      config?.mode === "dark" || config?.mode === "light"
+        ? config.mode
+        : colors.defaultBackground
+          ? mode(RGBA.fromHex(colors.defaultBackground))
+          : (renderer.themeMode ?? mode(RGBA.fromHex(bg)))
     const { generateSyntax } = await import("../theme")
+    const indexed = indexedPalette(colors, 256)
+    const footerTheme = resolveTheme(generateSystem(colors, pick), pick)
+    const scrollbackTheme = quantizeTheme(footerTheme, indexed)
     const syntaxTheme: SharedSyntaxTheme = {
       ...scrollbackTheme,
       _hasSelectedListItemText: true,
     }
-    const syntax = generateSyntax(syntaxTheme)
-    return map(footerTheme, scrollbackTheme, splashTheme(scrollbackTheme, indexed), syntax)
+    return map(footerTheme, scrollbackTheme, splashTheme(scrollbackTheme, indexed), generateSyntax(syntaxTheme))
   } catch {
     return RUN_THEME_FALLBACK
   }

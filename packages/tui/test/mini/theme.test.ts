@@ -71,9 +71,6 @@ test("returns syntax styles and indexed splash colors", async () => {
     expectIndexed(theme.splash.left)
     expectIndexed(theme.splash.right)
     expectIndexed(theme.splash.leftShadow)
-    expectIndexed(theme.splash.rightShadow)
-    expectIndexed(theme.block.highlight)
-    expectIndexed(theme.block.warning)
     expectRgba(theme.footer.highlight)
     expectRgba(theme.footer.statusAccent)
     expectRgba(theme.footer.surface)
@@ -96,8 +93,6 @@ test("keeps footer surfaces exact while scrollback stays palette matched", async
     expect(expectRgba(theme.footer.border).toInts()).toEqual(expectRgba(exact.border).toInts())
     expect(expectRgba(theme.footer.pane).toInts()).toEqual(expectRgba(exact.backgroundMenu).toInts())
     expect(expectRgba(theme.footer.selected).intent).toBe("rgb")
-    expectIndexed(theme.block.highlight)
-    expectIndexed(theme.block.warning)
   } finally {
     theme.block.syntax?.destroy()
   }

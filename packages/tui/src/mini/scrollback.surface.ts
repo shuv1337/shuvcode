@@ -18,7 +18,7 @@ import { entryColor, entryLook, entrySyntax } from "./scrollback.shared"
 import { turnSummaryCommit } from "./turn-summary"
 import { entryWriter, sameEntryGroup, separatorRows, spacerWriter, turnSummaryWriter } from "./scrollback.writer"
 import { type RunTheme } from "./theme"
-import type { RunDiffStyle, RunEntryBody, StreamCommit } from "./types"
+import type { RunEntryBody, StreamCommit } from "./types"
 
 type ActiveBody = Exclude<RunEntryBody, { type: "none" | "structured" }>
 
@@ -86,8 +86,6 @@ export class RunScrollbackStream {
   private tail: StreamCommit | undefined
   private rendered: StreamCommit | undefined
   private active: ActiveEntry | undefined
-  private diffStyle: RunDiffStyle | undefined
-  private sessionID?: () => string | undefined
   private treeSitterClient: TreeSitterClient | undefined
   private wrote: boolean
   private pendingThemes: RunTheme[] = []
@@ -97,14 +95,10 @@ export class RunScrollbackStream {
     private theme: RunTheme,
     options: {
       wrote?: boolean
-      diffStyle?: RunDiffStyle
-      sessionID?: () => string | undefined
       treeSitterClient?: TreeSitterClient
       onThemeRelease?: (theme: RunTheme) => void
     } = {},
   ) {
-    this.diffStyle = options.diffStyle
-    this.sessionID = options.sessionID
     this.treeSitterClient = options.treeSitterClient
     this.wrote = options.wrote ?? false
     this.onThemeRelease = options.onThemeRelease
@@ -395,9 +389,6 @@ export class RunScrollbackStream {
         commit,
         body: staticBody(commit, body, spaced),
         theme: this.theme,
-        opts: {
-          diffStyle: this.diffStyle,
-        },
       }),
     )
     this.markRendered(commit)
