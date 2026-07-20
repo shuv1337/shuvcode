@@ -65,6 +65,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
         port: Option.fromNullishOr(port),
         password,
         instanceID,
+        database: {
+          path: process.env.OPENCODE_DB,
+        },
         service:
           serviceOptions === undefined
             ? undefined

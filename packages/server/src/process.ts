@@ -1,6 +1,7 @@
 export * as ServerProcess from "./process"
 
 import { NodeHttpServer, NodeHttpServerRequest } from "@effect/platform-node"
+import { Database } from "@opencode-ai/core/database/database"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
@@ -20,6 +21,7 @@ export type Options<E = never, R = never> = {
   readonly port: Option.Option<number>
   readonly password: string
   readonly instanceID: string
+  readonly database?: Database.Options
   readonly service?: {
     readonly onListen: (
       address: HttpServer.Address,
@@ -66,11 +68,15 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
 
   const boot = Effect.gen(function* () {
     const context = yield* Layer.buildWithScope(
-      createRoutes(options.password, () => {
-        const address = bound.server.address()
-        if (address === null || typeof address === "string") return []
-        const host = address.family === "IPv6" ? `[${address.address}]` : address.address
-        return ServerInfo.connectionURLs(`http://${host}:${address.port}`, options.hostname)
+      createRoutes({
+        password: options.password,
+        serviceURLs: () => {
+          const address = bound.server.address()
+          if (address === null || typeof address === "string") return []
+          const host = address.family === "IPv6" ? `[${address.address}]` : address.address
+          return ServerInfo.connectionURLs(`http://${host}:${address.port}`, options.hostname)
+        },
+        database: options.database,
       }).pipe(Layer.provide(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )

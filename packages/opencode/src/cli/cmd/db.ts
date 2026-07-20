@@ -1,6 +1,7 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
 import { Database } from "@opencode-ai/core/database/database"
+import { InstallationDatabase } from "@/installation/database"
 import { Effect } from "effect"
 import { sql } from "drizzle-orm"
 import { effectCmd } from "../effect-cmd"
@@ -35,7 +36,7 @@ const QueryCommand = effectCmd({
       }
       return
     }
-    const child = spawn("sqlite3", [Database.path()], {
+    const child = spawn("sqlite3", [InstallationDatabase.path()], {
       stdio: "inherit",
     })
     yield* Effect.promise(() => new Promise((resolve) => child.on("close", resolve)))
@@ -47,7 +48,7 @@ const PathCommand = effectCmd({
   describe: "print the database path",
   instance: false,
   handler: Effect.fn("Cli.db.path")(function* () {
-    console.log(Database.path())
+    console.log(InstallationDatabase.path())
   }),
 })
 

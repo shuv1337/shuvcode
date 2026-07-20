@@ -51,25 +51,32 @@ const applicationServices = LayerNode.group([
   SessionRestart.node,
 ])
 
-export function createRoutes(password?: string, serviceURLs: () => ReadonlyArray<string> = () => []) {
+export interface Options {
+  readonly password?: string
+  readonly serviceURLs?: () => ReadonlyArray<string>
+  readonly database?: Database.Options
+}
+
+export function createRoutes(options: Options = {}) {
   return makeRoutes(
-    password
-      ? ServerAuth.Config.configLayer({ username: "opencode", password: Option.some(password) })
+    options.password
+      ? ServerAuth.Config.configLayer({ username: "opencode", password: Option.some(options.password) })
       : ServerAuth.Config.layer,
-    serviceURLs,
+    options,
   )
 }
 
-export function createEmbeddedRoutes() {
-  return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }))
+export function createEmbeddedRoutes(options: Pick<Options, "database"> = {}) {
+  return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }), options)
 }
 
 function makeRoutes<AuthError, AuthServices>(
   auth: Layer.Layer<ServerAuth.Config, AuthError, AuthServices>,
-  serviceURLs: () => ReadonlyArray<string> = () => [],
+  options: Pick<Options, "database" | "serviceURLs">,
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
+    [Database.node, Database.layer(options.database)],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]
@@ -88,7 +95,7 @@ function makeRoutes<AuthError, AuthServices>(
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
         Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context)),
-        ServerInfo.layer(serviceURLs),
+        ServerInfo.layer(options.serviceURLs ?? (() => [])),
       )
       return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),
