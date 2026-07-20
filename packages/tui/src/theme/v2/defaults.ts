@@ -1,4 +1,13 @@
-import type { ThemeFile } from "./index"
+import type { HueName, ThemeFile } from "./schema"
+
+export const DEFAULT_CATEGORICAL = [
+  "blue",
+  "purple",
+  "green",
+  "orange",
+  "red",
+  "cyan",
+] as const satisfies readonly HueName[]
 
 export const DEFAULT_THEME = {
   version: 2,
@@ -96,6 +105,7 @@ export const DEFAULT_THEME = {
       interactive: "$hue.blue",
       neutral: "$hue.gray",
     },
+    categorical: DEFAULT_CATEGORICAL,
     text: {
       default: "$hue.neutral.800",
       subdued: "$hue.neutral.600",
@@ -308,6 +318,7 @@ export const DEFAULT_THEME = {
       interactive: "$hue.blue",
       neutral: "$hue.gray",
     },
+    categorical: DEFAULT_CATEGORICAL,
     text: {
       default: "$hue.neutral.200",
       subdued: "$hue.neutral.400",
