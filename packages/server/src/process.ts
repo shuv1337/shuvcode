@@ -3,6 +3,7 @@ export * as ServerProcess from "./process"
 import { NodeHttpServer, NodeHttpServerRequest } from "@effect/platform-node"
 import { Database } from "@opencode-ai/core/database/database"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
@@ -22,6 +23,7 @@ export type Options<E = never, R = never> = {
   readonly password: string
   readonly instanceID: string
   readonly database?: Database.Options
+  readonly models?: ModelsDev.Options
   readonly service?: {
     readonly onListen: (
       address: HttpServer.Address,
@@ -77,6 +79,7 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(options: 
           return ServerInfo.connectionURLs(`http://${host}:${address.port}`, options.hostname)
         },
         database: options.database,
+        models: options.models,
       }).pipe(Layer.provide(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )

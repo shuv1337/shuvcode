@@ -12,6 +12,7 @@ import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Job } from "@opencode-ai/core/job"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
@@ -55,6 +56,7 @@ export interface Options {
   readonly password?: string
   readonly serviceURLs?: () => ReadonlyArray<string>
   readonly database?: Database.Options
+  readonly models?: ModelsDev.Options
 }
 
 export function createRoutes(options: Options = {}) {
@@ -66,17 +68,18 @@ export function createRoutes(options: Options = {}) {
   )
 }
 
-export function createEmbeddedRoutes(options: Pick<Options, "database"> = {}) {
+export function createEmbeddedRoutes(options: Pick<Options, "database" | "models"> = {}) {
   return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }), options)
 }
 
 function makeRoutes<AuthError, AuthServices>(
   auth: Layer.Layer<ServerAuth.Config, AuthError, AuthServices>,
-  options: Pick<Options, "database" | "serviceURLs">,
+  options: Pick<Options, "database" | "models" | "serviceURLs">,
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
     [Database.node, Database.layer(options.database)],
+    [ModelsDev.node, ModelsDev.nodeWith(options.models)],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]

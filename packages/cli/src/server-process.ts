@@ -68,6 +68,11 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
         database: {
           path: process.env.OPENCODE_DB,
         },
+        models: {
+          url: process.env.OPENCODE_MODELS_URL,
+          file: process.env.OPENCODE_MODELS_PATH,
+          fetch: !["1", "true"].includes(process.env.OPENCODE_DISABLE_MODELS_FETCH?.toLowerCase() ?? ""),
+        },
         service:
           serviceOptions === undefined
             ? undefined
