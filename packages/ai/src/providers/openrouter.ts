@@ -41,13 +41,31 @@ export const protocol = Protocol.make({
     schema: OpenRouterBody,
     from: (request) =>
       OpenAIChat.protocol.body.from(request).pipe(
-        Effect.map(
-          (body) =>
-            ({
-              ...body,
-              ...bodyOptions(request.providerOptions?.openrouter),
-            }) as OpenRouterBody,
-        ),
+        Effect.map((body) => {
+          const sourceAssistants = request.messages.filter((message) => message.role === "assistant")
+          let assistantIndex = 0
+          const messages = body.messages.map((message) => {
+            if (message.role !== "assistant") return message
+            const source = sourceAssistants[assistantIndex++]
+            const reasoning = source?.content
+              .filter((part) => part.type === "reasoning")
+              .map((part) => part.text)
+              .join("")
+            const reasoningDetails = Array.isArray(message.reasoning_details) ? message.reasoning_details : undefined
+            return {
+              ...message,
+              reasoning_content: undefined,
+              reasoning_text: undefined,
+              reasoning: reasoning && reasoningDetails && reasoningDetails.length > 0 ? reasoning : undefined,
+              reasoning_details: reasoningDetails,
+            }
+          })
+          return {
+            ...body,
+            messages,
+            ...bodyOptions(request.providerOptions?.openrouter),
+          } as OpenRouterBody
+        }),
       ),
   },
   stream: OpenAIChat.protocol.stream,
