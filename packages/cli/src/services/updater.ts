@@ -118,13 +118,21 @@ export const layer = Layer.effect(
 
     const upgrade = Effect.fnUntraced(function* (method: Method, version: string) {
       const target = `${packageName}@${version}`
-      const commands: Record<Method, string[]> = {
+      const commands: Record<Exclude<Method, "bun">, string[]> = {
         npm: ["npm", "install", "--global", target],
         pnpm: ["pnpm", "install", "--global", target],
-        bun: ["bun", "install", "--global", target],
         yarn: ["yarn", "global", "add", target],
       }
-      const result = yield* run(commands[method], "5 minutes")
+      const result = yield* (method === "bun"
+        ? Effect.scoped(
+            Effect.gen(function* () {
+              // Bun does not prune old versions from its shared package cache.
+              yield* fs.makeDirectory(global.cache, { recursive: true })
+              const cache = yield* fs.makeTempDirectoryScoped({ directory: global.cache, prefix: "update-" })
+              return yield* run(["bun", "install", "--global", "--cache-dir", cache, target], "5 minutes")
+            }),
+          )
+        : run(commands[method], "5 minutes"))
       if (result.code === 0) return
       return yield* Effect.fail(new Error(result.stderr.trim() || `Failed to update with ${method}`))
     })
