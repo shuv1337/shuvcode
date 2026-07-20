@@ -81,6 +81,35 @@ yield *
   })
 ```
 
+Google's current Gemini image models use the same direct API:
+
+```ts
+import { Google } from "@opencode-ai/ai/providers"
+
+const googleProgram = Effect.gen(function* () {
+  const response = yield* Image.generate({
+    model: Google.configure({ apiKey }).image("any-model-id"),
+    prompt: "A robot tending a rooftop garden",
+    options: {
+      aspectRatio: "16:9",
+      imageSize: "2K",
+      seed: 42,
+      thinkingLevel: "HIGH",
+      includeThoughts: true,
+      futureOption: true,
+    },
+    http,
+  })
+
+  return response.images
+})
+```
+
+Google image options are request-scoped and inferred from the selected model. Known fields autocomplete while
+future string values and arbitrary native Gemini `generationConfig` fields remain available. Native fields override
+their mapped aliases, and `http.body` is the final deep overlay. The selected model ID is sent to Gemini
+`generateContent` without a local allowlist.
+
 Conversational image generation remains part of the LLM interaction. OpenAI Responses exposes it through its hosted image tool:
 
 ```ts
