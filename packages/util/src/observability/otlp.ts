@@ -6,19 +6,18 @@ import { runID } from "./shared.js"
 export interface Options {
   readonly endpoint?: string
   readonly headers?: string
-  readonly client?: string
 }
 
 function parseHeaders(value?: string) {
   return value
     ? value.split(",").reduce(
-      (acc, entry) => {
-        const [key, ...value] = entry.split("=")
-        acc[key] = value.join("=")
-        return acc
-      },
-      {} as Record<string, string>,
-    )
+        (acc, entry) => {
+          const [key, ...value] = entry.split("=")
+          acc[key] = value.join("=")
+          return acc
+        },
+        {} as Record<string, string>,
+      )
     : undefined
 }
 
@@ -38,7 +37,11 @@ function resourceAttributes() {
   }
 }
 
-export function resource(client = "cli"): { serviceName: string; serviceVersion: string; attributes: Record<string, string> } {
+export function resource(client = "cli"): {
+  serviceName: string
+  serviceVersion: string
+  attributes: Record<string, string>
+} {
   return {
     serviceName: "opencode",
     serviceVersion: InstallationVersion,
@@ -52,18 +55,18 @@ export function resource(client = "cli"): { serviceName: string; serviceVersion:
   }
 }
 
-export function loggers(options?: Options) {
+export function loggers(options: Options | undefined, client: string) {
   if (!options?.endpoint) return []
   return [
     OtlpLogger.make({
       url: `${options.endpoint}/v1/logs`,
-      resource: resource(options.client),
+      resource: resource(client),
       headers: parseHeaders(options.headers),
     }),
   ]
 }
 
-export async function tracingLayer(options?: Options) {
+export async function tracingLayer(options: Options | undefined, client: string) {
   if (!options?.endpoint) return Layer.empty
   const NodeSdk = await import("@effect/opentelemetry/NodeSdk")
   const OTLP = await import("@opentelemetry/exporter-trace-otlp-http")
@@ -77,7 +80,7 @@ export async function tracingLayer(options?: Options) {
   context.setGlobalContextManager(manager)
 
   return NodeSdk.layer(() => ({
-    resource: resource(options.client),
+    resource: resource(client),
     spanProcessor: new SdkBase.BatchSpanProcessor(
       new OTLP.OTLPTraceExporter({
         url: `${options.endpoint}/v1/traces`,

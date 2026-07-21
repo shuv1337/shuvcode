@@ -4,6 +4,7 @@ import { LLM, Message, SystemPart, type LLMRequest } from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Context, Effect, Layer } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Client } from "@opencode-ai/util/client"
 import { PluginHooks } from "../plugin/hooks"
 import { ToolRegistry } from "../tool/registry"
 import { SessionContext } from "./context"
@@ -39,11 +40,12 @@ export interface Interface {
 /** Location-scoped outbound model-request preparation. */
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionModelRequest") {}
 
-export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
+export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const registry = yield* ToolRegistry.Service
+    const client = yield* Client.Name
 
     const prepare = Effect.fn("SessionModelRequest.prepare")(function* (input: PrepareInput) {
       const session = input.context.session
@@ -81,7 +83,7 @@ export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
       const request = LLM.request({
         model,
         http: {
-          headers: SessionModelHeaders.make(session, options),
+          headers: SessionModelHeaders.make(session, client),
         },
         providerOptions: { openai: { promptCacheKey } },
         system: contextEvent.system,
@@ -112,8 +114,8 @@ export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
   }),
 )
 
-export function configured(options?: SessionModelHeaders.Options) {
-  return makeLocationNode({ service: Service, layer: layer(options), deps: [PluginHooks.node, ToolRegistry.node] })
-}
-
-export const node = configured()
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [PluginHooks.node, ToolRegistry.node, Client.node],
+})

@@ -6,6 +6,7 @@ import { AgentV2 } from "../agent"
 import { Database } from "../database/database"
 import { EventV2 } from "../event"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Client } from "@opencode-ai/util/client"
 import { llmClient } from "../effect/app-node-platform"
 import { SessionEvent } from "./event"
 import { SessionHistory } from "./history"
@@ -17,7 +18,7 @@ import { SessionUsage } from "./usage"
 const MAX_LENGTH = 100
 
 type Dependencies = {
-  readonly headers?: SessionModelHeaders.Options
+  readonly client: string
   readonly events: EventV2.Interface
   readonly llm: {
     readonly stream: (request: LLMRequest) => Stream.Stream<LLMEvent, LLMError>
@@ -67,7 +68,7 @@ const make = (dependencies: Dependencies) => {
       .stream(
         LLM.request({
           model: resolved.model,
-          http: { headers: SessionModelHeaders.make(session, dependencies.headers) },
+          http: { headers: SessionModelHeaders.make(session, dependencies.client) },
           system: agent.system,
           messages: [Message.user(firstUser.text)],
           tools: [],
@@ -103,7 +104,7 @@ const make = (dependencies: Dependencies) => {
   return { generateForFirstPrompt }
 }
 
-export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
+export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2.Service
@@ -111,19 +112,16 @@ export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
     const agents = yield* AgentV2.Service
     const models = yield* SessionRunnerModel.Service
     const database = yield* Database.Service
-    const title = make({ events, llm, agents, models, headers: options })
+    const client = yield* Client.Name
+    const title = make({ events, llm, agents, models, client })
     return Service.of({
       generateForFirstPrompt: (session) => title.generateForFirstPrompt(database.db, session),
     })
   }),
 )
 
-export function configured(options?: SessionModelHeaders.Options) {
-  return makeLocationNode({
-    service: Service,
-    layer: layer(options),
-    deps: [EventV2.node, llmClient, AgentV2.node, SessionRunnerModel.node, Database.node],
-  })
-}
-
-export const node = configured()
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [EventV2.node, llmClient, AgentV2.node, SessionRunnerModel.node, Database.node, Client.node],
+})

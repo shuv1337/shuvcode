@@ -10,6 +10,7 @@ import { llmClient } from "../effect/app-node-platform"
 import { SessionEvent } from "./event"
 import type { SessionMessage } from "./message"
 import { SessionModelHeaders } from "./model-headers"
+import { Client } from "@opencode-ai/util/client"
 import { SessionRunnerModel } from "./runner/model"
 import { SessionSchema } from "./schema"
 import { toSessionError } from "./to-session-error"
@@ -60,7 +61,7 @@ type Settings = {
 }
 
 type Dependencies = {
-  readonly headers?: SessionModelHeaders.Options
+  readonly client: string
   readonly events: EventV2.Interface
   readonly llm: {
     readonly stream: (request: LLMRequest) => Stream.Stream<LLMEvent, LLMError>
@@ -259,7 +260,7 @@ const make = (dependencies: Dependencies) => {
       .stream(
         LLM.request({
           model: plan.model,
-          http: { headers: SessionModelHeaders.make(plan.session, dependencies.headers) },
+          http: { headers: SessionModelHeaders.make(plan.session, dependencies.client) },
           messages: [Message.user(plan.prompt)],
           tools: [],
         }),
@@ -391,23 +392,20 @@ const make = (dependencies: Dependencies) => {
   })
 }
 
-export const layer = (options?: SessionModelHeaders.Options) => Layer.effect(
+export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2.Service
     const llm = yield* LLMClient.Service
     const config = yield* Config.Service
     const models = yield* SessionRunnerModel.Service
-    return make({ events, llm, models, config: settings(yield* config.entries()), headers: options })
+    const client = yield* Client.Name
+    return make({ events, llm, models, config: settings(yield* config.entries()), client })
   }),
 )
 
-export function configured(options?: SessionModelHeaders.Options) {
-  return makeLocationNode({
-    service: Service,
-    layer: layer(options),
-    deps: [EventV2.node, llmClient, Config.node, SessionRunnerModel.node],
-  })
-}
-
-export const node = configured()
+export const node = makeLocationNode({
+  service: Service,
+  layer,
+  deps: [EventV2.node, llmClient, Config.node, SessionRunnerModel.node, Client.node],
+})

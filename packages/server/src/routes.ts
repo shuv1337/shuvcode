@@ -6,6 +6,7 @@ import { EventV2 } from "@opencode-ai/core/event"
 import { EventLogger } from "@opencode-ai/core/event-logger"
 import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
 import { Observability } from "@opencode-ai/util/observability"
+import { Client } from "@opencode-ai/util/client"
 import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
 import { CommandV2 } from "@opencode-ai/core/command"
@@ -87,7 +88,8 @@ function makeRoutes<AuthError, AuthServices>(
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
     [Database.node, Database.configured(options.database)],
-    [ModelsDev.node, ModelsDev.configured({ ...options.models, client: options.client })],
+    [Client.node, Client.configured(options.client)],
+    [ModelsDev.node, ModelsDev.configured(options.models)],
     [Watcher.node, Watcher.configured({ enabled: options.fs?.filewatcher })],
     [FileSystemSearch.node, FileSystemSearch.configured({ fff: options.fs?.fff })],
     [Global.node, Global.layerWith(options.config?.directory ? { config: options.config.directory } : {})],
@@ -103,10 +105,6 @@ function makeRoutes<AuthError, AuthServices>(
     [CommandV2.node, CommandV2.configured({ gitbash: options.windows?.gitbash })],
     [Pty.node, Pty.configured({ gitbash: options.windows?.gitbash })],
     [Shell.node, Shell.configured({ gitbash: options.windows?.gitbash })],
-    [SessionCompaction.node, SessionCompaction.configured({ client: options.client })],
-    [SessionGenerateNode.node, SessionGenerateNode.configured({ client: options.client })],
-    [SessionModelRequest.node, SessionModelRequest.configured({ client: options.client })],
-    [SessionTitle.node, SessionTitle.configured({ client: options.client })],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]
@@ -135,7 +133,7 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(authorizationLayer),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
-        Layer.provide(Observability.layer({ ...options.observability, client: options.client })),
+        Layer.provide(Observability.layer(options.observability).pipe(Layer.provide(Client.layer(options.client)))),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),

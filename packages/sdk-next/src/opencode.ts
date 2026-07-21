@@ -9,9 +9,11 @@ export const create = Effect.fn("OpenCode.create")(function* (options: ServerOpt
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() =>
       ManagedRuntime.make(
-        createEmbeddedRoutes({ ...options, database: { path: ":memory:", ...options.database } }).pipe(
-          Layer.provide(HttpServer.layerServices),
-        ),
+        createEmbeddedRoutes({
+          ...options,
+          client: options.client ?? "sdk",
+          database: { path: ":memory:", ...options.database },
+        }).pipe(Layer.provide(HttpServer.layerServices)),
       ),
     ),
     (runtime) => runtime.disposeEffect,
