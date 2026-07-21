@@ -144,11 +144,7 @@ export const layer = (options?: Options) => Layer.effect(
   }),
 )
 
-export function nodeWith(options?: Options) {
-  return makeGlobalNode({ service: Service, layer: layer(options), deps: [] })
-}
-
-export const node = nodeWith()
+export const node = makeGlobalNode({ service: Service, layer: layer(), deps: [] })
 
 function subscribeDirectory(
   native: typeof import("@parcel/watcher") | undefined,

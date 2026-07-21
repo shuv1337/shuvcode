@@ -246,8 +246,8 @@ export const layer = (options?: Options) => Layer.unwrap(
   }),
 )
 
-export function nodeWith(options?: Options) {
-  return makeLocationNode({ service: Service, layer: layer(options), deps: [FSUtil.node, Location.node, Ripgrep.node] })
-}
-
-export const node = nodeWith()
+export const node = makeLocationNode({
+  service: Service,
+  layer: layer(),
+  deps: [FSUtil.node, Location.node, Ripgrep.node],
+})

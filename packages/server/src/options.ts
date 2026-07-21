@@ -12,6 +12,12 @@ export const ServerOptions = Schema.Struct({
   database: Schema.optional(Database.Options),
   models: Schema.optional(ModelsDev.Options),
   observability: Schema.optional(Observability.Options),
+  config: Schema.optional(
+    Schema.Struct({
+      directory: Schema.optional(Schema.String),
+      project: Schema.optional(Schema.Boolean),
+    }),
+  ),
   fs: Schema.optional(
     Schema.Struct({
       filewatcher: Schema.optional(Schema.Boolean),

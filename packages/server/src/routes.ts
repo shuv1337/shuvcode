@@ -7,11 +7,14 @@ import { EventLogger } from "@opencode-ai/core/event-logger"
 import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
 import { Observability } from "@opencode-ai/core/observability"
 import { Credential } from "@opencode-ai/core/credential"
+import { Config } from "@opencode-ai/core/config"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Job } from "@opencode-ai/core/job"
+import { Global } from "@opencode-ai/core/global"
+import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
@@ -77,9 +80,12 @@ function makeRoutes<AuthError, AuthServices>(
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
     [Database.node, Database.layer(options.database)],
-    [ModelsDev.node, ModelsDev.nodeWith(options.models)],
-    [Watcher.node, Watcher.nodeWith({ enabled: options.fs?.filewatcher })],
-    [FileSystemSearch.node, FileSystemSearch.nodeWith({ fff: options.fs?.fff })],
+    [ModelsDev.node, ModelsDev.layer(options.models)],
+    [Watcher.node, Watcher.layer({ enabled: options.fs?.filewatcher })],
+    [FileSystemSearch.node, FileSystemSearch.layer({ fff: options.fs?.fff })],
+    [Global.node, Global.layerWith(options.config?.directory ? { config: options.config.directory } : {})],
+    [Config.node, Config.layer({ project: options.config?.project })],
+    [InstructionDiscovery.node, InstructionDiscovery.layer({ project: options.config?.project })],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]

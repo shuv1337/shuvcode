@@ -26,7 +26,14 @@ export type Options = {
 export const run = Effect.fnUntraced(function* (options: Options) {
   return yield* processEffect(options).pipe(
     Effect.provide(Updater.layer),
-    Effect.provide(LayerNode.compile(LayerNode.group([Global.node, AppProcess.node]))),
+    Effect.provide(
+      LayerNode.compile(LayerNode.group([Global.node, AppProcess.node]), [
+        [
+          Global.node,
+          Global.layerWith(process.env.OPENCODE_CONFIG_DIR ? { config: process.env.OPENCODE_CONFIG_DIR } : {}),
+        ],
+      ]),
+    ),
     Effect.provide(NodeServices.layer),
   )
 })
@@ -76,6 +83,12 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           observability: {
             endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
             headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
+          },
+          config: {
+            directory: process.env.OPENCODE_CONFIG_DIR,
+            project: !truthy(
+              process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
+            ),
           },
           fs: {
             filewatcher: !truthy(

@@ -60,7 +60,14 @@ Effect.logInfo("cli starting", {
   Effect.annotateLogs({ role: "cli" }),
   Effect.provide(Config.layer),
   Effect.provide(Updater.layer),
-  Effect.provide(LayerNode.compile(LayerNode.group([Global.node, AppProcess.node, Npm.node]))),
+  Effect.provide(
+    LayerNode.compile(LayerNode.group([Global.node, AppProcess.node, Npm.node]), [
+      [
+        Global.node,
+        Global.layerWith(process.env.OPENCODE_CONFIG_DIR ? { config: process.env.OPENCODE_CONFIG_DIR } : {}),
+      ],
+    ]),
+  ),
   Effect.provide(
     Observability.layer({
       endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,

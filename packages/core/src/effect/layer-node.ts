@@ -121,7 +121,7 @@ type CheckReplacementErrors<SourceError, ReplacementError> = [Exclude<Replacemen
 type CheckReplacement<Item> = Item extends readonly [Node<infer A, infer E, infer T>, infer Replacement]
   ? Replacement extends Node<NoInfer<A>, infer E2, T>
     ? CheckReplacementErrors<E, NoInfer<E2>>
-    : Replacement extends Layer.Layer<NoInfer<A>, infer E2, never>
+    : Replacement extends Layer.Layer<NoInfer<A>, infer E2, infer _R>
       ? CheckReplacementErrors<E, NoInfer<E2>>
       : { readonly "Invalid replacement": Replacement }
   : { readonly "Invalid replacement": Item }
@@ -133,14 +133,16 @@ type CheckReplacements<Items extends Replacements> = {
 type ValidReplacements<Items extends Replacements> = Items & CheckReplacements<Items>
 
 function replacementNode(source: AnyNode, replacement: AnyNode | Layer.Any) {
-  const replacementNode = isNode(replacement)
+  const replacementNode: AnyNode = isNode(replacement)
     ? replacement
-    : make({
-        ...nodeMakeIdentity(source),
-        layer: replacement as Layer.Layer<unknown, unknown>,
-        deps: [],
+    : {
+        kind: "layer",
+        name: source.name,
+        service: source.service,
+        implementation: replacement,
+        dependencies: source.dependencies,
         tag: source.tag,
-      })
+      }
   if (source.name !== replacementNode.name) {
     throw new Error(`Cannot replace ${source.name} with ${replacementNode.name}`)
   }
@@ -148,11 +150,6 @@ function replacementNode(source: AnyNode, replacement: AnyNode | Layer.Any) {
     throw new Error(`Cannot replace ${source.name} across tags`)
   }
   return replacementNode
-}
-
-function nodeMakeIdentity(node: AnyNode): NodeIdentity {
-  if (node.service !== undefined) return { service: node.service }
-  return { name: node.name }
 }
 
 function isNode(input: Layer.Any | AnyNode): input is AnyNode {

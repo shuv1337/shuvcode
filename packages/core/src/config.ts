@@ -153,9 +153,14 @@ export interface Interface {
   readonly entries: () => Effect.Effect<Entry[]>
 }
 
+export const Options = Schema.Struct({
+  project: Schema.optional(Schema.Boolean),
+})
+export type Options = typeof Options.Type
+
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Config") {}
 
-const layer = Layer.effect(
+export const layer = (options?: Options) => Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -239,7 +244,7 @@ const layer = Layer.effect(
       const globalAgentsDirectory = AbsolutePath.make(path.join(global.home, ".agents"))
       const globalClaudeDirectory = AbsolutePath.make(path.join(global.home, ".claude"))
       const locationIsGlobal = path.resolve(location.directory) === path.resolve(global.config)
-      const discovered = locationIsGlobal
+      const discovered = locationIsGlobal || options?.project === false
         ? []
         : yield* fs
             .up({
@@ -396,6 +401,6 @@ const layer = Layer.effect(
 
 export const node = makeLocationNode({
   service: Service,
-  layer,
+  layer: layer(),
   deps: [Watcher.node, EventV2.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
 })
