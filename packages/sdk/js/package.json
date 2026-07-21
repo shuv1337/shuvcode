@@ -6,8 +6,7 @@
   "license": "MIT",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsgo --noEmit",
-    "build": "bun ./script/build.ts"
+    "typecheck": "tsgo --noEmit"
   },
   "exports": {
     ".": "./src/index.ts",
