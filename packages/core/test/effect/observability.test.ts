@@ -66,7 +66,7 @@ test("falls back to local logging when OTLP initialization fails", async () => {
       `
         import { Effect } from "effect"
         import { Observability } from "./src/observability.ts"
-        await Effect.void.pipe(Effect.provide(Observability.layer), Effect.scoped, Effect.runPromise)
+        await Effect.void.pipe(Effect.provide(Observability.layer()), Effect.scoped, Effect.runPromise)
       `,
     ],
     {

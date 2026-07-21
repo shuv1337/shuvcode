@@ -71,7 +71,20 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           models: {
             url: process.env.OPENCODE_MODELS_URL,
             file: process.env.OPENCODE_MODELS_PATH,
-            fetch: !["1", "true"].includes(process.env.OPENCODE_DISABLE_MODELS_FETCH?.toLowerCase() ?? ""),
+            fetch: !truthy(process.env.OPENCODE_DISABLE_MODELS_FETCH),
+          },
+          observability: {
+            endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+            headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
+          },
+          fs: {
+            filewatcher: !truthy(
+              process.env.OPENCODE_FILEWATCHER_DISABLE ?? process.env.OPENCODE_DISABLE_FILEWATCHER,
+            ),
+            fff:
+              process.env.OPENCODE_DISABLE_FFF === undefined
+                ? process.platform !== "win32"
+                : !truthy(process.env.OPENCODE_DISABLE_FFF),
           },
         },
         serviceOptions === undefined
@@ -175,6 +188,10 @@ const recognizeIncumbent = Effect.fnUntraced(function* (options: DiscoverOptions
 
 function serviceURL(hostname: string, port: number) {
   return `http://${hostname.includes(":") ? `[${hostname}]` : hostname}:${port}`
+}
+
+function truthy(value?: string) {
+  return value === "1" || value?.toLowerCase() === "true"
 }
 
 function addressInUse(error: unknown): boolean {

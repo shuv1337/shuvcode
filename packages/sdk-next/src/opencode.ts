@@ -1,19 +1,15 @@
 import { OpenCode } from "@opencode-ai/client/effect"
-import { Database } from "@opencode-ai/core/database/database"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { createEmbeddedRoutes } from "@opencode-ai/server/routes"
+import type { ServerOptions } from "@opencode-ai/server/options"
 import { Context, Effect, Layer, ManagedRuntime } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/unstable/http"
 
-export const create = Effect.fn("OpenCode.create")(function* (options: {
-  readonly database?: Database.Options
-  readonly models?: ModelsDev.Options
-} = {}) {
+export const create = Effect.fn("OpenCode.create")(function* (options: ServerOptions = {}) {
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() =>
       ManagedRuntime.make(
-        createEmbeddedRoutes({ database: { path: ":memory:", ...options.database }, models: options.models }).pipe(
+        createEmbeddedRoutes({ ...options, database: { path: ":memory:", ...options.database } }).pipe(
           Layer.provide(HttpServer.layerServices),
         ),
       ),

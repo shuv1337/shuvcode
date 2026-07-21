@@ -61,7 +61,12 @@ Effect.logInfo("cli starting", {
   Effect.provide(Config.layer),
   Effect.provide(Updater.layer),
   Effect.provide(LayerNode.compile(LayerNode.group([Global.node, AppProcess.node, Npm.node]))),
-  Effect.provide(Observability.layer),
+  Effect.provide(
+    Observability.layer({
+      endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+      headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
+    }),
+  ),
   Effect.provide(NodeServices.layer),
   Effect.scoped,
   Effect.tap(() => Effect.sync(() => process.exit(process.exitCode ?? 0))),

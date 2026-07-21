@@ -305,7 +305,7 @@ export function createRoutes(
     Layer.provide(locationServiceMapV2),
 
     Layer.provide(AppNodeBuilderV1.build(app)),
-    Layer.provideMerge(Observability.layer),
+    Layer.provideMerge(Observability.layer()),
   )
 }
 

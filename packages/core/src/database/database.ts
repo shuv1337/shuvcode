@@ -2,7 +2,7 @@ export * as Database from "./database"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { sqliteLayer } from "#sqlite"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { Global } from "../global"
 import { isAbsolute, join } from "path"
 import { DatabaseMigration } from "./migration"
@@ -16,9 +16,10 @@ export interface Interface {
   db: DatabaseShape
 }
 
-export interface Options {
-  readonly path?: string
-}
+export const Options = Schema.Struct({
+  path: Schema.optional(Schema.String),
+})
+export type Options = typeof Options.Type
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/storage/Database") {}
 

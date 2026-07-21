@@ -4,6 +4,7 @@ import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventLogger } from "@opencode-ai/core/event-logger"
+import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
 import { Observability } from "@opencode-ai/core/observability"
 import { Credential } from "@opencode-ai/core/credential"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
@@ -18,6 +19,7 @@ import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { WellKnown } from "@opencode-ai/core/wellknown"
+import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Context, Effect, Layer, Option } from "effect"
@@ -76,6 +78,8 @@ function makeRoutes<AuthError, AuthServices>(
   const replacements: LayerNode.Replacements = [
     [Database.node, Database.layer(options.database)],
     [ModelsDev.node, ModelsDev.nodeWith(options.models)],
+    [Watcher.node, Watcher.nodeWith({ enabled: options.fs?.filewatcher })],
+    [FileSystemSearch.node, FileSystemSearch.nodeWith({ fff: options.fs?.fff })],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]
@@ -104,7 +108,7 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(authorizationLayer),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
-        Layer.provide(Observability.layer),
+        Layer.provide(Observability.layer(options.observability)),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),

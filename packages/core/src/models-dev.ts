@@ -530,11 +530,12 @@ export interface Interface {
   readonly refresh: (force?: boolean) => Effect.Effect<void>
 }
 
-export interface Options {
-  readonly url?: string
-  readonly file?: string
-  readonly fetch?: boolean
-}
+export const Options = Schema.Struct({
+  url: Schema.optional(Schema.String),
+  file: Schema.optional(Schema.String),
+  fetch: Schema.optional(Schema.Boolean),
+})
+export type Options = typeof Options.Type
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ModelsDev") {}
 
