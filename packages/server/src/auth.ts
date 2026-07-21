@@ -13,11 +13,12 @@ export type DecodedCredentials = {
 
 export type Info = {
   readonly password: Option.Option<string>
+  readonly username: string
 }
 
 export class Config extends Context.Service<Config, Info>()("@opencode/ServerAuthConfig") {
-  static configLayer(input: Info) {
-    return Layer.succeed(this, this.of(input))
+  static configLayer(input: Pick<Info, "password">) {
+    return Layer.succeed(this, this.of({ ...input, username: "opencode" }))
   }
 
   static get layer() {
@@ -32,7 +33,7 @@ export function required(config: Info) {
 export function authorized(credentials: DecodedCredentials, config: Info) {
   return (
     Option.isSome(config.password) &&
-    credentials.username === "opencode" &&
+    credentials.username === config.username &&
     Redacted.value(credentials.password) === config.password.value
   )
 }
