@@ -31,6 +31,7 @@ import { layer } from "./location"
 import { formLocationLayer } from "./middleware/form-location"
 import { sessionLocationLayer } from "./middleware/session-location"
 import { ServerInfo } from "./server-info"
+import type { ServerOptions } from "./options"
 
 const applicationServices = LayerNode.group([
   Database.node,
@@ -52,29 +53,24 @@ const applicationServices = LayerNode.group([
   SessionRestart.node,
 ])
 
-export interface Options {
-  readonly password?: string
-  readonly serviceURLs?: () => ReadonlyArray<string>
-  readonly database?: Database.Options
-  readonly models?: ModelsDev.Options
-}
-
-export function createRoutes(options: Options = {}) {
+export function createRoutes(options: ServerOptions = {}, serviceURLs: () => ReadonlyArray<string> = () => []) {
   return makeRoutes(
     options.password
       ? ServerAuth.Config.configLayer({ username: "opencode", password: Option.some(options.password) })
       : ServerAuth.Config.layer,
     options,
+    serviceURLs,
   )
 }
 
-export function createEmbeddedRoutes(options: Pick<Options, "database" | "models"> = {}) {
-  return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }), options)
+export function createEmbeddedRoutes(options: ServerOptions = {}) {
+  return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }), options, () => [])
 }
 
 function makeRoutes<AuthError, AuthServices>(
   auth: Layer.Layer<ServerAuth.Config, AuthError, AuthServices>,
-  options: Pick<Options, "database" | "models" | "serviceURLs">,
+  options: ServerOptions,
+  serviceURLs: () => ReadonlyArray<string>,
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
@@ -98,7 +94,7 @@ function makeRoutes<AuthError, AuthServices>(
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
         Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context)),
-        ServerInfo.layer(options.serviceURLs ?? (() => [])),
+        ServerInfo.layer(serviceURLs),
       )
       return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),

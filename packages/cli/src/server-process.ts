@@ -60,30 +60,31 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             : randomBytes(32).toString("base64url")
       if (!password) return yield* Effect.fail(new Error("Missing server password"))
       const instanceID = randomUUID()
-      const server = yield* start({
-        hostname,
-        port: Option.fromNullishOr(port),
-        password,
-        instanceID,
-        database: {
-          path: process.env.OPENCODE_DB,
+      const server = yield* start(
+        {
+          hostname,
+          port,
+          password,
+          database: {
+            path: process.env.OPENCODE_DB,
+          },
+          models: {
+            url: process.env.OPENCODE_MODELS_URL,
+            file: process.env.OPENCODE_MODELS_PATH,
+            fetch: !["1", "true"].includes(process.env.OPENCODE_DISABLE_MODELS_FETCH?.toLowerCase() ?? ""),
+          },
         },
-        models: {
-          url: process.env.OPENCODE_MODELS_URL,
-          file: process.env.OPENCODE_MODELS_PATH,
-          fetch: !["1", "true"].includes(process.env.OPENCODE_DISABLE_MODELS_FETCH?.toLowerCase() ?? ""),
-        },
-        service:
-          serviceOptions === undefined
-            ? undefined
-            : {
-                onListen: (address, shutdown) =>
-                  Effect.gen(function* () {
-                    if (!config.password) yield* ServiceConfig.password(password)
-                    return yield* register(address, password, instanceID, serviceOptions.file, shutdown)
-                  }),
-              },
-      }).pipe(
+        serviceOptions === undefined
+          ? undefined
+          : {
+              instanceID,
+              onListen: (address, shutdown) =>
+                Effect.gen(function* () {
+                  if (!config.password) yield* ServiceConfig.password(password)
+                  return yield* register(address, password, instanceID, serviceOptions.file, shutdown)
+                }),
+            },
+      ).pipe(
         Effect.provide(Logger.layer([], { mergeWithExisting: false })),
         Effect.catch((error) => {
           if (serviceOptions === undefined || port === undefined || !addressInUse(error)) return Effect.fail(error)
