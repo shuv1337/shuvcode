@@ -23,7 +23,7 @@ const instructionLayer = (input: {
   project?: boolean
 }) =>
   AppNodeBuilder.build(InstructionDiscovery.node, [
-    [InstructionDiscovery.node, InstructionDiscovery.layer({ project: input.project })],
+    [InstructionDiscovery.node, InstructionDiscovery.configured({ project: input.project })],
     [Global.node, Global.layerWith({ config: input.config })],
     [Location.node, input.locationServiceLayer],
     ...(input.filesystemLayer ? [[FSUtil.node, input.filesystemLayer] as const] : []),

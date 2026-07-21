@@ -97,11 +97,15 @@ export const layer = (options?: Options) => Layer.effect(
   }),
 )
 
-export const node = makeLocationNode({
-  service: Service,
-  layer: layer(),
-  deps: [FSUtil.node, Global.node, Location.node],
-})
+export function configured(options?: Options) {
+  return makeLocationNode({
+    service: Service,
+    layer: layer(options),
+    deps: [FSUtil.node, Global.node, Location.node],
+  })
+}
+
+export const node = configured()
 
 function render(files: ReadonlyArray<File>) {
   return files.map((file) => `Instructions from: ${file.path}\n${file.content}`).join("\n\n")

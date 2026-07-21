@@ -399,8 +399,12 @@ export const layer = (options?: Options) => Layer.effect(
   }),
 )
 
-export const node = makeLocationNode({
-  service: Service,
-  layer: layer(),
-  deps: [Watcher.node, EventV2.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
-})
+export function configured(options?: Options) {
+  return makeLocationNode({
+    service: Service,
+    layer: layer(options),
+    deps: [Watcher.node, EventV2.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
+  })
+}
+
+export const node = configured()

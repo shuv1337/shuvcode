@@ -8,10 +8,13 @@ import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
 import { Observability } from "@opencode-ai/core/observability"
 import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
+import { CommandV2 } from "@opencode-ai/core/command"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
+import { Pty } from "@opencode-ai/core/pty"
 import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
+import { Shell } from "@opencode-ai/core/shell"
 import { Job } from "@opencode-ai/core/job"
 import { Global } from "@opencode-ai/core/global"
 import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
@@ -79,13 +82,16 @@ function makeRoutes<AuthError, AuthServices>(
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
-    [Database.node, Database.layer(options.database)],
-    [ModelsDev.node, ModelsDev.layer(options.models)],
-    [Watcher.node, Watcher.layer({ enabled: options.fs?.filewatcher })],
-    [FileSystemSearch.node, FileSystemSearch.layer({ fff: options.fs?.fff })],
+    [Database.node, Database.configured(options.database)],
+    [ModelsDev.node, ModelsDev.configured(options.models)],
+    [Watcher.node, Watcher.configured({ enabled: options.fs?.filewatcher })],
+    [FileSystemSearch.node, FileSystemSearch.configured({ fff: options.fs?.fff })],
     [Global.node, Global.layerWith(options.config?.directory ? { config: options.config.directory } : {})],
-    [Config.node, Config.layer({ project: options.config?.project })],
-    [InstructionDiscovery.node, InstructionDiscovery.layer({ project: options.config?.project })],
+    [Config.node, Config.configured({ project: options.config?.project })],
+    [InstructionDiscovery.node, InstructionDiscovery.configured({ project: options.config?.project })],
+    [CommandV2.node, CommandV2.configured({ gitbash: options.windows?.gitbash })],
+    [Pty.node, Pty.configured({ gitbash: options.windows?.gitbash })],
+    [Shell.node, Shell.configured({ gitbash: options.windows?.gitbash })],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]

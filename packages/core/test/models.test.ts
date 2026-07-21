@@ -161,7 +161,7 @@ const buildLayer = (state: Ref.Ref<MockState>, options: ModelsDev.Options = { fe
   // every test would reuse the cachedInvalidateWithTTL state from the first run.
   Layer.fresh(
     AppNodeBuilder.build(ModelsDev.node, [
-      [ModelsDev.node, ModelsDev.layer(options)],
+      [ModelsDev.node, ModelsDev.configured(options)],
       [LayerNodePlatform.httpClient, Layer.succeed(HttpClient.HttpClient, makeMockClient(state))],
     ]),
   )

@@ -90,6 +90,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
               process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
             ),
           },
+          windows: {
+            gitbash: process.env.OPENCODE_GIT_BASH_PATH,
+          },
           fs: {
             filewatcher: !truthy(
               process.env.OPENCODE_FILEWATCHER_DISABLE ?? process.env.OPENCODE_DISABLE_FILEWATCHER,

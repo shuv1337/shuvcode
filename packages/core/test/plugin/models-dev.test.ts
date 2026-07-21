@@ -26,7 +26,7 @@ const layer = AppNodeBuilder.build(LayerNode.group([Catalog.node, Integration.no
 ])
 const it = testEffect(layer)
 const models = (file: string) =>
-  AppNodeBuilder.build(ModelsDev.node, [[ModelsDev.node, ModelsDev.layer({ file, fetch: false })]])
+  AppNodeBuilder.build(ModelsDev.node, [[ModelsDev.node, ModelsDev.configured({ file, fetch: false })]])
 
 describe("ModelsDevPlugin", () => {
   it.effect("projects normalized models.dev snapshots into the catalog", () =>

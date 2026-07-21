@@ -82,7 +82,7 @@ function testLayer(
     ),
   )
   return AppNodeBuilder.build(LayerNode.group([Config.node, EventV2.node]), [
-    [Config.node, Config.layer(options)],
+    [Config.node, Config.configured(options)],
     [Location.node, locationLayer],
     [Global.node, Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })],
     [Credential.node, credentialNode],

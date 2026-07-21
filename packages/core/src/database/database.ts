@@ -57,8 +57,8 @@ export function layer(options?: Options) {
   })
 }
 
-export const node = makeGlobalNode({
-  service: Service,
-  layer: layer({ path: ":memory:" }),
-  deps: [],
-})
+export function configured(options?: Options) {
+  return makeGlobalNode({ service: Service, layer: layer(options), deps: [] })
+}
+
+export const node = configured({ path: ":memory:" })

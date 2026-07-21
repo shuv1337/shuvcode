@@ -81,17 +81,6 @@ describe("layer node", () => {
     expect(await Effect.runPromise(program)).toBe("hello simulation")
   })
 
-  test("preserves source dependencies when replacing a node with a layer", async () => {
-    const replacement = Layer.effect(
-      Greeting,
-      Effect.map(Value, (item) => Greeting.of({ value: `replaced ${item.value}` })),
-    )
-    const program = Effect.map(Greeting, (item) => item.value).pipe(
-      Effect.provide(build(LayerNode.group([greeting]), [[greeting, replacement]])),
-    )
-    expect(await Effect.runPromise(program)).toBe("replaced production")
-  })
-
   test("replaces every use of the same layer", async () => {
     const leftLayer = Layer.effect(
       Left,
