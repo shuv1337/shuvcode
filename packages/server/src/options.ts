@@ -4,11 +4,13 @@ import { Observability } from "@opencode-ai/core/observability"
 import { Schema } from "effect"
 
 export const ServerOptions = Schema.Struct({
+  client: Schema.optional(Schema.String),
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535)),
   ),
   password: Schema.optional(Schema.String),
+  simulation: Schema.optional(Schema.Boolean),
   database: Schema.optional(Database.Options),
   models: Schema.optional(ModelsDev.Options),
   observability: Schema.optional(Observability.Options),
@@ -16,6 +18,8 @@ export const ServerOptions = Schema.Struct({
     Schema.Struct({
       directory: Schema.optional(Schema.String),
       project: Schema.optional(Schema.Boolean),
+      file: Schema.optional(Schema.String),
+      content: Schema.optional(Schema.String),
     }),
   ),
   windows: Schema.optional(

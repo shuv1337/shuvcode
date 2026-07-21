@@ -69,9 +69,11 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
       const instanceID = randomUUID()
       const server = yield* start(
         {
+          client: process.env.OPENCODE_CLIENT ?? "cli",
           hostname,
           port,
           password,
+          simulation: truthy(process.env.OPENCODE_SIMULATE),
           database: {
             path: process.env.OPENCODE_DB,
           },
@@ -89,6 +91,8 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             project: !truthy(
               process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
             ),
+            file: process.env.OPENCODE_CONFIG,
+            content: process.env.OPENCODE_CONFIG_CONTENT,
           },
           windows: {
             gitbash: process.env.OPENCODE_GIT_BASH_PATH,

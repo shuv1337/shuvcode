@@ -11,6 +11,7 @@ import { Otlp } from "./observability/otlp"
 export const Options = Schema.Struct({
   endpoint: Schema.optional(Schema.String),
   headers: Schema.optional(Schema.String),
+  client: Schema.optional(Schema.String),
 })
 export type Options = typeof Options.Type
 
@@ -18,6 +19,7 @@ export function layer(
   options: Options = {
     endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
+    client: process.env.OPENCODE_CLIENT ?? "cli",
   },
 ) {
   const local = Logger.layer(Logging.loggers(), { mergeWithExisting: false }).pipe(

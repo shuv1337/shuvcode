@@ -1,5 +1,4 @@
 import { Global } from "@opencode-ai/core/global"
-import { Flag } from "@opencode-ai/core/flag/flag"
 import { AppProcess } from "@opencode-ai/core/process"
 import {
   InstallationChannel,
@@ -138,7 +137,10 @@ export const layer = Layer.effect(
     })
 
     const check = Effect.fn("cli.updater.check")(function* () {
-      if (InstallationLocal || Flag.OPENCODE_DISABLE_AUTOUPDATE)
+      if (
+        InstallationLocal ||
+        ["1", "true"].includes(process.env.OPENCODE_DISABLE_AUTOUPDATE?.toLowerCase() ?? "")
+      )
         return yield* Effect.logInfo("update check skipped", {
           reason: InstallationLocal ? "local-install" : "disabled",
           version: InstallationVersion,

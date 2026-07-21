@@ -1,12 +1,12 @@
 import { Layer } from "effect"
 import { OtlpLogger } from "effect/unstable/observability"
-import { Flag } from "../flag/flag"
 import { InstallationChannel, InstallationVersion } from "../installation/version"
 import { runID } from "./shared"
 
 export interface Options {
   readonly endpoint?: string
   readonly headers?: string
+  readonly client?: string
 }
 
 function parseHeaders(value?: string) {
@@ -38,14 +38,14 @@ function resourceAttributes() {
   }
 }
 
-export function resource(): { serviceName: string; serviceVersion: string; attributes: Record<string, string> } {
+export function resource(client = "cli"): { serviceName: string; serviceVersion: string; attributes: Record<string, string> } {
   return {
     serviceName: "opencode",
     serviceVersion: InstallationVersion,
     attributes: {
       ...resourceAttributes(),
       "deployment.environment.name": InstallationChannel,
-      "opencode.client": Flag.OPENCODE_CLIENT,
+      "opencode.client": client,
       "opencode.run": runID,
       "service.instance.id": runID,
     },
@@ -55,7 +55,11 @@ export function resource(): { serviceName: string; serviceVersion: string; attri
 export function loggers(options?: Options) {
   if (!options?.endpoint) return []
   return [
-    OtlpLogger.make({ url: `${options.endpoint}/v1/logs`, resource: resource(), headers: parseHeaders(options.headers) }),
+    OtlpLogger.make({
+      url: `${options.endpoint}/v1/logs`,
+      resource: resource(options.client),
+      headers: parseHeaders(options.headers),
+    }),
   ]
 }
 
@@ -73,7 +77,7 @@ export async function tracingLayer(options?: Options) {
   context.setGlobalContextManager(manager)
 
   return NodeSdk.layer(() => ({
-    resource: resource(),
+    resource: resource(options.client),
     spanProcessor: new SdkBase.BatchSpanProcessor(
       new OTLP.OTLPTraceExporter({
         url: `${options.endpoint}/v1/traces`,

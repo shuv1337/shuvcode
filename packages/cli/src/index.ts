@@ -72,6 +72,7 @@ Effect.logInfo("cli starting", {
     Observability.layer({
       endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
       headers: process.env.OTEL_EXPORTER_OTLP_HEADERS,
+      client: process.env.OPENCODE_CLIENT ?? "cli",
     }),
   ),
   Effect.provide(NodeServices.layer),

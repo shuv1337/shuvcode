@@ -1,6 +1,6 @@
 export * as InstallationDatabase from "./database"
 
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { Flag } from "@/flag/flag"
 import { Global } from "@opencode-ai/core/global"
 import { InstallationChannel } from "@opencode-ai/core/installation/version"
 import { isAbsolute, join } from "node:path"
