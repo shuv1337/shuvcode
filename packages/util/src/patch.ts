@@ -1,4 +1,4 @@
-export * as Patch from "./patch"
+export * as Patch from "./patch.js"
 
 import { Result, Schema } from "effect"
 
