@@ -12,6 +12,22 @@ export * as OpenAICodex from "./openai-codex"
 /** ChatGPT-plan requests must target the codex backend instead of the public API. */
 export const baseURL = "https://chatgpt.com/backend-api/codex"
 
+// ChatGPT Codex OAuth exposes a smaller window than the public Responses API.
+// Cap instead of replacing so models with smaller windows retain their limit.
+const contextWindow = 272_000
+
+type Limits = {
+  readonly context: number
+  readonly input?: number
+  readonly output: number
+}
+
+export const limits = (value: Limits): Limits => ({
+  context: Math.min(value.context, contextWindow),
+  ...(value.input === undefined ? {} : { input: Math.min(value.input, contextWindow) }),
+  output: value.output,
+})
+
 const methodIDs: readonly string[] = ["chatgpt-browser", "chatgpt-headless"]
 
 /** Structural credential shape so both core and plugin-facing credential types fit. */

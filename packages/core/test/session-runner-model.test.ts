@@ -16,6 +16,7 @@ import { it } from "./lib/effect"
 
 interface ModelOptions {
   readonly modelID?: string
+  readonly limit?: ModelV2.Info["limit"]
   readonly settings?: ModelV2.Info["settings"]
   readonly headers?: ModelV2.Info["headers"]
   readonly body?: ModelV2.Info["body"]
@@ -38,7 +39,7 @@ const model = (packageName: string | undefined, options: ModelOptions = {}) =>
     cost: [],
     status: "active",
     enabled: true,
-    limit: { context: 100, output: 20 },
+    limit: options.limit ?? { context: 100, output: 20 },
   })
 
 describe("SessionRunnerModel", () => {
@@ -297,6 +298,7 @@ describe("SessionRunnerModel", () => {
           settings: { baseURL: "https://openai.example/v1" },
           headers: {},
           body: {},
+          limit: { context: 1_050_000, input: 922_000, output: 128_000 },
         }),
         Credential.Key.make({ type: "key", key: "secret" }),
       )
@@ -310,6 +312,7 @@ describe("SessionRunnerModel", () => {
       })
 
       expect(headers.authorization).toBe("Bearer secret")
+      expect(resolved.route.defaults.limits).toEqual({ context: 1_050_000, output: 128_000 })
     }),
   )
 
@@ -366,6 +369,7 @@ describe("SessionRunnerModel", () => {
           settings: { baseURL: "https://openai.example/v1" },
           headers: {},
           body: {},
+          limit: { context: 1_050_000, input: 922_000, output: 128_000 },
         }),
         Credential.OAuth.make({
           type: "oauth",
@@ -388,6 +392,7 @@ describe("SessionRunnerModel", () => {
       expect(resolved.route).toMatchObject({
         id: "openai-responses",
         endpoint: { baseURL: "https://chatgpt.com/backend-api/codex" },
+        defaults: { limits: { context: 272_000, output: 128_000 } },
       })
       expect(headers.authorization).toBe("Bearer chatgpt-token")
       expect(headers["chatgpt-account-id"]).toBe("acct_123")
