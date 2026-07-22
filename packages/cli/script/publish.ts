@@ -3,6 +3,7 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
+import { UpdateArtifact } from "../../../script/update-artifact"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -76,4 +77,11 @@ await publishDistribution({
   name: "shuvcode-node",
   binary: "shuvcode-node",
   packagePrefix: "shuvcode-node-",
+})
+await UpdateArtifact.publish({
+  channel: Script.channel,
+  name: "cli",
+  distribution: "npm",
+  version: Script.version,
+  metadata: {},
 })

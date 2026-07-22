@@ -44,7 +44,7 @@ describe("acp command", () => {
     expect(response.result).toMatchObject({
       protocolVersion: 1,
       agentCapabilities: { loadSession: true },
-      agentInfo: { name: "OpenCode" },
+      agentInfo: { name: "Shuvcode" },
     })
 
     await child.stdin.end()

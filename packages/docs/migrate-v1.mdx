@@ -1,6 +1,6 @@
 ---
 title: "Migrate from V1"
-description: "Move from OpenCode V1 to the OpenCode 2.0 beta."
+description: "Move from OpenCode V1 to Shuvcode's OpenCode V2-based release."
 ---
 
 ## Breaking changes
@@ -18,30 +18,30 @@ continue to work without changes. If one of these stops working in V2, treat it 
 an expected migration requirement.
 
 <Tip>
-  Run `/report` if existing V1 functionality does not work in V2. The report skill collects diagnostics and helps you file
-  a compatibility issue.
+  Run `/report` if existing V1 functionality does not work in V2. The report skill collects diagnostics and helps you
+  file a compatibility issue.
 </Tip>
 
 <Warning>
-  OpenCode 2.0 is in beta. Beta data may be wiped, features may break unintentionally, and the server and plugin APIs may
-  continue to change.
+  Shuvcode's V2 line is in beta. Beta data may be wiped, features may break unintentionally, and the server and plugin
+  APIs may continue to change.
 </Warning>
 
-During the beta, OpenCode V1 and V2 use different executable names. You can keep using `opencode` for V1 while trying V2
-with `opencode2`.
+OpenCode V1 and Shuvcode use different executable names. You can keep using `opencode` for V1 while trying Shuvcode with
+`shuvcode`.
 
 ## Install the beta
 
 Install the beta from the `next` distribution tag:
 
 ```bash
-npm install -g @opencode-ai/cli@next
+npm install -g shuvcode@next
 ```
 
 Start it in your project with:
 
 ```bash
-opencode2
+shuvcode
 ```
 
 ## Configuration
@@ -61,19 +61,19 @@ V2 reads existing global and project configuration from the same locations as V1
 V2 reads these same locations. It detects V1-shaped configuration and translates it in memory without rewriting the
 source file. Existing V1 configuration is intended to keep working, so you do not need to convert it to try or adopt V2.
 
-### Ask OpenCode to migrate
+### Ask Shuvcode to migrate
 
 The V1 config format remains supported. The native V2 format is optional and makes several settings more explicit and
 ergonomic.
 
-The recommended migration path is to ask OpenCode to update the configuration for you:
+The recommended migration path is to ask Shuvcode to update the configuration for you:
 
 ```text
-Migrate my OpenCode configuration, including file-based definitions, from the V1 format to the native V2 format.
+Migrate my OpenCode V1 configuration, including file-based definitions, to Shuvcode's native V2 format.
 Preserve its behavior and all unrelated settings.
 ```
 
-OpenCode can inspect the complete file, apply the relevant changes below, and avoid rewriting settings that do not need to
+Shuvcode can inspect the complete file, apply the relevant changes below, and avoid rewriting settings that do not need to
 change. Do not mix V1 and V2 field names manually in one file.
 
 ### Sharing
@@ -395,7 +395,7 @@ Most fields that keep the same shape, including `shell`, `model`, `default_agent
 
 These V1 fields do not have one-to-one native V2 config fields:
 
-- `logLevel`: use `OPENCODE_LOG_LEVEL` when starting OpenCode.
+- `logLevel`: use `OPENCODE_LOG_LEVEL` when starting Shuvcode.
 - `server`: use the V2 service and explicit server options; the server API is an intentional breaking change.
 - `layout`: remove it; V1 already treated it as deprecated and always used stretch layout.
 - `enabled_providers` and `disabled_providers`: there is no native provider allowlist or denylist field yet.
@@ -557,12 +557,12 @@ The config entry can be translated automatically, but plugin implementation code
 plugin API is still being finalized during beta, and detailed plugin migration guidance will be published when it is
 ready.
 
-Once the V2 plugin API is finalized, OpenCode should be able to migrate the majority of V1 plugins while keeping related
+Once the V2 plugin API is finalized, Shuvcode should be able to migrate the majority of V1 plugins while keeping related
 local modules and dependencies together. See the current beta [Plugins guide](/build/plugins).
 
 ## Server API and clients
 
-OpenCode 2 has a revised, more ergonomic server API and a new set of clients. Integrations that call the V1 server API
+Shuvcode V2 has a revised, more ergonomic server API and a new set of clients. Integrations that call the V1 server API
 must migrate to the V2 API.
 
 Use the `@opencode-ai/client` package to access the new clients. The server API and clients are still being finalized
@@ -571,6 +571,6 @@ request types, and responses.
 
 ## Verify your setup
 
-Start `opencode2` in a project and verify your model, provider credentials, agents, permissions, MCP servers, and plugins
+Start `shuvcode` in a project and verify your model, provider credentials, agents, permissions, MCP servers, and plugins
 before relying on the beta for regular work. Keep your V1 setup until you have confirmed the V2 behavior you need, and do
 not point V1 at configuration that you have converted to the native V2 shape.

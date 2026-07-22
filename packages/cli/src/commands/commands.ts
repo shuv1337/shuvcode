@@ -14,7 +14,7 @@ const ServerParams = {
   ),
 }
 
-export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
+export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "shuvcode", {
   description: "shuvcode — OpenCode v2 fork command line interface",
   params: {
     ...ServerParams,

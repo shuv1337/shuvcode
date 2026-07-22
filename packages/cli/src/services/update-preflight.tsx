@@ -6,7 +6,7 @@ import { render, useTerminalDimensions } from "@opentui/solid"
 import { OPENCODE_VERSION } from "../version"
 import { registerOpencodeSpinner } from "@opencode-ai/tui/component/register-spinner"
 import { SPINNER_FRAMES } from "@opencode-ai/tui/component/spinner"
-import { go } from "@opencode-ai/tui/logo"
+import { shuvcodeMark } from "@opencode-ai/tui/logo"
 import { setTimeout } from "node:timers/promises"
 import {
   batch,
@@ -207,7 +207,7 @@ const colors = {
   text: RGBA.fromHex("#eeeeee"),
 }
 
-const monogram = go.right.slice(1)
+const monogram = shuvcodeMark
 const sweepBlend = 8
 const textDim = RGBA.fromHex("#4c4c4c")
 const rampSteps = 32
@@ -413,9 +413,7 @@ function UpdateFooter(props: {
     const completion = smoothstep(headerFade.progress())
     return Array.from({ length: width }, (_, index) => {
       const color =
-        index >= filled
-          ? colors.muted
-          : shade(railRamp, Math.max(0, 1 - Math.abs(index - center) / glowRadius) ** 2)
+        index >= filled ? colors.muted : shade(railRamp, Math.max(0, 1 - Math.abs(index - center) / glowRadius) ** 2)
       return {
         char: success || index < filled ? "━" : "·",
         color: success ? blend(color, colors.accent, completion) : color,

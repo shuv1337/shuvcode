@@ -18,7 +18,7 @@ import {
   type ScrollbackWriter,
 } from "@opentui/core"
 import { Locale } from "../util/locale"
-import { go } from "../logo"
+import { shuvcodeMark } from "../logo"
 import { monoTruncate, monoTruncateMiddle } from "./mono"
 import type { RunSplashTheme } from "./theme"
 
@@ -44,6 +44,11 @@ export type SplashMeta = {
 
 export function splashResumeCommand(sessionID: string) {
   return `shuvcode mini -s ${sessionID}`
+}
+
+export const splashMark = {
+  mono: ["[S]"],
+  full: shuvcodeMark,
 }
 
 type Cell = {
@@ -187,7 +192,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
   let height = 1
 
   if (kind === "entry") {
-    const mark = input.mono ? ["[O]"] : go.right.slice(1)
+    const mark = input.mono ? splashMark.mono : splashMark.full
     const top = 1
     const body_left = (mark[0]?.length ?? 0) + 2
 
@@ -217,7 +222,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
   }
 
   if (kind === "exit") {
-    const mark = input.mono ? ["[O]"] : go.right.slice(1)
+    const mark = input.mono ? splashMark.mono : splashMark.full
     const top = 1
     const body_left = (mark[0]?.length ?? 0) + 2
     const session = "Session  "
