@@ -17,6 +17,25 @@ export class Repository extends Schema.Class<Repository>("Git.Repository")({
   commonDirectory: AbsolutePath,
 }) {}
 
+// Included from $GIT_DIR/config via include.path (git >= 1.7.10); OpenCode owns
+// this file entirely, so updates are plain rewrites with no config parsing.
+const snapshotConfigFile = "opencode.gitconfig"
+const snapshotConfigInclude = `[include]
+	path = ${snapshotConfigFile}
+`
+const snapshotConfig = `[core]
+	autocrlf = false
+	longpaths = true
+	symlinks = true
+	fsmonitor = false
+	untrackedCache = true
+[feature]
+	manyFiles = true
+[index]
+	version = 4
+	threads = true
+`
+
 export const ChangeSet = Schema.String.pipe(Schema.brand("Git.ChangeSet"))
 export type ChangeSet = typeof ChangeSet.Type
 
@@ -376,19 +395,24 @@ const layer = Layer.effect(
         commonDirectory: input.gitDirectory,
       })
       yield* repositoryOperation("create", repository, ["init"])
-      yield* Effect.forEach(
-        [
-          ["core.autocrlf", "false"],
-          ["core.longpaths", "true"],
-          ["core.symlinks", "true"],
-          ["core.fsmonitor", "false"],
-          ["feature.manyFiles", "true"],
-          ["index.version", "4"],
-          ["index.threads", "true"],
-          ["core.untrackedCache", "true"],
-        ],
-        ([key, value]) => repositoryOperation("create", repository, ["config", key, value]),
-        { discard: true },
+      yield* Effect.gen(function* () {
+        yield* fs.writeFileString(path.join(input.gitDirectory, snapshotConfigFile), snapshotConfig)
+        const config = path.join(input.gitDirectory, "config")
+        const current = yield* fs.readFileString(config)
+        if (current.includes(snapshotConfigInclude)) return
+        yield* fs.writeFileString(config, `${current.endsWith("\n") ? "\n" : "\n\n"}${snapshotConfigInclude}`, {
+          flag: "a",
+        })
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OperationError({
+              operation: "create",
+              directory: input.gitDirectory,
+              message: "Failed to configure Git storage",
+              cause,
+            }),
+        ),
       )
       if (!input.seed) return repository
       yield* fs.ensureDir(path.join(input.gitDirectory, "objects", "info")).pipe(
