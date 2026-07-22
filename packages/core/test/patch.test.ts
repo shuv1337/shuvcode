@@ -22,6 +22,30 @@ describe("Patch", () => {
     ])
   })
 
+  test("parses an empty patch", () => {
+    expect(parse("*** Begin Patch\n*** End Patch")).toEqual([])
+  })
+
+  test("ignores a Codex environment preamble", () => {
+    expect(
+      parse("*** Begin Patch\n*** Environment ID: remote\n*** Add File: file.txt\n+content\n*** End Patch"),
+    ).toEqual([{ type: "add", path: "file.txt", contents: "content" }])
+  })
+
+  test("parses an update followed by an add", () => {
+    expect(
+      parse("*** Begin Patch\n*** Update File: update.txt\n@@\n+line\n*** Add File: add.txt\n+content\n*** End Patch"),
+    ).toEqual([
+      {
+        type: "update",
+        path: "update.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: [], newLines: ["line"], changeContext: undefined }],
+      },
+      { type: "add", path: "add.txt", contents: "content" },
+    ])
+  })
+
   test("parses a file move", () => {
     expect(
       parse("*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch"),
@@ -66,6 +90,20 @@ describe("Patch", () => {
     ])
   })
 
+  test("strips quoted heredoc wrappers", () => {
+    const patch = "*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch"
+    expect(parse(`<<'EOF'\n${patch}\nEOF`)).toEqual([{ type: "add", path: "add.txt", contents: "added" }])
+    expect(parse(`<<\"EOF\"\n${patch}\nEOF`)).toEqual([{ type: "add", path: "add.txt", contents: "added" }])
+  })
+
+  test("rejects malformed heredoc wrappers", () => {
+    const patch = "*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch"
+    expect(() => parse(`<<\"EOF'\n${patch}\nEOF`)).toThrow("The first line of the patch must be '*** Begin Patch'")
+    expect(() => parse("<<EOF\n*** Begin Patch\n*** Add File: add.txt\n+added\nEOF")).toThrow(
+      "The last line of the patch must be '*** End Patch'",
+    )
+  })
+
   test("parses a whitespace-padded hunk header", () => {
     expect(parse("*** Begin Patch\n  *** Update File: foo.txt\n@@\n-old\n+new\n*** End Patch")).toEqual([
       {
@@ -95,6 +133,23 @@ describe("Patch", () => {
         path: "file.txt",
         movePath: undefined,
         chunks: [{ oldLines: ["one"], newLines: ["two"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("parses relative and absolute hunk paths", () => {
+    expect(
+      parse(
+        "*** Begin Patch\n*** Add File: relative.txt\n+content\n*** Delete File: /tmp/delete.txt\n*** Update File: /tmp/update.txt\n@@\n-old\n+new\n*** End Patch",
+      ),
+    ).toEqual([
+      { type: "add", path: "relative.txt", contents: "content" },
+      { type: "delete", path: "/tmp/delete.txt" },
+      {
+        type: "update",
+        path: "/tmp/update.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined }],
       },
     ])
   })
@@ -132,6 +187,42 @@ describe("Patch", () => {
         path: "file.txt",
         movePath: undefined,
         chunks: [{ oldLines: [], newLines: ["quux"], changeContext: undefined, endOfFile: true }],
+      },
+    ])
+  })
+
+  test("allows an end-of-file marker before an explicit chunk", () => {
+    expect(
+      parse("*** Begin Patch\n*** Update File: file.txt\n*** End of File\n@@\n-old\n+new\n*** End Patch"),
+    ).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined }],
+      },
+    ])
+  })
+
+  test("allows an end-of-file marker before an implicit chunk and move", () => {
+    expect(parse("*** Begin Patch\n*** Update File: file.txt\n*** End of File\n-old\n+new\n*** End Patch")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"] }],
+      },
+    ])
+    expect(
+      parse(
+        "*** Begin Patch\n*** Update File: old.txt\n*** End of File\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch",
+      ),
+    ).toEqual([
+      {
+        type: "update",
+        path: "old.txt",
+        movePath: "new.txt",
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined }],
       },
     ])
   })
@@ -236,15 +327,157 @@ describe("Patch", () => {
     ).toThrow("Failed to find expected lines")
   })
 
-  test("matches V1 lenient parsing of malformed hunk bodies", () => {
-    expect(parse("*** Begin Patch\n*** Add File: add.txt\nmissing plus\n*** End Patch")).toEqual([
-      { type: "add", path: "add.txt", contents: "" },
+  test("parses an update without an explicit first chunk header", () => {
+    expect(parse("*** Begin Patch\n*** Update File: file.txt\n import foo\n+bar\n*** End Patch")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["import foo"], newLines: ["import foo", "bar"] }],
+      },
     ])
-    expect(parse("*** Begin Patch\n*** Update File: update.txt\n*** End Patch")).toEqual([
-      { type: "update", path: "update.txt", movePath: undefined, chunks: [] },
+  })
+
+  test("keeps indented update markers as context lines", () => {
+    expect(
+      parse(
+        "*** Begin Patch\n*** Update File: a.txt\n@@\n-old a\n+new a\n *** Update File: b.txt\n@@\n-old b\n+new b\n*** End Patch",
+      ),
+    ).toEqual([
+      {
+        type: "update",
+        path: "a.txt",
+        movePath: undefined,
+        chunks: [
+          {
+            oldLines: ["old a", "*** Update File: b.txt"],
+            newLines: ["new a", "*** Update File: b.txt"],
+            changeContext: undefined,
+          },
+          { oldLines: ["old b"], newLines: ["new b"], changeContext: undefined },
+        ],
+      },
     ])
-    expect(parse("*** Begin Patch\n*** Delete File: delete.txt\nunexpected body\n*** End Patch")).toEqual([
-      { type: "delete", path: "delete.txt" },
+  })
+
+  test("keeps indented move and EOF markers as context lines", () => {
+    expect(
+      parse(
+        "*** Begin Patch\n*** Update File: file.txt\n@@\n before\n *** Move to: moved.txt\n *** End of File\n*** End Patch",
+      ),
+    ).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [
+          {
+            oldLines: ["before", "*** Move to: moved.txt", "*** End of File"],
+            newLines: ["before", "*** Move to: moved.txt", "*** End of File"],
+            changeContext: undefined,
+          },
+        ],
+      },
     ])
+  })
+
+  test("preserves update context indentation", () => {
+    expect(parse("*** Begin Patch\n*** Update File: file.txt\n@@   section\n-old\n+new\n*** End Patch")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: "  section" }],
+      },
+    ])
+  })
+
+  test("preserves bare empty update lines as context", () => {
+    expect(
+      parse("*** Begin Patch\n*** Update File: file.txt\n@@\n context before\n\n context after\n*** End Patch"),
+    ).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [
+          {
+            oldLines: ["context before", "", "context after"],
+            newLines: ["context before", "", "context after"],
+            changeContext: undefined,
+          },
+        ],
+      },
+    ])
+  })
+
+  test("rejects invalid add and delete lines", () => {
+    expect(() => parse("*** Begin Patch\n*** Add File: file.txt\nbad\n*** End Patch")).toThrow(
+      "Invalid hunk at line 3: 'bad' is not a valid hunk header",
+    )
+    expect(() => parse("*** Begin Patch\n*** Delete File: file.txt\nbad\n*** End Patch")).toThrow(
+      "Invalid hunk at line 3: 'bad' is not a valid hunk header",
+    )
+  })
+
+  test("rejects an empty update hunk", () => {
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n*** End Patch")).toThrow(
+      "Invalid hunk at line 2: Update file hunk for path 'file.txt' is empty",
+    )
+    expect(() =>
+      parse(
+        "*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n*** Delete File: other.txt\n*** End Patch",
+      ),
+    ).toThrow("Invalid hunk at line 2: Update file hunk for path 'old.txt' is empty")
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n*** End of File\n*** End Patch")).toThrow(
+      "Invalid hunk at line 2: Update file hunk for path 'file.txt' is empty",
+    )
+  })
+
+  test("rejects an empty update chunk", () => {
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\n*** End Patch")).toThrow(
+      "Invalid hunk at line 4: Update hunk does not contain any lines",
+    )
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\n*** End of File\n*** End Patch")).toThrow(
+      "Invalid hunk at line 4: Update hunk does not contain any lines",
+    )
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\n@@\n-old\n+new\n*** End Patch")).toThrow(
+      "Invalid hunk at line 4: Unexpected line found in update hunk: '@@'",
+    )
+    expect(() =>
+      parse("*** Begin Patch\n*** Update File: file.txt\n@@\n*** Update File: other.txt\n@@\n-old\n+new\n*** End Patch"),
+    ).toThrow("Invalid hunk at line 4: Unexpected line found in update hunk: '*** Update File: other.txt'")
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\nbad\n*** End Patch")).toThrow(
+      "Invalid hunk at line 4: Unexpected line found in update hunk: 'bad'",
+    )
+  })
+
+  test("rejects an invalid update line", () => {
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\n-old\nbad\n*** End Patch")).toThrow(
+      "Invalid hunk at line 5: Expected update hunk to start with a @@ context marker, got: 'bad'",
+    )
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@foo\n*** End Patch")).toThrow(
+      "Invalid hunk at line 3: Unexpected line found in update hunk: '@@foo'",
+    )
+    expect(() => parse("*** Begin Patch\n*** Update File: file.txt\n@@\n-old\n*** Frobnicate File: foo\n*** End Patch")).toThrow(
+      "Invalid hunk at line 5: Expected update hunk to start with a @@ context marker, got: '*** Frobnicate File: foo'",
+    )
+  })
+
+  test("rejects invalid and pathless hunk headers", () => {
+    expect(() => parse("*** Begin Patch\n*** Frobnicate File: foo\n*** End Patch")).toThrow(
+      "Invalid hunk at line 2: '*** Frobnicate File: foo' is not a valid hunk header",
+    )
+    expect(() => parse("*** Begin Patch\n*** Add File:\n*** End Patch")).toThrow(
+      "Invalid hunk at line 2: '*** Add File:' is not a valid hunk header",
+    )
+    for (const header of ["*** Add File: ", "*** Delete File: ", "*** Update File: "]) {
+      expect(() => parse(`*** Begin Patch\n${header}\n*** End Patch`)).toThrow(
+        `Invalid hunk at line 2: '${header.trim()}' is not a valid hunk header`,
+      )
+    }
+    expect(() =>
+      parse("*** Begin Patch\n*** Update File: old.txt\n*** Move to: \n@@\n-old\n+new\n*** End Patch"),
+    ).toThrow("Invalid hunk at line 3: '*** Move to:' is not a valid hunk header")
   })
 })
