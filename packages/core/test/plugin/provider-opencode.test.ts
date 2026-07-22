@@ -124,13 +124,17 @@ describe("OpencodePlugin", () => {
         Effect.gen(function* () {
           yield* addPlugin()
           const integrations = yield* Integration.Service
-          const attempt = yield* integrations.connection.oauth({
-            integrationID: Integration.ID.make("opencode"),
+          const integrationID = Integration.ID.make("opencode")
+          const attempt = yield* integrations.oauth.connect({
+            integrationID,
             methodID: Integration.MethodID.make("device"),
             inputs: { server: `${server.url.origin}/console///?ignored=true#ignored` },
           })
           expect(attempt.url).toBe(`${server.url.origin}/verify`)
-          yield* eventually(integrations.attempt.status(attempt.attemptID), (status) => status.status === "complete")
+          yield* eventually(
+            integrations.oauth.status({ integrationID, attemptID: attempt.attemptID }),
+            (status) => status.status === "complete",
+          )
 
           expect(requests).toContain("POST /console/auth/device/code")
           expect(requests).toContain("POST /console/auth/device/token")
@@ -147,8 +151,8 @@ describe("OpencodePlugin", () => {
   it.effect("rejects non-HTTP OpenCode servers", () =>
     Effect.gen(function* () {
       yield* addPlugin()
-      const error = yield* (yield* Integration.Service).connection
-        .oauth({
+      const error = yield* (yield* Integration.Service).oauth
+        .connect({
           integrationID: Integration.ID.make("opencode"),
           methodID: Integration.MethodID.make("device"),
           inputs: { server: "ftp://console.example.com" },

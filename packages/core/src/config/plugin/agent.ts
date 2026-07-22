@@ -7,10 +7,10 @@ import { AgentV2 } from "../../agent"
 import { Config } from "../../config"
 import { ConfigAgent } from "../agent"
 import { ConfigMarkdown } from "../markdown"
-import { FSUtil } from "../../fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { ConfigAgentV1 } from "../../v1/config/agent"
 import { ConfigMigrateV1 } from "../../v1/config/migrate"
-import { Global } from "../../global"
+import { Global } from "@opencode-ai/util/global"
 import { PermissionV2 } from "../../permission"
 import type { LocationMutation } from "../../location-mutation"
 import type { ReadTool } from "../../tool/read"
@@ -150,7 +150,7 @@ function expandHome(resource: string, home: string) {
 function discover(fs: FSUtil.Interface, directory: string) {
   return Effect.forEach(legacySources, (source) =>
     fs
-      .glob(source.pattern, { cwd: directory, absolute: true, dot: true, symlink: true })
+      .scan(source.pattern, { cwd: directory, absolute: true, dot: true, symlink: true })
       .pipe(
         Effect.map((files) => files.toSorted().map((filepath) => ({ directory, filepath, primary: source.primary }))),
       ),

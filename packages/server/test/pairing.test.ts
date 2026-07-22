@@ -9,7 +9,7 @@ process.env.OPENCODE_DB = ":memory:"
 const password = "admin-secret"
 const basic = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`
 const app = HttpRouter.toWebHandler(
-  createRoutes(password, () => ["https://shuvdev.example"]).pipe(Layer.provide(HttpServer.layerServices)),
+  createRoutes({ password }, () => ["https://shuvdev.example"]).pipe(Layer.provide(HttpServer.layerServices)),
 )
 const embedded = HttpRouter.toWebHandler(createEmbeddedRoutes().pipe(Layer.provide(HttpServer.layerServices)))
 

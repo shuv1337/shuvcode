@@ -3,7 +3,7 @@ title: "Models"
 description: ""
 ---
 
-OpenCode builds its model catalog from [Models.dev](https://models.dev), provider integrations, and your configuration.
+Shuvcode builds its model catalog from [Models.dev](https://models.dev), provider integrations, and your configuration.
 Only enabled models whose provider is available for the current project appear in the model picker.
 
 Connect a provider with `/connect` in the TUI, or configure it in [Providers](/providers).
@@ -21,8 +21,8 @@ the catalog entries shown in the picker rather than guessing a provider or model
 Select a model for one non-interactive run with `--model` or `-m`:
 
 ```bash
-opencode2 run --model openai/gpt-5.2 "Explain this repository"
-opencode2 run -m openai/gpt-5.2#high "Review the current changes"
+shuvcode run --model openai/gpt-5.2 "Explain this repository"
+shuvcode run -m openai/gpt-5.2#high "Review the current changes"
 ```
 
 Agents and commands can also select their own model. See [Agents](/agents) and [Commands](/commands).
@@ -44,7 +44,7 @@ Set `model` in `opencode.json` or `opencode.jsonc`:
 ```jsonc title="opencode.jsonc"
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "anthropic/claude-sonnet-4-5"
+  "model": "anthropic/claude-sonnet-4-5",
 }
 ```
 
@@ -62,7 +62,7 @@ Provider and model entries can supply three kinds of request configuration:
 - `headers` adds HTTP request headers.
 - `body` adds provider-specific fields to the request body.
 
-These values are provider-specific JSON. OpenCode applies provider values first, then model values, then the selected
+These values are provider-specific JSON. Shuvcode applies provider values first, then model values, then the selected
 variant. Nested `settings` and `body` objects are merged; later array and scalar values replace earlier values. Header
 names are matched case-insensitively.
 
@@ -81,21 +81,21 @@ You can also map a friendly catalog ID to a different API model ID with `modelID
           "capabilities": {
             "tools": true,
             "input": ["text", "image"],
-            "output": ["text"]
+            "output": ["text"],
           },
           "limit": {
             "context": 200000,
-            "output": 32000
-          }
-        }
-      }
-    }
-  }
+            "output": 32000,
+          },
+        },
+      },
+    },
+  },
 }
 ```
 
 Here `openai/coding-default` is the selectable catalog reference, while `gpt-5.2` is sent to the provider. When adding a
-model that is not already in the catalog, set accurate `capabilities` and `limit` values so OpenCode can expose tools and
+model that is not already in the catalog, set accurate `capabilities` and `limit` values so Shuvcode can expose tools and
 enforce the correct context limits. Set `disabled: true` on a model entry to hide it from the available catalog.
 
 ### Custom variants
@@ -110,27 +110,27 @@ Add a variant, or override a catalog variant with the same ID, under the model's
       "models": {
         "gpt-5.2": {
           "settings": {
-            "reasoningEffort": "medium"
+            "reasoningEffort": "medium",
           },
           "variants": [
             {
               "id": "fast",
               "settings": {
-                "reasoningEffort": "low"
-              }
+                "reasoningEffort": "low",
+              },
             },
             {
               "id": "deep",
               "settings": {
                 "reasoningEffort": "high",
-                "reasoningSummary": "auto"
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
+                "reasoningSummary": "auto",
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
 }
 ```
 
@@ -150,7 +150,7 @@ For an OpenAI-compatible server, define a provider package, endpoint, and at lea
       "name": "Local server",
       "package": "aisdk:@ai-sdk/openai-compatible",
       "settings": {
-        "baseURL": "http://127.0.0.1:1234/v1"
+        "baseURL": "http://127.0.0.1:1234/v1",
       },
       "models": {
         "coder": {
@@ -158,20 +158,20 @@ For an OpenAI-compatible server, define a provider package, endpoint, and at lea
           "capabilities": {
             "tools": true,
             "input": ["text"],
-            "output": ["text"]
+            "output": ["text"],
           },
           "limit": {
             "context": 32768,
-            "output": 8192
-          }
-        }
-      }
-    }
-  }
+            "output": 8192,
+          },
+        },
+      },
+    },
+  },
 }
 ```
 
-Use the server's real model name, limits, modalities, and tool support. OpenCode cannot infer these for a model you add
+Use the server's real model name, limits, modalities, and tool support. Shuvcode cannot infer these for a model you add
 manually. If the endpoint requires a key, add `apiKey` to provider `settings` using an environment substitution such as
 `"apiKey": "{env:LOCAL_API_KEY}"`; do not commit secrets.
 
@@ -185,7 +185,7 @@ openai/gpt-5.2#high
 openrouter/anthropic/claude-sonnet-4.5#high
 ```
 
-OpenCode splits the reference at the first `/`, so model IDs may contain additional slashes. Provider and model IDs are
+Shuvcode splits the reference at the first `/`, so model IDs may contain additional slashes. Provider and model IDs are
 case-sensitive. Provider IDs cannot contain `/` or `#`, and model IDs cannot contain `#`.
 
 The expanded config form is equivalent when generated or programmatic configuration is more convenient:
@@ -194,8 +194,8 @@ The expanded config form is equivalent when generated or programmatic configurat
 {
   "model": {
     "providerID": "openrouter",
-    "model": "anthropic/claude-sonnet-4.5"
-  }
+    "model": "anthropic/claude-sonnet-4.5",
+  },
 }
 ```
 
@@ -205,7 +205,7 @@ Root, agent, and command `model` fields accept both forms. Use the IDs shown by 
 
 - The selector object uses `model`, while a provider catalog entry uses `modelID` for the upstream API identifier.
 - The root `model` currently sets the default provider and model only. Although its selection shape accepts a variant,
-  the V2 catalog default does not retain it; select a variant in the TUI, with `opencode2 run`, or on an agent or command.
+  the V2 catalog default does not retain it; select a variant in the TUI, with `shuvcode run`, or on an agent or command.
 - Model options are provider-specific. A setting accepted by one provider package may be ignored or rejected by another.
 - Catalog data, credentials, and config are location-scoped. A model available in one project may be unavailable in
   another.

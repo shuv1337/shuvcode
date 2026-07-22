@@ -1,14 +1,14 @@
 export * as SessionRunnerModel from "./model"
 
-import { makeLocationNode } from "../../effect/app-node"
-import { Model } from "@opencode-ai/llm"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Model } from "@opencode-ai/ai"
 // ast-grep-ignore: no-star-import
-import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-messages"
+import * as AnthropicMessages from "@opencode-ai/ai/protocols/anthropic-messages"
 // ast-grep-ignore: no-star-import
-import * as OpenAICompatibleChat from "@opencode-ai/llm/protocols/openai-compatible-chat"
+import * as OpenAICompatibleChat from "@opencode-ai/ai/protocols/openai-compatible-chat"
 // ast-grep-ignore: no-star-import
-import * as OpenAIResponses from "@opencode-ai/llm/protocols/openai-responses"
-import { Auth, type AnyRoute } from "@opencode-ai/llm/route"
+import * as OpenAIResponses from "@opencode-ai/ai/protocols/openai-responses"
+import { Auth, type AnyRoute } from "@opencode-ai/ai/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { AISDK } from "../../aisdk"
@@ -16,7 +16,7 @@ import { Catalog } from "../../catalog"
 import { Credential } from "../../credential"
 import { Integration } from "../../integration"
 import { ModelV2 } from "../../model"
-import { Npm } from "../../npm"
+import { Npm } from "@opencode-ai/util/npm"
 import { OpenAICodex } from "../../plugin/provider/openai-codex"
 import { ProviderV2 } from "../../provider"
 import { SessionSchema } from "../schema"
@@ -82,6 +82,8 @@ export interface Resolved {
   readonly model: Model
   /** Selected catalog identity. Durable records and displays must use this, never the API model id. */
   readonly ref: ModelV2.Ref
+  /** Catalog capabilities used to shape requests before provider lowering. */
+  readonly capabilities: ModelV2.Capabilities
   /** Catalog pricing in dollars per million tokens. */
   readonly cost: ModelV2.Info["cost"]
 }
@@ -96,14 +98,22 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/v2
 export const layerWith = (resolve: Interface["resolve"]) => Layer.succeed(Service, Service.of({ resolve }))
 
 /** Builds a Resolved whose catalog identity mirrors the route model. Test or embedding seam. */
-export const resolved = (model: Model, variant?: ModelV2.VariantID, cost: ModelV2.Info["cost"] = []): Resolved => ({
+export const resolved = (
+  model: Model,
+  options: {
+    readonly capabilities: ModelV2.Capabilities
+    readonly variant?: ModelV2.VariantID
+    readonly cost: ModelV2.Info["cost"]
+  },
+): Resolved => ({
   model,
   ref: ModelV2.Ref.make({
     id: ModelV2.ID.make(model.id),
     providerID: ProviderV2.ID.make(model.provider),
-    ...(variant === undefined ? {} : { variant }),
+    ...(options.variant === undefined ? {} : { variant: options.variant }),
   }),
-  cost,
+  capabilities: options.capabilities,
+  cost: options.cost,
 })
 
 const apiKey = (model: ModelV2.Info, credential?: Credential.Value) => {
@@ -182,20 +192,15 @@ export const fromCatalogModel = (
   credential?: Credential.Value,
   dependencies: Dependencies = {},
 ): Effect.Effect<Model, UnsupportedPackageError> => {
-  const resolved =
-    credential?.type !== "key" || credential.metadata === undefined
-      ? model
-      : produce(model, (draft) => {
-          draft.body = ProviderV2.mergeOverlay(draft.body, credential.metadata)
-        })
+  const resolved = produce(model, (draft) => {
+    if (draft.settings?.apiKey === "") delete draft.settings.apiKey
+    if (credential?.type === "key" && credential.metadata !== undefined)
+      draft.body = ProviderV2.mergeOverlay(draft.body, credential.metadata)
+  })
   const packageName = ProviderV2.packageName(resolved.package)
   const key = apiKey(resolved, credential)
 
-  if (
-    OpenAICodex.isChatGPT(credential) &&
-    !ProviderV2.isAISDK(resolved.package) &&
-    isNativeOpenAI(resolved.package)
-  ) {
+  if (OpenAICodex.isChatGPT(credential) && !ProviderV2.isAISDK(resolved.package) && isNativeOpenAI(resolved.package)) {
     return Effect.succeed(codexModel(resolved, credential, key))
   }
 
@@ -243,11 +248,10 @@ export const fromCatalogModel = (
     const module = yield* (dependencies.loadPackage ?? ProviderV2.loadPackage)(specifier).pipe(
       Effect.mapError(() => unsupported(resolved)),
     )
+    const configured = { ...resolved.settings, ...credential?.metadata }
     const settings = {
-      ...resolved.settings,
-      ...(credential?.type === "key" ? { apiKey: credential.key } : {}),
-      ...(credential?.type === "oauth" ? { apiKey: credential.access } : {}),
-      ...credential?.metadata,
+      ...(credential ? withoutNativeAuthSettings(configured) : configured),
+      ...nativeCredentialSettings(specifier, credential),
       headers: resolved.headers,
       body: resolved.body,
       limits: { context: resolved.limit.context, output: resolved.limit.output },
@@ -261,8 +265,29 @@ export const fromCatalogModel = (
 }
 
 const isNativeOpenAI = (packageName: string | undefined) =>
-  packageName === "@opencode-ai/llm/providers/openai" ||
-  packageName?.startsWith("@opencode-ai/llm/providers/openai/") === true
+  packageName === "@opencode-ai/ai/providers/openai" ||
+  packageName?.startsWith("@opencode-ai/ai/providers/openai/") === true
+
+const nativeCredentialSettings = (specifier: string, credential: Credential.Value | undefined) => {
+  if (!credential) return {}
+  if (credential.type === "key") return { apiKey: credential.key }
+  if (
+    specifier === "@opencode-ai/ai/providers/anthropic" ||
+    specifier === "@opencode-ai/ai/providers/anthropic-compatible"
+  )
+    return { authToken: credential.access }
+  if (
+    specifier === "@opencode-ai/ai/providers/google-vertex" ||
+    specifier.startsWith("@opencode-ai/ai/providers/google-vertex/")
+  )
+    return { accessToken: credential.access }
+  return { apiKey: credential.access }
+}
+
+const withoutNativeAuthSettings = (settings: Record<string, unknown>) => {
+  const { accessToken: _accessToken, apiKey: _apiKey, authToken: _authToken, ...rest } = settings
+  return rest
+}
 
 const codexModel = (
   model: ModelV2.Info,
@@ -344,6 +369,7 @@ const layer = Layer.effect(
             providerID: selected.providerID,
             ...(session.model?.variant === undefined ? {} : { variant: session.model.variant }),
           }),
+          capabilities: selected.capabilities,
           cost: selected.cost,
         }
       }),

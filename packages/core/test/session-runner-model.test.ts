@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
-import { LLM, Model } from "@opencode-ai/llm"
-import { LLMClient } from "@opencode-ai/llm/route"
+import { LLM, Model } from "@opencode-ai/ai"
+import { LLMClient } from "@opencode-ai/ai/route"
 import { DateTime, Effect } from "effect"
 import { Money } from "@opencode-ai/schema/money"
 import { Headers } from "effect/unstable/http"
@@ -75,6 +75,25 @@ describe("SessionRunnerModel", () => {
 
       expect(JSON.stringify(prepared.body)).not.toContain("apiKey")
       expect(JSON.stringify(prepared.body)).not.toContain("secret")
+    }),
+  )
+
+  it.effect("treats an empty configured API key as omitted", () =>
+    Effect.gen(function* () {
+      const resolved = yield* SessionRunnerModel.fromCatalogModel(
+        model(ProviderV2.aisdk("@ai-sdk/openai"), {
+          settings: { apiKey: "", baseURL: "https://openai.example/v1" },
+        }),
+      )
+      const headers = yield* resolved.route.auth.apply({
+        request: LLM.request({ model: resolved, prompt: "Hello" }),
+        method: "POST",
+        url: "https://openai.example/v1/responses",
+        body: "{}",
+        headers: Headers.empty,
+      })
+
+      expect(headers.authorization).toBeUndefined()
     }),
   )
 
@@ -378,7 +397,7 @@ describe("SessionRunnerModel", () => {
   it.effect("routes native OpenAI provider packages with ChatGPT credentials to the codex backend", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/openai", {
+        model("@opencode-ai/ai/providers/openai", {
           settings: { baseURL: "https://openai.example/v1" },
         }),
         Credential.OAuth.make({
@@ -407,7 +426,7 @@ describe("SessionRunnerModel", () => {
   it.effect("does not route native OpenAI-compatible packages to the codex backend", () =>
     Effect.gen(function* () {
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/openai-compatible", {
+        model("@opencode-ai/ai/providers/openai-compatible", {
           settings: { baseURL: "https://compatible.example/v1" },
         }),
         Credential.OAuth.make({
@@ -511,7 +530,7 @@ describe("SessionRunnerModel", () => {
         }),
       )
       const resolved = yield* SessionRunnerModel.fromCatalogModel(
-        model("@opencode-ai/llm/providers/custom", {
+        model("@opencode-ai/ai/providers/custom", {
           settings: { region: "test" },
           headers: { "x-package": "header" },
           body: { custom: true },
@@ -519,7 +538,7 @@ describe("SessionRunnerModel", () => {
         undefined,
         {
           loadPackage: (specifier) => {
-            expect(specifier).toBe("@opencode-ai/llm/providers/custom")
+            expect(specifier).toBe("@opencode-ai/ai/providers/custom")
             return Effect.succeed({
               model: (modelID, settings) => {
                 expect(modelID).toBe("api-test-model")
@@ -537,6 +556,45 @@ describe("SessionRunnerModel", () => {
       )
 
       expect(resolved).toMatchObject({ id: "api-test-model", provider: "test-provider" })
+    }),
+  )
+
+  it.effect("maps OAuth credentials to native provider auth settings", () =>
+    Effect.gen(function* () {
+      const native = yield* SessionRunnerModel.fromCatalogModel(
+        model(ProviderV2.aisdk("@ai-sdk/openai"), {
+          settings: { baseURL: "https://openai.example/v1" },
+        }),
+      )
+      const credential = Credential.OAuth.make({
+        type: "oauth",
+        methodID: Integration.MethodID.make("device"),
+        access: "oauth-token",
+        refresh: "refresh",
+        expires: Date.now() + 60_000,
+      })
+      const packages = [
+        ["@opencode-ai/ai/providers/google-vertex", "accessToken"],
+        ["@opencode-ai/ai/providers/google-vertex/gemini", "accessToken"],
+        ["@opencode-ai/ai/providers/google-vertex/chat", "accessToken"],
+        ["@opencode-ai/ai/providers/google-vertex/responses", "accessToken"],
+        ["@opencode-ai/ai/providers/google-vertex/messages", "accessToken"],
+        ["@opencode-ai/ai/providers/anthropic", "authToken"],
+        ["@opencode-ai/ai/providers/anthropic-compatible", "authToken"],
+      ] as const
+
+      yield* Effect.forEach(packages, ([specifier, key]) =>
+        SessionRunnerModel.fromCatalogModel(model(specifier, { settings: { apiKey: "configured-key" } }), credential, {
+          loadPackage: () =>
+            Effect.succeed({
+              model: (modelID, settings) => {
+                expect(settings).toMatchObject({ [key]: "oauth-token" })
+                expect(settings).not.toHaveProperty("apiKey")
+                return Model.make({ id: modelID, provider: "package-provider", route: native.route })
+              },
+            }),
+        }),
+      )
     }),
   )
 
@@ -598,10 +656,33 @@ describe("SessionRunnerModel", () => {
     }),
   )
 
+  it.effect("drops an empty API key before loading an AISDK package", () =>
+    Effect.gen(function* () {
+      const native = yield* SessionRunnerModel.fromCatalogModel(
+        model(ProviderV2.aisdk("@ai-sdk/openai"), {
+          settings: { baseURL: "https://openai.example/v1" },
+        }),
+      )
+      yield* SessionRunnerModel.fromCatalogModel(
+        model(ProviderV2.aisdk("@ai-sdk/google"), {
+          settings: { apiKey: "", baseURL: "https://google.example/v1" },
+        }),
+        undefined,
+        {
+          loadAISDK: (runtime) =>
+            Effect.sync(() => {
+              expect(runtime.settings).not.toHaveProperty("apiKey")
+              return native
+            }),
+        },
+      )
+    }),
+  )
+
   it.effect("reports whether a catalog model declares a provider package", () =>
     Effect.sync(() => {
       expect(SessionRunnerModel.supported(model(ProviderV2.aisdk("@ai-sdk/openai")))).toBe(true)
-      expect(SessionRunnerModel.supported(model("@opencode-ai/llm/providers/custom"))).toBe(true)
+      expect(SessionRunnerModel.supported(model("@opencode-ai/ai/providers/custom"))).toBe(true)
       expect(SessionRunnerModel.supported(model(undefined))).toBe(false)
     }),
   )

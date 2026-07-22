@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Message } from "@opencode-ai/llm"
+import { Message } from "@opencode-ai/ai"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { SessionMessage } from "@opencode-ai/core/session/message"
@@ -124,7 +124,12 @@ describe("toLLMMessages", () => {
     )
     expect(messages.slice(2).map((message) => message.content)).toEqual([
       [{ type: "text", text: "Synthetic context" }],
-      [{ type: "text", text: "Shell command: pwd\n\n/project" }],
+      [
+        {
+          type: "text",
+          text: "The following shell command was executed by the user:\n\nCommand:\npwd\n\nOutput:\n/project",
+        },
+      ],
       [
         {
           type: "text",
@@ -562,6 +567,22 @@ Recent work
             }),
             SessionMessage.AssistantTool.make({
               type: "tool",
+              id: "hosted-completed",
+              name: "web_search",
+              executed: true,
+              providerState: { itemId: "call_completed" },
+              providerResultState: { itemId: "result_completed" },
+              state: SessionMessage.ToolStateCompleted.make({
+                status: "completed",
+                input: { query: "Effect" },
+                content: [],
+                structured: {},
+                result: { type: "json", value: { found: true } },
+              }),
+              time: { created, completed: created },
+            }),
+            SessionMessage.AssistantTool.make({
+              type: "tool",
               id: "hosted-failed",
               name: "web_search",
               executed: true,
@@ -587,6 +608,22 @@ Recent work
 
     expect(messages[0]?.content).toEqual([
       { type: "text", text: "Partial thought" },
+      {
+        type: "tool-call",
+        id: "hosted-completed",
+        name: "web_search",
+        input: { query: "Effect" },
+        providerExecuted: true,
+        providerMetadata: { provider: { itemId: "call_completed" } },
+      },
+      {
+        type: "tool-result",
+        id: "hosted-completed",
+        name: "web_search",
+        result: { type: "json", value: { found: true } },
+        providerExecuted: true,
+        providerMetadata: { provider: { itemId: "result_completed" } },
+      },
       {
         type: "tool-call",
         id: "hosted-failed",

@@ -1,57 +1,45 @@
 export * as Status from "./service-status"
 
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { Effect, Ref } from "effect"
 
+export type State =
+  | { readonly type: "starting" }
+  | { readonly type: "ready" }
+  | { readonly type: "stopping" }
+  | { readonly type: "failed" }
+
 export interface Interface {
-  readonly health: Effect.Effect<ServiceStatus.Health>
-  readonly current: Effect.Effect<ServiceStatus.State>
+  readonly current: Effect.Effect<State>
   readonly ready: Effect.Effect<void>
-  readonly fail: (failure: { readonly message: string; readonly action: string }) => Effect.Effect<void>
-  readonly beginStopping: (targetVersion?: string) => Effect.Effect<void>
+  readonly fail: Effect.Effect<void>
+  readonly beginStopping: Effect.Effect<void>
   readonly requestStop: (request: ServiceStatus.StopRequest) => Effect.Effect<boolean>
 }
 
 export const make = Effect.fnUntraced(function* (options: {
   readonly instanceID: string
   readonly managed: boolean
-  readonly initial?: ServiceStatus.State
+  readonly initial?: State
 }) {
-  const current = yield* Ref.make(options.initial ?? ({ type: "starting" } satisfies ServiceStatus.State))
-  const transitionToStopping = (targetVersion?: string) =>
-    Ref.update(current, (status) => {
-      if (status.type === "stopping") return status
-      return (
-        targetVersion === undefined || targetVersion === InstallationVersion
-          ? { type: "stopping" }
-          : { type: "stopping", targetVersion }
-      ) satisfies ServiceStatus.State
-    })
+  const current = yield* Ref.make(options.initial ?? ({ type: "starting" } satisfies State))
+  const beginStopping = Ref.update(current, (status) =>
+    status.type === "stopping" ? status : ({ type: "stopping" } satisfies State),
+  )
 
   return {
     current: Ref.get(current),
-    health: Effect.gen(function* () {
-      return {
-        healthy: true as const,
-        version: InstallationVersion,
-        pid: process.pid,
-        instanceID: options.instanceID,
-        status: yield* Ref.get(current),
-      }
-    }),
     ready: Ref.update(current, (status) =>
-      status.type === "starting" ? ({ type: "ready" } satisfies ServiceStatus.State) : status,
+      status.type === "starting" ? ({ type: "ready" } satisfies State) : status,
     ),
-    fail: (failure) =>
-      Ref.update(current, (status) =>
-        status.type === "starting" ? ({ type: "failed", ...failure } satisfies ServiceStatus.State) : status,
-      ),
-    beginStopping: transitionToStopping,
+    fail: Ref.update(current, (status) =>
+      status.type === "starting" ? ({ type: "failed" } satisfies State) : status,
+    ),
+    beginStopping,
     requestStop: (request) => {
       if (!options.managed || request.instanceID !== options.instanceID)
         return Effect.succeed(false)
-      return transitionToStopping(request.targetVersion).pipe(Effect.as(true))
+      return beginStopping.pipe(Effect.as(true))
     },
   } satisfies Interface
 })

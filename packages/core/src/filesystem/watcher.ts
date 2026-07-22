@@ -4,17 +4,18 @@ export * as Watcher from "./watcher"
 import { createWrapper } from "@parcel/watcher/wrapper"
 import type ParcelWatcher from "@parcel/watcher"
 import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { makeGlobalNode } from "../effect/app-node"
-import { Cause, Context, Effect, Layer, PubSub, Scope, Stream } from "effect"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { Cause, Context, Effect, Layer, PubSub, Schema, Scope, Stream } from "effect"
 import { KeyedMutex } from "../effect/keyed-mutex"
-import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { watch as watchFileSystem } from "node:fs"
 import path from "path"
+import { createRequire } from "node:module"
 
 declare const OPENCODE_LIBC: string | undefined
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
+const require = createRequire(import.meta.url)
 
 export const Event = { Updated: FileSystem.Event.Changed }
 
@@ -22,7 +23,8 @@ const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
   try {
     const libc = typeof OPENCODE_LIBC === "undefined" ? undefined : OPENCODE_LIBC
     const binding = require(
-      `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${libc || "glibc"}` : ""}`,
+      process.env.OPENCODE_PARCEL_WATCHER_PATH ??
+        `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${libc || "glibc"}` : ""}`,
     )
     return createWrapper(binding) as typeof import("@parcel/watcher")
   } catch {
@@ -47,14 +49,19 @@ export interface Interface {
   readonly subscribe: (input: WatchInput) => Stream.Stream<Update>
 }
 
+export const Options = Schema.Struct({
+  enabled: Schema.optional(Schema.Boolean),
+})
+export type Options = typeof Options.Type
+
 export class Service extends Context.Service<Service, Interface>()("@opencode/Watcher") {}
 
-const layer = Layer.effect(
+export const layer = (options?: Options) => Layer.effect(
   Service,
   Effect.gen(function* () {
     const backend = getBackend()
     const native = watcher()
-    if (Flag.OPENCODE_DISABLE_FILEWATCHER) {
+    if (options?.enabled === false) {
       return Service.of({ subscribe: () => Stream.empty })
     }
 
@@ -137,7 +144,11 @@ const layer = Layer.effect(
   }),
 )
 
-export const node = makeGlobalNode({ service: Service, layer, deps: [] })
+export function configured(options?: Options) {
+  return makeGlobalNode({ service: Service, layer: layer(options), deps: [] })
+}
+
+export const node = configured()
 
 function subscribeDirectory(
   native: typeof import("@parcel/watcher") | undefined,

@@ -4,7 +4,7 @@ import { Catalog } from "../../catalog"
 import { Credential } from "../../credential"
 import { EventV2 } from "../../event"
 import { CopilotModels } from "../../github-copilot/models"
-import { InstallationVersion } from "../../installation/version"
+import { App } from "../../app"
 import { Integration } from "../../integration"
 import { ModelV2 } from "../../model"
 import { define } from "@opencode-ai/plugin/v2/effect/plugin"
@@ -13,6 +13,7 @@ import type { PluginInternal } from "../internal"
 
 const clientID = "Ov23li8tweQw6odWQebz"
 const apiVersion = "2026-06-01"
+const userApiVersion = "2025-04-01"
 const pollingSafetyMargin = 3000
 const methodID = Integration.MethodID.make("device")
 
@@ -27,10 +28,18 @@ const Token = Schema.Struct({
   error: Schema.optional(Schema.String),
   interval: Schema.optional(Schema.Number),
 })
+const User = Schema.Struct({
+  endpoints: Schema.optional(
+    Schema.Struct({
+      api: Schema.optional(Schema.String),
+    }),
+  ),
+})
+const decodeUser = Schema.decodeUnknownOption(User)
 const JsonBody = Schema.UnknownFromJsonString
 const decodeBody = Schema.decodeUnknownOption(JsonBody)
 
-const oauth = {
+const oauth = (app: App.Info) => ({
   integrationID: Integration.ID.make("github-copilot"),
   method: {
     id: methodID,
@@ -63,7 +72,7 @@ const oauth = {
       const urls = oauthURLs(domain)
       const device = yield* request(urls.device, {
         method: "POST",
-        headers: headers(),
+        headers: headers(app),
         body: JSON.stringify({ client_id: clientID, scope: "read:user" }),
       }).pipe(Effect.map(Schema.decodeUnknownSync(Device)))
       const interval = Math.max(device.interval, 1) * 1000
@@ -71,7 +80,7 @@ const oauth = {
       const poll = (wait: number): Effect.Effect<Credential.OAuth, unknown> =>
         request(urls.token, {
           method: "POST",
-          headers: headers(),
+          headers: headers(app),
           body: JSON.stringify({
             client_id: clientID,
             device_code: device.device_code,
@@ -81,15 +90,35 @@ const oauth = {
           Effect.map(Schema.decodeUnknownSync(Token)),
           Effect.flatMap((token) => {
             if (token.access_token) {
-              return Effect.succeed(
-                Credential.OAuth.make({
-                  type: "oauth",
-                  methodID,
-                  refresh: token.access_token,
-                  access: token.access_token,
-                  expires: 0,
-                  ...(enterprise ? { metadata: { enterpriseUrl: domain } } : {}),
-                }),
+              const access = token.access_token
+              return request(
+                `${domain === "github.com" ? "https://api.github.com" : `https://api.${domain}`}/copilot_internal/user`,
+                {
+                  headers: {
+                    Accept: "application/json",
+                    Authorization: `Bearer ${access}`,
+                    "User-Agent": App.useragent(app),
+                    "X-GitHub-Api-Version": userApiVersion,
+                  },
+                },
+              ).pipe(
+                Effect.map((user) => Option.getOrUndefined(decodeUser(user))?.endpoints?.api?.replace(/\/+$/, "")),
+                Effect.catch(() => Effect.succeed(undefined)),
+                Effect.map((apiEndpoint) =>
+                  Credential.OAuth.make({
+                    type: "oauth",
+                    methodID,
+                    refresh: access,
+                    access,
+                    expires: 0,
+                    ...((enterprise || apiEndpoint) && {
+                      metadata: {
+                        ...(enterprise ? { enterpriseUrl: domain } : {}),
+                        ...(apiEndpoint ? { apiEndpoint } : {}),
+                      },
+                    }),
+                  }),
+                ),
               )
             }
             if (token.error === "authorization_pending")
@@ -109,7 +138,7 @@ const oauth = {
         callback: poll(interval),
       }
     }),
-} satisfies IntegrationOAuthMethodRegistration
+}) satisfies IntegrationOAuthMethodRegistration
 
 function shouldUseResponses(modelID: string) {
   // Copilot supports Responses for GPT-5 class models, except mini variants
@@ -141,8 +170,7 @@ export const GithubCopilotPlugin = define({
         return
       }
 
-      const enterprise = credential.metadata?.enterpriseUrl
-      loaded.baseURL = baseURL(typeof enterprise === "string" ? enterprise : undefined)
+      loaded.baseURL = copilotBaseURL(credential.metadata)
       const provider = yield* catalog.provider.get(ProviderV2.ID.githubCopilot)
       const existing = (yield* catalog.model.all()).filter((model) => model.providerID === ProviderV2.ID.githubCopilot)
       loaded.models = yield* Effect.tryPromise({
@@ -152,7 +180,7 @@ export const GithubCopilotPlugin = define({
             {
               ...provider?.headers,
               Authorization: `Bearer ${credential.refresh}`,
-              "User-Agent": `opencode/${InstallationVersion}`,
+              "User-Agent": App.useragent(ctx.app),
               "X-GitHub-Api-Version": apiVersion,
             },
             existing,
@@ -166,7 +194,7 @@ export const GithubCopilotPlugin = define({
     })
 
     yield* ctx.integration.transform((draft) => {
-      draft.method.update(oauth)
+      draft.method.update(oauth(ctx.app))
     })
     yield* ctx.catalog.transform((evt) => {
       const item = evt.provider.get(ProviderV2.ID.githubCopilot)
@@ -209,6 +237,7 @@ export const GithubCopilotPlugin = define({
           typeof evt.options.apiKey === "string" ? evt.options.apiKey : undefined,
           evt.options.fetch,
           evt.package === "@ai-sdk/anthropic",
+          ctx.app,
         )
         if (evt.package === "@ai-sdk/anthropic") {
           evt.options.headers = {
@@ -261,11 +290,18 @@ function baseURL(enterprise?: string) {
   return enterprise ? `https://copilot-api.${normalizeDomain(enterprise)}` : "https://api.githubcopilot.com"
 }
 
-function headers() {
+export function copilotBaseURL(metadata?: Readonly<Record<string, unknown>>) {
+  const endpoint = metadata?.apiEndpoint
+  if (typeof endpoint === "string" && endpoint) return endpoint
+  const enterprise = metadata?.enterpriseUrl
+  return baseURL(typeof enterprise === "string" ? enterprise : undefined)
+}
+
+function headers(app: App.Info) {
   return {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "User-Agent": `opencode/${InstallationVersion}`,
+    "User-Agent": App.useragent(app),
   }
 }
 
@@ -282,7 +318,12 @@ function request(url: string, init: RequestInit) {
 
 type Fetch = (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>
 
-export function copilotFetch(token: string | undefined, upstream: Fetch | undefined, anthropic: boolean): Fetch {
+export function copilotFetch(
+  token: string | undefined,
+  upstream: Fetch | undefined,
+  anthropic: boolean,
+  app: App.Info,
+): Fetch {
   const send = upstream ?? fetch
   return async (input, init) => {
     const requestHeaders = new Headers(init?.headers)
@@ -291,7 +332,7 @@ export function copilotFetch(token: string | undefined, upstream: Fetch | undefi
       requestHeaders.delete("x-api-key")
       requestHeaders.set("Authorization", `Bearer ${token}`)
     }
-    requestHeaders.set("User-Agent", `opencode/${InstallationVersion}`)
+    requestHeaders.set("User-Agent", App.useragent(app))
     requestHeaders.set("Openai-Intent", "conversation-edits")
     requestHeaders.set("X-GitHub-Api-Version", apiVersion)
     if (anthropic) requestHeaders.set("anthropic-beta", "interleaved-thinking-2025-05-14")

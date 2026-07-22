@@ -2,14 +2,13 @@
 
 export * as SkillPlugin from "./skill"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import { define, type Context } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Effect } from "effect"
 import { AbsolutePath } from "../schema"
 import { SkillV2 } from "../skill"
-import { InstallationChannel, InstallationVersion } from "../installation/version"
 import { Config } from "../config"
 import { Location } from "../location"
-import { FSUtil } from "../fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import os from "os"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -27,7 +26,7 @@ const REPORT_DESCRIPTION =
 export const Plugin = define({
   id: "opencode.skill",
   effect: Effect.fn(function* (ctx) {
-    const reportContent = yield* reportContentWithDiagnostics()
+    const reportContent = yield* reportContentWithDiagnostics(ctx.app)
     yield* ctx.skill.transform((draft) => {
       draft.source(
         SkillV2.EmbeddedSource.make({
@@ -58,7 +57,9 @@ export const Plugin = define({
   }),
 })
 
-const reportContentWithDiagnostics = Effect.fn("SkillPlugin.reportContentWithDiagnostics")(function* () {
+const reportContentWithDiagnostics = Effect.fn("SkillPlugin.reportContentWithDiagnostics")(function* (
+  app: Context["app"],
+) {
   const plugins = yield* configuredPlugins().pipe(Effect.orElseSucceed(() => ["Unavailable: failed to inspect config"]))
   return [
     ReportContent,
@@ -67,8 +68,8 @@ const reportContentWithDiagnostics = Effect.fn("SkillPlugin.reportContentWithDia
     "",
     "These values were captured when the built-in report skill was registered. Verify them before publishing.",
     "",
-    `- opencode version: ${InstallationVersion}`,
-    `- install/channel: ${InstallationChannel}`,
+    `- opencode version: ${app.version}`,
+    `- install/channel: ${app.channel}`,
     `- OS: ${os.type()} ${os.release()} (${os.platform()} ${os.arch()})`,
     `- Terminal: ${terminal()}`,
     `- Shell: ${shell()}`,
@@ -94,7 +95,7 @@ const configuredPlugins = Effect.fn("SkillPlugin.configuredPlugins")(function* (
     }
     if (entry.type !== "directory") return Effect.succeed([])
     return fs
-      .glob("{plugin,plugins}/*.{ts,js}", {
+      .scan("{plugin,plugins}/*.{ts,js}", {
         cwd: entry.path,
         absolute: true,
         include: "file",

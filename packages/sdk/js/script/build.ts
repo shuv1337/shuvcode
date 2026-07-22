@@ -12,6 +12,12 @@ import { createClient } from "@hey-api/openapi-ts"
 const opencode = path.resolve(dir, "../../opencode")
 const client = path.resolve(dir, "../../client")
 
+if (!(await Bun.file(path.join(opencode, "package.json")).exists())) {
+  await $`rm -rf dist`
+  await $`bun tsc`
+  process.exit(0)
+}
+
 await $`bun dev generate > ${dir}/openapi.json`.cwd(opencode)
 await $`bun -e ${`
   import { OpenApi } from "effect/unstable/httpapi"
@@ -141,7 +147,7 @@ if (sessionMessagesTypesPatched === sessionListTypesPatched) {
   throw new Error("Session messages numeric query patch did not apply")
 }
 const eventSubscribeTypesPatched = sessionMessagesTypesPatched.replace(
-  /(export type V2EventSubscribeResponses = \{\s*\/\*\*[\s\S]*?\*\/\s*200: )\{\s*id: string \| null;?\s*event: string;?\s*data: V2EventStream(?:V2)?;?\s*\};?/,
+  /(export type V2EventSubscribeResponses = \{\s*\/\*\*[\s\S]*?\*\/\s*200: )\{\s*id: string \| null;?\s*event: string;?\s*data: (?:V2EventStream(?:V2)?|V2EventJsonString);?\s*\};?/,
   "$1V2Event",
 )
 if (eventSubscribeTypesPatched === sessionMessagesTypesPatched) {

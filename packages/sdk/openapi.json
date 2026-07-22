@@ -21122,6 +21122,10 @@
           "default_agent": {
             "type": "string"
           },
+          "subagent_depth": {
+            "type": "integer",
+            "minimum": 0
+          },
           "username": {
             "type": "string"
           },

@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
-import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/llm"
-import { OpenAIChat } from "@opencode-ai/llm/protocols"
+import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/ai"
+import { OpenAIChat } from "@opencode-ai/ai/protocols"
 import { Config } from "@opencode-ai/core/config"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { llmClient } from "@opencode-ai/core/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventTable } from "@opencode-ai/core/event/sql"
 import { SessionCompaction } from "@opencode-ai/core/session/compaction"
@@ -18,9 +18,9 @@ import { SessionStore } from "@opencode-ai/core/session/store"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { Flag } from "@opencode-ai/core/flag/flag"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { App } from "@opencode-ai/core/app"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Money } from "@opencode-ai/schema/money"
 import { DateTime, Effect, Fiber, Layer, Stream } from "effect"
 import { asc, eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
@@ -31,17 +31,50 @@ const model = Model.make({
   provider: "test",
   route: OpenAIChat.route.with({ limits: { context: 10_000, output: 1_000 } }),
 })
+const cost = [
+  {
+    input: Money.USDPerMillionTokens.make(1),
+    output: Money.USDPerMillionTokens.make(2),
+    cache: {
+      read: Money.USDPerMillionTokens.make(0.1),
+      write: Money.USDPerMillionTokens.make(0.5),
+    },
+  },
+]
 const client = Layer.mock(LLMClient.Service)({
   prepare: () => Effect.die("unused"),
   stream: (request: LLMRequest) => {
     requests.push(request)
-    return Stream.make(LLMEvent.textDelta({ id: "summary", text: "manual summary" }))
+    return Stream.make(
+      LLMEvent.textDelta({ id: "summary", text: "manual summary" }),
+      LLMEvent.stepFinish({
+        index: 0,
+        reason: "stop",
+        usage: {
+          inputTokens: 15,
+          outputTokens: 6,
+          nonCachedInputTokens: 10,
+          cacheReadInputTokens: 3,
+          cacheWriteInputTokens: 2,
+          reasoningTokens: 2,
+        },
+      }),
+      LLMEvent.finish({
+        reason: "stop",
+      }),
+    )
   },
   generate: () => Effect.die("unused"),
 })
 const config = Layer.mock(Config.Service)({ entries: () => Effect.succeed([]) })
 const models = Layer.mock(SessionRunnerModel.Service)({
-  resolve: () => Effect.succeed(SessionRunnerModel.resolved(model)),
+  resolve: () =>
+    Effect.succeed(
+      SessionRunnerModel.resolved(model, {
+        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+        cost,
+      }),
+    ),
 })
 const it = testEffect(
   AppNodeBuilder.build(
@@ -159,16 +192,20 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
       "x-session-affinity": sessionID,
       "X-Session-Id": sessionID,
       "x-parent-session-id": parentID,
-      "User-Agent": `opencode/${InstallationVersion}`,
+      "User-Agent": App.useragent(App.make()),
       "x-opencode-project": Project.ID.global,
       "x-opencode-session": sessionID,
-      "x-opencode-client": Flag.OPENCODE_CLIENT,
+      "x-opencode-client": "opencode",
     })
     expect(requests[0]?.generation).toBeUndefined()
     expect(JSON.stringify(requests[0]?.messages)).toContain("Manual compaction should include this short conversation.")
     expect(yield* store.context(sessionID)).toMatchObject([
       { type: "compaction", reason: "manual", summary: "manual summary", recent: "" },
     ])
+    expect(yield* store.get(sessionID)).toMatchObject({
+      cost: 0.0000233,
+      tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 2 } },
+    })
     expect(
       yield* db
         .select({ type: EventTable.type })
@@ -179,6 +216,7 @@ it.effect("manual compaction summarizes short context instead of no-op", () =>
         .pipe(Effect.orDie),
     ).toEqual([
       { type: EventV2.versionedType(SessionEvent.Compaction.Started.type, 1) },
+      { type: EventV2.versionedType(SessionEvent.UsageRecorded.type, 1) },
       { type: EventV2.versionedType(SessionEvent.Compaction.Ended.type, 1) },
     ])
   }),

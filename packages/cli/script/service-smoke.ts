@@ -1,18 +1,20 @@
 #!/usr/bin/env bun
 
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { Schema } from "effect"
+import { randomBytes, randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-const target = `shuvcode-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
-const directory = path.join(import.meta.dir, "..", "dist", target, "bin")
-const binary = path.join(directory, `shuvcode${process.platform === "win32" ? ".exe" : ""}`)
+const nodeBuild = process.argv.includes("--node")
+const target = `shuvcode${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+const directory = path.join(import.meta.dir, "..", "dist", ...(nodeBuild ? ["node"] : []), target, "bin")
+const binary = path.join(directory, `shuvcode${nodeBuild ? "-node" : ""}${process.platform === "win32" ? ".exe" : ""}`)
 if (!(await Bun.file(binary).exists())) throw new Error(`Missing compiled CLI in ${directory}`)
 
-const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-smoke-"))
+const root = await fs.mkdtemp(path.join(os.tmpdir(), "shuvcode-service-smoke-"))
 const env = {
   ...process.env,
   HOME: root,
@@ -37,17 +39,14 @@ try {
   const headers = { authorization: "Basic " + credential }
   const token = encodeURIComponent(credential)
   const health = await waitForReady(info.url, headers)
-  if (health.pid !== info.pid || health.instanceID !== info.id)
-    throw new Error("Health identity does not match registration")
-  const tokenHealth = await fetch(
-    new URL(`/api/health?auth_token=${token}`, info.url),
-    { signal: AbortSignal.timeout(5_000) },
-  )
+  if (health.pid !== info.pid) throw new Error("Health process does not match registration")
+  const tokenHealth = await fetch(new URL(`/api/health?auth_token=${token}`, info.url), {
+    signal: AbortSignal.timeout(5_000),
+  })
   if (tokenHealth.status !== 200) throw new Error("Compiled service rejected query authentication")
-  const tokenOpenApi = await fetch(
-    new URL(`/openapi.json?auth_token=${token}`, info.url),
-    { signal: AbortSignal.timeout(5_000) },
-  )
+  const tokenOpenApi = await fetch(new URL(`/openapi.json?auth_token=${token}`, info.url), {
+    signal: AbortSignal.timeout(5_000),
+  })
   if (tokenOpenApi.status !== 200) throw new Error("Compiled application rejected query authentication")
 
   const unauthorizedHealth = await fetch(new URL("/api/health", info.url), {
@@ -57,7 +56,8 @@ try {
   const unauthorizedOpenApi = await fetch(new URL("/openapi.json", info.url), {
     signal: AbortSignal.timeout(5_000),
   })
-  if (unauthorizedOpenApi.status !== 401) throw new Error("Compiled service exposed application routes without authentication")
+  if (unauthorizedOpenApi.status !== 401)
+    throw new Error("Compiled service exposed application routes without authentication")
   const unauthorizedStop = await fetch(new URL("/api/service/stop", info.url), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -65,6 +65,55 @@ try {
     signal: AbortSignal.timeout(5_000),
   })
   if (unauthorizedStop.status !== 401) throw new Error("Compiled service accepted unauthenticated stop")
+
+  const invitationResponse = await fetch(new URL("/api/pairing/invitation", info.url), {
+    method: "POST",
+    headers,
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (invitationResponse.status !== 200) throw new Error("Compiled service failed to create a pairing invitation")
+  const invitation = (await invitationResponse.json()) as { token?: string }
+  if (!invitation.token) throw new Error("Compiled service returned an invalid pairing invitation")
+  const deviceCredential = `scd_v1_${randomBytes(32).toString("base64url")}`
+  const redemptionResponse = await fetch(new URL("/api/pairing/redeem", info.url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      token: invitation.token,
+      requestID: randomUUID(),
+      deviceName: "Compiled service smoke test",
+      credential: deviceCredential,
+    }),
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (redemptionResponse.status !== 200) throw new Error("Compiled service rejected unauthenticated redemption")
+  const redemption = (await redemptionResponse.json()) as { deviceID?: string }
+  if (!redemption.deviceID) throw new Error("Compiled service returned an invalid pairing redemption")
+  const deviceHeaders = { authorization: `Bearer ${deviceCredential}` }
+  for (const pathname of ["/api/health", "/api/server"]) {
+    const response = await fetch(new URL(pathname, info.url), {
+      headers: deviceHeaders,
+      signal: AbortSignal.timeout(5_000),
+    })
+    if (response.status !== 200) throw new Error(`Compiled service rejected paired device access to ${pathname}`)
+  }
+  const deviceManagement = await fetch(new URL("/api/pairing/invitation", info.url), {
+    method: "POST",
+    headers: deviceHeaders,
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (deviceManagement.status !== 403) throw new Error("Compiled service allowed device pairing management")
+  const revoke = await fetch(new URL(`/api/pairing/device/${encodeURIComponent(redemption.deviceID)}`, info.url), {
+    method: "DELETE",
+    headers,
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (revoke.status !== 204) throw new Error("Compiled service failed to revoke paired device")
+  const revokedHealth = await fetch(new URL("/api/health", info.url), {
+    headers: deviceHeaders,
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (revokedHealth.status !== 401) throw new Error("Compiled service accepted a revoked device credential")
 
   const winner = processes.find((process) => process.pid === info.pid)
   const loser = processes.find((process) => process.pid !== info.pid)
@@ -75,7 +124,7 @@ try {
     await fetch(new URL("/api/service/stop", info.url), {
       method: "POST",
       headers: { ...headers, "content-type": "application/json" },
-      body: JSON.stringify({ instanceID: info.id, targetVersion: "smoke-next" }),
+      body: JSON.stringify({ instanceID: info.id }),
       signal: AbortSignal.timeout(5_000),
     }).then((response) => response.json()),
   )
@@ -120,19 +169,11 @@ async function waitForRegistration() {
 async function waitForReady(url: string, headers: HeadersInit) {
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
-    const health = await fetch(new URL("/api/health", url), {
+    const response = await fetch(new URL("/api/health", url), {
       headers,
       signal: AbortSignal.timeout(1_000),
-    })
-      .then((response) => response.json())
-      .then(Schema.decodeUnknownPromise(ServiceStatus.Health))
-      .catch(() => undefined)
-    if (health === undefined) {
-      await Bun.sleep(25)
-      continue
-    }
-    if (health.status.type === "ready") return health
-    if (health.status.type === "failed") throw new Error(health.status.message)
+    }).catch(() => undefined)
+    if (response?.ok) return Schema.decodeUnknownPromise(ServiceStatus.Health)(await response.json())
     await Bun.sleep(25)
   }
   throw new Error("Compiled service did not become ready")

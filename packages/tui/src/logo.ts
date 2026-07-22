@@ -8,4 +8,6 @@ export const go = {
   right: ["    ", "█▀▀█", "█__█", "▀▀▀▀"],
 }
 
+export const shuvcodeMark = ["█▀▀▀", "▀▀▀█", "▀▀▀▀"]
+
 export const marks = "_^~,"

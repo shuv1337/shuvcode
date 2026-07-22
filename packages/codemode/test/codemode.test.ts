@@ -308,7 +308,7 @@ describe("CodeMode console capture", () => {
     )
 
     expect(result.ok).toBe(true)
-    expect(result.logs).toStrictEqual(['{"box":Map(1) [["self",[Circular]]]}', '{"fn":[CodeMode reference],"ok":1}'])
+    expect(result.logs).toStrictEqual(['{"box":Map(1) [["self",[Circular]]]}', '{"fn":[opaque reference],"ok":1}'])
   })
 
   test("console.table renders CodeMode value cells", async () => {
@@ -451,6 +451,56 @@ describe("CodeMode schema flexibility", () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.value).toStrictEqual({ echoed: { id: 42 } })
     expect(observed).toStrictEqual([{ id: 42 }])
+  })
+
+  test("outbound tool arguments follow JSON serialization semantics", async () => {
+    const observed: Array<unknown> = []
+    const call = Tool.make({
+      description: "Observe raw input",
+      input: { type: "object" },
+      run: (input) =>
+        Effect.sync(() => {
+          observed.push(input)
+          return "ok"
+        }),
+    })
+    const runtime = CodeMode.make({ tools: { adapter: { call } } })
+
+    const result = await Effect.runPromise(
+      runtime.execute(
+        `return await tools.adapter.call({ q: undefined, limit: 0 / 0, rate: 1 / 0, items: [1, undefined, 2], holes: [1, , 3] })`,
+      ),
+    )
+    expect(result.ok).toBe(true)
+    const received = observed[0] as Record<string, unknown>
+    expect(received).toStrictEqual({ limit: null, rate: null, items: [1, null, 2], holes: [1, null, 3] })
+    // The undefined-valued property is dropped like JSON.stringify, not delivered as undefined.
+    expect(Object.hasOwn(received, "q")).toBe(false)
+  })
+
+  test("dropping undefined values lets optionalKey schemas accept conditional arguments", async () => {
+    const observed: Array<unknown> = []
+    const find = Tool.make({
+      description: "Find things",
+      input: Schema.Struct({ query: Schema.optionalKey(Schema.String), limit: Schema.optionalKey(Schema.Number) }),
+      run: (input) =>
+        Effect.sync(() => {
+          observed.push(input)
+          return "ok"
+        }),
+    })
+    const runtime = CodeMode.make({ tools: { things: { find } } })
+
+    // The `cond ? value : undefined` idiom: optionalKey rejects a present undefined, so the
+    // JSON boundary must drop the key before the schema decodes.
+    const result = await Effect.runPromise(
+      runtime.execute(`return await tools.things.find({ query: undefined, limit: 5 })`),
+    )
+    expect(result.ok).toBe(true)
+    expect(observed).toStrictEqual([{ limit: 5 }])
+
+    const search = await Effect.runPromise(runtime.execute(`return (await search({ query: undefined })).items.length`))
+    expect(search.ok).toBe(true)
   })
 
   test("renders JSON Schema outputs and $defs references", async () => {
@@ -646,7 +696,7 @@ describe("CodeMode public contract", () => {
     expect(instructions).toContain("Do not infer or normalize tool names")
     expect(instructions).toContain("bracket notation and quotes are part of the path")
     expect(instructions).toContain("surrounding agent tools are not available")
-    expect(instructions).toContain("Only Code Mode tools listed here are available")
+    expect(instructions).toContain("Only tools listed here are available")
     // Placeholders use generic namespace/tool/field names only - no fabricated real tools
     // and no real catalog tools cherry-picked into example lines.
     expect(instructions).toContain("`const result = await tools.<namespace>.<tool>(input)`")
@@ -668,7 +718,7 @@ describe("CodeMode public contract", () => {
       '1. If needed, discover tools with the built-in search function: `return search({ query: "<intent + key nouns>" })`.',
     )
     expect(partial).toContain("In the next execution, copy a returned path exactly")
-    expect(partial).toContain("Only Code Mode tools listed here or returned by the built-in `search` function")
+    expect(partial).toContain("Only tools listed here or returned by the built-in `search` function")
     expect(partial).toContain('- Browse one namespace: `search({ query: "", namespace: "<name>" })`.')
     expect(partial).toContain("repeat the same search with `offset: next.offset`")
     expect(partial).toContain("  limit?: number,\n  offset?: number,")
@@ -689,7 +739,7 @@ describe("CodeMode public contract", () => {
     expect(instructions).not.toContain("promise chaining")
     expect(instructions).toContain("URL, URLSearchParams, and URI encoding helpers")
     expect(instructions).not.toContain("host globals")
-    expect(instructions).toContain("Use Code Mode tools for external operations")
+    expect(instructions).toContain("Use tools for external operations")
     expect(instructions).toContain(
       "Prefer explicit `return`; otherwise only the final top-level expression becomes the result.",
     )

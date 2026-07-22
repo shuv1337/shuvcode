@@ -1,8 +1,9 @@
 import { EOL } from "node:os"
 import path from "node:path"
+import { readFile, stat, writeFile } from "node:fs/promises"
 import { Effect, Option } from "effect"
 import { applyEdits, modify } from "jsonc-parser"
-import { Global } from "@opencode-ai/core/global"
+import { Global } from "@opencode-ai/util/global"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 
@@ -29,13 +30,14 @@ export default Runtime.handler(
       ? { type: "remote" as const, url, ...(headers ? { headers } : {}) }
       : { type: "local" as const, command, ...(environment ? { environment } : {}) }
 
-    const configPath = yield* Effect.promise(() => resolveConfigPath(input.global ? Global.Path.config : process.cwd()))
+    const global = yield* Global.Service
+    const configPath = yield* Effect.promise(() => resolveConfigPath(input.global ? global.config : process.cwd()))
     yield* Effect.promise(() => write(configPath, input.name, server))
     process.stdout.write(`MCP server "${input.name}" added to ${configPath}` + EOL)
   }),
 )
 
-async function resolveConfigPath(directory: string) {
+export async function resolveConfigPath(directory: string) {
   const candidates = [
     path.join(directory, "opencode.json"),
     path.join(directory, "opencode.jsonc"),
@@ -43,16 +45,24 @@ async function resolveConfigPath(directory: string) {
     path.join(directory, ".opencode", "opencode.jsonc"),
   ]
   for (const candidate of candidates) {
-    if (await Bun.file(candidate).exists()) return candidate
+    if (
+      await stat(candidate).then(
+        (info) => info.isFile(),
+        () => false,
+      )
+    )
+      return candidate
   }
   return candidates[0]
 }
 
 async function write(configPath: string, name: string, server: unknown) {
-  const file = Bun.file(configPath)
-  const text = (await file.exists()) ? await file.text() : "{}"
+  const text = await readFile(configPath, "utf8").catch((error) => {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return "{}"
+    throw error
+  })
   const edits = modify(text, ["mcp", "servers", name], server, {
     formattingOptions: { tabSize: 2, insertSpaces: true },
   })
-  await Bun.write(configPath, applyEdits(text, edits))
+  await writeFile(configPath, applyEdits(text, edits))
 }

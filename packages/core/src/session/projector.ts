@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gt, gte, inArray, lt, sql } from "drizzle-orm"
 import { DateTime, Effect, Layer, Schema, Stream } from "effect"
 import { Database } from "../database/database"
 import { EventV2 } from "../event"
-import { makeGlobalNode } from "../effect/app-node"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { ModelV2 } from "../model"
 import { SessionEvent } from "./event"
 import { SessionV1 } from "../v1/session"
@@ -609,6 +609,7 @@ const layer = Layer.effectDiscard(
         .run()
         .pipe(Effect.orDie),
     )
+    yield* events.project(SessionEvent.UsageRecorded, (event) => applyUsage(db, event.data.sessionID, event.data))
     yield* events.project(SessionEvent.Forked, (event) => projectFork(db, event))
     yield* events.project(SessionEvent.InputPromoted, (event) =>
       Effect.gen(function* () {
@@ -781,7 +782,7 @@ const layer = Layer.effectDiscard(
         yield* InstructionState.reset(db, event.data.sessionID)
       }),
     )
-    yield* events.subscribe([SessionEvent.Step.Ended, SessionEvent.Step.Failed]).pipe(
+    yield* events.subscribe([SessionEvent.Step.Ended, SessionEvent.Step.Failed, SessionEvent.UsageRecorded]).pipe(
       Stream.runForEach((event) => {
         if (
           event.type === SessionEvent.Step.Failed.type &&

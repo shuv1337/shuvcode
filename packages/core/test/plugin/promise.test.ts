@@ -1,19 +1,102 @@
 import { describe, expect } from "bun:test"
-import { Effect, Schema } from "effect"
+import { Message, SystemPart } from "@opencode-ai/ai"
+import { DateTime, Effect, Schema } from "effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
+import { Catalog } from "@opencode-ai/core/catalog"
+import { ModelV2 } from "@opencode-ai/core/model"
 import { PluginV2 } from "@opencode-ai/core/plugin"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { PluginPromise } from "@opencode-ai/core/plugin/promise"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
+import { SessionPending } from "@opencode-ai/core/session/pending"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
+import { ProviderV2 } from "@opencode-ai/core/provider"
 import { Plugin } from "@opencode-ai/plugin/v2"
+import type { SessionHooks } from "@opencode-ai/plugin/v2/effect/session"
+import { Model } from "@opencode-ai/schema/model"
+import { Provider } from "@opencode-ai/schema/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
+import { host as testHost } from "./host"
 
 const it = testEffect(PluginTestLayer)
 
 describe("fromPromise", () => {
+  it.effect("forwards transient session generation", () =>
+    Effect.gen(function* () {
+      const host = testHost({
+        session: {
+          generate: (input) => Effect.succeed({ text: `${input.sessionID}: ${input.prompt}` }),
+        },
+      })
+
+      yield* PluginPromise.fromPromise(
+        Plugin.define({
+          id: "promise-session-generate",
+          setup: async (ctx) => {
+            expect(await ctx.session.generate({ sessionID: "ses_generate", prompt: "Summarize" })).toEqual({
+              text: "ses_generate: Summarize",
+            })
+          },
+        }),
+      ).effect(host)
+    }),
+  )
+
+  it.effect("forwards synthetic session input", () =>
+    Effect.gen(function* () {
+      const input = {
+        sessionID: "ses_synthetic",
+        id: "msg_synthetic",
+        text: "Background work completed",
+        description: null,
+        metadata: { shellID: "shell_1" },
+        delivery: null,
+        resume: null,
+      }
+      let seen: unknown
+      const host = testHost({
+        session: {
+          synthetic: (value) => {
+            seen = value
+            return Effect.succeed(
+              SessionPending.Synthetic.make({
+                admittedSeq: 1,
+                id: SessionMessage.ID.make(input.id),
+                sessionID: SessionV2.ID.make(input.sessionID),
+                timeCreated: DateTime.makeUnsafe(0),
+                type: "synthetic",
+                data: {
+                  text: input.text,
+                  metadata: input.metadata,
+                },
+                delivery: "queue",
+              }),
+            )
+          },
+        },
+      })
+
+      yield* PluginPromise.fromPromise(
+        Plugin.define({
+          id: "promise-session-synthetic",
+          setup: async (ctx) => {
+            await ctx.session.synthetic(input)
+          },
+        }),
+      ).effect(host)
+
+      expect(seen).toEqual({
+        ...input,
+        description: undefined,
+        delivery: undefined,
+        resume: undefined,
+      })
+    }),
+  )
+
   it.effect("forwards standard client reads", () =>
     Effect.gen(function* () {
       const plugin = yield* PluginV2.Service
@@ -43,6 +126,37 @@ describe("fromPromise", () => {
     }),
   )
 
+  it.effect("forwards direct agent and model reads", () =>
+    Effect.gen(function* () {
+      const agents = yield* AgentV2.Service
+      const catalog = yield* Catalog.Service
+      const plugin = yield* PluginV2.Service
+      const host = yield* PluginHost.make(plugin)
+      yield* agents.transform((draft) =>
+        draft.update(AgentV2.ID.make("reviewer"), (agent) => {
+          agent.description = "Reviews code"
+        }),
+      )
+      yield* catalog.transform((draft) =>
+        draft.model.update(ProviderV2.ID.make("test"), ModelV2.ID.make("alias"), (model) => {
+          model.modelID = ModelV2.ID.make("gpt-5")
+        }),
+      )
+
+      yield* PluginPromise.fromPromise(
+        Plugin.define({
+          id: "promise-direct-reads",
+          setup: async (ctx) => {
+            expect(await ctx.agent.get("reviewer")).toMatchObject({ description: "Reviews code" })
+            expect(await ctx.agent.get("missing")).toBeUndefined()
+            expect(await ctx.catalog.model.get("test", "alias")).toMatchObject({ modelID: "gpt-5" })
+            expect(await ctx.catalog.model.get("test", "missing")).toBeUndefined()
+          },
+        }),
+      ).effect(host)
+    }),
+  )
+
   it.effect("loads a promise plugin and registers a transform hook", () =>
     Effect.gen(function* () {
       const agents = yield* AgentV2.Service
@@ -69,6 +183,38 @@ describe("fromPromise", () => {
         description: "Reviews code",
         mode: "subagent",
       })
+    }),
+  )
+
+  it.effect("forwards session context hooks", () =>
+    Effect.gen(function* () {
+      const plugin = yield* PluginV2.Service
+      const hooks = yield* PluginHooks.Service
+      const host = yield* PluginHost.make(plugin)
+      yield* PluginPromise.fromPromise(
+        Plugin.define({
+          id: "promise-session-context",
+          setup: async (ctx) => {
+            await ctx.session.hook("context", (event) => {
+              event.system.push(SystemPart.make("Promise hook"))
+              delete event.tools.echo
+            })
+          },
+        }),
+      ).effect(host)
+      const event: SessionHooks["context"] = {
+        sessionID: SessionV2.ID.make("ses_promise_session_context"),
+        agent: AgentV2.ID.make("build"),
+        model: Model.Ref.make({ providerID: Provider.ID.make("test"), id: Model.ID.make("model") }),
+        system: [SystemPart.make("Initial")],
+        messages: [Message.user("Hello")],
+        tools: { echo: { description: "Echo", input: { type: "object" } } },
+      }
+
+      yield* hooks.trigger("session", "context", event)
+
+      expect(event.system.map((part) => part.text)).toEqual(["Initial", "Promise hook"])
+      expect(event.tools).toEqual({})
     }),
   )
 

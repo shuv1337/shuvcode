@@ -1,8 +1,9 @@
 import { TextAttributes } from "@opentui/core"
 import type {
   ConnectionInfo,
-  IntegrationConnectOauthOutput,
+  IntegrationCommandConnectOutput,
   IntegrationInfo,
+  IntegrationOauthConnectOutput,
   IntegrationOAuthMethod,
 } from "@opencode-ai/client"
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
@@ -27,7 +28,8 @@ const INTEGRATION_PRIORITY: Record<string, number> = {
 }
 
 type ConnectMethod = Exclude<IntegrationInfo["methods"][number], { type: "env" }>
-type IntegrationAttempt = IntegrationConnectOauthOutput["data"]
+type IntegrationAttempt = IntegrationOauthConnectOutput["data"]
+type CommandAttempt = IntegrationCommandConnectOutput["data"]
 type OnIntegrationConnected = (providerID?: string) => void
 
 export function integrationOptions(list: IntegrationInfo[]) {
@@ -60,7 +62,7 @@ export function connectionSummary(integration: IntegrationInfo) {
 export function DialogIntegration(props: { onConnected?: OnIntegrationConnected } = {}) {
   const data = useData()
   const dialog = useDialog()
-  const { theme } = useTheme()
+  const { themeV2 } = useTheme().contextual("elevated")
   const options = createMemo(() =>
     integrationOptions(data.location.integration.list() ?? []).map((integration) => {
       const methods = connectMethods(integration)
@@ -72,7 +74,7 @@ export function DialogIntegration(props: { onConnected?: OnIntegrationConnected 
         footer: connectionSummary(integration) || undefined,
         category: integration.id in INTEGRATION_PRIORITY ? "Popular" : "Services",
         disabled: methods.length === 0,
-        gutter: connected ? () => <text fg={theme.success}>✓</text> : undefined,
+        gutter: connected ? () => <text fg={themeV2.text.feedback.success.default}>✓</text> : undefined,
         onSelect: () =>
           credentialConnections(integration).length
             ? manageConnections(integration, methods, dialog, props.onConnected)
@@ -87,12 +89,12 @@ export function DialogIntegration(props: { onConnected?: OnIntegrationConnected 
       options={options()}
       emptyView={
         <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-          <text fg={theme.textMuted}>No integrations available</text>
+          <text fg={themeV2.text.subdued}>No integrations available</text>
         </box>
       }
       noMatchView={
         <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-          <text fg={theme.textMuted}>No integrations found</text>
+          <text fg={themeV2.text.subdued}>No integrations found</text>
         </box>
       }
     />
@@ -167,7 +169,153 @@ function openMethod(
     dialog.replace(() => <KeyMethod integration={integration} method={method} onConnected={onConnected} />)
     return
   }
+  if (method.type === "command") {
+    dialog.replace(() => <CommandStarting integration={integration} method={method} onConnected={onConnected} />)
+    return
+  }
   void beginOAuth(integration, method, dialog, onConnected)
+}
+
+function CommandStarting(props: {
+  integration: IntegrationInfo
+  method: Extract<ConnectMethod, { type: "command" }>
+  onConnected?: OnIntegrationConnected
+}) {
+  const data = useData()
+  const dialog = useDialog()
+  const client = useClient()
+  const toast = useToast()
+  let closed = false
+  let handedOff = false
+
+  onMount(() => {
+    void client.api.integration.command
+      .connect({
+        integrationID: props.integration.id,
+        methodID: props.method.id,
+        location: location(data),
+      })
+      .then((result) => {
+        if (closed) {
+          void client.api.integration.command.cancel({
+            integrationID: props.integration.id,
+            attemptID: result.data.attemptID,
+            location: location(data),
+          })
+          return
+        }
+        handedOff = true
+        dialog.replace(() => (
+          <CommandPending
+            integration={props.integration}
+            title={props.method.label}
+            attempt={result.data}
+            onConnected={props.onConnected}
+          />
+        ))
+      })
+      .catch((cause) => {
+        if (closed) return
+        toast.show({ variant: "error", message: message(cause) })
+        dialog.clear()
+      })
+  })
+  onCleanup(() => {
+    if (!handedOff) closed = true
+  })
+
+  return <CommandView title={props.method.label} output="" message="Starting command..." />
+}
+
+function CommandPending(props: {
+  integration: IntegrationInfo
+  title: string
+  attempt: CommandAttempt
+  onConnected?: OnIntegrationConnected
+}) {
+  const data = useData()
+  const dialog = useDialog()
+  const client = useClient()
+  const toast = useToast()
+  const [output, setOutput] = createSignal("")
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let settled = false
+
+  const poll = () => {
+    void client.api.integration.command
+      .status({
+        integrationID: props.integration.id,
+        attemptID: props.attempt.attemptID,
+        location: location(data),
+      })
+      .then((result) => {
+        const status = result.data
+        if (status.status === "pending") {
+          setOutput(status.message ?? "")
+          timer = setTimeout(poll, 500)
+          return
+        }
+        settled = true
+        if (status.status === "complete") {
+          void connected(props.integration, data, dialog, toast, props.onConnected)
+          return
+        }
+        toast.show({
+          variant: "error",
+          message: status.status === "failed" ? status.message : "Authentication expired",
+        })
+        dialog.clear()
+      })
+      .catch((cause) => {
+        settled = true
+        toast.show({ variant: "error", message: message(cause) })
+        dialog.clear()
+      })
+  }
+
+  onMount(poll)
+  onCleanup(() => {
+    if (timer) clearTimeout(timer)
+    if (settled) return
+    void client.api.integration.command.cancel({
+      integrationID: props.integration.id,
+      attemptID: props.attempt.attemptID,
+      location: location(data),
+    })
+  })
+
+  return <CommandView title={props.title} output={output()} message="Waiting for command to finish..." />
+}
+
+function CommandView(props: { title: string; output: string; message: string }) {
+  const dialog = useDialog()
+  const { themeV2 } = useTheme().contextual("elevated")
+  const { themeV2: overlayTheme } = useTheme().contextual("overlay")
+  onMount(() => dialog.setSize("large"))
+  return (
+    <box gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
+        <text attributes={TextAttributes.BOLD} fg={themeV2.text.default}>
+          {props.title}
+        </text>
+        <text fg={themeV2.text.subdued} onMouseUp={() => dialog.clear()}>
+          esc close
+        </text>
+      </box>
+      <box
+        backgroundColor={overlayTheme.background.default}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+        paddingBottom={1}
+      >
+        <text fg={overlayTheme.text.default}>{props.output.trim()}</text>
+      </box>
+      <box paddingLeft={2} paddingRight={2}>
+        <text fg={themeV2.text.subdued}>{props.message}</text>
+      </box>
+    </box>
+  )
 }
 
 function KeyMethod(props: {
@@ -179,7 +327,7 @@ function KeyMethod(props: {
   const dialog = useDialog()
   const client = useClient()
   const toast = useToast()
-  const { theme } = useTheme()
+  const { themeV2 } = useTheme().contextual("elevated")
   const [error, setError] = createSignal<string>()
 
   return (
@@ -197,7 +345,9 @@ function KeyMethod(props: {
           .then(() => connected(props.integration, data, dialog, toast, props.onConnected))
           .catch((cause) => setError(message(cause)))
       }}
-      description={() => <Show when={error()}>{(value) => <text fg={theme.error}>{value()}</text>}</Show>}
+      description={() => (
+        <Show when={error()}>{(value) => <text fg={themeV2.text.feedback.error.default}>{value()}</text>}</Show>
+      )}
     />
   )
 }
@@ -227,8 +377,8 @@ function OAuthStarting(props: {
   const toast = useToast()
 
   onMount(() => {
-    void client.api.integration.connect
-      .oauth({
+    void client.api.integration.oauth
+      .connect({
         integrationID: props.integration.id,
         location: location(data),
         methodID: props.method.id,
@@ -297,8 +447,8 @@ function OAuthAuto(props: {
   }))
 
   const poll = () => {
-    void client.api.integration.attempt
-      .status({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth
+      .status({ integrationID: props.integration.id, attemptID: props.attempt.attemptID, location: location(data) })
       .then((result) => {
         const status = result.data
         if (status.status === "pending") {
@@ -324,7 +474,11 @@ function OAuthAuto(props: {
   onCleanup(() => {
     if (timer) clearTimeout(timer)
     if (settled) return
-    void client.api.integration.attempt.cancel({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth.cancel({
+      integrationID: props.integration.id,
+      attemptID: props.attempt.attemptID,
+      location: location(data),
+    })
   })
 
   return (
@@ -348,13 +502,17 @@ function OAuthCode(props: {
   const dialog = useDialog()
   const client = useClient()
   const toast = useToast()
-  const { theme } = useTheme()
+  const { themeV2 } = useTheme().contextual("elevated")
   const [error, setError] = createSignal<string>()
   let settled = false
 
   onCleanup(() => {
     if (settled) return
-    void client.api.integration.attempt.cancel({ attemptID: props.attempt.attemptID, location: location(data) })
+    void client.api.integration.oauth.cancel({
+      integrationID: props.integration.id,
+      attemptID: props.attempt.attemptID,
+      location: location(data),
+    })
   })
 
   return (
@@ -363,8 +521,13 @@ function OAuthCode(props: {
       placeholder="Authorization code"
       onConfirm={(code) => {
         if (!code) return
-        void client.api.integration.attempt
-          .complete({ attemptID: props.attempt.attemptID, location: location(data), code })
+        void client.api.integration.oauth
+          .complete({
+            integrationID: props.integration.id,
+            attemptID: props.attempt.attemptID,
+            location: location(data),
+            code,
+          })
           .then(() => {
             settled = true
             return connected(props.integration, data, dialog, toast, props.onConnected)
@@ -373,9 +536,9 @@ function OAuthCode(props: {
       }}
       description={() => (
         <box gap={1}>
-          <text fg={theme.textMuted}>{props.attempt.instructions}</text>
-          <Link href={props.attempt.url} fg={theme.primary} />
-          <Show when={error()}>{(value) => <text fg={theme.error}>{value()}</text>}</Show>
+          <text fg={themeV2.text.subdued}>{props.attempt.instructions}</text>
+          <Link href={props.attempt.url} fg={themeV2.markdown.link} />
+          <Show when={error()}>{(value) => <text fg={themeV2.text.feedback.error.default}>{value()}</text>}</Show>
         </box>
       )}
     />
@@ -384,31 +547,31 @@ function OAuthCode(props: {
 
 function OAuthView(props: { title: string; url?: string; instructions?: string; message: string; copy?: boolean }) {
   const dialog = useDialog()
-  const { theme } = useTheme()
+  const { themeV2 } = useTheme().contextual("elevated")
   return (
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
       <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
+        <text attributes={TextAttributes.BOLD} fg={themeV2.text.default}>
           {props.title}
         </text>
-        <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+        <text fg={themeV2.text.subdued} onMouseUp={() => dialog.clear()}>
           esc
         </text>
       </box>
       <Show when={props.url}>
         {(url) => (
           <box gap={1}>
-            <Link href={url()} fg={theme.primary} />
+            <Link href={url()} fg={themeV2.markdown.link} />
             <Show when={props.instructions}>
-              {(instructions) => <text fg={theme.textMuted}>{instructions()}</text>}
+              {(instructions) => <text fg={themeV2.text.subdued}>{instructions()}</text>}
             </Show>
           </box>
         )}
       </Show>
-      <text fg={theme.textMuted}>{props.message}</text>
+      <text fg={themeV2.text.subdued}>{props.message}</text>
       <Show when={props.copy}>
-        <text fg={theme.text}>
-          c <span style={{ fg: theme.textMuted }}>copy</span>
+        <text fg={themeV2.text.default}>
+          c <span style={{ fg: themeV2.text.subdued }}>copy</span>
         </text>
       </Show>
     </box>

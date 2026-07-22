@@ -1,11 +1,11 @@
 import { expect } from "bun:test"
-import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/llm"
-import { OpenAIChat } from "@opencode-ai/llm/protocols"
+import { LLMClient, LLMEvent, Model, type LLMRequest } from "@opencode-ai/ai"
+import { OpenAIChat } from "@opencode-ai/ai/protocols"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { llmClient } from "@opencode-ai/core/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
@@ -17,10 +17,10 @@ import { SessionTitle } from "@opencode-ai/core/session/title"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { Flag } from "@opencode-ai/core/flag/flag"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { App } from "@opencode-ai/core/app"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { DateTime, Effect, Layer, Stream } from "effect"
+import { Money } from "@opencode-ai/schema/money"
+import { Effect, Layer, Stream } from "effect"
 import { testEffect } from "./lib/effect"
 
 let requests: LLMRequest[] = []
@@ -29,16 +29,49 @@ const model = Model.make({
   provider: "test",
   route: OpenAIChat.route.with({ limits: { context: 10_000, output: 1_000 } }),
 })
+const cost = [
+  {
+    input: Money.USDPerMillionTokens.make(1),
+    output: Money.USDPerMillionTokens.make(2),
+    cache: {
+      read: Money.USDPerMillionTokens.make(0.1),
+      write: Money.USDPerMillionTokens.make(0.5),
+    },
+  },
+]
 const client = Layer.mock(LLMClient.Service)({
   prepare: () => Effect.die("unused"),
   stream: (request: LLMRequest) => {
     requests.push(request)
-    return Stream.make(LLMEvent.textDelta({ id: "title", text: "Generated Title\n" }))
+    return Stream.make(
+      LLMEvent.textDelta({ id: "title", text: "Generated Title\n" }),
+      LLMEvent.stepFinish({
+        index: 0,
+        reason: "stop",
+        usage: {
+          inputTokens: 15,
+          outputTokens: 6,
+          nonCachedInputTokens: 10,
+          cacheReadInputTokens: 3,
+          cacheWriteInputTokens: 2,
+          reasoningTokens: 2,
+        },
+      }),
+      LLMEvent.finish({
+        reason: "stop",
+      }),
+    )
   },
   generate: () => Effect.die("unused"),
 })
 const models = Layer.mock(SessionRunnerModel.Service)({
-  resolve: () => Effect.succeed(SessionRunnerModel.resolved(model)),
+  resolve: () =>
+    Effect.succeed(
+      SessionRunnerModel.resolved(model, {
+        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+        cost,
+      }),
+    ),
 })
 const it = testEffect(
   AppNodeBuilder.build(
@@ -122,14 +155,16 @@ it.effect("generates a title from the sole user message and renames the session"
     expect(requests[0]?.http?.headers).toEqual({
       "x-session-affinity": sessionID,
       "X-Session-Id": sessionID,
-      "User-Agent": `opencode/${InstallationVersion}`,
+      "User-Agent": App.useragent(App.make()),
       "x-opencode-project": Project.ID.global,
       "x-opencode-session": sessionID,
-      "x-opencode-client": Flag.OPENCODE_CLIENT,
+      "x-opencode-client": "opencode",
     })
     expect(JSON.stringify(requests[0]?.messages)).toContain("Help me debug the failing build")
     const renamed = yield* store.get(sessionID)
     expect(renamed?.title).toBe("Generated Title")
+    expect(renamed?.tokens).toEqual({ input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 2 } })
+    expect(renamed?.cost).toBeCloseTo(0.0000233)
   }),
 )
 

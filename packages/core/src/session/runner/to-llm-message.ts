@@ -5,7 +5,7 @@ import {
   ToolResultPart,
   type ContentPart,
   type ProviderMetadata,
-} from "@opencode-ai/llm"
+} from "@opencode-ai/ai"
 import { Option, Schema } from "effect"
 import type { ModelV2 } from "../../model"
 import { SessionMessage } from "../message"
@@ -136,14 +136,19 @@ const assistant = (message: SessionMessage.Assistant, model: ModelV2.Ref, provid
         : item.text.length > 0
           ? [{ type: "text", text: item.text }]
           : []
+    const reuseToolProviderMetadata =
+      reuseProviderMetadata ||
+      (sameModel &&
+        item.executed === true &&
+        (item.state.status === "completed" || (item.state.status === "error" && item.state.result !== undefined)))
     const call = toolCall(
       item,
-      reuseProviderMetadata ? providerMetadata(providerMetadataKey, item.providerState) : undefined,
+      reuseToolProviderMetadata ? providerMetadata(providerMetadataKey, item.providerState) : undefined,
     )
     if (item.executed !== true) return [call]
     const result = toolResult(
       item,
-      reuseProviderMetadata
+      reuseToolProviderMetadata
         ? providerMetadata(providerMetadataKey, item.providerResultState ?? item.providerState)
         : undefined,
     )
@@ -206,7 +211,7 @@ function toLLMMessage(message: SessionMessage.Info, model: ModelV2.Ref, provider
         Message.make({
           id: message.id,
           role: "user",
-          content: `Shell command: ${message.command}\n\n${message.output?.output ?? ""}`,
+          content: `The following shell command was executed by the user:\n\nCommand:\n${message.command}\n\nOutput:\n${message.output?.output ?? ""}`,
           metadata: message.metadata,
         }),
       ]
@@ -235,7 +240,7 @@ ${message.recent}
   }
 }
 
-/** Translate projected V2 Session history into canonical @opencode-ai/llm context. */
+/** Translate projected V2 Session history into canonical @opencode-ai/ai context. */
 export const toLLMMessages = (
   messages: readonly SessionMessage.Info[],
   model: ModelV2.Ref,

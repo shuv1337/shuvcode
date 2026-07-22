@@ -17,7 +17,6 @@ export type {
   SessionApi,
   SkillApi,
 } from "./api.js"
-export { Service } from "./service.js"
 export { Agent } from "@opencode-ai/schema/agent"
 export { Command } from "@opencode-ai/schema/command"
 export { Credential } from "@opencode-ai/schema/credential"

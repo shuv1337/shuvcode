@@ -1,6 +1,6 @@
 import { EOL } from "os"
 import { Effect } from "effect"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { OpenCode } from "@opencode-ai/client/promise"
 import { renderUnicodeCompact } from "uqr"
 import { Commands } from "../commands"
@@ -10,7 +10,7 @@ import { ServiceConfig } from "../../services/service-config"
 export default Runtime.handler(
   Commands.commands.pair,
   Effect.fn("cli.pair")(function* () {
-    const endpoint = yield* Service.start(yield* ServiceConfig.options())
+    const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
     const invitation = yield* Effect.tryPromise(() =>
       OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) }).pairing.invitation.create(),
     )

@@ -1,5 +1,5 @@
 import type { BoxRenderable, TextareaRenderable, ScrollBoxRenderable } from "@opentui/core"
-import { pathToFileURL } from "bun"
+import { pathToFileURL } from "node:url"
 import fuzzysort from "fuzzysort"
 import path from "path"
 import { firstBy } from "remeda"
@@ -18,42 +18,11 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "../../util/locale"
 import type { PromptInfo, PromptPartRef } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
-import { useBindings } from "../../keymap"
 import { Keymap } from "../../context/keymap"
 import { displayCharAt, mentionTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/client"
-
-function removeLineRange(input: string) {
-  const hashIndex = input.lastIndexOf("#")
-  return hashIndex !== -1 ? input.substring(0, hashIndex) : input
-}
-
-function extractLineRange(input: string) {
-  const hashIndex = input.lastIndexOf("#")
-  if (hashIndex === -1) {
-    return { baseQuery: input }
-  }
-
-  const baseName = input.substring(0, hashIndex)
-  const linePart = input.substring(hashIndex + 1)
-  const lineMatch = linePart.match(/^(\d+)(?:-(\d*))?$/)
-
-  if (!lineMatch) {
-    return { baseQuery: baseName }
-  }
-
-  const startLine = Number(lineMatch[1])
-  const endLine = lineMatch[2] && startLine < Number(lineMatch[2]) ? Number(lineMatch[2]) : undefined
-
-  return {
-    lineRange: {
-      baseName,
-      startLine,
-      endLine,
-    },
-    baseQuery: baseName,
-  }
-}
+import { stringWidth } from "../../util/string-width"
+import { parseFileLineRange, stripFileLineRange } from "../../prompt/parse"
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
@@ -189,7 +158,7 @@ export function Autocomplete(props: {
 
     const virtualText = "@" + text
     const extmarkStart = store.index
-    const extmarkEnd = extmarkStart + Bun.stringWidth(virtualText)
+    const extmarkEnd = extmarkStart + stringWidth(virtualText)
 
     const styleId = part.type === "file" ? props.fileStyleId : props.agentStyleId
 
@@ -275,9 +244,9 @@ export function Autocomplete(props: {
 
   const referenceMatch = createMemo(() => {
     if (!store.visible || store.visible === "/") return
-    const { baseQuery } = extractLineRange(search())
-    const slash = baseQuery.indexOf("/")
-    const alias = slash === -1 ? baseQuery : baseQuery.slice(0, slash)
+    const base = parseFileLineRange(search()).base
+    const slash = base.indexOf("/")
+    const alias = slash === -1 ? base : base.slice(0, slash)
     return references().find((item) => !item.hidden && item.name === alias)
   })
 
@@ -312,11 +281,11 @@ export function Autocomplete(props: {
     async (input) => {
       if (!input.visible || input.visible === "/") return { options: [], failed: false }
       if (referenceMatch()) return { options: [], failed: false }
-      const { lineRange, baseQuery } = extractLineRange(input.query ?? "")
+      const { lineRange, base } = parseFileLineRange(input.query ?? "")
 
       const result = await client.api.file
         .find({
-          query: baseQuery,
+          query: base,
           limit: 20,
           location: {
             directory: input.location?.directory,
@@ -432,7 +401,7 @@ export function Autocomplete(props: {
     const cursor = props.input().logicalCursor
     props.input().deleteRange(0, 0, cursor.row, cursor.col)
     props.input().insertText(newText)
-    props.input().cursorOffset = Bun.stringWidth(newText)
+    props.input().cursorOffset = stringWidth(newText)
   }
 
   const commands = createMemo((): AutocompleteOption[] => {
@@ -491,7 +460,7 @@ export function Autocomplete(props: {
 
     // Files come from fff already fuzzy ranked and filtered
     // it shouldn't be additionally sorted by fuzzysort as it will loose the results
-    const fileOptions: AutocompleteOption[] = store.visible === "@" && !files.loading ? fileSearch.options : []
+    const fileOptions: AutocompleteOption[] = store.visible === "@" ? fileSearch.options : []
     const nonFileOptions: AutocompleteOption[] =
       store.visible === "@" ? [...referenceAliasesValue, ...agentsValue, ...mcpResources()] : [...commandsValue]
 
@@ -500,9 +469,9 @@ export function Autocomplete(props: {
     }
 
     const fuzziedNonFiles = fuzzysort
-      .go(removeLineRange(searchValue), nonFileOptions, {
+      .go(stripFileLineRange(searchValue), nonFileOptions, {
         keys: [
-          (obj) => removeLineRange((obj.value ?? obj.display).trimEnd()),
+          (obj) => stripFileLineRange((obj.value ?? obj.display).trimEnd()),
           // Match description for slash commands only; for "@" it surfaced unrelated items.
           ...(store.visible === "/" ? ["description" as const] : []),
           (obj) => obj.aliases?.join(" ") ?? "",
@@ -578,48 +547,49 @@ export function Autocomplete(props: {
     setStore("selected", 0)
   }
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
+    mode: "autocomplete",
     target: props.input,
     enabled: () => Boolean(store.visible),
     commands: [
       {
-        name: "prompt.autocomplete.prev",
+        id: "prompt.autocomplete.prev",
         title: "Previous autocomplete item",
-        category: "Autocomplete",
+        group: "Autocomplete",
         run() {
           setStore("input", "keyboard")
           move(-1)
         },
       },
       {
-        name: "prompt.autocomplete.next",
+        id: "prompt.autocomplete.next",
         title: "Next autocomplete item",
-        category: "Autocomplete",
+        group: "Autocomplete",
         run() {
           setStore("input", "keyboard")
           move(1)
         },
       },
       {
-        name: "prompt.autocomplete.hide",
+        id: "prompt.autocomplete.hide",
         title: "Hide autocomplete",
-        category: "Autocomplete",
+        group: "Autocomplete",
         run() {
           hide()
         },
       },
       {
-        name: "prompt.autocomplete.select",
+        id: "prompt.autocomplete.select",
         title: "Select autocomplete item",
-        category: "Autocomplete",
+        group: "Autocomplete",
         run() {
           select()
         },
       },
       {
-        name: "prompt.autocomplete.complete",
+        id: "prompt.autocomplete.complete",
         title: "Complete autocomplete item",
-        category: "Autocomplete",
+        group: "Autocomplete",
         run() {
           const selected = options()[store.selected]
           if (selected?.isDirectory) {
@@ -631,13 +601,6 @@ export function Autocomplete(props: {
         },
       },
     ],
-    bindings: [
-      "prompt.autocomplete.prev",
-      "prompt.autocomplete.next",
-      "prompt.autocomplete.hide",
-      "prompt.autocomplete.select",
-      "prompt.autocomplete.complete",
-    ].flatMap((command) => config.keybinds.get(command)),
   }))
 
   function show(mode: "@" | "/") {

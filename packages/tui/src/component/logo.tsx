@@ -7,10 +7,10 @@ import { logo } from "../shuv-logo"
 export const defaultLogo = logo
 
 export function Logo() {
-  const { theme } = useTheme()
+  const { themeV2 } = useTheme()
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
-    const shadow = tint(theme.background, fg, 0.25)
+    const shadow = tint(themeV2.background.default, fg, 0.25)
     const attrs = bold ? TextAttributes.BOLD : undefined
     return Array.from(line).map((char) => {
       if (char === "_") {
@@ -54,8 +54,8 @@ export function Logo() {
       <For each={defaultLogo.left}>
         {(line, index) => (
           <box flexDirection="row" gap={1}>
-            <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            <box flexDirection="row">{renderLine(defaultLogo.right[index()], theme.text, true)}</box>
+            <box flexDirection="row">{renderLine(line, themeV2.text.subdued, false)}</box>
+            <box flexDirection="row">{renderLine(defaultLogo.right[index()], themeV2.text.default, true)}</box>
           </box>
         )}
       </For>

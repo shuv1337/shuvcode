@@ -113,7 +113,7 @@ Node application:
 
 - `Service.discover()` returns a healthy registered endpoint without starting
   a process.
-- `Service.start()` reuses a compatible service or starts one when needed.
+- `Service.ensure()` returns a compatible service, starting one when needed.
 - `Service.stop()` stops the registered service.
 - `Service.headers(endpoint)` creates the authentication headers for a client.
 
@@ -123,12 +123,13 @@ bun add @effect/platform-node
 
 ```ts
 import { NodeFileSystem } from "@effect/platform-node"
-import { OpenCode, Service } from "@opencode-ai/client/effect"
+import { OpenCode } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { Effect } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 
 const program = Effect.gen(function* () {
-  const endpoint = yield* Service.start()
+  const endpoint = yield* Service.ensure()
   const client = yield* OpenCode.make({
     baseUrl: endpoint.url,
     headers: Service.headers(endpoint),

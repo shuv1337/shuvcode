@@ -56,6 +56,14 @@ export const OAuthMethod = Schema.Struct({
   prompts: optional(Schema.Array(Prompt)),
 }).annotate({ identifier: "Integration.OAuthMethod" })
 
+export interface CommandMethod extends Schema.Schema.Type<typeof CommandMethod> {}
+export const CommandMethod = Schema.Struct({
+  id: MethodID,
+  type: Schema.Literal("command"),
+  label: Schema.String,
+  command: Schema.Array(Schema.String),
+}).annotate({ identifier: "Integration.CommandMethod" })
+
 export interface KeyMethod extends Schema.Schema.Type<typeof KeyMethod> {}
 export const KeyMethod = Schema.Struct({
   type: Schema.Literal("key"),
@@ -68,7 +76,7 @@ export const EnvMethod = Schema.Struct({
   names: Schema.Array(Schema.String),
 }).annotate({ identifier: "Integration.EnvMethod" })
 
-export const Method = Schema.Union([OAuthMethod, KeyMethod, EnvMethod])
+export const Method = Schema.Union([OAuthMethod, CommandMethod, KeyMethod, EnvMethod])
   .pipe(Schema.toTaggedUnion("type"))
   .annotate({ identifier: "Integration.Method" })
 export type Method = typeof Method.Type
@@ -128,3 +136,19 @@ export const AttemptStatus = Schema.Union([
   .pipe(Schema.toTaggedUnion("status"))
   .annotate({ identifier: "Integration.AttemptStatus" })
 export type AttemptStatus = typeof AttemptStatus.Type
+
+export interface CommandAttempt extends Schema.Schema.Type<typeof CommandAttempt> {}
+export const CommandAttempt = Schema.Struct({
+  attemptID: AttemptID,
+  time: AttemptTime,
+}).annotate({ identifier: "Integration.CommandAttempt" })
+
+export const CommandAttemptStatus = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("pending"), message: optional(Schema.String), time: AttemptTime }),
+  Schema.Struct({ status: Schema.Literal("complete"), time: AttemptTime }),
+  Schema.Struct({ status: Schema.Literal("failed"), message: Schema.String, time: AttemptTime }),
+  Schema.Struct({ status: Schema.Literal("expired"), time: AttemptTime }),
+])
+  .pipe(Schema.toTaggedUnion("status"))
+  .annotate({ identifier: "Integration.CommandAttemptStatus" })
+export type CommandAttemptStatus = typeof CommandAttemptStatus.Type

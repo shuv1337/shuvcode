@@ -1,10 +1,11 @@
 import { HttpRecorder } from "@opencode-ai/http-recorder"
-import * as OpenAIChat from "@opencode-ai/llm/protocols/openai-chat"
-import { Auth, LLMClient, RequestExecutor } from "@opencode-ai/llm/route"
+import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
+import { Auth, LLMClient, RequestExecutor } from "@opencode-ai/ai/route"
+import { Catalog } from "@opencode-ai/core/catalog"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventTable } from "@opencode-ai/core/event/sql"
 import { Job } from "@opencode-ai/core/job"
@@ -32,15 +33,18 @@ import { Location } from "@opencode-ai/core/location"
 import { InstructionBuiltIns } from "@opencode-ai/core/instructions/builtins"
 import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
 import { Instructions } from "@opencode-ai/core/instructions"
-import { SkillGuidance } from "@opencode-ai/core/skill/guidance"
-import { ReferenceGuidance } from "@opencode-ai/core/reference/guidance"
-import { McpGuidance } from "@opencode-ai/core/mcp/guidance"
+import { SkillInstructions } from "@opencode-ai/core/skill/instructions"
+import { ReferenceInstructions } from "@opencode-ai/core/reference/instructions"
+import { McpInstructions } from "@opencode-ai/core/mcp/instructions"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
+import { SystemPromptPlugin } from "@opencode-ai/core/plugin/system-prompt"
 import { describe, expect } from "bun:test"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import path from "node:path"
 import { testEffect } from "./lib/effect"
+import { agentHost, catalogHost, host } from "./plugin/host"
 
 const cassetteName = "session-runner/openai-chat-streams-text"
 const cassetteDirectory = path.resolve(import.meta.dir, "fixtures/recordings")
@@ -69,14 +73,37 @@ const model = OpenAIChat.route
     generation: { maxTokens: 20, temperature: 0 },
   })
   .model({ id: "gpt-4o-mini" })
-const models = SessionRunnerModel.layerWith(() => Effect.succeed(SessionRunnerModel.resolved(model)))
+const models = SessionRunnerModel.layerWith(() =>
+  Effect.succeed(
+    SessionRunnerModel.resolved(model, {
+      capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+      cost: [],
+    }),
+  ),
+)
 const systemContext = Layer.mock(InstructionBuiltIns.Service, { load: () => Effect.succeed(Instructions.empty) })
 const instructionContext = Layer.mock(InstructionDiscovery.Service, { load: () => Effect.succeed(Instructions.empty) })
-const skillGuidance = Layer.mock(SkillGuidance.Service, { load: () => Effect.succeed(Instructions.empty) })
-const referenceGuidance = Layer.mock(ReferenceGuidance.Service, { load: () => Effect.succeed(Instructions.empty) })
-const mcpGuidance = Layer.mock(McpGuidance.Service, { load: () => Effect.succeed(Instructions.empty) })
+const skillInstructions = Layer.mock(SkillInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
+const referenceInstructions = Layer.mock(ReferenceInstructions.Service, {
+  load: () => Effect.succeed(Instructions.empty),
+})
+const mcpInstructions = Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const config = Layer.succeed(Config.Service, Config.Service.of({ entries: () => Effect.succeed([]) }))
 const pluginSupervisor = Layer.succeed(PluginSupervisor.Service, PluginSupervisor.Service.of({ flush: Effect.void }))
+const promptCatalog = Layer.mock(Catalog.Service, {
+  provider: {
+    get: () => Effect.succeed(undefined),
+    all: () => Effect.succeed([]),
+    available: () => Effect.succeed([]),
+  },
+  model: {
+    get: () => Effect.succeed(undefined),
+    all: () => Effect.succeed([]),
+    available: () => Effect.succeed([]),
+    default: () => Effect.succeed(undefined),
+    small: () => Effect.succeed(undefined),
+  },
+})
 const runnerLayer = AppNodeBuilder.build(SessionRunnerLLM.node, [
   [Snapshot.node, Snapshot.noopLayer],
   [LayerNodePlatform.llmClient, client],
@@ -84,9 +111,9 @@ const runnerLayer = AppNodeBuilder.build(SessionRunnerLLM.node, [
   [InstructionBuiltIns.node, systemContext],
   [InstructionDiscovery.node, instructionContext],
   [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
-  [SkillGuidance.node, skillGuidance],
-  [ReferenceGuidance.node, referenceGuidance],
-  [McpGuidance.node, mcpGuidance],
+  [SkillInstructions.node, skillInstructions],
+  [ReferenceInstructions.node, referenceInstructions],
+  [McpInstructions.node, mcpInstructions],
   [Config.node, config],
   [PermissionV2.node, permission],
   [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
@@ -116,12 +143,14 @@ const it = testEffect(
       SessionProjector.node,
       SessionStore.node,
       AgentV2.node,
+      Catalog.node,
+      PluginHooks.node,
       ToolRegistry.node,
       SessionRunnerModel.node,
       InstructionBuiltIns.node,
       InstructionDiscovery.node,
-      SkillGuidance.node,
-      ReferenceGuidance.node,
+      SkillInstructions.node,
+      ReferenceInstructions.node,
       Config.node,
       Snapshot.node,
       SessionRunnerLLM.node,
@@ -130,13 +159,14 @@ const it = testEffect(
     [
       [LayerNodePlatform.llmClient, client],
       [PermissionV2.node, permission],
+      [Catalog.node, promptCatalog],
       [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
       [SessionRunnerModel.node, models],
       [InstructionBuiltIns.node, systemContext],
       [InstructionDiscovery.node, instructionContext],
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
-      [SkillGuidance.node, skillGuidance],
-      [ReferenceGuidance.node, referenceGuidance],
+      [SkillInstructions.node, skillInstructions],
+      [ReferenceInstructions.node, referenceInstructions],
       [Config.node, config],
       [Snapshot.node, Snapshot.noopLayer],
       [PluginSupervisor.node, pluginSupervisor],
@@ -150,11 +180,19 @@ describe("SessionRunnerLLM recorded", () => {
   it.effect("executes one recorded V2 prompt through the recorded HTTP transport", () =>
     Effect.gen(function* () {
       const agents = yield* AgentV2.Service
+      const catalog = yield* Catalog.Service
+      const hooks = yield* PluginHooks.Service
       yield* agents.transform((draft) =>
         draft.update(AgentV2.ID.make("build"), (agent) => {
           agent.mode = "primary"
         }),
       )
+      const pluginHost = host({
+        agent: agentHost(agents),
+        catalog: catalogHost(catalog),
+        session: { hook: (name, callback) => hooks.register("session", name, callback) },
+      })
+      yield* Effect.forEach(SystemPromptPlugin.Plugins, (plugin) => plugin.effect(pluginHost), { discard: true })
       const { db } = yield* Database.Service
       yield* db
         .insert(ProjectTable)

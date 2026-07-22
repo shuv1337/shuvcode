@@ -5,7 +5,7 @@ import { Pairing } from "@opencode-ai/core/pairing"
 import { PairingDeviceTable } from "@opencode-ai/core/pairing/sql"
 import { Database } from "@opencode-ai/core/database/database"
 import { DeviceCredential, DeviceName, type InvitationToken, RequestID } from "@opencode-ai/schema/pairing"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(Layer.merge(LayerNode.compile(Pairing.node), LayerNode.compile(Database.node)))

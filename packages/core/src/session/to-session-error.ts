@@ -1,4 +1,4 @@
-import { LLMError, ToolFailure } from "@opencode-ai/llm"
+import { LLMError, ToolFailure } from "@opencode-ai/ai"
 import { Tool } from "@opencode-ai/plugin/v2/effect/tool"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { PermissionV2 } from "../permission"

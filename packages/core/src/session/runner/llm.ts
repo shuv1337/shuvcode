@@ -1,108 +1,45 @@
 export * as SessionRunnerLLM from "./llm"
 
-import {
-  LLM,
-  LLMClient,
-  LLMError,
-  LLMEvent,
-  Message,
-  SystemPart,
-  isContextOverflowFailure,
-  type ProviderErrorEvent,
-} from "@opencode-ai/llm"
+import { LLMClient, LLMError, LLMEvent, isContextOverflowFailure, type ProviderErrorEvent } from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
-import { Money } from "@opencode-ai/schema/money"
 import { Cause, Effect, Exit, Fiber, FiberSet, Layer, Option, Semaphore, Stream } from "effect"
-import { AgentV2 } from "../../agent"
 import { Database } from "../../database/database"
 import { EventV2 } from "../../event"
-import { Location } from "../../location"
-import { ModelV2 } from "../../model"
 import { PermissionV2 } from "../../permission"
-import { Instructions } from "../../instructions/index"
-import { InstructionBuiltIns } from "../../instructions/builtins"
-import { InstructionDiscovery } from "../../instruction-discovery"
-import { SkillGuidance } from "../../skill/guidance"
-import { ReferenceGuidance } from "../../reference/guidance"
-import { McpGuidance } from "../../mcp/guidance"
-import { InstructionEntry } from "../instruction-entry"
 import { QuestionTool } from "../../tool/question"
-import { ToolRegistry } from "../../tool/registry"
 import { ToolOutputStore } from "../../tool-output-store"
 import { InstructionState } from "../instruction-state"
 import { SessionCompaction } from "../compaction"
+import { SessionContext } from "../context"
 import { SessionEvent } from "../event"
-import { SessionHistory } from "../history"
 import { SessionPending } from "../pending"
+import { SessionModelRequest } from "../model-request"
 import { SessionMessage } from "../message"
 import { SessionSchema } from "../schema"
 import { SessionStore } from "../store"
 import { SessionTitle } from "../title"
 import { Service } from "./index"
-import { SessionRunnerModel } from "./model"
 import { createLLMEventPublisher } from "./publish-llm-event"
-import { toLLMMessages } from "./to-llm-message"
-import { MAX_STEPS_PROMPT } from "./max-steps"
-import { SessionRunnerSystemPrompt } from "./system-prompt"
 import { Snapshot } from "../../snapshot"
-import { makeLocationNode } from "../../effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { llmClient } from "../../effect/app-node-platform"
-import { AgentNotFoundError, StepFailedError } from "../error"
+import { StepFailedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
-import { PluginSupervisor } from "../../plugin/supervisor"
-import { SessionModelHeaders } from "../model-headers"
-
-type StepTokens = {
-  readonly input: number
-  readonly output: number
-  readonly reasoning: number
-  readonly cache: { readonly read: number; readonly write: number }
-}
-
-// TODO(#35765): Use Copilot's reported billed amount once billing has a dedicated typed runtime contract.
-export function calculateCost(costs: ModelV2.Info["cost"], tokens: StepTokens) {
-  const context = tokens.input + tokens.cache.read + tokens.cache.write
-  const tier = costs
-    .filter((cost) => cost.tier?.type === "context" && context > cost.tier.size)
-    .toSorted((a, b) => (b.tier?.size ?? 0) - (a.tier?.size ?? 0))[0]
-  const cost = tier ?? costs.find((cost) => cost.tier === undefined)
-  if (!cost) return Money.USD.zero
-  return Money.USD.make(
-    (tokens.input * cost.input +
-      (tokens.output + tokens.reasoning) * cost.output +
-      tokens.cache.read * cost.cache.read +
-      tokens.cache.write * cost.cache.write) /
-      1_000_000,
-  )
-}
-
-/**
- * Runs one durable coding-agent Session until it settles. Each step reloads projected history,
- * materializes tools, makes one model request, and settles local calls before continuation.
- */
+import { SessionUsage } from "../usage"
 
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2.Service
     const llm = yield* LLMClient.Service
-    const agents = yield* AgentV2.Service
-    const tools = yield* ToolRegistry.Service
-    const models = yield* SessionRunnerModel.Service
     const store = yield* SessionStore.Service
-    const location = yield* Location.Service
-    const builtins = yield* InstructionBuiltIns.Service
-    const discovery = yield* InstructionDiscovery.Service
-    const skillGuidance = yield* SkillGuidance.Service
-    const referenceGuidance = yield* ReferenceGuidance.Service
-    const mcpGuidance = yield* McpGuidance.Service
-    const entries = yield* InstructionEntry.Service
+    const context = yield* SessionContext.Service
+    const modelRequests = yield* SessionModelRequest.Service
     const snapshots = yield* Snapshot.Service
     const db = (yield* Database.Service).db
     const compaction = yield* SessionCompaction.Service
     const title = yield* SessionTitle.Service
-    const plugins = yield* PluginSupervisor.Service
     // Title generation is a side effect of the first step; it must not delay step continuation.
     // Tracked per process so repeated wakes before the second user message arrives don't
     // re-fire a redundant LLM call; `SessionTitle` itself is idempotent based on durable history.
@@ -113,9 +50,6 @@ const layer = Layer.effect(
       if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
       return session
     })
-    const isCurrentLocation = (session: SessionSchema.Info) =>
-      session.location.directory === location.directory && session.location.workspaceID === location.workspaceID
-
     const failInterruptedTools = Effect.fn("SessionRunner.failInterruptedTools")(function* (
       sessionID: SessionSchema.ID,
     ) {
@@ -142,19 +76,6 @@ const layer = Layer.effect(
           (reason.defect instanceof PermissionV2.DeclinedError || reason.defect instanceof QuestionTool.CancelledError),
       )
 
-    const loadInstructions = (agent: AgentV2.Selection, sessionID: SessionSchema.ID) =>
-      Effect.all(
-        [
-          builtins.load(sessionID),
-          discovery.load(),
-          skillGuidance.load(agent),
-          referenceGuidance.load(),
-          mcpGuidance.load(agent),
-          entries.load(sessionID),
-        ],
-        { concurrency: "unbounded" },
-      ).pipe(Effect.map(Instructions.combine))
-
     const attemptStep = Effect.fn("SessionRunner.attemptStep")(function* (
       sessionID: SessionSchema.ID,
       promotion: SessionPending.Delivery | undefined,
@@ -162,55 +83,34 @@ const layer = Layer.effect(
       recoverOverflow?: typeof compaction.compact,
       assistantMessageID?: SessionMessage.ID,
     ) {
-      const session = yield* getSession(sessionID)
-      if (!isCurrentLocation(session)) return yield* Effect.interrupt
-      yield* plugins.flush
-      const agent = yield* agents.select(session.agent)
-      const agentInfo = agent.info
-      if (!agentInfo) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
+      const selected = yield* context.select(sessionID)
       // Establish what the model knows before admitting what the user said, so
       // a blocked first step leaves pending inputs untouched.
-      const instructions = yield* loadInstructions(agent, session.id)
-      yield* InstructionState.prepare(db, events, instructions, session.id)
+      yield* InstructionState.prepare(db, events, selected.instructions, selected.session.id)
       let currentStep = step
       if (promotion) {
         let promoted = 0
-        if (promotion === "steer") promoted = yield* SessionPending.promoteSteers(db, events, session.id)
+        if (promotion === "steer") promoted = yield* SessionPending.promoteSteers(db, events, selected.session.id)
         if (promotion === "queue") {
-          promoted += Number(yield* SessionPending.promoteNextQueued(db, events, session.id))
-          promoted += yield* SessionPending.promoteSteers(db, events, session.id)
+          promoted += Number(yield* SessionPending.promoteNextQueued(db, events, selected.session.id))
+          promoted += yield* SessionPending.promoteSteers(db, events, selected.session.id)
         }
         if (promoted > 0) currentStep = 1
       }
-      const resolved = yield* models.resolve(session)
+      const loaded = yield* context.load(selected)
+      const session = loaded.session
+      const agent = loaded.agent
+      const resolved = loaded.model
       const model = resolved.model
-      const providerMetadataKey = model.route.providerMetadataKey ?? model.provider
-      const history = yield* SessionHistory.entriesForRunner(db, session.id, instructions)
-      const context = history.entries.map((entry) => entry.message)
-      const compactionInput = { session, messages: context, model }
+      const compactionInput = { session, messages: loaded.messages, model, cost: resolved.cost }
       if (compaction.required(compactionInput) && !(yield* SessionPending.compaction(db, session.id))) {
         const compacted = yield* compaction.compact(compactionInput)
         if (compacted.status === "completed") return { _tag: "RestartAfterCompaction", step: currentStep } as const
         return yield* new StepFailedError({ error: compacted.error })
       }
-      const isLastStep = agentInfo.steps !== undefined && currentStep >= agentInfo.steps
-      const toolMaterialization = isLastStep ? undefined : yield* tools.materialize(agentInfo.permissions)
-      const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
-      const request = LLM.request({
-        model,
-        http: {
-          headers: SessionModelHeaders.make(session),
-        },
-        providerOptions: { openai: { promptCacheKey } },
-        system: [agentInfo.system ? agentInfo.system : SessionRunnerSystemPrompt.provider(model), history.initial]
-          .filter((part): part is string => part !== undefined && part.length > 0)
-          .map(SystemPart.make),
-        messages: [
-          ...toLLMMessages(context, resolved.ref, providerMetadataKey),
-          ...(isLastStep ? [Message.assistant(MAX_STEPS_PROMPT)] : []),
-        ],
-        tools: toolMaterialization?.definitions ?? [],
-        toolChoice: isLastStep ? "none" : undefined,
+      const prepared = yield* modelRequests.prepare({
+        context: loaded,
+        step: currentStep,
       })
       const toolFibers = yield* FiberSet.make<void, ToolOutputStore.Error>()
       const ownedToolFibers: Array<Fiber.Fiber<void, ToolOutputStore.Error>> = []
@@ -222,7 +122,7 @@ const layer = Layer.effect(
         // The selected catalog identity, not model.id: route-level ids are provider API
         // model ids (for example gpt-5.5-fast resolves to api id gpt-5.5).
         model: resolved.ref,
-        providerMetadataKey,
+        providerMetadataKey: model.route.providerMetadataKey ?? model.provider,
         snapshot: startSnapshot,
         assistantMessageID,
       })
@@ -232,7 +132,7 @@ const layer = Layer.effect(
       const serialized = <A, E, R>(effect: Effect.Effect<A, E, R>) => publication.withPermit(effect)
       const publish = (event: LLMEvent, error?: SessionError.Error) => serialized(publisher.publish(event, error))
       let overflowFailure: ProviderErrorEvent | undefined
-      const providerStream = llm.stream(request).pipe(
+      const providerStream = llm.stream(prepared.request).pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
             if (overflowFailure || publisher.hasProviderError()) return
@@ -243,14 +143,14 @@ const layer = Layer.effect(
               }
             }
             yield* publish(event)
+            if (LLMEvent.is.toolInputError(event)) {
+              if (prepared.resolveToolCall(event.name).type === "settle") needsContinuation = true
+              return
+            }
             if (event.type !== "tool-call" || event.providerExecuted) return
-            if (!toolMaterialization) {
-              yield* serialized(
-                publisher.failUnsettledTools({
-                  type: "tool.execution",
-                  message: "Tools are disabled after the maximum agent steps",
-                }),
-              )
+            const tool = prepared.resolveToolCall(event.name)
+            if (tool.type === "reject") {
+              yield* serialized(publisher.failUnsettledTools(tool.error))
               return
             }
             needsContinuation = true
@@ -258,7 +158,7 @@ const layer = Layer.effect(
             ownedToolFibers.push(
               yield* Effect.uninterruptibleMask((restore) =>
                 restore(
-                  toolMaterialization.settle({
+                  tool.settle({
                     sessionID: session.id,
                     agent: agent.id,
                     messageID: assistantMessageID,
@@ -295,29 +195,31 @@ const layer = Layer.effect(
       )
 
       const stepUsage = (settlement: NonNullable<ReturnType<typeof publisher.stepSettlement>>) => ({
-        cost: calculateCost(resolved.cost, settlement.tokens),
+        cost: SessionUsage.calculateCost(resolved.cost, settlement.tokens),
         tokens: settlement.tokens,
       })
 
-      // Captures the end snapshot, diffs it against the step's start, and durably ends the
-      // assistant step.
+      const captureStepEnd = Effect.fnUntraced(function* () {
+        const snapshot = yield* snapshots.capture()
+        const files =
+          startSnapshot && snapshot
+            ? yield* snapshots
+                .files({ from: startSnapshot, to: snapshot })
+                .pipe(Effect.catch(() => Effect.succeed(undefined)))
+            : undefined
+        return { snapshot, files }
+      })
+
       const publishStepEnd = (settlement: NonNullable<ReturnType<typeof publisher.stepSettlement>>) =>
         Effect.gen(function* () {
-          const endSnapshot = yield* snapshots.capture()
-          const files =
-            startSnapshot && endSnapshot
-              ? yield* snapshots
-                  .files({ from: startSnapshot, to: endSnapshot })
-                  .pipe(Effect.catch(() => Effect.succeed(undefined)))
-              : undefined
+          const end = yield* captureStepEnd()
           yield* serialized(
             events.publish(SessionEvent.Step.Ended, {
               sessionID: session.id,
               assistantMessageID: yield* publisher.startAssistant(),
               finish: settlement.finish,
               ...stepUsage(settlement),
-              snapshot: endSnapshot,
-              files,
+              ...end,
             }),
           )
         })
@@ -337,8 +239,8 @@ const layer = Layer.effect(
             recoverOverflow &&
             !publisher.hasRetryEvidence() &&
             isContextOverflowFailure(overflowFailure ?? streamFailure) &&
-            (yield* restore(recoverOverflow({ session, messages: context, model }))).status ===
-              "completed"
+            (yield* restore(recoverOverflow({ session, messages: loaded.messages, model, cost: resolved.cost })))
+              .status === "completed"
           )
             return { _tag: "RestartAfterOverflowCompaction", step: currentStep } as const
 
@@ -349,11 +251,7 @@ const layer = Layer.effect(
           const llmFailure = streamFailure instanceof LLMError ? streamFailure : undefined
           if (llmFailure && !publisher.hasProviderError()) {
             const error = toSessionError(llmFailure)
-            if (
-              SessionRunnerRetry.isRetryable(llmFailure) &&
-              !publisher.hasRetryEvidence() &&
-              (agentInfo.steps === undefined || currentStep < agentInfo.steps)
-            ) {
+            if (SessionRunnerRetry.isRetryable(llmFailure) && !publisher.hasRetryEvidence()) {
               return yield* new SessionRunnerRetry.RetryableFailure({
                 cause: llmFailure,
                 assistantMessageID: yield* publisher.startAssistant(),
@@ -432,8 +330,15 @@ const layer = Layer.effect(
           const stepFailure = publisher.stepFailure()
           const stepSettlement = publisher.stepSettlement()
           if (stepSettlement && !stepFailure) yield* publishStepEnd(stepSettlement)
-          if (stepFailure)
-            yield* serialized(publisher.publishStepFailure(stepSettlement ? stepUsage(stepSettlement) : undefined))
+          if (stepFailure) {
+            const end = yield* captureStepEnd()
+            yield* serialized(
+              publisher.publishStepFailure({
+                ...(stepSettlement ? stepUsage(stepSettlement) : {}),
+                ...end,
+              }),
+            )
+          }
 
           if (stream._tag === "Failure") return yield* Effect.failCause(stream.cause)
           if (userDeclined) return yield* Effect.interrupt
@@ -469,7 +374,7 @@ const layer = Layer.effect(
           Effect.tapError((error) =>
             error instanceof SessionRunnerRetry.RetryableFailure
               ? Effect.sync(() => {
-                  currentStep = error.step + 1
+                  currentStep = error.step
                   assistantMessageID = error.assistantMessageID
                   currentPromotion = undefined
                 })
@@ -486,7 +391,11 @@ const layer = Layer.effect(
               .pipe(Effect.andThen(Effect.fail(error.cause)))
           }),
         )
-        if (attempt._tag === "Completed") return { needsContinuation: attempt.needsContinuation, step: attempt.step }
+        if (attempt._tag === "Completed")
+          return {
+            needsContinuation: attempt.needsContinuation,
+            step: attempt.step,
+          }
         if (attempt._tag === "RestartAfterOverflowCompaction") recoverOverflow = undefined
         yield* Effect.yieldNow
         currentPromotion = undefined
@@ -518,7 +427,9 @@ const layer = Layer.effect(
               yield* events.publish(SessionEvent.Compaction.Failed, {
                 sessionID,
                 reason: "manual",
-                error: { type: "compaction.failed", message: Cause.pretty(compacted.cause) },
+                error: Cause.hasInterruptsOnly(compacted.cause)
+                  ? { type: "aborted", message: "Compaction cancelled" }
+                  : { type: "compaction.failed", message: Cause.pretty(compacted.cause) },
                 inputID: unsettled.id,
               })
             return yield* Effect.failCause(compacted.cause)
@@ -583,21 +494,12 @@ export const node = makeLocationNode({
   deps: [
     EventV2.node,
     llmClient,
-    AgentV2.node,
-    ToolRegistry.node,
-    SessionRunnerModel.node,
+    SessionContext.node,
+    SessionModelRequest.node,
     SessionStore.node,
-    Location.node,
-    InstructionBuiltIns.node,
-    InstructionDiscovery.node,
-    SkillGuidance.node,
-    ReferenceGuidance.node,
-    McpGuidance.node,
-    InstructionEntry.node,
     SessionCompaction.node,
     SessionTitle.node,
     Snapshot.node,
     Database.node,
-    PluginSupervisor.node,
   ],
 })

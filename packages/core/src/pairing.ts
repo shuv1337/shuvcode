@@ -4,11 +4,11 @@ import { asc, eq, or } from "drizzle-orm"
 import { timingSafeEqual } from "node:crypto"
 import { Context, Data, Duration, Effect, Layer, Schema } from "effect"
 import { Pairing } from "@opencode-ai/schema/pairing"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { Hash } from "@opencode-ai/util/hash"
 import { Database } from "./database/database"
-import { makeGlobalNode } from "./effect/app-node"
 import { KeyedMutex } from "./effect/keyed-mutex"
 import { PairingDeviceTable } from "./pairing/sql"
-import { Hash } from "./util/hash"
 
 const DEFAULT_TTL = Duration.minutes(3)
 const CAPACITY = 1_024

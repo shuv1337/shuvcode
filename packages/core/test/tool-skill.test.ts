@@ -3,7 +3,7 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { PermissionV2 } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
@@ -12,9 +12,11 @@ import { SkillTool } from "@opencode-ai/core/tool/skill"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { tmpdir } from "./fixture/tmpdir"
+import { Image } from "@opencode-ai/core/image"
 import { it } from "./lib/effect"
-import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
-import { FSUtil } from "@opencode-ai/core/fs-util"
+import { imagePassthrough } from "./lib/image"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
 
 const skillToolNode = makeLocationNode({
@@ -90,6 +92,7 @@ describe("SkillTool", () => {
               [PermissionV2.node, permission],
               [SkillV2.node, skills],
               [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
+              [Image.node, imagePassthrough],
             ],
           )
 

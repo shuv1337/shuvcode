@@ -3,12 +3,12 @@ export * as ToolOutputStore from "./tool-output-store"
 import path from "path"
 import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { Config } from "./config"
-import { FSUtil } from "./fs-util"
-import { Global } from "./global"
-import { makeGlobalNode, makeLocationNode } from "./effect/app-node"
+import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Global } from "@opencode-ai/util/global"
+import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { SessionSchema } from "./session/schema"
 import { Identifier } from "./util/identifier"
-import type { ToolOutput } from "@opencode-ai/llm"
+import type { ToolOutput } from "@opencode-ai/ai"
 
 export const MAX_LINES = 2_000
 export const MAX_BYTES = 50 * 1024

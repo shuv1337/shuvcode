@@ -1,116 +1,237 @@
 import { RGBA } from "@opentui/core"
+import { oklchToHex, rgbToOklch } from "@opencode-ai/ui/theme/color"
 import type { Theme, ThemeJson } from "../index"
-import type { ThemeFile } from "./index"
+import { DEFAULT_CATEGORICAL, DEFAULT_THEME } from "./defaults"
+import type { FileThemeDefinition, Mode, ThemeFile } from "./index"
+import { HueStep } from "./schema"
 
 type ThemeColor = Exclude<keyof Theme, "thinkingOpacity" | "_hasSelectedListItemText">
+type ChromaticHue = "red" | "orange" | "yellow" | "green" | "cyan" | "blue" | "purple"
+type V1HueToken = "secondary" | "accent" | "success" | "warning" | "primary" | "error" | "info"
+
+const chromaticHues: readonly ChromaticHue[] = ["red", "orange", "yellow", "green", "cyan", "blue", "purple"]
+const categoricalTokens: readonly V1HueToken[] = ["secondary", "accent", "success", "warning", "primary", "error"]
+const minimumChroma = 0.03
+const lightThreshold = 0.6
 
 export function migrateV1(theme: ThemeJson): ThemeFile {
+  const light = resolveV1(theme, "light")
+  const dark = resolveV1(theme, "dark")
+  if (light.background.a > 0 && dark.background.a > 0 && light.background.equals(dark.background)) {
+    const lightMode = detectMode(light)
+    const darkMode = detectMode(dark)
+    if (lightMode === darkMode) {
+      if (lightMode === "light") return { version: 2, standalone: true, light: migrateMode(light, "light") }
+      return { version: 2, standalone: true, dark: migrateMode(dark, "dark") }
+    }
+  }
   return {
     version: 2,
-    light: migrateMode(resolveV1(theme, "light")),
-    dark: migrateMode(resolveV1(theme, "dark")),
+    standalone: true,
+    light: migrateMode(light, "light"),
+    dark: migrateMode(dark, "dark"),
   }
 }
 
-function migrateMode(theme: Theme): ThemeFile["light"] {
+function detectMode(theme: Theme): Mode {
+  return luminance(theme.text) > luminance(theme.background) ? "dark" : "light"
+}
+
+function luminance(color: RGBA) {
+  return 0.299 * color.r + 0.587 * color.g + 0.114 * color.b
+}
+
+function migrateMode(theme: Theme, mode: Mode): FileThemeDefinition {
   const color = (key: ThemeColor) => hex(theme[key])
   const selected = hex(selectedForeground(theme, theme.primary))
   const destructive = hex(selectedForeground(theme, theme.error))
+  const hues = inferHues(theme, mode)
+  const categorical = categoricalTokens.flatMap((token) => {
+    const hue = hues.byToken[token]
+    return hue ? [hue] : []
+  })
+  const uniqueCategorical = categorical.filter((hue, index) => categorical.indexOf(hue) === index)
+  const text = mode === "light" ? "$hue.neutral.800" : "$hue.neutral.200"
+  const textMuted = mode === "light" ? "$hue.neutral.600" : "$hue.neutral.400"
+  const primary = mode === "light" ? "$hue.interactive.800" : "$hue.interactive.200"
+  const background = mode === "light" ? "$hue.neutral.200" : "$hue.neutral.800"
+  const backgroundPanel = mode === "light" ? "$hue.neutral.300" : "$hue.neutral.700"
+  const backgroundMenu = mode === "light" ? "$hue.neutral.400" : "$hue.neutral.600"
 
   return {
-    hue: { accent: accentScale(theme.accent) },
-    color: {
-      text: {
-        default: color("text"),
-        subdued: color("textMuted"),
-        action: {
-          primary: { default: selected },
-          secondary: {
-            default: color("text"),
-            $hovered: color("text"),
-            $pressed: color("text"),
-            $selected: color("text"),
-            $focused: color("text"),
-            $disabled: color("textMuted"),
-          },
-          destructive: { default: destructive },
+    hue: {
+      gray: neutralScale(theme, mode),
+      ...Object.fromEntries(
+        chromaticHues.map((name) => {
+          const match = hues.byHue[name]
+          return [name, match ? hueScale(match.color, mode) : "$hue.gray"]
+        }),
+      ),
+      accent: ambiguous(theme.accent) ? "$hue.gray" : hueScale(theme.accent, mode),
+      interactive: ambiguous(theme.primary) ? "$hue.gray" : hueScale(theme.primary, mode),
+      neutral: "$hue.gray",
+    },
+    categorical: uniqueCategorical.length ? uniqueCategorical : DEFAULT_CATEGORICAL,
+    text: {
+      default: text,
+      subdued: textMuted,
+      action: {
+        primary: {
+          default: "$text.default",
+          $disabled: textMuted,
+          $focused: selected,
+          $selected: primary,
         },
-        feedback: {
-          error: { default: color("error") },
-          warning: { default: color("warning") },
-          success: { default: color("success") },
-          info: { default: color("info") },
-        },
+        destructive: { default: destructive, $disabled: textMuted },
       },
-      background: {
-        default: color("background"),
-        action: {
-          primary: { default: color("primary") },
-          secondary: {
-            default: color("backgroundMenu"),
-            $hovered: color("backgroundElement"),
-            $pressed: color("backgroundElement"),
-            $selected: color("backgroundMenu"),
-            $focused: color("backgroundElement"),
-            $disabled: color("backgroundMenu"),
-          },
-          destructive: { default: color("error") },
-        },
+      formfield: {
+        default: text,
+        $hovered: primary,
+        $focused: primary,
+        $pressed: primary,
+        $disabled: textMuted,
+        $selected: primary,
       },
-      border: { default: color("border") },
-      scrollbar: { default: color("borderActive") },
-      diff: {
-        text: {
-          added: color("diffAdded"),
-          removed: color("diffRemoved"),
-          context: color("diffContext"),
-          hunkHeader: color("diffHunkHeader"),
-        },
-        background: {
-          added: color("diffAddedBg"),
-          removed: color("diffRemovedBg"),
-          context: color("diffContextBg"),
-        },
-        highlight: { added: color("diffHighlightAdded"), removed: color("diffHighlightRemoved") },
-        lineNumber: {
-          text: color("diffLineNumber"),
-          background: {
-            added: color("diffAddedLineNumberBg"),
-            removed: color("diffRemovedLineNumberBg"),
-          },
-        },
-      },
-      syntax: {
-        comment: color("syntaxComment"),
-        keyword: color("syntaxKeyword"),
-        function: color("syntaxFunction"),
-        variable: color("syntaxVariable"),
-        string: color("syntaxString"),
-        number: color("syntaxNumber"),
-        type: color("syntaxType"),
-        operator: color("syntaxOperator"),
-        punctuation: color("syntaxPunctuation"),
-      },
-      markdown: {
-        text: color("markdownText"),
-        heading: color("markdownHeading"),
-        link: color("markdownLink"),
-        linkText: color("markdownLinkText"),
-        code: color("markdownCode"),
-        blockQuote: color("markdownBlockQuote"),
-        emphasis: color("markdownEmph"),
-        strong: color("markdownStrong"),
-        horizontalRule: color("markdownHorizontalRule"),
-        listItem: color("markdownListItem"),
-        listEnumeration: color("markdownListEnumeration"),
-        image: color("markdownImage"),
-        imageText: color("markdownImageText"),
-        codeBlock: color("markdownCodeBlock"),
+      feedback: {
+        error: { default: color("error") },
+        warning: { default: color("warning") },
+        success: { default: color("success") },
+        info: { default: color("info") },
       },
     },
-    "@context:elevated": { color: { background: { default: color("backgroundPanel") } } },
-    "@context:overlay": { color: { background: { default: color("backgroundMenu") } } },
+    background: {
+      default: background,
+      surface: {
+        offset: backgroundPanel,
+        overlay: backgroundMenu,
+      },
+      action: {
+        primary: { default: "transparent", $hovered: backgroundPanel, $focused: primary, $selected: "transparent" },
+        destructive: { default: color("error") },
+      },
+      formfield: {
+        default: "$background.default",
+      },
+      feedback: {
+        error: { default: "$background.default" },
+        warning: { default: "$background.default" },
+        success: { default: "$background.default" },
+        info: { default: "$background.default" },
+      },
+    },
+    border: { default: color("border") },
+    scrollbar: { default: color("borderActive") },
+    diff: {
+      text: {
+        added: color("diffAdded"),
+        removed: color("diffRemoved"),
+        context: color("diffContext"),
+        hunkHeader: color("diffHunkHeader"),
+      },
+      background: {
+        added: color("diffAddedBg"),
+        removed: color("diffRemovedBg"),
+        context: color("diffContextBg"),
+      },
+      highlight: { added: color("diffHighlightAdded"), removed: color("diffHighlightRemoved") },
+      lineNumber: {
+        text: color("diffLineNumber"),
+        background: {
+          added: color("diffAddedLineNumberBg"),
+          removed: color("diffRemovedLineNumberBg"),
+        },
+      },
+    },
+    syntax: {
+      comment: color("syntaxComment"),
+      keyword: color("syntaxKeyword"),
+      function: color("syntaxFunction"),
+      variable: color("syntaxVariable"),
+      string: color("syntaxString"),
+      number: color("syntaxNumber"),
+      type: color("syntaxType"),
+      operator: color("syntaxOperator"),
+      punctuation: color("syntaxPunctuation"),
+    },
+    markdown: {
+      text: color("markdownText"),
+      heading: color("markdownHeading"),
+      link: color("markdownLink"),
+      linkText: color("markdownLinkText"),
+      code: color("markdownCode"),
+      blockQuote: color("markdownBlockQuote"),
+      emphasis: color("markdownEmph"),
+      strong: color("markdownStrong"),
+      horizontalRule: color("markdownHorizontalRule"),
+      listItem: color("markdownListItem"),
+      listEnumeration: color("markdownListEnumeration"),
+      image: color("markdownImage"),
+      imageText: color("markdownImageText"),
+      codeBlock: color("markdownCodeBlock"),
+    },
+    "@context:elevated": {
+      background: {
+        default: "$background.surface.offset",
+        action: { primary: { $hovered: "$background.surface.overlay" } },
+      },
+    },
+    "@context:overlay": { background: { default: "$background.surface.overlay" } },
   }
+}
+
+function inferHues(theme: Theme, mode: "light" | "dark") {
+  const colors: readonly [V1HueToken, RGBA][] = [
+    ["accent", theme.accent],
+    ["success", theme.success],
+    ["warning", theme.warning],
+    ["primary", theme.primary],
+    ["error", theme.error],
+    ["info", theme.info],
+    ["secondary", theme.secondary],
+  ]
+  return colors.reduce<{
+    byHue: Partial<Record<ChromaticHue, { color: RGBA; distance: number }>>
+    byToken: Partial<Record<V1HueToken, ChromaticHue>>
+  }>(
+    (result, [token, color]) => {
+      const nearest = inferHue(color, mode)
+      if (!nearest) return result
+      const current = result.byHue[nearest.name]
+      return {
+        byHue:
+          current && current.distance <= nearest.distance
+            ? result.byHue
+            : { ...result.byHue, [nearest.name]: { color, distance: nearest.distance } },
+        byToken: { ...result.byToken, [token]: nearest.name },
+      }
+    },
+    { byHue: {}, byToken: {} },
+  )
+}
+
+function inferHue(color: RGBA, mode: Mode) {
+  const value = toOklch(color)
+  if (ambiguous(color, value.c)) return
+  const anchor = inferenceAnchor(value.l)
+  return chromaticHues
+    .map((name) => ({
+      name,
+      distance: hueDistance(value.h, toOklch(RGBA.fromHex(DEFAULT_THEME[mode].hue[name][anchor])).h),
+    }))
+    .sort((first, second) => first.distance - second.distance)[0]
+}
+
+function inferenceAnchor(lightness: number): HueStep {
+  return lightness >= lightThreshold ? 300 : 700
+}
+
+function hueDistance(first: number, second: number) {
+  const difference = Math.abs(first - second)
+  return Math.min(difference, 360 - difference)
+}
+
+function ambiguous(color: RGBA, chroma = toOklch(color).c) {
+  return color.toInts()[3] === 0 || chroma < minimumChroma
 }
 
 function resolveV1(theme: ThemeJson, mode: "dark" | "light"): Theme {
@@ -159,28 +280,77 @@ function selectedForeground(theme: Theme, background: RGBA) {
     : RGBA.fromInts(255, 255, 255)
 }
 
-function accentScale(accent: RGBA) {
-  return {
-    100: mix(accent, 255, 0.66),
-    200: mix(accent, 255, 0.33),
-    300: hex(accent),
-    400: mix(accent, 0, 0.1),
-    500: mix(accent, 0, 0.2),
-    600: mix(accent, 0, 0.3),
-    700: mix(accent, 0, 0.4),
-    800: mix(accent, 0, 0.5),
-    900: mix(accent, 0, 0.6),
-  }
+function hueScale(color: RGBA, mode: "light" | "dark") {
+  const value = toOklch(color)
+  const anchor = mode === "light" ? 800 : 200
+  const endpoint = mode === "light" ? Math.max(0.97, value.l) : Math.min(0.18, value.l)
+  const alpha = color.toInts()[3]
+  return Object.fromEntries(
+    HueStep.literals.map((step) => {
+      if (step === anchor) return [step, hex(color)]
+      const progress = mode === "light" ? (anchor - step) / (anchor - 100) : (step - anchor) / (900 - anchor)
+      const generated = oklchToHex({
+        l: value.l + (endpoint - value.l) * progress,
+        c: value.c * (1 - progress * 0.5),
+        h: value.h,
+      })
+      return [step, alpha === 255 ? generated : `${generated}${byte(alpha)}`]
+    }),
+  ) as Record<HueStep, string>
 }
 
-function mix(color: RGBA, target: number, amount: number) {
-  const [r, g, b, a] = color.toInts()
-  return hexInts(
-    Math.round(r + (target - r) * amount),
-    Math.round(g + (target - g) * amount),
-    Math.round(b + (target - b) * amount),
-    a,
+function neutralScale(theme: Theme, mode: "light" | "dark") {
+  const anchors = neutralAnchors(theme, mode)
+  return Object.fromEntries(
+    HueStep.literals.map((step) => {
+      const exact = anchors.find((anchor) => anchor.step === step)
+      if (exact) return [step, hex(exact.color)]
+      const first = anchors[0]!
+      const last = anchors.at(-1)!
+      const [lower, upper] =
+        step < first.step
+          ? [first, anchors[1]!]
+          : step > last.step
+            ? [anchors.at(-2)!, last]
+            : [anchors.filter((anchor) => anchor.step < step).at(-1)!, anchors.find((anchor) => anchor.step > step)!]
+      return [step, interpolate(lower.color, upper.color, (step - lower.step) / (upper.step - lower.step))]
+    }),
+  ) as Record<HueStep, string>
+}
+
+function neutralAnchors(theme: Theme, mode: "light" | "dark") {
+  const light: { step: HueStep; color: RGBA }[] = [
+    { step: 200, color: theme.background },
+    { step: 300, color: theme.backgroundPanel },
+    { step: 400, color: theme.backgroundElement || theme.backgroundMenu },
+    { step: 600, color: theme.textMuted },
+    { step: 800, color: theme.text },
+  ]
+  if (mode === "light") return light
+  return light.toReversed().map((source) => ({ ...source, step: (1000 - source.step) as HueStep }))
+}
+
+function interpolate(first: RGBA, second: RGBA, amount: number) {
+  const start = toOklch(first)
+  const end = toOklch(second)
+  const startHue = Number.isFinite(start.h) ? start.h : Number.isFinite(end.h) ? end.h : 0
+  const endHue = Number.isFinite(end.h) ? end.h : startHue
+  const hue = ((((endHue - startHue) % 360) + 540) % 360) - 180
+  const generated = oklchToHex({
+    l: start.l + (end.l - start.l) * amount,
+    c: start.c + (end.c - start.c) * amount,
+    h: startHue + hue * amount,
+  })
+  const alpha = Math.max(
+    0,
+    Math.min(255, Math.round(first.toInts()[3] + (second.toInts()[3] - first.toInts()[3]) * amount)),
   )
+  return alpha === 255 ? generated : `${generated}${byte(alpha)}`
+}
+
+function toOklch(color: RGBA) {
+  const [red, green, blue] = color.toInts()
+  return rgbToOklch(red / 255, green / 255, blue / 255)
 }
 
 function hex(color: RGBA) {
@@ -188,15 +358,32 @@ function hex(color: RGBA) {
 }
 
 function hexInts(r: number, g: number, b: number, a: number) {
-  const byte = (value: number) => value.toString(16).padStart(2, "0")
   return `#${byte(r)}${byte(g)}${byte(b)}${a === 255 ? "" : byte(a)}`
+}
+
+function byte(value: number) {
+  return value.toString(16).padStart(2, "0")
 }
 
 function ansi(code: number) {
   if (code < 16) {
     const colors = [
-      "#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0",
-      "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+      "#000000",
+      "#800000",
+      "#008000",
+      "#808000",
+      "#000080",
+      "#800080",
+      "#008080",
+      "#c0c0c0",
+      "#808080",
+      "#ff0000",
+      "#00ff00",
+      "#ffff00",
+      "#0000ff",
+      "#ff00ff",
+      "#00ffff",
+      "#ffffff",
     ]
     return RGBA.fromHex(colors[code] ?? "#000000")
   }

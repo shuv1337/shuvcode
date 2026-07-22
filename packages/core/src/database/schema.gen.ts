@@ -88,6 +88,14 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`kv\` (
+          \`key\` text PRIMARY KEY,
+          \`value\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`pairing_device\` (
           \`id\` text PRIMARY KEY,
           \`request_id\` text NOT NULL,

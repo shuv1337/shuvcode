@@ -1,5 +1,5 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import { Global } from "@opencode-ai/core/global"
+import { Global } from "@opencode-ai/util/global"
 import { Effect } from "effect"
 import { expect, test } from "bun:test"
 import path from "path"
@@ -131,11 +131,16 @@ test("updates a config draft while preserving JSONC comments", async () => {
         const service = yield* Config.Service
         return yield* service.update((draft) => {
           draft.prompt = { paste: "compact" }
+          draft.mini = { thinking: "hide", shell_output: "hide", turn_summary: "hide", mono: true }
         })
       }),
     )
 
-    expect(config).toEqual({ animations: true, prompt: { paste: "compact" } })
+    expect(config).toEqual({
+      animations: true,
+      prompt: { paste: "compact" },
+      mini: { thinking: "hide", shell_output: "hide", turn_summary: "hide", mono: true },
+    })
     expect(await Bun.file(path.join(directory, "cli.json")).text()).toContain("// Keep this comment")
   } finally {
     await Bun.$`rm -rf ${directory}`
