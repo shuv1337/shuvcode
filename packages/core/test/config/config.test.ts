@@ -419,6 +419,28 @@ describe("Config", () => {
     }),
   )
 
+  it.effect("migrates v1 interleaved fields to compatibility", () =>
+    Effect.sync(() => {
+      const migrated = ConfigMigrateV1.migrate({
+        provider: {
+          custom: {
+            models: {
+              object: { interleaved: { field: "vendor_reasoning" } },
+              string: { interleaved: "reasoning_text" },
+              boolean: { interleaved: true },
+            },
+          },
+        },
+      })
+
+      expect(migrated.providers?.custom?.models?.object?.compatibility).toEqual({
+        reasoningField: "vendor_reasoning",
+      })
+      expect(migrated.providers?.custom?.models?.string?.compatibility).toEqual({ reasoningField: "reasoning_text" })
+      expect(migrated.providers?.custom?.models?.boolean?.compatibility).toBeUndefined()
+    }),
+  )
+
   it.effect("migrates v1 command configuration", () =>
     Effect.sync(() => {
       expect(

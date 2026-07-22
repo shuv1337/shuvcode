@@ -163,6 +163,8 @@ export type SessionMessageProviderState7 = { [x: string]: any }
 
 export type EventLogSynced = { type: "log.synced"; aggregateID: string; seq?: number }
 
+export type ModelReasoningField = "reasoning" | "reasoning_content" | "reasoning_text" | (string & {})
+
 export type ModelCapabilities = { tools: boolean; input: Array<string>; output: Array<string> }
 
 export type ModelVariant = {
@@ -1094,7 +1096,7 @@ export type TuiCommandExecute = {
       | "prompt.clear"
       | "prompt.submit"
       | "agent.cycle"
-      | string
+      | (string & {})
   }
 }
 
@@ -1402,6 +1404,8 @@ export type SessionToolFailed = {
     resultState?: SessionMessageProviderState7
   }
 }
+
+export type ModelCompatibility = { reasoningField?: ModelReasoningField }
 
 export type ModelCost = {
   tier?: { type: "context"; size: number }
@@ -1893,6 +1897,7 @@ export type ModelInfo = {
   providerID: string
   family?: string
   name: string
+  compatibility?: ModelCompatibility
   package?: string
   settings?: { [x: string]: JsonValue }
   headers?: { [x: string]: string }

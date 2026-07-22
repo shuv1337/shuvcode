@@ -92,6 +92,45 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("writes reasoning to a configured custom field on every assistant message", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
+        LLM.request({
+          model: Model.update(model, { compatibility: { reasoningField: "vendor_reasoning" } }),
+          messages: [
+            Message.assistant([
+              {
+                type: "reasoning",
+                text: "thinking",
+                providerMetadata: { openai: { reasoningField: "reasoning" } },
+              },
+              { type: "text", text: "Hello" },
+            ]),
+            Message.assistant("Done"),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        { role: "assistant", content: "Hello", vendor_reasoning: "thinking" },
+        { role: "assistant", content: "Done", vendor_reasoning: "" },
+      ])
+    }),
+  )
+
+  it.effect("rejects reasoning fields that conflict with assistant message fields", () =>
+    Effect.gen(function* () {
+      const error = yield* LLMClient.prepare(
+        LLM.request({
+          model: Model.update(model, { compatibility: { reasoningField: "content" } }),
+          messages: [Message.assistant([{ type: "reasoning", text: "thinking" }])],
+        }),
+      ).pipe(Effect.flip)
+
+      expect(error.message).toContain("reserved field content")
+    }),
+  )
+
   it.effect("maps OpenAI provider options to Chat options", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
@@ -567,6 +606,35 @@ describe("OpenAI Chat route", () => {
         )
         expect(replay.body.messages).toEqual([{ role: "assistant", content: "Hello", [field]: "thinking" }])
       }
+    }),
+  )
+
+  it.effect("parses and replays a configured custom reasoning field", () =>
+    Effect.gen(function* () {
+      const custom = Model.update(model, { compatibility: { reasoningField: "vendor_reasoning" } })
+      const response = yield* LLMClient.generate(LLM.updateRequest(request, { model: custom })).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents(
+              { choices: [{ delta: { vendor_reasoning: "thinking" } }] },
+              { choices: [{ delta: { content: "Hello" } }] },
+              { choices: [{ delta: {}, finish_reason: "stop" }] },
+            ),
+          ),
+        ),
+      )
+
+      expect(response.reasoning).toBe("thinking")
+      expect(response.message.content.find((part) => part.type === "reasoning")?.providerMetadata).toEqual({
+        openai: { reasoningField: "vendor_reasoning" },
+      })
+
+      const replay = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
+        LLM.request({ model: custom, messages: [response.message] }),
+      )
+      expect(replay.body.messages).toEqual([
+        { role: "assistant", content: "Hello", vendor_reasoning: "thinking" },
+      ])
     }),
   )
 
