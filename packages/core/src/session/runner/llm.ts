@@ -163,16 +163,7 @@ const layer = Layer.effect(
                     agent: agent.id,
                     messageID: assistantMessageID,
                     call: event,
-                    progress: (update) =>
-                      serialized(
-                        events.publish(SessionEvent.Tool.Progress, {
-                          sessionID: session.id,
-                          assistantMessageID,
-                          callID: event.id,
-                          structured: { ...update.structured },
-                          content: [...update.content],
-                        }),
-                      ),
+                    progress: (update) => serialized(publisher.progress(event.id, update)),
                   }),
                 ).pipe(
                   Effect.flatMap((settlement) =>

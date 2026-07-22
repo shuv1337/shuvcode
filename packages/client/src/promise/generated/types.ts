@@ -1387,24 +1387,6 @@ export type SessionToolCalled = {
   }
 }
 
-export type SessionToolFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.tool.failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    callID: string
-    error: SessionStructuredError
-    result?: any
-    executed: boolean
-    resultState?: SessionMessageProviderState7
-  }
-}
-
 export type ModelCompatibility = { reasoningField?: ModelReasoningField }
 
 export type ModelCost = {
@@ -1851,22 +1833,6 @@ export type SessionMessageToolStateError = {
   result?: JsonValue
 }
 
-export type SessionToolProgress = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.tool.progress"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: {
-    sessionID: string
-    assistantMessageID: string
-    callID: string
-    structured: { [x: string]: any }
-    content: Array<LLMToolContent>
-  }
-}
-
 export type SessionToolSuccess = {
   id: string
   created: number
@@ -1883,6 +1849,41 @@ export type SessionToolSuccess = {
     result?: any
     executed: boolean
     resultState?: SessionMessageProviderState6
+  }
+}
+
+export type SessionToolFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tool.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    error: SessionStructuredError
+    content?: [LLMToolContent, ...Array<LLMToolContent>]
+    metadata?: { [x: string]: any }
+    result?: any
+    executed: boolean
+    resultState?: SessionMessageProviderState7
+  }
+}
+
+export type SessionToolProgress = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tool.progress"
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    callID: string
+    structured: { [x: string]: any }
+    content: Array<LLMToolContent>
   }
 }
 
@@ -2224,7 +2225,6 @@ export type SessionEventDurable =
   | SessionToolInputStarted
   | SessionToolInputEnded
   | SessionToolCalled
-  | SessionToolProgress
   | SessionToolSuccess
   | SessionToolFailed
   | SessionRetryScheduled

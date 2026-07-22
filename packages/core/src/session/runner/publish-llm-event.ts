@@ -11,6 +11,7 @@ import { AgentV2 } from "../../agent"
 import { Snapshot } from "../../snapshot"
 import { RelativePath } from "../../schema"
 import { SessionUsage } from "../usage"
+import type { ToolRegistry } from "../../tool/registry"
 
 type Input = {
   readonly sessionID: SessionSchema.ID
@@ -54,8 +55,17 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       called: boolean
       settled: boolean
       providerExecuted: boolean
+      progress?: ToolRegistry.Progress
     }
   >()
+  const failureSnapshot = (tool: { readonly progress?: ToolRegistry.Progress }) => {
+    if (!tool.progress) return {}
+    const first = tool.progress.content[0]
+    return {
+      ...(first === undefined ? {} : { content: [first, ...tool.progress.content.slice(1)] as const }),
+      metadata: tool.progress.structured,
+    }
+  }
   let assistantMessageID = input.assistantMessageID
   let stepStarted = false
   let stepFailed = false
@@ -232,6 +242,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         type: "tool.input-json",
         message: "Tool call arguments were malformed JSON and were not executed. Retry with valid JSON.",
       },
+      ...failureSnapshot(tool),
       executed: false,
     })
   })
@@ -256,6 +267,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         assistantMessageID: tool.assistantMessageID,
         callID,
         error,
+        ...failureSnapshot(tool),
         executed: tool.providerExecuted,
       })
     }
@@ -415,6 +427,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
             assistantMessageID: tool.assistantMessageID,
             callID: event.id,
             error: result.error,
+            ...failureSnapshot(tool),
             result: event.result,
             executed,
             resultState,
@@ -447,6 +460,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
             event.message === `Unknown tool: ${event.name}`
               ? { type: "tool.unknown", message: event.message }
               : { type: "tool.execution", message: event.message },
+          ...failureSnapshot(tool),
           executed: tool.providerExecuted,
           resultState: providerState(event.providerMetadata),
         })
@@ -471,8 +485,23 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     }
   })
 
+  const progress = Effect.fnUntraced(function* (callID: string, update: ToolRegistry.Progress) {
+    const tool = tools.get(callID)
+    if (!tool?.called || tool.settled)
+      return yield* Effect.die(new Error(`Tool progress outside running call: ${callID}`))
+    const current = { structured: { ...update.structured }, content: [...update.content] }
+    tool.progress = current
+    yield* events.publish(SessionEvent.Tool.Progress, {
+      sessionID: input.sessionID,
+      assistantMessageID: tool.assistantMessageID,
+      callID,
+      ...current,
+    })
+  })
+
   return {
     publish,
+    progress,
     flush,
     failAssistant,
     publishStepFailure,

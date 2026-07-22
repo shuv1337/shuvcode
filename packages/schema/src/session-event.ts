@@ -3,8 +3,7 @@ export * as SessionEvent from "./session-event.js"
 import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { Event } from "./event.js"
-import { ToolContent } from "./llm.js"
-import { FinishReason } from "./llm.js"
+import { FinishReason, ToolContent } from "./llm.js"
 import { Model } from "./model.js"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema.js"
 import { FileAttachment } from "./prompt.js"
@@ -410,13 +409,9 @@ export namespace Tool {
   })
   export type Called = typeof Called.Type
 
-  /**
-   * Replayable bounded running-tool state. Tools should checkpoint semantic
-   * transitions or at a bounded cadence, not persist every stdout/stderr chunk.
-   */
-  export const Progress = Event.durable({
+  /** Live replacement snapshot for a running tool. */
+  export const Progress = Event.ephemeral({
     type: "session.tool.progress",
-    ...options,
     schema: {
       ...ToolBase,
       structured: Schema.Record(Schema.String, Schema.Unknown),
@@ -445,6 +440,8 @@ export namespace Tool {
     schema: {
       ...ToolBase,
       error: SessionError.Error,
+      content: Schema.NonEmptyArray(ToolContent).pipe(optional),
+      metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(optional),
       result: Schema.Unknown.pipe(optional),
       executed: Schema.Boolean,
       resultState: SessionMessage.ProviderState.pipe(optional),
