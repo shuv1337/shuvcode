@@ -5,6 +5,7 @@ import { LLM, LLMError, LLMEvent, Message, Model, ToolCallPart, ToolResultPart, 
 import { Auth, LLMClient, RequestExecutor, WebSocketExecutor } from "../../src/route"
 import * as Azure from "../../src/providers/azure"
 import * as OpenAI from "../../src/providers/openai"
+import * as XAI from "../../src/providers/xai"
 import * as OpenAIResponses from "../../src/protocols/openai-responses"
 import * as ProviderShared from "../../src/protocols/shared"
 import { continuationRequest, nativeOpenAIResponsesContinuation } from "../continuation-scenarios"
@@ -15,6 +16,8 @@ import { sseEvents } from "../lib/sse"
 const model = OpenAIResponses.route
   .with({ endpoint: { baseURL: "https://api.openai.test/v1/" }, auth: Auth.bearer("test") })
   .model({ id: "gpt-4.1-mini" })
+
+const xaiModel = XAI.configure({ apiKey: "test", baseURL: "https://api.x.ai/v1" }).responses("grok-4.5")
 
 const request = LLM.request({
   id: "req_1",
@@ -524,7 +527,77 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
-  it.effect("rejects non-image media in tool-result content with a clear error", () =>
+  it.effect("lowers PDF tool-result content as structured input_file array", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIResponses.OpenAIResponsesBody>(
+        LLM.request({
+          id: "req_tool_result_pdf",
+          model,
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "read", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "read",
+              resultType: "content",
+              result: [
+                {
+                  type: "file",
+                  uri: "data:application/pdf;base64,JVBERi0xLjQ=",
+                  mime: "application/pdf",
+                  name: "report.pdf",
+                },
+              ],
+            }),
+          ],
+        }),
+      )
+
+      expect(expectToolOutput(prepared.body).output).toEqual([
+        {
+          type: "input_file",
+          filename: "report.pdf",
+          file_data: "data:application/pdf;base64,JVBERi0xLjQ=",
+        },
+      ])
+    }),
+  )
+
+  it.effect("uses xAI inline file encoding for PDF tool results", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIResponses.OpenAIResponsesBody>(
+        LLM.request({
+          model: xaiModel,
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "read", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "read",
+              resultType: "content",
+              result: [
+                {
+                  type: "file",
+                  uri: "data:application/pdf;base64,JVBERi0xLjQ=",
+                  mime: "application/pdf",
+                  name: "report.pdf",
+                },
+              ],
+            }),
+          ],
+        }),
+      )
+
+      expect(expectToolOutput(prepared.body).output).toEqual([
+        {
+          type: "input_file",
+          filename: "report.pdf",
+          file_data: "JVBERi0xLjQ=",
+          mime_type: "application/pdf",
+        },
+      ])
+    }),
+  )
+
+  it.effect("rejects unsupported media in tool-result content with a clear error", () =>
     Effect.gen(function* () {
       const error = yield* LLMClient.prepare(
         LLM.request({
@@ -1526,20 +1599,64 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
-  it.effect("lowers user image content", () =>
+  it.effect("lowers user image and PDF content", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare<OpenAIResponses.OpenAIResponsesBody>(
         LLM.request({
           id: "req_media",
           model,
-          messages: [Message.user({ type: "media", mediaType: "image/png", data: "AAECAw==" })],
+          messages: [
+            Message.user([
+              { type: "media", mediaType: "image/png", data: "AAECAw==" },
+              { type: "media", mediaType: "application/pdf", data: "JVBERi0xLjQ=", filename: "report.pdf" },
+            ]),
+          ],
         }),
       )
 
       expect(prepared.body.input).toEqual([
         {
           role: "user",
-          content: [{ type: "input_image", image_url: "data:image/png;base64,AAECAw==" }],
+          content: [
+            { type: "input_image", image_url: "data:image/png;base64,AAECAw==" },
+            {
+              type: "input_file",
+              filename: "report.pdf",
+              file_data: "data:application/pdf;base64,JVBERi0xLjQ=",
+            },
+          ],
+        },
+      ])
+    }),
+  )
+
+  it.effect("uses xAI inline file encoding for user PDFs", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIResponses.OpenAIResponsesBody>(
+        LLM.request({
+          model: xaiModel,
+          messages: [
+            Message.user({
+              type: "media",
+              mediaType: "application/pdf",
+              data: "data:application/pdf;base64,JVBERi0xLjQ=",
+              filename: "report.pdf",
+            }),
+          ],
+        }),
+      )
+
+      expect(prepared.body.input).toEqual([
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_file",
+              filename: "report.pdf",
+              file_data: "JVBERi0xLjQ=",
+              mime_type: "application/pdf",
+            },
+          ],
         },
       ])
     }),
@@ -1551,11 +1668,11 @@ describe("OpenAI Responses route", () => {
         LLM.request({
           id: "req_media",
           model,
-          messages: [Message.user({ type: "media", mediaType: "application/pdf", data: "AAECAw==" })],
+          messages: [Message.user({ type: "media", mediaType: "application/x-tar", data: "AAECAw==" })],
         }),
       ).pipe(Effect.flip)
 
-      expect(error.message).toContain("OpenAI Responses does not support media type application/pdf")
+      expect(error.message).toContain("OpenAI Responses does not support media type application/x-tar")
     }),
   )
 

@@ -27,6 +27,7 @@ import { ToolSchemaProjection } from "./utils/tool-schema"
 import { ToolStream } from "./utils/tool-stream"
 
 const ADAPTER = "anthropic-messages"
+const MEDIA_MIMES = new Set<string>([...ProviderShared.IMAGE_MIMES, ...ProviderShared.PDF_MIMES])
 export const DEFAULT_BASE_URL = "https://api.anthropic.com/v1"
 export const PATH = "/messages"
 
@@ -55,6 +56,17 @@ const AnthropicImageBlock = Schema.Struct({
   cache_control: Schema.optional(AnthropicCacheControl),
 })
 type AnthropicImageBlock = Schema.Schema.Type<typeof AnthropicImageBlock>
+
+const AnthropicDocumentBlock = Schema.Struct({
+  type: Schema.tag("document"),
+  source: Schema.Struct({
+    type: Schema.tag("base64"),
+    media_type: Schema.Literal("application/pdf"),
+    data: Schema.String,
+  }),
+  cache_control: Schema.optional(AnthropicCacheControl),
+})
+type AnthropicDocumentBlock = Schema.Schema.Type<typeof AnthropicDocumentBlock>
 
 const AnthropicThinkingBlock = Schema.Struct({
   type: Schema.tag("thinking"),
@@ -101,13 +113,10 @@ const AnthropicServerToolResultBlock = Schema.Struct({
 })
 type AnthropicServerToolResultBlock = Schema.Schema.Type<typeof AnthropicServerToolResultBlock>
 
-// Anthropic accepts either a plain string or an ordered array of text/image
-// blocks inside `tool_result.content`. The array form is required when a tool
-// returns image bytes (screenshot, image search, etc.) so they can be passed
-// to the model as proper image inputs instead of being JSON-stringified into
-// the prompt — which silently inflates context by megabytes and can push the
-// conversation over the model's token limit.
-const AnthropicToolResultContent = Schema.Union([AnthropicTextBlock, AnthropicImageBlock])
+// Anthropic accepts either a plain string or an ordered array of text, image, and
+// document blocks inside `tool_result.content`. The array form keeps media as native
+// model input instead of JSON-stringifying base64 into prompt text.
+const AnthropicToolResultContent = Schema.Union([AnthropicTextBlock, AnthropicImageBlock, AnthropicDocumentBlock])
 
 const AnthropicToolResultBlock = Schema.Struct({
   type: Schema.tag("tool_result"),
@@ -117,7 +126,12 @@ const AnthropicToolResultBlock = Schema.Struct({
   cache_control: Schema.optional(AnthropicCacheControl),
 })
 
-const AnthropicUserBlock = Schema.Union([AnthropicTextBlock, AnthropicImageBlock, AnthropicToolResultBlock])
+const AnthropicUserBlock = Schema.Union([
+  AnthropicTextBlock,
+  AnthropicImageBlock,
+  AnthropicDocumentBlock,
+  AnthropicToolResultBlock,
+])
 type AnthropicUserBlock = Schema.Schema.Type<typeof AnthropicUserBlock>
 const AnthropicAssistantBlock = Schema.Union([
   AnthropicTextBlock,
@@ -319,12 +333,17 @@ const lowerServerToolResult = Effect.fn("AnthropicMessages.lowerServerToolResult
   return { type: wireType, tool_use_id: part.id, content: part.result.value } satisfies AnthropicServerToolResultBlock
 })
 
-const lowerImage = Effect.fn("AnthropicMessages.lowerImage")(function* (part: MediaPart) {
-  const media = yield* ProviderShared.validateMedia(
-    "Anthropic Messages",
-    part,
-    new Set<string>(ProviderShared.IMAGE_MIMES),
-  )
+const lowerMedia = Effect.fn("AnthropicMessages.lowerMedia")(function* (part: MediaPart) {
+  const media = yield* ProviderShared.validateMedia("Anthropic Messages", part, MEDIA_MIMES)
+  if (media.mime === "application/pdf")
+    return {
+      type: "document" as const,
+      source: {
+        type: "base64" as const,
+        media_type: "application/pdf" as const,
+        data: media.base64,
+      },
+    } satisfies AnthropicDocumentBlock
   return {
     type: "image" as const,
     source: {
@@ -335,25 +354,13 @@ const lowerImage = Effect.fn("AnthropicMessages.lowerImage")(function* (part: Me
   } satisfies AnthropicImageBlock
 })
 
-// Tool results may carry structured text/images. Keep media as provider-native
+// Tool results may carry structured text, images, and documents. Keep media as provider-native
 // content instead of JSON-stringifying base64 into a prompt string.
 const lowerToolResultContentItem = Effect.fn("AnthropicMessages.lowerToolResultContentItem")(function* (
   item: ToolContent,
 ) {
   if (item.type === "text") return { type: "text" as const, text: item.text } satisfies AnthropicTextBlock
-  const media = yield* ProviderShared.validateToolFile(
-    "Anthropic Messages",
-    item,
-    new Set<string>(ProviderShared.IMAGE_MIMES),
-  )
-  return {
-    type: "image" as const,
-    source: {
-      type: "base64" as const,
-      media_type: media.mime,
-      data: media.base64,
-    },
-  } satisfies AnthropicImageBlock
+  return yield* lowerMedia({ type: "media", mediaType: item.mime, data: item.uri, filename: item.name })
 })
 
 const lowerToolResultContent = Effect.fn("AnthropicMessages.lowerToolResultContent")(function* (part: ToolResultPart) {
@@ -445,7 +452,7 @@ const lowerMessages = Effect.fn("AnthropicMessages.lowerMessages")(function* (
           continue
         }
         if (part.type === "media") {
-          content.push(yield* lowerImage(part))
+          content.push(yield* lowerMedia(part))
           continue
         }
         return yield* ProviderShared.unsupportedContent("Anthropic Messages", "user", ["text", "media"])

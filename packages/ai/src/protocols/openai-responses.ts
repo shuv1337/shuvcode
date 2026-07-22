@@ -11,6 +11,7 @@ import {
   type FinishReason,
   type JsonSchema,
   type LLMRequest,
+  type MediaPart,
   type ProviderMetadata,
   type ReasoningPart,
   type TextPart,
@@ -28,6 +29,7 @@ import { ToolStream } from "./utils/tool-stream"
 import { OpenAIImage } from "./utils/openai-image"
 
 const ADAPTER = "openai-responses"
+const MEDIA_MIMES = new Set<string>([...ProviderShared.IMAGE_MIMES, ...ProviderShared.PDF_MIMES])
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1"
 export const PATH = "/responses"
 
@@ -42,7 +44,17 @@ const OpenAIResponsesInputImage = Schema.Struct({
   type: Schema.tag("input_image"),
   image_url: Schema.String,
 })
-const OpenAIResponsesInputContent = Schema.Union([OpenAIResponsesInputText, OpenAIResponsesInputImage])
+const OpenAIResponsesInputFile = Schema.Struct({
+  type: Schema.tag("input_file"),
+  filename: Schema.String,
+  file_data: Schema.String,
+  mime_type: Schema.optional(Schema.String),
+})
+const OpenAIResponsesInputContent = Schema.Union([
+  OpenAIResponsesInputText,
+  OpenAIResponsesInputImage,
+  OpenAIResponsesInputFile,
+])
 type OpenAIResponsesInputContent = Schema.Schema.Type<typeof OpenAIResponsesInputContent>
 
 const OpenAIResponsesOutputText = Schema.Struct({
@@ -68,9 +80,13 @@ const OpenAIResponsesItemReference = Schema.Struct({
 })
 
 // `function_call_output.output` accepts either a plain string or an ordered
-// array of content items so tools can return images in addition to text.
+// array of content items so tools can return images and files in addition to text.
 // https://platform.openai.com/docs/api-reference/responses/object
-const OpenAIResponsesFunctionCallOutputContent = Schema.Union([OpenAIResponsesInputText, OpenAIResponsesInputImage])
+const OpenAIResponsesFunctionCallOutputContent = Schema.Union([
+  OpenAIResponsesInputText,
+  OpenAIResponsesInputImage,
+  OpenAIResponsesInputFile,
+])
 
 const OpenAIResponsesFunctionCallOutput = Schema.Union([
   Schema.String,
@@ -343,42 +359,58 @@ const hostedToolItemID = (part: ToolResultPart) => {
     : undefined
 }
 
-const lowerUserContent = Effect.fn("OpenAIResponses.lowerUserContent")(function* (
-  part: LLMRequest["messages"][number]["content"][number],
-) {
-  if (part.type === "text") return { type: "input_text" as const, text: part.text }
-  if (part.type === "media") {
-    const media = yield* ProviderShared.validateMedia(
-      "OpenAI Responses",
-      part,
-      new Set<string>(ProviderShared.IMAGE_MIMES),
-    )
-    return { type: "input_image" as const, image_url: media.dataUrl }
+const lowerMedia = Effect.fn("OpenAIResponses.lowerMedia")(function* (part: MediaPart, provider: string) {
+  const media = yield* ProviderShared.validateMedia("OpenAI Responses", part, MEDIA_MIMES)
+  if (media.mime === "application/pdf") {
+    // xAI models inline bytes and MIME separately; OpenAI uses a data URL in file_data.
+    if (provider === "xai")
+      return {
+        type: "input_file" as const,
+        filename: part.filename ?? "document.pdf",
+        file_data: media.base64,
+        mime_type: media.mime,
+      }
+    return {
+      type: "input_file" as const,
+      filename: part.filename ?? "document.pdf",
+      file_data: media.dataUrl,
+    }
   }
-  return yield* ProviderShared.unsupportedContent("OpenAI Responses", "user", ["text", "media"])
-})
-
-// Tool results may carry structured text/images. Keep media as provider-native
-// content instead of JSON-stringifying base64 into a prompt string.
-const lowerToolResultContentItem = Effect.fn("OpenAIResponses.lowerToolResultContentItem")(function* (
-  item: ToolContent,
-) {
-  if (item.type === "text") return { type: "input_text" as const, text: item.text }
-  const media = yield* ProviderShared.validateToolFile(
-    "OpenAI Responses",
-    item,
-    new Set<string>(ProviderShared.IMAGE_MIMES),
-  )
   return { type: "input_image" as const, image_url: media.dataUrl }
 })
 
-const lowerToolResultOutput = Effect.fn("OpenAIResponses.lowerToolResultOutput")(function* (part: ToolResultPart) {
+const lowerUserContent = Effect.fn("OpenAIResponses.lowerUserContent")(function* (
+  part: LLMRequest["messages"][number]["content"][number],
+  provider: string,
+) {
+  if (part.type === "text") return { type: "input_text" as const, text: part.text }
+  if (part.type === "media") return yield* lowerMedia(part, provider)
+  return yield* ProviderShared.unsupportedContent("OpenAI Responses", "user", ["text", "media"])
+})
+
+// Tool results may carry structured text, images, and files. Keep media as provider-native
+// content instead of JSON-stringifying base64 into a prompt string.
+const lowerToolResultContentItem = Effect.fn("OpenAIResponses.lowerToolResultContentItem")(function* (
+  item: ToolContent,
+  provider: string,
+) {
+  if (item.type === "text") return { type: "input_text" as const, text: item.text }
+  return yield* lowerMedia(
+    { type: "media", mediaType: item.mime, data: item.uri, filename: item.name },
+    provider,
+  )
+})
+
+const lowerToolResultOutput = Effect.fn("OpenAIResponses.lowerToolResultOutput")(function* (
+  part: ToolResultPart,
+  provider: string,
+) {
   // Text/json/error results are encoded as a plain string for backward
   // compatibility with existing cassettes and provider expectations.
   if (part.result.type !== "content") return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
   const content: ReadonlyArray<ToolContent> = part.result.value
-  return yield* Effect.forEach(content, lowerToolResultContentItem)
+  return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, provider))
 })
 
 const lowerMessages = Effect.fn("OpenAIResponses.lowerMessages")(function* (request: LLMRequest) {
@@ -401,7 +433,10 @@ const lowerMessages = Effect.fn("OpenAIResponses.lowerMessages")(function* (requ
     }
 
     if (message.role === "user") {
-      input.push({ role: "user", content: yield* Effect.forEach(message.content, lowerUserContent) })
+      input.push({
+        role: "user",
+        content: yield* Effect.forEach(message.content, (part) => lowerUserContent(part, request.model.provider)),
+      })
       continue
     }
 
@@ -460,7 +495,9 @@ const lowerMessages = Effect.fn("OpenAIResponses.lowerMessages")(function* (requ
             const content: ReadonlyArray<ToolContent> = part.result.value
             input.push({
               role: "user",
-              content: yield* Effect.forEach(content, lowerToolResultContentItem),
+              content: yield* Effect.forEach(content, (item) =>
+                lowerToolResultContentItem(item, request.model.provider),
+              ),
             })
           }
           if (itemID) hostedToolReferences.add(itemID)
@@ -483,7 +520,7 @@ const lowerMessages = Effect.fn("OpenAIResponses.lowerMessages")(function* (requ
       input.push({
         type: "function_call_output",
         call_id: part.id,
-        output: yield* lowerToolResultOutput(part),
+        output: yield* lowerToolResultOutput(part, request.model.provider),
       })
     }
   }

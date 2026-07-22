@@ -41,9 +41,11 @@ const GeminiInlineDataPart = Schema.Struct({
     data: Schema.String,
   }),
 })
+type GeminiInlineDataPart = Schema.Schema.Type<typeof GeminiInlineDataPart>
 
 const GeminiFunctionCallPart = Schema.Struct({
   functionCall: Schema.Struct({
+    id: Schema.optional(Schema.String),
     name: Schema.String,
     args: Schema.Unknown,
   }),
@@ -52,8 +54,10 @@ const GeminiFunctionCallPart = Schema.Struct({
 
 const GeminiFunctionResponsePart = Schema.Struct({
   functionResponse: Schema.Struct({
+    id: Schema.optional(Schema.String),
     name: Schema.String,
     response: Schema.Unknown,
+    parts: Schema.optional(Schema.Array(GeminiInlineDataPart)),
   }),
 })
 
@@ -197,8 +201,13 @@ const thoughtSignature = (providerMetadata: ProviderMetadata | undefined) => {
     : undefined
 }
 
+const functionCallId = (providerMetadata: ProviderMetadata | undefined) => {
+  const google = providerMetadata?.google
+  return ProviderShared.isRecord(google) && typeof google.functionCallId === "string" ? google.functionCallId : undefined
+}
+
 const lowerToolCall = (part: ToolCallPart) => ({
-  functionCall: { name: part.name, args: part.input },
+  functionCall: { id: functionCallId(part.providerMetadata), name: part.name, args: part.input },
   thoughtSignature: thoughtSignature(part.providerMetadata),
 })
 
@@ -255,6 +264,7 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
       if (part.result.type !== "content") {
         parts.push({
           functionResponse: {
+            id: functionCallId(part.providerMetadata),
             name: part.name,
             response: {
               name: part.name,
@@ -266,20 +276,23 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
       }
       const content: ReadonlyArray<ToolContent> = part.result.value
       const text = content.filter((item) => item.type === "text").map((item) => item.text)
+      const media: GeminiInlineDataPart[] = []
+      for (const item of content) {
+        if (item.type === "text") continue
+        const value = yield* ProviderShared.validateToolFile("Gemini", item, MEDIA_MIMES)
+        media.push({ inlineData: { mimeType: value.mime, data: value.base64 } })
+      }
       parts.push({
         functionResponse: {
+          id: functionCallId(part.providerMetadata),
           name: part.name,
           response: {
             name: part.name,
             content: text.join("\n"),
           },
+          parts: media.length > 0 ? media : undefined,
         },
       })
-      for (const item of content) {
-        if (item.type === "text") continue
-        const media = yield* ProviderShared.validateToolFile("Gemini", item, MEDIA_MIMES)
-        parts.push({ inlineData: { mimeType: media.mime, data: media.base64 } })
-      }
     }
     contents.push({ role: "user", parts })
   }
@@ -441,6 +454,10 @@ const step = (state: ParserState, event: GeminiEvent) => {
     if ("functionCall" in part) {
       const input = part.functionCall.args
       const id = `tool_${nextToolCallId++}`
+      const metadata = {
+        ...(part.functionCall.id === undefined ? {} : { functionCallId: part.functionCall.id }),
+        ...(part.thoughtSignature === undefined ? {} : { thoughtSignature: part.thoughtSignature }),
+      }
       lifecycle = Lifecycle.reasoningEnd(
         lifecycle,
         events,
@@ -453,9 +470,7 @@ const step = (state: ParserState, event: GeminiEvent) => {
           id,
           name: part.functionCall.name,
           input,
-          providerMetadata: part.thoughtSignature
-            ? googleMetadata({ thoughtSignature: part.thoughtSignature })
-            : undefined,
+          providerMetadata: Object.keys(metadata).length > 0 ? googleMetadata(metadata) : undefined,
         }),
       )
       hasToolCalls = true
