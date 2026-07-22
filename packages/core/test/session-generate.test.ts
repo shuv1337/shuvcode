@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { LLMClient, LLMEvent, LLMResponse, Model, SystemPart, type LLMRequest } from "@opencode-ai/ai"
+import { LLMClient, LLMEvent, LLMResponse, Model, SystemPart, ToolDefinition, type LLMRequest } from "@opencode-ai/ai"
 import { OpenAIChat } from "@opencode-ai/ai/protocols"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Database } from "@opencode-ai/core/database/database"
@@ -38,6 +38,7 @@ import { SessionStore } from "@opencode-ai/core/session/store"
 import { SkillInstructions } from "@opencode-ai/core/skill/instructions"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
+import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { asc, eq } from "drizzle-orm"
 import { Effect, Layer, Schema, Stream } from "effect"
 import { testEffect } from "./lib/effect"
@@ -92,6 +93,15 @@ const skills = Layer.mock(SkillInstructions.Service, { load: () => Effect.succee
 const references = Layer.mock(ReferenceInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const mcp = Layer.mock(McpInstructions.Service, { load: () => Effect.succeed(Instructions.empty) })
 const plugins = Layer.mock(PluginSupervisor.Service, { flush: Effect.void })
+const tools = Layer.mock(ToolRegistry.Service, {
+  materialize: () =>
+    Effect.succeed({
+      definitions: [ToolDefinition.make({ name: "lookup", description: "Lookup", inputSchema: { type: "object" } })],
+      settle: () => Effect.die(new Error("unused")),
+    }),
+  register: () => Effect.die(new Error("unused")),
+  registerBatch: () => Effect.die(new Error("unused")),
+})
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -114,6 +124,7 @@ const it = testEffect(
       [ReferenceInstructions.node, references],
       [McpInstructions.node, mcp],
       [PluginSupervisor.node, plugins],
+      [ToolRegistry.node, tools],
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
     ],
   ),
@@ -259,6 +270,7 @@ it.effect("generates from fresh settled Session context without durable mutation
     yield* hooks.register("session", "context", (event) =>
       Effect.sync(() => {
         event.system = [SystemPart.make("Hooked system"), ...event.system]
+        if (event.tools.lookup) event.tools.lookup.description = "Hooked lookup"
       }),
     )
 
@@ -287,7 +299,7 @@ it.effect("generates from fresh settled Session context without durable mutation
           : [],
       ),
     ).toEqual(["Settled partial answer"])
-    expect(requests[0]?.tools).toEqual([])
+    expect(requests[0]?.tools).toMatchObject([{ name: "lookup", description: "Hooked lookup" }])
     expect(requests[0]?.toolChoice).toMatchObject({ type: "none" })
     expect(yield* durableState(db, sessionID)).toEqual(before)
   }),
