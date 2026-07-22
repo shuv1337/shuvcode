@@ -30,6 +30,7 @@ import { ConfigReference } from "./config/reference"
 import { ConfigToolOutput } from "./config/tool-output"
 import { ConfigVariable } from "./config/variable"
 import { ConfigWatcher } from "./config/watcher"
+import { ConfigWarming } from "./config/warming"
 import { ConfigV1 } from "./v1/config/config"
 import { ConfigMigrateV1 } from "./v1/config/migrate"
 import { WellKnown } from "./wellknown"
@@ -109,6 +110,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   plugins: ConfigPlugin.Plugins.pipe(Schema.optional).annotate({
     description: "Ordered plugin enablement directives and external package declarations",
+  }),
+  warming: ConfigWarming.Warming.pipe(Schema.optional).annotate({
+    description: "Keep recently active sessions warm with transient model requests (default: false)",
   }),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(Schema.optional),
   experimental: ConfigExperimental.Info.pipe(Schema.optional),

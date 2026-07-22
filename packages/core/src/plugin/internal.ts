@@ -54,6 +54,7 @@ import { PluginRuntime } from "./runtime"
 import { SkillPlugin } from "./skill"
 import { SystemPromptPlugin } from "./system-prompt"
 import { VariantPlugin } from "./variant"
+import { WarmingPlugin } from "./warming"
 import { WellKnownPlugin } from "../wellknown/plugin"
 
 const services = Effect.fn("PluginInternal.services")(function* () {
@@ -143,6 +144,7 @@ const pre = [
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,
+  WarmingPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]
 
 const post = [
