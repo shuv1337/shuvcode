@@ -8,7 +8,7 @@ import { FileSystem } from "../filesystem"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "../location"
 import { Ripgrep } from "../ripgrep"
-import { RelativePath } from "../schema"
+import { NonNegativeInt, RelativePath } from "../schema"
 import { PermissionV2 } from "../permission"
 import { Tool } from "./tool"
 
@@ -25,6 +25,9 @@ export const Input = Schema.Struct({
 })
 
 export const Output = Schema.Array(FileSystem.Entry)
+const StructuredOutput = Schema.Struct({
+  count: NonNegativeInt,
+})
 type ModelOutput = typeof Output.Encoded
 
 /** Format raw search results into the concise line-oriented output models expect. */
@@ -51,6 +54,8 @@ export const Plugin = {
               "Find files by glob pattern within the active Location. Returns concise relative file resources. Use a relative path to narrow the search and limit to bound the result count.",
             input: Input,
             output: Output,
+            structured: StructuredOutput,
+            toStructuredOutput: ({ output }) => ({ count: output.length }),
             toModelOutput: ({ output }) => [
               {
                 type: "text",

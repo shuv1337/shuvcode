@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { normalizeTool, toolInlineInfo, toolOutputText, toolPath, toolScroll } from "../../src/mini/tool"
+import { canonicalToolPart } from "./fixture/tool-part"
 
 describe("Mini tool presentation", () => {
   test("uses V2 shell output without the model-facing status", () => {
@@ -103,6 +104,29 @@ describe("Mini tool presentation", () => {
         time: {},
       }),
     ).toBe('→ Skill "effect"')
+  })
+
+  test("renders compact search metadata", () => {
+    expect(
+      toolInlineInfo(
+        canonicalToolPart("glob", {
+          status: "completed",
+          input: { pattern: "*.ts" },
+          structured: { count: 3 },
+          content: [],
+        }),
+      ).description,
+    ).toBe("3 matches")
+    expect(
+      toolInlineInfo(
+        canonicalToolPart("grep", {
+          status: "completed",
+          input: { pattern: "needle" },
+          structured: { matches: 1 },
+          content: [],
+        }),
+      ).description,
+    ).toBe("1 match")
   })
 
   test("keeps segment-safe contained tool paths relative", () => {

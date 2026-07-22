@@ -9,7 +9,7 @@ import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "../location"
 import { PermissionV2 } from "../permission"
 import { Ripgrep } from "../ripgrep"
-import { RelativePath } from "../schema"
+import { NonNegativeInt, RelativePath } from "../schema"
 import { Tool } from "./tool"
 
 export const name = "grep"
@@ -30,6 +30,9 @@ export const Input = Schema.Struct({
 })
 
 export const Output = Schema.Array(FileSystem.Match)
+const StructuredOutput = Schema.Struct({
+  matches: NonNegativeInt,
+})
 type ModelOutput = typeof Output.Encoded
 
 /** Format raw search matches into the familiar concise model output. */
@@ -65,6 +68,8 @@ export const Plugin = {
               "Search file contents by regular expression within the active Location or an absolute managed tool-output file. Use a path to narrow the search, include to filter files by glob, and limit to bound the match count. Returns concise file resources, line numbers, and bounded line previews.",
             input: Input,
             output: Output,
+            structured: StructuredOutput,
+            toStructuredOutput: ({ output }) => ({ matches: output.length }),
             toModelOutput: ({ output }) => [
               {
                 type: "text",
