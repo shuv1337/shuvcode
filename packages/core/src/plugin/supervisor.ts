@@ -10,20 +10,20 @@ import { Catalog } from "../catalog"
 import { CommandV2 } from "../command"
 import { Config } from "../config"
 import { ConfigPlugin } from "../config/plugin"
-import { makeLocationNode } from "../effect/app-node"
-import { httpClient } from "../effect/app-node-platform"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
 import { EventV2 } from "../event"
 import { FileMutation } from "../file-mutation"
 import { FileSystem } from "../filesystem"
 import { Form } from "../form"
-import { FSUtil } from "../fs-util"
-import { Global } from "../global"
+import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Global } from "@opencode-ai/util/global"
 import { Image } from "../image"
 import { Integration } from "../integration"
 import { Location } from "../location"
 import { LocationMutation } from "../location-mutation"
 import { ModelsDev } from "../models-dev"
-import { Npm } from "../npm"
+import { Npm } from "@opencode-ai/util/npm"
 import { PermissionV2 } from "../permission"
 import { PluginV2 } from "../plugin"
 import { PluginPromise } from "../plugin/promise"
@@ -35,9 +35,11 @@ import { SkillV2 } from "../skill"
 import { ReadToolFileSystem } from "../tool/read-filesystem"
 import { ToolRegistry } from "../tool/registry"
 import { WebSearchTool } from "../tool/websearch"
+import { WellKnown } from "../wellknown"
 import { PluginInternal } from "./internal"
 import { PluginRuntime } from "./runtime"
 import { SdkPlugins } from "./sdk"
+import { importModule } from "@opencode-ai/util/runtime-import"
 
 const PluginModule = Schema.Struct({
   default: Schema.Union([
@@ -140,7 +142,11 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
       continue
     }
 
-    const plugin = yield* load(operation).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+    const plugin = yield* load(operation).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("failed to load plugin", { target: operation.target, cause }).pipe(Effect.as(undefined)),
+      ),
+    )
     if (!plugin) continue
     const previous = packages.get(operation.target)
     if (previous) enabled.delete(previous.id)
@@ -165,9 +171,11 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
   const source =
     operation.mtime === undefined
       ? entrypoint
-      : `${operation.target.replaceAll("\\", "/")}?mtime=${operation.mtime}`
+      : typeof Bun !== "undefined"
+        ? `${operation.target.replaceAll("\\", "/")}?mtime=${operation.mtime}`
+        : `${entrypoint}?mtime=${operation.mtime}`
   yield* Effect.log({ msg: "loading plugin", id: operation.target, entrypoint: source })
-  const mod = yield* Effect.promise(() => import(source))
+  const mod = yield* Effect.promise(() => importModule(source))
   const value = (yield* Schema.decodeUnknownEffect(PluginModule)(mod)).default
   const plugin = "effect" in value ? value : PluginPromise.fromPromise(value)
   return {
@@ -180,7 +188,7 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
 function discoverDirectory(fs: FSUtil.Interface, directory: string) {
   return Effect.gen(function* () {
     const files = yield* fs
-      .glob("{plugin,plugins}/*.{ts,js}", {
+      .scan("{plugin,plugins}/*.{ts,js}", {
         cwd: directory,
         absolute: true,
         include: "file",
@@ -296,6 +304,7 @@ export const node = makeLocationNode({
     SkillV2.node,
     ToolRegistry.toolsNode,
     WebSearchTool.configNode,
+    WellKnown.node,
   ],
 })
 

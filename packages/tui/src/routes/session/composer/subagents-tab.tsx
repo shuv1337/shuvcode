@@ -1,10 +1,10 @@
 import { createMemo, For, Show, createEffect, onMount, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { TextAttributes, RGBA, ScrollBoxRenderable } from "@opentui/core"
+import { TextAttributes, ScrollBoxRenderable } from "@opentui/core"
 import { useRoute, useRouteData } from "../../../context/route"
 import { useData } from "../../../context/data"
 import { useClient } from "../../../context/client"
-import { useTheme, selectedForeground } from "../../../context/theme"
+import { useTheme } from "../../../context/theme"
 import { Locale } from "../../../util/locale"
 import { Keymap } from "../../../context/keymap"
 import { useComposerTab } from "./index"
@@ -21,8 +21,7 @@ export function SubagentsTab(props: { sessionID: string }) {
   const route = useRouteData("session")
   const data = useData()
   const client = useClient()
-  const { theme } = useTheme()
-  const fg = selectedForeground(theme)
+  const { themeV2 } = useTheme()
   const navigate = useRoute().navigate
   const composer = useComposerTab()
   const shortcuts = Keymap.useShortcuts()
@@ -39,7 +38,11 @@ export function SubagentsTab(props: { sessionID: string }) {
       const siblings = data.session.list().filter((s) => s.parentID === current.parentID)
       for (const sibling of siblings) {
         const agentMatch = sibling.title.match(/@(\w+) subagent/)
-        const agent = sibling.agent ? Locale.titlecase(sibling.agent) : agentMatch ? Locale.titlecase(agentMatch[1]) : "Subagent"
+        const agent = sibling.agent
+          ? Locale.titlecase(sibling.agent)
+          : agentMatch
+            ? Locale.titlecase(agentMatch[1])
+            : "Subagent"
         const name = agentMatch ? sibling.title.replace(agentMatch[0], "").trim() || sibling.title : sibling.title
         result.push({
           sessionID: sibling.id,
@@ -53,7 +56,11 @@ export function SubagentsTab(props: { sessionID: string }) {
       const children = data.session.list().filter((s) => s.parentID === props.sessionID)
       for (const child of children) {
         const agentMatch = child.title.match(/@(\w+) subagent/)
-        const agent = child.agent ? Locale.titlecase(child.agent) : agentMatch ? Locale.titlecase(agentMatch[1]) : "Subagent"
+        const agent = child.agent
+          ? Locale.titlecase(child.agent)
+          : agentMatch
+            ? Locale.titlecase(agentMatch[1])
+            : "Subagent"
         const name = agentMatch ? child.title.replace(agentMatch[0], "").trim() || child.title : child.title
         result.push({
           sessionID: child.id,
@@ -153,9 +160,11 @@ export function SubagentsTab(props: { sessionID: string }) {
         group: "Composer",
         bind: "up",
         run() {
-          const list = entries()
-          if (list.length === 0) return
-          moveTo((store.selected - 1 + list.length) % list.length, true)
+          if (store.selected === 0) {
+            composer.close()
+            return
+          }
+          moveTo(store.selected - 1, true)
         },
       },
       {
@@ -195,12 +204,8 @@ export function SubagentsTab(props: { sessionID: string }) {
 
   return (
     <Show when={composer.active("subagents")}>
-      <scrollbox
-        scrollbarOptions={{ visible: false }}
-        maxHeight={5}
-        ref={(r: ScrollBoxRenderable) => (scroll = r)}
-      >
-        <Show when={entries().length > 0} fallback={<text fg={theme.textMuted}> No subagents</text>}>
+      <scrollbox scrollbarOptions={{ visible: false }} maxHeight={5} ref={(r: ScrollBoxRenderable) => (scroll = r)}>
+        <Show when={entries().length > 0} fallback={<text fg={themeV2.text.subdued}> No subagents</text>}>
           <For each={entries()}>
             {(entry, index) => {
               const active = createMemo(() => index() === selected())
@@ -213,7 +218,13 @@ export function SubagentsTab(props: { sessionID: string }) {
                   flexDirection="row"
                   paddingLeft={1}
                   paddingRight={1}
-                  backgroundColor={active() ? theme.primary : RGBA.fromInts(0, 0, 0, 0)}
+                  backgroundColor={
+                    active()
+                      ? themeV2.background.action.primary.focused
+                      : entry.current
+                        ? themeV2.background.action.primary.selected
+                        : themeV2.background.action.primary.default
+                  }
                   onMouseOver={() => setStore("selected", index())}
                   onMouseUp={() => {
                     setStore("selected", index())
@@ -222,7 +233,13 @@ export function SubagentsTab(props: { sessionID: string }) {
                 >
                   <box flexGrow={1} minWidth={0} flexDirection="row">
                     <text
-                      fg={active() ? fg : entry.current ? theme.primary : theme.text}
+                      fg={
+                        active()
+                          ? themeV2.text.action.primary.focused
+                          : entry.current
+                            ? themeV2.text.action.primary.selected
+                            : themeV2.text.action.primary.default
+                      }
                       attributes={active() ? TextAttributes.BOLD : undefined}
                       wrapMode="none"
                     >
@@ -230,7 +247,7 @@ export function SubagentsTab(props: { sessionID: string }) {
                     </text>
                   </box>
                   <Show when={status()}>
-                    <text fg={active() ? fg : theme.textMuted} wrapMode="none">
+                    <text fg={active() ? themeV2.text.action.primary.focused : themeV2.text.subdued} wrapMode="none">
                       {status()}
                     </text>
                   </Show>

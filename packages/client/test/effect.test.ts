@@ -15,7 +15,7 @@ import {
 
 const synced = { type: "log.synced" as const, aggregateID: "ses_test", seq: Event.Seq.make(1) }
 
-test("health.get treats an old server as ready", async () => {
+test("health.get decodes the readiness response", async () => {
   const httpClient = HttpClient.make((request) =>
     Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ healthy: true, version: "old", pid: 123 }))),
   )
@@ -24,7 +24,7 @@ test("health.get treats an old server as ready", async () => {
     return yield* client.health.get()
   }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient), Effect.runPromise)
 
-  expect(result.status).toEqual({ type: "ready" })
+  expect(result).toEqual({ healthy: true, version: "old", pid: 123 })
 })
 
 test("session.get returns the decoded Effect projection", async () => {

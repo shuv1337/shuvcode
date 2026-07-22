@@ -31,11 +31,13 @@ function run(target) {
 
 const envPath = process.env.OPENCODE_BIN_PATH
 const scriptDir = path.dirname(fs.realpathSync(__filename))
-const cached = path.join(scriptDir, ".shuvcode")
+const command = path.basename(__filename).replace(/\.cjs$/, "")
+const nodeBuild = command === "shuvcode-node"
+const cached = path.join(scriptDir, `.${command}`)
 const platform = { darwin: "darwin", linux: "linux", win32: "windows" }[os.platform()] || os.platform()
 const arch = { x64: "x64", arm64: "arm64", arm: "arm" }[os.arch()] || os.arch()
-const base = "shuvcode-" + platform + "-" + arch
-const binary = platform === "windows" ? "shuvcode.exe" : "shuvcode"
+const base = `shuvcode${nodeBuild ? "-node" : ""}-` + platform + "-" + arch
+const binary = platform === "windows" ? `${command}.exe` : command
 
 function supportsAvx2() {
   if (arch !== "x64") return false
@@ -77,6 +79,7 @@ function supportsAvx2() {
 }
 
 const names = (() => {
+  if (nodeBuild) return [base]
   const baseline = arch === "x64" && !supportsAvx2()
   if (platform === "linux") {
     const musl = (() => {
@@ -121,7 +124,7 @@ function findBinary(startDir) {
 const resolved = envPath || (fs.existsSync(cached) ? cached : findBinary(scriptDir))
 if (!resolved) {
   console.error(
-    "It seems that your package manager failed to install the right shuvcode CLI package. Try manually installing " +
+    `It seems that your package manager failed to install the right ${command} CLI package. Try manually installing ` +
       names.map((name) => `"${name}"`).join(" or ") +
       " package",
   )

@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "506fd542-6599-4831-93eb-97f9373bdf02",
+  "id": "6150dfda-9751-4371-8e67-cc5afcd2fed8",
   "prevIds": [
-    "5f0a1db8-d4bf-42c3-becb-96b46fe66bed"
+    "a4ba73b4-21bc-41ab-a415-94e2ca38d798"
   ],
   "ddl": [
     {
@@ -36,6 +36,10 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "kv",
       "entityType": "tables"
     },
     {
@@ -559,6 +563,46 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "kv"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "kv"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "kv"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "kv"
     },
     {
       "type": "text",
@@ -1926,6 +1970,15 @@
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "key"
+      ],
+      "nameExplicit": false,
+      "name": "kv_pk",
+      "table": "kv",
       "entityType": "pks"
     },
     {

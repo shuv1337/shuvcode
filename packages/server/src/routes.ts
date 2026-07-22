@@ -1,23 +1,35 @@
 import { Database } from "@opencode-ai/core/database/database"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
+import { App } from "@opencode-ai/core/app"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventLogger } from "@opencode-ai/core/event-logger"
-import { Observability } from "@opencode-ai/core/observability"
+import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
+import { Observability } from "@opencode-ai/util/observability"
 import { Credential } from "@opencode-ai/core/credential"
-import { Pairing } from "@opencode-ai/core/pairing"
+import { Config } from "@opencode-ai/core/config"
+import { CommandV2 } from "@opencode-ai/core/command"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
+import { Pairing } from "@opencode-ai/core/pairing"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
+import { Pty } from "@opencode-ai/core/pty"
 import { Project } from "@opencode-ai/core/project"
 import { SessionV2 } from "@opencode-ai/core/session"
+import { Shell } from "@opencode-ai/core/shell"
 import { Job } from "@opencode-ai/core/job"
+import { MCP } from "@opencode-ai/core/mcp/index"
+import { Global } from "@opencode-ai/util/global"
+import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { HttpRouter, HttpServer } from "effect/unstable/http"
+import { WellKnown } from "@opencode-ai/core/wellknown"
+import { Watcher } from "@opencode-ai/core/filesystem/watcher"
+import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Context, Effect, Layer, Option } from "effect"
 import { Api } from "./api"
@@ -30,6 +42,7 @@ import { layer } from "./location"
 import { formLocationLayer } from "./middleware/form-location"
 import { sessionLocationLayer } from "./middleware/session-location"
 import { ServerInfo } from "./server-info"
+import type { ServerOptions } from "./options"
 
 const applicationServices = LayerNode.group([
   Database.node,
@@ -46,38 +59,68 @@ const applicationServices = LayerNode.group([
   PtyTicket.node,
   Credential.node,
   Pairing.node,
+  WellKnown.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
   SessionRestart.node,
 ])
 
-export function createRoutes(password?: string, serviceURLs: () => ReadonlyArray<string> = () => []) {
+export function createRoutes(options: ServerOptions = {}, serviceURLs: () => ReadonlyArray<string> = () => []) {
   return makeRoutes(
-    password
-      ? ServerAuth.Config.configLayer({ username: "opencode", password: Option.some(password) })
+    options.password
+      ? ServerAuth.Config.configLayer({ password: Option.some(options.password) })
       : ServerAuth.Config.layer,
+    options,
     serviceURLs,
   )
 }
 
-export function createEmbeddedRoutes() {
-  return makeRoutes(ServerAuth.Config.configLayer({ username: "opencode", password: Option.none() }))
+export function createEmbeddedRoutes(options: ServerOptions = {}) {
+  return makeRoutes(ServerAuth.Config.configLayer({ password: Option.none() }), options, () => [])
 }
 
 function makeRoutes<AuthError, AuthServices>(
   auth: Layer.Layer<ServerAuth.Config, AuthError, AuthServices>,
-  serviceURLs: () => ReadonlyArray<string> = () => [],
+  options: ServerOptions,
+  serviceURLs: () => ReadonlyArray<string>,
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
+    [Database.node, Database.configured(options.database)],
+    [App.node, App.configured(options.app)],
+    [ModelsDev.node, ModelsDev.configured(options.models)],
+    [Watcher.node, Watcher.configured({ enabled: options.fs?.filewatcher })],
+    [FileSystemSearch.node, FileSystemSearch.configured({ fff: options.fs?.fff })],
+    [Global.node, Global.layerWith(options.config?.directory ? { config: options.config.directory } : {})],
+    [
+      Config.node,
+      Config.configured({
+        project: options.config?.project,
+        file: options.config?.file,
+        content: options.config?.content,
+      }),
+    ],
+    [InstructionDiscovery.node, InstructionDiscovery.configured({ project: options.config?.project })],
+    [CommandV2.node, CommandV2.configured({ gitbash: options.windows?.gitbash })],
+    [Pty.node, Pty.configured({ gitbash: options.windows?.gitbash })],
+    [Shell.node, Shell.configured({ gitbash: options.windows?.gitbash })],
+    [
+      MCP.node,
+      MCP.configured({
+        clientInfo: {
+          name: options.app?.name ?? "opencode",
+          version: options.app?.version ?? "unknown",
+        },
+      }),
+    ],
     [PluginRuntime.node, PluginRuntime.layerWithCell(pluginRuntimeCell)],
     [PluginRuntime.providerNode, PluginRuntime.providerNodeWithCell(pluginRuntimeCell)],
   ]
-  const serviceLayer = simulateEnabled()
+  const serviceLayer = options.simulation
     ? Layer.unwrap(
         Effect.gen(function* () {
           const { simulationReplacements } = yield* Effect.promise(() => import("@opencode-ai/simulation/backend"))
-          const simulation = yield* simulationReplacements()
+          const simulation = yield* simulationReplacements({ version: App.make(options.app).version })
           return AppNodeBuilder.build(applicationServices, [...replacements, ...simulation])
         }),
       )
@@ -87,11 +130,13 @@ function makeRoutes<AuthError, AuthServices>(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
       const requestServices = Layer.mergeAll(
-        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, Pairing.Service)(context)),
-        ServerInfo.layer(serviceURLs),
+        Layer.succeedContext(
+          Context.pick(PermissionSaved.Service, Project.Service, Pairing.Service, WellKnown.Service)(context),
+        ),
+        ServerInfo.layer(serviceURLs, options.app),
         Layer.succeed(Principal, { type: "unauthenticated", reason: "embedded" }),
       )
-      return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+      const routes = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
@@ -99,18 +144,25 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(authorizationLayer.pipe(Layer.provide(services))),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
-        Layer.provide(Observability.layer),
+        Layer.provide(
+          Observability.layer({
+            ...options.observability,
+            client: options.app?.name,
+            version: options.app?.version,
+            channel: options.app?.channel,
+          }),
+        ),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
       )
+      // Effect's provideRequest distributes the provided service union, but the HttpApi builder combines
+      // Pairing and ServerInfo into one request marker. Runtime middleware supplies the full context above.
+      return routes as Layer.Layer<
+        Layer.Success<typeof routes>,
+        Layer.Error<typeof routes>,
+        Exclude<Layer.Services<typeof routes>, HttpRouter.Request<"Requires", Pairing.Service | ServerInfo.Service>>
+      >
     }),
   )
 }
-
-function simulateEnabled() {
-  return !!process.env.OPENCODE_SIMULATE
-}
-
-export const webHandler = () =>
-  HttpRouter.toWebHandler(createRoutes().pipe(Layer.provide(HttpServer.layerServices)))

@@ -1,6 +1,6 @@
 import { RGBA } from "@opentui/core"
 import { Schema } from "effect"
-import { DEFAULT_THEME } from "./defaults"
+import { DEFAULT_CATEGORICAL, DEFAULT_THEME } from "./defaults"
 import { expandTheme, expandTokens, mergeTheme } from "./expand"
 import { fallback } from "./fallback"
 import {
@@ -25,20 +25,43 @@ import type {
 } from "./index"
 import { selectTheme, selectThemeMode } from "./select"
 
-const decodeThemeDefinition = Schema.decodeUnknownSync(ThemeDefinition)
-const decodeThemeFile = Schema.decodeUnknownSync(ThemeFile)
+const decodeThemeDefinitionSchema = Schema.decodeUnknownSync(ThemeDefinition)
+const decodeThemeFileSchema = Schema.decodeUnknownSync(ThemeFile)
 
-export function resolveThemeFile(file: ThemeFile, mode?: "light" | "dark") {
-  const decoded = decodeThemeFile(file)
+function decodeThemeDefinition(input: unknown) {
+  try {
+    return decodeThemeDefinitionSchema(input)
+  } catch (error) {
+    throw themeDecodeError(error, "theme")
+  }
+}
+
+function decodeThemeFile(input: unknown, name: string) {
+  try {
+    return decodeThemeFileSchema(input)
+  } catch (error) {
+    throw themeDecodeError(error, name)
+  }
+}
+
+function themeDecodeError(error: unknown, name: string) {
+  const message = Schema.isSchemaError(error) ? error.message : String(error)
+  const value = /got ("[^"]*"|\S+)/.exec(message)?.[1] ?? "value"
+  return new Error(`Invalid theme: ${name} ${value} is an invalid value`, { cause: error })
+}
+
+export function resolveThemeFile(file: ThemeFile, mode?: "light" | "dark", name = "theme") {
+  const decoded = decodeThemeFile(file, name)
   const selected = selectThemeMode(decoded, mode)
   const definition = selected.expanded ? selected.theme : expandTheme(selected.theme)
   const defaults = expandTheme(selectTheme(DEFAULT_THEME, selected.mode))
   const core = expandTokens(fallback())
-  const merged = decoded.standalone
-    ? mergeTheme(core, definition)
-    : mergeTheme(core, defaults, definition)
+  const merged = decoded.standalone ? mergeTheme(core, definition) : mergeTheme(core, defaults, definition)
   if (!merged["hue"]) throw new Error("Standalone themes must provide hues")
-  return resolveExpandedTheme(merged as ThemeDefinition)
+  return resolveExpandedTheme({
+    ...merged,
+    categorical: merged["categorical"] ?? DEFAULT_CATEGORICAL,
+  } as ThemeDefinition)
 }
 
 export function resolveTheme(definition: ThemeDefinition): ResolvedTheme {
@@ -47,14 +70,16 @@ export function resolveTheme(definition: ThemeDefinition): ResolvedTheme {
 
 function resolveExpandedTheme(definition: ThemeDefinition): ResolvedTheme {
   const hue = resolveHue(definition.hue)
+  const categorical = (definition.categorical ?? DEFAULT_CATEGORICAL).map((name) => hue[name])
+  const hueSteps = compileHueSteps(hue)
   const base = tokens(definition)
-  const resolved = resolveView(base, hue)
+  const resolved = resolveView(base, hue, categorical, hueSteps)
   const contexts = Object.fromEntries(
     Object.entries(definition)
       .filter(([key]) => key.startsWith("@context:"))
       .map(([key, override]) => {
         const contextual = contextualize(base, override as ThemeTokensDefinition)
-        return [key, resolveView(contextual, hue)]
+        return [key, resolveView(contextual, hue, categorical, hueSteps)]
       }),
   )
 
@@ -63,24 +88,28 @@ function resolveExpandedTheme(definition: ThemeDefinition): ResolvedTheme {
 
 function tokens(definition: ThemeDefinition): ThemeTokensDefinition {
   return {
-    color: definition.color,
+    text: definition.text,
+    background: definition.background,
+    border: definition.border,
+    scrollbar: definition.scrollbar,
+    diff: definition.diff,
+    syntax: definition.syntax,
+    markdown: definition.markdown,
   }
 }
 
 function contextualize(base: ThemeTokensDefinition, override: ThemeTokensDefinition) {
   const result = mergeTheme(base, override)
-  const baseText = base.color?.text?.action
-  const contextText = override.color?.text?.action
-  const baseBackground = base.color?.background?.action
-  const contextBackground = override.color?.background?.action
-  const color = result["color"] as NonNullable<ThemeTokensDefinition["color"]>
+  const baseText = base.text?.action
+  const contextText = override.text?.action
+  const baseBackground = base.background?.action
+  const contextBackground = override.background?.action
+  const text = result["text"] as NonNullable<ThemeTokensDefinition["text"]>
+  const background = result["background"] as NonNullable<ThemeTokensDefinition["background"]>
   return {
     ...result,
-    color: {
-      ...color,
-      text: { ...color.text, action: contextualActions(baseText, contextText) },
-      background: { ...color.background, action: contextualActions(baseBackground, contextBackground) },
-    },
+    text: { ...text, action: contextualActions(baseText, contextText) },
+    background: { ...background, action: contextualActions(baseBackground, contextBackground) },
   } as ThemeTokensDefinition
 }
 
@@ -111,9 +140,36 @@ function contextualActions(
   )
 }
 
-function resolveView(definition: ThemeTokensDefinition, hue: ResolvedThemeView["hue"]): ResolvedThemeView {
+function resolveView(
+  definition: ThemeTokensDefinition,
+  hue: ResolvedThemeView["hue"],
+  categorical: ResolvedThemeView["categorical"],
+  hueSteps: Pick<ResolvedThemeView, "source" | "increase" | "decrease">,
+): ResolvedThemeView {
   const source: Record<string, unknown> = { hue, ...definition }
-  return { ...(createResolver(source)(source, "theme") as ResolvedThemeView), hue }
+  return { ...(createResolver(source)(source, "theme") as ResolvedThemeView), hue, categorical, ...hueSteps }
+}
+
+function compileHueSteps(hue: ResolvedThemeView["hue"]): Pick<ResolvedThemeView, "source" | "increase" | "decrease"> {
+  const index = new WeakMap<RGBA, { hue: keyof typeof hue; step: HueStep; position: number }>()
+  for (const [name, scale] of Object.entries(hue) as [keyof typeof hue, HueScale][]) {
+    HueStep.literals.forEach((step, position) => index.set(scale[step], { hue: name, step, position }))
+  }
+  const shift = (color: RGBA, amount: number) => {
+    const match = index.get(color)
+    if (!match) return color
+    const offset = Number.isFinite(amount) ? Math.trunc(amount) : 0
+    const position = Math.max(0, Math.min(HueStep.literals.length - 1, match.position + offset))
+    return hue[match.hue][HueStep.literals[position]]
+  }
+  return {
+    source: (color) => {
+      const match = index.get(color)
+      return match ? { hue: match.hue, step: match.step } : undefined
+    },
+    increase: (color, amount = 1) => shift(color, amount),
+    decrease: (color, amount = 1) => shift(color, -amount),
+  }
 }
 
 function resolveHue(definition: HueDefinition) {
@@ -130,10 +186,10 @@ function resolveHue(definition: HueDefinition) {
     if (stack.includes(name)) throw new Error(`Circular hue reference: ${[...stack, name].join(" -> ")}`)
     const value = source[name]
     if (typeof value === "string") {
-      if ((BaseHue.literals as readonly string[]).includes(name)) throw new Error(`Base hue "${name}" must be a scale`)
       const match = /^\$hue\.([^.]+)$/.exec(value)
       if (!match?.[1]) throw new Error(`Hue alias "${value}" must reference a hue scale`)
-      const result = resolve(match[1], [...stack, name])
+      const target = resolve(match[1], [...stack, name])
+      const result = Object.fromEntries(HueStep.literals.map((step) => [step, RGBA.clone(target[step])])) as HueScale
       cache.set(name, result)
       return result
     }
@@ -146,7 +202,8 @@ function resolveHue(definition: HueDefinition) {
       }),
     ) as HueScale
     for (const step of Object.keys(value)) {
-      if (!HueStep.literals.includes(Number(step) as HueStep)) throw new Error(`Unknown hue step at "hue.${name}.${step}"`)
+      if (!HueStep.literals.includes(Number(step) as HueStep))
+        throw new Error(`Unknown hue step at "hue.${name}.${step}"`)
     }
     cache.set(name, result)
     return result
@@ -171,6 +228,7 @@ function createResolver(source: Record<string, unknown>) {
   }
 
   function resolveColor(value: string, path: string, stack: string[]) {
+    if (value === "transparent") return RGBA.fromInts(0, 0, 0, 0)
     if (isHex(value)) return RGBA.fromHex(value)
     if (!value.startsWith("$")) throw new Error(`Invalid color "${value}" at "${path}"`)
     const target = value.slice(1)

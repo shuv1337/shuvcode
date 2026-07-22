@@ -4,22 +4,22 @@ import { Effect, Exit, Layer, PlatformError } from "effect"
 import { Config } from "@opencode-ai/core/config"
 import { ConfigAttachments } from "@opencode-ai/core/config/attachments"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { FileSystem } from "@opencode-ai/core/filesystem"
-import { FSUtil } from "@opencode-ai/core/fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "@opencode-ai/core/location"
 import { Image } from "@opencode-ai/core/image"
 import { PermissionV2 } from "@opencode-ai/core/permission"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { Global } from "@opencode-ai/core/global"
+import { Global } from "@opencode-ai/util/global"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
 import { location } from "./fixture/location"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { ReadTool } from "@opencode-ai/core/tool/read"
 import { ReadToolFileSystem } from "@opencode-ai/core/tool/read-filesystem"
-import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { SessionInstructions } from "@opencode-ai/core/session/instructions"
 import { testEffect } from "./lib/effect"
 import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
@@ -291,6 +291,9 @@ describe("ReadTool", () => {
         name: "pixel.png",
         mime: "image/png",
         encoding: "base64",
+        // Image base64 is carried by the content file item only; structured is slimmed
+        // so the original bytes are never persisted twice.
+        content: "",
       })
       expect(settled.output?.content).toMatchObject([
         { type: "text", text: "Image read successfully" },
@@ -364,7 +367,7 @@ describe("ReadTool", () => {
     }),
   )
 
-  it.effect("rejects invalid image data returned by the filesystem", () =>
+  it.effect("drops undecodable image data at settlement", () =>
     Effect.gen(function* () {
       readResult = {
         uri: "file:///truncated.png",
@@ -381,11 +384,17 @@ describe("ReadTool", () => {
           ...toolIdentity,
           call: { type: "tool-call", id: "call-truncated-image", name: "read", input: { path: "truncated.png" } },
         }),
-      ).toEqual({ type: "error", value: "Image could not be decoded: truncated.png" })
+      ).toEqual({
+        type: "content",
+        value: [
+          { type: "text", text: "Image read successfully" },
+          { type: "text", text: "[1 image omitted: could not be decoded.]" },
+        ],
+      })
     }),
   )
 
-  it.effect("rejects oversized images when resizing is disabled", () =>
+  it.effect("drops oversized images at settlement when resizing is disabled", () =>
     Effect.gen(function* () {
       const photon = yield* Effect.promise(() => import("@silvia-odwyer/photon-node"))
       const source = new photon.PhotonImage(new Uint8Array(Array.from({ length: 16 * 4 }, () => 255)), 16, 1)
@@ -409,14 +418,20 @@ describe("ReadTool", () => {
         }),
       ]
       const registry = yield* ToolRegistry.Service
-      const result = yield* executeTool(registry, {
-        sessionID,
-        ...toolIdentity,
-        call: { type: "tool-call", id: "call-wide-image", name: "read", input: { path: "wide.png" } },
-      })
 
-      expect(result.type).toBe("error")
-      if (result.type === "error") expect(result.value).toContain("exceeding configured limits 4x2000")
+      expect(
+        yield* executeTool(registry, {
+          sessionID,
+          ...toolIdentity,
+          call: { type: "tool-call", id: "call-wide-image", name: "read", input: { path: "wide.png" } },
+        }),
+      ).toEqual({
+        type: "content",
+        value: [
+          { type: "text", text: "Image read successfully" },
+          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
+        ],
+      })
     }),
   )
 
@@ -460,7 +475,7 @@ describe("ReadTool", () => {
     }),
   )
 
-  it.effect("enforces max base64 bytes after resize attempts", () =>
+  it.effect("drops images that cannot fit max base64 bytes after resize attempts", () =>
     Effect.gen(function* () {
       const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
       readResult = {
@@ -481,14 +496,20 @@ describe("ReadTool", () => {
         }),
       ]
       const registry = yield* ToolRegistry.Service
-      const result = yield* executeTool(registry, {
-        sessionID,
-        ...toolIdentity,
-        call: { type: "tool-call", id: "call-max-bytes", name: "read", input: { path: "pixel.png" } },
-      })
 
-      expect(result.type).toBe("error")
-      if (result.type === "error") expect(result.value).toContain("/1 bytes")
+      expect(
+        yield* executeTool(registry, {
+          sessionID,
+          ...toolIdentity,
+          call: { type: "tool-call", id: "call-max-bytes", name: "read", input: { path: "pixel.png" } },
+        }),
+      ).toEqual({
+        type: "content",
+        value: [
+          { type: "text", text: "Image read successfully" },
+          { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
+        ],
+      })
     }),
   )
 

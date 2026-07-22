@@ -5,12 +5,12 @@ import { Context, Deferred, Duration, Effect, Fiber, Layer, Schema, Stream } fro
 import { ChildProcess } from "effect/unstable/process"
 import { produce } from "immer"
 import { Shell } from "@opencode-ai/schema/shell"
-import { makeLocationNode } from "./effect/app-node"
-import { AppProcess } from "./process"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { AppProcess } from "@opencode-ai/util/process"
 import { Config } from "./config"
 import { EventV2 } from "./event"
 import { Location } from "./location"
-import { Global } from "./global"
+import { Global } from "@opencode-ai/util/global"
 import { ShellSelect } from "./shell/select"
 
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Shell.NotFoundError", {
@@ -59,7 +59,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Shell") {}
 
-export const layer = Layer.effect(
+export const layer = (options?: ShellSelect.Options) => Layer.effect(
   Service,
   Effect.gen(function* () {
     const events = yield* EventV2.Service
@@ -168,7 +168,7 @@ export const layer = Layer.effect(
       const id = Shell.ID.ascending()
       const cwd = input.cwd ?? location.directory
       const configShell = Config.latest(yield* config.entries(), "shell")
-      const shell = ShellSelect.preferred(configShell)
+      const shell = ShellSelect.preferred(configShell, options)
       const args = ShellSelect.args(shell, input.command)
       const file = path.join(outputDir, `${id}.out`)
       const env = {
@@ -316,8 +316,12 @@ export const layer = Layer.effect(
   }),
 )
 
-export const node = makeLocationNode({
-  service: Service,
-  layer,
-  deps: [EventV2.node, Location.node, Config.node, Global.node, AppProcess.node],
-})
+export function configured(options?: ShellSelect.Options) {
+  return makeLocationNode({
+    service: Service,
+    layer: layer(options),
+    deps: [EventV2.node, Location.node, Config.node, Global.node, AppProcess.node],
+  })
+}
+
+export const node = configured()

@@ -3,22 +3,19 @@ import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effe
 import { HttpClient, HttpClientRequest } from "effect/unstable/http"
 import { ModelsDev } from "@opencode-ai/schema/models-dev"
 import { Money } from "@opencode-ai/schema/money"
-import { Global } from "./global"
-import { Flag } from "./flag/flag"
-import { Flock } from "./util/flock"
-import { Hash } from "./util/hash"
-import { FSUtil } from "./fs-util"
-import { InstallationChannel, InstallationVersion } from "./installation/version"
+import { App } from "./app"
+import { Global } from "@opencode-ai/util/global"
+import { Flock } from "@opencode-ai/util/flock"
+import { Hash } from "@opencode-ai/util/hash"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { EventV2 } from "./event"
-import { makeGlobalNode } from "./effect/app-node"
-import { httpClient } from "./effect/app-node-platform"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
 import { ModelV2 } from "./model"
 import { ProviderV2 } from "./provider"
 
 export const CatalogModelStatus = Schema.Literals(["alpha", "beta", "deprecated"])
 export type CatalogModelStatus = typeof CatalogModelStatus.Type
-
-const USER_AGENT = `opencode/${InstallationChannel}/${InstallationVersion}/${Flag.OPENCODE_CLIENT}`
 
 type Cost = {
   readonly input: Money.USDPerMillionTokens
@@ -530,13 +527,22 @@ export interface Interface {
   readonly refresh: (force?: boolean) => Effect.Effect<void>
 }
 
+export const Options = Schema.Struct({
+  url: Schema.optional(Schema.String),
+  file: Schema.optional(Schema.String),
+  fetch: Schema.optional(Schema.Boolean),
+})
+export type Options = typeof Options.Type
+
 export class Service extends Context.Service<Service, Interface>()("@opencode/ModelsDev") {}
 
-const layer = Layer.effect(
+export const layer = (options?: Options) =>
+  Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const events = yield* EventV2.Service
+      const app = yield* App.Metadata
     const http = HttpClient.filterStatusOk(
       (yield* HttpClient.HttpClient).pipe(
         HttpClient.retryTransient({
@@ -547,7 +553,9 @@ const layer = Layer.effect(
       ),
     )
 
-    const source = Flag.OPENCODE_MODELS_URL || "https://models.dev"
+    const source = options?.url || "https://models.dev"
+    const fetch = options?.fetch ?? true
+      const userAgent = App.useragent(app)
     const filepath = path.join(
       Global.Path.cache,
       source === "https://models.dev" ? "models.json" : `models-${Hash.fast(source)}.json`,
@@ -564,21 +572,17 @@ const layer = Layer.effect(
 
     const fetchApi = Effect.fn("ModelsDev.fetchApi")(function* () {
       return yield* HttpClientRequest.get(`${source}/api.json`).pipe(
-        HttpClientRequest.setHeader("User-Agent", USER_AGENT),
+        HttpClientRequest.setHeader("User-Agent", userAgent),
         http.execute,
         Effect.flatMap((res) => res.text),
         Effect.timeout("10 seconds"),
       )
     })
 
-    const loadFromDisk = fs.readJson(Flag.OPENCODE_MODELS_PATH ?? filepath).pipe(
+    const loadFromDisk = fs.readJson(options?.file ?? filepath).pipe(
       Effect.map((input) => input as Record<string, SourceProvider>),
       Effect.catch((error) => {
-        if (
-          Flag.OPENCODE_MODELS_PATH === undefined &&
-          error._tag === "FileSystemError" &&
-          error.method === "readJson"
-        ) {
+          if (options?.file === undefined && error._tag === "FileSystemError" && error.method === "readJson") {
           return fs.remove(filepath, { force: true }).pipe(Effect.ignore, Effect.as(undefined))
         }
         return Effect.succeed(undefined)
@@ -609,7 +613,7 @@ const layer = Layer.effect(
       if (fromDisk) return normalize(fromDisk)
       const bundled = yield* loadSnapshot
       if (bundled) return normalize(bundled)
-      if (Flag.OPENCODE_DISABLE_MODELS_FETCH) return []
+      if (!fetch) return []
       // Flock is cross-process: concurrent opencode CLIs can race on this cache file.
       const text = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -642,15 +646,23 @@ const layer = Layer.effect(
       )
     })
 
-    if (!Flag.OPENCODE_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
+    if (fetch && !process.argv.includes("--get-yargs-completions")) {
       // Schedule.spaced runs the effect once, then waits between completions.
-      yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced("60 minutes")), Effect.ignore))
+      yield* Effect.forkScoped(refresh().pipe(Effect.repeat(Schedule.spaced(ttl)), Effect.ignore))
     }
 
     return Service.of({ get, refresh })
   }),
 )
 
-export const node = makeGlobalNode({ service: Service, layer: layer, deps: [FSUtil.node, EventV2.node, httpClient] })
+export function configured(options?: Options) {
+  return makeGlobalNode({
+    service: Service,
+    layer: layer(options),
+    deps: [FSUtil.node, EventV2.node, App.node, httpClient],
+  })
+}
+
+export const node = configured()
 
 export * as ModelsDev from "./models-dev"

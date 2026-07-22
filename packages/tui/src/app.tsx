@@ -1,10 +1,9 @@
 import { render, TimeToFirstDraw, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { registerOpencodeSpinner } from "./component/register-spinner"
 import { Deferred, Effect } from "effect"
-import { Service } from "@opencode-ai/client/effect"
+import { Service, type Endpoint } from "@opencode-ai/client/effect/service"
 import { OpenCode } from "@opencode-ai/client"
-import { Global } from "@opencode-ai/core/global"
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { Global } from "@opencode-ai/util/global"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
 import { LogProvider, useLog, type LogSink } from "./context/log"
 import { ExitProvider, useExit } from "./context/exit"
@@ -33,10 +32,12 @@ import {
 } from "solid-js"
 import {
   TuiLifecycleProvider,
+  TuiAppProvider,
   TuiPathsProvider,
   TuiStartupProvider,
   TuiTerminalEnvironmentProvider,
   useTuiStartup,
+  type TuiApp,
 } from "./context/runtime"
 import { DialogProvider, useDialog } from "./ui/dialog"
 import { DialogIntegration } from "./component/dialog-integration"
@@ -46,6 +47,8 @@ import { EditorContextProvider } from "./context/editor"
 import { useEvent } from "./context/event"
 import { ClientProvider, useClient } from "./context/client"
 import { StartupLoading } from "./component/startup-loading"
+import { DevToolsSidebar } from "./component/devtools-sidebar"
+import { DevTools } from "./devtools"
 import { Reconnecting } from "./component/reconnecting"
 import { DataProvider, useData } from "./context/data"
 import { LocationProvider, useLocation } from "./context/location"
@@ -78,13 +81,14 @@ import { Config, ConfigProvider, useConfig } from "./config"
 import { createPluginRuntime, PluginRuntimeProvider, usePluginRuntime } from "./plugin/runtime"
 import { PluginProvider, PluginRoute, PluginSlot, usePlugin, type PackageResolver } from "./plugin/context"
 import { CommandPaletteDialog } from "./component/command-palette"
-import { COMMAND_PALETTE_COMMAND, OPENCODE_BASE_MODE, useBindings, useOpencodeKeymap } from "./keymap"
-import { Keymap } from "./context/keymap"
+import { COMMAND_PALETTE_COMMAND, Keymap, type KeymapCommand } from "./context/keymap"
 
 import { DialogVariant } from "./component/dialog-variant"
 import { win32DisableProcessedInput, win32FlushInputBuffer } from "./terminal-win32"
 import { destroyRenderer } from "./util/renderer"
 import { cliErrorMessage, errorFormat } from "./util/error"
+
+const themePerformance = DevTools.register({ id: "theme-performance", title: "Theme performance" })
 
 registerOpencodeSpinner()
 
@@ -118,6 +122,7 @@ const appBindingCommands = [
   "provider.connect",
   "opencode.status",
   "server.pair",
+  "service.restart",
   "opencode.debug",
   "theme.switch",
   "theme.switch_mode",
@@ -136,10 +141,13 @@ const appBindingCommands = [
 ] as const
 
 export type TuiInput = {
+  app: TuiApp
   server: {
-    endpoint: Service.Endpoint
-    reconnect?: (onStatus: (status: Service.Status) => void, signal: AbortSignal) => Promise<Service.Endpoint>
-    reload?: () => Promise<void>
+    endpoint: Endpoint
+    service?: {
+      reconnect: (signal: AbortSignal) => Promise<Endpoint>
+      restart: () => Promise<void>
+    }
   }
   args: Args
   config: Config.Interface
@@ -183,14 +191,15 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     Effect.catch(() => Effect.tryPromise(() => api.location.get()).pipe(Effect.map((response) => response.directory))),
   )
   const handoff = input.terminalHandoff ? yield* Effect.promise(input.terminalHandoff) : undefined
-  const reconnectEndpoint = input.server.reconnect
-  const reconnect = reconnectEndpoint
-    ? async (onStatus: (status: Service.Status) => void, signal: AbortSignal) => {
-        const endpoint = await reconnectEndpoint(onStatus, signal)
-        const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
-        return {
-          api: OpenCode.make(next),
-        }
+  const managed = input.server.service
+  const service = managed
+    ? {
+        reconnect: async (signal: AbortSignal) => {
+          const endpoint = await managed.reconnect(signal)
+          const next = { baseUrl: endpoint.url, headers: Service.headers(endpoint) }
+          return { api: OpenCode.make(next) }
+        },
+        restart: managed.restart,
       }
     : undefined
   const exit = { epilogue: undefined as string | undefined, reason: undefined as unknown }
@@ -204,7 +213,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
         useKittyKeyboard: {},
         autoFocus: false,
         openConsoleOnError: false,
-        useMouse: !Flag.OPENCODE_DISABLE_MOUSE && config.mouse,
+        useMouse: config.mouse,
         consoleOptions: {
           keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
         },
@@ -218,7 +227,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
         }
         if (process.env.OPENCODE_DRIVE) {
           const { Drive } = yield* Effect.promise(() => import("@opencode-ai/simulation/frontend"))
-          return yield* Drive.create(options)
+          return yield* Drive.create(options, input.app.version)
         }
         return yield* Effect.acquireRelease(
           Effect.tryPromise({
@@ -248,9 +257,12 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       const pluginRuntime = createPluginRuntime()
 
       yield* Effect.tryPromise(async () => {
+        const appStarted = performance.now()
         // Prewarm palette before ThemeProvider mounts so `system` theme avoids a first-paint fallback flash.
         void renderer.getPalette({ size: 16 }).catch(() => undefined)
+        const modeStarted = performance.now()
         const mode = handoff?.mode ?? (await renderer.waitForThemeMode(1000)) ?? "dark"
+        themePerformance.set("Detect light/dark mode", `${(performance.now() - modeStarted).toFixed(2)} ms`)
         if (renderer.isDestroyed) return
 
         await render(() => {
@@ -264,105 +276,107 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                 }}
               >
                 <EpilogueProvider set={(value) => (exit.epilogue = value)}>
-                  <ErrorBoundary
-                    fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}
-                  >
-                    <TuiPathsProvider
-                      value={{
-                        cwd: process.cwd(),
-                        home: global.home,
-                        state: global.state,
-                        worktree: global.data + "/worktree",
-                      }}
+                  <TuiAppProvider value={input.app}>
+                    <ErrorBoundary
+                      fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}
                     >
-                      <TuiLifecycleProvider
+                      <TuiPathsProvider
                         value={{
-                          add(finalizer) {
-                            finalizers.add(finalizer)
-                            return () => finalizers.delete(finalizer)
-                          },
+                          cwd: process.cwd(),
+                          home: global.home,
+                          state: global.state,
+                          worktree: global.data + "/worktree",
                         }}
                       >
-                        <TuiTerminalEnvironmentProvider
+                        <TuiLifecycleProvider
                           value={{
-                            platform: process.platform,
-                            multiplexer: process.env.TMUX ? "tmux" : process.env.STY ? "screen" : undefined,
-                            displayServer: process.env.WAYLAND_DISPLAY
-                              ? "wayland"
-                              : process.env.DISPLAY
-                                ? "x11"
-                                : undefined,
+                            add(finalizer) {
+                              finalizers.add(finalizer)
+                              return () => finalizers.delete(finalizer)
+                            },
                           }}
                         >
-                          <TuiStartupProvider
+                          <TuiTerminalEnvironmentProvider
                             value={{
-                              initialRoute: process.env.OPENCODE_SCRAP
-                                ? { type: "plugin", id: "scrap", name: "scrap" }
-                                : process.env.OPENCODE_ROUTE
-                                  ? JSON.parse(process.env.OPENCODE_ROUTE)
+                              platform: process.platform,
+                              multiplexer: process.env.TMUX ? "tmux" : process.env.STY ? "screen" : undefined,
+                              displayServer: process.env.WAYLAND_DISPLAY
+                                ? "wayland"
+                                : process.env.DISPLAY
+                                  ? "x11"
                                   : undefined,
-                              skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
                             }}
                           >
-                            <ClipboardProvider>
-                              <ArgsProvider {...input.args}>
-                                <ConfigProvider
-                                  config={config}
-                                  service={input.config}
-                                  options={{ terminalSuspend: process.platform !== "win32" }}
-                                >
-                                  <Keymap.Provider>
-                                    <ToastProvider>
-                                      <RouteProvider
-                                        initialRoute={
-                                          input.args.continue
-                                            ? {
-                                                type: "session",
-                                                sessionID: "dummy",
-                                              }
-                                            : undefined
-                                        }
-                                      >
-                                        <PluginRuntimeProvider value={pluginRuntime}>
-                                          <ClientProvider api={api} reconnect={reconnect} reload={input.server.reload}>
-                                            <PermissionProvider>
-                                              <DataProvider>
-                                                <LocationProvider>
-                                                  <ThemeProvider mode={mode}>
-                                                    <LocalProvider>
-                                                      <PromptStashProvider>
-                                                        <DialogProvider>
-                                                          <FrecencyProvider>
-                                                            <PromptHistoryProvider>
-                                                              <PromptRefProvider>
-                                                                <EditorContextProvider>
-                                                                  <PluginProvider packages={input.packages}>
-                                                                    <App />
-                                                                  </PluginProvider>
-                                                                </EditorContextProvider>
-                                                              </PromptRefProvider>
-                                                            </PromptHistoryProvider>
-                                                          </FrecencyProvider>
-                                                        </DialogProvider>
-                                                      </PromptStashProvider>
-                                                    </LocalProvider>
-                                                  </ThemeProvider>
-                                                </LocationProvider>
-                                              </DataProvider>
-                                            </PermissionProvider>
-                                          </ClientProvider>
-                                        </PluginRuntimeProvider>
-                                      </RouteProvider>
-                                    </ToastProvider>
-                                  </Keymap.Provider>
-                                </ConfigProvider>
-                              </ArgsProvider>
-                            </ClipboardProvider>
-                          </TuiStartupProvider>
-                        </TuiTerminalEnvironmentProvider>
-                      </TuiLifecycleProvider>
-                    </TuiPathsProvider>
-                  </ErrorBoundary>
+                            <TuiStartupProvider
+                              value={{
+                                initialRoute: process.env.OPENCODE_SCRAP
+                                  ? { type: "plugin", id: "scrap", name: "scrap" }
+                                  : process.env.OPENCODE_ROUTE
+                                    ? JSON.parse(process.env.OPENCODE_ROUTE)
+                                    : undefined,
+                                skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
+                              }}
+                            >
+                              <ClipboardProvider>
+                                <ArgsProvider {...input.args}>
+                                  <ConfigProvider
+                                    config={config}
+                                    service={input.config}
+                                    options={{ terminalSuspend: process.platform !== "win32" }}
+                                  >
+                                    <Keymap.Provider>
+                                      <ToastProvider>
+                                        <RouteProvider
+                                          initialRoute={
+                                            input.args.continue
+                                              ? {
+                                                  type: "session",
+                                                  sessionID: "dummy",
+                                                }
+                                              : undefined
+                                          }
+                                        >
+                                          <PluginRuntimeProvider value={pluginRuntime}>
+                                            <ClientProvider api={api} service={service}>
+                                              <PermissionProvider>
+                                                <DataProvider>
+                                                  <LocationProvider>
+                                                    <ThemeProvider mode={mode}>
+                                                      <LocalProvider>
+                                                        <PromptStashProvider>
+                                                          <DialogProvider>
+                                                            <FrecencyProvider>
+                                                              <PromptHistoryProvider>
+                                                                <PromptRefProvider>
+                                                                  <EditorContextProvider>
+                                                                    <PluginProvider packages={input.packages}>
+                                                                      <App started={appStarted} />
+                                                                    </PluginProvider>
+                                                                  </EditorContextProvider>
+                                                                </PromptRefProvider>
+                                                              </PromptHistoryProvider>
+                                                            </FrecencyProvider>
+                                                          </DialogProvider>
+                                                        </PromptStashProvider>
+                                                      </LocalProvider>
+                                                    </ThemeProvider>
+                                                  </LocationProvider>
+                                                </DataProvider>
+                                              </PermissionProvider>
+                                            </ClientProvider>
+                                          </PluginRuntimeProvider>
+                                        </RouteProvider>
+                                      </ToastProvider>
+                                    </Keymap.Provider>
+                                  </ConfigProvider>
+                                </ArgsProvider>
+                              </ClipboardProvider>
+                            </TuiStartupProvider>
+                          </TuiTerminalEnvironmentProvider>
+                        </TuiLifecycleProvider>
+                      </TuiPathsProvider>
+                    </ErrorBoundary>
+                  </TuiAppProvider>
                 </EpilogueProvider>
               </ExitProvider>
             </LogProvider>
@@ -385,21 +399,22 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   })
 })
 
-function App() {
+function App(props: { started: number }) {
   const log = useLog({ component: "app" })
   const startup = useTuiStartup()
   const config = useConfig()
+  const devtools = createMemo(() => config.data.debug?.devtools ?? false)
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   const dialog = useDialog()
   const local = useLocal()
-  const keymap = useOpencodeKeymap()
+  const keymap = Keymap.use()
   const event = useEvent()
   const client = useClient()
   const toast = useToast()
   const themeState = useTheme()
-  const { theme, mode, setMode, locked, lock, unlock } = themeState
+  const { themeV2, mode, supports, setMode, locked, lock, unlock } = themeState
   const data = useData()
   const location = useLocation()
   const exit = useExit()
@@ -407,6 +422,11 @@ function App() {
   const pluginRuntime = usePluginRuntime()
   const plugins = usePlugin()
   const clipboard = useClipboard()
+
+  createEffect(() => {
+    if (!themeState.ready) return
+    themePerformance.set("Total", `${(performance.now() - props.started).toFixed(2)} ms`)
+  })
 
   // Toast once when an MCP server enters a failed or needs-auth state so the user knows to act,
   // without having to open the status panel. Tracking the last alerted status avoids re-toasting
@@ -440,7 +460,7 @@ function App() {
   const offSelectionKeys = keymap.intercept(
     "key",
     ({ event }) => {
-      if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+      if (config.data.terminal?.copy_on_select ?? process.platform !== "win32") return
       Selection.handleSelectionKey(renderer, toast, event, clipboard)
     },
     { priority: 1 },
@@ -461,15 +481,16 @@ function App() {
     renderer.clearSelection()
   }
   const terminalTitleEnabled = () => config.data.terminal?.title ?? true
+  const copyOnSelectEnabled = () => config.data.terminal?.copy_on_select ?? process.platform !== "win32"
   const pasteSummaryEnabled = () => config.data.prompt?.paste !== "full"
 
   createEffect(() => {
-    renderer.useMouse = !Flag.OPENCODE_DISABLE_MOUSE && config.data.mouse
+    renderer.useMouse = config.data.mouse
   })
 
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
+    if (!terminalTitleEnabled()) return
 
     if (route.data.type === "home") {
       renderer.setTerminalTitle("shuvcode")
@@ -562,7 +583,7 @@ function App() {
         name: COMMAND_PALETTE_COMMAND,
         title: "Show command palette",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           dialog.replace(() => <CommandPaletteDialog />)
         },
@@ -594,7 +615,7 @@ function App() {
         name: `session.quick_switch.${i + 1}`,
         title: `Switch to session in quick slot ${i + 1}`,
         category: "Session",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.session.quickSwitch(i + 1)
         },
@@ -614,7 +635,7 @@ function App() {
         name: "model.cycle_recent",
         title: "Model cycle",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.model.cycle(1)
         },
@@ -623,7 +644,7 @@ function App() {
         name: "model.cycle_recent_reverse",
         title: "Model cycle reverse",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.model.cycle(-1)
         },
@@ -632,7 +653,7 @@ function App() {
         name: "model.cycle_favorite",
         title: "Favorite cycle",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.model.cycleFavorite(1)
         },
@@ -641,7 +662,7 @@ function App() {
         name: "model.cycle_favorite_reverse",
         title: "Favorite cycle reverse",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.model.cycleFavorite(-1)
         },
@@ -668,7 +689,7 @@ function App() {
         name: "agent.cycle",
         title: "Agent cycle",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.agent.move(1)
         },
@@ -685,7 +706,7 @@ function App() {
         name: "variant.list",
         title: "Switch model variant",
         category: "Agent",
-        hidden: local.model.variant.list().length === 0,
+        palette: local.model.variant.list().length === 0 ? undefined : (true as const),
         slash: { name: "variants" },
         run: () => {
           if (local.model.variant.list().length === 0) {
@@ -702,7 +723,7 @@ function App() {
         name: "agent.cycle.reverse",
         title: "Agent cycle reverse",
         category: "Agent",
-        hidden: true,
+        palette: undefined,
         run: () => {
           local.agent.move(-1)
         },
@@ -724,6 +745,7 @@ function App() {
       {
         name: "opencode.settings",
         title: "Open settings",
+        suggested: true,
         slash: { name: "settings" },
         run: () => {
           dialog.replace(() => <DialogConfig />)
@@ -748,19 +770,21 @@ function App() {
         },
         category: "System",
       },
-      ...(client.reload
+      ...(client.restart
         ? [
             {
-              name: "server.reload",
-              title: "Reload server",
-              slash: { name: "reload" },
+              name: "service.restart",
+              title: "Restart service",
+              slash: { name: "restart" },
               run: async () => {
+                const restart = client.restart
+                if (!restart) return
                 dialog.clear()
-                toast.show({ variant: "info", message: "Reloading server...", duration: 30000 })
-                // reload resolves once the replacement service is healthy; the
+                toast.show({ variant: "info", message: "Restarting service...", duration: 30000 })
+                // restart resolves once the replacement service is healthy; the
                 // event stream reattaches through the reconnect loop.
-                await client.reload!()
-                  .then(() => toast.show({ variant: "success", message: "Server reloaded" }))
+                await restart()
+                  .then(() => toast.show({ variant: "success", message: "Service restarted" }))
                   .catch(toast.error)
               },
               category: "System",
@@ -788,7 +812,8 @@ function App() {
       {
         name: "theme.switch_mode",
         title: mode() === "dark" ? "Switch to light mode" : "Switch to dark mode",
-        hidden: true,
+        palette: undefined,
+        enabled: () => supports(mode() === "dark" ? "light" : "dark"),
         run: () => {
           setMode(mode() === "dark" ? "light" : "dark")
           dialog.clear()
@@ -798,7 +823,7 @@ function App() {
       {
         name: "theme.mode.lock",
         title: locked() ? "Unlock theme mode" : "Lock theme mode",
-        hidden: true,
+        palette: undefined,
         run: () => {
           if (locked()) unlock()
           else lock()
@@ -853,7 +878,7 @@ function App() {
         name: "terminal.suspend",
         title: "Suspend terminal",
         category: "System",
-        hidden: true,
+        palette: undefined,
         enabled: process.platform !== "win32",
         run: () => {
           renderer.suspend()
@@ -865,7 +890,7 @@ function App() {
         name: "terminal.title.toggle",
         title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           const next = !terminalTitleEnabled()
           if (!next) renderer.setTerminalTitle("")
@@ -881,7 +906,7 @@ function App() {
         name: "app.toggle.animations",
         title: (config.data.animations ?? true) ? "Disable animations" : "Enable animations",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           void config
             .update((draft) => {
@@ -895,7 +920,7 @@ function App() {
         name: "app.toggle.file_context",
         title: (config.data.prompt?.editor ?? true) ? "Disable file context" : "Enable file context",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           void config
             .update((draft) => {
@@ -909,7 +934,7 @@ function App() {
         name: "app.toggle.diffwrap",
         title: (config.data.diffs?.wrap ?? "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           void config
             .update((draft) => {
@@ -926,7 +951,7 @@ function App() {
         name: "app.toggle.paste_summary",
         title: pasteSummaryEnabled() ? "Disable paste summary" : "Enable paste summary",
         category: "System",
-        hidden: true,
+        palette: undefined,
         run: () => {
           void config
             .update((draft) => {
@@ -946,38 +971,44 @@ function App() {
           dialog.clear()
         },
       },
-    ].map((command) => ({
-      namespace: "palette",
-      ...command,
-    })),
+    ].map(
+      ({ name, category, ...command }) =>
+        ({
+          id: name,
+          group: category,
+          bind: false,
+          palette: true as const,
+          ...command,
+        }) satisfies KeymapCommand,
+    ),
   )
 
-  useBindings(() => ({
+  Keymap.createLayer(() => ({
+    mode: "global",
     commands: appCommands(),
   }))
 
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
-    bindings: appBindingCommands.flatMap((command) => config.data.keybinds.get(command)),
+  Keymap.createLayer(() => ({
+    bindings: appBindingCommands,
   }))
 
-  useBindings(() => ({
-    bindings: appGlobalBindingCommands.flatMap((command) => config.data.keybinds.get(command)),
+  Keymap.createLayer(() => ({
+    mode: "global",
+    bindings: appGlobalBindingCommands,
   }))
 
-  useBindings(() => ({
-    mode: OPENCODE_BASE_MODE,
+  Keymap.createLayer(() => ({
     enabled: () => {
       const current = promptRef.current
       if (!current?.focused) return true
       return current.current.text === ""
     },
-    bindings: config.data.keybinds.get("app.exit"),
+    bindings: ["app.exit"],
   }))
 
   event.on("tui.command.execute", (evt, { workspace }) => {
     if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
-    keymap.dispatchCommand(evt.data.command)
+    keymap.dispatch(evt.data.command)
   })
 
   event.on("tui.toast.show", (evt, { workspace }) => {
@@ -1052,54 +1083,57 @@ function App() {
       width={dimensions().width}
       height={dimensions().height}
       flexDirection="column"
-      backgroundColor={theme.background}
+      backgroundColor={themeV2.background.default}
       onMouseDown={(evt) => {
-        if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+        if (copyOnSelectEnabled()) return
         if (evt.button !== MouseButton.RIGHT) return
 
         if (!Selection.copy(renderer, toast, clipboard)) return
         evt.preventDefault()
         evt.stopPropagation()
       }}
-      onMouseUp={
-        !Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT
-          ? () => Selection.copy(renderer, toast, clipboard)
-          : undefined
-      }
+      onMouseUp={copyOnSelectEnabled() ? () => Selection.copy(renderer, toast, clipboard) : undefined}
     >
-      <Show when={Flag.OPENCODE_SHOW_TTFD}>
+      <Show when={config.data.debug?.timing}>
         <TimeToFirstDraw />
       </Show>
-      <Show when={plugins.ready()}>
-        <box flexGrow={1} minHeight={0} flexDirection="column">
-          <Switch>
-            <Match when={route.data.type === "home"}>
-              <Home />
-            </Match>
-            <Match when={route.data.type === "session"}>
-              <Show when={route.data.type === "session" ? route.data.sessionID : undefined} keyed>
-                {(_) => <Session />}
-              </Show>
-            </Match>
-            <Match when={route.data.type === "plugin"}>
-              <PluginRoute
-                fallback={(id, name) => (
-                  <PluginRouteMissing id={id} name={name} onHome={() => route.navigate({ type: "home" })} />
-                )}
-              />
-            </Match>
-          </Switch>
+      <box flexGrow={1} minHeight={0} flexDirection="row">
+        <box flexGrow={1} minWidth={0} flexDirection="column">
+          <Show when={plugins.ready()}>
+            <box flexGrow={1} minHeight={0} flexDirection="column">
+              <Switch>
+                <Match when={route.data.type === "home"}>
+                  <Home />
+                </Match>
+                <Match when={route.data.type === "session"}>
+                  <Show when={route.data.type === "session" ? route.data.sessionID : undefined} keyed>
+                    {(_) => <Session />}
+                  </Show>
+                </Match>
+                <Match when={route.data.type === "plugin"}>
+                  <PluginRoute
+                    fallback={(id, name) => (
+                      <PluginRouteMissing id={id} name={name} onHome={() => route.navigate({ type: "home" })} />
+                    )}
+                  />
+                </Match>
+              </Switch>
+            </box>
+            <box flexShrink={0}>
+              <PluginSlot name="app.bottom" />
+            </box>
+            <PluginSlot name="app" />
+          </Show>
         </box>
-        <box flexShrink={0}>
-          <PluginSlot name="app.bottom" />
-        </box>
-        <PluginSlot name="app" />
-      </Show>
+        <Show when={devtools()}>
+          <DevToolsSidebar />
+        </Show>
+      </box>
       <Show when={!startup.skipInitialLoading}>
         <StartupLoading ready={plugins.ready} />
       </Show>
       <Show when={showReconnecting()}>
-        <Reconnecting status={client.connection.service()} />
+        <Reconnecting />
       </Show>
       <Toast />
     </box>

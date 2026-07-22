@@ -1,5 +1,5 @@
 import type { SafeObject } from "../tool-runtime.js"
-import type { CodeModePromise, CodeModeURL } from "../values.js"
+import type { CodeModePromise, CodeModeRegExp, CodeModeURL } from "../values.js"
 
 export type SourcePosition = {
   line: number
@@ -31,12 +31,12 @@ export type Binding = {
 export type StatementResult =
   | { kind: "none" }
   | { kind: "return"; value: unknown }
-  | { kind: "break" }
-  | { kind: "continue" }
+  | { kind: "break"; label?: string }
+  | { kind: "continue"; label?: string }
 
 export type MemberReference = {
-  target: SafeObject | Array<unknown> | CodeModeURL
-  key: string | number
+  target: SafeObject | Array<unknown> | CodeModeRegExp | CodeModeURL
+  key: PropertyKey
 }
 
 export class CodeModeFunction {
@@ -60,6 +60,12 @@ export class ComputedValue {
 }
 
 export class PromiseNamespace {}
+
+export class SymbolNamespace {}
+
+export const AsyncIteratorSymbol: unique symbol = Symbol("codemode.async-iterator")
+export const IteratorSymbol: unique symbol = Symbol("codemode.iterator")
+export const IteratorSymbols = [AsyncIteratorSymbol, IteratorSymbol] as const
 
 export type PromiseMethodName = "all" | "allSettled" | "race" | "any" | "resolve" | "reject"
 
@@ -99,13 +105,17 @@ export class GlobalNamespace {
 
 export class GlobalMethodReference {
   constructor(
-    readonly namespace: GlobalNamespaceName | "Number" | "String",
+    readonly namespace: Exclude<GlobalNamespaceName, "JSON"> | "Number" | "String",
     readonly name: string,
   ) {}
 }
 
+export class JsonMethodReference {
+  constructor(readonly name: "parse" | "stringify") {}
+}
+
 export class CoercionFunction {
-  constructor(readonly name: "Number" | "String" | "Boolean" | "parseInt" | "parseFloat") {}
+  constructor(readonly name: "Number" | "String" | "Boolean" | "parseInt" | "parseFloat" | "isFinite" | "isNaN") {}
 }
 
 export class UriFunction {
@@ -162,7 +172,7 @@ export class InterpreterRuntimeError extends Error {
 
 export const unsupportedSyntax = (kind: string, node: AstNode): InterpreterRuntimeError =>
   new InterpreterRuntimeError(
-    `Syntax '${kind}' is not supported in CodeMode. ${supportedSyntaxMessage}`,
+    `Syntax '${kind}' is not supported. ${supportedSyntaxMessage}`,
     node,
     "UnsupportedSyntax",
     [supportedSyntaxMessage],

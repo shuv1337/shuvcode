@@ -14,30 +14,11 @@
         "security": [],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "ServiceHealth",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "healthy": {
-                      "type": "boolean",
-                      "enum": [true]
-                    },
-                    "version": {
-                      "type": "string"
-                    },
-                    "pid": {
-                      "type": "integer",
-                      "allOf": [
-                        {
-                          "exclusiveMinimum": 0
-                        }
-                      ]
-                    }
-                  },
-                  "required": ["healthy", "version", "pid"],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/ServiceHealth"
                 }
               }
             }
@@ -73,8 +54,70 @@
             }
           }
         },
-        "description": "Check whether the API server is ready to accept requests.",
+        "description": "Report the owning server process and its application status.",
         "summary": "Check server health"
+      }
+    },
+    "/api/service/stop": {
+      "post": {
+        "tags": ["health"],
+        "operationId": "v2.health.stop",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "ServiceStopResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceStopResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Request graceful shutdown of one exact managed server instance.",
+        "summary": "Stop the managed server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceStopRequest"
+              }
+            }
+          },
+          "required": true
+        }
       }
     },
     "/api/server": {
@@ -1806,31 +1849,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "destination": {
-                    "type": "object",
-                    "properties": {
-                      "directory": {
-                        "type": "string"
-                      }
-                    },
-                    "required": ["directory"],
-                    "additionalProperties": false
-                  },
-                  "moveChanges": {
-                    "anyOf": [
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": ["destination"],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/Location.Ref"
               }
             }
           },
@@ -3642,6 +3661,116 @@
         "summary": "Remove instruction entry"
       }
     },
+    "/api/session/{sessionID}/generate": {
+      "post": {
+        "tags": ["session"],
+        "operationId": "v2.session.generate",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "allOf": [
+                {
+                  "pattern": "^ses"
+                }
+              ]
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "SessionGenerateResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ServiceUnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Generate transient text from the current session context without mutating session history.",
+        "summary": "Generate text from session context",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  }
+                },
+                "required": ["prompt"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/api/experimental/session/{sessionID}/log": {
       "get": {
         "tags": ["session"],
@@ -3715,7 +3844,7 @@
                       "type": "string"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/SessionLogItemStream"
+                      "$ref": "#/components/schemas/SessionLogItemJsonString"
                     }
                   },
                   "required": ["id", "event", "data"],
@@ -5088,6 +5217,116 @@
         "summary": "Get integration"
       }
     },
+    "/api/experimental/integration/wellknown": {
+      "post": {
+        "tags": ["integration"],
+        "operationId": "v2.experimental.integration.wellknown.add",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Discover and persist an experimental wellknown integration source.",
+        "summary": "Add wellknown integration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": ["url"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/api/integration/{integrationID}/connect/key": {
       "post": {
         "tags": ["integration"],
@@ -5219,7 +5458,7 @@
     "/api/integration/{integrationID}/connect/oauth": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.connect.oauth",
+        "operationId": "v2.integration.oauth.connect",
         "parameters": [
           {
             "name": "integrationID",
@@ -5367,11 +5606,19 @@
         }
       }
     },
-    "/api/integration/attempt/{attemptID}": {
+    "/api/integration/{integrationID}/connect/oauth/{attemptID}": {
       "get": {
         "tags": ["integration"],
-        "operationId": "v2.integration.attempt.status",
+        "operationId": "v2.integration.oauth.status",
         "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
           {
             "name": "attemptID",
             "in": "path",
@@ -5479,8 +5726,16 @@
       },
       "delete": {
         "tags": ["integration"],
-        "operationId": "v2.integration.attempt.cancel",
+        "operationId": "v2.integration.oauth.cancel",
         "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
           {
             "name": "attemptID",
             "in": "path",
@@ -5570,11 +5825,19 @@
         "summary": "Cancel OAuth connection"
       }
     },
-    "/api/integration/attempt/{attemptID}/complete": {
+    "/api/integration/{integrationID}/connect/oauth/{attemptID}/complete": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.attempt.complete",
+        "operationId": "v2.integration.oauth.complete",
         "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
           {
             "name": "attemptID",
             "in": "path",
@@ -5694,6 +5957,370 @@
         }
       }
     },
+    "/api/integration/{integrationID}/connect/command": {
+      "post": {
+        "tags": ["integration"],
+        "operationId": "v2.integration.command.connect",
+        "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "$ref": "#/components/schemas/Location.Info"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Integration.CommandAttempt"
+                    }
+                  },
+                  "required": ["location", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Start a command authentication attempt.",
+        "summary": "Begin command connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "methodID": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": ["methodID"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/integration/{integrationID}/connect/command/{attemptID}": {
+      "get": {
+        "tags": ["integration"],
+        "operationId": "v2.integration.command.status",
+        "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "attemptID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "$ref": "#/components/schemas/Location.Info"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Integration.CommandAttemptStatus"
+                    }
+                  },
+                  "required": ["location", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Poll the current status and output of a command authentication attempt.",
+        "summary": "Get command attempt status"
+      },
+      "delete": {
+        "tags": ["integration"],
+        "operationId": "v2.integration.command.cancel",
+        "parameters": [
+          {
+            "name": "integrationID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "attemptID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cancel a command authentication attempt and terminate its process.",
+        "summary": "Cancel command connection"
+      }
+    },
     "/api/mcp": {
       "get": {
         "tags": ["mcp"],
@@ -5798,6 +6425,434 @@
         },
         "description": "Retrieve configured MCP servers and their connection status.",
         "summary": "List MCP servers"
+      }
+    },
+    "/api/mcp/{server}": {
+      "put": {
+        "tags": ["mcp"],
+        "operationId": "v2.mcp.add",
+        "parameters": [
+          {
+            "name": "server",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Add an MCP server at runtime or replace an existing one, connecting it immediately.",
+        "summary": "Add MCP server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "config": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Mcp.LocalConfig"
+                      },
+                      {
+                        "$ref": "#/components/schemas/Mcp.RemoteConfig"
+                      }
+                    ]
+                  }
+                },
+                "required": ["config"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["mcp"],
+        "operationId": "v2.mcp.remove",
+        "parameters": [
+          {
+            "name": "server",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "McpServerNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerNotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Stop an MCP server and remove it from the runtime set until restart.",
+        "summary": "Remove MCP server"
+      }
+    },
+    "/api/mcp/{server}/connect": {
+      "post": {
+        "tags": ["mcp"],
+        "operationId": "v2.mcp.connect",
+        "parameters": [
+          {
+            "name": "server",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "McpServerNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerNotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Connect an MCP server at runtime, overriding a disabled configuration until restart.",
+        "summary": "Connect MCP server"
+      }
+    },
+    "/api/mcp/{server}/disconnect": {
+      "post": {
+        "tags": ["mcp"],
+        "operationId": "v2.mcp.disconnect",
+        "parameters": [
+          {
+            "name": "server",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "McpServerNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerNotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Disconnect an MCP server at runtime, removing its tools until reconnected.",
+        "summary": "Disconnect MCP server"
       }
     },
     "/api/mcp/resource": {
@@ -8384,7 +9439,7 @@
                       "type": "string"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/V2EventStream"
+                      "$ref": "#/components/schemas/V2EventJsonString"
                     }
                   },
                   "required": ["id", "event", "data"],
@@ -11389,6 +12444,28 @@
   },
   "components": {
     "schemas": {
+      "ServiceHealth": {
+        "type": "object",
+        "properties": {
+          "healthy": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "version": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              }
+            ]
+          }
+        },
+        "required": ["healthy", "version", "pid"],
+        "additionalProperties": false
+      },
       "UnauthorizedError": {
         "type": "object",
         "properties": {
@@ -11449,6 +12526,26 @@
           }
         },
         "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "ServiceStopRequest": {
+        "type": "object",
+        "properties": {
+          "instanceID": {
+            "type": "string"
+          }
+        },
+        "required": ["instanceID"],
+        "additionalProperties": false
+      },
+      "ServiceStopResponse": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": ["accepted"],
         "additionalProperties": false
       },
       "Pairing.Invitation": {
@@ -13507,6 +14604,23 @@
         "required": ["_tag", "actualBytes", "maxBytes", "message"],
         "additionalProperties": false
       },
+      "SessionGenerateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["data"],
+        "additionalProperties": false
+      },
       "session.agent.selected": {
         "type": "object",
         "properties": {
@@ -13702,6 +14816,9 @@
               },
               "location": {
                 "$ref": "#/components/schemas/Location.Ref"
+              },
+              "projectID": {
+                "type": "string"
               },
               "subpath": {
                 "type": "string"
@@ -15141,6 +16258,15 @@
               },
               "tokens": {
                 "$ref": "#/components/schemas/TokenUsage.Info"
+              },
+              "snapshot": {
+                "type": "string"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": ["sessionID", "assistantMessageID", "error"],
@@ -16613,6 +17739,81 @@
         "required": ["id", "created", "type", "durable", "data"],
         "additionalProperties": false
       },
+      "session.usage.recorded": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^evt_"
+              }
+            ]
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["session.usage.recorded"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "minimum": 0
+                  }
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [1]
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "allOf": [
+                  {
+                    "pattern": "^ses"
+                  }
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": ["title", "compaction"]
+              },
+              "cost": {
+                "$ref": "#/components/schemas/Money.USD"
+              },
+              "tokens": {
+                "$ref": "#/components/schemas/TokenUsage.Info"
+              }
+            },
+            "required": ["sessionID", "source", "cost", "tokens"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "created", "type", "durable", "data"],
+        "additionalProperties": false
+      },
       "Session.Event.Durable": {
         "oneOf": [
           {
@@ -16728,6 +17929,9 @@
           },
           {
             "$ref": "#/components/schemas/session.revert.committed"
+          },
+          {
+            "$ref": "#/components/schemas/session.usage.recorded"
           }
         ]
       },
@@ -16764,7 +17968,7 @@
           }
         ]
       },
-      "SessionLogItemStream": {
+      "SessionLogItemJsonString": {
         "type": "string",
         "contentSchema": {
           "$ref": "#/components/schemas/SessionLogItem"
@@ -17171,6 +18375,29 @@
         "required": ["id", "type", "label"],
         "additionalProperties": false
       },
+      "Integration.CommandMethod": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["command"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["id", "type", "label", "command"],
+        "additionalProperties": false
+      },
       "Integration.KeyMethod": {
         "type": "object",
         "properties": {
@@ -17206,6 +18433,9 @@
         "anyOf": [
           {
             "$ref": "#/components/schemas/Integration.OAuthMethod"
+          },
+          {
+            "$ref": "#/components/schemas/Integration.CommandMethod"
           },
           {
             "$ref": "#/components/schemas/Integration.KeyMethod"
@@ -17657,6 +18887,375 @@
           }
         ]
       },
+      "Integration.CommandAttempt": {
+        "type": "object",
+        "properties": {
+          "attemptID": {
+            "type": "string"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["NaN"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["-Infinity"]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              "expires": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["NaN"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["-Infinity"]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              }
+            },
+            "required": ["created", "expires"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["attemptID", "time"],
+        "additionalProperties": false
+      },
+      "Integration.CommandAttemptStatus": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["pending"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "time": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  },
+                  "expires": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["created", "expires"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["status", "time"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["complete"]
+              },
+              "time": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  },
+                  "expires": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["created", "expires"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["status", "time"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "time": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  },
+                  "expires": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["created", "expires"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["status", "message", "time"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["expired"]
+              },
+              "time": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  },
+                  "expires": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["NaN"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["Infinity"]
+                          },
+                          {
+                            "type": "string",
+                            "enum": ["-Infinity"]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["created", "expires"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["status", "time"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "Mcp.Status.Connected": {
         "type": "object",
         "properties": {
@@ -17762,6 +19361,287 @@
           }
         },
         "required": ["name", "status"],
+        "additionalProperties": false
+      },
+      "Mcp.TimeoutConfig": {
+        "type": "object",
+        "properties": {
+          "startup": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "exclusiveMinimum": 0
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum time in milliseconds to establish and initialize the MCP server."
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "exclusiveMinimum": 0
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum time in milliseconds to wait for MCP discovery requests such as tools/list and prompts/list."
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "exclusiveMinimum": 0
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum time in milliseconds to wait for MCP tool and prompt execution."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Mcp.LocalConfig": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["local"]
+          },
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Working directory for the MCP server process. Relative paths resolve from the workspace directory."
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codemode": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Expose this server's tools through Code Mode. Defaults to true."
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mcp.TimeoutConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["type", "command"],
+        "additionalProperties": false
+      },
+      "Mcp.OAuthConfig": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "callback_port": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "minimum": 1,
+                    "maximum": 65535
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "redirect_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Mcp.RemoteConfig": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["remote"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oauth": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Mcp.OAuthConfig"
+                  },
+                  {
+                    "type": "boolean",
+                    "enum": [false]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codemode": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Expose this server's tools through Code Mode. Defaults to true."
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mcp.TimeoutConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["type", "url"],
+        "additionalProperties": false
+      },
+      "McpServerNotFoundError": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["McpServerNotFoundError"]
+          },
+          "server": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "server", "message"],
         "additionalProperties": false
       },
       "Mcp.Resource": {
@@ -24929,7 +26809,7 @@
           }
         ]
       },
-      "V2EventStream": {
+      "V2EventJsonString": {
         "type": "string",
         "contentSchema": {
           "$ref": "#/components/schemas/V2Event"

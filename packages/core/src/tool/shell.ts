@@ -1,10 +1,10 @@
 export * as ShellTool from "./shell"
 
 import path from "path"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Effect, Fiber, Schedule, Schema, Scope } from "effect"
-import { FSUtil } from "../fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { LocationMutation } from "../location-mutation"
 import { PermissionV2 } from "../permission"
 import { PluginRuntime } from "../plugin/runtime"

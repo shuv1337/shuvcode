@@ -1,10 +1,18 @@
 import { tmpdir } from "node:os"
 import { extname, join, resolve } from "node:path"
 import type { CliRenderer, Renderable } from "@opentui/core"
-import { createMockKeys, createMockMouse, type MockInput, type MockMouse } from "@opentui/core/testing"
-import { Config, Effect, FileSystem } from "effect"
-import type { SimulationProtocol } from "../protocol"
+import {
+  createMockKeys,
+  createMockMouse,
+  KeyCodes,
+  type KeyInput,
+  type MockInput,
+  type MockMouse,
+} from "@opentui/core/testing"
+import { Config, Effect, FileSystem, Schema } from "effect"
+import { SimulationProtocol } from "../protocol"
 import { SimulationRenderer } from "./renderer"
+import { SimulationSemantics } from "./semantics"
 
 export type Action = SimulationProtocol.Frontend.Action
 export type Element = SimulationProtocol.Frontend.Element
@@ -26,6 +34,15 @@ type RenderBuffer = {
 
 const decoder = new TextDecoder()
 
+function isKeyCode(key: string): key is keyof typeof KeyCodes {
+  return Object.hasOwn(KeyCodes, key)
+}
+
+function keyInput(key: string): KeyInput {
+  const named = key.toUpperCase()
+  return isKeyCode(named) ? named : key
+}
+
 function children(renderable: Renderable) {
   return renderable.getChildren().filter((child): child is Renderable => "num" in child)
 }
@@ -44,7 +61,8 @@ function hit(renderer: CliRenderer, renderable: Renderable) {
   if (renderable.width <= 0 || renderable.height <= 0) return false
   const x = Math.floor(renderable.screenX + renderable.width / 2)
   const y = Math.floor(renderable.screenY + renderable.height / 2)
-  return renderer.hitTest(x, y) === renderable.num
+  const target = renderer.hitTest(x, y)
+  return all(renderable).some((item) => item.num === target)
 }
 
 /**
@@ -106,9 +124,47 @@ export function state(harness: Harness) {
   }
 }
 
+export function snapshot(harness: Harness): SimulationProtocol.Frontend.SemanticSnapshot {
+  const ids = new Set<string>()
+  const visit = (renderable: Renderable, parent?: string): SimulationProtocol.Frontend.SemanticNode[] => {
+    if (!renderable.visible || renderable.isDestroyed) return []
+    const definition = SimulationSemantics.read(renderable)?.()
+    if (definition && ids.has(renderable.id)) throw new Error(`duplicate semantic UI id: ${renderable.id}`)
+    if (definition) ids.add(renderable.id)
+    const node = definition
+      ? [{ id: renderable.id, ...definition, ...(parent === undefined ? {} : { parent }), element: renderable.num }]
+      : []
+    const ancestor = definition ? renderable.id : parent
+    return [...node, ...children(renderable).flatMap((child) => visit(child, ancestor))]
+  }
+  return Schema.decodeUnknownSync(SimulationProtocol.Frontend.SemanticSnapshot)({
+    format: "opencode-ui-snapshot-v1",
+    nodes: visit(harness.renderer.root),
+  })
+}
+
 export function matches(harness: Pick<Harness, "screen">, text: string) {
   return harness.screen().includes(text)
 }
+
+export const capture = Effect.fn("SimulationActions.capture")(function* (harness: Harness) {
+  yield* Effect.tryPromise(() => harness.renderOnce())
+  const buffer = harness.renderer.currentRenderBuffer
+  return {
+    cols: buffer.width,
+    rows: buffer.height,
+    cursor: [0, 0] as const,
+    lines: buffer.getSpanLines().map((line) => ({
+      spans: line.spans.map((span) => ({
+        text: span.text,
+        fg: span.fg.toInts(),
+        bg: span.bg.toInts(),
+        attributes: span.attributes,
+        width: span.width,
+      })),
+    })),
+  } satisfies SimulationProtocol.Frontend.CapturedFrame
+})
 
 export const screenshot = Effect.fn("SimulationActions.screenshot")(function* (harness: Harness, name?: string) {
   const filename = name ?? `screenshot-${crypto.randomUUID()}`
@@ -135,7 +191,7 @@ export const execute = Effect.fn("SimulationActions.execute")(function* (harness
       yield* Effect.tryPromise(() => harness.mockInput.typeText(action.text))
       break
     case "ui.press":
-      harness.mockInput.pressKey(action.key, action.modifiers)
+      harness.mockInput.pressKey(keyInput(action.key), action.modifiers)
       break
     case "ui.enter":
       harness.mockInput.pressEnter()
@@ -148,9 +204,31 @@ export const execute = Effect.fn("SimulationActions.execute")(function* (harness
         .find((item) => item.num === action.target)
         ?.focus()
       break
-    case "ui.click":
-      yield* Effect.tryPromise(() => harness.mockMouse.click(action.x, action.y))
+    case "ui.click": {
+      const target = all(harness.renderer.root).find((item) => item.num === action.target)
+      if (!target || !target.visible || target.isDestroyed)
+        return yield* Effect.fail(new Error(`click target is stale or unavailable: ${action.target}`))
+      if (action.semantic) {
+        const current = snapshot(harness).nodes.find((node) => node.element === action.target)
+        if (
+          current?.id !== action.semantic.id ||
+          current.instance !== action.semantic.instance ||
+          current.element !== action.semantic.element
+        )
+          return yield* Effect.fail(new Error(`semantic click target is stale or unavailable: ${action.semantic.id}`))
+      }
+      if (
+        !Number.isFinite(action.x) ||
+        action.x < 0 ||
+        action.x >= target.width ||
+        !Number.isFinite(action.y) ||
+        action.y < 0 ||
+        action.y >= target.height
+      )
+        return yield* Effect.fail(new Error("click position must be within the target element"))
+      yield* Effect.tryPromise(() => harness.mockMouse.click(target.screenX + action.x, target.screenY + action.y))
       break
+    }
     case "ui.resize":
       if (
         !Number.isSafeInteger(action.cols) ||

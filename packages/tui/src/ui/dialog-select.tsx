@@ -11,7 +11,7 @@ import { useDialog, type DialogContext } from "./dialog"
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useConfig } from "../config"
-import { formatKeyBindings, useKeymapSelector } from "../keymap"
+import { moveSelection, reconcileSelection } from "./select-controller"
 
 export interface DialogSelectProps<T> {
   title: string
@@ -126,18 +126,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   const actions = createMemo(() => props.actions ?? [])
   const shownActions = createMemo(() => actions().filter((item) => !item.hidden))
-  const actionBindings = useKeymapSelector((keymap) =>
-    keymap.getCommandBindings({
-      visibility: "registered",
-      commands: shownActions().map((item) => item.command),
-    }),
-  )
+  const shortcuts = Keymap.useShortcuts()
 
   const actionLabels = createMemo(() => {
     const labels = new Map<string, string>()
 
     for (const action of shownActions()) {
-      const label = formatKeyBindings(actionBindings().get(action.command), config)
+      const label = shortcuts.all(action.command)
       if (label) labels.set(action.command, label)
     }
 
@@ -227,8 +222,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       () => props.options,
       () => {
         if (!props.preserveSelection) {
-          const next = Math.min(store.selected, flat().length - 1)
-          if (next >= 0 && next !== store.selected) setStore("selected", next)
+          const count = flat().length
+          if (count === 0) return
+          const next = reconcileSelection(store.selected, count)
+          if (next !== store.selected) setStore("selected", next)
           return
         }
         if (resetSelection && store.filter.length > 0) {
@@ -272,8 +269,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           })
           return
         }
-        const next = Math.min(store.selected, flat().length - 1)
-        if (next < 0) return
+        const next = reconcileSelection(store.selected, flat().length)
+        if (flat().length === 0) return
         setStore("selected", next)
         selection = flat()[next]
       },
@@ -302,10 +299,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   function move(direction: number) {
     if (props.locked) return
     if (flat().length === 0) return
-    let next = store.selected + direction
-    if (next < 0) next = flat().length - 1
-    if (next >= flat().length) next = 0
-    moveTo(next, true)
+    moveTo(moveSelection(store.selected, { count: flat().length, delta: direction, policy: "wrap" }), true)
   }
 
   function moveTo(next: number, center = false, preserve = true) {

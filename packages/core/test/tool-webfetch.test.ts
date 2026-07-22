@@ -3,15 +3,17 @@ import { Duration, Effect, Fiber, Layer, Schema } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { LayerNodePlatform } from "@opencode-ai/util/effect/app-node-platform"
 import { PermissionV2 } from "@opencode-ai/core/permission"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { ToolRegistry } from "@opencode-ai/core/tool/registry"
 import { WebFetchTool } from "@opencode-ai/core/tool/webfetch"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { makeLocationNode } from "@opencode-ai/core/effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
+import { Image } from "@opencode-ai/core/image"
 import { testEffect } from "./lib/effect"
+import { imagePassthrough } from "./lib/image"
 import { toolIdentity, executeTool, registerToolPlugin, settleTool, toolDefinitions } from "./lib/tool"
 
 const webFetchToolNode = makeLocationNode({
@@ -50,6 +52,7 @@ const toolLayer = (replacements: LayerNode.Replacements = []) =>
   AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, webFetchToolNode]), [
     [PermissionV2.node, permission],
     [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
+    [Image.node, imagePassthrough],
     ...replacements,
   ])
 const it = testEffect(toolLayer([[LayerNodePlatform.httpClient, http]]))

@@ -1,22 +1,20 @@
-import { Global } from "@opencode-ai/core/global"
-import { Flag } from "@opencode-ai/core/flag/flag"
-import { AppProcess } from "@opencode-ai/core/process"
-import {
-  InstallationChannel,
-  InstallationLocal,
-  InstallationVersion,
-} from "@opencode-ai/core/installation/version"
+import { Global } from "@opencode-ai/util/global"
+import { AppProcess } from "@opencode-ai/util/process"
+import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
 import { Context, Duration, Effect, FileSystem, Layer } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
 import semver from "semver"
 
+declare const OPENCODE_CLI_NAME: string | undefined
+
 export type Policy = boolean | "notify"
 export type Action = "none" | "upgrade"
 type Method = "npm" | "pnpm" | "bun" | "yarn"
 
-const packageName = "shuvcode"
+const packageName =
+  typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-node" ? OPENCODE_CLI_NAME : "shuvcode"
 
 export interface Interface {
   readonly check: () => Effect.Effect<void>
@@ -47,7 +45,6 @@ export function action(current: string, latest: string, policy: Policy): Action 
     if (currentFork.base === latestFork.base) return latestFork.iteration > currentFork.iteration ? "upgrade" : "none"
     return semver.gt(latestFork.base, currentFork.base) ? "upgrade" : "none"
   }
-
   return "upgrade"
 }
 
@@ -63,13 +60,14 @@ export const layer = Layer.effect(
     const fs = yield* FileSystem.FileSystem
     const global = yield* Global.Service
     const appProcess = yield* AppProcess.Service
-    const channel = InstallationChannel.replace(/[^a-zA-Z0-9._-]/g, "-")
+    const channel = OPENCODE_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")
 
     const readPolicy = Effect.fnUntraced(function* () {
       const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
-        fs
-          .readFileString(path.join(global.config, name))
-          .pipe(Effect.map(decodePolicy), Effect.catch(() => Effect.succeed(undefined))),
+        fs.readFileString(path.join(global.config, name)).pipe(
+          Effect.map(decodePolicy),
+          Effect.catch(() => Effect.succeed(undefined)),
+        ),
       )
       return values.findLast((value) => value !== undefined) ?? true
     })
@@ -110,8 +108,8 @@ export const layer = Layer.effect(
       const response = yield* Effect.tryPromise({
         try: () =>
           fetch(
-            `https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(InstallationChannel)}`,
-            { headers: { "User-Agent": `shuvcode/${InstallationVersion}` }, signal: AbortSignal.timeout(10_000) },
+            `https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(OPENCODE_CHANNEL)}`,
+            { headers: { "User-Agent": `shuvcode/${OPENCODE_VERSION}` }, signal: AbortSignal.timeout(10_000) },
           ),
         catch: (cause) => new Error("Failed to check for updates", { cause }),
       })
@@ -128,41 +126,52 @@ export const layer = Layer.effect(
 
     const upgrade = Effect.fnUntraced(function* (method: Method, version: string) {
       const target = `${packageName}@${version}`
-      const commands: Record<Method, string[]> = {
+      const commands: Record<Exclude<Method, "bun">, string[]> = {
         npm: ["npm", "install", "--global", target],
         pnpm: ["pnpm", "install", "--global", target],
-        bun: ["bun", "install", "--global", target],
         yarn: ["yarn", "global", "add", target],
       }
-      const result = yield* run(commands[method], "5 minutes")
+      const result = yield* method === "bun"
+        ? Effect.scoped(
+            Effect.gen(function* () {
+              // Bun does not prune old versions from its shared package cache.
+              yield* fs.makeDirectory(global.cache, { recursive: true })
+              const cache = yield* fs.makeTempDirectoryScoped({ directory: global.cache, prefix: "update-" })
+              return yield* run(["bun", "install", "--global", "--cache-dir", cache, target], "5 minutes")
+            }),
+          )
+        : run(commands[method], "5 minutes")
       if (result.code === 0) return
       return yield* Effect.fail(new Error(result.stderr.trim() || `Failed to update with ${method}`))
     })
 
-    const check = Effect.fn("cli.updater.check")(function* () {
-      if (InstallationLocal || Flag.OPENCODE_DISABLE_AUTOUPDATE)
-        return yield* Effect.logInfo("update check skipped", {
-          reason: InstallationLocal ? "local-install" : "disabled",
-          version: InstallationVersion,
-          channel: InstallationChannel,
-        })
-      const policy = yield* readPolicy()
-      if (policy === false) return yield* Effect.logInfo("update check skipped", { reason: "policy-disabled" })
+    const check = Effect.fn("cli.updater.check")(
+      function* () {
+        if (OPENCODE_LOCAL || ["1", "true"].includes(process.env.OPENCODE_DISABLE_AUTOUPDATE?.toLowerCase() ?? ""))
+          return yield* Effect.logInfo("update check skipped", {
+            reason: OPENCODE_LOCAL ? "local-install" : "disabled",
+            version: OPENCODE_VERSION,
+            channel: OPENCODE_CHANNEL,
+          })
+        const policy = yield* readPolicy()
+        if (policy === false) return yield* Effect.logInfo("update check skipped", { reason: "policy-disabled" })
 
-      return yield* Effect.gen(function* () {
-        const version = yield* latest()
-        yield* Effect.logInfo("update check", {
-          current: InstallationVersion,
-          latest: version,
+        return yield* Effect.gen(function* () {
+          const version = yield* latest()
+          yield* Effect.logInfo("update check", {
+            current: OPENCODE_VERSION,
+            latest: version,
+          })
+          const next = action(OPENCODE_VERSION, version, policy)
+          if (next === "none") return yield* Effect.logInfo("update check done", { action: "up-to-date" })
+          const detected = yield* method()
+          if (!detected) return yield* Effect.logWarning("automatic update skipped: installation method not found")
+          yield* upgrade(detected, version)
+          yield* Effect.logInfo("updated shuvcode", { from: OPENCODE_VERSION, to: version, method: detected })
         })
-        const next = action(InstallationVersion, version, policy)
-        if (next === "none") return yield* Effect.logInfo("update check done", { action: "up-to-date" })
-        const detected = yield* method()
-        if (!detected) return yield* Effect.logWarning("automatic update skipped: installation method not found")
-        yield* upgrade(detected, version)
-        yield* Effect.logInfo("updated shuvcode", { from: InstallationVersion, to: version, method: detected })
-      })
-    }, Effect.catchCause((cause) => Effect.logWarning("automatic update failed", { cause })))
+      },
+      Effect.catchCause((cause) => Effect.logWarning("automatic update failed", { cause })),
+    )
 
     return Service.of({ check })
   }),

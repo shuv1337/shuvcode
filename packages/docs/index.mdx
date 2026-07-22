@@ -22,12 +22,12 @@ You can also install it with the following package managers.
   </Tab>
   <Tab title="bun">
     ```bash
-    bun install -g @opencode-ai/cli@next
+    bun install -g --trust @opencode-ai/cli@next
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install -g @opencode-ai/cli@next
+    pnpm add -g --allow-build=@opencode-ai/cli @opencode-ai/cli@next
     ```
   </Tab>
   <Tab title="Yarn">
@@ -36,6 +36,9 @@ You can also install it with the following package managers.
     ```
   </Tab>
 </Tabs>
+
+The package uses a trusted postinstall script to select the native binary for your platform. The Bun and pnpm commands
+above explicitly allow that script to run.
 
 <Note>During beta, the binary is called `opencode2`.</Note>
 

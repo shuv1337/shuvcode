@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { OpenCode, type McpServer } from "@opencode-ai/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { Service } from "@opencode-ai/client/effect"
+import { Service } from "@opencode-ai/client/effect/service"
 import { ServiceConfig } from "../../../services/service-config"
 
 export default Runtime.handler(
@@ -11,7 +11,7 @@ export default Runtime.handler(
   Effect.fn("cli.mcp.list")(function* () {
     const options = yield* ServiceConfig.options()
     const found = yield* Service.discover(options)
-    const endpoint = found ?? (yield* Service.start(options))
+    const endpoint = found ?? (yield* Service.ensure(options))
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     const response = yield* Effect.promise(() => client.mcp.list({ location: { directory: process.cwd() } }))
     const servers = response.data.toSorted((a, b) => a.name.localeCompare(b.name))

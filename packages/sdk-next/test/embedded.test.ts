@@ -1,13 +1,10 @@
 import fs from "fs/promises"
 import path from "path"
 import { expect } from "bun:test"
-import { Flag } from "@opencode-ai/core/flag/flag"
 import { Deferred, Effect, Latch, Layer, Option, Ref, Schema, Stream } from "effect"
 import { testEffect } from "../../core/test/lib/effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
 import type { OpenCodeEvent } from "../src"
-
-Flag.OPENCODE_DB = ":memory:"
 
 const it = testEffect(Layer.empty)
 type Sdk = typeof import("../src")
@@ -27,6 +24,27 @@ const sessionID = (fixture: Fixture) => fixture.sdk.Session.ID.create()
 
 const location = (fixture: Fixture) =>
   fixture.sdk.Location.Ref.make({ directory: fixture.sdk.AbsolutePath.make(fixture.directory) })
+
+it.live("exposes app metadata to plugins", () =>
+  withEmbedded("opencode-embedded-app-", (fixture) =>
+    Effect.gen(function* () {
+      const opencode = yield* fixture.sdk.OpenCode.create({
+        app: { name: "test", version: "1.2.3", channel: "beta" },
+      })
+      const app = yield* Deferred.make<{ readonly name: string; readonly version: string; readonly channel: string }>()
+      yield* opencode.plugin({
+        id: `app-${crypto.randomUUID()}`,
+        effect: (ctx) => Deferred.succeed(app, ctx.app).pipe(Effect.asVoid),
+      })
+      yield* opencode.plugin.list({ location: location(fixture) })
+      expect(yield* Deferred.await(app).pipe(Effect.timeout("4 seconds"))).toEqual({
+        name: "test",
+        version: "1.2.3",
+        channel: "beta",
+      })
+    }),
+  ),
+)
 
 it.live(
   "reloads every booted Location after SDK plugin registration",

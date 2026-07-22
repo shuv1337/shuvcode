@@ -9,7 +9,6 @@ export class Keep extends Schema.Class<Keep>("ConfigV2.Compaction.Keep")({
 
 export class Info extends Schema.Class<Info>("ConfigV2.Compaction")({
   auto: Schema.Boolean.pipe(Schema.optional),
-  prune: Schema.Boolean.pipe(Schema.optional),
   keep: Keep.pipe(Schema.optional),
   buffer: NonNegativeInt.pipe(Schema.optional),
 }) {}

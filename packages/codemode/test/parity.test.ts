@@ -42,6 +42,15 @@ describe("H2: string property access reads as undefined (not a throw)", () => {
   test("unknown property on a number is undefined", async () => {
     expect(await value(`return (5).foo ?? "n"`)).toBe("n")
   })
+
+  test("only canonical string index keys access characters", async () => {
+    expect(
+      await value(`
+        const text = "abc"
+        return [text[1], text["1"], text["01"], text["1.0"], text[-0], text["-0"]]
+      `),
+    ).toEqual(["b", "b", null, null, "a", null])
+  })
 })
 
 describe("H3: array property access reads as undefined (not a throw)", () => {
@@ -55,12 +64,44 @@ describe("H3: array property access reads as undefined (not a throw)", () => {
   })
 
   test("unknown property reads stay undefined for methods CodeMode does not implement", async () => {
-    expect(await value(`return [1,2,3].toSpliced === undefined`)).toBe(true)
+    expect(await value(`return [1,2,3].unknownMethod === undefined`)).toBe(true)
   })
 
   test("array indexing still works", async () => {
     expect(await value(`return [1,2,3][9] === undefined`)).toBe(true)
     expect(await value(`return [1,2,3][9]`)).toBeNull()
+  })
+
+  test("only canonical array index keys access elements", async () => {
+    expect(
+      await value(`
+        const values = ["a", "b"]
+        return [values[1], values["1"], values["01"], values["1.0"], values[-0], values["-0"]]
+      `),
+    ).toEqual(["b", "b", null, null, "a", null])
+  })
+
+  test("noncanonical keys cannot mutate or delete an aliased element", async () => {
+    expect(
+      await value(`
+        const values = ["a", "b"]
+        let writes = 0
+        try { values["01"] = ++writes } catch {}
+        const removed = delete values["01"]
+        return [writes, removed, values]
+      `),
+    ).toEqual([0, true, ["a", "b"]])
+  })
+
+  test("the maximum array length is not accepted as an array index", async () => {
+    expect(
+      await value(`
+        const values = []
+        let writes = 0
+        try { values["4294967295"] = ++writes } catch {}
+        return [writes, values.length]
+      `),
+    ).toEqual([0, 0])
   })
 })
 
@@ -99,6 +140,137 @@ describe("H4: typeof on an undeclared identifier is 'undefined'", () => {
   })
 })
 
+describe("CodeMode lexical scope integration", () => {
+  test("keeps self, cross, and destructuring defaults in the TDZ", async () => {
+    expect(
+      await value(`
+        const outer = 1
+        const errors = []
+        try { const first = second, second = 2 } catch (error) { errors.push(error.name) }
+        try { const [first = second, second = 2] = [] } catch (error) { errors.push(error.name) }
+        return errors
+      `),
+    ).toEqual(["ReferenceError", "ReferenceError"])
+  })
+
+  test("keeps typeof and constant assignment inside the TDZ", async () => {
+    expect(
+      await value(`
+        const errors = []
+        try { { errors.push(typeof item); let item } } catch (error) { errors.push(error.name) }
+        try { { constant = 1; const constant = 2 } } catch (error) { errors.push(error.name) }
+        return errors
+      `),
+    ).toEqual(["ReferenceError", "ReferenceError"])
+  })
+
+  test("shadows builtins from the start of the program scope", async () => {
+    expect(
+      await value(`
+        let observed
+        try { observed = typeof Promise } catch (error) { observed = error.name }
+        const Promise = 1
+        return observed
+      `),
+    ).toBe("ReferenceError")
+  })
+
+  test("keeps classic for initializers inside the header TDZ", async () => {
+    expect(
+      await value(`
+        let index = 1
+        try { for (let index = index; index < 2; index++) {} } catch (error) { return error.name }
+      `),
+    ).toBe("ReferenceError")
+  })
+
+  test("removes loop scopes when per-iteration initialization fails", async () => {
+    expect(
+      await value(`
+        const value = "outer"
+        try { for (let [value] of [1]) {} } catch {}
+        return value
+      `),
+    ).toBe("outer")
+  })
+})
+
+describe("unary void", () => {
+  test("evaluates its operand and returns undefined", async () => {
+    expect(
+      await value(`let count = 0; const result = void (count += 1); return [count, result === undefined]`),
+    ).toEqual([1, true])
+  })
+
+  test("discards opaque values", async () => {
+    expect(await value(`return void tools === undefined`)).toBe(true)
+  })
+})
+
+describe("property deletion", () => {
+  test("deletes plain object fields and reports missing fields as successful", async () => {
+    expect(
+      await value(`
+        const object = { keep: 1, remove: 2 }
+        return [delete object.remove, delete object.missing, object]
+      `),
+    ).toEqual([true, true, { keep: 1 }])
+  })
+
+  test("evaluates computed object and key expressions once", async () => {
+    expect(
+      await value(`
+        const object = { remove: true }
+        let objectReads = 0
+        let keyReads = 0
+        function getObject() { objectReads++; return object }
+        function getKey() { keyReads++; return "remove" }
+        const removed = delete getObject()[getKey()]
+        return [removed, objectReads, keyReads, Object.hasOwn(object, "remove")]
+      `),
+    ).toEqual([true, 1, 1, false])
+  })
+
+  test("deleting an array index creates a hole without changing its length", async () => {
+    expect(
+      await value(
+        `const values = [1, 2, 3]; const removed = delete values[1]; return [removed, values.length, 1 in values, values]`,
+      ),
+    ).toEqual([true, 3, false, [1, null, 3]])
+  })
+
+  test("array length is not configurable", async () => {
+    expect(await value(`const values = [1, 2]; return [delete values.length, values.length]`)).toEqual([false, 2])
+  })
+
+  test("does not broaden unsupported array property assignment", async () => {
+    expect(
+      await value(`
+        const values = []
+        let rightHandSideRuns = 0
+        function next() { rightHandSideRuns++; return 1 }
+        try { values.field = next() } catch {}
+        return rightHandSideRuns
+      `),
+    ).toBe(0)
+  })
+
+  test("optional deletion short-circuits without evaluating the key", async () => {
+    expect(
+      await value(`let keyReads = 0; const object = null; return [delete object?.[keyReads++], keyReads]`),
+    ).toEqual([true, 0])
+  })
+
+  test("rejects deletion from opaque runtime references", async () => {
+    expect((await error(`return delete tools.example`)).kind).toBe("InvalidDataValue")
+  })
+
+  test("keeps blocked property names unavailable", async () => {
+    expect((await error(`const object = {}; return delete object.__proto__`)).kind).toBe("ExecutionFailure")
+    expect((await error(`const values = []; return delete values["constructor"]`)).kind).toBe("ExecutionFailure")
+  })
+})
+
 describe("H1: NaN/Infinity flow as intermediates and normalize to null at the boundary", () => {
   test("guards run instead of the program crashing on a transient NaN", async () => {
     expect(await value(`return parseInt("abc") || 0`)).toBe(0)
@@ -127,11 +299,23 @@ describe("H1: NaN/Infinity flow as intermediates and normalize to null at the bo
 
   test("copyOut normalizes non-finite numbers to null (the shared return + tool-arg boundary)", () => {
     // Tool-call arguments funnel through copyOut too, so this one function pins both boundaries.
-    expect(ToolRuntime.copyOut(NaN)).toBeNull()
-    expect(ToolRuntime.copyOut(Infinity)).toBeNull()
-    expect(ToolRuntime.copyOut(-Infinity)).toBeNull()
-    expect(ToolRuntime.copyOut(42)).toBe(42)
-    expect(ToolRuntime.copyOut({ a: NaN, b: [Infinity, 1] })).toEqual({ a: null, b: [null, 1] })
+    expect(ToolRuntime.copyOut(NaN, "json")).toBeNull()
+    expect(ToolRuntime.copyOut(Infinity, "json")).toBeNull()
+    expect(ToolRuntime.copyOut(-Infinity, "nullify")).toBeNull()
+    expect(ToolRuntime.copyOut(42, "json")).toBe(42)
+    expect(ToolRuntime.copyOut({ a: NaN, b: [Infinity, 1] }, "json")).toEqual({ a: null, b: [null, 1] })
+  })
+})
+
+describe("copyOut undefined handling per boundary mode", () => {
+  test("json mode mirrors JSON.stringify for undefined", () => {
+    expect(ToolRuntime.copyOut({ q: undefined, keep: 1 }, "json")).toStrictEqual({ keep: 1 })
+    expect(ToolRuntime.copyOut([1, undefined, 2], "json")).toStrictEqual([1, null, 2])
+    expect(ToolRuntime.copyOut({ nested: { a: undefined, b: [undefined] } }, "json")).toStrictEqual({
+      nested: { b: [null] },
+    })
+    expect(ToolRuntime.copyOut(undefined, "json")).toBeUndefined()
+    expect(ToolRuntime.copyOut({ a: undefined }, "nullify")).toStrictEqual({ a: null })
   })
 })
 
@@ -469,5 +653,263 @@ describe("destructuring assignment", () => {
 
   test("returns the assigned value", async () => {
     expect(await value(`let a = 0; const result = ([a] = [7]); return [a, result]`)).toEqual([7, [7]])
+  })
+
+  test("supports computed object keys and evaluates them once", async () => {
+    expect(
+      await value(`
+        let calls = 0
+        const field = () => { calls++; return "name" }
+        const { [field()]: name, ...rest } = { name: "Ada", role: "engineer" }
+        return { calls, name, rest }
+      `),
+    ).toEqual({ calls: 1, name: "Ada", rest: { role: "engineer" } })
+  })
+
+  test("supports object patterns over arrays", async () => {
+    expect(
+      await value(`
+        const { 0: first, length, slice, ...rest } = ["a", "b", "c"]
+        return { first, length, sliced: slice(1), rest }
+      `),
+    ).toEqual({ first: "a", length: 3, sliced: ["b", "c"], rest: { 1: "b", 2: "c" } })
+  })
+
+  test("preserves exact computed property names on arrays", async () => {
+    expect(
+      await value(`
+        const { ["01"]: item, ...rest } = [10, 20]
+        return { missing: item === undefined, rest }
+      `),
+    ).toEqual({ missing: true, rest: { 0: 10, 1: 20 } })
+  })
+
+  test("supports array patterns over strings, Maps, Sets, and URLSearchParams", async () => {
+    expect(
+      await value(`
+        const [letter, ...letters] = "A😀B"
+        const [[mapKey, mapValue]] = new Map([["key", 1]])
+        const [setFirst, setSecond] = new Set([2, 3])
+        const [[queryKey, queryValue]] = new URLSearchParams("q=test&page=2")
+        return { letter, letters, mapKey, mapValue, setFirst, setSecond, queryKey, queryValue }
+      `),
+    ).toEqual({
+      letter: "A",
+      letters: ["😀", "B"],
+      mapKey: "key",
+      mapValue: 1,
+      setFirst: 2,
+      setSecond: 3,
+      queryKey: "q",
+      queryValue: "test",
+    })
+  })
+
+  test("supports iterable patterns in assignment and parameters", async () => {
+    expect(
+      await value(`
+        let first
+        let rest
+        ;[first, ...rest] = new Set([1, 2, 3])
+        const read = ([[key, value]]) => key + value
+        return { first, rest, entry: read(new Map([["a", 4]])) }
+      `),
+    ).toEqual({ first: 1, rest: [2, 3], entry: "a4" })
+  })
+
+  test("excludes computed numeric keys from object rest", async () => {
+    expect(
+      await value(`
+        const { [0]: declared, ...declarationRest } = { 0: "a", 1: "b" }
+        let assigned
+        let assignmentRest
+        ;({ [0]: assigned, ...assignmentRest } = { 0: "c", 1: "d" })
+        return { declared, declarationRest, assigned, assignmentRest }
+      `),
+    ).toEqual({ declared: "a", declarationRest: { 1: "b" }, assigned: "c", assignmentRest: { 1: "d" } })
+  })
+
+  test("rejects computed keys that are not confined property keys", async () => {
+    const err = await error(`const key = {}; const { [key]: value } = {}`)
+    expect(err.message).toContain("Property key must be a string or number")
+  })
+})
+
+describe("coercion parity: zero-argument coercion functions", () => {
+  test("Number() is 0 and String() is empty, unlike their undefined-argument forms", async () => {
+    expect(await value(`return Number()`)).toBe(0)
+    expect(await value(`return String()`)).toBe("")
+    expect(await value(`return Boolean()`)).toBe(false)
+    expect(await value(`return Number.isNaN(Number(undefined))`)).toBe(true)
+    expect(await value(`return String(undefined)`)).toBe("undefined")
+  })
+
+  test("parseInt() and parseFloat() stay NaN with no argument", async () => {
+    expect(await value(`return Number.isNaN(parseInt())`)).toBe(true)
+    expect(await value(`return Number.isNaN(parseFloat())`)).toBe(true)
+  })
+})
+
+describe("coercion parity: global isFinite and isNaN", () => {
+  test("coerce their argument like native JS, unlike the Number statics", async () => {
+    expect(await value(`return isFinite("42")`)).toBe(true)
+    expect(await value(`return Number.isFinite("42")`)).toBe(false)
+    expect(await value(`return isNaN("oops")`)).toBe(true)
+    expect(await value(`return isNaN("42")`)).toBe(false)
+    expect(await value(`return isFinite(Infinity)`)).toBe(false)
+    expect(await value(`return isNaN(null)`)).toBe(false)
+  })
+
+  test("zero-argument forms match native", async () => {
+    expect(await value(`return isFinite()`)).toBe(false)
+    expect(await value(`return isNaN()`)).toBe(true)
+  })
+
+  test("read as functions", async () => {
+    expect(await value(`return typeof isFinite`)).toBe("function")
+    expect(await value(`return typeof isNaN`)).toBe("function")
+  })
+
+  test("work as array callbacks", async () => {
+    expect(await value(`return [1, "2", "x", Infinity].filter(isFinite)`)).toEqual([1, "2"])
+    expect(await value(`return ["1", "x"].map(isNaN)`)).toEqual([false, true])
+  })
+})
+
+describe("coercion parity: arrays coerce to numbers through their string form", () => {
+  test("arrays with objects become NaN instead of crashing on host ToPrimitive", async () => {
+    expect(await value(`let x = [{}]; x++; return Number.isNaN(x)`)).toBe(true)
+    expect(await value(`return isFinite([{}])`)).toBe(false)
+    expect(await value(`return "abc".slice([{}])`)).toBe("abc")
+  })
+
+  test("single-element and empty arrays match native Number()", async () => {
+    expect(await value(`return Number([5])`)).toBe(5)
+    expect(await value(`return Number([])`)).toBe(0)
+    expect(await value(`return Number.isNaN(Number([1, 2]))`)).toBe(true)
+  })
+})
+
+describe("coercion parity: String method arguments coerce like native JS", () => {
+  test("includes and indexOf coerce numbers", async () => {
+    expect(await value(`return "v1.2".includes(1)`)).toBe(true)
+    expect(await value(`return "a2b".indexOf(2)`)).toBe(1)
+    expect(await value(`return "abc".includes("d")`)).toBe(false)
+  })
+
+  test("slice, repeat, and padStart coerce numeric strings", async () => {
+    expect(await value(`return "abc".slice("1")`)).toBe("bc")
+    expect(await value(`return "ab".repeat("2")`)).toBe("abab")
+    expect(await value(`return "7".padStart("3", 0)`)).toBe("007")
+  })
+
+  test("split coerces separators but treats undefined as absent", async () => {
+    expect(await value(`return "a1b".split(1)`)).toEqual(["a", "b"])
+    expect(await value(`return "a,b".split(undefined)`)).toEqual(["a,b"])
+    expect(await value(`return "a,b".split()`)).toEqual(["a,b"])
+    expect(await value(`return "a,b".split(undefined, 0)`)).toEqual([])
+    expect(await value(`return "a,b".split(undefined, 1)`)).toEqual(["a,b"])
+  })
+
+  test("replace coerces search and replacement values", async () => {
+    expect(await value(`return "a1b".replace(1, 2)`)).toBe("a2b")
+    expect(await value(`return "a1b".replace(1, () => "x")`)).toBe("axb")
+  })
+
+  test("repeat rejections carry the native RangeError name", async () => {
+    expect(await value(`try { "a".repeat(-1) } catch (e) { return e.name }`)).toBe("RangeError")
+  })
+
+  test("includes, startsWith, and endsWith reject regular expressions with a TypeError", async () => {
+    expect(await value(`try { "abc".includes(/a/) } catch (e) { return e.name }`)).toBe("TypeError")
+    expect(await value(`try { "abc".startsWith(/a/) } catch (e) { return e.name }`)).toBe("TypeError")
+    expect(await value(`try { "abc".endsWith(/a/) } catch (e) { return e.name }`)).toBe("TypeError")
+  })
+
+  test("opaque runtime references still reject as data errors", async () => {
+    const err = await error(`const f = () => 1; return "abc".includes(f)`)
+    expect(err.message).toContain("data value")
+    const replacerErr = await error(`const f = () => 1; return "a".replace(f, () => "x")`)
+    expect(replacerErr.message).toContain("data value")
+  })
+})
+
+describe("coercion parity: match() and search() with no argument", () => {
+  test("behave as an empty pattern like native JS", async () => {
+    expect(await value(`return "abc".search()`)).toBe(0)
+    expect(await value(`const m = "abc".match(); return { first: m[0], index: m.index }`)).toEqual({
+      first: "",
+      index: 0,
+    })
+  })
+})
+
+describe("coercion parity: ++ and -- use CodeMode numeric coercion", () => {
+  test("numeric strings increment like native JS", async () => {
+    expect(await value(`let x = "5"; x++; return x`)).toBe(6)
+    expect(await value(`let x = "5"; return ++x`)).toBe(6)
+    expect(await value(`const o = { n: "2" }; o.n--; return o.n`)).toBe(1)
+  })
+
+  test("dates increment through their epoch time", async () => {
+    expect(await value(`let d = new Date(5); d++; return d`)).toBe(6)
+  })
+
+  test("plain data objects become NaN instead of crashing", async () => {
+    expect(await value(`let x = {}; x++; return Number.isNaN(x)`)).toBe(true)
+    expect(await value(`const o = { a: {} }; o.a++; return Number.isNaN(o.a)`)).toBe(true)
+  })
+
+  test("opaque runtime references reject with a clear error", async () => {
+    const err = await error(`let f = () => 1; f++`)
+    expect(err.message).toContain("data value")
+  })
+})
+
+describe("coercion parity: unknown static members read as undefined", () => {
+  test("feature detection on missing statics works like native JS", async () => {
+    expect(await value(`return typeof Math.sum`)).toBe("undefined")
+    expect(await value(`return RegExp.quote === undefined`)).toBe(true)
+    expect(await value(`return Number.range === undefined`)).toBe(true)
+    expect(await value(`return String.raw === undefined`)).toBe(true)
+    expect(await value(`return isFinite.something === undefined`)).toBe(true)
+    expect(await value(`return console.group === undefined`)).toBe(true)
+    expect(await value(`return Date.moment === undefined`)).toBe(true)
+    expect(await value(`return JSON.rawJSON === undefined`)).toBe(true)
+    expect(await value(`return URL.createObjectURL === undefined`)).toBe(true)
+    expect(await value(`return Math.sum?.([1]) ?? "fallback"`)).toBe("fallback")
+  })
+
+  test("known statics still resolve and run", async () => {
+    expect(await value(`return typeof Math.max`)).toBe("function")
+    expect(await value(`return typeof console.log`)).toBe("function")
+    expect(await value(`return typeof Date.now`)).toBe("function")
+    expect(await value(`return typeof Math.sumPrecise`)).toBe("function")
+    expect(await value(`return typeof RegExp.escape`)).toBe("function")
+    expect(await value(`return typeof Object.groupBy`)).toBe("function")
+    expect(await value(`return typeof Map.groupBy`)).toBe("function")
+    expect(await value(`return Math.max(1, 2)`)).toBe(2)
+    expect(await value(`return Math.sumPrecise([1, 2])`)).toBe(3)
+    expect(await value(`return RegExp.escape("a.b")`)).toBe("\\x61\\.b")
+    expect(await value(`return URL.canParse("https://example.com")`)).toBe(true)
+    expect(await value(`return Number.isInteger(3)`)).toBe(true)
+    expect(await value(`return Number.MAX_SAFE_INTEGER`)).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  test("calling an unknown static reports a native-style TypeError", async () => {
+    expect(await value(`try { Math.sum([1]) } catch (e) { return e.name + ": " + e.message }`)).toBe(
+      "TypeError: Math.sum is not a function.",
+    )
+    expect(await value(`try { Math["sum"]([1]) } catch (e) { return e.message }`)).toBe("Math.sum is not a function.")
+    expect(await value(`try { JSON.rawJSON("1") } catch (e) { return e.message }`)).toBe(
+      "JSON.rawJSON is not a function.",
+    )
+  })
+
+  test("blocked members still throw instead of reading as undefined", async () => {
+    const err = await error(`return Math.constructor`)
+    expect(err.message).toContain("not available")
+    const coercionErr = await error(`return Number.constructor`)
+    expect(coercionErr.message).toContain("Number.constructor is not available")
   })
 })

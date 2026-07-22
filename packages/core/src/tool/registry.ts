@@ -1,18 +1,27 @@
 export * as ToolRegistry from "./registry"
 
-import { ToolOutput, type ToolCall, type ToolDefinition, type ToolResultValue } from "@opencode-ai/llm"
-import { Context, Effect, Layer, Scope } from "effect"
+import { ToolOutput, type ToolCall, type ToolDefinition, type ToolResultValue } from "@opencode-ai/ai"
+import { Context, Effect, Layer, Scope, Semaphore } from "effect"
 import type { AgentV2 } from "../agent"
+import { Image } from "../image"
 import { PermissionV2 } from "../permission"
 import { SessionMessage } from "../session/message"
 import { SessionSchema } from "../session/schema"
 import { ToolOutputStore } from "../tool-output-store"
 import { Wildcard } from "../util/wildcard"
-import { ExecuteTool } from "./execute"
-import { definition, permission, registrationEntries, RegistrationError, settle, type AnyTool } from "./tool"
+import { CodeMode } from "../codemode"
+import {
+  definition,
+  permission,
+  registrationEntries,
+  RegistrationError,
+  settle,
+  validateNamespace,
+  type AnyTool,
+} from "./tool"
 import { Tools } from "./tools"
 import { ToolHooks } from "./hooks"
-import { makeLocationNode } from "../effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { toSessionError } from "../session/to-session-error"
 
@@ -36,6 +45,13 @@ export interface Interface {
     tools: Readonly<Record<string, AnyTool>>,
     options?: Tools.RegisterOptions,
   ) => Effect.Effect<void, RegistrationError, Scope.Scope>
+  /** Internal atomic registration capability used by plugin transforms. */
+  readonly registerBatch: (
+    registrations: ReadonlyArray<{
+      readonly tools: Readonly<Record<string, AnyTool>>
+      readonly options?: Tools.RegisterOptions
+    }>,
+  ) => Effect.Effect<void, RegistrationError, Scope.Scope>
 }
 
 export interface Materialization {
@@ -57,13 +73,48 @@ const registryLayer = Layer.effect(
   Effect.gen(function* () {
     const resources = yield* ToolOutputStore.Service
     const toolHooks = yield* ToolHooks.Service
+    const image = yield* Image.Service
+    const codeMode = yield* CodeMode.Service
+
+    type NormalizedItem = ToolOutput["content"][number] | "decode" | "size"
+    const normalizeImages = Effect.fn("ToolRegistry.normalizeImages")(function* (content: ToolOutput["content"]) {
+      const normalized = yield* Effect.forEach(content, (item): Effect.Effect<NormalizedItem> => {
+        if (item.type !== "file" || !item.mime.startsWith("image/")) return Effect.succeed(item)
+        // RFC 2397 permits parameters between the mime and ";base64".
+        const base64 = /^data:[^,]*;base64,(.*)$/s.exec(item.uri)?.[1]
+        if (base64 === undefined) return Effect.succeed(item)
+        const resource = item.name ?? `${item.mime} tool output`
+        return image
+          .normalize(resource, { uri: resource, content: base64, encoding: "base64", mime: item.mime })
+          .pipe(
+            Effect.map((result) => ({
+              ...item,
+              uri: `data:${result.mime};base64,${result.content}`,
+              mime: result.mime,
+            })),
+            Effect.catchTag("Image.ResizerUnavailableError", () => Effect.succeed(item)),
+            Effect.catchTag("Image.DecodeError", () => Effect.succeed("decode" as const)),
+            Effect.catchTag("Image.SizeError", () => Effect.succeed("size" as const)),
+          )
+      })
+      const note = (reason: "decode" | "size", text: string) => {
+        const count = normalized.filter((item) => item === reason).length
+        if (count === 0) return []
+        return [{ type: "text" as const, text: `[${count} image${count === 1 ? "" : "s"} omitted: ${text}]` }]
+      }
+      return [
+        ...normalized.filter((item) => typeof item !== "string"),
+        ...note("decode", "could not be decoded."),
+        ...note("size", "could not be resized below the image size limit."),
+      ]
+    })
     type Registration = {
       readonly tool: AnyTool
       readonly name: string
-      readonly group?: string
-      readonly codemode: boolean
+      readonly namespace?: string
     }
     const local = new Map<string, Array<{ readonly token: object; readonly registration: Registration }>>()
+    const registrationLock = Semaphore.makeUnsafe(1)
 
     const settleTool = Effect.fn("ToolRegistry.settleTool")(function* (input: ExecuteInput, tool: AnyTool) {
       // Hooks fire only for hosted/local tools; provider-executed calls never reach settleTool.
@@ -84,10 +135,11 @@ const registryLayer = Layer.effect(
           agent: input.agent,
           messageID: input.messageID,
           callID: input.call.id,
-          progress: (update) =>
-            input.progress?.({
-              structured: update.structured,
-              content: (update.content ?? []).map((part) =>
+          progress: (update) => {
+            const progress = input.progress
+            if (!progress) return Effect.void
+            return normalizeImages(
+              (update.content ?? []).map((part) =>
                 part.type === "text"
                   ? { type: "text" as const, text: part.text }
                   : {
@@ -97,7 +149,8 @@ const registryLayer = Layer.effect(
                       name: part.name,
                     },
               ),
-            }) ?? Effect.void,
+            ).pipe(Effect.flatMap((content) => progress({ structured: update.structured, content })))
+          },
         },
       ).pipe(
         Effect.map((output) => ({ output })),
@@ -115,7 +168,7 @@ const registryLayer = Layer.effect(
         const bounded = yield* resources.bound({
           sessionID: input.sessionID,
           callID: input.call.id,
-          output: pending.output,
+          output: { structured: pending.output.structured, content: yield* normalizeImages(pending.output.content) },
         })
         const result = ToolOutput.toResultValue(bounded.output)
         settlement =
@@ -147,81 +200,114 @@ const registryLayer = Layer.effect(
       }
     })
 
-    return Service.of({
-      register: Effect.fn("ToolRegistry.register")(function* (tools, options) {
-        const entries = registrationEntries(tools, options?.group)
-        if (entries.length === 0) return
-        const codemode = options?.codemode ?? true
-        const reserved = codemode ? undefined : entries.find((entry) => entry.key === "execute")
-        if (reserved)
-          return yield* Effect.fail(
-            new RegistrationError({ name: reserved.key, message: 'Tool name "execute" is reserved for CodeMode' }),
-          )
-        yield* Effect.uninterruptible(
+    const registerBatch: Interface["registerBatch"] = Effect.fn("ToolRegistry.registerBatch")(
+      function* (registrations) {
+        const planned = yield* Effect.forEach(registrations, ({ tools, options }) =>
           Effect.gen(function* () {
-            const token = {}
-            for (const entry of entries)
-              local.set(entry.key, [
-                ...(local.get(entry.key) ?? []),
-                {
-                  token,
-                  registration: {
-                    tool: entry.tool,
-                    name: entry.name,
-                    group: entry.group,
-                    codemode,
-                  },
-                },
-              ])
-            yield* Effect.addFinalizer(() =>
-              Effect.sync(() => {
-                for (const entry of entries) {
-                  const registrations =
-                    local.get(entry.key)?.filter((registration) => registration.token !== token) ?? []
-                  if (registrations.length > 0) local.set(entry.key, registrations)
-                  else local.delete(entry.key)
-                }
-              }),
-            )
+            if (options?.namespace !== undefined) yield* validateNamespace(options.namespace)
+            const entries = registrationEntries(tools, options?.namespace)
+            const codemode = options?.codemode ?? true
+            const reserved = codemode ? undefined : entries.find((entry) => entry.key === "execute")
+            if (reserved)
+              return yield* Effect.fail(
+                new RegistrationError({ name: reserved.key, message: 'Tool name "execute" is reserved for CodeMode' }),
+              )
+            return { tools, options, entries, codemode }
           }),
         )
-      }),
-      materialize: Effect.fn("ToolRegistry.materialize")(function* (permissions) {
-        const direct = new Map<string, Registration>()
-        const codemode = new Map<string, Registration>()
-        const rules = permissions ?? []
-        for (const [name, entries] of local) {
-          const registration = entries.at(-1)?.registration
-          if (!registration) continue
-          if (whollyDisabled(permission(registration.tool, name), rules)) continue
-          if (registration.codemode) codemode.set(name, registration)
-          else direct.set(name, registration)
-        }
-        const execute =
-          codemode.size > 0 && !whollyDisabled("execute", rules) ? ExecuteTool.create(codemode) : undefined
-        return {
-          definitions: [
-            ...Array.from(direct, ([name, registration]) => definition(name, registration.tool)),
-            ...(execute ? [definition("execute", execute)] : []),
-          ],
-          settle: (input) => {
-            if (input.call.name === "execute" && execute) return settleTool(input, execute)
-            const registration = direct.get(input.call.name)
-            if (registration) return settleTool(input, registration.tool)
-            return Effect.succeed({
-              result: { type: "error", value: `Unknown tool: ${input.call.name}` },
-              error: { type: "tool.unknown", message: `Unknown tool: ${input.call.name}` },
-            })
+        // CodeMode registrations live in the CodeMode service; the registry keeps only direct tools.
+        yield* Effect.forEach(
+          planned.filter((plan) => plan.codemode && plan.entries.length > 0),
+          (plan) => codeMode.register(plan.tools, plan.options),
+          { discard: true },
+        )
+        const direct = planned.filter((plan) => !plan.codemode)
+        if (direct.every((plan) => plan.entries.length === 0)) return
+        yield* Effect.uninterruptible(
+          registrationLock.withPermit(
+            Effect.gen(function* () {
+              const token = {}
+              for (const { entries } of direct)
+                for (const entry of entries)
+                  local.set(entry.key, [
+                    ...(local.get(entry.key) ?? []),
+                    {
+                      token,
+                      registration: {
+                        tool: entry.tool,
+                        name: entry.name,
+                        namespace: entry.namespace,
+                      },
+                    },
+                  ])
+              yield* Effect.addFinalizer(() =>
+                registrationLock.withPermit(
+                  Effect.sync(() => {
+                    for (const { entries } of direct)
+                      for (const entry of entries) {
+                        const registrations =
+                          local.get(entry.key)?.filter((registration) => registration.token !== token) ?? []
+                        if (registrations.length > 0) local.set(entry.key, registrations)
+                        else local.delete(entry.key)
+                      }
+                  }),
+                ),
+              )
+            }),
+          ),
+        )
+      },
+    )
+
+    return Service.of({
+      register: Effect.fn("ToolRegistry.register")((tools, options) =>
+        registerBatch([
+          {
+            tools,
+            ...(options === undefined ? {} : { options }),
           },
-        }
-      }),
+        ]),
+      ),
+      registerBatch,
+      materialize: Effect.fn("ToolRegistry.materialize")((permissions) =>
+        registrationLock.withPermit(
+          Effect.gen(function* () {
+            const direct = new Map<string, Registration>()
+            const rules = permissions ?? []
+            for (const [name, entries] of local) {
+              const registration = entries.at(-1)?.registration
+              if (!registration) continue
+              if (whollyDisabled(permission(registration.tool, name), rules)) continue
+              direct.set(name, registration)
+            }
+            const execute = (yield* codeMode.materialize(permissions)).tool
+            return {
+              definitions: [
+                ...Array.from(direct, ([name, registration]) => definition(name, registration.tool)),
+                ...(execute ? [definition("execute", execute)] : []),
+              ],
+              settle: (input: ExecuteInput) => {
+                if (input.call.name === "execute" && execute) return settleTool(input, execute)
+                const registration = direct.get(input.call.name)
+                if (registration) return settleTool(input, registration.tool)
+                return Effect.succeed({
+                  result: { type: "error", value: `Unknown tool: ${input.call.name}` },
+                  error: { type: "tool.unknown", message: `Unknown tool: ${input.call.name}` },
+                })
+              },
+            }
+          }),
+        ),
+      ),
     })
   }),
 )
 
 const layer = Layer.effect(
   Tools.Service,
-  Service.use((registry) => Effect.succeed(Tools.Service.of({ register: registry.register }))),
+  Service.use((registry) =>
+    Effect.succeed(Tools.Service.of({ register: registry.register, registerBatch: registry.registerBatch })),
+  ),
 ).pipe(Layer.provideMerge(registryLayer))
 
 function whollyDisabled(action: string, rules: PermissionV2.Ruleset) {
@@ -232,11 +318,11 @@ function whollyDisabled(action: string, rules: PermissionV2.Ruleset) {
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [ToolOutputStore.node, ToolHooks.node],
+  deps: [CodeMode.node, ToolOutputStore.node, ToolHooks.node, Image.node],
 })
 
 export const toolsNode = makeLocationNode({
   service: Tools.Service,
   layer,
-  deps: [ToolOutputStore.node, ToolHooks.node],
+  deps: [CodeMode.node, ToolOutputStore.node, ToolHooks.node, Image.node],
 })

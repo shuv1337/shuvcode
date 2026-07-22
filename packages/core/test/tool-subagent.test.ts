@@ -1,9 +1,10 @@
 import { describe, expect } from "bun:test"
 import { DateTime, Effect, Fiber, Layer, Schema, Stream } from "effect"
+import path from "path"
 import { Money } from "@opencode-ai/schema/money"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Location } from "@opencode-ai/core/location"
@@ -164,6 +165,77 @@ describe("SubagentTool", () => {
     ),
   )
 
+  it.live("prevents subagents from launching subagents by default", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* SessionV2.Service
+          const root = yield* sessions.create({ location })
+          const parent = yield* sessions.create({ parentID: root.id, title: "parent" })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* ToolRegistry.Service.pipe(Effect.provide(locations.get(parent.location)))
+          yield* waitForTool(registry, SubagentTool.name)
+
+          expect(
+            yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: "call-nested-subagent",
+                name: SubagentTool.name,
+                input: { agent: "reviewer", description: "nested", prompt: "should fail" },
+              },
+            }),
+          ).toEqual({ type: "error", value: expect.stringContaining("Subagent depth limit reached (1)") })
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(0)
+        }),
+      ),
+    ),
+  )
+
+  it.live("allows nested subagents up to the configured depth", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            Bun.write(path.join(dir.path, "opencode.json"), JSON.stringify({ experimental: { subagent_depth: 2 } })),
+          )
+          const location = Location.Ref.make({ directory: AbsolutePath.make(dir.path) })
+          const sessions = yield* SessionV2.Service
+          const root = yield* sessions.create({ location })
+          const parent = yield* sessions.create({ parentID: root.id, title: "parent", model: parentModel })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* ToolRegistry.Service.pipe(Effect.provide(locations.get(parent.location)))
+          yield* waitForTool(registry, SubagentTool.name)
+
+          const settled = yield* settleTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-configured-nested-subagent",
+              name: SubagentTool.name,
+              input: { agent: "reviewer", description: "nested", prompt: "should run" },
+            },
+          })
+
+          expect(settled.output?.structured).toMatchObject({ status: "completed", output: childText })
+          expect((yield* sessions.get(outputSessionID(settled.output?.structured))).parentID).toBe(parent.id)
+        }),
+      ),
+    ),
+  )
+
   it.live("runs a foreground child session and returns the final assistant text", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
@@ -201,6 +273,9 @@ describe("SubagentTool", () => {
             agent: "reviewer",
             model: childModel,
           })
+          expect((yield* sessions.pending(child.id)).find((message) => message.type === "user")?.data.text).toBe(
+            "You are a subagent spawned by another session.\nreview this",
+          )
 
           const fallback = yield* settleTool(registry, {
             sessionID: parent.id,

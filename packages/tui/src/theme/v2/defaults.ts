@@ -1,4 +1,13 @@
-import type { ThemeFile } from "./index"
+import type { HueName, ThemeFile } from "./schema"
+
+export const DEFAULT_CATEGORICAL = [
+  "blue",
+  "purple",
+  "green",
+  "orange",
+  "red",
+  "cyan",
+] as const satisfies readonly HueName[]
 
 export const DEFAULT_THEME = {
   version: 2,
@@ -93,62 +102,87 @@ export const DEFAULT_THEME = {
         900: "#581c87",
       },
       accent: "$hue.blue",
+      interactive: "$hue.blue",
       neutral: "$hue.gray",
     },
-    color: {
+    categorical: DEFAULT_CATEGORICAL,
+    text: {
+      default: "$hue.neutral.800",
+      subdued: "$hue.neutral.600",
+      action: {
+        primary: { default: "$hue.neutral.200", $disabled: "$hue.neutral.500" },
+        destructive: { default: "$hue.red.200", $disabled: "$hue.neutral.500" },
+      },
+      formfield: {
+        default: "$hue.neutral.800",
+        $focused: "$text.action.primary.default",
+        $pressed: "$hue.neutral.200",
+        $disabled: "$hue.neutral.500",
+        $selected: "$hue.interactive.700",
+      },
+      feedback: {
+        error: { default: "$hue.red.700", subdued: "$hue.red.600" },
+        warning: { default: "$hue.yellow.800", subdued: "$hue.yellow.700" },
+        success: { default: "$hue.green.700", subdued: "$hue.green.600" },
+        info: { default: "$hue.cyan.700", subdued: "$hue.cyan.600" },
+      },
+    },
+    background: {
+      default: "$hue.neutral.200",
+      surface: {
+        offset: "$hue.neutral.300",
+        overlay: "$hue.neutral.400",
+      },
+      action: {
+        primary: {
+          default: "$hue.interactive.600",
+          $hovered: "$hue.interactive.700",
+          $focused: "$hue.interactive.700",
+          $pressed: "$hue.interactive.800",
+          $selected: "$hue.interactive.700",
+          $disabled: "$hue.neutral.300",
+        },
+        destructive: {
+          default: "$hue.red.600",
+          $hovered: "$hue.red.700",
+          $focused: "$hue.red.700",
+          $pressed: "$hue.red.800",
+          $selected: "$hue.red.700",
+          $disabled: "$hue.neutral.300",
+        },
+      },
+      formfield: {
+        default: "$background.default",
+        $hovered: "$background.surface.offset",
+        $focused: "$background.action.primary.default",
+        $pressed: "$hue.interactive.800",
+        $disabled: "$background.default",
+        $selected: "$background.formfield.default",
+      },
+      feedback: {
+        error: { default: "$background.default" },
+        warning: { default: "$background.default" },
+        success: { default: "$background.default" },
+        info: { default: "$background.default" },
+      },
+    },
+    border: { default: "$hue.neutral.300" },
+    scrollbar: { default: "$hue.neutral.400" },
+    diff: {
       text: {
-        default: "$hue.neutral.900",
-        subdued: "$hue.neutral.600",
-        action: {
-          primary: { default: "$hue.neutral.100", $disabled: "$hue.neutral.500" },
-          secondary: { default: "$hue.neutral.900", $disabled: "$hue.neutral.500" },
-          destructive: { default: "$hue.red.100", $disabled: "$hue.neutral.500" },
-        },
-        feedback: {
-          error: { default: "$hue.red.700", subdued: "$hue.red.600" },
-          warning: { default: "$hue.yellow.800", subdued: "$hue.yellow.700" },
-          success: { default: "$hue.green.700", subdued: "$hue.green.600" },
-          info: { default: "$hue.cyan.700", subdued: "$hue.cyan.600" },
-        },
+        added: "$hue.green.700",
+        removed: "$hue.red.700",
+        context: "$hue.neutral.900",
+        hunkHeader: "$hue.purple.600",
       },
-      background: {
-        default: "$hue.neutral.100",
-        action: {
-          primary: {
-            default: "$hue.accent.600", $hovered: "$hue.accent.700", $pressed: "$hue.accent.800",
-            $selected: "$hue.accent.700", $disabled: "$hue.neutral.300",
-          },
-          secondary: {
-            default: "$hue.neutral.200", $hovered: "$hue.neutral.300", $pressed: "$hue.neutral.400",
-            $selected: "$hue.neutral.300", $disabled: "$hue.neutral.200",
-          },
-          destructive: {
-            default: "$hue.red.600", $hovered: "$hue.red.700", $pressed: "$hue.red.800",
-            $selected: "$hue.red.700", $disabled: "$hue.neutral.300",
-          },
-        },
-        feedback: {
-          error: { default: "$color.background.default" },
-          warning: { default: "$color.background.default" },
-          success: { default: "$color.background.default" },
-          info: { default: "$color.background.default" },
-        },
+      background: { added: "$hue.green.100", removed: "$hue.red.100", context: "$hue.neutral.100" },
+      highlight: { added: "$hue.green.600", removed: "$hue.red.600" },
+      lineNumber: {
+        text: "$hue.neutral.600",
+        background: { added: "$hue.green.200", removed: "$hue.red.200" },
       },
-      border: { default: "$hue.neutral.300" },
-      scrollbar: { default: "$hue.neutral.400" },
-      diff: {
-        text: {
-          added: "$hue.green.700", removed: "$hue.red.700", context: "$hue.neutral.900",
-          hunkHeader: "$hue.purple.600",
-        },
-        background: { added: "$hue.green.100", removed: "$hue.red.100", context: "$hue.neutral.100" },
-        highlight: { added: "$hue.green.600", removed: "$hue.red.600" },
-        lineNumber: {
-          text: "$hue.neutral.600",
-          background: { added: "$hue.green.200", removed: "$hue.red.200" },
-        },
-      },
-      syntax: {
+    },
+    syntax: {
       comment: "$hue.neutral.600",
       keyword: "$hue.purple.600",
       function: "$hue.accent.600",
@@ -159,7 +193,7 @@ export const DEFAULT_THEME = {
       operator: "$hue.cyan.600",
       punctuation: "$hue.neutral.900",
     },
-      markdown: {
+    markdown: {
       text: "$hue.neutral.900",
       heading: "$hue.purple.600",
       link: "$hue.accent.600",
@@ -174,24 +208,19 @@ export const DEFAULT_THEME = {
       image: "$hue.accent.600",
       imageText: "$hue.cyan.600",
       codeBlock: "$hue.neutral.900",
-      },
     },
     "@context:elevated": {
-      color: {
-        text: { action: { primary: { default: "$hue.neutral.100" } } },
-        background: {
-          default: "$hue.neutral.200",
-          action: { primary: { default: "$hue.accent.500" } },
-        },
+      text: { action: { primary: { default: "$hue.neutral.100" } } },
+      background: {
+        default: "$background.surface.offset",
+        action: { primary: { default: "$hue.interactive.500", $hovered: "$background.surface.overlay" } },
       },
     },
     "@context:overlay": {
-      color: {
-        text: { action: { primary: { default: "$hue.neutral.100" } } },
-        background: {
-          default: "$hue.neutral.300",
-          action: { primary: { default: "$hue.accent.500" } },
-        },
+      text: { action: { primary: { default: "$hue.neutral.100" } } },
+      background: {
+        default: "$background.surface.overlay",
+        action: { primary: { default: "$hue.interactive.500" } },
       },
     },
   },
@@ -286,62 +315,87 @@ export const DEFAULT_THEME = {
         900: "#581c87",
       },
       accent: "$hue.blue",
+      interactive: "$hue.blue",
       neutral: "$hue.gray",
     },
-    color: {
+    categorical: DEFAULT_CATEGORICAL,
+    text: {
+      default: "$hue.neutral.200",
+      subdued: "$hue.neutral.400",
+      action: {
+        primary: { default: "$hue.neutral.200", $disabled: "$hue.neutral.500" },
+        destructive: { default: "$hue.red.200", $disabled: "$hue.neutral.500" },
+      },
+      formfield: {
+        default: "$hue.neutral.200",
+        $focused: "$text.action.primary.default",
+        $pressed: "$hue.neutral.200",
+        $disabled: "$hue.neutral.500",
+        $selected: "$hue.interactive.500",
+      },
+      feedback: {
+        error: { default: "$hue.red.300", subdued: "$hue.red.400" },
+        warning: { default: "$hue.yellow.200", subdued: "$hue.yellow.300" },
+        success: { default: "$hue.green.300", subdued: "$hue.green.400" },
+        info: { default: "$hue.cyan.300", subdued: "$hue.cyan.400" },
+      },
+    },
+    background: {
+      default: "$hue.neutral.800",
+      surface: {
+        offset: "$hue.neutral.700",
+        overlay: "$hue.neutral.600",
+      },
+      action: {
+        primary: {
+          default: "$hue.interactive.500",
+          $hovered: "$hue.interactive.600",
+          $focused: "$hue.interactive.600",
+          $pressed: "$hue.interactive.800",
+          $selected: "$hue.interactive.600",
+          $disabled: "$hue.neutral.800",
+        },
+        destructive: {
+          default: "$hue.red.600",
+          $hovered: "$hue.red.700",
+          $focused: "$hue.red.700",
+          $pressed: "$hue.red.800",
+          $selected: "$hue.red.700",
+          $disabled: "$hue.neutral.800",
+        },
+      },
+      formfield: {
+        default: "$background.default",
+        $hovered: "$background.surface.offset",
+        $focused: "$background.action.primary.default",
+        $pressed: "$hue.interactive.800",
+        $disabled: "$background.default",
+        $selected: "$background.formfield.default",
+      },
+      feedback: {
+        error: { default: "$background.default" },
+        warning: { default: "$background.default" },
+        success: { default: "$background.default" },
+        info: { default: "$background.default" },
+      },
+    },
+    border: { default: "$hue.neutral.700" },
+    scrollbar: { default: "$hue.neutral.600" },
+    diff: {
       text: {
-        default: "$hue.neutral.100",
-        subdued: "$hue.neutral.400",
-        action: {
-          primary: { default: "$hue.neutral.100", $disabled: "$hue.neutral.500" },
-          secondary: { default: "$hue.neutral.100", $disabled: "$hue.neutral.500" },
-          destructive: { default: "$hue.red.100", $disabled: "$hue.neutral.500" },
-        },
-        feedback: {
-          error: { default: "$hue.red.300", subdued: "$hue.red.400" },
-          warning: { default: "$hue.yellow.200", subdued: "$hue.yellow.300" },
-          success: { default: "$hue.green.300", subdued: "$hue.green.400" },
-          info: { default: "$hue.cyan.300", subdued: "$hue.cyan.400" },
-        },
+        added: "$hue.green.300",
+        removed: "$hue.red.300",
+        context: "$hue.neutral.100",
+        hunkHeader: "$hue.purple.400",
       },
-      background: {
-        default: "$hue.neutral.900",
-        action: {
-          primary: {
-            default: "$hue.accent.500", $hovered: "$hue.accent.600", $pressed: "$hue.accent.800",
-            $selected: "$hue.accent.600", $disabled: "$hue.neutral.800",
-          },
-          secondary: {
-            default: "$hue.neutral.800", $hovered: "$hue.neutral.700", $pressed: "$hue.neutral.900",
-            $selected: "$hue.neutral.700", $disabled: "$hue.neutral.900",
-          },
-          destructive: {
-            default: "$hue.red.600", $hovered: "$hue.red.700", $pressed: "$hue.red.800",
-            $selected: "$hue.red.700", $disabled: "$hue.neutral.800",
-          },
-        },
-        feedback: {
-          error: { default: "$color.background.default" },
-          warning: { default: "$color.background.default" },
-          success: { default: "$color.background.default" },
-          info: { default: "$color.background.default" },
-        },
+      background: { added: "$hue.green.900", removed: "$hue.red.900", context: "$hue.neutral.900" },
+      highlight: { added: "$hue.green.400", removed: "$hue.red.400" },
+      lineNumber: {
+        text: "$hue.neutral.400",
+        background: { added: "$hue.green.800", removed: "$hue.red.800" },
       },
-      border: { default: "$hue.neutral.700" },
-      scrollbar: { default: "$hue.neutral.600" },
-      diff: {
-        text: {
-          added: "$hue.green.300", removed: "$hue.red.300", context: "$hue.neutral.100",
-          hunkHeader: "$hue.purple.400",
-        },
-        background: { added: "$hue.green.900", removed: "$hue.red.900", context: "$hue.neutral.900" },
-        highlight: { added: "$hue.green.400", removed: "$hue.red.400" },
-        lineNumber: {
-          text: "$hue.neutral.400",
-          background: { added: "$hue.green.800", removed: "$hue.red.800" },
-        },
-      },
-      syntax: {
+    },
+    syntax: {
       comment: "$hue.neutral.400",
       keyword: "$hue.purple.400",
       function: "$hue.accent.400",
@@ -352,7 +406,7 @@ export const DEFAULT_THEME = {
       operator: "$hue.cyan.400",
       punctuation: "$hue.neutral.100",
     },
-      markdown: {
+    markdown: {
       text: "$hue.neutral.100",
       heading: "$hue.purple.400",
       link: "$hue.accent.400",
@@ -367,24 +421,19 @@ export const DEFAULT_THEME = {
       image: "$hue.accent.400",
       imageText: "$hue.cyan.400",
       codeBlock: "$hue.neutral.100",
-      },
     },
     "@context:elevated": {
-      color: {
-        text: { action: { primary: { default: "$hue.neutral.100" } } },
-        background: {
-          default: "$hue.neutral.800",
-          action: { primary: { default: "$hue.accent.400" } },
-        },
+      text: { action: { primary: { default: "$hue.neutral.200" } } },
+      background: {
+        default: "$background.surface.offset",
+        action: { primary: { default: "$hue.interactive.400", $hovered: "$background.surface.overlay" } },
       },
     },
     "@context:overlay": {
-      color: {
-        text: { action: { primary: { default: "$hue.neutral.900" } } },
-        background: {
-          default: "$hue.neutral.700",
-          action: { primary: { default: "$hue.accent.400" } },
-        },
+      text: { action: { primary: { default: "$hue.neutral.200" } } },
+      background: {
+        default: "$background.surface.overlay",
+        action: { primary: { default: "$hue.interactive.400" } },
       },
     },
   },

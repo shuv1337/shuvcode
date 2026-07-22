@@ -8,11 +8,12 @@ import {
   GlobalNamespace,
   IntrinsicReference,
   InterpreterRuntimeError,
+  JsonMethodReference,
   PromiseCapabilityFunction,
   PromiseNamespace,
   UriFunction,
 } from "./model.js"
-import { rejectCircularInsertion, typeofValue } from "./references.js"
+import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, typeofValue } from "./references.js"
 import { isBlockedMember, type SafeObject } from "../tool-runtime.js"
 import {
   CodeModeDate,
@@ -22,13 +23,13 @@ import {
   CodeModeSet,
   CodeModeURL,
   CodeModeURLSearchParams,
+  isCodeModeValue,
 } from "../values.js"
-import { invokeDateMethod, invokeDateStatic } from "../stdlib/date.js"
-import { invokeJsonMethod } from "../stdlib/json.js"
+import { dateSetterArgumentCount, invokeDateMethod, invokeDateStatic } from "../stdlib/date.js"
 import { invokeMathMethod } from "../stdlib/math.js"
 import { invokeNumberMethod, invokeNumberStatic } from "../stdlib/number.js"
 import { invokeObjectMethod } from "../stdlib/object.js"
-import { invokeRegExpMethod, matchToValue, toHostRegex } from "../stdlib/regexp.js"
+import { invokeRegExpMethod, invokeRegExpStatic, matchToValue, toHostRegex } from "../stdlib/regexp.js"
 import { invokeStringStatic } from "../stdlib/string.js"
 import { invokeURLMethod, invokeURLStatic, uriArgument } from "../stdlib/url.js"
 import { boundedData, coerceToNumber, coerceToString, errorBrandName } from "../stdlib/value.js"
@@ -53,6 +54,7 @@ export type SupportedCallback =
   | UriFunction
   | PromiseCapabilityFunction
   | GlobalMethodReference
+  | JsonMethodReference
   | IntrinsicReference
   | ErrorConstructorReference
   | GlobalNamespace
@@ -64,6 +66,7 @@ export const isSupportedCallback = (value: unknown): value is SupportedCallback 
   value instanceof UriFunction ||
   value instanceof PromiseCapabilityFunction ||
   value instanceof GlobalMethodReference ||
+  value instanceof JsonMethodReference ||
   value instanceof IntrinsicReference ||
   value instanceof ErrorConstructorReference ||
   // Callable namespaces dispatch like JS: Array/Object/Date/RegExp construct,
@@ -96,7 +99,17 @@ export const invokeIntrinsic = <R>(
     return invokeArrayMethod(runner, ref.receiver, ref.name, args, node)
   }
   if (ref.receiver instanceof CodeModeDate) {
-    return Effect.succeed(invokeDateMethod(ref.receiver, ref.name, node))
+    const target = ref.receiver
+    const argumentCount = dateSetterArgumentCount(ref.name)
+    if (argumentCount === undefined) return Effect.succeed(invokeDateMethod(target, ref.name, [], node))
+    // Native setters read the current time before argument coercion, whose callbacks may mutate the Date.
+    const initialTime = target.time
+    return Effect.map(
+      Effect.forEach(args.slice(0, argumentCount), (arg) => coerceNumericArgument(runner, arg, node), {
+        concurrency: 1,
+      }),
+      (values) => invokeDateMethod(target, ref.name, values, node, initialTime),
+    )
   }
   if (ref.receiver instanceof CodeModeRegExp) {
     return Effect.succeed(invokeRegExpMethod(ref.receiver, ref.name, args, node))
@@ -113,12 +126,38 @@ export const invokeIntrinsic = <R>(
   if (ref.receiver instanceof CodeModeURLSearchParams) {
     return invokeURLSearchParamsMethod(runner, ref.receiver, ref.name, args, node)
   }
-  throw new InterpreterRuntimeError(`Method '${ref.name}' is not available in CodeMode.`, node)
+  throw new InterpreterRuntimeError(`Method '${ref.name}' is not available.`, node)
+}
+
+const coerceNumericArgument = <R>(
+  runner: CallbackRunner<R>,
+  value: unknown,
+  node: AstNode,
+): Effect.Effect<number, unknown, R> => {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || isCodeModeValue(value)) {
+    return Effect.succeed(coerceToNumber(value))
+  }
+  const object = value as Record<string, unknown>
+  return Effect.gen(function* () {
+    if (Object.hasOwn(object, "valueOf") && typeofValue(object.valueOf) === "function") {
+      const result = yield* runner.invokeCallable(object.valueOf, [], node)
+      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
+        return coerceToNumber(result)
+      }
+    }
+    if (!Object.hasOwn(object, "toString")) return coerceToNumber(value)
+    if (typeofValue(object.toString) === "function") {
+      const result = yield* runner.invokeCallable(object.toString, [], node)
+      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
+        return coerceToNumber(result)
+      }
+    }
+    throw new InterpreterRuntimeError("Cannot convert object to primitive value.", node).as("TypeError")
+  })
 }
 
 export const invokeGlobalMethod = (ref: GlobalMethodReference, args: Array<unknown>, node: AstNode): unknown => {
-  if (ref.namespace === "console")
-    throw new InterpreterRuntimeError(`console.${ref.name} is not available in CodeMode.`, node)
+  if (ref.namespace === "console") throw new InterpreterRuntimeError(`console.${ref.name} is not available.`, node)
   if (ref.namespace === "Object") return invokeObjectMethod(ref.name, args, node)
   if (ref.namespace === "Math") return invokeMathMethod(ref.name, args, node)
   if (ref.namespace === "Array") return invokeArrayStatic(ref.name, args, node)
@@ -126,32 +165,38 @@ export const invokeGlobalMethod = (ref: GlobalMethodReference, args: Array<unkno
   if (ref.namespace === "String") return invokeStringStatic(ref.name, args, node)
   if (ref.namespace === "URL") return invokeURLStatic(ref.name, args, node)
   if (ref.namespace === "Date") return invokeDateStatic(ref.name, args, node)
-  if (
-    ref.namespace === "RegExp" ||
-    ref.namespace === "Map" ||
-    ref.namespace === "Set" ||
-    ref.namespace === "URLSearchParams"
-  ) {
-    throw new InterpreterRuntimeError(`${ref.namespace}.${ref.name} is not available in CodeMode.`, node)
+  if (ref.namespace === "RegExp") return invokeRegExpStatic(ref.name, args, node)
+  if (ref.namespace === "Map" || ref.namespace === "Set" || ref.namespace === "URLSearchParams") {
+    throw new InterpreterRuntimeError(`${ref.namespace}.${ref.name} is not available.`, node)
   }
-  return invokeJsonMethod(ref.name, args, node)
+  throw new InterpreterRuntimeError(`${ref.namespace}.${ref.name} is not available.`, node)
+}
+
+const requireDataArgument = (name: string, index: number, arg: unknown, node: AstNode): unknown => {
+  if (containsOpaqueReference(arg)) {
+    throw new InterpreterRuntimeError(
+      `String.${name} expects argument ${index + 1} to be a data value.`,
+      node,
+      "InvalidDataValue",
+    )
+  }
+  return arg
 }
 
 const invokeStringMethod = (value: string, name: string, args: Array<unknown>, node: AstNode): unknown => {
-  const str = (index: number): string => {
-    const arg = args[index]
-    if (typeof arg !== "string")
-      throw new InterpreterRuntimeError(`String.${name} expects argument ${index + 1} to be a string.`, node)
-    return arg
-  }
-  const num = (index: number): number => {
-    const arg = args[index]
-    if (typeof arg !== "number")
-      throw new InterpreterRuntimeError(`String.${name} expects argument ${index + 1} to be a number.`, node)
-    return arg
-  }
+  // Coerce arguments like native JS; opaque runtime references still reject.
+  const str = (index: number): string => coerceToString(requireDataArgument(name, index, args[index], node))
+  const num = (index: number): number => coerceToNumber(requireDataArgument(name, index, args[index], node))
   const optNum = (index: number): number | undefined => (args[index] === undefined ? undefined : num(index))
   const optStr = (index: number): string | undefined => (args[index] === undefined ? undefined : str(index))
+  const rejectRegex = (): void => {
+    if (args[0] instanceof CodeModeRegExp) {
+      throw new InterpreterRuntimeError(
+        `String.${name} cannot take a regular expression; use regex.test(string) or String.search instead.`,
+        node,
+      ).as("TypeError")
+    }
+  }
 
   let result: unknown
   switch (name) {
@@ -187,8 +232,11 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       break
     }
     case "split": {
-      if (args.length === 0) {
-        result = [value]
+      // Native: an undefined separator returns the whole string, not a split on "undefined",
+      // unless the limit truncates to zero.
+      if (args[0] === undefined) {
+        const requestedLimit = optNum(1)
+        result = requestedLimit !== undefined && requestedLimit >>> 0 === 0 ? [] : [value]
         break
       }
       if (args[0] instanceof CodeModeRegExp) {
@@ -203,12 +251,15 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       result = value.slice(optNum(0), optNum(1))
       break
     case "includes":
+      rejectRegex()
       result = value.includes(str(0), optNum(1))
       break
     case "startsWith":
+      rejectRegex()
       result = value.startsWith(str(0), optNum(1))
       break
     case "endsWith":
+      rejectRegex()
       result = value.endsWith(str(0), optNum(1))
       break
     case "indexOf":
@@ -263,7 +314,7 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
     case "repeat": {
       const count = num(0)
       if (!Number.isFinite(count) || count < 0)
-        throw new InterpreterRuntimeError("String.repeat expects a finite non-negative count.", node)
+        throw new InterpreterRuntimeError("String.repeat expects a finite non-negative count.", node).as("RangeError")
       result = value.repeat(count)
       break
     }
@@ -296,10 +347,12 @@ const invokeStringMethod = (value: string, name: string, args: Array<unknown>, n
       break
     }
     default:
-      throw new InterpreterRuntimeError(`String method '${name}' is not available in CodeMode.`, node)
+      throw new InterpreterRuntimeError(`String method '${name}' is not available.`, node)
   }
   return boundedData(result, `String.${name} result`)
 }
+
+export const arrayStatics = new Set(["isArray", "of", "from"])
 
 const invokeArrayStatic = (name: string, args: Array<unknown>, node: AstNode): unknown => {
   switch (name) {
@@ -310,7 +363,7 @@ const invokeArrayStatic = (name: string, args: Array<unknown>, node: AstNode): u
     case "from":
       return arrayFromItems(args[0], node)
     default:
-      throw new InterpreterRuntimeError(`Array.${name} is not available in CodeMode.`, node)
+      throw new InterpreterRuntimeError(`Array.${name} is not available.`, node)
   }
 }
 
@@ -361,6 +414,89 @@ export const invokeArrayFrom = <R>(
   })
 }
 
+export const invokeGroupBy = <R>(
+  runner: CallbackRunner<R>,
+  namespace: "Map" | "Object",
+  args: Array<unknown>,
+  node: AstNode,
+): Effect.Effect<unknown, unknown, R> => {
+  const source = args[0]
+  if (source === null || source === undefined) {
+    throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
+  }
+  const apply = applyCollectionCallback(runner, args[1], `${namespace}.groupBy`, node)
+  const items = supportedIterableItems(source)
+  if (items === undefined) {
+    throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
+  }
+  return Effect.gen(function* () {
+    if (namespace === "Map") {
+      const result = new CodeModeMap()
+      let index = 0
+      for (const item of items) {
+        const key = yield* apply([item, index])
+        const group = result.map.get(key)
+        if (group === undefined) result.map.set(key, [item])
+        else (group as Array<unknown>).push(item)
+        index += 1
+      }
+      return result
+    }
+
+    const result: SafeObject = Object.create(null) as SafeObject
+    let index = 0
+    for (const item of items) {
+      const key = yield* coerceGroupByPropertyKey(runner, yield* apply([item, index]), node)
+      if (isBlockedMember(key)) {
+        throw new InterpreterRuntimeError(`Property '${key}' is not available.`, node)
+      }
+      const group = result[key]
+      if (group === undefined) result[key] = [item]
+      else (group as Array<unknown>).push(item)
+      index += 1
+    }
+    return result
+  })
+}
+
+const supportedIterableItems = (source: unknown): Iterable<unknown> | undefined => {
+  if (Array.isArray(source) || typeof source === "string") return source
+  if (source instanceof CodeModeMap) return source.map.entries()
+  if (source instanceof CodeModeSet) return source.set.values()
+  if (source instanceof CodeModeURLSearchParams) return source.params.entries()
+}
+
+const coerceGroupByPropertyKey = <R>(
+  runner: CallbackRunner<R>,
+  value: unknown,
+  node: AstNode,
+): Effect.Effect<string, unknown, R> => {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || isCodeModeValue(value)) {
+    return Effect.succeed(coerceToString(value))
+  }
+  if (value instanceof CodeModePromise) return Effect.succeed("[object Promise]")
+  if (isRuntimeReference(value)) {
+    throw new InterpreterRuntimeError("Object.groupBy callback must return a data value.", node, "InvalidDataValue")
+  }
+  const object = value as Record<string, unknown>
+  if (!Object.hasOwn(object, "toString")) return Effect.succeed(coerceToString(value))
+  return Effect.gen(function* () {
+    if (typeofValue(object.toString) === "function") {
+      const result = yield* runner.invokeCallable(object.toString, [], node)
+      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
+        return coerceToString(result)
+      }
+    }
+    if (Object.hasOwn(object, "valueOf") && typeofValue(object.valueOf) === "function") {
+      const result = yield* runner.invokeCallable(object.valueOf, [], node)
+      if (result === null || (typeof result !== "object" && typeof result !== "function")) {
+        return coerceToString(result)
+      }
+    }
+    throw new InterpreterRuntimeError("Cannot convert object to primitive value.", node).as("TypeError")
+  })
+}
+
 const invokeStringReplacer = <R>(
   runner: CallbackRunner<R>,
   value: string,
@@ -400,11 +536,9 @@ const invokeStringReplacer = <R>(
     if (name === "replace") value.replace(pattern.regex, collect)
     else value.replaceAll(pattern.regex, collect)
   } else {
-    if (typeof pattern !== "string") {
-      throw new InterpreterRuntimeError(`String.${name} expects argument 1 to be a string.`, node)
-    }
-    if (name === "replace") value.replace(pattern, collect)
-    else value.replaceAll(pattern, collect)
+    const search = coerceToString(requireDataArgument(name, 0, pattern, node))
+    if (name === "replace") value.replace(search, collect)
+    else value.replaceAll(search, collect)
   }
 
   return Effect.gen(function* () {
@@ -412,16 +546,14 @@ const invokeStringReplacer = <R>(
     let end = 0
     for (const match of matches) {
       const replacement = yield* apply(match.args)
-      const resolved =
-        args[1] instanceof CodeModeFunction && args[1].async && replacement instanceof CodeModePromise
-          ? yield* runner.settlePromise(replacement)
-          : replacement
       // Error values are branded plain objects; boundedData would strip the brand before coercion.
       output.push(
         value.slice(end, match.offset),
-        errorBrandName(resolved)
-          ? coerceToString(resolved)
-          : coerceToString(boundedData(resolved, `String.${name} replacer result`)),
+        replacement instanceof CodeModePromise
+          ? "[object Promise]"
+          : errorBrandName(replacement)
+            ? coerceToString(replacement)
+            : coerceToString(boundedData(replacement, `String.${name} replacer result`)),
       )
       end = match.offset + match.match.length
     }
@@ -443,7 +575,7 @@ export const applyCollectionCallback = <R>(
         node,
       )
     }
-    throw new InterpreterRuntimeError(`${name} expects a function callback.`, node)
+    throw new InterpreterRuntimeError(`${name} expects a function callback.`, node).as("TypeError")
   }
   return (callbackArgs) => runner.invokeCallable(callback, callbackArgs, node)
 }
@@ -486,7 +618,7 @@ const invokeMapMethod = <R>(
       })
     }
     default:
-      throw new InterpreterRuntimeError(`Map method '${name}' is not available in CodeMode.`, node)
+      throw new InterpreterRuntimeError(`Map method '${name}' is not available.`, node)
   }
 }
 
@@ -524,9 +656,138 @@ const invokeSetMethod = <R>(
         return undefined
       })
     }
+    case "union":
+    case "intersection":
+    case "difference":
+    case "symmetricDifference":
+    case "isSubsetOf":
+    case "isSupersetOf":
+    case "isDisjointFrom":
+      return invokeSetOperation(runner, target, name, args[0], node)
     default:
-      throw new InterpreterRuntimeError(`Set method '${name}' is not available in CodeMode.`, node)
+      throw new InterpreterRuntimeError(`Set method '${name}' is not available.`, node)
   }
+}
+
+const invokeSetOperation = <R>(
+  runner: CallbackRunner<R>,
+  target: CodeModeSet,
+  name: string,
+  source: unknown,
+  node: AstNode,
+): Effect.Effect<unknown, unknown, R> =>
+  Effect.gen(function* () {
+    const other = yield* loadSetRecord(runner, source, name, node)
+    if (name === "union") {
+      const result = copySet(target)
+      for (const item of yield* other.keys()) result.set.add(item)
+      return result
+    }
+    if (name === "intersection") {
+      const result = new CodeModeSet()
+      if (target.set.size <= other.size) {
+        for (const item of target.set.values()) {
+          if (yield* other.has(item)) result.set.add(item)
+        }
+        return result
+      }
+      for (const item of yield* other.keys()) {
+        if (target.set.has(item)) result.set.add(item)
+      }
+      return result
+    }
+    if (name === "difference") {
+      const result = copySet(target)
+      if (target.set.size <= other.size) {
+        for (const item of result.set.values()) {
+          if (yield* other.has(item)) result.set.delete(item)
+        }
+        return result
+      }
+      for (const item of yield* other.keys()) result.set.delete(item)
+      return result
+    }
+    if (name === "symmetricDifference") {
+      const result = copySet(target)
+      for (const item of yield* other.keys()) {
+        if (target.set.has(item)) result.set.delete(item)
+        else result.set.add(item)
+      }
+      return result
+    }
+    if (name === "isSubsetOf") {
+      if (target.set.size > other.size) return false
+      for (const item of target.set.values()) {
+        if (!(yield* other.has(item))) return false
+      }
+      return true
+    }
+    if (name === "isSupersetOf") {
+      if (target.set.size < other.size) return false
+      for (const item of yield* other.keys()) {
+        if (!target.set.has(item)) return false
+      }
+      return true
+    }
+    if (target.set.size <= other.size) {
+      for (const item of target.set.values()) {
+        if (yield* other.has(item)) return false
+      }
+      return true
+    }
+    for (const item of yield* other.keys()) {
+      if (target.set.has(item)) return false
+    }
+    return true
+  })
+
+const copySet = (source: CodeModeSet): CodeModeSet => {
+  const result = new CodeModeSet()
+  for (const item of source.set.values()) result.set.add(item)
+  return result
+}
+
+const loadSetRecord = <R>(runner: CallbackRunner<R>, source: unknown, name: string, node: AstNode) => {
+  if (source instanceof CodeModeSet) {
+    return Effect.succeed({
+      size: source.set.size,
+      has: (item: unknown) => Effect.succeed(source.set.has(item)),
+      keys: () => Effect.succeed(source.set.values()),
+    })
+  }
+  if (source instanceof CodeModeMap) {
+    return Effect.succeed({
+      size: source.map.size,
+      has: (item: unknown) => Effect.succeed(source.map.has(item)),
+      keys: () => Effect.succeed(source.map.keys()),
+    })
+  }
+  if (source === null || typeof source !== "object" || isCodeModeValue(source)) {
+    throw new InterpreterRuntimeError(`Set.${name} expects a Set-like object.`, node).as("TypeError")
+  }
+  const object = source as Record<string, unknown>
+  return Effect.gen(function* () {
+    const size = yield* coerceNumericArgument(runner, object.size, node)
+    if (Number.isNaN(size)) {
+      throw new InterpreterRuntimeError(`Set.${name} received a Set-like object with an invalid size.`, node).as(
+        "TypeError",
+      )
+    }
+    if (!isSupportedCallback(object.has) || !isSupportedCallback(object.keys)) {
+      throw new InterpreterRuntimeError(`Set.${name} expects callable 'has' and 'keys' methods.`, node).as("TypeError")
+    }
+    const has = object.has
+    const keys = object.keys
+    return {
+      size: Math.max(Math.trunc(size), 0),
+      has: (item: unknown) => Effect.map(runner.invokeCallable(has, [item], node), Boolean),
+      keys: () =>
+        Effect.flatMap(runner.invokeCallable(keys, [], node), (result) => {
+          if (Array.isArray(result)) return Effect.succeed(result)
+          throw new InterpreterRuntimeError(`Set.${name} expected 'keys' to return an iterator.`, node).as("TypeError")
+        }),
+    }
+  })
 }
 
 const invokeURLSearchParamsMethod = <R>(
@@ -599,7 +860,7 @@ const invokeURLSearchParamsMethod = <R>(
       })
     }
     default:
-      throw new InterpreterRuntimeError(`URLSearchParams method '${name}' is not available in CodeMode.`, node)
+      throw new InterpreterRuntimeError(`URLSearchParams method '${name}' is not available.`, node)
   }
 }
 
@@ -648,11 +909,20 @@ const invokeArrayMethod = <R>(
       return Effect.succeed(target.flat(optNumber(args[0], "depth") ?? 1))
     case "reverse":
       return Effect.succeed(target.reverse())
-    case "sort":
+    case "sort": {
+      const length = target.length
+      const holeCount = Array.from({ length }, (_, index) => Object.hasOwn(target, index)).filter((own) => !own).length
+      const itemCount = length - holeCount
       return Effect.map(sortArray(runner, target, args[0], "Array.sort", node), (sorted) => {
-        target.splice(0, target.length, ...sorted)
+        sorted.slice(0, itemCount).forEach((item, index) => {
+          target[index] = item
+        })
+        Array.from({ length: holeCount }, (_, index) => itemCount + index).forEach((index) => {
+          Reflect.deleteProperty(target, index)
+        })
         return target
       })
+    }
     case "toSorted":
       return sortArray(runner, target, args[0], "Array.toSorted", node)
     case "toReversed":
@@ -690,6 +960,19 @@ const invokeArrayMethod = <R>(
       const inserted = args.slice(2)
       for (const item of inserted) rejectCircularInsertion(target, item, "Array.splice result", node)
       return Effect.succeed(target.splice(start, deleteCount, ...inserted))
+    }
+    case "toSpliced": {
+      if (args.length === 0) return Effect.succeed([...target])
+      const start = optNumber(args[0], "start") ?? 0
+      if (args.length === 1) {
+        const copied = [...target]
+        copied.splice(start)
+        return Effect.succeed(copied)
+      }
+      const deleteCount = optNumber(args[1], "delete count") ?? 0
+      const copied = [...target]
+      copied.splice(start, deleteCount, ...args.slice(2))
+      return Effect.succeed(copied)
     }
     case "fill": {
       rejectCircularInsertion(target, args[0], "Array.fill result", node)
@@ -820,7 +1103,7 @@ const invokeArrayMethod = <R>(
         }
         return -1
     }
-    throw new InterpreterRuntimeError(`Array method '${name}' is not available in CodeMode.`, node)
+    throw new InterpreterRuntimeError(`Array method '${name}' is not available.`, node)
   })
 }
 

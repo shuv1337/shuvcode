@@ -1,10 +1,10 @@
 import { describe, expect } from "bun:test"
-import { Cause, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
+import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Integration } from "@opencode-ai/core/integration"
 import { testEffect } from "./lib/effect"
@@ -28,6 +28,20 @@ const failingCredentialNode = makeGlobalNode({
 const failingIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([Integration.node, EventV2.node]), [[Credential.node, failingCredentialNode]]),
 )
+
+function eventually<A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  predicate: (value: A) => boolean,
+  remaining = 1000,
+): Effect.Effect<A, E | Error, R> {
+  return Effect.gen(function* () {
+    const value = yield* effect
+    if (predicate(value)) return value
+    if (remaining === 0) return yield* Effect.fail(new Error("Timed out waiting for value"))
+    yield* Effect.promise(() => Bun.sleep(1))
+    return yield* eventually(effect, predicate, remaining - 1)
+  })
+}
 
 describe("Integration", () => {
   it.effect("registers integrations through the editor", () =>
@@ -151,6 +165,51 @@ describe("Integration", () => {
     }),
   )
 
+  it.live("runs command authentication and stores the final output line", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("company")
+      const methodID = Integration.MethodID.make("login")
+      yield* integrations.transform((editor) =>
+        editor.method.update({
+          integrationID,
+          method: {
+            id: methodID,
+            type: "command",
+            label: "Log in",
+            command: [
+              process.execPath,
+              "-e",
+              'console.error("https://example.com/login"); await Bun.sleep(50); console.log("secret")',
+            ],
+          },
+        }),
+      )
+
+      const attempt = yield* integrations.command.connect({ integrationID, methodID, label: "Work" })
+      const pending = yield* eventually(
+        integrations.command.status({ integrationID, attemptID: attempt.attemptID }),
+        (status) => status.status === "pending" && status.message?.includes("https://example.com/login") === true,
+      )
+      expect(pending).toMatchObject({ status: "pending", message: "https://example.com/login\n" })
+
+      expect(
+        yield* eventually(
+          integrations.command.status({ integrationID, attemptID: attempt.attemptID }),
+          (status) => status.status === "complete",
+        ),
+      ).toEqual({ status: "complete", time: attempt.time })
+      expect(yield* credentials.list(integrationID)).toEqual([
+        expect.objectContaining({
+          integrationID,
+          label: "Work",
+          value: Credential.Key.make({ type: "key", key: "secret" }),
+        }),
+      ])
+    }),
+  )
+
   it.effect("completes code OAuth once and stores the credential", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service
@@ -181,14 +240,14 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({
+      const attempt = yield* integrations.oauth.connect({
         integrationID,
         methodID,
         inputs: {},
         label: "Personal",
       })
       expect(attempt.mode).toBe("code")
-      yield* integrations.attempt.complete({ attemptID: attempt.attemptID, code: "1234" })
+      yield* integrations.oauth.complete({ integrationID, attemptID: attempt.attemptID, code: "1234" })
 
       expect((yield* credentials.list(integrationID))[0]).toEqual(
         expect.objectContaining({
@@ -230,12 +289,17 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
-      expect(yield* integrations.attempt.complete({ attemptID: attempt.attemptID }).pipe(Effect.flip)).toBeInstanceOf(
-        Integration.CodeRequiredError,
-      )
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
+      expect(
+        yield* integrations.oauth.complete({ integrationID, attemptID: attempt.attemptID }).pipe(Effect.flip),
+      ).toBeInstanceOf(Integration.CodeRequiredError)
       expect(closed).toBe(false)
-      yield* integrations.attempt.cancel(attempt.attemptID)
+      yield* integrations.oauth.cancel({
+        integrationID: Integration.ID.make("other"),
+        attemptID: attempt.attemptID,
+      })
+      expect(closed).toBe(false)
+      yield* integrations.oauth.cancel({ integrationID, attemptID: attempt.attemptID })
       expect(closed).toBe(true)
       expect(yield* credentials.list(integrationID)).toEqual([])
     }),
@@ -263,9 +327,9 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
       yield* Effect.yieldNow
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "complete",
         time: attempt.time,
       })
@@ -301,12 +365,12 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
-      const exit = yield* integrations.attempt
-        .complete({ attemptID: attempt.attemptID, code: "1234" })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
+      const exit = yield* integrations.oauth
+        .complete({ integrationID, attemptID: attempt.attemptID, code: "1234" })
         .pipe(Effect.exit)
       expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "failed",
         message: "credential persistence failed",
         time: attempt.time,
@@ -337,16 +401,51 @@ describe("Integration", () => {
         }),
       )
 
-      const attempt = yield* integrations.connection.oauth({ integrationID, methodID, inputs: {} })
+      const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
       expect(attempt.time.expires - attempt.time.created).toBe(Duration.toMillis(Duration.minutes(10)))
       yield* TestClock.adjust(Duration.minutes(10))
       yield* Effect.yieldNow
-      expect(yield* integrations.attempt.status(attempt.attemptID)).toEqual({
+      expect(yield* integrations.oauth.status({ integrationID, attemptID: attempt.attemptID })).toEqual({
         status: "expired",
         time: attempt.time,
       })
       expect(closed).toBe(true)
       expect(yield* credentials.list(integrationID)).toEqual([])
+    }),
+  )
+
+  it.effect("uses provider-defined OAuth attempt expirations", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const integrationID = Integration.ID.make("openai")
+      const created = yield* Clock.currentTimeMillis
+      const expirations = [
+        created + Duration.toMillis(Duration.minutes(5)),
+        created + Duration.toMillis(Duration.minutes(20)),
+      ]
+
+      yield* Effect.forEach(expirations, (expiresAt, index) => {
+        const methodID = Integration.MethodID.make(`browser-${index}`)
+        return Effect.gen(function* () {
+          yield* integrations.transform((editor) =>
+            editor.method.update({
+              integrationID,
+              method: { id: methodID, type: "oauth", label: "Browser" },
+              authorize: () =>
+                Effect.succeed({
+                  mode: "auto" as const,
+                  url: "https://example.com/authorize",
+                  instructions: "Sign in",
+                  expiresAt,
+                  callback: Effect.never,
+                }),
+            }),
+          )
+
+          const attempt = yield* integrations.oauth.connect({ integrationID, methodID, inputs: {} })
+          expect(attempt.time).toEqual({ created, expires: expiresAt })
+        })
+      })
     }),
   )
 

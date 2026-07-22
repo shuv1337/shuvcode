@@ -1,7 +1,7 @@
 - To regenerate the legacy JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit `src/generated` or `src/generated-effect` directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk-next` composes Client, Core, and Server.
-- Do not modify `packages/opencode` unless the user explicitly asks for V1 work. `packages/opencode` is the V1 implementation and is present for reference only. New implementation changes should land in the V2 package set: `packages/core`, `packages/cli`, `packages/server`, `packages/protocol`, `packages/schema`, and related generated client surfaces when required.
+- Implementation changes should land in the V2 package set: `packages/core`, `packages/cli`, `packages/server`, `packages/protocol`, `packages/schema`, and related generated client surfaces when required. The deleted V1 `packages/opencode` tree is available from `fork-v1-final` when historical reference is needed.
 - The default branch in this repo is `dev`.
 - Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
 
@@ -18,8 +18,6 @@ Use conventional commit-style messages and PR titles: `type(scope): summary`.
 Valid types are `feat`, `fix`, `docs`, `chore`, `refactor`, and `test`. Scopes are optional; use the affected package or area when helpful, e.g. `core`, `opencode`, `tui`, `app`, `desktop`, `sdk`, or `plugin`.
 
 Examples: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`.
-
-Never bypass Git hooks. Do not use `--no-verify` or otherwise disable, skip, or circumvent commit or push hooks. If a hook fails, fix the failure or stop and report it to the user.
 
 ## Style Guide
 
@@ -146,11 +144,11 @@ const table = sqliteTable("session", {
 
 - Avoid mocks as much as possible, you shouldn't be using globalThis.\* at all unless it's the only option.
 - Test actual implementation, do not duplicate logic into tests
-- Tests cannot run from repo root (guard: `do-not-run-tests-from-root`); run from package dirs like `packages/opencode`.
+- Tests cannot run from repo root (guard: `do-not-run-tests-from-root`); run from package dirs like `packages/core` or `packages/cli`.
 
 ## Type Checking
 
-- Always run `bun typecheck` from package directories (e.g., `packages/opencode`), never `tsc` directly.
+- Always run `bun typecheck` from package directories (e.g., `packages/core`), never `tsc` directly.
 
 ## V2 Session Core
 
@@ -173,4 +171,4 @@ const table = sqliteTable("session", {
 - The fork tracks `upstream/v2` on `integration-v2`; `integration` and tag `fork-v1-final` are the frozen V1 rollback line.
 - Record upstream sync state in `.github/last-synced-tag` as a V2 commit SHA.
 - The CLI binary and npm package are named `shuvcode`.
-- Keep `packages/core/src/global.ts` `app = "opencode"` for XDG path compatibility.
+- Keep `packages/util/src/global.ts` `app = "opencode"` for XDG path compatibility.

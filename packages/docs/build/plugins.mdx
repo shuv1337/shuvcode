@@ -169,15 +169,15 @@ and plugin options.
 
 | Capability             | Available operations                                                                         |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
-| `ctx.agent`            | `list`, `transform`, `reload`                                                                |
+| `ctx.agent`            | `list`, `get`, `transform`, `reload`                                                         |
 | `ctx.catalog.provider` | `list`, `get`                                                                                |
-| `ctx.catalog.model`    | `list`, `default`                                                                            |
+| `ctx.catalog.model`    | `list`, `get`, `default`                                                                     |
 | `ctx.catalog`          | `transform`, `reload`                                                                        |
 | `ctx.command`          | `list`, `transform`, `reload`                                                                |
 | `ctx.integration`      | `list`, `get`, `connect`, `attempt`, `transform`, `reload`, and connection lookup/resolution |
 | `ctx.plugin`           | `list` currently active plugin IDs                                                           |
 | `ctx.reference`        | `list`, `transform`, `reload`                                                                |
-| `ctx.session`          | `create`, `get`, `prompt`, `command`, `interrupt`, and `hook`                                |
+| `ctx.session`          | `create`, `get`, `prompt`, `command`, `synthetic`, `interrupt`, and `hook`                   |
 | `ctx.skill`            | `list`, `transform`, `reload`                                                                |
 | `ctx.tool`             | `transform` and `hook`                                                                       |
 | `ctx.aisdk`            | `hook`                                                                                       |

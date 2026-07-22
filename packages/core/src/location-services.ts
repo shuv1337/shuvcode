@@ -2,10 +2,12 @@ import { Effect, Layer, LayerMap } from "effect"
 import { AgentV2 } from "./agent"
 import { AISDK } from "./aisdk"
 import { Catalog } from "./catalog"
+import { CodeMode } from "./codemode"
+import { CodeModeInstructions } from "./codemode/instructions"
 import { CommandV2 } from "./command"
 import { Config } from "./config"
-import { LayerNode } from "./effect/layer-node"
-import { Node } from "./effect/app-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Node } from "@opencode-ai/util/effect/app-node"
 import { EventV2 } from "./event"
 import { FileMutation } from "./file-mutation"
 import { FileSystem } from "./filesystem"
@@ -27,18 +29,19 @@ import { Pty } from "./pty"
 import { QuestionV2 } from "./question"
 import { Shell } from "./shell"
 import { Reference } from "./reference"
-import { ReferenceGuidance } from "./reference/guidance"
+import { ReferenceInstructions } from "./reference/instructions"
 import { SessionRunnerLLM } from "./session/runner/llm"
 import { SessionRunnerModel } from "./session/runner/model"
 import { SessionCompaction } from "./session/compaction"
 import { SessionTitle } from "./session/title"
 import { SkillV2 } from "./skill"
-import { SkillGuidance } from "./skill/guidance"
+import { SkillInstructions } from "./skill/instructions"
 import { Snapshot } from "./snapshot"
 import { InstructionDiscovery } from "./instruction-discovery"
 import { InstructionBuiltIns } from "./instructions/builtins"
 import { InstructionEntry } from "./session/instruction-entry"
 import { SessionInstructions } from "./session/instructions"
+import { SessionGenerateNode } from "./session/generate-node"
 import { McpTool } from "./tool/mcp"
 import { ReadToolFileSystem } from "./tool/read-filesystem"
 import { ToolRegistry } from "./tool/registry"
@@ -65,6 +68,7 @@ const locationServiceNodes = [
   Pty.node,
   Shell.node,
   SkillV2.node,
+  CodeMode.node,
   InstructionBuiltIns.node,
   InstructionDiscovery.node,
   LocationMutation.node,
@@ -75,12 +79,14 @@ const locationServiceNodes = [
   ToolRegistry.node,
   ToolRegistry.toolsNode,
   Image.node,
-  SkillGuidance.node,
-  ReferenceGuidance.node,
+  SkillInstructions.node,
+  CodeModeInstructions.node,
+  ReferenceInstructions.node,
   InstructionEntry.node,
   Form.node,
   QuestionV2.node,
   Generate.node,
+  SessionGenerateNode.node,
   ReadToolFileSystem.node,
   McpTool.node,
   SessionInstructions.node,

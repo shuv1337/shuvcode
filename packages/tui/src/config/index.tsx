@@ -92,6 +92,7 @@ export const Info = Schema.Struct({
   terminal: Schema.optional(
     Schema.Struct({
       title: Schema.optional(Schema.Boolean).annotate({ description: "Update the terminal window title" }),
+      copy_on_select: Schema.optional(Schema.Boolean).annotate({ description: "Copy selected terminal text" }),
     }),
   ).annotate({ description: "Terminal integration settings" }),
   prompt: Schema.optional(
@@ -124,11 +125,36 @@ export const Info = Schema.Struct({
       }),
     }),
   ).annotate({ description: "Session transcript presentation settings" }),
+  mini: Schema.optional(
+    Schema.Struct({
+      thinking: Schema.optional(Schema.Literals(["show", "hide"])).annotate({
+        description: "Show or hide model reasoning",
+      }),
+      shell_output: Schema.optional(Schema.Literals(["show", "hide"])).annotate({
+        description: "Show or hide raw shell tool output",
+      }),
+      turn_summary: Schema.optional(Schema.Literals(["show", "hide"])).annotate({
+        description: "Show or hide the agent, model, and duration summary in scrollback",
+      }),
+      footer: Schema.optional(Schema.Literals(["show", "hide"])).annotate({
+        description: "Show or hide persistent activity, model, usage, and context details in the footer",
+      }),
+      mono: Schema.optional(Schema.Boolean).annotate({
+        description: "Use monochrome ASCII output",
+      }),
+    }),
+  ).annotate({ description: "Mini transcript presentation settings" }),
   hints: Schema.optional(
     Schema.Struct({
       onboarding: Schema.optional(Schema.Boolean).annotate({ description: "Show getting-started guidance" }),
     }),
   ).annotate({ description: "In-product guidance settings" }),
+  debug: Schema.optional(
+    Schema.Struct({
+      devtools: Schema.optional(Schema.Boolean).annotate({ description: "Show the DevTools sidebar" }),
+      timing: Schema.optional(Schema.Boolean).annotate({ description: "Show time-to-first-draw diagnostics" }),
+    }),
+  ).annotate({ description: "Debugging settings" }),
   animations: Schema.optional(Schema.Boolean).annotate({ description: "Enable interface animations" }),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable terminal mouse capture" }),
 })

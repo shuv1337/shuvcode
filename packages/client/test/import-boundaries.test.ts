@@ -20,15 +20,28 @@ describe("public import boundaries", () => {
     expect(within(root, core)).toEqual([])
     expect(within(root, server)).toEqual([])
 
-    // The effect entry includes local service lifecycle (node spawn/fs), so it
-    // bundles for bun; the boundary assertions below are what matter.
-    const network = await bundleInputs("@opencode-ai/client/effect", "bun")
+    const network = await bundleInputs("@opencode-ai/client/effect", "browser")
 
     expect(within(network, effect).length).toBeGreaterThan(0)
     expect(within(network, schema).length).toBeGreaterThan(0)
     expect(within(network, protocol).length).toBeGreaterThan(0)
     expect(within(network, core)).toEqual([])
     expect(within(network, server)).toEqual([])
+
+    const promiseService = await bundleInputs("@opencode-ai/client/service", "bun")
+
+    expect(within(promiseService, effect)).toEqual([])
+    expect(within(promiseService, schema)).toEqual([])
+    expect(within(promiseService, protocol)).toEqual([])
+    expect(within(promiseService, core)).toEqual([])
+    expect(within(promiseService, server)).toEqual([])
+
+    const effectService = await bundleInputs("@opencode-ai/client/effect/service", "bun")
+
+    expect(within(effectService, effect).length).toBeGreaterThan(0)
+    expect(within(effectService, protocol).length).toBeGreaterThan(0)
+    expect(within(effectService, core)).toEqual([])
+    expect(within(effectService, server)).toEqual([])
   })
 })
 

@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { Patch } from "@opencode-ai/core/patch"
+import { Patch } from "@opencode-ai/util/patch"
+import { Result } from "effect"
+
+const parse = (input: string) => Result.getOrThrow(Patch.parse(input))
 
 describe("Patch", () => {
   test("parses add, update, and delete hunks", () => {
     expect(
-      Patch.parse(
+      parse(
         "*** Begin Patch\n*** Add File: add.txt\n+added\n*** Update File: update.txt\n@@ section\n-old\n+new\n*** Delete File: delete.txt\n*** End Patch",
       ),
     ).toEqual([
@@ -19,9 +22,117 @@ describe("Patch", () => {
     ])
   })
 
-  test("strips a heredoc wrapper", () => {
-    expect(Patch.parse("cat <<'EOF'\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF")).toEqual([
+  test("parses a file move", () => {
+    expect(
+      parse("*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch"),
+    ).toEqual([
+      {
+        type: "update",
+        path: "old.txt",
+        movePath: "new.txt",
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("identifies the missing patch boundary", () => {
+    expect(() => parse("This is not a valid patch")).toThrow("The first line of the patch must be '*** Begin Patch'")
+    expect(() => parse("*** Begin Patch\n*** Add File: add.txt\n+added")).toThrow(
+      "The last line of the patch must be '*** End Patch'",
+    )
+    expect(() => parse("extra\n*** Begin Patch\n*** End Patch")).toThrow(
+      "The first line of the patch must be '*** Begin Patch'",
+    )
+    expect(() => parse("*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nextra")).toThrow(
+      "The last line of the patch must be '*** End Patch'",
+    )
+  })
+
+  test("allows whitespace after the end marker", () => {
+    expect(parse("*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\n \t\n")).toEqual([
       { type: "add", path: "add.txt", contents: "added" },
+    ])
+  })
+
+  test("strips a heredoc wrapper", () => {
+    expect(parse("cat <<'EOF'\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF")).toEqual([
+      { type: "add", path: "add.txt", contents: "added" },
+    ])
+  })
+
+  test("strips a heredoc wrapper without cat", () => {
+    expect(parse("<<EOF\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF")).toEqual([
+      { type: "add", path: "add.txt", contents: "added" },
+    ])
+  })
+
+  test("parses a whitespace-padded hunk header", () => {
+    expect(parse("*** Begin Patch\n  *** Update File: foo.txt\n@@\n-old\n+new\n*** End Patch")).toEqual([
+      {
+        type: "update",
+        path: "foo.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("parses leading and trailing whitespace around patch markers", () => {
+    expect(parse(" *** Begin Patch\n*** Update File: file.txt\n@@\n-one\n+two\n*** End Patch ")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["one"], newLines: ["two"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("parses whitespace on the inner sides of patch marker lines", () => {
+    expect(parse("*** Begin Patch \n*** Update File: file.txt\n@@\n-one\n+two\n *** End Patch")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["one"], newLines: ["two"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("strips one carriage return from CRLF patch lines", () => {
+    expect(parse("*** Begin Patch\r\n*** Update File: file.txt\r\n@@\r\n-old\r\n+new\r\n*** End Patch\r\n")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old"], newLines: ["new"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("preserves an extra carriage return in CRLF patch lines", () => {
+    expect(parse("*** Begin Patch\r\n*** Update File: file.txt\r\n@@\r\n-old\r\r\n+new\r\n*** End Patch\r\n")).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: ["old\r"], newLines: ["new"], changeContext: undefined, endOfFile: undefined }],
+      },
+    ])
+  })
+
+  test("preserves the end-of-file marker", () => {
+    expect(
+      parse(
+        "*** Begin Patch\n*** Update File: file.txt\n@@\n+quux\n*** End of File\n\n*** End Patch",
+      ),
+    ).toEqual([
+      {
+        type: "update",
+        path: "file.txt",
+        movePath: undefined,
+        chunks: [{ oldLines: [], newLines: ["quux"], changeContext: undefined, endOfFile: true }],
+      },
     ])
   })
 
@@ -29,6 +140,80 @@ describe("Patch", () => {
     const update = Patch.derive("update.txt", [{ oldLines: ["  old   "], newLines: ["new"] }], "\uFEFFold\n")
     expect(update).toEqual({ content: "new\n", bom: true })
     expect(Patch.joinBom(update.content, update.bom)).toBe("\uFEFFnew\n")
+  })
+
+  test("derives multiple update chunks", () => {
+    expect(
+      Patch.derive(
+        "update.txt",
+        [
+          { oldLines: ["line 2"], newLines: ["LINE 2"] },
+          { oldLines: ["line 4"], newLines: ["LINE 4"] },
+        ],
+        "line 1\nline 2\nline 3\nline 4\n",
+      ).content,
+    ).toBe("line 1\nLINE 2\nline 3\nLINE 4\n")
+  })
+
+  test("updates empty files and adds a trailing newline", () => {
+    expect(Patch.derive("empty.txt", [{ oldLines: [], newLines: ["First line"] }], "").content).toBe("First line\n")
+    expect(Patch.derive("no-newline.txt", [{ oldLines: ["old"], newLines: ["new"] }], "old").content).toBe("new\n")
+  })
+
+  test("disambiguates updates with change context", () => {
+    expect(
+      Patch.derive(
+        "update.txt",
+        [{ oldLines: ["x=10"], newLines: ["x=11"], changeContext: "fn b" }],
+        "fn a\nx=10\nfn b\nx=10\n",
+      ).content,
+    ).toBe("fn a\nx=10\nfn b\nx=11\n")
+  })
+
+  test("matches leading, trailing, and Unicode punctuation differences", () => {
+    expect(Patch.derive("leading.txt", [{ oldLines: ["line"], newLines: ["next"] }], "  line\n").content).toBe("next\n")
+    expect(Patch.derive("trailing.txt", [{ oldLines: ["line"], newLines: ["next"] }], "line  \n").content).toBe(
+      "next\n",
+    )
+    expect(
+      Patch.derive("unicode.txt", [{ oldLines: ['He said "hello"'], newLines: ['He said "hi"'] }], "He said “hello”\n")
+        .content,
+    ).toBe('He said "hi"\n')
+  })
+
+  test("matches Unicode minus signs and spaces", () => {
+    expect(
+      Patch.derive("minus.txt", [{ oldLines: ["value - 1"], newLines: ["value - 2"] }], "value − 1\n")
+        .content,
+    ).toBe("value - 2\n")
+    const spaces = ["\u00A0", "\u2002", "\u2003", "\u2004", "\u2005", "\u2006", "\u2007", "\u2008", "\u2009", "\u200A", "\u202F", "\u205F", "\u3000"]
+    spaces.forEach(
+      (space) => {
+        expect(
+          Patch.derive(
+            "spaces.txt",
+            [{ oldLines: ["hello world"], newLines: ["hello there"] }],
+            `hello${space}world\n`,
+          ).content,
+        ).toBe("hello there\n")
+      },
+    )
+  })
+
+  test("does not normalize ellipses", () => {
+    expect(() =>
+      Patch.derive("ellipsis.txt", [{ oldLines: ["wait..."], newLines: ["done"] }], "wait…\n"),
+    ).toThrow("Failed to find expected lines")
+  })
+
+  test("prefers a later exact match over an earlier normalized match", () => {
+    expect(
+      Patch.derive(
+        "quotes.txt",
+        [{ oldLines: ['He said "hello"'], newLines: ['He said "goodbye"'] }],
+        'He said “hello”\nmiddle\nHe said "hello"\n',
+      ).content,
+    ).toBe('He said “hello”\nmiddle\nHe said "goodbye"\n')
   })
 
   test("matches EOF-anchored chunks from the end", () => {
@@ -41,28 +226,25 @@ describe("Patch", () => {
     ).toBe("marker\nmiddle\nmarker changed\nend\n")
   })
 
-  test("parses the EOF marker inside update chunks", () => {
-    expect(
-      Patch.parse("*** Begin Patch\n*** Update File: update.txt\n@@\n-last\n+end\n*** End of File\n*** End Patch"),
-    ).toEqual([
-      {
-        type: "update",
-        path: "update.txt",
-        movePath: undefined,
-        chunks: [{ oldLines: ["last"], newLines: ["end"], changeContext: undefined, endOfFile: true }],
-      },
-    ])
+  test("does not fall back to a non-EOF match", () => {
+    expect(() =>
+      Patch.derive(
+        "update.txt",
+        [{ oldLines: ["marker", "end"], newLines: ["changed", "end"], endOfFile: true }],
+        "marker\nend\nmiddle\n",
+      ),
+    ).toThrow("Failed to find expected lines")
   })
 
-  test("rejects malformed hunk bodies", () => {
-    expect(() => Patch.parse("*** Begin Patch\n*** Add File: add.txt\nmissing plus\n*** End Patch")).toThrow(
-      "Invalid add file line",
-    )
-    expect(() => Patch.parse("*** Begin Patch\n*** Update File: update.txt\n*** End Patch")).toThrow(
-      "expected at least one @@ chunk",
-    )
-    expect(() => Patch.parse("*** Begin Patch\n*** Delete File: delete.txt\nunexpected body\n*** End Patch")).toThrow(
-      "Invalid patch line",
-    )
+  test("matches V1 lenient parsing of malformed hunk bodies", () => {
+    expect(parse("*** Begin Patch\n*** Add File: add.txt\nmissing plus\n*** End Patch")).toEqual([
+      { type: "add", path: "add.txt", contents: "" },
+    ])
+    expect(parse("*** Begin Patch\n*** Update File: update.txt\n*** End Patch")).toEqual([
+      { type: "update", path: "update.txt", movePath: undefined, chunks: [] },
+    ])
+    expect(parse("*** Begin Patch\n*** Delete File: delete.txt\nunexpected body\n*** End Patch")).toEqual([
+      { type: "delete", path: "delete.txt" },
+    ])
   })
 })

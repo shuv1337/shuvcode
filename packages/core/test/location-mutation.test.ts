@@ -2,7 +2,7 @@ import fs from "fs/promises"
 import path from "path"
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Location } from "@opencode-ai/core/location"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -60,16 +60,24 @@ describe("LocationMutation", () => {
     ),
   )
 
-  it.live("rejects a relative lexical escape instead of promoting it to external authority", () =>
+  it.live("requires external-directory authorization for a relative lexical escape", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
-        const error = yield* Effect.flip((yield* LocationMutation.Service).resolve({ path: "../outside.txt" }))
-        expect(error).toMatchObject({ _tag: "LocationMutation.PathError", reason: "relative_escape" })
+        const target = yield* (yield* LocationMutation.Service).resolve({ path: "../outside.txt" })
+        const root = yield* Effect.promise(() => fs.realpath(path.dirname(directory)))
+        expect(target).toMatchObject({
+          canonical: path.join(root, "outside.txt"),
+          resource: path.join(root, "outside.txt").replaceAll("\\", "/"),
+        })
+        expect(target.externalDirectory).toMatchObject({
+          directory: root,
+          resource: path.join(root, "*").replaceAll("\\", "/"),
+        })
       }).pipe(provide(directory)),
     ),
   )
 
-  it.live("rejects a prospective target below an escaping symlink ancestor", () =>
+  it.live("authorizes a prospective target below an external symlink by its in-location path", () =>
     withTmp((directory) => {
       const outside = `${directory}-outside`
       return Effect.gen(function* () {
@@ -78,10 +86,12 @@ describe("LocationMutation", () => {
           await fs.mkdir(outside)
           await fs.symlink(outside, path.join(directory, "escape"))
         })
-        const error = yield* Effect.flip(
-          (yield* LocationMutation.Service).resolve({ path: path.join("escape", "new.txt") }),
-        )
-        expect(error).toMatchObject({ _tag: "LocationMutation.PathError", reason: "location_escape" })
+        const target = yield* (yield* LocationMutation.Service).resolve({ path: path.join("escape", "new.txt") })
+        expect(target).toMatchObject({
+          canonical: path.join(yield* Effect.promise(() => fs.realpath(outside)), "new.txt"),
+          resource: "escape/new.txt",
+        })
+        expect(target.externalDirectory).toBeUndefined()
         yield* Effect.promise(() => fs.rm(outside, { recursive: true, force: true }))
       }).pipe(provide(directory))
     }),
@@ -98,7 +108,7 @@ describe("LocationMutation", () => {
 
         expect(yield* (yield* LocationMutation.Service).resolve({ path: "linked/new.txt" })).toMatchObject({
           canonical: path.join(yield* Effect.promise(() => fs.realpath(directory)), "actual", "new.txt"),
-          resource: "actual/new.txt",
+          resource: "linked/new.txt",
         })
       }).pipe(provide(directory)),
     ),

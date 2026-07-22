@@ -1,9 +1,9 @@
 export * as FileSystem from "./filesystem"
 
-import { makeLocationNode } from "./effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import path from "path"
 import { Context, Effect, Layer, Schema } from "effect"
-import { FSUtil } from "./fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "./location"
 import { PositiveInt, RelativePath } from "./schema"
 import { FileSystemSearch } from "./filesystem/search"
@@ -30,6 +30,8 @@ export const ListInput = Schema.Struct({
 export type ListInput = typeof ListInput.Type
 
 export { FindInput }
+
+export const DEFAULT_SEARCH_LIMIT = 100
 
 export class GlobInput extends Schema.Class<GlobInput>("FileSystem.GlobInput")({
   pattern: Schema.String,

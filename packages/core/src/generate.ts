@@ -1,9 +1,9 @@
 export * as Generate from "./generate"
 
-import { LLM, LLMClient, LLMError } from "@opencode-ai/llm"
+import { LLM, LLMClient, LLMError } from "@opencode-ai/ai"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Catalog } from "./catalog"
-import { makeLocationNode } from "./effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { llmClient } from "./effect/app-node-platform"
 import { Integration } from "./integration"
 import { ModelV2 } from "./model"

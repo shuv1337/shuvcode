@@ -2,9 +2,9 @@ export * as SkillTool from "./skill"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
 import path from "path"
-import { ToolFailure } from "@opencode-ai/llm"
+import { ToolFailure } from "@opencode-ai/ai"
 import { Effect, Schema } from "effect"
-import { FSUtil } from "../fs-util"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { SkillV2 } from "../skill"
 import { PermissionV2 } from "../permission"
 import { Tool } from "./tool"
@@ -84,7 +84,7 @@ export const Plugin = {
                   const directory = path.dirname(skill.location)
                   const files =
                     path.basename(skill.location) === "SKILL.md"
-                      ? (yield* fs.glob("**/*", { cwd: directory, absolute: true, include: "file", dot: true }))
+                      ? (yield* fs.scan("**/*", { cwd: directory, absolute: true, include: "file", dot: true }))
                           .filter((file) => path.basename(file) !== "SKILL.md")
                           .toSorted()
                           .slice(0, FILE_LIMIT)

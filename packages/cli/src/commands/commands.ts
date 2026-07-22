@@ -34,6 +34,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
     ),
   },
   commands: [
+    Spec.make("acp", { description: "Start an Agent Client Protocol server" }),
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
@@ -62,6 +63,17 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           description: "Log in to OpenCode Console",
           params: {
             url: Argument.string("url").pipe(Argument.withDescription("Console server URL"), Argument.optional),
+          },
+        }),
+      ],
+    }),
+    Spec.make("auth", {
+      description: "Manage authentication",
+      commands: [
+        Spec.make("connect", {
+          description: "Connect to a wellknown authentication provider",
+          params: {
+            url: Argument.string("url").pipe(Argument.withDescription("Wellknown provider URL")),
           },
         }),
       ],
@@ -102,6 +114,10 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           params: { name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")) },
         }),
       ],
+    }),
+    Spec.make("plugin", {
+      description: "Manage plugins",
+      commands: [Spec.make("list", { description: "List active plugins" })],
     }),
     Spec.make("migrate", { description: "Migrate v1 data to v2" }),
     Spec.make("mini", {

@@ -3,8 +3,12 @@ export {
   type ActionStateKey,
   ActionVariant,
   BaseHue,
+  CategoricalDefinition,
   FeedbackKind,
+  FormfieldState,
+  type FormfieldStateKey,
   HueAlias,
+  HueName,
   HueStep,
   MarkdownDefinition,
   MarkdownToken,
@@ -16,6 +20,7 @@ export {
   type BackgroundDefinition,
   type DiffDefinition,
   type FileThemeDefinition,
+  type FormfieldColorDefinition,
   type HueDefinition,
   type HueOverrideDefinition,
   type MergeModeDefinition,
@@ -26,5 +31,18 @@ export {
   type ThemeTokensDefinition,
 } from "./schema"
 
-export type { Hue, HueScale, ResolvedActionState, ResolvedTheme, ResolvedThemeView, StatefulColor } from "./types"
+export type {
+  Categorical,
+  FormfieldColor,
+  Hue,
+  HueSource,
+  HueScale,
+  ResolvedActionState,
+  ResolvedFormfieldState,
+  ResolvedTheme,
+  ResolvedThemeView,
+  StatefulColor,
+} from "./types"
+export { DEFAULT_CATEGORICAL } from "./defaults"
 export { migrateV1 } from "./v1-migrate"
+export { selectTheme, selectThemeMode, supportsThemeMode, themeModes } from "./select"

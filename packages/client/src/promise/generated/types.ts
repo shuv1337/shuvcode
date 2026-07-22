@@ -1,10 +1,6 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
-export type ServiceStatus =
-  | { type: "starting" }
-  | { type: "ready" }
-  | { type: "stopping"; targetVersion?: string | null }
-  | { type: "failed"; message: string; action: string }
+export type ServiceHealth = { healthy: true; version: string; pid: number }
 
 export type ServiceStopResponse = { accepted: boolean }
 
@@ -150,6 +146,8 @@ export type SessionMessageCompactionCompleted = {
 
 export type InstructionEntryKey = string
 
+export type SessionGenerateResponse = { data: { text: string } }
+
 export type SessionPendingSyntheticData1 = { text: string; description?: string; metadata?: { [x: string]: any } }
 
 export type ShellInfo = {
@@ -203,6 +201,8 @@ export type ProviderV2Info = {
 
 export type IntegrationWhen = { key: string; op: "eq" | "neq"; value: string }
 
+export type IntegrationCommandMethod = { id: string; type: "command"; label: string; command: Array<string> }
+
 export type IntegrationKeyMethod = { type: "key"; label?: string }
 
 export type IntegrationEnvMethod = { type: "env"; names: Array<string> }
@@ -214,6 +214,31 @@ export type ConnectionEnvInfo = { type: "env"; name: string }
 export type IntegrationAttemptStatus =
   | {
       status: "pending"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "complete"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "failed"
+      message: string
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+  | {
+      status: "expired"
+      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+    }
+
+export type IntegrationCommandAttempt = {
+  attemptID: string
+  time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+}
+
+export type IntegrationCommandAttemptStatus =
+  | {
+      status: "pending"
+      message?: string
       time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
     }
   | {
@@ -518,14 +543,6 @@ export type VcsFileStatus = {
   status: "added" | "deleted" | "modified"
 }
 
-export type ServiceHealth = {
-  healthy: true
-  version: string
-  pid: number
-  instanceID?: string | null
-  status?: ServiceStatus
-}
-
 export type SessionMessageModelSelected = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -798,6 +815,16 @@ export type SessionRevertCommitted = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; to: string }
+}
+
+export type SessionUsageRecorded = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.usage.recorded"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; source: "title" | "compaction"; cost: MoneyUSD; tokens: TokenUsageInfo }
 }
 
 export type ModelsDevRefreshed = {
@@ -1261,6 +1288,8 @@ export type SessionStepFailed = {
     error: SessionStructuredError
     cost?: MoneyUSD
     tokens?: TokenUsageInfo
+    snapshot?: string
+    files?: Array<string>
   }
 }
 
@@ -2016,7 +2045,11 @@ export type SessionMessageAssistantTool = {
   time: { created: number; ran?: number; completed?: number }
 }
 
-export type IntegrationMethod = IntegrationOAuthMethod | IntegrationKeyMethod | IntegrationEnvMethod
+export type IntegrationMethod =
+  | IntegrationOAuthMethod
+  | IntegrationCommandMethod
+  | IntegrationKeyMethod
+  | IntegrationEnvMethod
 
 export type FormFields = [FormField, ...Array<FormField>]
 
@@ -2209,6 +2242,7 @@ export type SessionEventDurable =
   | SessionRevertStaged
   | SessionRevertCleared
   | SessionRevertCommitted
+  | SessionUsageRecorded
 
 export type SessionMessagesResponse = {
   data: Array<SessionMessageInfo>
@@ -2486,6 +2520,14 @@ export type ProviderNotFoundError = {
 export const isProviderNotFoundError = (value: unknown): value is ProviderNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProviderNotFoundError"
 
+export type McpServerNotFoundError = {
+  readonly _tag: "McpServerNotFoundError"
+  readonly server: string
+  readonly message: string
+}
+export const isMcpServerNotFoundError = (value: unknown): value is McpServerNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "McpServerNotFoundError"
+
 export type FormNotFoundError = { readonly _tag: "FormNotFoundError"; readonly id: string; readonly message: string }
 export const isFormNotFoundError = (value: unknown): value is FormNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "FormNotFoundError"
@@ -2539,10 +2581,7 @@ export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
 
 export type HealthGetOutput = ServiceHealth
 
-export type HealthStopInput = {
-  readonly instanceID: { readonly instanceID: string; readonly targetVersion?: string | undefined }["instanceID"]
-  readonly targetVersion?: { readonly instanceID: string; readonly targetVersion?: string | undefined }["targetVersion"]
-}
+export type HealthStopInput = { readonly instanceID: { readonly instanceID: string }["instanceID"] }
 
 export type HealthStopOutput = ServiceStopResponse
 
@@ -3235,6 +3274,13 @@ export type SessionInstructionsEntryRemoveInput = {
 
 export type SessionInstructionsEntryRemoveOutput = void
 
+export type SessionGenerateInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly prompt: { readonly prompt: string }["prompt"]
+}
+
+export type SessionGenerateOutput = SessionGenerateResponse["data"]
+
 export type SessionLogInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly after?: { readonly after?: number | undefined; readonly follow?: boolean | undefined }["after"]
@@ -3363,6 +3409,15 @@ export type IntegrationGetOutput = {
   data: IntegrationInfo | null
 }
 
+export type IntegrationWellknownAddInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly url: { readonly url: string }["url"]
+}
+
+export type IntegrationWellknownAddOutput = void
+
 export type IntegrationConnectKeyInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
   readonly location?: {
@@ -3374,7 +3429,7 @@ export type IntegrationConnectKeyInput = {
 
 export type IntegrationConnectKeyOutput = void
 
-export type IntegrationConnectOauthInput = {
+export type IntegrationOauthConnectInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
@@ -3396,7 +3451,7 @@ export type IntegrationConnectOauthInput = {
   }["label"]
 }
 
-export type IntegrationConnectOauthOutput = {
+export type IntegrationOauthConnectOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: {
     attemptID: string
@@ -3407,36 +3462,76 @@ export type IntegrationConnectOauthOutput = {
   }
 }
 
-export type IntegrationAttemptStatusInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthStatusInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type IntegrationAttemptStatusOutput = {
+export type IntegrationOauthStatusOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: IntegrationAttemptStatus
 }
 
-export type IntegrationAttemptCompleteInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthCompleteInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
   readonly code?: { readonly code?: string | undefined }["code"]
 }
 
-export type IntegrationAttemptCompleteOutput = void
+export type IntegrationOauthCompleteOutput = void
 
-export type IntegrationAttemptCancelInput = {
-  readonly attemptID: { readonly attemptID: string }["attemptID"]
+export type IntegrationOauthCancelInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type IntegrationAttemptCancelOutput = void
+export type IntegrationOauthCancelOutput = void
+
+export type IntegrationCommandConnectInput = {
+  readonly integrationID: { readonly integrationID: string }["integrationID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly methodID: { readonly methodID: string; readonly label?: string | undefined }["methodID"]
+  readonly label?: { readonly methodID: string; readonly label?: string | undefined }["label"]
+}
+
+export type IntegrationCommandConnectOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  data: IntegrationCommandAttempt
+}
+
+export type IntegrationCommandStatusInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type IntegrationCommandStatusOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  data: IntegrationCommandAttemptStatus
+}
+
+export type IntegrationCommandCancelInput = {
+  readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
+  readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type IntegrationCommandCancelOutput = void
 
 export type McpListInput = {
   readonly location?: {
@@ -3448,6 +3543,84 @@ export type McpListOutput = {
   location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
   data: Array<McpServer>
 }
+
+export type McpAddInput = {
+  readonly server: { readonly server: string }["server"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly config: {
+    readonly config:
+      | {
+          readonly type: "local"
+          readonly command: ReadonlyArray<string>
+          readonly cwd?: string | undefined
+          readonly environment?: { readonly [x: string]: string } | undefined
+          readonly disabled?: boolean | undefined
+          readonly codemode?: boolean | undefined
+          readonly timeout?:
+            | {
+                readonly startup?: number | undefined
+                readonly catalog?: number | undefined
+                readonly execution?: number | undefined
+              }
+            | undefined
+        }
+      | {
+          readonly type: "remote"
+          readonly url: string
+          readonly headers?: { readonly [x: string]: string } | undefined
+          readonly oauth?:
+            | {
+                readonly client_id?: string | undefined
+                readonly client_secret?: string | undefined
+                readonly scope?: string | undefined
+                readonly callback_port?: number | undefined
+                readonly redirect_uri?: string | undefined
+              }
+            | false
+            | undefined
+          readonly disabled?: boolean | undefined
+          readonly codemode?: boolean | undefined
+          readonly timeout?:
+            | {
+                readonly startup?: number | undefined
+                readonly catalog?: number | undefined
+                readonly execution?: number | undefined
+              }
+            | undefined
+        }
+  }["config"]
+}
+
+export type McpAddOutput = void
+
+export type McpRemoveInput = {
+  readonly server: { readonly server: string }["server"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type McpRemoveOutput = void
+
+export type McpConnectInput = {
+  readonly server: { readonly server: string }["server"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type McpConnectOutput = void
+
+export type McpDisconnectInput = {
+  readonly server: { readonly server: string }["server"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type McpDisconnectOutput = void
 
 export type McpResourceCatalogInput = {
   readonly location?: {

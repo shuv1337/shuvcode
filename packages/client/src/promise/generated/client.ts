@@ -64,6 +64,8 @@ import type {
   SessionInstructionsEntryPutOutput,
   SessionInstructionsEntryRemoveInput,
   SessionInstructionsEntryRemoveOutput,
+  SessionGenerateInput,
+  SessionGenerateOutput,
   SessionLogInput,
   SessionLogOutput,
   SessionInterruptInput,
@@ -88,18 +90,34 @@ import type {
   IntegrationListOutput,
   IntegrationGetInput,
   IntegrationGetOutput,
+  IntegrationWellknownAddInput,
+  IntegrationWellknownAddOutput,
   IntegrationConnectKeyInput,
   IntegrationConnectKeyOutput,
-  IntegrationConnectOauthInput,
-  IntegrationConnectOauthOutput,
-  IntegrationAttemptStatusInput,
-  IntegrationAttemptStatusOutput,
-  IntegrationAttemptCompleteInput,
-  IntegrationAttemptCompleteOutput,
-  IntegrationAttemptCancelInput,
-  IntegrationAttemptCancelOutput,
+  IntegrationOauthConnectInput,
+  IntegrationOauthConnectOutput,
+  IntegrationOauthStatusInput,
+  IntegrationOauthStatusOutput,
+  IntegrationOauthCompleteInput,
+  IntegrationOauthCompleteOutput,
+  IntegrationOauthCancelInput,
+  IntegrationOauthCancelOutput,
+  IntegrationCommandConnectInput,
+  IntegrationCommandConnectOutput,
+  IntegrationCommandStatusInput,
+  IntegrationCommandStatusOutput,
+  IntegrationCommandCancelInput,
+  IntegrationCommandCancelOutput,
   McpListInput,
   McpListOutput,
+  McpAddInput,
+  McpAddOutput,
+  McpRemoveInput,
+  McpRemoveOutput,
+  McpConnectInput,
+  McpConnectOutput,
+  McpDisconnectInput,
+  McpDisconnectOutput,
   McpResourceCatalogInput,
   McpResourceCatalogOutput,
   CredentialUpdateInput,
@@ -345,7 +363,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/service/stop`,
-            body: { instanceID: input["instanceID"], targetVersion: input["targetVersion"] },
+            body: { instanceID: input["instanceID"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 400],
             empty: false,
@@ -797,6 +815,18 @@ export function make(options: ClientOptions) {
             ),
         },
       },
+      generate: (input: SessionGenerateInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionGenerateOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/generate`,
+            body: { prompt: input["prompt"] },
+            successStatus: 200,
+            declaredStatuses: [404, 503, 400, 401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
       log: (input: SessionLogInput, requestOptions?: RequestOptions): AsyncIterable<SessionLogOutput> =>
         sse<SessionLogOutput>(
           {
@@ -949,6 +979,21 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      wellknown: {
+        add: (input: IntegrationWellknownAddInput, requestOptions?: RequestOptions) =>
+          request<IntegrationWellknownAddOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/integration/wellknown`,
+              query: { location: input["location"] },
+              body: { url: input["url"] },
+              successStatus: 204,
+              declaredStatuses: [400, 401, 403],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       connect: {
         key: (input: IntegrationConnectKeyInput, requestOptions?: RequestOptions) =>
           request<IntegrationConnectKeyOutput>(
@@ -963,8 +1008,10 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        oauth: (input: IntegrationConnectOauthInput, requestOptions?: RequestOptions) =>
-          request<IntegrationConnectOauthOutput>(
+      },
+      oauth: {
+        connect: (input: IntegrationOauthConnectInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthConnectOutput>(
             {
               method: "POST",
               path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth`,
@@ -976,13 +1023,11 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-      },
-      attempt: {
-        status: (input: IntegrationAttemptStatusInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptStatusOutput>(
+        status: (input: IntegrationOauthStatusInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthStatusOutput>(
             {
               method: "GET",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 400],
@@ -990,11 +1035,11 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        complete: (input: IntegrationAttemptCompleteInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptCompleteOutput>(
+        complete: (input: IntegrationOauthCompleteInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthCompleteOutput>(
             {
               method: "POST",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}/complete`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}/complete`,
               query: { location: input["location"] },
               body: { code: input["code"] },
               successStatus: 204,
@@ -1003,11 +1048,50 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
-        cancel: (input: IntegrationAttemptCancelInput, requestOptions?: RequestOptions) =>
-          request<IntegrationAttemptCancelOutput>(
+        cancel: (input: IntegrationOauthCancelInput, requestOptions?: RequestOptions) =>
+          request<IntegrationOauthCancelOutput>(
             {
               method: "DELETE",
-              path: `/api/integration/attempt/${encodeURIComponent(input.attemptID)}`,
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
+              query: { location: input["location"] },
+              successStatus: 204,
+              declaredStatuses: [401, 403, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
+      command: {
+        connect: (input: IntegrationCommandConnectInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandConnectOutput>(
+            {
+              method: "POST",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command`,
+              query: { location: input["location"] },
+              body: { methodID: input["methodID"], label: input["label"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        status: (input: IntegrationCommandStatusInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandStatusOutput>(
+            {
+              method: "GET",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command/${encodeURIComponent(input.attemptID)}`,
+              query: { location: input["location"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 400],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        cancel: (input: IntegrationCommandCancelInput, requestOptions?: RequestOptions) =>
+          request<IntegrationCommandCancelOutput>(
+            {
+              method: "DELETE",
+              path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 204,
               declaredStatuses: [401, 403, 400],
@@ -1027,6 +1111,55 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [401, 403, 400],
             empty: false,
+          },
+          requestOptions,
+        ),
+      add: (input: McpAddInput, requestOptions?: RequestOptions) =>
+        request<McpAddOutput>(
+          {
+            method: "PUT",
+            path: `/api/mcp/${encodeURIComponent(input.server)}`,
+            query: { location: input["location"] },
+            body: { config: input["config"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      remove: (input: McpRemoveInput, requestOptions?: RequestOptions) =>
+        request<McpRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/mcp/${encodeURIComponent(input.server)}`,
+            query: { location: input["location"] },
+            successStatus: 204,
+            declaredStatuses: [404, 401, 403, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      connect: (input: McpConnectInput, requestOptions?: RequestOptions) =>
+        request<McpConnectOutput>(
+          {
+            method: "POST",
+            path: `/api/mcp/${encodeURIComponent(input.server)}/connect`,
+            query: { location: input["location"] },
+            successStatus: 204,
+            declaredStatuses: [404, 401, 403, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      disconnect: (input: McpDisconnectInput, requestOptions?: RequestOptions) =>
+        request<McpDisconnectOutput>(
+          {
+            method: "POST",
+            path: `/api/mcp/${encodeURIComponent(input.server)}/disconnect`,
+            query: { location: input["location"] },
+            successStatus: 204,
+            declaredStatuses: [404, 401, 403, 400],
+            empty: true,
           },
           requestOptions,
         ),
