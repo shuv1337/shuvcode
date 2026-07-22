@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from "effect"
+import { Cause, Deferred, Effect, Exit } from "effect"
 import { isBlockedMember, ToolReference, ToolRuntimeError, type SafeObject } from "../tool-runtime.js"
 import {
   type AstNode,
@@ -6,11 +6,15 @@ import {
   asNode,
   type Binding,
   CodeModeFunction,
+  CodeModeGenerator,
   CoercionFunction,
   ComputedValue,
   ErrorConstructorReference,
   GlobalMethodReference,
   GlobalNamespace,
+  GeneratorMethodReference,
+  GeneratorReturn,
+  type GeneratorRequestKind,
   type GlobalNamespaceName,
   getArray,
   getBoolean,
@@ -35,11 +39,10 @@ import {
   SearchFunction,
   SymbolNamespace,
   type StatementResult,
-  supportedSyntaxMessage,
   unsupportedSyntax,
   UriFunction,
 } from "./model.js"
-import { caughtErrorValue, constructErrorValue } from "./errors.js"
+import { caughtErrorValue, constructAggregateErrorValue, constructErrorValue } from "./errors.js"
 import {
   arrayStatics,
   type CallbackRunner,
@@ -48,6 +51,7 @@ import {
   invokeGroupBy,
   invokeIntrinsic,
 } from "./methods.js"
+import { preserveConsumerError, type SyncIteratorRunner } from "./iterator.js"
 import {
   constructPromise,
   invokePromiseInstanceMethod,
@@ -57,13 +61,13 @@ import {
 } from "./promises.js"
 import { containsOpaqueReference, isRuntimeReference, rejectCircularInsertion, typeofValue } from "./references.js"
 import { ScopeStack } from "./scope.js"
-import { arrayMethods, mapMethods, mapStatics, setMethods, spreadItems } from "../stdlib/collections.js"
+import { arrayMethods, mapMethods, mapStatics, setMethods } from "../stdlib/collections.js"
 import { consoleMethods, formatConsoleMessage } from "../stdlib/console.js"
 import { dateMethods, dateStatics } from "../stdlib/date.js"
 import { invokeJsonMethod, jsonStatics, type JsonMethodName } from "../stdlib/json.js"
-import { mathConstants, mathMethods } from "../stdlib/math.js"
+import { invokeMathSumPrecise, mathConstants, mathMethods } from "../stdlib/math.js"
 import { numberConstants, numberMethods, numberStatics } from "../stdlib/number.js"
-import { objectMethodsPreservingIdentity, objectStatics } from "../stdlib/object.js"
+import { invokeObjectFromEntries, objectMethodsPreservingIdentity, objectStatics } from "../stdlib/object.js"
 import { promiseStatics } from "../stdlib/promise.js"
 import {
   escapeRegexHint,
@@ -216,9 +220,50 @@ const loopDeclaration = (left: AstNode, statement: "for...of" | "for...in") => {
 }
 
 type CustomIterator = {
-  iterator: SafeObject
+  iterator: SafeObject | CodeModeGenerator
   next: unknown
   asynchronous: boolean
+}
+
+type OpaqueMemberReference =
+  | ToolReference
+  | PromiseMethodReference
+  | PromiseInstanceMethodReference
+  | IntrinsicReference
+  | GlobalMethodReference
+  | JsonMethodReference
+  | GeneratorMethodReference
+
+const isOpaqueMemberReference = (value: unknown): value is OpaqueMemberReference =>
+  value instanceof ToolReference ||
+  value instanceof PromiseMethodReference ||
+  value instanceof PromiseInstanceMethodReference ||
+  value instanceof IntrinsicReference ||
+  value instanceof GlobalMethodReference ||
+  value instanceof JsonMethodReference ||
+  value instanceof GeneratorMethodReference
+
+const copyIteratorSymbols = (source: object, target: object, consumed?: ReadonlySet<PropertyKey>): void => {
+  for (const symbol of IteratorSymbols) {
+    if (!consumed?.has(symbol) && Object.hasOwn(source, symbol))
+      Reflect.set(target, symbol, Reflect.get(source, symbol))
+  }
+}
+
+type GeneratorRequest = {
+  kind: GeneratorRequestKind
+  value: unknown
+  response: Deferred.Deferred<unknown, unknown>
+}
+
+type GeneratorState = {
+  started: boolean
+  completed: boolean
+  draining: boolean
+  active?: GeneratorRequest
+  pending: Array<GeneratorRequest>
+  pendingIndex: number
+  available?: Deferred.Deferred<void>
 }
 
 export class Interpreter<R> {
@@ -228,10 +273,13 @@ export class Interpreter<R> {
   private readonly toolKeys: (path: ReadonlyArray<string>) => ReadonlyArray<string>
   private readonly logs: Array<string>
   private readonly promises: PromiseRuntime<R>
-  private readonly runner: CallbackRunner<R> = {
+  private generatorState?: GeneratorState
+  private generatorAsync = false
+  private readonly runner: CallbackRunner<R> & SyncIteratorRunner<R> = {
     invokeFunction: (fn, args) => this.invokeFunction(fn, args),
     invokeCallable: (callable, args, node) => this.invokeCallable(callable, args, node),
     settlePromise: (promise) => this.settlePromise(promise),
+    syncIterator: (value, node) => this.syncIterator(value, node),
   }
 
   constructor(
@@ -403,16 +451,12 @@ export class Interpreter<R> {
   }
 
   private createFunction(node: AstNode): CodeModeFunction {
-    if (node.generator === true) {
-      throw new InterpreterRuntimeError("Generator functions are not supported.", node, "UnsupportedSyntax", [
-        supportedSyntaxMessage,
-      ])
-    }
     return new CodeModeFunction(
       getArray(node, "params").map((parameter, index) => asNode(parameter, `params[${index}]`)),
       getNode(node, "body"),
       this.scopes.capture(),
       node.async === true,
+      node.generator === true,
     )
   }
 
@@ -646,14 +690,20 @@ export class Interpreter<R> {
       const right = yield* self.evaluateExpression(getNode(node, "right"))
       const body = getNode(node, "body")
 
-      const iterable = spreadItems(right)
-      const iterator = iterable === undefined && awaiting ? yield* self.customIterator(right, node) : undefined
-      if (iterable === undefined && iterator === undefined) {
+      const iterator = yield* self.customIterator(right, node, awaiting)
+      const cursor = iterator === undefined ? yield* self.syncIterator(right, node) : undefined
+      if (iterator === undefined && cursor === undefined) {
         throw new InterpreterRuntimeError(
-          `${awaiting ? "for await...of" : "for...of"} requires an array, string, Map, Set, or URLSearchParams${awaiting ? ", or custom iterator" : ""} value.`,
+          `${awaiting ? "for await...of" : "for...of"} requires an array, string, Map, Set, or URLSearchParams, or custom iterator value.`,
           node,
-        )
+        ).as("TypeError")
       }
+      const close = () =>
+        iterator
+          ? self.closeIterator(iterator, node, awaiting)
+          : awaiting
+            ? Effect.andThen(cursor?.close ?? Effect.void, Effect.yieldNow)
+            : (cursor?.close ?? Effect.void)
 
       let assignment: AstNode | undefined
 
@@ -687,45 +737,35 @@ export class Interpreter<R> {
           ),
         )
 
-      if (iterable !== undefined) {
-        for (const value of iterable) {
-          const result = yield* evaluateBody(awaiting ? yield* self.awaitValue(value) : value)
-
-          if (result.kind === "return") return result
-          if (result.kind === "break") {
-            if (result.label !== undefined && !labels?.has(result.label)) return result
-            return { kind: "none" } satisfies StatementResult
-          }
-          if (result.kind === "continue" && result.label !== undefined && !labels?.has(result.label)) return result
-        }
-        return { kind: "none" } satisfies StatementResult
-      }
-      if (iterator === undefined) throw new InterpreterRuntimeError("Custom iterator is unavailable.", node)
-
       while (true) {
-        const step = yield* self.nextIteratorResult(iterator, node)
+        const current = iterator
+          ? yield* self.nextIteratorResult(iterator, node, awaiting)
+          : yield* cursor?.next ?? Effect.fail(new InterpreterRuntimeError("Iterator is unavailable.", node))
+        const step = cursor && awaiting ? { done: current.done, value: yield* self.awaitValue(current.value) } : current
         if (step.done) return { kind: "none" } satisfies StatementResult
         const bodyExit = yield* Effect.exit(evaluateBody(step.value))
         if (!Exit.isSuccess(bodyExit)) {
           // Process interruption must remain prompt; user cleanup cannot extend a timeout.
-          if (!Cause.hasInterruptsOnly(bodyExit.cause)) yield* Effect.exit(self.closeIterator(iterator, node))
+          if (!Cause.hasInterruptsOnly(bodyExit.cause)) {
+            yield* Effect.exit(close())
+          }
           return yield* Effect.failCause(bodyExit.cause)
         }
         const result = bodyExit.value
 
         if (result.kind === "return") {
-          yield* self.closeIterator(iterator, node)
+          yield* close()
           return result
         }
 
         if (result.kind === "break") {
-          yield* self.closeIterator(iterator, node)
+          yield* close()
           if (result.label !== undefined && !labels?.has(result.label)) return result
           return { kind: "none" } satisfies StatementResult
         }
 
         if (result.kind === "continue" && result.label !== undefined && !labels?.has(result.label)) {
-          yield* self.closeIterator(iterator, node)
+          yield* close()
           return result
         }
       }
@@ -742,26 +782,86 @@ export class Interpreter<R> {
     return value instanceof CodeModePromise ? this.settlePromise(value) : Effect.as(Effect.yieldNow, value)
   }
 
-  private customIterator(value: unknown, node: AstNode) {
+  private awaitAsyncFromSyncValue(
+    iterator: CustomIterator,
+    value: unknown,
+    node: AstNode,
+    closeOnRejection: boolean,
+  ): Effect.Effect<unknown, unknown, R> {
+    const self = this
+    return Effect.gen(function* () {
+      const settled = yield* Effect.exit(self.awaitValue(value))
+      if (Exit.isSuccess(settled)) return settled.value
+      if (closeOnRejection && !Cause.hasInterruptsOnly(settled.cause)) {
+        yield* Effect.exit(self.closeIterator(iterator, node, false))
+      }
+      return yield* Effect.failCause(settled.cause)
+    })
+  }
+
+  private syncIterator(value: unknown, node: AstNode) {
+    const iterator = Array.isArray(value)
+      ? value[Symbol.iterator]()
+      : typeof value === "string"
+        ? value[Symbol.iterator]()
+        : value instanceof CodeModeMap
+          ? value.map.entries()
+          : value instanceof CodeModeSet
+            ? value.set.values()
+            : value instanceof CodeModeURLSearchParams
+              ? value.params.entries()
+              : undefined
+    if (iterator !== undefined) {
+      return Effect.succeed({
+        next: Effect.sync(() => {
+          const step = iterator.next()
+          return { done: Boolean(step.done), value: step.value }
+        }),
+        close: Effect.void,
+      })
+    }
+    const self = this
+    return Effect.map(this.customIterator(value, node, false), (iterator) =>
+      iterator === undefined
+        ? undefined
+        : {
+            next: self.nextIteratorResult(iterator, node, false),
+            close: Effect.suspend(() => self.closeIterator(iterator, node, false)),
+          },
+    )
+  }
+
+  private customIterator(value: unknown, node: AstNode, allowAsync = true) {
+    if (value instanceof CodeModeGenerator) {
+      if (value.asynchronous && !allowAsync) return Effect.succeed(undefined)
+      return Effect.succeed({
+        iterator: value,
+        next: new GeneratorMethodReference(value, "next"),
+        asynchronous: value.asynchronous,
+      })
+    }
     if (!isRecord(value) || isRuntimeReference(value)) return Effect.succeed(undefined)
-    const asyncMethod = Reflect.get(value, AsyncIteratorSymbol)
+    const asyncMethod = allowAsync ? Reflect.get(value, AsyncIteratorSymbol) : undefined
     const method = asyncMethod ?? Reflect.get(value, IteratorSymbol)
     if (method === undefined || method === null) return Effect.succeed(undefined)
     const self = this
     return Effect.map(
       this.invokeCallable(this.requireIteratorMethod(method, "Iterator method", node), [], node),
       (iterator) => {
-        const object = self.requireIteratorObject(iterator, "Iterator method result", node)
+        const object = self.requireIterator(iterator, node)
         return {
           iterator: object,
-          next: self.requireIteratorMethod(object.next, "Iterator next", node),
+          next:
+            object instanceof CodeModeGenerator
+              ? new GeneratorMethodReference(object, "next")
+              : self.requireIteratorMethod(object.next, "Iterator next", node),
           asynchronous: asyncMethod !== undefined && asyncMethod !== null,
         }
       },
     )
   }
 
-  private nextIteratorResult(iterator: CustomIterator, node: AstNode) {
+  private nextIteratorResult(iterator: CustomIterator, node: AstNode, awaiting: boolean) {
     const self = this
     return Effect.gen(function* () {
       if (iterator.asynchronous) {
@@ -775,7 +875,7 @@ export class Interpreter<R> {
 
       const called = yield* Effect.exit(self.invokeCallable(iterator.next, [], node))
       if (!Exit.isSuccess(called)) {
-        yield* Effect.yieldNow
+        if (awaiting) yield* Effect.yieldNow
         return yield* Effect.failCause(called.cause)
       }
       const captured = yield* Effect.exit(
@@ -785,16 +885,24 @@ export class Interpreter<R> {
         }),
       )
       if (!Exit.isSuccess(captured)) {
-        yield* Effect.yieldNow
+        if (awaiting) yield* Effect.yieldNow
         return yield* Effect.failCause(captured.cause)
       }
-      return { done: captured.value.done, value: yield* self.awaitValue(captured.value.value) }
+      return {
+        done: captured.value.done,
+        value: awaiting
+          ? yield* self.awaitAsyncFromSyncValue(iterator, captured.value.value, node, !captured.value.done)
+          : captured.value.value,
+      }
     })
   }
 
-  private closeIterator(iterator: CustomIterator, node: AstNode): Effect.Effect<void, unknown, R> {
-    const close = iterator.iterator.return
-    if (close === undefined || close === null) return iterator.asynchronous ? Effect.void : Effect.yieldNow
+  private closeIterator(iterator: CustomIterator, node: AstNode, awaiting = true): Effect.Effect<void, unknown, R> {
+    const close =
+      iterator.iterator instanceof CodeModeGenerator
+        ? new GeneratorMethodReference(iterator.iterator, "return")
+        : iterator.iterator.return
+    if (close === undefined || close === null) return iterator.asynchronous || !awaiting ? Effect.void : Effect.yieldNow
     const self = this
     return Effect.gen(function* () {
       const method = self.requireIteratorMethod(close, "Iterator return", node)
@@ -809,23 +917,29 @@ export class Interpreter<R> {
 
       const called = yield* Effect.exit(self.invokeCallable(method, [], node))
       if (!Exit.isSuccess(called)) {
-        yield* Effect.yieldNow
+        if (awaiting) yield* Effect.yieldNow
         return yield* Effect.failCause(called.cause)
       }
       const captured = yield* Effect.exit(
         Effect.sync(() => self.requireIteratorObject(called.value, "Iterator return() result", node).value),
       )
       if (!Exit.isSuccess(captured)) {
-        yield* Effect.yieldNow
+        if (awaiting) yield* Effect.yieldNow
         return yield* Effect.failCause(captured.cause)
       }
-      yield* self.awaitValue(captured.value)
+      if (awaiting) yield* self.awaitValue(captured.value)
     })
   }
 
   private requireIteratorObject(value: unknown, context: string, node: AstNode): SafeObject {
     if (isRecord(value) && !isRuntimeReference(value)) return value
     throw new InterpreterRuntimeError(`${context} must be an object.`, node).as("TypeError")
+  }
+
+  private requireIterator(value: unknown, node: AstNode): SafeObject | CodeModeGenerator {
+    return value instanceof CodeModeGenerator
+      ? value
+      : this.requireIteratorObject(value, "Iterator method result", node)
   }
 
   private requireIteratorMethod(value: unknown, context: string, node: AstNode): unknown {
@@ -966,7 +1080,7 @@ export class Interpreter<R> {
 
     const attempted = Effect.matchCauseEffect(this.evaluateStatement(body), {
       onFailure: (cause) => {
-        if (cause.reasons.some(Cause.isInterruptReason) || !handler) {
+        if (cause.reasons.some(Cause.isInterruptReason) || Cause.squash(cause) instanceof GeneratorReturn || !handler) {
           return Effect.failCause(cause)
         }
 
@@ -1059,10 +1173,7 @@ export class Interpreter<R> {
             for (const [key, item] of Object.entries(value as SafeObject)) {
               if (!consumed.has(key) && !isBlockedMember(key)) rest[key] = item
             }
-            for (const symbol of IteratorSymbols) {
-              if (!consumed.has(symbol) && Object.hasOwn(value, symbol))
-                Reflect.set(rest, symbol, Reflect.get(value, symbol))
-            }
+            copyIteratorSymbols(value, rest, consumed)
             yield* self.declarePattern(getNode(property, "argument"), rest, mutable, property, initialize)
             continue
           }
@@ -1084,21 +1195,9 @@ export class Interpreter<R> {
       }
 
       if (pattern.type === "ArrayPattern") {
-        const items = spreadItems(value)
-        if (items === undefined) {
-          throw new InterpreterRuntimeError("Array destructuring requires a supported iterable value.", pattern)
-        }
-
-        for (const [index, item] of getArray(pattern, "elements").entries()) {
-          if (item === null) continue
-          const element = asNode(item, `elements[${index}]`)
-          if (element.type === "RestElement") {
-            yield* self.declarePattern(getNode(element, "argument"), items.slice(index), mutable, element, initialize)
-            break
-          }
-          yield* self.declarePattern(element, items[index], mutable, pattern, initialize)
-        }
-        return
+        return yield* self.destructureArrayPattern(pattern, value, (target, item, context) =>
+          self.declarePattern(target, item, mutable, context, initialize),
+        )
       }
 
       throw new InterpreterRuntimeError(`Unsupported binding pattern '${pattern.type}'.`, pattern)
@@ -1142,10 +1241,7 @@ export class Interpreter<R> {
             for (const [key, item] of Object.entries(source)) {
               if (!consumed.has(key) && !isBlockedMember(key)) rest[key] = item
             }
-            for (const symbol of IteratorSymbols) {
-              if (!consumed.has(symbol) && Object.hasOwn(source, symbol))
-                Reflect.set(rest, symbol, Reflect.get(source, symbol))
-            }
+            copyIteratorSymbols(source, rest, consumed)
             yield* self.assignPattern(getNode(property, "argument"), rest, property)
             continue
           }
@@ -1160,23 +1256,60 @@ export class Interpreter<R> {
       }
 
       if (pattern.type === "ArrayPattern") {
-        const items = spreadItems(value)
-        if (items === undefined) {
-          throw new InterpreterRuntimeError("Array destructuring requires a supported iterable value.", pattern)
-        }
-        for (const [index, item] of getArray(pattern, "elements").entries()) {
-          if (item === null) continue
-          const element = asNode(item, `elements[${index}]`)
-          if (element.type === "RestElement") {
-            yield* self.assignPattern(getNode(element, "argument"), items.slice(index), element)
-            break
-          }
-          yield* self.assignPattern(element, items[index], pattern)
-        }
-        return
+        return yield* self.destructureArrayPattern(pattern, value, (target, item, context) =>
+          self.assignPattern(target, item, context),
+        )
       }
 
       throw new InterpreterRuntimeError(`Unsupported assignment pattern '${pattern.type}'.`, node)
+    })
+  }
+
+  private destructureArrayPattern(
+    pattern: AstNode,
+    value: unknown,
+    consume: (target: AstNode, value: unknown, context: AstNode) => Effect.Effect<void, unknown, R>,
+  ): Effect.Effect<void, unknown, R> {
+    const self = this
+    return Effect.gen(function* () {
+      const cursor = yield* self.syncIterator(value, pattern)
+      if (cursor === undefined) {
+        throw new InterpreterRuntimeError("Array destructuring requires a supported iterable value.", pattern).as(
+          "TypeError",
+        )
+      }
+      let done = false
+      for (const [index, item] of getArray(pattern, "elements").entries()) {
+        if (done) {
+          if (item === null) continue
+          const element = asNode(item, `elements[${index}]`)
+          yield* consume(
+            element.type === "RestElement" ? getNode(element, "argument") : element,
+            element.type === "RestElement" ? [] : undefined,
+            element,
+          )
+          if (element.type === "RestElement") return
+          continue
+        }
+        const step = yield* cursor.next
+        done = step.done
+        if (item === null) continue
+        const element = asNode(item, `elements[${index}]`)
+        if (element.type === "RestElement") {
+          const rest: Array<unknown> = []
+          if (!step.done) rest.push(step.value)
+          while (!done) {
+            const next = yield* cursor.next
+            done = next.done
+            if (!done) rest.push(next.value)
+          }
+          yield* consume(getNode(element, "argument"), rest, element)
+          return
+        }
+        const consumed = consume(element, step.done ? undefined : step.value, pattern)
+        yield* step.done ? consumed : preserveConsumerError(cursor, consumed)
+      }
+      if (!done) yield* cursor.close
     })
   }
 
@@ -1259,6 +1392,8 @@ export class Interpreter<R> {
           value instanceof CodeModePromise ? self.settlePromise(value) : Effect.as(Effect.yieldNow, value),
         )
       }
+      case "YieldExpression":
+        return this.evaluateYieldExpression(node)
       case "NewExpression":
         return this.evaluateNewExpression(node)
       default:
@@ -1280,7 +1415,11 @@ export class Interpreter<R> {
       )
     }
     if (errorConstructors.has(name)) {
-      return Effect.map(this.evaluateCallArguments(argNodes), (args) => constructErrorValue(name, args, node))
+      return Effect.flatMap(this.evaluateCallArguments(argNodes), (args) =>
+        name === "AggregateError"
+          ? constructAggregateErrorValue(self.runner, args, node)
+          : Effect.succeed(constructErrorValue(name, args)),
+      )
     }
     // Array and Object construct identically with or without new, like JS.
     if (name === "Array") {
@@ -1298,13 +1437,13 @@ export class Interpreter<R> {
           case "RegExp":
             return self.constructRegExp(args, node)
           case "Map":
-            return self.constructMap(args[0], node)
+            return yield* self.constructMap(args[0], node)
           case "Set":
-            return self.constructSet(args[0], node)
+            return yield* self.constructSet(args[0], node)
           case "URL":
             return self.constructURL(args, node)
           default:
-            return self.constructURLSearchParams(args[0], node)
+            return yield* self.constructURLSearchParams(args[0], node)
         }
       })
     }
@@ -1390,44 +1529,53 @@ export class Interpreter<R> {
     }
   }
 
-  private constructMap(init: unknown, node: AstNode): CodeModeMap {
+  private constructMap(init: unknown, node: AstNode): Effect.Effect<CodeModeMap, unknown, R> {
     const target = new CodeModeMap()
-    if (init === undefined || init === null) return target
-    const entries = Array.isArray(init)
-      ? init
-      : init instanceof CodeModeMap
-        ? Array.from(init.map.entries(), ([key, item]): Array<unknown> => [key, item])
-        : undefined
-    if (entries === undefined) {
-      throw new InterpreterRuntimeError(
-        "new Map(...) expects an array of [key, value] pairs, a Map, or no argument.",
-        node,
-      )
-    }
-    for (const pair of entries) {
-      if (!Array.isArray(pair)) {
-        throw new InterpreterRuntimeError("new Map(...) expects [key, value] pairs.", node)
+    if (init === undefined || init === null) return Effect.succeed(target)
+    const self = this
+    return Effect.gen(function* () {
+      const cursor = yield* self.syncIterator(init, node)
+      if (cursor === undefined) {
+        throw new InterpreterRuntimeError(
+          "new Map(...) expects an iterable of [key, value] pairs or no argument.",
+          node,
+        ).as("TypeError")
       }
-      target.map.set(pair[0], pair[1])
-    }
-    return target
+      while (true) {
+        const step = yield* cursor.next
+        if (step.done) return target
+        yield* preserveConsumerError(
+          cursor,
+          Effect.sync(() => {
+            if (!isRecord(step.value) || isRuntimeReference(step.value)) {
+              throw new InterpreterRuntimeError("new Map(...) expects [key, value] pairs as entry objects.", node).as(
+                "TypeError",
+              )
+            }
+            target.map.set(step.value[0], step.value[1])
+          }),
+        )
+      }
+    })
   }
 
-  private constructSet(init: unknown, node: AstNode): CodeModeSet {
+  private constructSet(init: unknown, node: AstNode): Effect.Effect<CodeModeSet, unknown, R> {
     const target = new CodeModeSet()
-    if (init === undefined || init === null) return target
-    const items = Array.isArray(init)
-      ? init
-      : init instanceof CodeModeSet
-        ? Array.from(init.set.values())
-        : typeof init === "string"
-          ? Array.from(init)
-          : undefined
-    if (items === undefined) {
-      throw new InterpreterRuntimeError("new Set(...) expects an array, Set, string, or no argument.", node)
-    }
-    for (const item of items) target.set.add(item)
-    return target
+    if (init === undefined || init === null) return Effect.succeed(target)
+    const self = this
+    return Effect.gen(function* () {
+      const cursor = yield* self.syncIterator(init, node)
+      if (cursor === undefined) {
+        throw new InterpreterRuntimeError("new Set(...) expects a synchronous iterable or no argument.", node).as(
+          "TypeError",
+        )
+      }
+      while (true) {
+        const step = yield* cursor.next
+        if (step.done) return target
+        target.set.add(step.value)
+      }
+    })
   }
 
   private constructURL(args: Array<unknown>, node: AstNode): CodeModeURL {
@@ -1448,47 +1596,79 @@ export class Interpreter<R> {
     }
   }
 
-  private constructURLSearchParams(init: unknown, node: AstNode): CodeModeURLSearchParams {
-    if (init === undefined) return new CodeModeURLSearchParams(new URLSearchParams())
+  private constructURLSearchParams(init: unknown, node: AstNode): Effect.Effect<CodeModeURLSearchParams, unknown, R> {
+    if (init === undefined) return Effect.succeed(new CodeModeURLSearchParams(new URLSearchParams()))
     if (init instanceof CodeModeURLSearchParams) {
-      return new CodeModeURLSearchParams(new URLSearchParams(init.params))
+      return Effect.succeed(new CodeModeURLSearchParams(new URLSearchParams(init.params)))
     }
-    if (typeof init === "string") return new CodeModeURLSearchParams(new URLSearchParams(init))
+    if (typeof init === "string") return Effect.succeed(new CodeModeURLSearchParams(new URLSearchParams(init)))
     if (init === null || typeof init === "number" || typeof init === "boolean") {
-      return new CodeModeURLSearchParams(new URLSearchParams(coerceToString(init)))
+      return Effect.succeed(new CodeModeURLSearchParams(new URLSearchParams(coerceToString(init))))
     }
-    if (init instanceof CodeModeMap) {
-      return this.constructURLSearchParams(
-        Array.from(init.map.entries(), ([key, value]) => [key, value]),
-        node,
-      )
-    }
-    if (Array.isArray(init)) {
-      const entries = init.map((pair) => {
-        if (!Array.isArray(pair) || pair.length !== 2) {
-          throw new InterpreterRuntimeError(
-            "new URLSearchParams(...) expects an array of [name, value] pairs.",
-            node,
-          ).as("TypeError")
+    const self = this
+    return Effect.gen(function* () {
+      const cursor = yield* self.syncIterator(init, node)
+      if (cursor !== undefined) {
+        const entries: Array<Array<string>> = []
+        while (true) {
+          const step = yield* cursor.next
+          if (step.done) {
+            if (entries.some((entry) => entry.length !== 2)) {
+              throw new InterpreterRuntimeError(
+                "new URLSearchParams(...) expects iterable [name, value] pairs.",
+                node,
+              ).as("TypeError")
+            }
+            return new CodeModeURLSearchParams(
+              new URLSearchParams(entries.map((entry): [string, string] => [entry[0] ?? "", entry[1] ?? ""])),
+            )
+          }
+          entries.push(yield* preserveConsumerError(cursor, self.readURLSearchParamsPair(step.value, node)))
         }
-        return [uriArgument(pair[0], "URLSearchParams name"), uriArgument(pair[1], "URLSearchParams value")] as [
-          string,
-          string,
-        ]
-      })
-      return new CodeModeURLSearchParams(new URLSearchParams(entries))
-    }
-    if (isCodeModeValue(init)) return new CodeModeURLSearchParams(new URLSearchParams())
-    const data = boundedData(init, "new URLSearchParams input")
-    if (data === null || typeof data !== "object") {
-      throw new InterpreterRuntimeError(
-        "new URLSearchParams(...) expects a query string, data object, array of pairs, or URLSearchParams.",
-        node,
-      ).as("TypeError")
-    }
-    return new CodeModeURLSearchParams(
-      new URLSearchParams(Object.fromEntries(Object.entries(data).map(([key, value]) => [key, coerceToString(value)]))),
-    )
+      }
+      if (isRuntimeReference(init)) {
+        throw new InterpreterRuntimeError(
+          "new URLSearchParams(...) expects a query string, data object, or synchronous iterable pairs.",
+          node,
+        ).as("TypeError")
+      }
+      if (isCodeModeValue(init)) return new CodeModeURLSearchParams(new URLSearchParams())
+      const data = boundedData(init, "new URLSearchParams input")
+      if (data === null || typeof data !== "object") {
+        throw new InterpreterRuntimeError(
+          "new URLSearchParams(...) expects a query string, data object, iterable pairs, or URLSearchParams.",
+          node,
+        ).as("TypeError")
+      }
+      return new CodeModeURLSearchParams(
+        new URLSearchParams(
+          Object.fromEntries(Object.entries(data).map(([key, value]) => [key, coerceToString(value)])),
+        ),
+      )
+    })
+  }
+
+  private readURLSearchParamsPair(value: unknown, node: AstNode): Effect.Effect<Array<string>, unknown, R> {
+    const self = this
+    return Effect.gen(function* () {
+      const cursor = yield* self.syncIterator(value, node)
+      if (cursor === undefined) {
+        throw new InterpreterRuntimeError("new URLSearchParams(...) expects iterable [name, value] pairs.", node).as(
+          "TypeError",
+        )
+      }
+      const items: Array<string> = []
+      while (true) {
+        const step = yield* cursor.next
+        if (step.done) return items
+        items.push(
+          yield* preserveConsumerError(
+            cursor,
+            Effect.sync(() => uriArgument(step.value, "URLSearchParams pair value")),
+          ),
+        )
+      }
+    })
   }
 
   private evaluateBinaryExpression(node: AstNode): Effect.Effect<unknown, unknown, R> {
@@ -1503,6 +1683,8 @@ export class Interpreter<R> {
   }
 
   private applyBinaryOperator(operator: string, lhs: unknown, rhs: unknown, node: AstNode): unknown {
+    if (operator === "===") return lhs === rhs
+    if (operator === "!==") return lhs !== rhs
     if (containsOpaqueReference(lhs) || containsOpaqueReference(rhs)) {
       throw new InterpreterRuntimeError("Binary operators require data values.", node, "InvalidDataValue")
     }
@@ -1532,12 +1714,8 @@ export class Interpreter<R> {
         return (l as number) ** (r as number)
       case "==":
         return bothObjects ? lhs === rhs : l == r
-      case "===":
-        return lhs === rhs
       case "!=":
         return bothObjects ? lhs !== rhs : l != r
-      case "!==":
-        return lhs !== rhs
       case "<":
         return (l as string) < (r as string)
       case "<=":
@@ -1773,6 +1951,11 @@ export class Interpreter<R> {
       if (callable instanceof CodeModeFunction) {
         return yield* self.invokeFunction(callable, args)
       }
+      if (callable instanceof GeneratorMethodReference) {
+        if (callable.kind === "iterator") return callable.generator
+        const requested = callable.generator.request(callable.kind, args[0], node) as Effect.Effect<unknown, unknown, R>
+        return callable.generator.asynchronous ? yield* self.createPromise(requested) : yield* requested
+      }
       if (callable instanceof IntrinsicReference) {
         return yield* invokeIntrinsic(self.runner, callable, args, node)
       }
@@ -1782,6 +1965,7 @@ export class Interpreter<R> {
           return self.invokeObjectMethodOnTools(callable.name, args[0], node)
         }
         if (callable.namespace === "Object" && objectMethodsPreservingIdentity.has(callable.name)) {
+          if (callable.name === "fromEntries") return yield* invokeObjectFromEntries(self.runner, args[0], node)
           return invokeGlobalMethod(callable, args, node)
         }
         if (callable.namespace === "Array" && callable.name === "from") {
@@ -1789,6 +1973,9 @@ export class Interpreter<R> {
         }
         if ((callable.namespace === "Object" || callable.namespace === "Map") && callable.name === "groupBy") {
           return yield* invokeGroupBy(self.runner, callable.namespace, args, node)
+        }
+        if (callable.namespace === "Math" && callable.name === "sumPrecise") {
+          return yield* invokeMathSumPrecise(self.runner, args[0], node)
         }
         if (callable.namespace === "Array" && callable.name === "of") {
           return invokeGlobalMethod(callable, args, node)
@@ -1808,7 +1995,8 @@ export class Interpreter<R> {
         return yield* self.invokeSearch(args)
       }
       if (callable instanceof ErrorConstructorReference) {
-        return constructErrorValue(callable.name, args, node)
+        if (callable.name === "AggregateError") return yield* constructAggregateErrorValue(self.runner, args, node)
+        return constructErrorValue(callable.name, args)
       }
       if (callable instanceof GlobalNamespace) {
         // Real JS permits calling Array, Object, Date, and RegExp without new.
@@ -1868,10 +2056,16 @@ export class Interpreter<R> {
         const argNode = asNode(arg, `arguments[${index}]`)
         if (argNode.type === "SpreadElement") {
           const spread = yield* self.evaluateExpression(getNode(argNode, "argument"))
-          const items = spreadItems(spread)
-          if (items === undefined)
-            throw new InterpreterRuntimeError("Spread arguments require an array, string, Map, or Set.", argNode)
-          args.push(...items)
+          const cursor = yield* self.syncIterator(spread, argNode)
+          if (cursor === undefined)
+            throw new InterpreterRuntimeError("Spread arguments require a synchronous iterable.", argNode).as(
+              "TypeError",
+            )
+          while (true) {
+            const step = yield* cursor.next
+            if (step.done) break
+            args.push(step.value)
+          }
         } else {
           args.push(yield* self.evaluateExpression(argNode))
         }
@@ -1906,6 +2100,7 @@ export class Interpreter<R> {
 
       return yield* invocation.evaluateExpression(fn.body)
     })
+    if (fn.generator) return Effect.succeed(this.createGenerator(invocation, run, fn.async))
     if (!fn.async) return run
     // The initial yield assigns `box.own` before the body can self-resolve.
     const box: { own?: CodeModePromise } = {}
@@ -1922,6 +2117,250 @@ export class Interpreter<R> {
         return promise
       },
     )
+  }
+
+  private createGenerator(
+    invocation: Interpreter<R>,
+    run: Effect.Effect<unknown, unknown, R>,
+    asynchronous: boolean,
+  ): CodeModeGenerator {
+    const state: GeneratorState = { started: false, completed: false, draining: false, pending: [], pendingIndex: 0 }
+    invocation.generatorState = state
+    invocation.generatorAsync = asynchronous
+    const generator = new CodeModeGenerator(asynchronous, (kind, value, node) => {
+      const request = { kind, value, response: Deferred.makeUnsafe<unknown, unknown>() }
+      if (!asynchronous && state.active) {
+        return Effect.fail(new InterpreterRuntimeError("Generator is already running.", node).as("TypeError"))
+      }
+      if (asynchronous && (state.completed || (!state.started && kind !== "next"))) {
+        state.started = true
+        state.completed = true
+        state.pending.push(request)
+        if (state.draining) return Deferred.await(request.response)
+        state.draining = true
+        return Effect.andThen(
+          this.promises.fork(
+            invocation
+              .completeGeneratorRequests(state, true)
+              .pipe(Effect.ensuring(Effect.sync(() => (state.draining = false)))),
+          ),
+          Deferred.await(request.response),
+        )
+      }
+      if (state.completed) {
+        if (kind === "throw") return Effect.fail(new ProgramThrow(value))
+        return Effect.succeed({ value: kind === "return" ? value : undefined, done: true })
+      }
+      if (!state.started && kind !== "next") {
+        state.completed = true
+        if (kind === "throw") return Effect.fail(new ProgramThrow(value))
+        return Effect.succeed({ value, done: true })
+      }
+
+      state.pending.push(request)
+      if (state.available) {
+        const available = state.available
+        state.available = undefined
+        Deferred.doneUnsafe(available, Exit.succeed(undefined))
+      }
+      if (!state.started) {
+        state.started = true
+        const body = Effect.gen(function* () {
+          state.active = yield* invocation.takeGeneratorRequest(state)
+          const exit = yield* Effect.exit(
+            run.pipe(
+              Effect.flatMap((result) => (asynchronous ? invocation.awaitValue(result) : Effect.succeed(result))),
+              Effect.catch((error) =>
+                error instanceof GeneratorReturn
+                  ? asynchronous
+                    ? invocation.awaitValue(error.value)
+                    : Effect.succeed(error.value)
+                  : Effect.fail(error),
+              ),
+            ),
+          )
+          const active = state.active
+          state.active = undefined
+          if (active) {
+            Deferred.doneUnsafe(
+              active.response,
+              Exit.isSuccess(exit) ? Exit.succeed({ value: exit.value, done: true }) : exit,
+            )
+          }
+          yield* invocation.completeGeneratorRequests(state, asynchronous)
+          state.completed = true
+        })
+        return Effect.andThen(this.promises.fork(body), Deferred.await(request.response))
+      }
+      return Deferred.await(request.response)
+    })
+    return generator
+  }
+
+  private completeGeneratorRequests(state: GeneratorState, asynchronous: boolean): Effect.Effect<void, never, R> {
+    const self = this
+    return Effect.gen(function* () {
+      while (true) {
+        const pending = self.dequeueGeneratorRequest(state)
+        if (!pending) return
+        if (pending.kind === "throw") {
+          Deferred.doneUnsafe(pending.response, Exit.fail(new ProgramThrow(pending.value)))
+          continue
+        }
+        if (asynchronous && pending.kind === "return") {
+          const resolved = yield* Effect.exit(self.awaitValue(pending.value))
+          Deferred.doneUnsafe(
+            pending.response,
+            Exit.isSuccess(resolved) ? Exit.succeed({ value: resolved.value, done: true }) : resolved,
+          )
+          continue
+        }
+        Deferred.doneUnsafe(
+          pending.response,
+          Exit.succeed({ value: pending.kind === "return" ? pending.value : undefined, done: true }),
+        )
+      }
+    })
+  }
+
+  private takeGeneratorRequest(state: GeneratorState): Effect.Effect<GeneratorRequest> {
+    const next = this.dequeueGeneratorRequest(state)
+    if (next) return Effect.succeed(next)
+    state.available = Deferred.makeUnsafe<void>()
+    return Effect.andThen(
+      Deferred.await(state.available),
+      Effect.sync(() => this.dequeueGeneratorRequest(state)!),
+    )
+  }
+
+  private dequeueGeneratorRequest(state: GeneratorState): GeneratorRequest | undefined {
+    const request = state.pending[state.pendingIndex]
+    if (!request) return undefined
+    state.pendingIndex += 1
+    if (state.pendingIndex === state.pending.length) {
+      state.pending = []
+      state.pendingIndex = 0
+    }
+    return request
+  }
+
+  private evaluateYieldExpression(node: AstNode): Effect.Effect<unknown, unknown, R> {
+    const argument = getOptionalNode(node, "argument")
+    const self = this
+    return Effect.gen(function* () {
+      if (!self.generatorState) throw new InterpreterRuntimeError("yield is only valid inside a generator.", node)
+      if (node.delegate === true) {
+        const value = argument ? yield* self.evaluateExpression(argument) : undefined
+        return yield* self.delegateYield(value, node)
+      }
+      const value = argument ? yield* self.evaluateExpression(argument) : undefined
+      const yielded = self.generatorAsync ? yield* self.awaitValue(value) : value
+      return yield* self.suspendGenerator(yielded, node)
+    })
+  }
+
+  private suspendGenerator(value: unknown, node: AstNode): Effect.Effect<unknown, unknown, R> {
+    const state = this.generatorState
+    if (!state?.active) throw new InterpreterRuntimeError("Generator has no active request.", node)
+    Deferred.doneUnsafe(state.active.response, Exit.succeed({ value, done: false }))
+    state.active = undefined
+    return Effect.flatMap(this.takeGeneratorRequest(state), (request) => {
+      state.active = request
+      if (request.kind === "next") return Effect.succeed(request.value)
+      if (request.kind === "throw") return Effect.fail(new ProgramThrow(request.value))
+      return this.generatorAsync
+        ? Effect.flatMap(this.awaitValue(request.value), (value) => Effect.fail(new GeneratorReturn(value)))
+        : Effect.fail(new GeneratorReturn(request.value))
+    })
+  }
+
+  private delegateYield(value: unknown, node: AstNode): Effect.Effect<unknown, unknown, R> {
+    const self = this
+    return Effect.gen(function* () {
+      if (
+        Array.isArray(value) ||
+        typeof value === "string" ||
+        value instanceof CodeModeMap ||
+        value instanceof CodeModeSet ||
+        value instanceof CodeModeURLSearchParams
+      ) {
+        const cursor = yield* self.syncIterator(value, node)
+        if (!cursor) throw new InterpreterRuntimeError("Built-in iterator is unavailable.", node)
+        while (true) {
+          const step = yield* cursor.next
+          if (step.done) return undefined
+          const resumed = yield* Effect.exit(
+            self.suspendGenerator(self.generatorAsync ? yield* self.awaitValue(step.value) : step.value, node),
+          )
+          if (Exit.isSuccess(resumed)) continue
+          const error = Cause.squash(resumed.cause)
+          if (error instanceof GeneratorReturn) {
+            yield* cursor.close
+            return yield* Effect.fail(error)
+          }
+          if (error instanceof ProgramThrow) {
+            yield* cursor.close
+            throw new InterpreterRuntimeError("The delegated iterator does not provide a throw() method.", node).as(
+              "TypeError",
+            )
+          }
+          return yield* Effect.failCause(resumed.cause)
+        }
+      }
+
+      const iterator = yield* self.customIterator(value, node, self.generatorAsync)
+      if (!iterator)
+        throw new InterpreterRuntimeError("yield* requires a compatible iterable value.", node).as("TypeError")
+      let kind: GeneratorRequestKind = "next"
+      let input: unknown = undefined
+      while (true) {
+        const method =
+          kind === "next"
+            ? iterator.next
+            : iterator.iterator instanceof CodeModeGenerator
+              ? new GeneratorMethodReference(iterator.iterator, kind)
+              : iterator.iterator[kind]
+        if (method === undefined || method === null) {
+          if (kind === "return") return yield* Effect.fail(new GeneratorReturn(input))
+          yield* self.closeIterator(iterator, node, self.generatorAsync)
+          throw new InterpreterRuntimeError("The delegated iterator does not provide a throw() method.", node).as(
+            "TypeError",
+          )
+        }
+        const called = yield* self.invokeCallable(
+          self.requireIteratorMethod(method, `Iterator ${kind}`, node),
+          [input],
+          node,
+        )
+        const result = self.requireIteratorObject(
+          iterator.asynchronous ? yield* self.awaitValue(called) : called,
+          `Iterator ${kind}() result`,
+          node,
+        )
+        const done = Boolean(result.done)
+        const resultValue: unknown =
+          self.generatorAsync && !iterator.asynchronous
+            ? yield* self.awaitAsyncFromSyncValue(iterator, result.value, node, kind !== "return" && !done)
+            : result.value
+        if (done) {
+          if (kind === "return") return yield* Effect.fail(new GeneratorReturn(resultValue))
+          return resultValue
+        }
+
+        const resumed: Exit.Exit<unknown, unknown> = yield* Effect.exit(self.suspendGenerator(resultValue, node))
+        if (Exit.isSuccess(resumed)) {
+          kind = "next"
+          input = resumed.value
+          continue
+        }
+        const error: unknown = Cause.squash(resumed.cause)
+        if (!(error instanceof GeneratorReturn) && !(error instanceof ProgramThrow)) {
+          return yield* Effect.failCause(resumed.cause)
+        }
+        kind = error instanceof GeneratorReturn ? "return" : "throw"
+        input = error.value
+      }
+    })
   }
 
   private evaluateObjectExpression(node: AstNode): Effect.Effect<Record<string, unknown>, unknown, R> {
@@ -1942,9 +2381,7 @@ export class Interpreter<R> {
             if (isBlockedMember(key)) throw new InterpreterRuntimeError(`Property '${key}' is not available.`, property)
             objectValue[key] = value
           }
-          for (const symbol of IteratorSymbols) {
-            if (Object.hasOwn(spread, symbol)) Reflect.set(objectValue, symbol, Reflect.get(spread, symbol))
-          }
+          copyIteratorSymbols(spread, objectValue)
           continue
         }
 
@@ -1997,10 +2434,14 @@ export class Interpreter<R> {
         const element = asNode(elementValue, "elements")
         if (element.type === "SpreadElement") {
           const spread = yield* self.evaluateExpression(getNode(element, "argument"))
-          const items = spreadItems(spread)
-          if (items === undefined)
-            throw new InterpreterRuntimeError("Array spread requires an array, string, Map, or Set.", element)
-          values.push(...items)
+          const cursor = yield* self.syncIterator(spread, element)
+          if (cursor === undefined)
+            throw new InterpreterRuntimeError("Array spread requires a synchronous iterable.", element).as("TypeError")
+          while (true) {
+            const step = yield* cursor.next
+            if (step.done) break
+            values.push(step.value)
+          }
         } else {
           values.push(yield* self.evaluateExpression(element))
         }
@@ -2061,6 +2502,7 @@ export class Interpreter<R> {
     | IntrinsicReference
     | GlobalMethodReference
     | JsonMethodReference
+    | GeneratorMethodReference
     | ComputedValue
     | typeof OptionalShortCircuit
     | undefined,
@@ -2205,6 +2647,19 @@ export class Interpreter<R> {
         )
       }
 
+      if (objectValue instanceof CodeModeGenerator) {
+        if (key === "next" || key === "return" || key === "throw") {
+          return new GeneratorMethodReference(objectValue, key)
+        }
+        if (
+          (key === IteratorSymbol && !objectValue.asynchronous) ||
+          (key === AsyncIteratorSymbol && objectValue.asynchronous)
+        ) {
+          return new GeneratorMethodReference(objectValue, "iterator")
+        }
+        return new ComputedValue(undefined)
+      }
+
       if (isRuntimeReference(objectValue)) {
         throw new InterpreterRuntimeError(
           "Runtime references are opaque and do not expose properties.",
@@ -2241,16 +2696,7 @@ export class Interpreter<R> {
     return Effect.map(this.getMemberReference(node), (reference) => {
       if (reference === OptionalShortCircuit) return OptionalShortCircuit
       if (reference instanceof ComputedValue) return reference.value
-      if (
-        reference === undefined ||
-        reference instanceof ToolReference ||
-        reference instanceof PromiseMethodReference ||
-        reference instanceof PromiseInstanceMethodReference ||
-        reference instanceof IntrinsicReference ||
-        reference instanceof GlobalMethodReference ||
-        reference instanceof JsonMethodReference
-      )
-        return reference
+      if (reference === undefined || isOpaqueMemberReference(reference)) return reference
       if (Array.isArray(reference.target)) {
         if (reference.key === "length") return reference.target.length
         if (typeof reference.key === "string") return new IntrinsicReference(reference.target, reference.key)
@@ -2278,12 +2724,7 @@ export class Interpreter<R> {
       if (
         reference instanceof ComputedValue ||
         reference === undefined ||
-        reference instanceof ToolReference ||
-        reference instanceof PromiseMethodReference ||
-        reference instanceof PromiseInstanceMethodReference ||
-        reference instanceof IntrinsicReference ||
-        reference instanceof GlobalMethodReference ||
-        reference instanceof JsonMethodReference ||
+        isOpaqueMemberReference(reference) ||
         reference.target instanceof CodeModeURL
       ) {
         throw new InterpreterRuntimeError("Only data fields may be deleted.", target, "InvalidDataValue")
@@ -2307,12 +2748,7 @@ export class Interpreter<R> {
         reference === OptionalShortCircuit ||
         reference instanceof ComputedValue ||
         reference === undefined ||
-        reference instanceof ToolReference ||
-        reference instanceof PromiseMethodReference ||
-        reference instanceof PromiseInstanceMethodReference ||
-        reference instanceof IntrinsicReference ||
-        reference instanceof GlobalMethodReference ||
-        reference instanceof JsonMethodReference
+        isOpaqueMemberReference(reference)
       ) {
         throw new InterpreterRuntimeError("Only data fields may be assigned.", node)
       }
