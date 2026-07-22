@@ -206,6 +206,7 @@ export const OpenAIPlugin = define({
             return
           }
           draft.cost = []
+          draft.limit = OpenAICodex.limits(draft.limit)
         })
       }
     })

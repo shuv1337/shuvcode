@@ -295,14 +295,17 @@ const codexModel = (
   key: ReturnType<typeof Auth.value> | undefined,
 ) => {
   const account = OpenAICodex.accountID(credential)
-  return withDefaults(model, OpenAIResponses.route)
+  const runtime = produce(model, (draft) => {
+    draft.limit = OpenAICodex.limits(draft.limit)
+  })
+  return withDefaults(runtime, OpenAIResponses.route)
     .with({
       endpoint: { baseURL: OpenAICodex.baseURL },
       auth: (key === undefined ? Auth.none : Auth.bearer(key)).andThen(
         account === undefined ? Auth.none : Auth.headers({ "chatgpt-account-id": account }),
       ),
     })
-    .model({ id: model.modelID ?? model.id })
+    .model({ id: runtime.modelID ?? runtime.id })
 }
 
 const unsupported = (model: ModelV2.Info) =>
