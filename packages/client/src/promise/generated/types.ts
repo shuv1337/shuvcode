@@ -8,6 +8,8 @@ export type ModelRef = { id: string; providerID: string; variant?: string }
 
 export type ProviderSettings = { [x: string]: JsonValue }
 
+export type AgentColor = string
+
 export type PermissionV2Effect = "allow" | "deny" | "ask"
 
 export type PluginInfo = { id: string }
@@ -2003,7 +2005,7 @@ export type AgentInfo = {
   description?: string
   mode: "subagent" | "primary" | "all"
   hidden: boolean
-  color?: string
+  color?: AgentColor
   steps?: number
   permissions: PermissionV2Ruleset
 }
