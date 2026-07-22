@@ -37,6 +37,7 @@
               "mcp-servers",
               "attachments",
               "compaction",
+              "warming",
               "formatters",
               "lsp",
               "references"

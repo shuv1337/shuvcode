@@ -338,6 +338,25 @@ Control automatic context compaction and how much recent context it preserves.
 
 See the [compaction guide](/compaction) for automatic context management.
 
+### Session warming
+
+Keep recently active model sessions warm with periodic transient requests.
+Warming is disabled by default; set it to `true` to use the four-minute idle
+interval and 30-minute active window.
+
+```jsonc
+{
+  "warming": {
+    "prompt": "Do not perform any work. Reply with exactly: OK",
+    "interval": "4 minutes",
+    "duration": "30 minutes"
+  }
+}
+```
+
+See the [session warming guide](/warming) for request behavior, customization,
+and cost considerations.
+
 ### Skills
 
 Add directories or URLs that OpenCode should search for agent skills.

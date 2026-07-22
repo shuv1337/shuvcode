@@ -48,6 +48,11 @@ export const layer = Layer.effect(
           ],
           tools: {},
         })
+        yield* Effect.logInfo("sending session generation request", {
+          sessionID: selection.session.id,
+          providerID: model.ref.providerID,
+          modelID: model.ref.id,
+        })
         return (yield* llm.generate(
           LLM.request({
             model: model.model,

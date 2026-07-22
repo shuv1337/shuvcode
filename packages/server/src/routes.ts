@@ -123,6 +123,12 @@ function makeRoutes<AuthError, AuthServices>(
         }),
       )
     : AppNodeBuilder.build(applicationServices, replacements)
+  const observability = Observability.layer({
+    ...options.observability,
+    client: options.app?.name,
+    version: options.app?.version,
+    channel: options.app?.channel,
+  })
 
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
@@ -139,18 +145,11 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(authorizationLayer),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
-        Layer.provide(
-          Observability.layer({
-            ...options.observability,
-            client: options.app?.name,
-            version: options.app?.version,
-            channel: options.app?.channel,
-          }),
-        ),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
       )
     }),
+    Layer.provide(observability),
   )
 }
