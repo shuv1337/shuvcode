@@ -127,8 +127,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
             ),
       },
       model: {
-        get: (providerID, modelID) =>
-          catalog.model.get(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
+        get: (providerID, modelID) => catalog.model.get(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
         list: () => response(catalog.model.available()),
         default: () => response(catalog.model.default()),
       },
@@ -358,7 +357,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
         Effect.gen(function* () {
           const registrations: Array<{
             readonly name: string
-            readonly tool: Tool.AnyTool
+            readonly tool: Tool.Any
             readonly options?: Tool.RegisterOptions
           }> = []
           yield* Effect.sync(() =>
@@ -395,25 +394,42 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
           })
         }
         return toolHooks.hook.after((event) => {
-          const output = {
+          // JS plugin boundary: marshal the canonical outcome out, copy mutations back.
+          const output: Record<string, unknown> = {
             tool: event.tool,
             sessionID: event.sessionID,
             agent: event.agent,
             messageID: event.messageID,
             callID: event.callID,
             input: event.input,
-            result: event.result,
-            output: event.output,
+            status: event.status,
+            content: event.content,
+            metadata: event.metadata,
             outputPaths: event.outputPaths,
+            ...(event.status === "error" ? { error: event.error } : {}),
           }
           return Reflect.apply(callback, undefined, [output]).pipe(
-            Effect.tap(() =>
-              Effect.sync(() => {
-                event.result = output.result
-                event.output = output.output
-                event.outputPaths = output.outputPaths
-              }),
-            ),
+            Effect.tap(() => {
+              const decoded = Schema.decodeUnknownOption(Tool.ExecuteAfterOutcome)(output)
+              if (decoded._tag === "None")
+                return Effect.logWarning("ignoring invalid execute.after tool outcome", { tool: event.tool })
+              if (decoded.value.status !== event.status)
+                return Effect.logWarning("ignoring execute.after tool status change", { tool: event.tool })
+              return Effect.sync(() => {
+                if (event.status === "completed" && decoded.value.status === "completed") {
+                  if (output.content !== event.content) event.content = decoded.value.content
+                  if (output.metadata !== event.metadata) event.metadata = decoded.value.metadata
+                  if (output.outputPaths !== event.outputPaths) event.outputPaths = decoded.value.outputPaths
+                  return
+                }
+                if (event.status === "error" && decoded.value.status === "error") {
+                  if (output.error !== event.error) event.error = decoded.value.error
+                  if (output.content !== event.content) event.content = decoded.value.content
+                  if (output.metadata !== event.metadata) event.metadata = decoded.value.metadata
+                  if (output.outputPaths !== event.outputPaths) event.outputPaths = decoded.value.outputPaths
+                }
+              })
+            }),
           )
         })
       },

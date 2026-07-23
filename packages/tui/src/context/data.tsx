@@ -32,6 +32,7 @@ import type { Plugin } from "@opencode-ai/plugin/v2/tui"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
+import { nonEmptyToolContent } from "../util/tool-display"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
@@ -605,7 +606,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             match.time.ran = event.created
             match.executed = event.data.executed
             match.providerState = event.data.state
-            match.state = { status: "running", input: event.data.input, structured: {}, content: [] }
+            match.state = { status: "running", input: event.data.input, metadata: {} }
           })
           break
         case "session.tool.progress":
@@ -615,8 +616,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
               event.data.callID,
             )
             if (match?.state.status !== "running") return
-            match.state.structured = event.data.structured
-            match.state.content = [...event.data.content]
+            match.state.metadata = event.data.metadata
           })
           break
         case "session.tool.success":
@@ -629,9 +629,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             match.state = {
               status: "completed",
               input: match.state.input,
-              structured: event.data.structured,
+              metadata: event.data.metadata,
               content: [...event.data.content],
-              result: event.data.result,
             }
             match.executed = event.data.executed || match.executed === true
             match.providerResultState = event.data.resultState
@@ -649,9 +648,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
               status: "error",
               error: event.data.error,
               input: typeof match.state.input === "string" ? {} : match.state.input,
-              structured: event.data.metadata ?? (match.state.status === "running" ? match.state.structured : {}),
-              content: event.data.content ?? (match.state.status === "running" ? match.state.content : []),
-              result: event.data.result,
+              metadata: event.data.metadata,
+              content: event.data.content,
             }
             match.executed = event.data.executed || match.executed === true
             match.providerResultState = event.data.resultState

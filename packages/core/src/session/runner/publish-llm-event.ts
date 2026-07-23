@@ -1,5 +1,5 @@
-import { ToolOutput, type LLMEvent, type ProviderMetadata, type ToolResultValue } from "@opencode-ai/ai"
-import { Effect } from "effect"
+import { type LLMEvent, type ProviderMetadata, type ToolContent, type ToolResultValue } from "@opencode-ai/ai"
+import { Effect, Schema } from "effect"
 import { EventV2 } from "../../event"
 import { ModelV2 } from "../../model"
 import { SessionEvent } from "../event"
@@ -11,6 +11,8 @@ import { AgentV2 } from "../../agent"
 import { Snapshot } from "../../snapshot"
 import { RelativePath } from "../../schema"
 import { SessionUsage } from "../usage"
+import { Tool } from "../../tool/tool"
+import { MAX_BYTES } from "../../tool-output-store"
 import type { ToolRegistry } from "../../tool/registry"
 
 type Input = {
@@ -25,24 +27,11 @@ type Input = {
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : { value }
 
-const message = (value: unknown) => {
-  if (typeof value === "string") return value
-  try {
-    return JSON.stringify(value) ?? String(value)
-  } catch {
-    return String(value)
-  }
-}
-
-type SettledOutput =
-  | { readonly structured: Record<string, unknown>; readonly content: ToolOutput["content"] }
-  | { readonly error: SessionError.Error }
-
-const settledOutput = (value: ToolOutput | undefined, result: ToolResultValue): SettledOutput => {
-  if (result.type === "error") return { error: { type: "tool.execution", message: message(result.value) } }
-  const settled = value ?? ToolOutput.fromResultValue(result)
-  if (!settled) throw new Error(`Unsupported tool result: ${message(result)}`)
-  return { structured: record(settled.structured), content: settled.content }
+/** Derives canonical model content from a provider-hosted tool result. */
+const hostedContent = (result: ToolResultValue): readonly [ToolContent, ...ToolContent[]] => {
+  if (result.type === "content" && result.value.length > 0)
+    return result.value as unknown as readonly [ToolContent, ...ToolContent[]]
+  return [{ type: "text", text: Tool.stringify(result.value) }]
 }
 
 /** Persist one step without executing tools or starting a continuation step. */
@@ -60,11 +49,8 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
   >()
   const failureSnapshot = (tool: { readonly progress?: ToolRegistry.Progress }) => {
     if (!tool.progress) return {}
-    const first = tool.progress.content[0]
-    return {
-      ...(first === undefined ? {} : { content: [first, ...tool.progress.content.slice(1)] as const }),
-      metadata: tool.progress.structured,
-    }
+    const metadata = Tool.jsonMetadata(tool.progress, MAX_BYTES)
+    return metadata === undefined ? {} : { metadata }
   }
   let assistantMessageID = input.assistantMessageID
   let stepStarted = false
@@ -254,11 +240,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
   const failTools = Effect.fnUntraced(function* (error: SessionError.Error, mode: "all" | "hosted" | "uncalled") {
     let failed = false
     for (const [callID, tool] of tools) {
-      if (
-        tool.settled ||
-        (mode === "hosted" && !tool.providerExecuted) ||
-        (mode === "uncalled" && tool.called)
-      )
+      if (tool.settled || (mode === "hosted" && !tool.providerExecuted) || (mode === "uncalled" && tool.called))
         continue
       tool.settled = true
       failed = true
@@ -409,26 +391,27 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         return
       }
       case "tool-result": {
+        // Provider-hosted results only; local executions publish through `toolExecution`.
         const tool = tools.get(event.id)
         if (!tool?.called) return yield* Effect.die(new Error(`Tool result before call: ${event.id}`))
         if (tool.name !== event.name)
           return yield* Effect.die(new Error(`Tool result name changed for ${event.id}: ${tool.name} -> ${event.name}`))
         if (tool.settled) {
+          // A late error result is a benign straggler (e.g. after an abort
+          // sweep); a late success would mean double execution, so it dies.
           if (event.result.type === "error") return
           return yield* Effect.die(new Error(`Duplicate tool result: ${event.id}`))
         }
         tool.settled = true
-        const result = error ? { error } : settledOutput(event.output, event.result)
         const executed = event.providerExecuted === true || tool.providerExecuted
         const resultState = providerState(event.providerMetadata)
-        if ("error" in result) {
+        if (error !== undefined || event.result.type === "error") {
           yield* events.publish(SessionEvent.Tool.Failed, {
             sessionID: input.sessionID,
             assistantMessageID: tool.assistantMessageID,
             callID: event.id,
-            error: result.error,
+            error: error ?? { type: "tool.execution", message: Tool.stringify(event.result.value) },
             ...failureSnapshot(tool),
-            result: event.result,
             executed,
             resultState,
           })
@@ -438,8 +421,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
           sessionID: input.sessionID,
           assistantMessageID: tool.assistantMessageID,
           callID: event.id,
-          ...result,
-          ...(executed ? { result: event.result } : {}),
+          content: hostedContent(event.result),
           executed,
           resultState,
         })
@@ -489,19 +471,64 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     const tool = tools.get(callID)
     if (!tool?.called || tool.settled)
       return yield* Effect.die(new Error(`Tool progress outside running call: ${callID}`))
-    const current = { structured: { ...update.structured }, content: [...update.content] }
+    const current = { ...update }
     tool.progress = current
     yield* events.publish(SessionEvent.Tool.Progress, {
       sessionID: input.sessionID,
       assistantMessageID: tool.assistantMessageID,
       callID,
-      ...current,
+      metadata: current,
+    })
+  })
+
+  /** Publishes one canonical terminal event for a locally executed tool call. */
+  const toolExecution = Effect.fnUntraced(function* (
+    callID: string,
+    name: string,
+    execution: ToolRegistry.ToolOutcome,
+  ) {
+    const tool = tools.get(callID)
+    if (!tool?.called) return yield* Effect.die(new Error(`Tool execution before call: ${callID}`))
+    if (tool.name !== name)
+      return yield* Effect.die(new Error(`Tool execution name changed for ${callID}: ${tool.name} -> ${name}`))
+    if (tool.settled) {
+      if (execution.status === "error") return
+      return yield* Effect.die(new Error(`Duplicate tool execution: ${callID}`))
+    }
+    tool.settled = true
+    if (execution.status === "completed") {
+      yield* events.publish(SessionEvent.Tool.Success, {
+        sessionID: input.sessionID,
+        assistantMessageID: tool.assistantMessageID,
+        callID,
+        content: execution.content,
+        ...(execution.metadata === undefined ? {} : { metadata: execution.metadata }),
+        executed: tool.providerExecuted,
+      })
+      return
+    }
+    // An execution-provided snapshot wins; otherwise fall back to retained progress.
+    const snapshot =
+      execution.content !== undefined || execution.metadata !== undefined
+        ? {
+            ...(execution.content === undefined ? {} : { content: execution.content }),
+            ...(execution.metadata === undefined ? {} : { metadata: execution.metadata }),
+          }
+        : failureSnapshot(tool)
+    yield* events.publish(SessionEvent.Tool.Failed, {
+      sessionID: input.sessionID,
+      assistantMessageID: tool.assistantMessageID,
+      callID,
+      error: execution.error,
+      ...snapshot,
+      executed: tool.providerExecuted,
     })
   })
 
   return {
     publish,
     progress,
+    toolExecution,
     flush,
     failAssistant,
     publishStepFailure,
