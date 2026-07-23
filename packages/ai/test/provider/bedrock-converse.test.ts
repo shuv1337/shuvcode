@@ -290,12 +290,32 @@ describe("Bedrock Converse route", () => {
       // `metadata` (carries usage). We consolidate them into a single
       // terminal `finish` event with both.
       expect(finishes).toHaveLength(1)
-      expect(finishes[0]).toMatchObject({ type: "finish", reason: "stop" })
+      expect(finishes[0]).toMatchObject({
+        type: "finish",
+        reason: { normalized: "stop", raw: "end_turn" },
+      })
       expect(response.usage).toMatchObject({
         inputTokens: 5,
         outputTokens: 2,
         totalTokens: 7,
       })
+    }),
+  )
+
+  it.effect("maps truncation and malformed output stop reasons", () =>
+    Effect.gen(function* () {
+      const reasons = [
+        ["model_context_window_exceeded", "length"],
+        ["malformed_model_output", "error"],
+        ["malformed_tool_use", "error"],
+      ] as const
+
+      for (const [raw, normalized] of reasons) {
+        const response = yield* LLMClient.generate(baseRequest).pipe(
+          Effect.provide(fixedBytes(eventStreamBody(["messageStop", { stopReason: raw }]))),
+        )
+        expect(response.finishReason).toEqual({ normalized, raw })
+      }
     }),
   )
 
@@ -362,7 +382,10 @@ describe("Bedrock Converse route", () => {
         { type: "tool-input-delta", id: "tool_1", name: "lookup", text: '{"query"' },
         { type: "tool-input-delta", id: "tool_1", name: "lookup", text: ':"weather"}' },
       ])
-      expect(response.events.at(-1)).toMatchObject({ type: "finish", reason: "tool-calls" })
+      expect(response.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "tool-calls", raw: "tool_use" },
+      })
     }),
   )
 
@@ -388,7 +411,7 @@ describe("Bedrock Converse route", () => {
         name: "lookup",
         raw: '{"query":"partial',
       })
-      expect(response.finishReason).toBe("tool-calls")
+      expect(response.finishReason).toEqual({ normalized: "tool-calls", raw: "end_turn" })
     }),
   )
 

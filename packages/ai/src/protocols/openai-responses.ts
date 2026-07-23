@@ -979,7 +979,10 @@ const onOutputItemDone = Effect.fn("OpenAIResponses.onOutputItemDone")(function*
 const onResponseFinish = (state: ParserState, event: OpenAIResponsesEvent): StepResult => {
   const events: LLMEvent[] = []
   const lifecycle = Lifecycle.finish(state.lifecycle, events, {
-    reason: mapFinishReason(event, state.hasFunctionCall),
+    reason: {
+      normalized: mapFinishReason(event, state.hasFunctionCall),
+      raw: event.response?.incomplete_details?.reason,
+    },
     usage: mapUsage(event.response?.usage),
     providerMetadata:
       event.response?.id || event.response?.service_tier

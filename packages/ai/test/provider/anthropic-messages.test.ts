@@ -448,9 +448,47 @@ describe("Anthropic Messages route", () => {
       ])
       expect(response.events.at(-1)).toMatchObject({
         type: "finish",
-        reason: "stop",
+        reason: { normalized: "stop", raw: "end_turn" },
         providerMetadata: { anthropic: { stopSequence: "\n\nHuman:" } },
       })
+    }),
+  )
+
+  it.effect("maps context-window truncation to length", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents(
+              { type: "message_start", message: { usage: { input_tokens: 5 } } },
+              {
+                type: "message_delta",
+                delta: { stop_reason: "model_context_window_exceeded" },
+                usage: { output_tokens: 1 },
+              },
+            ),
+          ),
+        ),
+      )
+
+      expect(response.finishReason).toEqual({ normalized: "length", raw: "model_context_window_exceeded" })
+    }),
+  )
+
+  it.effect("preserves pause_turn while normalizing it to stop", () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(request).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents(
+              { type: "message_start", message: { usage: { input_tokens: 5 } } },
+              { type: "message_delta", delta: { stop_reason: "pause_turn" }, usage: { output_tokens: 1 } },
+            ),
+          ),
+        ),
+      )
+
+      expect(response.finishReason).toEqual({ normalized: "stop", raw: "pause_turn" })
     }),
   )
 
@@ -503,10 +541,16 @@ describe("Anthropic Messages route", () => {
           providerExecuted: undefined,
           providerMetadata: undefined,
         },
-        { type: "step-finish", index: 0, reason: "tool-calls", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "tool-calls", raw: "tool_use" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "tool-calls",
+          reason: { normalized: "tool-calls", raw: "tool_use" },
           providerMetadata: undefined,
           usage,
         },
@@ -674,7 +718,10 @@ describe("Anthropic Messages route", () => {
         },
       })
       expect(response.text).toBe("Found it.")
-      expect(response.events.at(-1)).toMatchObject({ type: "finish", reason: "stop" })
+      expect(response.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "stop", raw: "end_turn" },
+      })
     }),
   )
 

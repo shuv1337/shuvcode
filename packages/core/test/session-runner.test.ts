@@ -119,8 +119,8 @@ const client = Layer.succeed(
 const reply = {
   stop: () => [
     LLMEvent.stepStart({ index: 0 }),
-    LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-    LLMEvent.finish({ reason: "stop" }),
+    LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+    LLMEvent.finish({ reason: { normalized: "stop" } }),
   ],
   text: (text: string, id: string) => fragmentFixture("text", id, [text]).completeEvents,
   textWithUsage: (text: string, id: string, inputTokens: number) =>
@@ -136,8 +136,8 @@ const reply = {
   tool: (id: string, name: string, input: unknown) => [
     LLMEvent.stepStart({ index: 0 }),
     LLMEvent.toolCall({ id, name, input }),
-    LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-    LLMEvent.finish({ reason: "tool-calls" }),
+    LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+    LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
   ],
 }
 const model = Model.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
@@ -682,8 +682,8 @@ const fragmentFixture = (kind: FragmentKind, id: string, chunks: readonly string
         completeEvents: [
           ...partialEvents,
           LLMEvent.textEnd({ id }),
-          LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-          LLMEvent.finish({ reason: "stop" }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+          LLMEvent.finish({ reason: { normalized: "stop" } }),
         ],
         expectedAssistant: { type: "assistant", finish: "stop", content: [expectedContent] },
         expectedContent,
@@ -702,8 +702,8 @@ const fragmentFixture = (kind: FragmentKind, id: string, chunks: readonly string
         completeEvents: [
           ...partialEvents,
           LLMEvent.reasoningEnd({ id }),
-          LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-          LLMEvent.finish({ reason: "stop" }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+          LLMEvent.finish({ reason: { normalized: "stop" } }),
         ],
         expectedAssistant: { type: "assistant", finish: "stop", content: [expectedContent] },
         expectedContent,
@@ -999,8 +999,8 @@ describe("SessionRunnerLLM", () => {
         [
           LLMEvent.stepStart({ index: 0 }),
           LLMEvent.toolCall({ id: "call-reloaded", name: "reloaded", input: {} }),
-          LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-          LLMEvent.finish({ reason: "tool-calls" }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+          LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
         ],
         [],
       ]
@@ -2377,7 +2377,7 @@ describe("SessionRunnerLLM", () => {
         }),
         LLMEvent.stepFinish({
           index: 0,
-          reason: "tool-calls",
+          reason: { normalized: "tool-calls" },
           usage: {
             inputTokens: 10,
             nonCachedInputTokens: 8,
@@ -2386,7 +2386,7 @@ describe("SessionRunnerLLM", () => {
             cacheReadInputTokens: 2,
           },
         }),
-        LLMEvent.finish({ reason: "tool-calls" }),
+        LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
       ]
 
       yield* session.resume(sessionID)
@@ -2535,8 +2535,8 @@ describe("SessionRunnerLLM", () => {
             anthropic: { ignored: true },
           },
         }),
-        LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-        LLMEvent.finish({ reason: "stop" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+        LLMEvent.finish({ reason: { normalized: "stop" } }),
       ]
       yield* session.resume(sessionID)
       yield* replaySessionProjection(sessionID)
@@ -2600,8 +2600,8 @@ describe("SessionRunnerLLM", () => {
           providerExecuted: true,
           providerMetadata: { openai: { blockType: "web_search_tool_result" }, anthropic: { ignored: true } },
         }),
-        LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-        LLMEvent.finish({ reason: "stop" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+        LLMEvent.finish({ reason: { normalized: "stop" } }),
       ]
       yield* session.resume(sessionID)
       yield* replaySessionProjection(sessionID)
@@ -2648,8 +2648,8 @@ describe("SessionRunnerLLM", () => {
         ),
       ])
       const final = Stream.fromIterable([
-        LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-        LLMEvent.finish({ reason: "tool-calls" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+        LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
       ])
       responseStream = Stream.concat(
         initial,
@@ -3605,7 +3605,7 @@ describe("SessionRunnerLLM", () => {
       yield* admit(session, "Reject permission")
       responses = [
         reply.tool("call-permission", "permissionfail", {}),
-        [LLMEvent.stepStart({ index: 0 }), LLMEvent.stepFinish({ index: 0, reason: "stop" })],
+        [LLMEvent.stepStart({ index: 0 }), LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } })],
       ]
 
       yield* session.resume(sessionID)
@@ -3954,10 +3954,10 @@ describe("SessionRunnerLLM", () => {
         LLMEvent.textDelta({ id: "partial", text: "Partial" }),
         LLMEvent.stepFinish({
           index: 0,
-          reason: "content-filter",
+          reason: { normalized: "content-filter" },
           usage: { nonCachedInputTokens: 8, outputTokens: 3, reasoningTokens: 1 },
         }),
-        LLMEvent.finish({ reason: "content-filter" }),
+        LLMEvent.finish({ reason: { normalized: "content-filter" } }),
       ]
 
       expect((yield* session.resume(sessionID).pipe(Effect.flip)).message).toBe("Provider blocked the response")
@@ -3990,8 +3990,8 @@ describe("SessionRunnerLLM", () => {
       response = [
         LLMEvent.stepStart({ index: 0 }),
         LLMEvent.toolCall({ id: "call-before-content-filter", name: "echo", input: { text: "settled" } }),
-        LLMEvent.stepFinish({ index: 0, reason: "content-filter" }),
-        LLMEvent.finish({ reason: "content-filter" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "content-filter" } }),
+        LLMEvent.finish({ reason: { normalized: "content-filter" } }),
       ]
 
       const run = yield* session.resume(sessionID).pipe(Effect.forkChild)
@@ -4282,8 +4282,8 @@ describe("SessionRunnerLLM", () => {
             name: "echo",
             raw,
           }),
-          LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-          LLMEvent.finish({ reason: "tool-calls" }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+          LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
         ],
         reply.stop(),
       ]
@@ -4379,8 +4379,8 @@ describe("SessionRunnerLLM", () => {
             name: "echo",
             raw: '{"text":"partial',
           }),
-          LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-          LLMEvent.finish({ reason: "tool-calls" }),
+          LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+          LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
         ],
         reply.stop(),
       ]
@@ -4421,8 +4421,8 @@ describe("SessionRunnerLLM", () => {
           name: "echo",
           raw: '{"text":"partial',
         }),
-        LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-        LLMEvent.finish({ reason: "tool-calls" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+        LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
       ]
 
       const run = yield* session.resume(sessionID).pipe(Effect.forkChild)
@@ -4530,8 +4530,8 @@ describe("SessionRunnerLLM", () => {
           name: "echo",
           raw: '{"text":"partial',
         }),
-        LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-        LLMEvent.finish({ reason: "tool-calls" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+        LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
       ]
       responses = [
         malformed("call-first"),
@@ -4565,8 +4565,8 @@ describe("SessionRunnerLLM", () => {
           name: "echo",
           raw: '{"text":"partial',
         }),
-        LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
-        LLMEvent.finish({ reason: "tool-calls" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "tool-calls" } }),
+        LLMEvent.finish({ reason: { normalized: "tool-calls" } }),
       ]
       responses = [malformed("call-first"), malformed("call-at-limit")]
 
@@ -4727,8 +4727,8 @@ describe("SessionRunnerLLM", () => {
       response = [
         LLMEvent.stepStart({ index: 0 }),
         hostedCall("call-hosted-clean-end", "effect"),
-        LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-        LLMEvent.finish({ reason: "stop" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+        LLMEvent.finish({ reason: { normalized: "stop" } }),
       ]
 
       yield* session.resume(sessionID)
@@ -4852,8 +4852,8 @@ describe("SessionRunnerLLM", () => {
         LLMEvent.textStart({ id: "text-2" }),
         LLMEvent.textDelta({ id: "text-2", text: "Second" }),
         LLMEvent.textEnd({ id: "text-2" }),
-        LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-        LLMEvent.finish({ reason: "stop" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+        LLMEvent.finish({ reason: { normalized: "stop" } }),
       ]
 
       yield* session.resume(sessionID)
@@ -4906,8 +4906,8 @@ describe("SessionRunnerLLM", () => {
         LLMEvent.toolInputDelta({ id: "call-parsed", name: "web_search", text: '{"query":"hello"}' }),
         LLMEvent.toolInputEnd({ id: "call-parsed", name: "web_search" }),
         hostedCall("call-parsed", "hello"),
-        LLMEvent.stepFinish({ index: 0, reason: "stop" }),
-        LLMEvent.finish({ reason: "stop" }),
+        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" } }),
+        LLMEvent.finish({ reason: { normalized: "stop" } }),
       ]
 
       yield* session.resume(sessionID)

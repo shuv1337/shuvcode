@@ -373,10 +373,16 @@ describe("Gemini route", () => {
         { type: "text-delta", id: "text-0", text: "Hello" },
         { type: "text-delta", id: "text-0", text: "!" },
         { type: "text-end", id: "text-0" },
-        { type: "step-finish", index: 0, reason: "stop", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "stop", raw: "STOP" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "stop",
+          reason: { normalized: "stop", raw: "STOP" },
           usage,
         },
       ])
@@ -529,10 +535,16 @@ describe("Gemini route", () => {
           providerExecuted: undefined,
           providerMetadata: undefined,
         },
-        { type: "step-finish", index: 0, reason: "tool-calls", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "tool-calls", raw: "STOP" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "tool-calls",
+          reason: { normalized: "tool-calls", raw: "STOP" },
           usage,
         },
       ])
@@ -571,7 +583,10 @@ describe("Gemini route", () => {
         },
         { type: "tool-call", id: "tool_1", name: "lookup", input: { query: "news" } },
       ])
-      expect(response.events.at(-1)).toMatchObject({ type: "finish", reason: "tool-calls" })
+      expect(response.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "tool-calls", raw: "STOP" },
+      })
     }),
   )
 
@@ -591,9 +606,41 @@ describe("Gemini route", () => {
       )
 
       expect(length.events.map((event) => event.type)).toEqual(["step-start", "step-finish", "finish"])
-      expect(length.events.at(-1)).toMatchObject({ type: "finish", reason: "length" })
+      expect(length.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "length", raw: "MAX_TOKENS" },
+      })
       expect(filtered.events.map((event) => event.type)).toEqual(["step-start", "step-finish", "finish"])
-      expect(filtered.events.at(-1)).toMatchObject({ type: "finish", reason: "content-filter" })
+      expect(filtered.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "content-filter", raw: "SAFETY" },
+      })
+    }),
+  )
+
+  it.effect("maps current blocking and invalid-output finish reasons", () =>
+    Effect.gen(function* () {
+      const reasons = [
+        ["MODEL_ARMOR", "content-filter"],
+        ["IMAGE_PROHIBITED_CONTENT", "content-filter"],
+        ["IMAGE_RECITATION", "content-filter"],
+        ["LANGUAGE", "content-filter"],
+        ["UNEXPECTED_TOOL_CALL", "error"],
+        ["NO_IMAGE", "error"],
+        ["IMAGE_OTHER", "unknown"],
+        ["TOO_MANY_TOOL_CALLS", "error"],
+        ["MISSING_THOUGHT_SIGNATURE", "error"],
+        ["MALFORMED_RESPONSE", "error"],
+      ] as const
+
+      for (const [raw, normalized] of reasons) {
+        const response = yield* LLMClient.generate(request).pipe(
+          Effect.provide(
+            fixedResponse(sseEvents({ candidates: [{ content: { role: "model", parts: [] }, finishReason: raw }] })),
+          ),
+        )
+        expect(response.finishReason).toEqual({ normalized, raw })
+      }
     }),
   )
 

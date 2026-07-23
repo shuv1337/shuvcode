@@ -601,7 +601,7 @@ const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (reques
 // =============================================================================
 const mapFinishReason = (reason: string | null | undefined): FinishReason => {
   if (reason === "end_turn" || reason === "stop_sequence" || reason === "pause_turn") return "stop"
-  if (reason === "max_tokens") return "length"
+  if (reason === "max_tokens" || reason === "model_context_window_exceeded") return "length"
   if (reason === "tool_use") return "tool-calls"
   if (reason === "refusal") return "content-filter"
   return "unknown"
@@ -836,7 +836,10 @@ const onMessageDelta = (state: ParserState, event: AnthropicEvent): StepResult =
   const usage = mergeUsage(state.usage, mapUsage(event.usage))
   const events: LLMEvent[] = []
   const lifecycle = Lifecycle.finish(state.lifecycle, events, {
-    reason: mapFinishReason(event.delta?.stop_reason),
+    reason: {
+      normalized: mapFinishReason(event.delta?.stop_reason),
+      raw: event.delta?.stop_reason ?? undefined,
+    },
     usage,
     providerMetadata: event.delta?.stop_sequence
       ? anthropicMetadata({ stopSequence: event.delta.stop_sequence })

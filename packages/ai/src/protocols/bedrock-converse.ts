@@ -8,6 +8,7 @@ import {
   Usage,
   type CacheHint,
   type FinishReason,
+  type FinishReasonDetails,
   type JsonSchema,
   type LLMRequest,
   type ModelToolSchemaCompatibility,
@@ -435,9 +436,10 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
 // =============================================================================
 const mapFinishReason = (reason: string): FinishReason => {
   if (reason === "end_turn" || reason === "stop_sequence") return "stop"
-  if (reason === "max_tokens") return "length"
+  if (reason === "max_tokens" || reason === "model_context_window_exceeded") return "length"
   if (reason === "tool_use") return "tool-calls"
   if (reason === "content_filtered" || reason === "guardrail_intervened") return "content-filter"
+  if (reason === "malformed_model_output" || reason === "malformed_tool_use") return "error"
   return "unknown"
 }
 
@@ -466,7 +468,7 @@ interface ParserState {
   // Bedrock splits the finish into `messageStop` (carries `stopReason`) and
   // `metadata` (carries usage). Hold the terminal event in state so `onHalt`
   // can emit exactly one finish after both chunks have had a chance to arrive.
-  readonly pendingFinish: { readonly reason: FinishReason; readonly usage?: Usage } | undefined
+  readonly pendingFinish: { readonly reason: FinishReasonDetails; readonly usage?: Usage } | undefined
   readonly hasToolCalls: boolean
   readonly lifecycle: Lifecycle.State
   readonly reasoningSignatures: Readonly<Record<number, string>>
@@ -583,7 +585,13 @@ const step = (state: ParserState, event: BedrockEvent) =>
       return [
         {
           ...state,
-          pendingFinish: { reason: mapFinishReason(event.messageStop.stopReason), usage: state.pendingFinish?.usage },
+          pendingFinish: {
+            reason: {
+              normalized: mapFinishReason(event.messageStop.stopReason),
+              raw: event.messageStop.stopReason,
+            },
+            usage: state.pendingFinish?.usage,
+          },
         },
         [],
       ] as const
@@ -591,7 +599,16 @@ const step = (state: ParserState, event: BedrockEvent) =>
 
     if (event.metadata) {
       const usage = mapUsage(event.metadata.usage)
-      return [{ ...state, pendingFinish: { reason: state.pendingFinish?.reason ?? "stop", usage } }, []] as const
+      return [
+        {
+          ...state,
+          pendingFinish: {
+            reason: state.pendingFinish?.reason ?? { normalized: "stop" },
+            usage,
+          },
+        },
+        [],
+      ] as const
     }
 
     const exception = (
@@ -624,8 +641,13 @@ const onHalt = (state: ParserState): ReadonlyArray<LLMEvent> =>
     ? (() => {
         const events: LLMEvent[] = []
         Lifecycle.finish(state.lifecycle, events, {
-          reason:
-            state.pendingFinish.reason === "stop" && state.hasToolCalls ? "tool-calls" : state.pendingFinish.reason,
+          reason: {
+            ...state.pendingFinish.reason,
+            normalized:
+              state.pendingFinish.reason.normalized === "stop" && state.hasToolCalls
+                ? "tool-calls"
+                : state.pendingFinish.reason.normalized,
+          },
           usage: state.pendingFinish.usage,
         })
         return events
