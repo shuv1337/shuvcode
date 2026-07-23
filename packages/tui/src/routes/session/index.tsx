@@ -1029,11 +1029,23 @@ export function Session() {
   )
 }
 
-function SessionRowView(props: {
+type SessionRowViewProps = {
   row: SessionRow
   message: (messageID: string) => SessionMessageInfo | undefined
   boundaryID?: string
-}) {
+}
+
+function SessionRowView(props: SessionRowViewProps) {
+  const config = useConfig()
+  const hidden = () => props.row.type === "turn-usage" && config.data.debug?.turn_tokens !== true
+  return (
+    <Show when={!hidden()}>
+      <SessionRowContent row={props.row} message={props.message} boundaryID={props.boundaryID} />
+    </Show>
+  )
+}
+
+function SessionRowContent(props: SessionRowViewProps) {
   return (
     <box id={props.boundaryID} marginTop={1} flexShrink={0}>
       <Switch>
@@ -1072,8 +1084,106 @@ function SessionRowView(props: {
             </Show>
           )}
         </Match>
+        <Match when={props.row.type === "turn-usage" ? props.row : undefined}>
+          {(row) => (
+            <TurnTokenUsage
+              messageIDs={row().messageIDs}
+              previousCacheRead={row().previousCacheRead}
+              message={props.message}
+            />
+          )}
+        </Match>
       </Switch>
     </box>
+  )
+}
+
+function TurnTokenUsage(props: {
+  messageIDs: string[]
+  previousCacheRead?: number
+  message: (messageID: string) => SessionMessageInfo | undefined
+}) {
+  const config = useConfig()
+  const { themeV2 } = useTheme()
+  const steps = createMemo(() => {
+    let previousCacheRead = props.previousCacheRead
+    return props.messageIDs.flatMap((messageID) => {
+      const message = props.message(messageID)
+      if (message?.type !== "assistant" || !message.tokens) return []
+      const total =
+        message.tokens.input +
+        message.tokens.output +
+        message.tokens.reasoning +
+        message.tokens.cache.read +
+        message.tokens.cache.write
+      if (total === 0) return []
+      const newTokens = total - message.tokens.cache.read
+      const cacheBust =
+        previousCacheRead !== undefined && message.tokens.cache.read < previousCacheRead
+          ? previousCacheRead - message.tokens.cache.read
+          : undefined
+      previousCacheRead = message.tokens.cache.read
+      return [
+        {
+          finish: message.finish === "tool-calls" ? "tool-call" : (message.finish ?? "unknown"),
+          newTokens,
+          cached: message.tokens.cache.read,
+          total,
+          cacheBust,
+        },
+      ]
+    })
+  })
+  const columns = createMemo(() => ({
+    step: Math.max("Step".length, ...steps().map((item) => item.finish.length)),
+    newTokens: Math.max("New".length, ...steps().map((item) => item.newTokens.toLocaleString().length)),
+    cached: Math.max("Cached".length, ...steps().map((item) => item.cached.toLocaleString().length)),
+    total: Math.max("Total".length, ...steps().map((item) => item.total.toLocaleString().length)),
+  }))
+  return (
+    <Show when={config.data.debug?.turn_tokens === true && steps().length > 0}>
+      <box paddingLeft={3} flexDirection="column">
+        <box flexDirection="row">
+          <text width={INLINE_TOOL_ICON_WIDTH} fg={themeV2.text.subdued}>
+            ◈
+          </text>
+          <text fg={themeV2.text.subdued} attributes={TextAttributes.BOLD}>
+            Tokens
+          </text>
+        </box>
+        <box paddingLeft={INLINE_TOOL_ICON_WIDTH}>
+          <text fg={themeV2.text.subdued} attributes={TextAttributes.ITALIC}>
+            {"Step".padEnd(columns().step + 2)}
+            {"New".padStart(columns().newTokens)}
+            {"  "}
+            {"Cached".padStart(columns().cached)}
+            {"  "}
+            {"Total".padStart(columns().total)}
+          </text>
+        </box>
+        <For each={steps()}>
+          {(item) => (
+            <box paddingLeft={INLINE_TOOL_ICON_WIDTH} flexDirection="column">
+              <text fg={themeV2.text.subdued}>
+                {item.finish.padEnd(columns().step + 2)}
+                <span style={{ attributes: TextAttributes.BOLD }}>
+                  {item.newTokens.toLocaleString().padStart(columns().newTokens)}
+                </span>
+                {"  "}
+                {item.cached.toLocaleString().padStart(columns().cached)}
+                {"  "}
+                {item.total.toLocaleString().padStart(columns().total)}
+              </text>
+              <Show when={item.cacheBust !== undefined}>
+                <text fg={themeV2.text.feedback.error.default}>
+                  ! Cache bust: {item.cacheBust?.toLocaleString()} fewer cached tokens than the previous step
+                </text>
+              </Show>
+            </box>
+          )}
+        </For>
+      </box>
+    </Show>
   )
 }
 
