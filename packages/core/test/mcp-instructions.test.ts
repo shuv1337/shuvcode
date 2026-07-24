@@ -93,6 +93,60 @@ describe("McpInstructions", () => {
     ),
   )
 
+  it.effect("keeps MCP instructions when Code Mode is disabled and execute is denied", () =>
+    Effect.gen(function* () {
+      const service = yield* McpInstructions.Service
+      const generation = yield* service
+        .load(selection([{ action: "execute", resource: "*", effect: "deny" }]))
+        .pipe(Effect.flatMap(readInitial))
+
+      expect(generation.text).toBe(
+        [
+          "<mcp_instructions>",
+          '  <server name="alpha">',
+          "    Alpha instructions",
+          "  </server>",
+          "</mcp_instructions>",
+        ].join("\n"),
+      )
+    }).pipe(
+      Effect.provide(
+        layer(
+          () => [instructions("alpha", "Alpha instructions")],
+          () => [new MCP.Tool({ server: MCP.ServerName.make("alpha"), name: "search", codemode: false })],
+        ),
+      ),
+    ),
+  )
+
+  it.effect("restates guidance when Code Mode is disabled for a server", () => {
+    let tools = [tool("alpha")]
+    return Effect.gen(function* () {
+      const service = yield* McpInstructions.Service
+      const initialized = yield* service.load(selection()).pipe(Effect.flatMap(readInitial))
+
+      tools = [new MCP.Tool({ server: MCP.ServerName.make("alpha"), name: "search", codemode: false })]
+      const changed = yield* readUpdate(yield* service.load(selection()), initialized)
+      expect(changed.text).toBe(
+        [
+          "The available MCP server instructions have changed. This list supersedes the previous one.",
+          "<mcp_instructions>",
+          '  <server name="alpha">',
+          "    Alpha instructions",
+          "  </server>",
+          "</mcp_instructions>",
+        ].join("\n"),
+      )
+    }).pipe(
+      Effect.provide(
+        layer(
+          () => [instructions("alpha", "Alpha instructions")],
+          () => tools,
+        ),
+      ),
+    )
+  })
+
   it.effect("renders additions, changes, and removal", () => {
     let catalog = [instructions("alpha", "Alpha instructions")]
     const tools = [tool("alpha"), tool("beta")]
