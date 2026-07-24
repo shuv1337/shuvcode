@@ -4,7 +4,7 @@ import { Tool } from "@opencode-ai/core/tool/tool"
 import { Agent } from "@opencode-ai/schema/agent"
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Effect, Schema } from "effect"
+import { Deferred, Effect, Fiber, Schema } from "effect"
 
 const context = {
   sessionID: Session.ID.make("ses_execute"),
@@ -130,4 +130,47 @@ test("execute supports callable namespace tools", async () => {
     ],
   })
   expect(result.content).toEqual([{ type: "text", text: '[\n  "admin",\n  "created"\n]' }])
+})
+
+test("execute marks every admitted child call failed when interrupted", async () => {
+  const child = Tool.make({
+    description: "Wait forever",
+    input: Schema.Struct({ id: Schema.Number }),
+    output: Schema.String,
+    execute: () => Effect.never,
+  })
+  const execute = ExecuteTool.create(new Map([["wait", { tool: child, name: "wait", permission: "wait" }]]))
+  const updates: Tool.Metadata[] = []
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>()
+      const fiber = yield* Tool.execute(
+        execute,
+        { code: "return await Promise.all([tools.wait({ id: 1 }), tools.wait({ id: 2 })])" },
+        {
+          ...context,
+          progress: (update) =>
+            Effect.gen(function* () {
+              updates.push(update)
+              if (updates.length > 1) return
+              yield* Deferred.succeed(started, undefined)
+              yield* Effect.never
+            }),
+        },
+      ).pipe(Effect.forkChild)
+      yield* Deferred.await(started)
+      yield* Effect.yieldNow
+      yield* Effect.yieldNow
+      yield* Fiber.interrupt(fiber)
+    }),
+  )
+
+  expect(updates[0]).toEqual({ toolCalls: [{ tool: "wait", status: "running", input: { id: 1 } }] })
+  expect(updates.at(-1)).toEqual({
+    toolCalls: [
+      { tool: "wait", status: "error", input: { id: 1 } },
+      { tool: "wait", status: "error", input: { id: 2 } },
+    ],
+  })
 })

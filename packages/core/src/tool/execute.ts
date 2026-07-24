@@ -3,7 +3,7 @@ export type { Registration } from "./tool"
 
 import { CodeMode, Tool, toolError } from "@opencode-ai/codemode"
 import type { ToolContent } from "@opencode-ai/ai"
-import { Effect, Ref, Schema } from "effect"
+import { Effect, Ref, Schema, Semaphore } from "effect"
 import { execute, make, toLLMDefinition, type Content, type Metadata, type Registration } from "./tool"
 
 const ExecuteFile = Schema.Struct({
@@ -50,12 +50,11 @@ export const create = (registrations: ReadonlyMap<string, Registration>) => {
         const callIndex = yield* Ref.make(0)
         const files = yield* Ref.make<Array<CollectedFiles>>([])
         const calls = yield* Ref.make<Array<ExecuteCall>>([])
-        // TODO: Publish live call-list updates once V2 has a generic tool progress API.
-        const finalCalls = Ref.get(calls).pipe(
-          Effect.map((items) =>
-            items.map((call) => (call.status === "running" ? { ...call, status: "error" as const } : call)),
-          ),
-        )
+        const lock = Semaphore.makeUnsafe(1)
+        const updateCalls = (update: (items: Array<ExecuteCall>) => Array<ExecuteCall>) =>
+          lock.withPermit(
+            Ref.updateAndGet(calls, update).pipe(Effect.flatMap((toolCalls) => context.progress({ toolCalls }))),
+          )
         const result = yield* runtime(
           registrations,
           (name, registration, input) =>
@@ -66,7 +65,7 @@ export const create = (registrations: ReadonlyMap<string, Registration>) => {
                 agent: context.agent,
                 messageID: context.messageID,
                 callID: context.callID,
-                progress: context.progress,
+                progress: () => Effect.void,
               }).pipe(Effect.mapError((failure) => toolError(failure.message, failure)))
               const outputFileParts = outputFiles(executed.content)
               if (outputFileParts.length > 0)
@@ -74,26 +73,28 @@ export const create = (registrations: ReadonlyMap<string, Registration>) => {
               return executed.output
             }),
           {
-            onToolCallStart: ({ index, name, input }) =>
-              Effect.gen(function* () {
-                const shown = displayInput(input)
-                yield* Ref.update(calls, (items) => {
-                  const next = [...items]
-                  next[index] = { tool: name, status: "running", ...(shown ? { input: shown } : {}) }
-                  return next
-                })
-              }),
-            onToolCallEnd: ({ index, outcome }) =>
-              Ref.update(calls, (items) => {
-                const current = items[index]
-                if (!current) return items
+            onToolCallStart: ({ index, name, input }) => {
+              const shown = displayInput(input)
+              return updateCalls((items) => {
                 const next = [...items]
-                next[index] = { ...current, status: outcome === "success" ? "completed" : "error" }
+                next[index] = { tool: name, status: "running", ...(shown ? { input: shown } : {}) }
                 return next
-              }),
+              })
+            },
+            onToolCallEnd: ({ index, name, input, outcome }) => {
+              const shown = displayInput(input)
+              return updateCalls((items) => {
+                const next = [...items]
+                next[index] = {
+                  ...(items[index] ?? { tool: name, ...(shown ? { input: shown } : {}) }),
+                  status: outcome === "success" ? "completed" : "error",
+                }
+                return next
+              })
+            },
           },
         ).execute(code)
-        const toolCalls = yield* finalCalls
+        const toolCalls = yield* Ref.get(calls)
         const collected = (yield* Ref.get(files))
           .toSorted((left, right) => left.index - right.index)
           .flatMap((item) => item.files)
