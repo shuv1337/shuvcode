@@ -3,6 +3,7 @@ export * as ToolRegistry from "./registry"
 import { type ToolCall, type ToolContent, type ToolDefinition } from "@opencode-ai/ai"
 import { Context, Effect, Layer, Schema, Scope, Semaphore } from "effect"
 import type { AgentV2 } from "../agent"
+import { CodeModeCatalog } from "../codemode/catalog"
 import { Image } from "../image"
 import { PermissionV2 } from "../permission"
 import { SessionMessage } from "../session/message"
@@ -44,13 +45,13 @@ export interface Interface {
 }
 
 /**
- * One request-scoped snapshot pairing Code Mode instructions and advertised
+ * One request-scoped snapshot pairing the Code Mode catalog and advertised
  * definitions with captured tools. A model request executes exactly the tool
  * values it advertised even if registration changes while it is in flight.
  */
 export interface ToolSet {
   readonly definitions: ReadonlyArray<ToolDefinition>
-  readonly codeModeInstructions?: string
+  readonly codeModeCatalog?: ReadonlyArray<CodeModeCatalog.Entry>
   readonly execute: (input: ExecuteInput) => Effect.Effect<ToolOutcome, ToolOutputStore.Error>
 }
 
@@ -324,9 +325,9 @@ const registryLayer = Layer.effect(
             const codeModeMaterialization = yield* codeMode.materialize(permissions)
             const codemodeTool = codeModeMaterialization.tool
             return {
-              ...(codeModeMaterialization.instructions === undefined
+              ...(codeModeMaterialization.catalog === undefined
                 ? {}
-                : { codeModeInstructions: codeModeMaterialization.instructions }),
+                : { codeModeCatalog: codeModeMaterialization.catalog }),
               definitions: [
                 // Definitions are prompt-cache prefix bytes, so order only after effective registrations settle.
                 ...Array.from(direct)

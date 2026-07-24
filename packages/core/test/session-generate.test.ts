@@ -59,7 +59,11 @@ const client = Layer.mock(LLMClient.Service)({
         LLMEvent.textStart({ id: "generate" }),
         LLMEvent.textDelta({ id: "generate", text: "Transient answer" }),
         LLMEvent.textEnd({ id: "generate" }),
-        LLMEvent.stepFinish({ index: 0, reason: { normalized: "stop" }, usage: { inputTokens: 100, outputTokens: 10 } }),
+        LLMEvent.stepFinish({
+          index: 0,
+          reason: { normalized: "stop" },
+          usage: { inputTokens: 100, outputTokens: 10 },
+        }),
         LLMEvent.finish({ reason: { normalized: "stop" } }),
       ])
       if (!response) throw new Error("Incomplete generate response")
@@ -97,7 +101,13 @@ const plugins = Layer.mock(PluginSupervisor.Service, { flush: Effect.void })
 const tools = Layer.mock(ToolRegistry.Service, {
   snapshot: () =>
     Effect.succeed({
-      codeModeInstructions: "Captured Code Mode catalog",
+      codeModeCatalog: [
+        {
+          path: "captured.lookup",
+          description: "Captured Code Mode catalog",
+          signature: "tools.captured.lookup(input: {}): Promise<string>",
+        },
+      ],
       definitions: [ToolDefinition.make({ name: "lookup", description: "Lookup", inputSchema: { type: "object" } })],
       execute: () => Effect.die(new Error("unused")),
     }),
@@ -293,7 +303,7 @@ it.effect("generates from fresh settled Session context without durable mutation
     )
     expect(instructionUpdates).toHaveLength(1)
     expect(instructionUpdates?.[0]).toContain("Changed context")
-    expect(instructionUpdates?.[0]).toContain("Captured Code Mode catalog")
+    expect(instructionUpdates?.[0]).toContain("tools.captured.lookup(input: {}): Promise<string>")
     expect(userTexts(requests[0])).toEqual(["Existing durable context", "Summarize privately"])
     expect(
       requests[0]?.messages.flatMap((message) =>

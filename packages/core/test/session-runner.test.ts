@@ -844,12 +844,19 @@ describe("SessionRunnerLLM", () => {
           output: Schema.String,
           execute: () => Effect.sync(() => executed.push(name)).pipe(Effect.as({ output: name })),
         })
+      const catalog = (name: string) => [
+        {
+          path: `catalog.${name.toLowerCase()}`,
+          description: `Code Mode catalog ${name}`,
+          signature: `tools.catalog.${name.toLowerCase()}(input: {}): Promise<string>`,
+        },
+      ]
       const session = yield* setup
       codeModeMaterializations = [
-        { instructions: "Code Mode catalog A", tool: execute("A") },
-        { instructions: "Code Mode catalog B", tool: execute("B") },
-        { instructions: "Code Mode catalog C", tool: execute("C") },
-        { instructions: "Code Mode catalog D", tool: execute("D") },
+        { catalog: catalog("A"), tool: execute("A") },
+        { catalog: catalog("B"), tool: execute("B") },
+        { catalog: catalog("C"), tool: execute("C") },
+        { catalog: catalog("D"), tool: execute("D") },
       ]
       yield* admit(session, "Use Code Mode")
       responses = [reply.tool("call-execute", "execute", {}), reply.stop()]
@@ -1036,9 +1043,7 @@ describe("SessionRunnerLLM", () => {
               input: Schema.Struct({}),
               output: Schema.Struct({ value: Schema.String }),
               execute: () =>
-                Effect.sync(() => executions.push("advertised")).pipe(
-                  Effect.as({ output: { value: "advertised" } }),
-                ),
+                Effect.sync(() => executions.push("advertised")).pipe(Effect.as({ output: { value: "advertised" } })),
             }),
           },
           { codemode: false },
@@ -1067,9 +1072,7 @@ describe("SessionRunnerLLM", () => {
             input: Schema.Struct({}),
             output: Schema.Struct({ value: Schema.String }),
             execute: () =>
-              Effect.sync(() => executions.push("replacement")).pipe(
-                Effect.as({ output: { value: "replacement" } }),
-              ),
+              Effect.sync(() => executions.push("replacement")).pipe(Effect.as({ output: { value: "replacement" } })),
           }),
         },
         { codemode: false },
