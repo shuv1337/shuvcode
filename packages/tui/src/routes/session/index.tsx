@@ -81,7 +81,15 @@ import { PluginSlot } from "../../plugin/context"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { usePathFormatter } from "../../context/path-format"
 import { useLocation } from "../../context/location"
-import { createSessionRows, messageBoundaryIDs, resolvePart, type PartRef, type SessionRow } from "./rows"
+import {
+  cacheReuseDrop,
+  createSessionRows,
+  messageBoundaryIDs,
+  resolvePart,
+  type CacheUsage,
+  type PartRef,
+  type SessionRow,
+} from "./rows"
 import { switchLabel } from "../../util/model"
 import { findMessageBoundary, messageNavigationSlack } from "./message-navigation"
 import { stringWidth } from "../../util/string-width"
@@ -1079,7 +1087,7 @@ function SessionRowView(props: SessionRowViewProps) {
           {(row) => (
             <TurnTokenUsage
               messageIDs={row().messageIDs}
-              previousCacheRead={row().previousCacheRead}
+              previousCache={row().previousCache}
               message={props.message}
             />
           )}
@@ -1091,13 +1099,13 @@ function SessionRowView(props: SessionRowViewProps) {
 
 function TurnTokenUsage(props: {
   messageIDs: string[]
-  previousCacheRead?: number
+  previousCache?: CacheUsage
   message: (messageID: string) => SessionMessageInfo | undefined
 }) {
   const config = useConfig()
   const { themeV2 } = useTheme()
   const steps = createMemo(() => {
-    let previousCacheRead = props.previousCacheRead
+    let previousCache = props.previousCache
     return props.messageIDs.flatMap((messageID) => {
       const message = props.message(messageID)
       if (message?.type !== "assistant" || !message.tokens) return []
@@ -1109,18 +1117,16 @@ function TurnTokenUsage(props: {
         message.tokens.cache.write
       if (total === 0) return []
       const newTokens = total - message.tokens.cache.read
-      const cacheBust =
-        previousCacheRead !== undefined && message.tokens.cache.read < previousCacheRead
-          ? previousCacheRead - message.tokens.cache.read
-          : undefined
-      previousCacheRead = message.tokens.cache.read
+      const currentCache = { read: message.tokens.cache.read, model: message.model }
+      const reuseDrop = cacheReuseDrop(previousCache, currentCache)
+      previousCache = currentCache
       return [
         {
           finish: message.finish === "tool-calls" ? "tool-call" : (message.finish ?? "unknown"),
           newTokens,
           cached: message.tokens.cache.read,
           total,
-          cacheBust,
+          reuseDrop,
         },
       ]
     })
@@ -1165,9 +1171,9 @@ function TurnTokenUsage(props: {
                 {"  "}
                 {item.total.toLocaleString().padStart(columns().total)}
               </text>
-              <Show when={item.cacheBust !== undefined}>
-                <text fg={themeV2.text.feedback.error.default}>
-                  ! Cache bust: {item.cacheBust?.toLocaleString()} fewer cached tokens than the previous step
+              <Show when={item.reuseDrop !== undefined}>
+                <text fg={themeV2.text.feedback.warning.default}>
+                  ! Likely cache bust: {item.reuseDrop?.toLocaleString()} fewer cached tokens than the previous step
                 </text>
               </Show>
             </box>
