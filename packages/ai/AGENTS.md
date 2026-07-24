@@ -194,7 +194,7 @@ If you find yourself copying a 3-to-5-line snippet between two protocols, lift i
 
 `LLMRequest.system` is the initial privileged prompt that applies ahead of the conversation. `Message.system(...)` is a separate, provider-neutral chronological operator update inside `LLMRequest.messages`; it applies only from its position in history onward and accepts text content only.
 
-Native chronological system messages are route/model-specific. Anthropic Messages lowers them natively for Claude Opus 4.8 (`claude-opus-4-8`). Other routes and models intentionally lower the update in place into ordinary user-compatible text using this stable escaped representation:
+Native chronological system messages are route/model-specific. Anthropic Messages lowers them natively for Claude Opus 4.8 (`claude-opus-4-8`), Claude Opus 5 (`claude-opus-5`), and Claude Fable 5 (`claude-fable-5`). Sonnet 5 does not support them. Other routes and models intentionally lower the update in place into ordinary user-compatible text using this stable escaped representation:
 
 ```text
 <system-update>
