@@ -105,6 +105,31 @@ describe("SessionExecution lifecycle", () => {
     }),
   )
 
+  it.effect("starts every suspended execution without waiting for earlier drains to finish", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const sessionIDs = Array.from({ length: 5 }, (_, index) => SessionV2.ID.make(`ses_resume_concurrent_${index}`))
+      yield* seedSessions(database, sessionIDs, { time_suspended: Date.now() })
+
+      const fourStarted = yield* Deferred.make<void>()
+      const started: SessionV2.ID[] = []
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const context = yield* buildExecution(scope, ({ sessionID }) =>
+        Effect.sync(() => {
+          started.push(sessionID)
+          if (started.length === 4) Deferred.doneUnsafe(fourStarted, Effect.void)
+        }).pipe(Effect.andThen(Effect.never)),
+      )
+      const execution = Context.get(context, SessionExecution.Service)
+      const restart = Context.get(context, SessionRestart.Service)
+      yield* restart.resumeSuspendedSessions.pipe(Effect.forkIn(scope))
+      yield* Deferred.await(fourStarted)
+
+      expect([...(yield* execution.active)].toSorted()).toEqual(sessionIDs.toSorted())
+    }),
+  )
+
   it.effect("resumes each suspended Session at most once", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -115,9 +140,11 @@ describe("SessionExecution lifecycle", () => {
       const drained: string[] = []
       const scope = yield* Scope.make()
       const context = yield* buildExecution(scope, ({ sessionID }) => Effect.sync(() => void drained.push(sessionID)))
+      const execution = Context.get(context, SessionExecution.Service)
       const restart = Context.get(context, SessionRestart.Service)
 
       yield* restart.resumeSuspendedSessions
+      yield* Effect.forEach([first, second], execution.awaitIdle, { discard: true })
       expect(drained.toSorted()).toEqual([first, second])
       expect(yield* suspensions(database)).toEqual({ [first]: false, [second]: false })
 

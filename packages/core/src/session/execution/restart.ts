@@ -40,8 +40,7 @@ export const layer = Layer.effect(
               // Drain failures are already logged and durably recorded by the execution layer.
               yield* Effect.ignore(execution.resume(sessionID))
             }),
-          // Each suspension is consumed atomically right before its drain; at most four drains run at once.
-          { concurrency: 4, discard: true },
+          { concurrency: "unbounded", discard: true },
         )
       }),
     })
