@@ -7,10 +7,10 @@ Plugins extend OpenCode in-process. They can transform agents, models, commands,
 integrations, references, skills, and tools; intercept model requests and tool
 execution; and call a subset of the V2 client.
 
-<Warning>
+<Callout type="warning">
   The V2 plugin API is beta. Entrypoints, hooks, draft shapes, and configuration may change before the stable release.
   Use the `/v2` exports described on this page.
-</Warning>
+</Callout>
 
 ## Load plugins
 
@@ -49,7 +49,7 @@ Use the object form to pass JSON configuration to the plugin. OpenCode passes
 `options` unchanged as `ctx.options`; omitted options become an empty object.
 The plugin owns validation and defaults for its options.
 
-See [Config](/docs/config#locations) for configuration locations and precedence.
+See [Config](/config#locations) for configuration locations and precedence.
 Entries from all applicable files are processed from lowest to highest
 precedence rather than replacing the entire array.
 
@@ -162,22 +162,22 @@ connections, and background tasks.
 
 ### Context
 
-The plugin context is essentially an [OpenCode server client](/docs/build/client).
+The plugin context is essentially an [OpenCode server client](/build/client).
 Its read and action methods use the same inputs and responses as the client. It
 adds plugin-only methods for transforms, runtime hooks, reloads, registrations,
 and plugin options.
 
 | Capability             | Available operations                                                                         |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
-| `ctx.agent`            | `list`, `transform`, `reload`                                                                |
+| `ctx.agent`            | `list`, `get`, `transform`, `reload`                                                         |
 | `ctx.catalog.provider` | `list`, `get`                                                                                |
-| `ctx.catalog.model`    | `list`, `default`                                                                            |
+| `ctx.catalog.model`    | `list`, `get`, `default`                                                                     |
 | `ctx.catalog`          | `transform`, `reload`                                                                        |
 | `ctx.command`          | `list`, `transform`, `reload`                                                                |
 | `ctx.integration`      | `list`, `get`, `connect`, `attempt`, `transform`, `reload`, and connection lookup/resolution |
 | `ctx.plugin`           | `list` currently active plugin IDs                                                           |
 | `ctx.reference`        | `list`, `transform`, `reload`                                                                |
-| `ctx.session`          | `create`, `get`, `prompt`, `command`, `interrupt`, and `hook`                                |
+| `ctx.session`          | `create`, `get`, `prompt`, `command`, `synthetic`, `interrupt`, and `hook`                   |
 | `ctx.skill`            | `list`, `transform`, `reload`                                                                |
 | `ctx.tool`             | `transform` and `hook`                                                                       |
 | `ctx.aisdk`            | `hook`                                                                                       |
@@ -403,7 +403,7 @@ opencode2 api get /api/plugin
 ```
 
 If a plugin is absent, check the server log described in
-[Troubleshooting](/docs/troubleshooting#read-logs). Invalid modules and setup failures are
+[Troubleshooting](/troubleshooting#read-logs). Invalid modules and setup failures are
 logged; one failing package does not prevent unrelated valid packages from
 being resolved.
 
@@ -440,6 +440,7 @@ fibers, and registrations are released when the plugin reloads or unloads.
 OpenCode does not expose its private Core services to the plugin; use the
 capabilities on `ctx`.
 
-Typed tools can use `Schema` from `effect` and the contracts exported from
-`@opencode-ai/plugin/v2/effect/tool`. Their executors return an Effect and may
-fail with the typed tool failure channel.
+Typed tools can use `Schema` from `effect` and `Tool.make` from
+`@opencode-ai/plugin/v2/effect/tool`. Effect and Promise plugins use the same
+`tools.add(name, tool, options?)` registration shape. Effect executors
+return an Effect and may fail with the typed tool failure channel.

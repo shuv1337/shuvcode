@@ -68,7 +68,7 @@ every field, examples, config locations, and links to dedicated feature guides.
 For any request to migrate OpenCode configuration, agents, commands, skills,
 plugins, integrations, or other behavior from V1 to V2, read the full
 [migration guide](https://v2.opencode.ai/docs/migrate-v1) before acting. In
-the repository, its source is `packages/docs/migrate-v1.mdx`.
+the repository, its source is `packages/www/content/docs/(Get started)/migrate-v1.mdx`.
 
 V1 config files and `.opencode/` definitions are intended to remain compatible.
 The only intentional breaking changes are the server API and plugin API. Native
