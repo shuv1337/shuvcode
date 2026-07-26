@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import os from "os"
+import path from "path"
 import type { SessionMessageAssistantTool } from "@opencode-ai/client/promise"
 import { entryBody, entryCanStream, entryDone } from "../../src/mini/entry.body"
 import type { StreamCommit, ToolSnapshot } from "../../src/mini/types"
@@ -11,6 +13,7 @@ function commit(input: Partial<StreamCommit> & Pick<StreamCommit, "kind" | "text
 function toolCommit(input: {
   tool: string
   state: SessionMessageAssistantTool["state"]
+  directory?: string
   phase?: StreamCommit["phase"]
   toolState?: StreamCommit["toolState"]
   text?: string
@@ -23,6 +26,7 @@ function toolCommit(input: {
     phase: input.phase ?? "final",
     source: "tool",
     tool: input.tool,
+    directory: input.directory,
     toolState:
       input.toolState ??
       (input.state.status === "error" ? "error" : input.state.status === "completed" ? "completed" : "running"),
@@ -369,6 +373,52 @@ describe("run entry body", () => {
     ).toEqual({
       type: "text",
       content: "$ ls",
+    })
+  })
+
+  test("renders a shell workdir before the prompt", () => {
+    expect(
+      entryBody(
+        toolCommit({
+          tool: "shell",
+          directory: "/work/project",
+          phase: "start",
+          toolState: "running",
+          state: {
+            status: "running",
+            input: {
+              command: "ls",
+              workdir: "packages/foo",
+            },
+            metadata: {},
+          },
+        }),
+      ),
+    ).toEqual({
+      type: "text",
+      content: "packages/foo$ ls",
+    })
+
+    expect(
+      entryBody(
+        toolCommit({
+          tool: "shell",
+          directory: path.join(os.homedir(), "project"),
+          phase: "start",
+          toolState: "running",
+          state: {
+            status: "running",
+            input: {
+              command: "pwd",
+              workdir: path.join(os.homedir(), "outside", "folder"),
+            },
+            metadata: {},
+          },
+        }),
+      ),
+    ).toEqual({
+      type: "text",
+      content: "~/outside/folder$ pwd",
     })
   })
 

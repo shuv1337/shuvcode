@@ -2562,6 +2562,7 @@ function Shell(props: ToolProps) {
   const ctx = use()
   const client = useClient()
   const data = useData()
+  const pathFormatter = usePathFormatter()
   const permission = createMemo(() => {
     const request = data.session.permission.list(ctx.sessionID)?.[0]
     return request?.source?.type === "tool" && request.source.callID === props.part.id
@@ -2575,6 +2576,7 @@ function Shell(props: ToolProps) {
   })
   const isRunning = createMemo(() => props.part.state.status === "running" || backgroundRunning())
   const command = createMemo(() => stringValue(props.input.command))
+  const workdir = createMemo(() => pathFormatter.format(stringValue(props.input.workdir)))
   const [expanded, setExpanded] = createSignal(false)
   const [backgroundOutput, setBackgroundOutput] = createSignal("")
   const [outputTruncated, setOutputTruncated] = createSignal(false)
@@ -2648,7 +2650,11 @@ function Shell(props: ToolProps) {
   })
   const maxLines = 10
   const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
-  const input = createMemo(() => (command() ? `${isRunning() ? "" : "$ "}${command()}` : ""))
+  const input = createMemo(() => {
+    if (!command()) return ""
+    const prompt = workdir() && workdir() !== "." ? `${workdir()}$ ` : isRunning() ? "" : "$ "
+    return `${prompt}${command()}`
+  })
   const content = createMemo(() => [input(), output()].filter(Boolean).join("\n\n"))
   const collapsed = createMemo(() => collapseToolOutput(content(), maxLines, maxChars()))
   const limited = createMemo(() => {

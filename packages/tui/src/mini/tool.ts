@@ -644,17 +644,17 @@ function snapQuestion(p: ToolProps): ToolSnapshot {
 function scrollBashStart(p: ToolProps): string {
   const cmd = p.input.command ?? ""
   const wd = p.input.workdir ?? ""
-  const formatted = wd && wd !== "." ? displayPath(p, wd) : ""
+  const formatted = wd && wd !== "." ? displayPath(p, wd, { home: true }) : ""
   const dir = formatted === "." ? "" : formatted
   if (cmd && !dir) {
     return `$ ${cmd}`
   }
 
   if (!cmd) {
-    return dir ? `# Running in ${dir}` : ""
+    return dir ? `${dir}$` : ""
   }
 
-  return `# Running in ${dir}\n$ ${cmd}`
+  return `${dir}$ ${cmd}`
 }
 
 function scrollBashProgress(p: ToolProps): string {
@@ -670,7 +670,7 @@ function scrollBashProgress(p: ToolProps): string {
   }
 
   const wdRaw = (p.input.workdir ?? "").trim()
-  const wd = wdRaw ? displayPath(p, wdRaw) : ""
+  const wd = wdRaw ? displayPath(p, wdRaw, { home: true }) : ""
   const lines = out.split("\n")
   const first = (lines[0] || "").trim()
   const second = (lines[1] || "").trim()
