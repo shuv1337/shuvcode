@@ -1,11 +1,16 @@
-import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
+import { Plugin } from "@opencode-ai/plugin/v2/effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Catalog } from "@opencode-ai/core/catalog"
 import { Credential } from "@opencode-ai/core/credential"
 import { Integration } from "@opencode-ai/core/integration"
+import { Location } from "@opencode-ai/core/location"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { Project } from "@opencode-ai/core/project"
 import { ProviderV2 } from "@opencode-ai/core/provider"
+import { AbsolutePath } from "@opencode-ai/core/schema"
+import { WebSearch } from "@opencode-ai/core/websearch"
 import type {
+  CredentialOAuth,
   IntegrationCommandMethod,
   IntegrationEnvMethod,
   IntegrationKeyMethod,
@@ -13,11 +18,11 @@ import type {
 } from "@opencode-ai/sdk/v2/types"
 import { Effect, Stream } from "effect"
 
-type Overrides = Partial<Omit<PluginContext, "options" | "session">> & {
-  readonly session?: Partial<PluginContext["session"]>
+type Overrides = Partial<Omit<Plugin.Context, "options" | "session">> & {
+  readonly session?: Partial<Plugin.Context["session"]>
 }
 
-export function host(overrides: Overrides = {}): PluginContext {
+export function host(overrides: Overrides = {}): Plugin.Context {
   return {
     app: overrides.app ?? { name: "test", version: "test", channel: "test" },
     options: {},
@@ -92,6 +97,12 @@ export function host(overrides: Overrides = {}): PluginContext {
       transform: () => Effect.die("unused tool.transform"),
       hook: () => Effect.die("unused tool.hook"),
     },
+    websearch: overrides.websearch ?? {
+      providers: () => Effect.die("unused websearch.providers"),
+      query: () => Effect.die("unused websearch.query"),
+      transform: () => Effect.die("unused websearch.transform"),
+      reload: () => Effect.die("unused websearch.reload"),
+    },
     session: {
       hook: overrides.session?.hook ?? (() => Effect.die("unused session.hook")),
       create: overrides.session?.create ?? (() => Effect.die("unused session.create")),
@@ -105,7 +116,7 @@ export function host(overrides: Overrides = {}): PluginContext {
   }
 }
 
-export function agentHost(agent: AgentV2.Interface): PluginContext["agent"] {
+export function agentHost(agent: AgentV2.Interface): Plugin.Context["agent"] {
   return {
     get: (id) => agent.get(AgentV2.ID.make(id)).pipe(Effect.map((value) => value && agentInfo(value))),
     list: () => Effect.die("unused agent.list"),
@@ -131,7 +142,7 @@ export function agentHost(agent: AgentV2.Interface): PluginContext["agent"] {
   }
 }
 
-export function catalogHost(catalog: Catalog.Interface): PluginContext["catalog"] {
+export function catalogHost(catalog: Catalog.Interface): Plugin.Context["catalog"] {
   return {
     provider: {
       list: () => Effect.die("unused catalog.provider.list"),
@@ -207,7 +218,7 @@ export function catalogHost(catalog: Catalog.Interface): PluginContext["catalog"
   }
 }
 
-export function integrationHost(integration: Integration.Interface): PluginContext["integration"] {
+export function integrationHost(integration: Integration.Interface): Plugin.Context["integration"] {
   return {
     list: () => Effect.die("unused integration.list"),
     get: () => Effect.die("unused integration.get"),
@@ -327,6 +338,40 @@ export function integrationHost(integration: Integration.Interface): PluginConte
         }),
       ),
   }
+}
+
+export function webSearchHost(websearch: WebSearch.Interface): Plugin.Context["websearch"] {
+  const location = Location.Info.make({
+    directory: AbsolutePath.make("/tmp/websearch-test"),
+    project: { id: Project.ID.make("websearch-test"), directory: AbsolutePath.make("/tmp/websearch-test") },
+  })
+  return {
+    providers: () => websearch.providers().pipe(Effect.map((data) => ({ location, data }))),
+    query: (input) =>
+      websearch
+        .query({ query: input.query, providerID: input.providerID && WebSearch.ID.make(input.providerID) })
+        .pipe(Effect.map((data) => ({ location, data }))),
+    reload: websearch.reload,
+    transform: (callback) =>
+      websearch.transform((draft) => {
+        callback({
+          add: (definition) =>
+            draft.add({
+              id: WebSearch.ID.make(definition.id),
+              name: definition.name,
+              execute: definition.execute,
+            }),
+          default: {
+            get: draft.default.get,
+            set: (providerID) => draft.default.set(WebSearch.ID.make(providerID)),
+          },
+        })
+      }),
+  }
+}
+
+function oauthCredential(value: CredentialOAuth) {
+  return Credential.OAuth.make({ ...value, methodID: Integration.MethodID.make(value.methodID) })
 }
 
 function method(value: Integration.Method) {

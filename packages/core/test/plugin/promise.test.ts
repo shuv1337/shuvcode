@@ -8,6 +8,7 @@ import { PluginV2 } from "@opencode-ai/core/plugin"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { PluginPromise } from "@opencode-ai/core/plugin/promise"
+import { WebSearch } from "@opencode-ai/core/websearch"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionPending } from "@opencode-ai/core/session/pending"
@@ -241,6 +242,38 @@ describe("fromPromise", () => {
       yield* adapted.effect(host)
 
       expect(yield* agents.get(AgentV2.ID.make("temp"))).toBeUndefined()
+    }),
+  )
+
+  it.effect("registers a standalone web search provider", () =>
+    Effect.gen(function* () {
+      const websearch = yield* WebSearch.Service
+      const plugin = yield* PluginV2.Service
+      const host = yield* PluginHost.make(plugin)
+      const promisePlugin = Plugin.define({
+        id: "promise-websearch",
+        setup: async (ctx) => {
+          await ctx.websearch.transform((draft) => {
+            draft.add({
+              id: "promise-websearch",
+              name: "Promise Web Search",
+              execute: async (input) => [{ url: "https://example.com", content: `promise: ${input.query}`, time: {} }],
+            })
+          })
+        },
+      })
+
+      yield* PluginPromise.fromPromise(promisePlugin).effect(host)
+      expect(yield* websearch.providers()).toContainEqual({
+        id: WebSearch.ID.make("promise-websearch"),
+        name: "Promise Web Search",
+      })
+      expect(yield* websearch.query({ query: "effect", providerID: WebSearch.ID.make("promise-websearch") })).toEqual(
+        new WebSearch.Response({
+          providerID: WebSearch.ID.make("promise-websearch"),
+          results: [{ url: "https://example.com", content: "promise: effect", time: {} }],
+        }),
+      )
     }),
   )
 

@@ -121,23 +121,15 @@ describe("Config", () => {
               const config = yield* Config.Service
               const entries = yield* config.entries()
               expect(
-                entries.flatMap((entry) =>
-                  entry.type === "document" && entry.info.shell ? [entry.info.shell] : [],
-                ),
+                entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
               ).toEqual(["global", "explicit", "project", "content"])
               expect(Config.latest(entries, "shell")).toBe("content")
             }).pipe(
               Effect.provide(
-                testLayer(
-                  project,
-                  global,
-                  project,
-                  undefined,
-                  undefined,
-                  emptyCredentialNode,
-                  emptyWellknownNode,
-                  { file: explicit, content: JSON.stringify({ shell: "content" }) },
-                ),
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  file: explicit,
+                  content: JSON.stringify({ shell: "content" }),
+                }),
               ),
             ),
           ),
@@ -155,31 +147,24 @@ describe("Config", () => {
         const global = path.join(tmp.path, "global")
         const project = path.join(tmp.path, "project")
         return Effect.promise(async () => {
-            await fs.mkdir(global, { recursive: true })
-            await fs.mkdir(project, { recursive: true })
-            await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
-            await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
-          }).pipe(
-            Effect.andThen(
-              Effect.gen(function* () {
-                const config = yield* Config.Service
-                expect(Config.latest(yield* config.entries(), "shell")).toBe("global")
-              }).pipe(
-                Effect.provide(
-                  testLayer(
-                    project,
-                    global,
-                    project,
-                    undefined,
-                    undefined,
-                    emptyCredentialNode,
-                    emptyWellknownNode,
-                    { project: false },
-                  ),
-                ),
+          await fs.mkdir(global, { recursive: true })
+          await fs.mkdir(project, { recursive: true })
+          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
+          await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+        }).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              const config = yield* Config.Service
+              expect(Config.latest(yield* config.entries(), "shell")).toBe("global")
+            }).pipe(
+              Effect.provide(
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  project: false,
+                }),
               ),
             ),
-          )
+          ),
+        )
       }),
     ),
   )

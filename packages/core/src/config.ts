@@ -27,6 +27,7 @@ import { ConfigModel } from "./config/model"
 import { ConfigPlugin } from "./config/plugin"
 import { ConfigProvider } from "./config/provider"
 import { ConfigReference } from "./config/reference"
+import { ConfigWebSearch } from "./config/websearch"
 import { ConfigToolOutput } from "./config/tool-output"
 import { ConfigVariable } from "./config/variable"
 import { ConfigWatcher } from "./config/watcher"
@@ -107,6 +108,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   references: ConfigReference.Info.pipe(Schema.optional).annotate({
     description: "Named local directories or Git repositories available as external context",
+  }),
+  websearch: ConfigWebSearch.Info.pipe(Schema.optional).annotate({
+    description: "Web search provider selection",
   }),
   plugins: ConfigPlugin.Plugins.pipe(Schema.optional).annotate({
     description: "Ordered plugin enablement directives and external package declarations",

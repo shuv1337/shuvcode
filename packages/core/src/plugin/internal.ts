@@ -13,6 +13,7 @@ import { ConfigProviderPlugin } from "../config/plugin/provider"
 import { ConfigPolicyPlugin } from "../config/plugin/policy"
 import { ConfigReferencePlugin } from "../config/plugin/reference"
 import { ConfigSkillPlugin } from "../config/plugin/skill"
+import { ConfigWebSearchPlugin } from "../config/plugin/websearch"
 import { EventV2 } from "../event"
 import { FileMutation } from "../file-mutation"
 import { Form } from "../form"
@@ -21,12 +22,14 @@ import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Global } from "@opencode-ai/util/global"
 import { Image } from "../image"
 import { Integration } from "../integration"
+import { KV } from "../kv"
 import { Location } from "../location"
 import { LocationMutation } from "../location-mutation"
 import { ModelsDev } from "../models-dev"
 import { Npm } from "@opencode-ai/util/npm"
 import { PermissionV2 } from "../permission"
 import { Reference } from "../reference"
+import { WebSearch } from "../websearch"
 import { Ripgrep } from "../ripgrep"
 import { SessionInstructions } from "../session/instructions"
 import { Shell } from "../shell"
@@ -50,6 +53,7 @@ import { AgentPlugin } from "./agent"
 import { CommandPlugin } from "./command"
 import { ModelsDevPlugin } from "./models-dev"
 import { ProviderPlugins } from "./provider"
+import { WebSearchPlugins } from "./websearch"
 import { PluginRuntime } from "./runtime"
 import { SkillPlugin } from "./skill"
 import { SystemPromptPlugin } from "./system-prompt"
@@ -70,6 +74,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const http = yield* HttpClient.HttpClient
   const image = yield* Image.Service
   const integration = yield* Integration.Service
+  const kv = yield* KV.Service
   const location = yield* Location.Service
   const locationMutation = yield* LocationMutation.Service
   const models = yield* ModelsDev.Service
@@ -79,12 +84,12 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const form = yield* Form.Service
   const read = yield* ReadToolFileSystem.Service
   const reference = yield* Reference.Service
+  const websearch = yield* WebSearch.Service
   const ripgrep = yield* Ripgrep.Service
   const instructions = yield* SessionInstructions.Service
   const shell = yield* Shell.Service
   const skill = yield* SkillV2.Service
   const tools = yield* Tools.Service
-  const websearch = yield* WebSearchTool.ConfigService
   const wellknown = yield* WellKnown.Service
   return Context.mergeAll(
     Context.make(AgentV2.Service, agent),
@@ -99,6 +104,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(HttpClient.HttpClient, http),
     Context.make(Image.Service, image),
     Context.make(Integration.Service, integration),
+    Context.make(KV.Service, kv),
     Context.make(Location.Service, location),
     Context.make(LocationMutation.Service, locationMutation),
     Context.make(ModelsDev.Service, models),
@@ -108,12 +114,12 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(Form.Service, form),
     Context.make(ReadToolFileSystem.Service, read),
     Context.make(Reference.Service, reference),
+    Context.make(WebSearch.Service, websearch),
     Context.make(Ripgrep.Service, ripgrep),
     Context.make(SessionInstructions.Service, instructions),
     Context.make(Shell.Service, shell),
     Context.make(SkillV2.Service, skill),
     Context.make(Tools.Service, tools),
-    Context.make(WebSearchTool.ConfigService, websearch),
     Context.make(WellKnown.Service, wellknown),
   )
 })
@@ -132,6 +138,7 @@ const pre = [
   ...SystemPromptPlugin.Plugins,
   ModelsDevPlugin,
   ...ProviderPlugins,
+  ...WebSearchPlugins,
   PatchTool.Plugin,
   EditTool.Plugin,
   GlobTool.Plugin,
@@ -153,6 +160,7 @@ const post = [
   ConfigCommandPlugin.Plugin,
   ConfigSkillPlugin.Plugin,
   ConfigProviderPlugin.Plugin,
+  ConfigWebSearchPlugin.Plugin,
   VariantPlugin.Plugin,
   ConfigPolicyPlugin.Plugin,
 ] as const satisfies readonly InternalPlugin[]

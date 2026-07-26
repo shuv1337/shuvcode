@@ -1042,6 +1042,25 @@ export interface DebugApi<E = never> {
   readonly location: { readonly list: DebugLocationListOperation<E>; readonly evict: DebugLocationEvictOperation<E> }
 }
 
+type Endpoint27_0Request = Parameters<RawClient["server.websearch"]["websearch.providers"]>[0]
+export type Endpoint27_0Input = { readonly location?: Endpoint27_0Request["query"]["location"] }
+export type Endpoint27_0Output = EffectValue<ReturnType<RawClient["server.websearch"]["websearch.providers"]>>
+export type WebsearchProvidersOperation<E = never> = (input?: Endpoint27_0Input) => Effect.Effect<Endpoint27_0Output, E>
+
+type Endpoint27_1Request = Parameters<RawClient["server.websearch"]["websearch.query"]>[0]
+export type Endpoint27_1Input = {
+  readonly location?: Endpoint27_1Request["query"]["location"]
+  readonly query: Endpoint27_1Request["payload"]["query"]
+  readonly providerID?: Endpoint27_1Request["payload"]["providerID"]
+}
+export type Endpoint27_1Output = EffectValue<ReturnType<RawClient["server.websearch"]["websearch.query"]>>
+export type WebsearchQueryOperation<E = never> = (input: Endpoint27_1Input) => Effect.Effect<Endpoint27_1Output, E>
+
+export interface WebsearchApi<E = never> {
+  readonly providers: WebsearchProvidersOperation<E>
+  readonly query: WebsearchQueryOperation<E>
+}
+
 export interface AppApi<E = never> {
   readonly health: HealthApi<E>
   readonly server: ServerApi<E>
@@ -1070,4 +1089,5 @@ export interface AppApi<E = never> {
   readonly projectCopy: ProjectCopyApi<E>
   readonly vcs: VcsApi<E>
   readonly debug: DebugApi<E>
+  readonly websearch: WebsearchApi<E>
 }

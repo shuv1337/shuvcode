@@ -12,6 +12,7 @@ import { AbsolutePath } from "@opencode-ai/schema/schema"
 import { Session } from "@opencode-ai/schema/session"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { Workspace } from "@opencode-ai/schema/workspace"
+import { WebSearch } from "@opencode-ai/schema/websearch"
 import { DateTime, Effect, Scope, Stream } from "effect"
 import { Tool } from "../tool/tool"
 
@@ -197,6 +198,31 @@ export function fromPromise(plugin: Plugin) {
             hook: (name, callback) =>
               register(host.tool.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
           },
+          websearch: {
+            providers: (input) => run(host.websearch.providers(input)),
+            query: (input) =>
+              run(
+                host.websearch.query({
+                  ...input,
+                  providerID: input.providerID === undefined ? undefined : WebSearch.ID.make(input.providerID),
+                }),
+              ),
+            reload: () => run(host.websearch.reload()),
+            transform: (callback) =>
+              register(
+                host.websearch.transform((draft) => {
+                  callback({
+                    add: (definition) =>
+                      draft.add({
+                        id: definition.id,
+                        name: definition.name,
+                        execute: (input) => attempt((signal) => definition.execute(input, { signal })),
+                      }),
+                    default: draft.default,
+                  })
+                }),
+              ),
+          },
           session: {
             hook: (name, callback) =>
               register(host.session.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
@@ -268,6 +294,10 @@ export function fromPromise(plugin: Plugin) {
         yield* Effect.addFinalizer(() => Effect.promise(() => Promise.resolve(cleanup())))
       }),
   })
+}
+
+function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
+  return Effect.tryPromise({ try: evaluate, catch: (cause) => cause })
 }
 
 function model(input: { readonly id: string; readonly providerID: string; readonly variant?: string }) {
