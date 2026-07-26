@@ -7,8 +7,8 @@
     "dev": "bun run generate && blume dev --host --port 3000",
     "build": "bun run generate && blume build && bun script/prepare-cloudflare.ts",
     "deploy": "wrangler deploy --config dist/server/wrangler.json",
-    "generate": "bun script/generate-theme-tokens.ts",
-    "check:generated": "bun script/generate-theme-tokens.ts --check",
+    "generate": "bun script/generate-theme-tokens.ts && bun script/generate-openapi.ts",
+    "check:generated": "bun script/generate-theme-tokens.ts --check && bun script/generate-openapi.ts --check",
     "typecheck": "blume check",
     "validate": "blume validate",
     "doctor": "blume doctor"
