@@ -15,11 +15,7 @@
       "name": "opencode-www-dev",
       "routes": [
         {
-          "pattern": "dev.opencode.ai/v2",
-          "zone_name": "opencode.ai"
-        },
-        {
-          "pattern": "dev.opencode.ai/v2/*",
+          "pattern": "dev.opencode.ai/v2*",
           "zone_name": "opencode.ai"
         }
       ]
@@ -28,11 +24,7 @@
       "name": "opencode-www",
       "routes": [
         {
-          "pattern": "opencode.ai/v2",
-          "zone_name": "opencode.ai"
-        },
-        {
-          "pattern": "opencode.ai/v2/*",
+          "pattern": "opencode.ai/v2*",
           "zone_name": "opencode.ai"
         }
       ]
