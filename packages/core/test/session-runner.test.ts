@@ -16,6 +16,7 @@ import {
 } from "@opencode-ai/ai"
 import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
 import { Catalog } from "@opencode-ai/core/catalog"
+import { CodeModeCatalog } from "@opencode-ai/core/codemode/catalog"
 import { Database } from "@opencode-ai/core/database/database"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -141,6 +142,10 @@ const reply = {
 }
 const model = Model.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
 const defaultSystem = PROMPT_DEFAULT
+const emptyCodeModeGuidance =
+  "No Code Mode tools are currently available. Later Code Mode catalog updates may add or remove tools. Do not call `execute` unless there is at least one available Code Mode tool."
+const withCodeModeGuidance = (...instructions: ReadonlyArray<string>) =>
+  [instructions[0], emptyCodeModeGuidance, ...instructions.slice(1)].join("\n\n")
 const replacementModel = Model.make({ id: "replacement", provider: "fake", route: OpenAIChat.route })
 const compactModel = Model.make({
   id: "compact",
@@ -860,7 +865,7 @@ describe("SessionRunnerLLM", () => {
             {
               type: "tool",
               id: "call-removed",
-              state: { status: "error", error: { type: "tool.unknown" } },
+              state: { status: "error", error: { type: "tool.execution" } },
             },
           ],
         },
@@ -1105,7 +1110,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests).toHaveLength(1)
       expect(requests[0]?.model).toBe(model)
-      expect(requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+      expect(requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail", "execute"])
       expect(requests[0]?.messages.map((message) => ({ role: message.role, content: message.content }))).toEqual([
         { role: "user", content: [{ type: "text", text: "First" }] },
         { role: "user", content: [{ type: "text", text: "Second" }] },
@@ -1221,7 +1226,10 @@ describe("SessionRunnerLLM", () => {
       yield* session.prompt({ sessionID: forked.id, text: "Forked", resume: false })
       yield* session.resume(forked.id)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        defaultSystem,
+        withCodeModeGuidance("Initial context"),
+      ])
       expect(systemTexts(requests.at(-1)!)).toContain("Changed context")
       expect(systemTexts(requests.at(-1)!)).toContain("Latest context")
 
@@ -1293,7 +1301,10 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests).toHaveLength(1)
-      expect(requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, "Initial context"])
+      expect(requests[0]?.system.map((part) => part.text)).toEqual([
+        defaultSystem,
+        withCodeModeGuidance("Initial context"),
+      ])
       expect(requests[0]?.messages.map((message) => message.role)).toEqual(["user", "user"])
       expect(
         yield* db
@@ -1320,8 +1331,8 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(requests[1]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
       expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Changed context" }])
@@ -1337,7 +1348,10 @@ describe("SessionRunnerLLM", () => {
       expect(updates).toHaveLength(2)
       expect(updates[0]?.data).toEqual({
         sessionID,
-        delta: { "test/context": Instructions.hash("Initial context") },
+        delta: {
+          "test/context": Instructions.hash("Initial context"),
+          "core/codemode": Instructions.hash(CodeModeCatalog.summarize([])),
+        },
       })
       expect(updates[1]?.data).toEqual({
         sessionID,
@@ -1359,7 +1373,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
         expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
-        "Initial context",
+        withCodeModeGuidance("Initial context"),
       ])
     }),
   )
@@ -1382,7 +1396,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
         expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
-        "Initial context",
+        withCodeModeGuidance("Initial context"),
       ])
     }),
   )
@@ -1402,7 +1416,10 @@ describe("SessionRunnerLLM", () => {
       response = reply.text("Done", "text-build")
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Build agent instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
     }),
   )
 
@@ -1426,7 +1443,10 @@ describe("SessionRunnerLLM", () => {
       response = reply.text("Done", "text-reviewer")
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Reviewer instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Reviewer instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
       expect((yield* session.messages({ sessionID }))[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
     }),
   )
@@ -1446,7 +1466,10 @@ describe("SessionRunnerLLM", () => {
       response = reply.text("Done", "text-no-system")
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Build agent instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
     }),
   )
 
@@ -1472,7 +1495,10 @@ describe("SessionRunnerLLM", () => {
       response = reply.text("Done", "text-selected")
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Reviewer instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Reviewer instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
       expect((yield* session.messages({ sessionID }))[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
     }),
   )
@@ -1548,8 +1574,8 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context\n\nBuild skills"],
-        [defaultSystem, "Initial context\n\nBuild skills"],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
       ])
       expect(systemTexts(requests[1]!)).toContainEqual(expect.stringContaining("Reviewer skills"))
     }),
@@ -1577,7 +1603,7 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context\n\nBuild skills"],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
       ])
     }),
   )
@@ -1602,7 +1628,7 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
       expect(requests.map((request) => request.model)).toEqual([model])
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
     }),
   )
@@ -1637,7 +1663,10 @@ describe("SessionRunnerLLM", () => {
       // String values render verbatim inside the initial tagged block.
       expect(requests[0]?.system.map((part) => part.text)).toEqual([
         defaultSystem,
-        ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
+        withCodeModeGuidance(
+          "Initial context",
+          ['<context key="deploy-target">', "production", "</context>"].join("\n"),
+        ),
       ])
 
       // Non-string JSON pretty-prints; the change narrates as a System update.
@@ -1735,9 +1764,9 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(requests[1]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
       expect(requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -1774,9 +1803,9 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
     }),
   )
@@ -1804,8 +1833,8 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(requests[1]?.messages.map((message) => message.role)).toEqual(["user", "system", "user"])
       expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Replacement context" }])
@@ -2340,7 +2369,10 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       // Compaction already moved current values into the new epoch before the unavailable read.
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, "Changed context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        defaultSystem,
+        withCodeModeGuidance("Changed context"),
+      ])
       expect(systemTexts(requests.at(-1)!)).not.toContain("Changed context")
     }),
   )
@@ -2398,7 +2430,7 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests).toHaveLength(1)
-      expect(requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail"])
+      expect(requests[0]?.tools.map((tool) => tool.name)).toEqual(["defect", "echo", "storefail", "execute"])
       expect(yield* session.context(sessionID)).toMatchObject([
         { type: "user", text: "Use tools" },
         {
@@ -2506,8 +2538,8 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.map((request) => request.model)).toEqual([model, replacementModel])
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(systemTexts(requests[1]!)).toContain("Replacement context")
     }),
@@ -3444,7 +3476,7 @@ describe("SessionRunnerLLM", () => {
               id: "call-missing",
               state: {
                 status: "error",
-                error: { type: "tool.unknown", message: "Unknown tool: missing" },
+                error: { type: "tool.execution", message: "Unknown tool: missing" },
               },
             },
           ],
