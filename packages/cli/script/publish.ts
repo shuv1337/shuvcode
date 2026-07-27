@@ -5,16 +5,12 @@ import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
 import { UpdateArtifact } from "../../../script/update-artifact"
 import { currentRepository, publishPlan } from "../../../script/publish-plan"
-import {
-  forkBunPlatformPackages,
-  forkNodePlatformPackages,
-  planPlatformPackages,
-  preflightForkNpmOwnership,
-} from "./publish-ownership"
+import { preflightForkPublish, type ForkDistribution } from "./publish-ownership"
+import { publishDistributions } from "./publish-order"
 
 const repository = currentRepository()
 const plan = publishPlan(repository)
-await preflightForkNpmOwnership(repository)
+const preflight = await preflightForkPublish(repository, Script.version)
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -30,24 +26,8 @@ async function publish(dir: string, name: string, version: string) {
   await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(dir)
 }
 
-async function planDistribution(input: {
-  root: string
-  name: string
-  binary: string
-  packagePrefix: string
-  packages: readonly string[]
-}) {
-  const binaries: Record<string, string> = {}
-  for (const filepath of new Bun.Glob("*/package.json").scanSync({ cwd: input.root })) {
-    const item = await Bun.file(`${input.root}/${filepath}`).json()
-    if (!item.name.startsWith(input.packagePrefix)) continue
-    binaries[item.name] = item.version
-  }
-  console.log(input.name, "binaries", binaries)
-  return { ...input, ...planPlatformPackages(input.packages, binaries) }
-}
-
-async function publishDistribution(input: Awaited<ReturnType<typeof planDistribution>>) {
+async function prepareDistribution(input: ForkDistribution) {
+  console.log(input.name, "binaries", input.binaries)
   await $`mkdir -p ${input.root}/${input.name}/bin`
   await $`cp ./script/postinstall.mjs ${input.root}/${input.name}/postinstall.mjs`
   await Bun.file(`${input.root}/${input.name}/bin/${input.binary}.exe`).write(
@@ -77,30 +57,9 @@ async function publishDistribution(input: Awaited<ReturnType<typeof planDistribu
       2,
     ),
   )
-
-  await Promise.all(
-    Object.entries(input.binaries).map(([name, version]) => publish(`${input.root}/${name}`, name, version)),
-  )
-  await publish(`${input.root}/${input.name}`, input.name, input.version)
 }
 
-const distributions = await Promise.all([
-  planDistribution({
-    root: "./dist",
-    name: pkg.name,
-    binary: "shuvcode",
-    packagePrefix: "shuvcode-",
-    packages: forkBunPlatformPackages,
-  }),
-  planDistribution({
-    root: "./dist/node",
-    name: "shuvcode-node",
-    binary: "shuvcode-node",
-    packagePrefix: "shuvcode-node-",
-    packages: forkNodePlatformPackages,
-  }),
-])
-for (const distribution of distributions) await publishDistribution(distribution)
+await publishDistributions(preflight.distributions, { prepare: prepareDistribution, publish })
 if (plan.updateArtifacts) {
   await UpdateArtifact.publish({
     channel: Script.channel,

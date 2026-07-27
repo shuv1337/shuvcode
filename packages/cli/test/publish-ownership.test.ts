@@ -6,6 +6,7 @@ import {
   parseNpmMaintainers,
   planForkNpmPublish,
   planPlatformPackages,
+  preflightForkNpmOwnership,
   validateForkNpmOwnership,
 } from "../script/publish-ownership"
 
@@ -58,24 +59,36 @@ describe("fork npm publish ownership", () => {
   })
 
   test("plans a complete coherent artifact set before publication", () => {
-    expect(planPlatformPackages(["a", "b"], { a: "1.0.0", b: "1.0.0" })).toEqual({
+    expect(planPlatformPackages(["a", "b"], { a: "1.0.0", b: "1.0.0" }, "1.0.0")).toEqual({
       binaries: { a: "1.0.0", b: "1.0.0" },
       version: "1.0.0",
     })
-    expect(() => planPlatformPackages(["a", "b"], { a: "1.0.0" })).toThrow("Missing platform packages: b")
-    expect(() => planPlatformPackages(["a"], { a: "1.0.0", b: "1.0.0" })).toThrow(
+    expect(() => planPlatformPackages(["a", "b"], { a: "1.0.0" }, "1.0.0")).toThrow("Missing platform packages: b")
+    expect(() => planPlatformPackages(["a"], { a: "1.0.0", b: "1.0.0" }, "1.0.0")).toThrow(
       "Unexpected platform packages: b",
     )
-    expect(() => planPlatformPackages(["a", "b"], { a: "1.0.0", b: "2.0.0" })).toThrow(
-      "Platform package versions do not match",
+    expect(() => planPlatformPackages(["a", "b"], { a: "1.0.0", b: "2.0.0" }, "1.0.0")).toThrow(
+      "Platform package versions do not match release 1.0.0: b",
+    )
+    expect(() => planPlatformPackages(["a", "b"], { a: "2.0.0", b: "2.0.0" }, "1.0.0")).toThrow(
+      "Platform package versions do not match release 1.0.0: a, b",
     )
   })
 
   test("fails repository planning before ownership parsing", () => {
     const invalid = [{ name: "shuvcode", exitCode: 0, stdout: "not json" }]
-    expect(() => planForkNpmPublish(undefined, invalid)).toThrow(
-      "Publishing is not configured for repository: unknown",
-    )
+    expect(() => planForkNpmPublish(undefined, invalid)).toThrow("Publishing is not configured for repository: unknown")
     expect(planForkNpmPublish(forkRepository, owned()).packages).toEqual(forkNpmPackages)
+  })
+
+  test("fails a missing repository before querying npm", async () => {
+    const queried: string[] = []
+    await expect(
+      preflightForkNpmOwnership(undefined, async (name) => {
+        queried.push(name)
+        throw new Error("must not query")
+      }),
+    ).rejects.toThrow("Publishing is not configured for repository: unknown")
+    expect(queried).toEqual([])
   })
 })

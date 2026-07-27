@@ -30,23 +30,25 @@ The first 13 names already exist under the expected npm maintainer, `kcrommett`.
 
 After every package exists, configure its npm trusted publisher with these exact values:
 
-| Field | Value |
-| --- | --- |
-| Provider | GitHub Actions |
-| Organization | `Latitudes-Dev` |
-| Repository | `shuvcode` |
-| Workflow filename | `publish.yml` |
-| Environment | none |
+| Field             | Value           |
+| ----------------- | --------------- |
+| Provider          | GitHub Actions  |
+| Organization      | `Latitudes-Dev` |
+| Repository        | `shuvcode`      |
+| Workflow filename | `publish.yml`   |
+| Environment       | none            |
 
 The workflow has `id-token: write`, runs Node 24 with npm 11.5.1, and does not set `NODE_AUTH_TOKEN`. GitHub release, generated-note, tag, and push operations use the built-in `github.token`; no OPENCODE_APP credential or AI changelog secret is required.
 
 ## Preflight and retry behavior
 
-`packages/cli/script/preflight-publish.ts` queries the maintainer response for all 19 package names and validates the complete set before the workflow creates a draft release. `packages/cli/script/publish.ts` repeats that same complete preflight, then validates the exact 12 Bun and five Node platform manifests and their versions before changing `dist`, packing, checking already-published versions, or publishing.
+`packages/cli/script/preflight-publish.ts` queries the maintainer response for all 19 package names and validates the complete set before the workflow creates a draft release. The root publisher repeats the authoritative CLI preflight before git detach, package rewrites, installation, or any other mutation. That preflight also requires every one of the exact 12 Bun and five Node platform manifests to match the requested release version. The CLI then prepares both wrappers, publishes all 17 platform packages, and only after every platform succeeds publishes `shuvcode` followed by `shuvcode-node`.
 
 The release fails closed when the repository is missing or unknown, a package is missing or unavailable, npm returns malformed ownership data, a package response is omitted or duplicated, or `kcrommett` is not a maintainer. The six Node names therefore block every release until the manual bootstrap is complete.
 
-Version idempotence applies only after ownership succeeds. A retry skips an exact package version that already exists, publishes missing versions, and publishes each umbrella package after its platform packages.
+Version idempotence applies only after the complete preflight succeeds. Redispatching the same explicit version, or the same bump while the latest published version is unchanged, reuses an existing fork draft only when its tag name, title, target commit, and any existing tag target exactly match. A published release, a mismatched draft, or an unrelated tag fails without being overwritten. Reused drafts retain their generated notes because the target release is unchanged. npm retries skip exact package versions that already exist, publish missing platform versions, and defer both umbrellas until all platform versions exist.
+
+npm publication is unavoidably non-transactional: a failure can leave an immutable subset of the 19 versions published. After correcting the cause, rerun the same release input so exact versions are reconciled and only missing packages are published; never choose a new version merely to hide a partial publication.
 
 ## Release procedure
 

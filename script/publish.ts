@@ -5,14 +5,16 @@ import { $ } from "bun"
 import { fileURLToPath } from "url"
 import { UpdateArtifact } from "./update-artifact"
 import { currentRepository, forkRepository, publishPlan } from "./publish-plan"
+import { preflightForkPublish } from "../packages/cli/script/publish-ownership"
 
 console.log("=== publishing ===\n")
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
-process.chdir(dir)
 const tag = `v${Script.version}`
 const repository = currentRepository()
 const plan = publishPlan(repository)
+if (repository === forkRepository) await preflightForkPublish(repository, Script.version)
+process.chdir(dir)
 
 const pkgjsons = await Array.fromAsync(
   new Bun.Glob("**/package.json").scan({
