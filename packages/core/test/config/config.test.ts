@@ -484,7 +484,7 @@ describe("Config", () => {
           const config = yield* Config.Service
           const entries = yield* config.entries()
 
-          expect(entries).toEqual([
+          expect(entries.filter((entry) => entry.path?.startsWith(`${tmp.path}${path.sep}`) === true)).toEqual([
             new Config.Directory({ type: "directory", path: AbsolutePath.make(path.join(tmp.path, "global")) }),
           ])
         }).pipe(Effect.provide(testLayer(tmp.path))),
@@ -1155,19 +1155,20 @@ describe("Config", () => {
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
             const entries = yield* config.entries()
-            const documents = entries.filter((entry) => entry.type === "document")
+            const owned = entries.filter((entry) => entry.path?.startsWith(`${tmp.path}${path.sep}`) === true)
+            const documents = owned.filter((entry) => entry.type === "document")
 
-            expect(entries.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(global),
               AbsolutePath.make(path.join(root, ".opencode")),
               AbsolutePath.make(path.join(directory, ".opencode")),
             ])
-            expect(entries.filter((entry) => entry.type === "agents").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "agents").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(globalAgents),
               AbsolutePath.make(path.join(directory, ".agents")),
               AbsolutePath.make(path.join(root, ".agents")),
             ])
-            expect(entries.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(globalClaude),
               AbsolutePath.make(path.join(directory, ".claude")),
               AbsolutePath.make(path.join(root, ".claude")),
@@ -1181,7 +1182,7 @@ describe("Config", () => {
               "root-dot",
               "directory-dot",
             ])
-            expect(entries.map((entry) => (entry.type === "document" ? entry.info.$schema : entry.path))).toEqual([
+            expect(owned.map((entry) => (entry.type === "document" ? entry.info.$schema : entry.path))).toEqual([
               AbsolutePath.make(globalClaude),
               AbsolutePath.make(path.join(directory, ".claude")),
               AbsolutePath.make(path.join(root, ".claude")),

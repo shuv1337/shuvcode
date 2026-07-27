@@ -17,13 +17,22 @@ import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { Model } from "@opencode-ai/core/model"
 import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Global } from "@opencode-ai/util/global"
 import { Effect, Logger } from "effect"
 import { Database } from "../../src/database/database"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node])),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node]), [
+    [
+      Global.node,
+      Global.layerWith({
+        config: path.join(import.meta.dir, "fixtures", "global", "config"),
+        home: path.join(import.meta.dir, "fixtures", "global", "home"),
+      }),
+    ],
+  ]),
 )
 
 describe("PluginSupervisor config", () => {
@@ -303,7 +312,7 @@ function withLocation<A, E, R>(
 }
 
 function mutablePlugin(description: string) {
-  const plugin = pathToFileURL(path.join(import.meta.dir, "../../../plugin/src/index.ts")).href
+  const plugin = pathToFileURL(path.join(import.meta.dir, "../../../plugin/src/promise/index.ts")).href
   return `
 import { Plugin } from ${JSON.stringify(plugin)}
 
