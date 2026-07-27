@@ -1,7 +1,18 @@
 import { describe, expect } from "bun:test"
 import { Effect, Schema, Stream } from "effect"
 import { HttpClientRequest } from "effect/unstable/http"
-import { LLM, LLMError, LLMEvent, Message, Model, ToolCallPart, Usage } from "../../src"
+import {
+  HttpOptions,
+  LLM,
+  LLMError,
+  LLMEvent,
+  LLMRequest,
+  Message,
+  Model,
+  ToolCallPart,
+  ToolDefinition,
+  Usage,
+} from "../../src"
 import * as Azure from "../../src/providers/azure"
 import * as OpenAI from "../../src/providers/openai"
 import * as OpenAIChat from "../../src/protocols/openai-chat"
@@ -92,6 +103,45 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("writes reasoning to a configured custom field on every assistant message", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
+        LLM.request({
+          model: Model.update(model, { compatibility: { reasoningField: "vendor_reasoning" } }),
+          messages: [
+            Message.assistant([
+              {
+                type: "reasoning",
+                text: "thinking",
+                providerMetadata: { openai: { reasoningField: "reasoning" } },
+              },
+              { type: "text", text: "Hello" },
+            ]),
+            Message.assistant("Done"),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        { role: "assistant", content: "Hello", vendor_reasoning: "thinking" },
+        { role: "assistant", content: "Done", vendor_reasoning: "" },
+      ])
+    }),
+  )
+
+  it.effect("rejects reasoning fields that conflict with assistant message fields", () =>
+    Effect.gen(function* () {
+      const error = yield* LLMClient.prepare(
+        LLM.request({
+          model: Model.update(model, { compatibility: { reasoningField: "content" } }),
+          messages: [Message.assistant([{ type: "reasoning", text: "thinking" }])],
+        }),
+      ).pipe(Effect.flip)
+
+      expect(error.message).toContain("reserved field content")
+    }),
+  )
+
   it.effect("maps OpenAI provider options to Chat options", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
@@ -123,7 +173,7 @@ describe("OpenAI Chat route", () => {
 
   it.effect("adds native query params to the Chat Completions URL", () =>
     LLMClient.generate(
-      LLM.updateRequest(request, {
+      LLMRequest.update(request, {
         model: Model.update(model, { route: model.route.with({ endpoint: { query: { "api-version": "v1" } } }) }),
       }),
     ).pipe(
@@ -143,7 +193,7 @@ describe("OpenAI Chat route", () => {
 
   it.effect("uses Azure api-key header for static OpenAI Chat keys", () =>
     LLMClient.generate(
-      LLM.updateRequest(request, {
+      LLMRequest.update(request, {
         model: Azure.configure({
           baseURL: "https://opencode-test.openai.azure.com/openai/v1/",
           apiKey: "azure-key",
@@ -169,15 +219,15 @@ describe("OpenAI Chat route", () => {
 
   it.effect("applies serializable HTTP overlays after payload lowering", () =>
     LLMClient.generate(
-      LLM.updateRequest(request, {
+      LLMRequest.update(request, {
         model: model.route
           .with({ auth: Auth.bearer("fresh-key"), headers: { authorization: "Bearer stale" } })
           .model({ id: model.id }),
-        http: {
+        http: HttpOptions.make({
           body: { metadata: { source: "test" } },
           headers: { authorization: "Bearer request", "x-custom": "yes" },
           query: { debug: "1" },
-        },
+        }),
       }),
     ).pipe(
       Effect.provide(
@@ -500,7 +550,7 @@ describe("OpenAI Chat route", () => {
           prompt_tokens: 5,
           completion_tokens: 2,
           total_tokens: 7,
-          prompt_tokens_details: { cached_tokens: 1 },
+          prompt_tokens_details: { cached_tokens: 1, cache_write_tokens: 2 },
           completion_tokens_details: { reasoning_tokens: 0 },
         }),
       )
@@ -508,8 +558,9 @@ describe("OpenAI Chat route", () => {
       const usage = new Usage({
         inputTokens: 5,
         outputTokens: 2,
-        nonCachedInputTokens: 4,
+        nonCachedInputTokens: 2,
         cacheReadInputTokens: 1,
+        cacheWriteInputTokens: 2,
         reasoningTokens: 0,
         totalTokens: 7,
         providerMetadata: {
@@ -517,7 +568,7 @@ describe("OpenAI Chat route", () => {
             prompt_tokens: 5,
             completion_tokens: 2,
             total_tokens: 7,
-            prompt_tokens_details: { cached_tokens: 1 },
+            prompt_tokens_details: { cached_tokens: 1, cache_write_tokens: 2 },
             completion_tokens_details: { reasoning_tokens: 0 },
           },
         },
@@ -530,10 +581,16 @@ describe("OpenAI Chat route", () => {
         { type: "text-delta", id: "text-0", text: "Hello" },
         { type: "text-delta", id: "text-0", text: "!" },
         { type: "text-end", id: "text-0" },
-        { type: "step-finish", index: 0, reason: "stop", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "stop", raw: "stop" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "stop",
+          reason: { normalized: "stop", raw: "stop" },
           usage,
         },
       ])
@@ -570,6 +627,33 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("parses and replays a configured custom reasoning field", () =>
+    Effect.gen(function* () {
+      const custom = Model.update(model, { compatibility: { reasoningField: "vendor_reasoning" } })
+      const response = yield* LLMClient.generate(LLMRequest.update(request, { model: custom })).pipe(
+        Effect.provide(
+          fixedResponse(
+            sseEvents(
+              { choices: [{ delta: { vendor_reasoning: "thinking" } }] },
+              { choices: [{ delta: { content: "Hello" } }] },
+              { choices: [{ delta: {}, finish_reason: "stop" }] },
+            ),
+          ),
+        ),
+      )
+
+      expect(response.reasoning).toBe("thinking")
+      expect(response.message.content.find((part) => part.type === "reasoning")?.providerMetadata).toEqual({
+        openai: { reasoningField: "vendor_reasoning" },
+      })
+
+      const replay = yield* LLMClient.prepare<OpenAIChat.OpenAIChatBody>(
+        LLM.request({ model: custom, messages: [response.message] }),
+      )
+      expect(replay.body.messages).toEqual([{ role: "assistant", content: "Hello", vendor_reasoning: "thinking" }])
+    }),
+  )
+
   it.effect("preserves and replays reasoning details alongside scalar reasoning", () =>
     Effect.gen(function* () {
       const details = [
@@ -577,8 +661,8 @@ describe("OpenAI Chat route", () => {
         { type: "reasoning.encrypted", data: "opaque", format: "anthropic-claude-v1", index: 1 },
       ]
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(
         Effect.provide(
@@ -950,8 +1034,8 @@ describe("OpenAI Chat route", () => {
         deltaChunk({}, "tool_calls"),
       )
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
 
@@ -969,8 +1053,14 @@ describe("OpenAI Chat route", () => {
           providerExecuted: undefined,
           providerMetadata: undefined,
         },
-        { type: "step-finish", index: 0, reason: "tool-calls", usage: undefined, providerMetadata: undefined },
-        { type: "finish", reason: "tool-calls", usage: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "tool-calls", raw: "tool_calls" },
+          usage: undefined,
+          providerMetadata: undefined,
+        },
+        { type: "finish", reason: { normalized: "tool-calls", raw: "tool_calls" }, usage: undefined },
       ])
     }),
   )
@@ -987,8 +1077,8 @@ describe("OpenAI Chat route", () => {
         deltaChunk({}, "tool_calls"),
       )
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
 
@@ -1009,8 +1099,8 @@ describe("OpenAI Chat route", () => {
         deltaChunk({}, "tool_calls"),
       )
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
 
@@ -1027,8 +1117,8 @@ describe("OpenAI Chat route", () => {
         deltaChunk({}, "tool_calls"),
       )
       const error = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)), Effect.flip)
 
@@ -1045,8 +1135,8 @@ describe("OpenAI Chat route", () => {
         }),
         deltaChunk({ tool_calls: [{ index: 0, function: { arguments: ':"weather"}' } }] }),
       )
-      const input = LLM.updateRequest(request, {
-        tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+      const input = LLMRequest.update(request, {
+        tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
       })
       const events: LLMEvent[] = []
       const streamError = yield* LLMClient.stream(input).pipe(

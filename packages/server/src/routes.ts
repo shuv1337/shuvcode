@@ -3,19 +3,18 @@ import { App } from "@opencode-ai/core/app"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { EventLogger } from "@opencode-ai/core/event-logger"
 import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
 import { Observability } from "@opencode-ai/util/observability"
 import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
-import { CommandV2 } from "@opencode-ai/core/command"
+import { Command } from "@opencode-ai/core/command"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { Pairing } from "@opencode-ai/core/pairing"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { Pty } from "@opencode-ai/core/pty"
 import { Project } from "@opencode-ai/core/project"
-import { SessionV2 } from "@opencode-ai/core/session"
+import { Session } from "@opencode-ai/core/session"
 import { Shell } from "@opencode-ai/core/shell"
 import { Job } from "@opencode-ai/core/job"
 import { MCP } from "@opencode-ai/core/mcp/index"
@@ -26,7 +25,6 @@ import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { WellKnown } from "@opencode-ai/core/wellknown"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { HttpRouter } from "effect/unstable/http"
@@ -35,7 +33,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { Api } from "./api"
 import { ServerAuth } from "./auth"
 import { handlers } from "./handlers"
-import { authorizationLayer, Principal } from "./middleware/authorization"
+import { authorizationLayer } from "./middleware/authorization"
 import { schemaErrorLayer } from "./middleware/schema-error"
 import { PtyEnvironment } from "./pty-environment"
 import { layer } from "./location"
@@ -46,19 +44,17 @@ import type { ServerOptions } from "./options"
 
 const applicationServices = LayerNode.group([
   Database.node,
-  EventV2.node,
+  Bus.node,
   EventLogger.node,
   httpClient,
-  ToolOutputStore.cleanupNode,
   Job.node,
   Project.node,
-  SessionV2.node,
+  Session.node,
   PluginRuntime.providerNode,
   SdkPlugins.node,
   PermissionSaved.node,
   PtyTicket.node,
   Credential.node,
-  Pairing.node,
   WellKnown.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
@@ -101,7 +97,7 @@ function makeRoutes<AuthError, AuthServices>(
       }),
     ],
     [InstructionDiscovery.node, InstructionDiscovery.configured({ project: options.config?.project })],
-    [CommandV2.node, CommandV2.configured({ gitbash: options.windows?.gitbash })],
+    [Command.node, Command.configured({ gitbash: options.windows?.gitbash })],
     [Pty.node, Pty.configured({ gitbash: options.windows?.gitbash })],
     [Shell.node, Shell.configured({ gitbash: options.windows?.gitbash })],
     [
@@ -125,16 +121,21 @@ function makeRoutes<AuthError, AuthServices>(
         }),
       )
     : AppNodeBuilder.build(applicationServices, replacements)
+  const observability = Observability.layer({
+    ...options.observability,
+    client: options.app?.name,
+    version: options.app?.version,
+    channel: options.app?.channel,
+  })
 
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
       const requestServices = Layer.mergeAll(
         Layer.succeedContext(
-          Context.pick(PermissionSaved.Service, Project.Service, Pairing.Service, WellKnown.Service)(context),
+          Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context),
         ),
         ServerInfo.layer(serviceURLs, options.app),
-        Layer.succeed(Principal, { type: "unauthenticated", reason: "embedded" }),
       )
       const routes = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),
@@ -144,25 +145,16 @@ function makeRoutes<AuthError, AuthServices>(
         Layer.provide(authorizationLayer.pipe(Layer.provide(services))),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
-        Layer.provide(
-          Observability.layer({
-            ...options.observability,
-            client: options.app?.name,
-            version: options.app?.version,
-            channel: options.app?.channel,
-          }),
-        ),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
       )
-      // Effect's provideRequest distributes the provided service union, but the HttpApi builder combines
-      // Pairing and ServerInfo into one request marker. Runtime middleware supplies the full context above.
       return routes as Layer.Layer<
         Layer.Success<typeof routes>,
         Layer.Error<typeof routes>,
-        Exclude<Layer.Services<typeof routes>, HttpRouter.Request<"Requires", Pairing.Service | ServerInfo.Service>>
+        Exclude<Layer.Services<typeof routes>, HttpRouter.Request<"Requires", ServerInfo.Service>>
       >
     }),
+    Layer.provide(observability),
   )
 }

@@ -59,7 +59,12 @@ export const runTools = <T extends Tools>(options: RunOptions<T>) =>
             ...request.messages,
             Message.assistant(state.assistantContent),
             ...dispatched.map(([call, dispatched]) =>
-              Message.tool({ id: call.id, name: call.name, result: dispatched.result }),
+              Message.tool({
+                id: call.id,
+                name: call.name,
+                result: dispatched.result,
+                providerMetadata: call.providerMetadata,
+              }),
             ),
           ],
         })
@@ -78,7 +83,7 @@ const indexStep = (event: LLMEvent, index: number): LLMEvent => {
 const stepState = (events: ReadonlyArray<LLMEvent>) => {
   const assistantContent: ContentPart[] = []
   const toolCalls: ToolCallPart[] = []
-  let reason: Extract<LLMEvent, { type: "finish" }>["reason"] = "unknown"
+  let reason: Extract<LLMEvent, { type: "finish" }>["reason"] = { normalized: "unknown" }
   let usage: Usage | undefined
   let providerMetadata: ProviderMetadata | undefined
 

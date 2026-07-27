@@ -10,6 +10,7 @@ import type {
   FooterSubagentTab,
   MiniSettingChange,
   MiniSettings,
+  RunAgent,
   RunCommand,
   RunInput,
   RunProvider,
@@ -21,6 +22,7 @@ type PanelEntry = RunFooterMenuItem & {
 }
 
 type CommandEntry =
+  | (PanelEntry & { action: "agent" })
   | (PanelEntry & { action: "model" })
   | (PanelEntry & { action: "editor" })
   | (PanelEntry & { action: "skill" })
@@ -40,6 +42,11 @@ type ModelEntry = PanelEntry & {
   current: boolean
 }
 
+type AgentEntry = PanelEntry & {
+  id: string
+  current: boolean
+}
+
 type VariantEntry = PanelEntry & {
   variant: string | undefined
   current: boolean
@@ -52,10 +59,6 @@ type SkillEntry = PanelEntry & {
 type SubagentEntry = PanelEntry & {
   sessionID: string
   current: boolean
-}
-
-type QueuedEntry = PanelEntry & {
-  prompt: FooterQueuedPrompt
 }
 
 type SettingEntry = PanelEntry & {
@@ -90,18 +93,6 @@ function countLabel(count: number, total: number, query: string) {
   }
 
   return `${count}/${total}`
-}
-
-function categoryRank(category: string) {
-  if (category === "Project Commands") {
-    return 0
-  }
-
-  if (category === "MCP Commands") {
-    return 1
-  }
-
-  return 2
 }
 
 function subagentStatusLabel(status: FooterSubagentTab["status"]) {
@@ -357,6 +348,7 @@ export function RunCommandMenuBody(props: {
   variants: Accessor<string[]>
   variantCycle: string
   onClose: () => void
+  onAgent: () => void
   onModel: () => void
   onEditor: () => void
   onSkill: () => void
@@ -374,7 +366,6 @@ export function RunCommandMenuBody(props: {
   const skills = createMemo(() => (props.commands() ?? []).filter((item) => item.source === "skill"))
   const activeSubagentCount = createMemo(() => props.subagents().filter((item) => item.status === "running").length)
   const entries = createMemo<CommandEntry[]>(() => {
-    const builtins = ["editor", "new", "settings"]
     const session: CommandEntry[] = [
       {
         action: "editor",
@@ -407,6 +398,14 @@ export function RunCommandMenuBody(props: {
       {
         action: "slash",
         category: "Session",
+        name: "compact",
+        display: "Compact session",
+        footer: "/compact",
+        keywords: "compact summarize session context",
+      },
+      {
+        action: "slash",
+        category: "Session",
         name: "new",
         display: "New session",
         footer: "/new",
@@ -428,6 +427,11 @@ export function RunCommandMenuBody(props: {
         ]
         : []
     const agent: CommandEntry[] = [
+      {
+        action: "agent",
+        category: "Agent",
+        display: "Switch agent",
+      },
       {
         action: "model",
         category: "Agent",
@@ -465,29 +469,10 @@ export function RunCommandMenuBody(props: {
         ]
         : []),
     ]
-    const commands = (props.commands() ?? [])
-      .filter((item) => item.source !== "skill" && !builtins.includes(item.name))
-      .map(
-        (item) =>
-          ({
-            action: "slash",
-            category: item.source === "mcp" ? "MCP Commands" : "Project Commands",
-            name: item.name,
-            display: item.name,
-            footer: `/${item.name}`,
-            keywords:
-              item.source === "mcp"
-                ? `/${item.name} ${item.name} mcp ${item.description ?? ""}`
-                : `/${item.name} ${item.name} ${item.description ?? ""}`,
-          }) satisfies CommandEntry,
-      )
-      .sort((a, b) => categoryRank(a.category) - categoryRank(b.category) || a.display.localeCompare(b.display))
-
     return [
       ...session,
       ...prompt,
       ...agent,
-      ...commands,
       {
         action: "settings",
         category: "System",
@@ -499,6 +484,11 @@ export function RunCommandMenuBody(props: {
     ]
   })
   const pick = (item: CommandEntry) => {
+    if (item.action === "agent") {
+      props.onAgent()
+      return
+    }
+
     if (item.action === "model") {
       props.onModel()
       return
@@ -596,6 +586,67 @@ export function RunCommandMenuBody(props: {
   )
 }
 
+export function RunAgentSelectBody(props: {
+  theme: Accessor<RunFooterTheme>
+  agents: Accessor<RunAgent[]>
+  current: Accessor<string | undefined>
+  onClose: () => void
+  onSelect: (agent: string) => void
+  mono?: boolean
+}) {
+  const entries = createMemo<AgentEntry[]>(() =>
+    props
+      .agents()
+      .filter((agent) => agent.mode !== "subagent" && !agent.hidden)
+      .map((agent) => ({
+        category: "",
+        display: agent.id,
+        description: agent.description,
+        footer: props.current() === agent.id ? "current" : undefined,
+        keywords: `${agent.id} ${agent.name} ${agent.description ?? ""}`,
+        id: agent.id,
+        current: props.current() === agent.id,
+      })),
+  )
+  const controller = createSearchablePanelController({
+    entries,
+    limit: PANEL_LIST_ROWS,
+    onClose: props.onClose,
+    onSelect: (item) => props.onSelect(item.id),
+    isCurrent: (item) => item.current,
+  })
+
+  return (
+    <PanelShell
+      title="Select agent"
+      query={controller.query()}
+      count={controller.items().length}
+      total={entries().length}
+      placeholder="Search"
+      theme={props.theme}
+      inputRef={controller.inputRef}
+      onQuery={controller.setQuery}
+      mono={props.mono}
+    >
+      <RunFooterMenu
+        theme={props.theme}
+        items={controller.items}
+        selected={controller.menu.selected}
+        offset={controller.menu.offset}
+        rows={() => PANEL_LIST_ROWS}
+        limit={PANEL_LIST_ROWS}
+        empty="No agents found"
+        border={false}
+        paddingLeft={panelPad(props.mono)}
+        paddingRight={panelPad(props.mono)}
+        grouped={false}
+        background
+        mono={props.mono}
+      />
+    </PanelShell>
+  )
+}
+
 export function RunSettingsBody(props: {
   theme: Accessor<RunFooterTheme>
   settings: Accessor<MiniSettings>
@@ -632,6 +683,13 @@ export function RunSettingsBody(props: {
       footer: saving() === "footer" ? "saving" : props.settings().footer,
       keywords: `footer status activity model context usage ${props.settings().footer}`,
       key: "footer",
+    },
+    {
+      category: "Terminal",
+      display: "Splash",
+      footer: saving() === "splash" ? "saving" : props.settings().splash,
+      keywords: `splash entry exit banner ${props.settings().splash}`,
+      key: "splash",
     },
     {
       category: "Terminal",
@@ -771,13 +829,12 @@ export function RunQueuedPromptSelectBody(props: {
   onRows?: (rows: number) => void
   mono?: boolean
 }) {
-  const entries = createMemo<QueuedEntry[]>(() =>
+  const entries = createMemo(() =>
     props.prompts().map((prompt) => ({
       category: "",
       display: prompt.prompt.text.replaceAll("\n", " "),
       footer: prompt.delivery,
       keywords: prompt.prompt.text,
-      prompt,
     })),
   )
   const controller = createSearchablePanelController({
@@ -1012,7 +1069,11 @@ export function RunModelSelectBody(props: {
     >
       <RunFooterMenu
         theme={props.theme}
-        items={controller.items}
+        items={() =>
+          controller.query().trim()
+            ? controller.items().map((item) => ({ ...item, footer: item.providerName }))
+            : controller.items()
+        }
         selected={controller.menu.selected}
         offset={controller.menu.offset}
         rows={() => PANEL_LIST_ROWS}

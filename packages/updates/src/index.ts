@@ -11,6 +11,7 @@ type ArtifactRow = {
   version: string
   metadata: string
   active: number
+  time_created: number
   time_updated: number
 }
 
@@ -25,7 +26,7 @@ type ArtifactInput = Pick<ArtifactRow, "channel" | "name" | "distribution" | "ve
 
 const identifier = /^[a-zA-Z0-9._-]{1,64}$/
 const version = /^[a-zA-Z0-9.+_-]{1,128}$/
-const select = "SELECT channel, name, distribution, version, metadata, active, time_updated FROM artifact"
+const select = "SELECT channel, name, distribution, version, metadata, active, time_created, time_updated FROM artifact"
 const audience = "https://update.opencode.ai"
 const githubKeys = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"))
 
@@ -35,7 +36,6 @@ export default {
 
     if (url.pathname === "/") return json({ service: "opencode-updates" })
     if (url.pathname === "/admin" && request.method === "GET") return admin(request, env)
-    if (url.pathname === "/admin/artifact" && request.method === "POST") return registerArtifact(request, env)
     if (url.pathname === "/admin/activate" && request.method === "POST") return activateArtifact(request, env)
     if (url.pathname === "/api/publish" && request.method === "POST") return publishArtifact(request, env)
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 })
@@ -43,6 +43,23 @@ export default {
     const segments = url.pathname.split("/").filter(Boolean)
     if (segments.length === 2 && segments[0] === "api" && validIdentifier(segments[1])) {
       return channel(env.DB, segments[1])
+    }
+    if (
+      segments.length === 3 &&
+      segments[0] === "api" &&
+      validIdentifier(segments[1]) &&
+      validIdentifier(segments[2])
+    ) {
+      return artifactName(env.DB, segments[1], segments[2])
+    }
+    if (
+      segments.length === 4 &&
+      segments[0] === "api" &&
+      validIdentifier(segments[1]) &&
+      validIdentifier(segments[2]) &&
+      validIdentifier(segments[3])
+    ) {
+      return artifactDistribution(env.DB, segments[1], segments[2], segments[3])
     }
     return new Response("Not found", { status: 404 })
   },
@@ -57,8 +74,36 @@ async function channel(db: D1Database, channel: string) {
   return cached({ channel, artifacts: result.results.map(decodeArtifact) })
 }
 
+async function artifactName(db: D1Database, channel: string, name: string) {
+  const result = await db
+    .prepare(`${select} WHERE channel = ? AND name = ? AND active = 1 ORDER BY distribution`)
+    .bind(channel, name)
+    .all<ArtifactRow>()
+  if (!result.results.length) return json({ error: "Artifact not found" }, 404)
+  return cached({ channel, name, artifacts: result.results.map(decodeArtifact) })
+}
+
+async function artifactDistribution(db: D1Database, channel: string, name: string, distribution: string) {
+  const artifact = await db
+    .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND active = 1`)
+    .bind(channel, name, distribution)
+    .first<ArtifactRow>()
+  if (!artifact) return json({ error: "Artifact not found" }, 404)
+  return cached(decodeArtifact(artifact))
+}
+
 async function admin(request: Request, env: Env) {
-  const result = await env.DB.prepare(`${select} ORDER BY channel, name, distribution, active DESC, time_updated DESC`).all<ArtifactRow>()
+  const url = new URL(request.url)
+  const requestedPage = Number.parseInt(url.searchParams.get("page") ?? "1", 10)
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  const pageSize = 100
+  const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM artifact").first<{ total: number }>()
+  const pages = Math.max(1, Math.ceil((count?.total ?? 0) / pageSize))
+  const currentPage = Math.min(page, pages)
+  const result = await env.DB
+    .prepare(`${select} ORDER BY time_created DESC LIMIT ? OFFSET ?`)
+    .bind(pageSize, (currentPage - 1) * pageSize)
+    .all<ArtifactRow>()
   const rows = result.results
     .map(
       (artifact) => `<tr>
@@ -66,8 +111,8 @@ async function admin(request: Request, env: Env) {
         <td><code>${escape(artifact.name)}</code></td>
         <td><code>${escape(artifact.distribution)}</code></td>
         <td><code>${escape(artifact.version)}</code></td>
-        <td>${artifact.active ? '<span class="badge">Active</span>' : '<span class="badge" data-variant="secondary">History</span>'}</td>
-        <td>${new Date(artifact.time_updated).toISOString()}</td>
+        <td>${new Date(artifact.time_created).toISOString()}</td>
+        <td>${artifact.active ? '<span class="badge">Active</span>' : '<span class="badge" data-variant="secondary">Inactive</span>'}</td>
         <td>
           ${
             artifact.active
@@ -105,11 +150,10 @@ async function admin(request: Request, env: Env) {
     th { color: var(--muted-foreground); font-size: .75rem; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; }
     tbody tr:last-child td { border-bottom: 0; }
     td form { margin: 0; }
-    .publish { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
-    .publish .metadata { grid-column: 1 / -1; }
-    textarea { min-height: 9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .actions { display: flex; justify-content: end; grid-column: 1 / -1; }
-    @media (max-width: 760px) { main { padding: 2rem 0; } .masthead { align-items: start; flex-direction: column; } .publish { grid-template-columns: 1fr; } .publish .metadata, .actions { grid-column: 1; } }
+    .pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--border); padding: 1rem; }
+    .pagination p { color: var(--muted-foreground); font-size: .875rem; }
+    .pagination nav { display: flex; gap: .5rem; }
+    @media (max-width: 760px) { main { padding: 2rem 0; } .masthead { align-items: start; flex-direction: column; } }
   </style>
 </head>
 <body>
@@ -119,48 +163,26 @@ async function admin(request: Request, env: Env) {
       <span class="badge" data-variant="outline">${escape(request.headers.get("Cf-Access-Authenticated-User-Email") ?? "Cloudflare Access pending")}</span>
     </header>
     <article class="card">
-      <header><h2>Published artifacts</h2><p>Activate any successfully published version without changing its metadata.</p></header>
+      <header><h2>Published builds</h2><p>Every build received from the trusted publishing workflow, newest first.</p></header>
       <section class="table-wrap">
         <table>
-          <thead><tr><th>Channel</th><th>Name</th><th>Distribution</th><th>Version</th><th>Status</th><th>Time updated</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="7">No artifacts published yet.</td></tr>'}</tbody>
+          <thead><tr><th>Channel</th><th>Name</th><th>Distribution</th><th>Version</th><th>Created</th><th>Status</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7">No builds have been published yet.</td></tr>'}</tbody>
         </table>
       </section>
-    </article>
-    <article class="card">
-      <header><h2>Publish artifact</h2><p>Publishing stores the metadata and activates this version for its distribution.</p></header>
-      <section>
-        <form action="/admin/artifact" method="post" class="publish">
-          ${field("Channel", '<input name="channel" value="latest" required>')}
-          ${field("Name", '<input name="name" placeholder="cli" required>')}
-          ${field("Distribution", '<input name="distribution" placeholder="npm" required>')}
-          ${field("Version", '<input name="version" placeholder="1.0.0" required>')}
-          <div class="field metadata"><label for="metadata">Metadata</label><textarea class="textarea" id="metadata" name="metadata" spellcheck="false">{}</textarea><p class="text-muted-foreground">JSON containing URLs, hashes, sizes, or distribution-specific data.</p></div>
-          <div class="actions"><button class="btn" type="submit">Publish and activate</button></div>
-        </form>
-      </section>
+      <footer class="pagination">
+        <p>Page ${currentPage} of ${pages} · ${count?.total ?? 0} builds</p>
+        <nav aria-label="Pagination">
+          ${currentPage > 1 ? `<a class="btn" data-size="sm" data-variant="outline" href="/admin?page=${currentPage - 1}">Previous</a>` : ""}
+          ${currentPage < pages ? `<a class="btn" data-size="sm" data-variant="outline" href="/admin?page=${currentPage + 1}">Next</a>` : ""}
+        </nav>
+      </footer>
     </article>
   </main>
 </body>
 </html>`,
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
   )
-}
-
-async function registerArtifact(request: Request, env: Env) {
-  const invalid = validMutation(request)
-  if (invalid) return invalid
-  const form = await request.formData()
-  const artifact = parseArtifact({
-    channel: form.get("channel"),
-    name: form.get("name"),
-    distribution: form.get("distribution"),
-    version: form.get("version"),
-    metadata: form.get("metadata"),
-  })
-  if (artifact instanceof Response) return artifact
-  await activate(env.DB, [artifact])
-  return Response.redirect(new URL("/admin", request.url), 303)
 }
 
 async function publishArtifact(request: Request, env: Env) {
@@ -219,24 +241,28 @@ async function activateArtifact(request: Request, env: Env) {
 
 function activate(db: D1Database, artifacts: ArtifactInput[]) {
   return db.batch(
-    artifacts.flatMap((artifact) => [
-      deactivateStatement(db, artifact),
-      db
-        .prepare(
-          `INSERT INTO artifact (channel, name, distribution, version, metadata, active, time_updated)
-           VALUES (?, ?, ?, ?, ?, 1, ?)
-           ON CONFLICT (channel, name, distribution, version) DO UPDATE SET
-             metadata = excluded.metadata, active = 1, time_updated = excluded.time_updated`,
-        )
-        .bind(
-          artifact.channel,
-          artifact.name,
-          artifact.distribution,
-          artifact.version,
-          JSON.stringify(artifact.metadata),
-          Date.now(),
-        ),
-    ]),
+    artifacts.flatMap((artifact) => {
+      const time = Date.now()
+      return [
+        deactivateStatement(db, artifact),
+        db
+          .prepare(
+            `INSERT INTO artifact (channel, name, distribution, version, metadata, active, time_created, time_updated)
+             VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+             ON CONFLICT (channel, name, distribution, version) DO UPDATE SET
+               metadata = excluded.metadata, active = 1, time_updated = excluded.time_updated`,
+          )
+          .bind(
+            artifact.channel,
+            artifact.name,
+            artifact.distribution,
+            artifact.version,
+            JSON.stringify(artifact.metadata),
+            time,
+            time,
+          ),
+      ]
+    }),
   )
 }
 
@@ -352,10 +378,6 @@ function cached(value: unknown) {
 
 function json(value: unknown, status = 200, headers?: HeadersInit) {
   return Response.json(value, { status, headers })
-}
-
-function field(label: string, input: string) {
-  return `<div class="field"><label>${label}</label>${input}</div>`
 }
 
 function escape(value: string) {

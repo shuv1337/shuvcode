@@ -1,4 +1,4 @@
-import type { TuiPlugin } from "@opencode-ai/plugin/tui"
+import type { TuiPlugin } from "@opencode-ai/plugin/v1/tui"
 import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import type { BuiltinTuiPlugin } from "../builtins"

@@ -1,9 +1,9 @@
 export * as ConfigAgentPlugin from "./agent"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import { define } from "@opencode-ai/plugin/effect/plugin"
 import path from "path"
 import { Effect, Option, Schema, Stream } from "effect"
-import { AgentV2 } from "../../agent"
+import { Agent } from "../../agent"
 import { Config } from "../../config"
 import { ConfigAgent } from "../agent"
 import { ConfigMarkdown } from "../markdown"
@@ -11,10 +11,10 @@ import { FSUtil } from "@opencode-ai/util/fs-util"
 import { ConfigAgentV1 } from "../../v1/config/agent"
 import { ConfigMigrateV1 } from "../../v1/config/migrate"
 import { Global } from "@opencode-ai/util/global"
-import { PermissionV2 } from "../../permission"
+import { Permission } from "../../permission"
 import type { LocationMutation } from "../../location-mutation"
-import type { ReadTool } from "../../tool/read"
-import type { EditTool } from "../../tool/edit"
+import type { ReadTool } from "../../tool/plugin/read"
+import type { EditTool } from "../../tool/plugin/edit"
 
 const legacySources = [
   { pattern: "{agent,agents}/**/*.md", primary: false },
@@ -74,14 +74,14 @@ export const Plugin = define({
         global.home,
       )
       const configuredDefault = Config.latest(loaded.documents, "default_agent")
-      if (configuredDefault !== undefined) draft.default(AgentV2.ID.make(configuredDefault))
+      if (configuredDefault !== undefined) draft.default(Agent.ID.make(configuredDefault))
       for (const current of draft.list()) {
         draft.update(current.id, (agent) => agent.permissions.push(...permissions))
       }
 
       for (const document of loaded.documents) {
         for (const [id, item] of Object.entries(document.info.agents ?? {})) {
-          const agentID = AgentV2.ID.make(id)
+          const agentID = Agent.ID.make(id)
           if (item.disabled) {
             draft.remove(agentID)
             continue
@@ -126,7 +126,7 @@ export const Plugin = define({
   }),
 })
 
-function expandPermissions(rules: PermissionV2.Ruleset, home: string): PermissionV2.Ruleset {
+function expandPermissions(rules: Permission.Ruleset, home: string): Permission.Ruleset {
   // Expand only resources tools resolve as filesystem paths. Bash resources are raw shell text:
   // rewriting `$HOME/private/**` would miss `$HOME/private/key`, and safe expansion needs shell-aware parsing.
   return rules.map((rule) =>

@@ -2,6 +2,7 @@ import { Effect } from "effect"
 import {
   type AstNode,
   CodeModeFunction,
+  CodeModeGenerator,
   CoercionFunction,
   ErrorConstructorReference,
   GlobalMethodReference,
@@ -33,6 +34,7 @@ import { invokeRegExpMethod, invokeRegExpStatic, matchToValue, toHostRegex } fro
 import { invokeStringStatic } from "../stdlib/string.js"
 import { invokeURLMethod, invokeURLStatic, uriArgument } from "../stdlib/url.js"
 import { boundedData, coerceToNumber, coerceToString, errorBrandName } from "../stdlib/value.js"
+import { preserveConsumerError, type SyncIteratorRunner } from "./iterator.js"
 
 export type CallbackRunner<R> = {
   readonly invokeFunction: (fn: CodeModeFunction, args: Array<unknown>) => Effect.Effect<unknown, unknown, R>
@@ -360,19 +362,12 @@ const invokeArrayStatic = (name: string, args: Array<unknown>, node: AstNode): u
       return Array.isArray(args[0])
     case "of":
       return [...args]
-    case "from":
-      return arrayFromItems(args[0], node)
     default:
       throw new InterpreterRuntimeError(`Array.${name} is not available.`, node)
   }
 }
 
-const arrayFromItems = (source: unknown, node: AstNode): Array<unknown> => {
-  if (source instanceof CodeModeMap) return Array.from(source.map.entries(), ([key, item]) => [key, item])
-  if (source instanceof CodeModeSet) return Array.from(source.set.values())
-  if (source instanceof CodeModeURLSearchParams) {
-    return Array.from(source.params.entries(), ([key, value]) => [key, value])
-  }
+const arrayLikeSource = (source: unknown, node: AstNode): { readonly length: number; readonly source: object } => {
   if (source instanceof CodeModePromise) {
     throw new InterpreterRuntimeError(
       "Array.from received an un-awaited Promise; await it before creating the array.",
@@ -380,15 +375,16 @@ const arrayFromItems = (source: unknown, node: AstNode): Array<unknown> => {
       "InvalidDataValue",
     )
   }
-  if (typeof source === "string") return Array.from(source)
-  if (Array.isArray(source)) return [...source]
   if (
     source !== null &&
     typeof source === "object" &&
     (Object.getPrototypeOf(source) === Object.prototype || Object.getPrototypeOf(source) === null) &&
     typeof (source as { length?: unknown }).length === "number"
   ) {
-    return Array.from(source as ArrayLike<unknown>)
+    const length = (source as { length: number }).length
+    const normalized = Number.isNaN(length) || length <= 0 ? 0 : Math.trunc(length)
+    if (normalized > 4_294_967_295) throw new RangeError("Invalid array length")
+    return { length: normalized, source }
   }
   throw new InterpreterRuntimeError(
     "Array.from expects an array, string, Map, Set, or array-like value.",
@@ -398,24 +394,42 @@ const arrayFromItems = (source: unknown, node: AstNode): Array<unknown> => {
 }
 
 export const invokeArrayFrom = <R>(
-  runner: CallbackRunner<R>,
+  runner: CallbackRunner<R> & SyncIteratorRunner<R>,
   args: Array<unknown>,
   node: AstNode,
 ): Effect.Effect<unknown, unknown, R> => {
-  const items = arrayFromItems(args[0], node)
-  if (args.length < 2 || args[1] === undefined) return Effect.succeed(items)
-  const apply = applyCollectionCallback(runner, args[1], "Array.from", node)
+  const source = args[0]
+  const apply =
+    args.length < 2 || args[1] === undefined ? undefined : applyCollectionCallback(runner, args[1], "Array.from", node)
   return Effect.gen(function* () {
-    const values: Array<unknown> = []
-    for (let index = 0; index < items.length; index += 1) {
-      values.push(yield* apply([items[index], index]))
+    const cursor = yield* runner.syncIterator(source, node)
+    if (cursor === undefined) {
+      if (source instanceof CodeModeGenerator) {
+        throw new InterpreterRuntimeError("Array.from expects a synchronous iterable or array-like value.", node).as(
+          "TypeError",
+        )
+      }
+      const arrayLike = arrayLikeSource(source, node)
+      const values: Array<unknown> = []
+      for (let index = 0; index < arrayLike.length; index += 1) {
+        const item = Reflect.get(arrayLike.source, index)
+        values.push(apply === undefined ? item : yield* apply([item, index]))
+      }
+      return values
     }
-    return values
+    const values: Array<unknown> = []
+    let index = 0
+    while (true) {
+      const step = yield* cursor.next
+      if (step.done) return values
+      values.push(apply === undefined ? step.value : yield* preserveConsumerError(cursor, apply([step.value, index])))
+      index += 1
+    }
   })
 }
 
 export const invokeGroupBy = <R>(
-  runner: CallbackRunner<R>,
+  runner: CallbackRunner<R> & SyncIteratorRunner<R>,
   namespace: "Map" | "Object",
   args: Array<unknown>,
   node: AstNode,
@@ -425,45 +439,48 @@ export const invokeGroupBy = <R>(
     throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
   }
   const apply = applyCollectionCallback(runner, args[1], `${namespace}.groupBy`, node)
-  const items = supportedIterableItems(source)
-  if (items === undefined) {
-    throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
-  }
   return Effect.gen(function* () {
+    const cursor = yield* runner.syncIterator(source, node)
+    if (cursor === undefined) {
+      throw new InterpreterRuntimeError(`${namespace}.groupBy expects an iterable collection.`, node).as("TypeError")
+    }
     if (namespace === "Map") {
       const result = new CodeModeMap()
       let index = 0
-      for (const item of items) {
-        const key = yield* apply([item, index])
+      while (true) {
+        const step = yield* cursor.next
+        if (step.done) return result
+        const item = step.value
+        const key = yield* preserveConsumerError(cursor, apply([item, index]))
         const group = result.map.get(key)
         if (group === undefined) result.map.set(key, [item])
         else (group as Array<unknown>).push(item)
         index += 1
       }
-      return result
     }
 
     const result: SafeObject = Object.create(null) as SafeObject
     let index = 0
-    for (const item of items) {
-      const key = yield* coerceGroupByPropertyKey(runner, yield* apply([item, index]), node)
+    while (true) {
+      const step = yield* cursor.next
+      if (step.done) return result
+      const item = step.value
+      const key = yield* preserveConsumerError(
+        cursor,
+        Effect.flatMap(apply([item, index]), (value) => coerceGroupByPropertyKey(runner, value, node)),
+      )
       if (isBlockedMember(key)) {
-        throw new InterpreterRuntimeError(`Property '${key}' is not available.`, node)
+        return yield* preserveConsumerError(
+          cursor,
+          Effect.fail(new InterpreterRuntimeError(`Property '${key}' is not available.`, node)),
+        )
       }
       const group = result[key]
       if (group === undefined) result[key] = [item]
       else (group as Array<unknown>).push(item)
       index += 1
     }
-    return result
   })
-}
-
-const supportedIterableItems = (source: unknown): Iterable<unknown> | undefined => {
-  if (Array.isArray(source) || typeof source === "string") return source
-  if (source instanceof CodeModeMap) return source.map.entries()
-  if (source instanceof CodeModeSet) return source.set.values()
-  if (source instanceof CodeModeURLSearchParams) return source.params.entries()
 }
 
 const coerceGroupByPropertyKey = <R>(

@@ -74,8 +74,7 @@ type RunFooterOptions = {
   agents: RunAgent[]
   references: RunReference[]
   wrote?: boolean
-  sessionID: () => string | undefined
-  agentLabel: string
+  agent: string | undefined
   modelLabel: string
   model: RunInput["model"]
   variant: string | undefined
@@ -92,6 +91,7 @@ type RunFooterOptions = {
   onFormReply: (input: FormReply) => void | Promise<void>
   onFormCancel: (input: FormCancel) => void | Promise<void>
   onCycleVariant?: () => CycleResult | void
+  onAgentSelect?: (agent: string) => void
   onModelSelect?: (model: NonNullable<RunInput["model"]>) => CycleResult | void | Promise<CycleResult | void>
   onVariantSelect?: (variant: string | undefined) => CycleResult | void | Promise<CycleResult | void>
   onInterrupt?: () => void
@@ -100,6 +100,12 @@ type RunFooterOptions = {
   onSubagentSelect?: (sessionID: string | undefined) => void
   onSubagentInterrupt?: (sessionID: string) => void
   subscribeThemeSignal: (listener: () => void) => () => void
+}
+
+export function resolveRunAgent(agents: RunAgent[], current: string | undefined) {
+  const selectable = agents.filter((agent) => agent.mode !== "subagent" && !agent.hidden)
+  if (current === undefined) return selectable.at(0)
+  return selectable.find((agent) => agent.id === current)
 }
 
 const PERMISSION_ROWS = 12
@@ -170,6 +176,9 @@ export class RunFooter implements FooterApi {
   private setCommands: Setter<RunCommand[] | undefined>
   private providers: Accessor<RunProvider[] | undefined>
   private setProviders: Setter<RunProvider[] | undefined>
+  private currentAgent: Accessor<string>
+  private currentAgentID: Accessor<string | undefined>
+  private setCurrentAgentID: Setter<string | undefined>
   private currentModel: Accessor<RunInput["model"]>
   private setCurrentModel: Setter<RunInput["model"]>
   private variants: Accessor<string[]>
@@ -195,8 +204,7 @@ export class RunFooter implements FooterApi {
   private interruptTimeout: NodeJS.Timeout | undefined
   private exitTimeout: NodeJS.Timeout | undefined
   private noticeTimeout: NodeJS.Timeout | undefined
-  private noticeRestoreStatus = ""
-  private statusVersion = 0
+  private turnAgent: string | undefined
   private requestExitHandler: (() => boolean) | undefined
   private scrollback: RunScrollbackStream
   private themes: RunTheme[]
@@ -226,6 +234,7 @@ export class RunFooter implements FooterApi {
     const [state, setState] = createSignal<FooterState>({
       phase: "idle",
       status: "",
+      notice: "",
       model: options.modelLabel,
       usage: "",
       first: options.first,
@@ -249,6 +258,16 @@ export class RunFooter implements FooterApi {
     const [providers, setProviders] = createSignal<RunProvider[] | undefined>()
     this.providers = providers
     this.setProviders = setProviders
+    const [selectedAgentID, setCurrentAgentID] = createSignal(options.agent)
+    const currentAgent = () => resolveRunAgent(this.agents(), selectedAgentID())
+    this.currentAgentID = () => currentAgent()?.id ?? selectedAgentID()
+    this.setCurrentAgentID = setCurrentAgentID
+    this.currentAgent = () => {
+      const agent = currentAgent()
+      if (agent) return agent.name
+      const selected = selectedAgentID()
+      return selected ? Locale.titlecase(selected) : "Default"
+    }
     const [currentModel, setCurrentModel] = createSignal<RunInput["model"]>(options.model)
     this.currentModel = currentModel
     this.setCurrentModel = setCurrentModel
@@ -307,12 +326,14 @@ export class RunFooter implements FooterApi {
               references: footer.references,
               commands: footer.commands,
               providers: footer.providers,
+              currentAgent: footer.currentAgent,
+              currentAgentID: footer.currentAgentID,
+              currentAgentExplicit: () => selectedAgentID() !== undefined,
               currentModel: footer.currentModel,
               variants: footer.variants,
               currentVariant: footer.currentVariant,
               theme: footer.theme,
               mono: options.mono,
-              tuiConfig: options.tuiConfig,
               miniSettings: footer.miniSettings,
               history: footer.history,
               onSubmit: footer.handlePrompt,
@@ -327,6 +348,7 @@ export class RunFooter implements FooterApi {
               onExitRequest: footer.handleExit,
               onRequestExit: footer.setRequestExitHandler,
               onExit: () => footer.close(),
+              onAgentSelect: footer.handleAgentSelect,
               onModelSelect: footer.handleModelSelect,
               onVariantSelect: footer.handleVariantSelect,
               onRows: footer.syncRows,
@@ -380,7 +402,7 @@ export class RunFooter implements FooterApi {
     }
 
     if (next.type === "agent") {
-      this.options.agentLabel = Locale.titlecase(next.agent ?? "build")
+      this.setCurrentAgentID(next.agent)
       return
     }
 
@@ -389,13 +411,15 @@ export class RunFooter implements FooterApi {
     }
 
     if (next.type === "turn.duration") {
+      const agent = this.turnAgent ?? this.currentAgent()
+      this.turnAgent = undefined
       if (this.miniSettings().turn_summary === "hide") return
       const current = this.currentModel()
       this.flush()
       this.flushing = this.flushing
         .then(() =>
           this.scrollback.writeTurnSummary({
-            agent: this.options.agentLabel,
+            agent,
             model: current ? modelInfo(this.providers(), current).model : this.state().model,
             duration: next.duration,
           }),
@@ -451,8 +475,10 @@ export class RunFooter implements FooterApi {
     if (patch) {
       if (typeof patch.status === "string") {
         this.clearNoticeTimer()
+        patch.notice = ""
       }
       if (next.type === "turn.send") {
+        this.turnAgent = this.currentAgent()
         this.clearInterruptTimer()
         this.clearExitTimer()
       }
@@ -481,12 +507,10 @@ export class RunFooter implements FooterApi {
     }
 
     const prev = this.state()
-    if (typeof next.status === "string") {
-      this.statusVersion++
-    }
     const state = {
       phase: next.phase ?? prev.phase,
       status: typeof next.status === "string" ? next.status : prev.status,
+      notice: typeof next.notice === "string" ? next.notice : prev.notice,
       model: typeof next.model === "string" ? next.model : prev.model,
       usage: typeof next.usage === "string" ? next.usage : prev.usage,
       first: typeof next.first === "boolean" ? next.first : prev.first,
@@ -594,6 +618,10 @@ export class RunFooter implements FooterApi {
     return this.theme()
   }
 
+  public currentMiniSettings(): MiniSettings {
+    return this.miniSettings()
+  }
+
   private destroyTheme(theme: RunTheme): void {
     const index = this.themes.indexOf(theme)
     if (index === -1) {
@@ -637,26 +665,13 @@ export class RunFooter implements FooterApi {
   }
 
   private setNotice(status: string): void {
-    const restore = this.noticeTimeout ? this.noticeRestoreStatus : this.state().status
-    this.clearNoticeTimer(false)
-    this.patch({ status })
-    if (!status) {
-      this.noticeRestoreStatus = ""
-      return
-    }
+    this.clearNoticeTimer()
+    this.patch({ notice: status })
+    if (!status) return
 
-    this.noticeRestoreStatus = restore
-    const version = this.statusVersion
     this.noticeTimeout = setTimeout(() => {
       this.noticeTimeout = undefined
-      if (this.isGone || version !== this.statusVersion) {
-        this.noticeRestoreStatus = ""
-        return
-      }
-
-      const next = this.noticeRestoreStatus
-      this.noticeRestoreStatus = ""
-      this.patch({ status: next })
+      this.patch({ notice: "" })
     }, NOTICE_DURATION)
   }
 
@@ -684,7 +699,7 @@ export class RunFooter implements FooterApi {
         ? this.base + PERMISSION_ROWS
         : type === "form"
           ? this.base + FORM_ROWS
-          : ["command", "skill", "model", "variant", "settings"].includes(route)
+          : ["command", "skill", "agent", "model", "variant", "settings"].includes(route)
             ? 1 + RUN_COMMAND_PANEL_ROWS
             : route === "queued-menu" || route === "subagent-menu"
               ? 1 + this.subagentMenuRows
@@ -832,6 +847,13 @@ export class RunFooter implements FooterApi {
       .catch(() => {})
   }
 
+  private handleAgentSelect = (agent: string): void => {
+    if (this.isClosed || this.currentAgentID() === agent) return
+    this.setCurrentAgentID(agent)
+    this.options.onAgentSelect?.(agent)
+    this.setNotice(`agent ${this.currentAgent()}`)
+  }
+
   private handleVariantSelect = (variant: string | undefined): void => {
     if (this.isClosed) {
       return
@@ -897,19 +919,9 @@ export class RunFooter implements FooterApi {
     this.interruptTimeout = undefined
   }
 
-  private clearNoticeTimer(reset = true): void {
-    if (!this.noticeTimeout) {
-      if (reset) {
-        this.noticeRestoreStatus = ""
-      }
-      return
-    }
-
-    clearTimeout(this.noticeTimeout)
+  private clearNoticeTimer(): void {
+    if (this.noticeTimeout) clearTimeout(this.noticeTimeout)
     this.noticeTimeout = undefined
-    if (reset) {
-      this.noticeRestoreStatus = ""
-    }
   }
 
   private armInterruptTimer(): void {

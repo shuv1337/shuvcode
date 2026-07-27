@@ -34,14 +34,15 @@ import { ProviderFailureClassification } from "./errors"
  *
  * **Semantics by provider**:
  *
- * - OpenAI Chat / Responses / Gemini / Bedrock: provider reports inclusive
+ * - OpenAI Chat / Responses / Gemini: provider reports inclusive
  *   `inputTokens` and an inclusive `outputTokens`; mapper subtracts to
  *   derive the breakdown.
- * - Anthropic: provider reports the breakdown natively (`input_tokens` is
- *   non-cached only); mapper sums to derive the inclusive `inputTokens`.
- *   Anthropic does *not* break extended-thinking out of `output_tokens`, so
- *   `reasoningTokens` is `undefined` and `outputTokens` carries the
- *   combined total — a documented limitation of the Anthropic API.
+ * - Anthropic and Bedrock report the input breakdown natively: Anthropic's
+ *   `input_tokens` and Bedrock's `inputTokens` are non-cached only. Their
+ *   mappers sum the breakdown to derive the inclusive `inputTokens`.
+ *   Anthropic's `outputTokens` includes extended thinking. Newer responses
+ *   expose that subset as `output_tokens_details.thinking_tokens`, which maps
+ *   to `reasoningTokens`; older responses leave it undefined.
  *
  * `providerMetadata` always carries the provider's raw usage payload —
  * keyed by provider name (`{ openai: ... }`, `{ anthropic: ... }`, etc.)
@@ -190,10 +191,16 @@ export const ToolError = Schema.Struct({
 }).annotate({ identifier: "LLM.Event.ToolError" })
 export type ToolError = Schema.Schema.Type<typeof ToolError>
 
+export const FinishReasonDetails = Schema.Struct({
+  normalized: FinishReason,
+  raw: Schema.optional(Schema.String),
+}).annotate({ identifier: "LLM.FinishReasonDetails" })
+export type FinishReasonDetails = Schema.Schema.Type<typeof FinishReasonDetails>
+
 export const StepFinish = Schema.Struct({
   type: Schema.tag("step-finish"),
   index: Schema.Number,
-  reason: FinishReason,
+  reason: FinishReasonDetails,
   usage: Schema.optional(Usage),
   providerMetadata: Schema.optional(ProviderMetadata),
 }).annotate({ identifier: "LLM.Event.StepFinish" })
@@ -201,7 +208,7 @@ export type StepFinish = Schema.Schema.Type<typeof StepFinish>
 
 export const Finish = Schema.Struct({
   type: Schema.tag("finish"),
-  reason: FinishReason,
+  reason: FinishReasonDetails,
   usage: Schema.optional(Usage),
   providerMetadata: Schema.optional(ProviderMetadata),
 }).annotate({ identifier: "LLM.Event.Finish" })
@@ -364,7 +371,7 @@ interface ResponseState {
   readonly events: ReadonlyArray<LLMEvent>
   readonly message: Message
   readonly usage?: Usage
-  readonly finishReason?: FinishReason
+  readonly finishReason?: FinishReasonDetails
   readonly textParts: Readonly<Record<string, ContentAssembly>>
   readonly reasoningParts: Readonly<Record<string, ContentAssembly>>
   readonly toolInputs: Readonly<Record<string, ToolInputAssembly>>
@@ -392,7 +399,7 @@ const appendEvent = (state: ResponseState, event: LLMEvent): ResponseState => {
     return {
       ...state,
       events,
-      finishReason: state.finishReason ?? "error",
+      finishReason: state.finishReason ?? { normalized: "error" },
     }
   }
   return {
@@ -579,7 +586,7 @@ export class LLMResponse extends Schema.Class<LLMResponse>("LLM.Response")({
   message: Message,
   events: Schema.Array(LLMEvent),
   usage: Schema.optional(Usage),
-  finishReason: FinishReason,
+  finishReason: FinishReasonDetails,
 }) {
   /** Concatenated assistant text assembled from streamed `text-delta` events. */
   get text() {

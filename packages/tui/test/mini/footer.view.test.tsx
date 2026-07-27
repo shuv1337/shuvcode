@@ -8,6 +8,7 @@ import { Keymap } from "../../src/context/keymap"
 import {
   RUN_COMMAND_PANEL_ROWS,
   RUN_SUBAGENT_PANEL_ROWS,
+  RunAgentSelectBody,
   RunCommandMenuBody,
   RunModelSelectBody,
   RunQueuedPromptSelectBody,
@@ -26,6 +27,7 @@ import type {
   FooterView,
   MiniSettingChange,
   MiniSettings,
+  RunAgent,
   RunCommand,
   RunInput,
   RunPrompt,
@@ -35,7 +37,7 @@ import type {
 } from "../../src/mini/types"
 import { selectedCommand } from "../../src/mini/footer.prompt"
 import { RejectField } from "../../src/mini/footer.permission"
-import { createTuiResolvedConfig } from "./fixture/tui-runtime"
+import { createTuiResolvedConfig } from "../fixture/tui-runtime"
 
 const tuiConfig = createTuiResolvedConfig()
 
@@ -87,7 +89,6 @@ function subagent(input: {
     label: input.label,
     description: input.description,
     status: input.status ?? "running",
-    lastUpdatedAt: 1,
   } satisfies FooterSubagentTab
 }
 
@@ -95,6 +96,7 @@ function footerState(input: Partial<FooterState> = {}) {
   return createSignal<FooterState>({
     phase: "idle",
     status: "",
+    notice: "",
     model: "gpt-5",
     usage: "",
     first: false,
@@ -110,6 +112,7 @@ async function renderFooter(
     commands?: RunCommand[]
     theme?: () => RunTheme
     providers?: RunProvider[]
+    currentAgent?: string
     currentModel?: RunInput["model"]
     currentVariant?: string
     subagents?: FooterSubagentState
@@ -122,6 +125,7 @@ async function renderFooter(
     onFormReply?: (input: unknown) => void
     miniSettings?: MiniSettings
     mono?: boolean
+    onStatus?: (status: string) => void
     onMiniSettingChange?: (change: MiniSettingChange) => void
   } = {},
 ) {
@@ -132,7 +136,14 @@ async function renderFooter(
   const [state, setState] = footerState(input.state)
   const config = input.tuiConfig ?? tuiConfig
   const [miniSettings] = createSignal<MiniSettings>(
-    input.miniSettings ?? { thinking: "hide", shell_output: "hide", turn_summary: "show", footer: "show", mono: false },
+    input.miniSettings ?? {
+      thinking: "hide",
+      shell_output: "hide",
+      turn_summary: "show",
+      footer: "show",
+      splash: "show",
+      mono: false,
+    },
   )
   function Harness() {
     return (
@@ -144,6 +155,9 @@ async function renderFooter(
           references={() => []}
           commands={() => input.commands ?? []}
           providers={() => input.providers}
+          currentAgent={() => input.currentAgent ?? "Build"}
+          currentAgentID={() => input.currentAgent?.toLowerCase() ?? "build"}
+          currentAgentExplicit={() => input.currentAgent !== undefined}
           currentModel={() => input.currentModel}
           variants={() => []}
           currentVariant={() => input.currentVariant}
@@ -152,7 +166,6 @@ async function renderFooter(
           subagent={subagents}
           theme={input.theme ?? (() => RUN_THEME_FALLBACK)}
           mono={input.mono ?? false}
-          tuiConfig={config}
           miniSettings={miniSettings}
           onSubmit={input.onSubmit ?? (() => true)}
           onPermissionReply={() => {}}
@@ -163,11 +176,12 @@ async function renderFooter(
           onEditorOpen={async () => undefined}
           onInputClear={() => {}}
           onExit={() => {}}
+          onAgentSelect={() => {}}
           onModelSelect={() => {}}
           onVariantSelect={() => {}}
           onRows={() => {}}
           onLayout={() => {}}
-          onStatus={() => {}}
+          onStatus={(status) => input.onStatus?.(status)}
           onMiniSettingChange={(change) => input.onMiniSettingChange?.(change)}
         />
       </Keymap.Provider>
@@ -194,6 +208,18 @@ async function renderFooter(
     },
   }
 }
+
+test("direct footer shows the default model without the fallback agent", async () => {
+  const app = await renderFooter({ state: { model: "Default model" } })
+  try {
+    await app.renderOnce()
+    const frame = app.captureCharFrame()
+    expect(frame).toContain("Default model")
+    expect(frame).not.toContain("Build")
+  } finally {
+    app.cleanup()
+  }
+})
 
 test("direct footer preserves a partial multi-field form draft across permission preemption", async () => {
   const request: FormInfo = {
@@ -355,7 +381,84 @@ test("run entry content updates when live commit text changes", async () => {
   }
 })
 
-test("direct command panel renders grouped command palette", async () => {
+test("run entry content preserves monochrome markdown grammar", async () => {
+  const [commit, setCommit] = createSignal<StreamCommit>({
+    kind: "assistant",
+    text: "• literal\n\n———\n\narrow →",
+    phase: "progress",
+    source: "assistant",
+    messageID: "msg-1",
+    partID: "part-1",
+  })
+  const app = await testRender(
+    () => (
+      <box width={60} height={8}>
+        <RunEntryContent commit={commit()} theme={RUN_THEME_FALLBACK} opts={{ mono: true }} />
+      </box>
+    ),
+    { width: 60, height: 8 },
+  )
+
+  try {
+    await app.renderOnce()
+    const rows = app
+      .captureCharFrame()
+      .split("\n")
+      .map((row) => row.trimEnd())
+    expect(rows).toContain("* literal")
+    expect(rows).toContain("------")
+    expect(rows).toContain("arrow ->")
+    expect(rows.join("\n")).not.toMatch(/[^\x00-\x7f]/)
+
+    setCommit({ ...commit(), text: "- Café\n- arrow →\n- third …" })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("- arrow ->")
+    expect(app.captureCharFrame()).toContain("- third ...")
+
+    setCommit({ ...commit(), text: "| A | B |\n| - | - |\n| Café | → |" })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Caf?")
+    expect(app.captureCharFrame()).toContain("->")
+    setCommit({ ...commit(), text: "| A | B |\n| - | - |\n| Café | … |" })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("...")
+
+    setCommit({ ...commit(), text: "```\nCafé → …\n```" })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Caf? -> ...")
+    expect(app.captureCharFrame()).not.toMatch(/[^\x00-\x7f]/)
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("run entry content eagerly renders final monochrome markdown", async () => {
+  const app = await testRender(
+    () => (
+      <box width={60} height={6}>
+        <RunEntryContent
+          commit={{ kind: "tool", text: "", phase: "final", source: "tool", tool: "subagent" }}
+          body={{ type: "markdown", content: "# Café →\n\n```markdown\nCafé →\n```" }}
+          theme={RUN_THEME_FALLBACK}
+          opts={{ mono: true }}
+        />
+      </box>
+    ),
+    { width: 60, height: 6 },
+  )
+
+  try {
+    await app.renderOnce()
+    const frame = app.captureCharFrame()
+    expect(frame).toContain("# Caf? ->")
+    expect(frame).toContain("Caf? ->")
+    expect(frame).not.toMatch(/[^\x00-\x7f]/)
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("direct command panel renders grouped actions without catalog commands", async () => {
   const [commands] = createSignal<RunCommand[] | undefined>([
     command({ name: "review", description: "Review code" }),
     command({ name: "deploy", description: "Deploy prompt", source: "mcp" }),
@@ -376,6 +479,7 @@ test("direct command panel renders grouped command palette", async () => {
           variants={variants}
           variantCycle="ctrl+t"
           onClose={() => {}}
+          onAgent={() => {}}
           onModel={() => {}}
           onEditor={() => {}}
           onSkill={() => {}}
@@ -410,7 +514,8 @@ test("direct command panel renders grouped command palette", async () => {
     expect(frame).toContain("Open editor")
     expect(frame).toContain("/editor")
     expect(frame).toContain("Show status")
-    expect(frame).toContain("Switch model")
+    expect(frame).toContain("Compact session")
+    expect(frame).toContain("/compact")
     expect(frame).toContain("Skills")
     expect(frame).toContain("/skills")
     expect(frame.match(/\bAgent\b/g)?.length).toBe(1)
@@ -422,6 +527,21 @@ test("direct command panel renders grouped command palette", async () => {
     expect(frame).not.toContain("Review code")
     expect(frame).not.toContain("Commands 8")
 
+    await app.mockInput.typeText("agent")
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Switch agent")
+
+    app.mockInput.pressKey("u", { ctrl: true })
+    await app.mockInput.typeText("review")
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("No results found")
+
+    app.mockInput.pressKey("u", { ctrl: true })
+    await app.mockInput.typeText("deploy")
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("No results found")
+
+    app.mockInput.pressKey("u", { ctrl: true })
     await app.mockInput.typeText("status")
     await app.renderOnce()
     expect(app.captureCharFrame()).toContain("Show status")
@@ -438,6 +558,7 @@ test("direct settings panel changes Mini transcript preferences", async () => {
     shell_output: "hide",
     turn_summary: "show",
     footer: "show",
+    splash: "show",
     mono: false,
   })
   const app = await testRender(
@@ -466,6 +587,7 @@ test("direct settings panel changes Mini transcript preferences", async () => {
     expect(frame).toContain("Shell")
     expect(frame).toContain("Turn summary")
     expect(frame).toContain("Footer details")
+    expect(frame).toContain("Splash")
     expect(frame).toContain("Monochrome UI")
     expect(frame).toContain("left/right change")
     expect(frame).not.toMatch(/[^\x00-\x7F]/)
@@ -473,16 +595,35 @@ test("direct settings panel changes Mini transcript preferences", async () => {
     app.mockInput.pressKey("ARROW_RIGHT")
     await app.renderOnce()
 
-    expect(settings()).toEqual({ thinking: "show", shell_output: "hide", turn_summary: "show", footer: "show", mono: false })
+    expect(settings()).toEqual({
+      thinking: "show",
+      shell_output: "hide",
+      turn_summary: "show",
+      footer: "show",
+      splash: "show",
+      mono: false,
+    })
 
     app.mockInput.pressKey("ARROW_DOWN")
     app.mockInput.pressKey("ARROW_DOWN")
     app.mockInput.pressKey("ARROW_RIGHT")
     await app.renderOnce()
 
-    expect(settings()).toEqual({ thinking: "show", shell_output: "hide", turn_summary: "hide", footer: "show", mono: false })
+    expect(settings()).toEqual({
+      thinking: "show",
+      shell_output: "hide",
+      turn_summary: "hide",
+      footer: "show",
+      splash: "show",
+      mono: false,
+    })
 
     app.mockInput.pressKey("ARROW_DOWN")
+    app.mockInput.pressKey("ARROW_DOWN")
+    app.mockInput.pressKey("ARROW_RIGHT")
+    await app.renderOnce()
+    expect(settings().splash).toBe("hide")
+
     app.mockInput.pressKey("ARROW_DOWN")
     app.mockInput.pressKey("ARROW_RIGHT")
     await app.renderOnce()
@@ -595,6 +736,7 @@ test("direct command panel shows subagent entry when available", async () => {
           variants={variants}
           variantCycle="ctrl+t"
           onClose={() => {}}
+          onAgent={() => {}}
           onModel={() => {}}
           onEditor={() => {}}
           onSkill={() => {}}
@@ -645,6 +787,7 @@ test("direct command panel keeps completed subagents available", async () => {
           variants={variants}
           variantCycle="ctrl+t"
           onClose={() => {}}
+          onAgent={() => {}}
           onModel={() => {}}
           onEditor={() => {}}
           onSkill={() => {}}
@@ -975,27 +1118,17 @@ test("direct footer closes settings with ctrl-c instead of arming exit", async (
   }
 })
 
-test("selectedCommand backfills the catalog source for bound drafts", () => {
-  const catalog = [command({ name: "opencode-ts", description: "TS skill", source: "skill" })]
-
-  // The skill picker binds `/name ` drafts; older drafts may lack source.
-  expect(selectedCommand("/opencode-ts fix it", { name: "opencode-ts", arguments: "" }, catalog)).toEqual({
-    name: "opencode-ts",
-    arguments: "fix it",
-    source: "skill",
-  })
-  // An explicit source wins without a catalog lookup.
+test("selectedCommand validates the bound command and refreshes its arguments", () => {
   expect(selectedCommand("/opencode-ts", { name: "opencode-ts", arguments: "", source: "skill" })).toEqual({
     name: "opencode-ts",
     arguments: "",
     source: "skill",
   })
-  // Plain commands stay untagged.
-  expect(
-    selectedCommand("/deploy prod", { name: "deploy", arguments: "" }, [
-      command({ name: "deploy", description: "Deploy" }),
-    ]),
-  ).toEqual({ name: "deploy", arguments: "prod" })
+  expect(selectedCommand("/deploy prod", { name: "deploy", arguments: "" })).toEqual({
+    name: "deploy",
+    arguments: "prod",
+  })
+  expect(selectedCommand("/other", { name: "deploy", arguments: "" })).toBeUndefined()
 })
 
 test("direct footer tags skill slash submissions with their catalog source", async () => {
@@ -1100,6 +1233,7 @@ test("direct footer shows authoritative pending work while running", async () =>
   const [state] = createSignal<FooterState>({
     phase: "running",
     status: "",
+    notice: "",
     model: "gpt-5",
     usage: "",
     first: false,
@@ -1123,6 +1257,9 @@ test("direct footer shows authoritative pending work while running", async () =>
           references={() => []}
           commands={() => []}
           providers={() => undefined}
+          currentAgent={() => "Build"}
+          currentAgentID={() => "build"}
+          currentAgentExplicit={() => false}
           currentModel={() => ({
             providerID: "opencode",
             modelID: "a-model-name-long-enough-to-force-responsive-truncation",
@@ -1141,8 +1278,14 @@ test("direct footer shows authoritative pending work while running", async () =>
             },
           ]}
           theme={() => RUN_THEME_FALLBACK}
-          tuiConfig={tuiConfig}
-          miniSettings={() => ({ thinking: "hide", shell_output: "hide", turn_summary: "show", footer: "show", mono: false })}
+          miniSettings={() => ({
+            thinking: "hide",
+            shell_output: "hide",
+            turn_summary: "show",
+            footer: "show",
+            splash: "show",
+            mono: false,
+          })}
           mono={false}
           onSubmit={() => true}
           onPermissionReply={() => {}}
@@ -1153,6 +1296,7 @@ test("direct footer shows authoritative pending work while running", async () =>
           onEditorOpen={async () => undefined}
           onInputClear={() => {}}
           onExit={() => {}}
+          onAgentSelect={() => {}}
           onModelSelect={() => {}}
           onVariantSelect={() => {}}
           onRows={() => {}}
@@ -1211,14 +1355,15 @@ test("direct footer shows authoritative pending work while running", async () =>
 
 test("direct footer progressively adds model details after the command hint", async () => {
   for (const expected of [
-    { width: 24, model: false, variant: false },
-    { width: 32, model: true, variant: false },
-    { width: 40, model: true, variant: true },
+    { width: 24, agent: false, model: false, variant: false },
+    { width: 32, agent: false, model: true, variant: false },
+    { width: 40, agent: true, model: true, variant: false },
+    { width: 48, agent: true, model: true, variant: true },
   ]) {
     const app = await renderFooter({
-      providers: [provider()],
-      currentModel: { providerID: "opencode", modelID: "gpt-5" },
+      currentAgent: "Plan",
       currentVariant: "xhigh",
+      state: { model: "GPT-5" },
       width: expected.width,
     })
 
@@ -1228,12 +1373,73 @@ test("direct footer progressively adds model details after the command hint", as
       expect({
         width: expected.width,
         command: frame.includes("ctrl+p cmd"),
+        agent: frame.includes("Plan"),
         model: frame.includes("GPT-5"),
         variant: frame.includes("xhigh"),
       }).toEqual({ ...expected, command: true })
     } finally {
       app.cleanup()
     }
+  }
+})
+
+test("direct footer keeps commands and active work ahead of usage under width pressure", async () => {
+  const app = await renderFooter({
+    currentAgent: "Plan",
+    subagents: {
+      tabs: [subagent({ sessionID: "s-1", label: "Explore", description: "Inspect auth flow" })],
+      details: {},
+      permissions: [],
+      forms: [],
+    },
+    state: {
+      phase: "running",
+      model: "a-model-name-long-enough-to-force-responsive-truncation",
+      usage: "159.6K (16%) · $4.23",
+    },
+    width: 80,
+  })
+
+  try {
+    await app.renderOnce()
+    const frame = app.captureCharFrame()
+
+    expect(frame).toContain("Plan")
+    expect(frame).toContain("ctrl+b background")
+    expect(frame).toContain("↓ subagents")
+    expect(frame).toContain("ctrl+p cmd")
+    expect(frame).not.toContain("a-model-name")
+    expect(frame).not.toContain("159.6K")
+    expect(frame).not.toContain("$4.23")
+  } finally {
+    app.cleanup()
+  }
+})
+
+test("direct footer keeps the command hint at its minimum width", async () => {
+  const app = await renderFooter({ state: { phase: "running" }, width: 10 })
+
+  try {
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("ctrl+p cmd")
+  } finally {
+    app.cleanup()
+  }
+})
+
+test("direct footer keeps complete status text ahead of the spinner", async () => {
+  const app = await renderFooter({
+    tuiConfig: createTuiResolvedConfig({ keybinds: { session_interrupt: "none" } }),
+    state: { phase: "running" },
+    width: 22,
+  })
+
+  try {
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("interrupt")
+    expect(boxPath(footerStatusline(app.renderer.root), "SpinnerRenderable")).toBeUndefined()
+  } finally {
+    app.cleanup()
   }
 })
 
@@ -1316,17 +1522,42 @@ test("direct footer shows full usage metadata when room is available", async () 
   }
 })
 
-test("direct footer can hide persistent details and briefly reveal changes", async () => {
+test("direct footer omits usage when it would fill the statusline", async () => {
+  const app = await renderFooter({
+    state: { phase: "running", model: "GPT-5.6 SoL", usage: "8.4K (1%) · $0.01" },
+    currentVariant: "high",
+    mono: true,
+    width: 66,
+  })
+
+  try {
+    await app.renderOnce()
+    const frame = app.captureCharFrame()
+
+    expect(frame).toContain("esc interrupt")
+    expect(frame).toContain("GPT-5.6 SoL high")
+    expect(frame).toContain("ctrl+p cmd")
+    expect(frame).not.toContain("8.4K")
+  } finally {
+    app.cleanup()
+  }
+})
+
+test("direct footer hides routine activity and shows explicit notices", async () => {
+  let status = ""
   const app = await renderFooter({
     state: { usage: "159.6K (16%) · $4.23" },
+    currentAgent: "Plan",
     miniSettings: {
       thinking: "hide",
       shell_output: "hide",
       turn_summary: "show",
       footer: "hide",
+      splash: "show",
       mono: true,
     },
     mono: true,
+    onStatus: (value) => (status = value),
     width: 160,
   })
 
@@ -1334,16 +1565,31 @@ test("direct footer can hide persistent details and briefly reveal changes", asy
     await app.renderOnce()
     const initial = app.captureCharFrame()
     expect(initial).toContain("ctrl+p cmd")
+    expect(initial).not.toContain("Plan")
     expect(initial).not.toContain("gpt-5")
     expect(initial).not.toContain("159.6K")
 
-    app.setState((state) => ({ ...state, phase: "running" }))
+    app.setState((state) => ({ ...state, phase: "running", status: "assistant responding" }))
     await app.renderOnce()
     const changed = app.captureCharFrame()
     const statusline = footerStatusline(app.renderer.root)
 
-    expect(changed).toContain("running - gpt-5 - 159.6K (16%) - $4.23")
+    expect(changed).not.toContain("running")
+    expect(changed).not.toContain("assistant responding")
+    expect(changed).not.toContain("interrupt")
+    expect(changed).not.toContain("gpt-5")
+    expect(changed).not.toContain("159.6K")
     expect(boxPath(statusline, "SpinnerRenderable")).toBeUndefined()
+
+    app.mockInput.pressKey("p", { ctrl: true })
+    await app.renderOnce()
+    await app.mockInput.typeText("status")
+    app.mockInput.pressEnter()
+    expect(status).toBe("running - agent Plan - gpt-5 - 159.6K (16%) - $4.23")
+
+    app.setState((state) => ({ ...state, notice: "variant high" }))
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("variant high")
   } finally {
     app.cleanup()
   }
@@ -1413,7 +1659,10 @@ test("direct permission rejection submits through keymap return binding", async 
 })
 
 test("direct model panel renders current model selector", async () => {
-  const [providers] = createSignal<RunProvider[] | undefined>([provider()])
+  const [providers] = createSignal<RunProvider[] | undefined>([
+    provider(),
+    { id: "openai", name: "OpenAI", models: { "gpt-5": model({ id: "gpt-5", name: "GPT-5" }) } },
+  ])
   const [current] = createSignal<RunInput["model"]>({ providerID: "opencode", modelID: "gpt-5" })
 
   const app = await testRender(
@@ -1450,6 +1699,61 @@ test("direct model panel renders current model selector", async () => {
     expect(frame).not.toContain("┃")
     expect(frame).not.toContain("Old Model")
     expectPaletteList(list, 2)
+
+    "gpt-5".split("").forEach((key) => app.mockInput.pressKey(key))
+    await app.renderOnce()
+    const search = app.captureCharFrame()
+
+    expect(search.match(/GPT-5/g)).toHaveLength(2)
+    expect(search).toContain("opencode")
+    expect(search).toContain("OpenAI")
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("direct agent panel shows eligible agents and marks the current agent", async () => {
+  const [agents] = createSignal<RunAgent[]>([
+    { id: "build", name: "Build", description: "Build software", mode: "all", hidden: false },
+    { id: "review", name: "Review", description: "Review changes", mode: "primary", hidden: false },
+    { id: "explore", name: "Explore", mode: "subagent", hidden: false },
+    { id: "secret", name: "Secret", mode: "all", hidden: true },
+  ])
+  const [current] = createSignal("review")
+  let selected: string | undefined
+
+  const app = await testRender(
+    () => (
+      <box width={100} height={RUN_COMMAND_PANEL_ROWS}>
+        <RunAgentSelectBody
+          theme={() => RUN_THEME_FALLBACK.footer}
+          agents={agents}
+          current={current}
+          onClose={() => {}}
+          onSelect={(agent) => (selected = agent)}
+        />
+      </box>
+    ),
+    {
+      width: 100,
+      height: RUN_COMMAND_PANEL_ROWS,
+    },
+  )
+
+  try {
+    await app.renderOnce()
+    const frame = app.captureCharFrame()
+
+    expect(frame).toContain("Select agent")
+    expect(frame).toContain("build")
+    expect(frame).toContain("review")
+    expect(frame).toContain("Review changes")
+    expect(frame).toContain("current")
+    expect(frame).not.toContain("explore")
+    expect(frame).not.toContain("secret")
+
+    app.mockInput.pressEnter()
+    expect(selected).toBe("review")
   } finally {
     app.renderer.destroy()
   }

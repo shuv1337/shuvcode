@@ -1,6 +1,10 @@
-# OpenCode website
+# Shuvcode website
 
-The server-rendered `opencode.ai` website. It uses TanStack Start on Cloudflare Workers and serves the V2 documentation with Fumadocs.
+The Shuvcode V2 website, powered by Blume and deployed with Wrangler at `https://shuv.ai/v2/`. Blume mounts the documentation at `/v2/docs`.
+
+Wrangler deploys the site through Blume's Cloudflare server adapter. Documentation pages are prerendered, while custom dynamic routes and endpoints can run in the Worker. Production uses `shuvcode-www-production` at `shuv.ai/v2/`; dev uses `shuvcode-www-dev` at `dev.shuv.ai/v2/`.
+
+The `deploy-www` GitHub workflow deploys the `dev` branch to the dev Worker and the `v2` branch to the production Worker.
 
 ## Development
 
@@ -10,13 +14,12 @@ From this directory, run:
 bun dev
 ```
 
-The site opens at `http://localhost:3000`; documentation is available at `http://localhost:3000/docs`.
+The site opens at `http://localhost:3000/v2/`; documentation is available at `http://localhost:3000/v2/docs`.
 
 ## Verification
 
 ```bash
 bun typecheck
+bun validate
 bun run build
 ```
-
-The existing `packages/web`, `packages/docs`, and `packages/stats/app` deployments remain in place until their routes have been migrated and verified.

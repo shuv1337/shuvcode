@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { Content } from "@opencode-ai/schema/tool"
 import { Effect, Schema, Stream } from "effect"
 import {
   GenerationOptions,
@@ -7,7 +8,6 @@ import {
   LLMRequest,
   LLMResponse,
   ToolChoice,
-  ToolContent,
   ToolOutput,
   toDefinitions,
 } from "../src"
@@ -183,6 +183,51 @@ describe("LLMClient tools", () => {
     }),
   )
 
+  it.effect("preserves provider metadata on dispatched tool results", () =>
+    Effect.gen(function* () {
+      const tool = Tool.make({
+        description: "Return text.",
+        parameters: Schema.Struct({}),
+        success: Schema.String,
+        execute: () => Effect.succeed("hello"),
+      })
+      const providerMetadata = { google: { functionCallId: "provider_call" } }
+      const dispatched = yield* ToolRuntime.dispatch(
+        { tool },
+        LLMEvent.toolCall({ id: "call_1", name: "tool", input: {}, providerMetadata }),
+      )
+
+      expect(dispatched.events).toEqual([
+        LLMEvent.toolResult({
+          id: "call_1",
+          name: "tool",
+          result: { type: "text", value: "hello" },
+          output: { structured: "hello", content: [{ type: "text", text: "hello" }] },
+          providerMetadata,
+        }),
+      ])
+
+      const failed = yield* ToolRuntime.dispatch(
+        {},
+        LLMEvent.toolCall({ id: "call_2", name: "missing", input: {}, providerMetadata }),
+      )
+      expect(failed.events).toEqual([
+        LLMEvent.toolError({
+          id: "call_2",
+          name: "missing",
+          message: "Unknown tool: missing",
+          providerMetadata,
+        }),
+        LLMEvent.toolResult({
+          id: "call_2",
+          name: "missing",
+          result: { type: "error", value: "Unknown tool: missing" },
+          providerMetadata,
+        }),
+      ])
+    }),
+  )
+
   it.effect("uses the narrow default projection for encoded typed success", () =>
     Effect.gen(function* () {
       const text = Tool.make({
@@ -234,7 +279,7 @@ describe("LLMClient tools", () => {
 
   it.effect("models canonical tool files with URIs", () =>
     Effect.sync(() => {
-      const decode = Schema.decodeUnknownSync(ToolContent)
+      const decode = Schema.decodeUnknownSync(Content)
 
       expect(decode({ type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" })).toEqual({
         type: "file",
@@ -494,6 +539,7 @@ describe("LLMClient tools", () => {
                   },
                   { type: "content_block_stop", index: 1 },
                   { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 5 } },
+                  { type: "message_stop" },
                 )
               : sseEvents(
                   { type: "message_start", message: { usage: { input_tokens: 5 } } },
@@ -501,6 +547,7 @@ describe("LLMClient tools", () => {
                   { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done." } },
                   { type: "content_block_stop", index: 0 },
                   { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 1 } },
+                  { type: "message_stop" },
                 ),
             { headers: { "content-type": "text/event-stream" } },
           )
@@ -508,7 +555,7 @@ describe("LLMClient tools", () => {
       )
 
       yield* TestToolRuntime.runTools({
-        request: LLM.updateRequest(baseRequest, {
+        request: LLMRequest.update(baseRequest, {
           model: AnthropicMessages.route
             .with({ auth: Auth.header("x-api-key", "test") })
             .model({ id: "claude-sonnet-4-5" }),
@@ -756,6 +803,7 @@ describe("LLMClient tools", () => {
               { type: "content_block_delta", index: 2, delta: { type: "text_delta", text: "Done." } },
               { type: "content_block_stop", index: 2 },
               { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 8 } },
+              { type: "message_stop" },
             ),
             { headers: { "content-type": "text/event-stream" } },
           )
@@ -763,7 +811,7 @@ describe("LLMClient tools", () => {
       )
       const events = Array.from(
         yield* TestToolRuntime.runTools({
-          request: LLM.updateRequest(baseRequest, {
+          request: LLMRequest.update(baseRequest, {
             model: AnthropicMessages.route
               .with({ auth: Auth.header("x-api-key", "test") })
               .model({ id: "claude-sonnet-4-5" }),

@@ -121,11 +121,12 @@ describe("mini command", () => {
     expect(result.stdout).toContain("run        Run shuvcode with a message")
   })
 
-  test("exposes run without legacy attach or command modes", async () => {
+  test("exposes run without legacy interactive, attach, or command modes", async () => {
     const result = await cli(["run", "--help"])
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("--server string")
+    expect(result.stdout).not.toContain("--interactive")
     expect(result.stdout).not.toContain("--variant")
     expect(result.stdout).not.toContain("--attach")
     expect(result.stdout).not.toContain("--command")
@@ -138,32 +139,47 @@ describe("mini command", () => {
     expect(result.stderr).not.toContain("You must provide a message")
   })
 
-  test("preserves a run failure exit code", async () => {
-    let modelRequests = 0
+  test("passes explicit selections to session creation without catalog preflight", async () => {
+    const requests: string[] = []
+    let session: unknown
     const server = Bun.serve({
       port: 0,
-      fetch(request) {
+      async fetch(request) {
         const url = new URL(request.url)
+        requests.push(url.pathname)
         if (url.pathname === "/api/health")
           return Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid })
         if (url.pathname === "/api/location")
           return Response.json({ directory: process.cwd(), project: { id: "global", directory: process.cwd() } })
-        if (url.pathname === "/api/model") {
-          modelRequests++
-          return Response.json({
-            location: { directory: process.cwd(), project: { id: "global", directory: process.cwd() } },
-            data: modelRequests === 1 ? [{ id: "missing", providerID: "definitely" }] : [],
-          })
+        if (url.pathname === "/api/session") {
+          session = await request.json()
+          return new Response("boom", { status: 500 })
         }
         return new Response(undefined, { status: 404 })
       },
     })
 
     try {
-      const result = await cli(["run", "--server", server.url.toString(), "--model", "definitely/missing", "hi"])
+      const result = await cli([
+        "run",
+        "--server",
+        server.url.toString(),
+        "--model",
+        "definitely/missing",
+        "--agent",
+        "definitely-missing",
+        "hi",
+      ])
 
       expect(result.exitCode).toBe(1)
-      expect(result.stderr).toContain("Model unavailable: definitely/missing")
+      expect(result.stderr).toContain("UnexpectedStatus")
+      expect(session).toMatchObject({
+        agent: "definitely-missing",
+        model: { providerID: "definitely", id: "missing" },
+      })
+      expect(requests).not.toContain("/api/model")
+      expect(requests).not.toContain("/api/agent")
+      expect(requests).not.toContain("/api/location/wait")
     } finally {
       server.stop(true)
     }
@@ -197,11 +213,16 @@ describe("mini command", () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("--server string")
+    expect(result.stdout).toContain("--prompt string")
+    expect(result.stdout).toContain("--replay")
+    expect(result.stdout).toContain("disable with --no-replay")
+    expect(result.stdout).toContain("--replay-limit integer")
+    expect(result.stdout).toContain("Limit replay to the newest N messages (default: 200)")
     expect(result.stdout).not.toContain("SUBCOMMANDS")
   })
 
   test("routes local and explicit-server invocations into mini", async () => {
-    for (const args of [["mini"], ["mini", "--server", "http://127.0.0.1:1"]]) {
+    for (const args of [["mini"], ["mini", "--no-replay"], ["mini", "--server", "http://127.0.0.1:1"]]) {
       const result = await cli(args)
 
       expect(result.exitCode).toBe(1)

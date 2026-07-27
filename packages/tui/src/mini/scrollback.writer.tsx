@@ -1,7 +1,14 @@
 import { createScrollbackWriter } from "@opentui/solid"
-import { TextRenderable, type ColorInput, type ScrollbackRenderContext, type ScrollbackWriter } from "@opentui/core"
+import {
+  MarkdownRenderable,
+  TextRenderable,
+  type ColorInput,
+  type ScrollbackRenderContext,
+  type ScrollbackWriter,
+} from "@opentui/core"
 import { Match, Switch, createMemo } from "solid-js"
 import { entryBody, entryFlags } from "./entry.body"
+import { monoMarkdownRenderable, monoMarkdownTableOptions } from "./mono"
 import { entryColor, entryLook, entrySyntax } from "./scrollback.shared"
 import { toolFiletype, toolStructuredFinal } from "./tool"
 import { RUN_THEME_FALLBACK, transparent, type RunTheme } from "./theme"
@@ -30,7 +37,7 @@ export function sameEntryGroup(left: StreamCommit | undefined, right: StreamComm
   return Boolean(current && next && current === next)
 }
 
-export function entryLayout(commit: StreamCommit, body: RunEntryBody = entryBody(commit)): EntryLayout {
+function entryLayout(commit: StreamCommit, body: RunEntryBody = entryBody(commit)): EntryLayout {
   if (commit.kind === "tool") {
     if (body.type === "structured" || body.type === "markdown") {
       return "block"
@@ -236,12 +243,15 @@ export function RunEntryContent(props: {
       </Match>
       <Match when={markdown()}>
         <markdown
+          ref={(renderable: MarkdownRenderable) => {
+            if (props.opts?.mono) monoMarkdownRenderable(renderable)
+          }}
           width="100%"
           syntaxStyle={syntax()}
           streaming={streaming()}
           content={markdown()!.content}
           fg={color()}
-          tableOptions={{ widthMode: "content" }}
+          tableOptions={props.opts?.mono ? monoMarkdownTableOptions : { widthMode: "content" }}
         />
       </Match>
     </Switch>

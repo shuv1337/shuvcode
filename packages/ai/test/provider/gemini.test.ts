@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { LLM, LLMError, Message, ToolCallPart, Usage } from "../../src"
+import { LLM, LLMError, LLMRequest, Message, ToolCallPart, ToolDefinition, Usage } from "../../src"
 import { Auth, LLMClient } from "../../src/route"
 import * as Gemini from "../../src/protocols/gemini"
 import { ProviderShared } from "../../src/protocols/shared"
@@ -33,6 +33,27 @@ describe("Gemini route", () => {
         systemInstruction: { parts: [{ text: "You are concise." }] },
         generationConfig: { maxOutputTokens: 20, temperature: 0 },
       })
+    }),
+  )
+
+  it.effect("normalizes Gemini thinking options", () =>
+    Effect.gen(function* () {
+      const prepared = yield* LLMClient.prepare<Gemini.GeminiBody>(
+        LLMRequest.update(request, {
+          providerOptions: { gemini: { thinkingConfig: { thinkingBudget: 0, includeThoughts: false } } },
+        }),
+      )
+      const filtered = yield* LLMClient.prepare<Gemini.GeminiBody>(
+        LLMRequest.update(request, {
+          providerOptions: { gemini: { thinkingConfig: { thinkingBudget: "invalid", includeThoughts: false } } },
+        }),
+      )
+
+      expect(prepared.body.generationConfig?.thinkingConfig).toEqual({
+        thinkingBudget: 0,
+        includeThoughts: false,
+      })
+      expect(filtered.body.generationConfig?.thinkingConfig).toEqual({ includeThoughts: false })
     }),
   )
 
@@ -70,6 +91,7 @@ describe("Gemini route", () => {
             Message.user([
               { type: "text", text: "What is in this image?" },
               { type: "media", mediaType: "image/png", data: "AAECAw==" },
+              { type: "media", mediaType: "application/pdf", data: "JVBERi0xLjQ=" },
             ]),
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "lookup", input: { query: "weather" } })]),
             Message.tool({ id: "call_1", name: "lookup", result: { forecast: "sunny" } }),
@@ -81,7 +103,11 @@ describe("Gemini route", () => {
         contents: [
           {
             role: "user",
-            parts: [{ text: "What is in this image?" }, { inlineData: { mimeType: "image/png", data: "AAECAw==" } }],
+            parts: [
+              { text: "What is in this image?" },
+              { inlineData: { mimeType: "image/png", data: "AAECAw==" } },
+              { inlineData: { mimeType: "application/pdf", data: "JVBERi0xLjQ=" } },
+            ],
           },
           {
             role: "model",
@@ -90,7 +116,12 @@ describe("Gemini route", () => {
           {
             role: "user",
             parts: [
-              { functionResponse: { name: "lookup", response: { name: "lookup", content: '{"forecast":"sunny"}' } } },
+              {
+                functionResponse: {
+                  name: "lookup",
+                  response: { name: "lookup", content: '{"forecast":"sunny"}' },
+                },
+              },
             ],
           },
         ],
@@ -110,7 +141,7 @@ describe("Gemini route", () => {
     }),
   )
 
-  it.effect("continues image tool results as inline vision input without base64 text", () =>
+  it.effect("continues media tool results as inline model input without base64 text", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare<Gemini.GeminiBody>(
         LLM.request({
@@ -125,6 +156,7 @@ describe("Gemini route", () => {
                 value: [
                   { type: "text", text: "Image read successfully" },
                   { type: "file", uri: "data:image/png;base64,AAECAw==", mime: "image/png", name: "pixel.png" },
+                  { type: "file", uri: "data:application/pdf;base64,JVBERi0xLjQ=", mime: "application/pdf" },
                 ],
               },
             }),
@@ -141,9 +173,12 @@ describe("Gemini route", () => {
               functionResponse: {
                 name: "read",
                 response: { name: "read", content: "Image read successfully" },
+                parts: [
+                  { inlineData: { mimeType: "image/png", data: "AAECAw==" } },
+                  { inlineData: { mimeType: "application/pdf", data: "JVBERi0xLjQ=" } },
+                ],
               },
             },
-            { inlineData: { mimeType: "image/png", data: "AAECAw==" } },
           ],
         },
       ])
@@ -174,8 +209,13 @@ describe("Gemini route", () => {
         {
           role: "user",
           parts: [
-            { functionResponse: { name: "read", response: { name: "read", content: "" } } },
-            { inlineData: { mimeType: "image/jpeg", data: "/9j/" } },
+            {
+              functionResponse: {
+                name: "read",
+                response: { name: "read", content: "" },
+                parts: [{ inlineData: { mimeType: "image/jpeg", data: "/9j/" } }],
+              },
+            },
           ],
         },
       ])
@@ -214,20 +254,22 @@ describe("Gemini route", () => {
     }),
   )
 
-  it.effect("omits tools when tool choice is none", () =>
+  it.effect("keeps tools and sends function calling mode NONE", () =>
     Effect.gen(function* () {
       const prepared = yield* LLMClient.prepare(
         LLM.request({
-          id: "req_no_tools",
+          id: "req_tool_choice_none",
           model,
           prompt: "Say hello.",
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
           toolChoice: { type: "none" },
         }),
       )
 
-      expect(prepared.body).toEqual({
+      expect(prepared.body).toMatchObject({
         contents: [{ role: "user", parts: [{ text: "Say hello." }] }],
+        tools: [{ functionDeclarations: [{ name: "lookup", description: "Lookup data" }] }],
+        toolConfig: { functionCallingConfig: { mode: "NONE" } },
       })
     }),
   )
@@ -352,10 +394,16 @@ describe("Gemini route", () => {
         { type: "text-delta", id: "text-0", text: "Hello" },
         { type: "text-delta", id: "text-0", text: "!" },
         { type: "text-end", id: "text-0" },
-        { type: "step-finish", index: 0, reason: "stop", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "stop", raw: "STOP" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "stop",
+          reason: { normalized: "stop", raw: "STOP" },
           usage,
         },
       ])
@@ -372,7 +420,10 @@ describe("Gemini route", () => {
               parts: [
                 { text: "thinking", thought: true },
                 { text: "", thought: true, thoughtSignature: "thought_sig" },
-                { functionCall: { name: "lookup", args: { query: "weather" } }, thoughtSignature: "tool_sig" },
+                {
+                  functionCall: { id: "provider_call", name: "lookup", args: { query: "weather" } },
+                  thoughtSignature: "tool_sig",
+                },
               ],
             },
             finishReason: "STOP",
@@ -380,8 +431,8 @@ describe("Gemini route", () => {
         ],
       })
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
       const reasoning = response.events.find((event) => event.type === "reasoning-start")
@@ -398,7 +449,10 @@ describe("Gemini route", () => {
         id: "reasoning-0",
         providerMetadata: { google: { thoughtSignature: "thought_sig" } },
       })
-      expect(toolCall).toMatchObject({ providerMetadata: { google: { thoughtSignature: "tool_sig" } } })
+      expect(toolCall).toMatchObject({
+        id: "tool_0",
+        providerMetadata: { google: { functionCallId: "provider_call", thoughtSignature: "tool_sig" } },
+      })
       expect(response.events.findIndex((event) => event.type === "reasoning-end")).toBeLessThan(
         response.events.findIndex((event) => event.type === "tool-call"),
       )
@@ -416,6 +470,13 @@ describe("Gemini route", () => {
                 providerMetadata: toolCall?.providerMetadata,
               }),
             ]),
+            Message.tool({
+              id: "tool_0",
+              name: "lookup",
+              result: "done",
+              resultType: "text",
+              providerMetadata: toolCall?.providerMetadata,
+            }),
           ],
         }),
       )
@@ -424,7 +485,22 @@ describe("Gemini route", () => {
           role: "model",
           parts: [
             { text: "thinking", thought: true, thoughtSignature: "thought_sig" },
-            { functionCall: { name: "lookup", args: { query: "weather" } }, thoughtSignature: "tool_sig" },
+            {
+              functionCall: { id: "provider_call", name: "lookup", args: { query: "weather" } },
+              thoughtSignature: "tool_sig",
+            },
+          ],
+        },
+        {
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                id: "provider_call",
+                name: "lookup",
+                response: { name: "lookup", content: "done" },
+              },
+            },
           ],
         },
       ])
@@ -446,8 +522,8 @@ describe("Gemini route", () => {
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1 },
       })
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
       const usage = new Usage({
@@ -480,10 +556,16 @@ describe("Gemini route", () => {
           providerExecuted: undefined,
           providerMetadata: undefined,
         },
-        { type: "step-finish", index: 0, reason: "tool-calls", usage, providerMetadata: undefined },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "tool-calls", raw: "STOP" },
+          usage,
+          providerMetadata: undefined,
+        },
         {
           type: "finish",
-          reason: "tool-calls",
+          reason: { normalized: "tool-calls", raw: "STOP" },
           usage,
         },
       ])
@@ -498,7 +580,7 @@ describe("Gemini route", () => {
             content: {
               role: "model",
               parts: [
-                { functionCall: { name: "lookup", args: { query: "weather" } } },
+                { functionCall: { id: "tool_0", name: "lookup", args: { query: "weather" } } },
                 { functionCall: { name: "lookup", args: { query: "news" } } },
               ],
             },
@@ -507,16 +589,25 @@ describe("Gemini route", () => {
         ],
       })
       const response = yield* LLMClient.generate(
-        LLM.updateRequest(request, {
-          tools: [{ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } }],
+        LLMRequest.update(request, {
+          tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
         }),
       ).pipe(Effect.provide(fixedResponse(body)))
 
       expect(response.toolCalls).toEqual([
-        { type: "tool-call", id: "tool_0", name: "lookup", input: { query: "weather" } },
+        {
+          type: "tool-call",
+          id: "tool_0",
+          name: "lookup",
+          input: { query: "weather" },
+          providerMetadata: { google: { functionCallId: "tool_0" } },
+        },
         { type: "tool-call", id: "tool_1", name: "lookup", input: { query: "news" } },
       ])
-      expect(response.events.at(-1)).toMatchObject({ type: "finish", reason: "tool-calls" })
+      expect(response.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "tool-calls", raw: "STOP" },
+      })
     }),
   )
 
@@ -536,9 +627,41 @@ describe("Gemini route", () => {
       )
 
       expect(length.events.map((event) => event.type)).toEqual(["step-start", "step-finish", "finish"])
-      expect(length.events.at(-1)).toMatchObject({ type: "finish", reason: "length" })
+      expect(length.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "length", raw: "MAX_TOKENS" },
+      })
       expect(filtered.events.map((event) => event.type)).toEqual(["step-start", "step-finish", "finish"])
-      expect(filtered.events.at(-1)).toMatchObject({ type: "finish", reason: "content-filter" })
+      expect(filtered.events.at(-1)).toMatchObject({
+        type: "finish",
+        reason: { normalized: "content-filter", raw: "SAFETY" },
+      })
+    }),
+  )
+
+  it.effect("maps current blocking and invalid-output finish reasons", () =>
+    Effect.gen(function* () {
+      const reasons = [
+        ["MODEL_ARMOR", "content-filter"],
+        ["IMAGE_PROHIBITED_CONTENT", "content-filter"],
+        ["IMAGE_RECITATION", "content-filter"],
+        ["LANGUAGE", "content-filter"],
+        ["UNEXPECTED_TOOL_CALL", "error"],
+        ["NO_IMAGE", "error"],
+        ["IMAGE_OTHER", "unknown"],
+        ["TOO_MANY_TOOL_CALLS", "error"],
+        ["MISSING_THOUGHT_SIGNATURE", "error"],
+        ["MALFORMED_RESPONSE", "error"],
+      ] as const
+
+      for (const [raw, normalized] of reasons) {
+        const response = yield* LLMClient.generate(request).pipe(
+          Effect.provide(
+            fixedResponse(sseEvents({ candidates: [{ content: { role: "model", parts: [] }, finishReason: raw }] })),
+          ),
+        )
+        expect(response.finishReason).toEqual({ normalized, raw })
+      }
     }),
   )
 

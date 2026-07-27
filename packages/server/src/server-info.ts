@@ -1,5 +1,4 @@
 import { Context, Layer } from "effect"
-import { Pairing } from "@opencode-ai/schema/pairing"
 import { networkInterfaces } from "node:os"
 import type { ServerOptions } from "./options"
 
@@ -33,7 +32,7 @@ export function connectionURLs(value: string, requestedHostname?: string) {
 }
 
 export function advertisedURLs(values: ReadonlyArray<string>) {
-  return Pairing.advertisedURLs(values)
+  return values.map((value) => new URL(value).toString().replace(/\/$/, ""))
 }
 
 export * as ServerInfo from "./server-info"

@@ -5,7 +5,7 @@ import { Result } from "effect"
 import { isAbsolute, resolve } from "node:path"
 import { pendingToolCall, stringValue, toLocations, toToolKind, type ToolInput } from "./tool"
 
-type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.v2.asked" }>
+type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.asked" }>
 type Connection = Pick<AgentSideConnection, "requestPermission"> & Partial<Pick<AgentSideConnection, "writeTextFile">>
 type Tool = { readonly name: string; readonly input: ToolInput }
 
@@ -53,15 +53,16 @@ export async function replyPermission(input: {
 
 export async function syncEditedFiles(input: {
   readonly connection: Partial<Pick<AgentSideConnection, "writeTextFile">>
+  readonly writeTextFile: boolean
   readonly sessionID: string
   readonly cwd: string
   readonly toolName: string
   readonly toolInput: ToolInput
-  readonly structured: Readonly<Record<string, unknown>>
+  readonly metadata: Readonly<Record<string, unknown>>
 }) {
-  if (!input.connection.writeTextFile || toToolKind(input.toolName) !== "edit") return
-  const files = Array.isArray(input.structured.files)
-    ? input.structured.files.flatMap((file): string[] => {
+  if (!input.writeTextFile || !input.connection.writeTextFile || toToolKind(input.toolName) !== "edit") return
+  const files = Array.isArray(input.metadata.files)
+    ? input.metadata.files.flatMap((file): string[] => {
         if (!file || typeof file !== "object") return []
         const path = Reflect.get(file, "file")
         return typeof path === "string" ? [path] : []

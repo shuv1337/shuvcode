@@ -22,7 +22,7 @@ import { useData } from "../../context/data"
 import { SplitBorder } from "../../ui/border"
 import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
 import { Spinner, SPINNER_FRAMES } from "../../component/spinner"
-import { useTheme } from "../../context/theme"
+import { ThemeContextProvider, useTheme } from "../../context/theme"
 import { BoxRenderable, ScrollBoxRenderable, addDefaultParsers, TextAttributes, RGBA } from "@opentui/core"
 import { Prompt, type PromptRef } from "../../component/prompt"
 import type {
@@ -42,6 +42,7 @@ import {
   canonicalToolName,
   finiteNumber,
   primitiveInputSummary,
+  toolDisplayContent,
   toolDisplayMetadata,
   webSearchProviderLabel,
 } from "../../util/tool-display"
@@ -80,10 +81,19 @@ import { PluginSlot } from "../../plugin/context"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { usePathFormatter } from "../../context/path-format"
 import { useLocation } from "../../context/location"
-import { createSessionRows, messageBoundaryIDs, resolvePart, type PartRef, type SessionRow } from "./rows"
+import {
+  cacheReuseDrop,
+  createSessionRows,
+  messageBoundaryIDs,
+  resolvePart,
+  type CacheUsage,
+  type PartRef,
+  type SessionRow,
+} from "./rows"
 import { switchLabel } from "../../util/model"
 import { findMessageBoundary, messageNavigationSlack } from "./message-navigation"
 import { stringWidth } from "../../util/string-width"
+import { useArgs } from "../../context/args"
 
 addDefaultParsers(parsers.parsers)
 
@@ -120,6 +130,7 @@ export function Session() {
   const { navigate } = useRoute()
   const data = useData()
   const local = useLocal()
+  const args = useArgs()
   const paths = useTuiPaths()
   const configState = useConfig()
   const config = configState.data
@@ -216,6 +227,7 @@ export function Session() {
   const boundaries = createMemo(() => messageBoundaryIDs(rows, messages()))
   const [navigationMessage, setNavigationMessage] = createSignal<string>()
   const [navigationSlack, setNavigationSlack] = createSignal(0)
+  const [synced, setSynced] = createSignal(false)
 
   const clearMessageNavigation = () => {
     setNavigationSlack(0)
@@ -242,6 +254,7 @@ export function Session() {
 
   createEffect(() => {
     if (client.connection.status() !== "connected") return
+    setSynced(false)
     const sessionID = route.sessionID
     void (async () => {
       await Promise.all([
@@ -261,6 +274,7 @@ export function Session() {
       }
       editor.reconnect(info.location.directory)
       if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
+      setSynced(true)
     })().catch((error) => {
       if (route.sessionID !== sessionID) return
       toast.show({
@@ -273,15 +287,25 @@ export function Session() {
   })
 
   let seeded = false
+  let sent = false
   let scroll: ScrollBoxRenderable
-  let prompt: PromptRef | undefined
+  const [prompt, setPrompt] = createSignal<PromptRef>()
   const bind = (r: PromptRef | undefined) => {
-    prompt = r
+    setPrompt(r)
     promptRef.set(r)
     if (seeded || !route.prompt || !r) return
     seeded = true
     r.set(route.prompt)
   }
+
+  createEffect(() => {
+    const current = prompt()
+    if (sent || !current || !synced() || !local.model.ready) return
+    if (!local.agent.current() || !local.model.current()) return
+    if (!args.prompt || route.prompt?.text !== args.prompt || current.current.text !== args.prompt) return
+    sent = true
+    current.submit()
+  })
   const dialog = useDialog()
   const renderer = useRenderer()
   const unavailable = (feature: string) => {
@@ -526,7 +550,7 @@ export function Session() {
         void client.api.session.revert
           .stage({ sessionID: route.sessionID, messageID: message.id })
           .catch((error) => toast.show({ message: errorMessage(error), variant: "error", duration: 5000 }))
-        prompt?.set({
+        prompt()?.set({
           ...projectedPromptInput(message),
           pasted: [],
         })
@@ -747,23 +771,6 @@ export function Session() {
             options.format === "markdown"
               ? formatSessionTranscript(sessionData, messages(), options.thinking)
               : await (async () => {
-                  if (options.debug) {
-                    const events: { readonly created: number }[] = []
-                    for await (const event of client.api.session.log({ sessionID: sessionData.id, follow: false })) {
-                      if (event.type !== "log.synced") events.push(event)
-                    }
-                    // Durable events stay in aggregate order even when their wall-clock timestamps differ.
-                    client.connection.internal.history().forEach((event) => {
-                      const index = events.findIndex((item) => item.created > event.created)
-                      if (index === -1) {
-                        events.push(event)
-                        return
-                      }
-                      events.splice(index, 0, event)
-                    })
-                    return JSON.stringify({ info: sessionData, events }, null, 2) + EOL
-                  }
-
                   const messages: unknown[] = []
                   let cursor: string | undefined
                   do {
@@ -1031,11 +1038,13 @@ export function Session() {
   )
 }
 
-function SessionRowView(props: {
+type SessionRowViewProps = {
   row: SessionRow
   message: (messageID: string) => SessionMessageInfo | undefined
   boundaryID?: string
-}) {
+}
+
+function SessionRowView(props: SessionRowViewProps) {
   return (
     <box id={props.boundaryID} marginTop={1} flexShrink={0}>
       <Switch>
@@ -1074,8 +1083,104 @@ function SessionRowView(props: {
             </Show>
           )}
         </Match>
+        <Match when={props.row.type === "turn-usage" ? props.row : undefined}>
+          {(row) => (
+            <TurnTokenUsage
+              messageIDs={row().messageIDs}
+              previousCache={row().previousCache}
+              message={props.message}
+            />
+          )}
+        </Match>
       </Switch>
     </box>
+  )
+}
+
+function TurnTokenUsage(props: {
+  messageIDs: string[]
+  previousCache?: CacheUsage
+  message: (messageID: string) => SessionMessageInfo | undefined
+}) {
+  const config = useConfig()
+  const { themeV2 } = useTheme()
+  const steps = createMemo(() => {
+    let previousCache = props.previousCache
+    return props.messageIDs.flatMap((messageID) => {
+      const message = props.message(messageID)
+      if (message?.type !== "assistant" || !message.tokens) return []
+      const total =
+        message.tokens.input +
+        message.tokens.output +
+        message.tokens.reasoning +
+        message.tokens.cache.read +
+        message.tokens.cache.write
+      if (total === 0) return []
+      const newTokens = total - message.tokens.cache.read
+      const currentCache = { read: message.tokens.cache.read, model: message.model }
+      const reuseDrop = cacheReuseDrop(previousCache, currentCache)
+      previousCache = currentCache
+      return [
+        {
+          finish: message.finish === "tool-calls" ? "tool-call" : (message.finish ?? "unknown"),
+          newTokens,
+          cached: message.tokens.cache.read,
+          total,
+          reuseDrop,
+        },
+      ]
+    })
+  })
+  const columns = createMemo(() => ({
+    step: Math.max("Step".length, ...steps().map((item) => item.finish.length)),
+    newTokens: Math.max("New".length, ...steps().map((item) => item.newTokens.toLocaleString().length)),
+    cached: Math.max("Cached".length, ...steps().map((item) => item.cached.toLocaleString().length)),
+    total: Math.max("Total".length, ...steps().map((item) => item.total.toLocaleString().length)),
+  }))
+  return (
+    <Show when={config.data.debug?.turn_tokens === true && steps().length > 0}>
+      <box paddingLeft={3} flexDirection="column">
+        <box flexDirection="row">
+          <text width={INLINE_TOOL_ICON_WIDTH} fg={themeV2.text.subdued}>
+            ◈
+          </text>
+          <text fg={themeV2.text.subdued} attributes={TextAttributes.BOLD}>
+            Tokens
+          </text>
+        </box>
+        <box paddingLeft={INLINE_TOOL_ICON_WIDTH}>
+          <text fg={themeV2.text.subdued} attributes={TextAttributes.ITALIC}>
+            {"Step".padEnd(columns().step + 2)}
+            {"New".padStart(columns().newTokens)}
+            {"  "}
+            {"Cached".padStart(columns().cached)}
+            {"  "}
+            {"Total".padStart(columns().total)}
+          </text>
+        </box>
+        <For each={steps()}>
+          {(item) => (
+            <box paddingLeft={INLINE_TOOL_ICON_WIDTH} flexDirection="column">
+              <text fg={themeV2.text.subdued}>
+                {item.finish.padEnd(columns().step + 2)}
+                <span style={{ attributes: TextAttributes.BOLD }}>
+                  {item.newTokens.toLocaleString().padStart(columns().newTokens)}
+                </span>
+                {"  "}
+                {item.cached.toLocaleString().padStart(columns().cached)}
+                {"  "}
+                {item.total.toLocaleString().padStart(columns().total)}
+              </text>
+              <Show when={item.reuseDrop !== undefined}>
+                <text fg={themeV2.text.feedback.warning.default}>
+                  ! Likely cache bust: {item.reuseDrop?.toLocaleString()} fewer cached tokens than the previous step
+                </text>
+              </Show>
+            </box>
+          )}
+        </For>
+      </box>
+    </Show>
   )
 }
 
@@ -2048,7 +2153,7 @@ function ToolPart(props: { part: SessionMessageAssistantTool }) {
     },
     get output() {
       if (props.part.state.status === "streaming") return undefined
-      return props.part.state.content
+      return toolDisplayContent(props.part.state)
         .flatMap((content) => (content.type === "text" ? [content.text] : [content.name ?? content.uri]))
         .join("\n")
     },
@@ -2352,15 +2457,26 @@ function StatusBadge(props: { children: string }) {
   )
 }
 
-function BlockTool(props: {
+type BlockToolProps = {
   title?: string
   path?: { label: string; value: string }
   children?: JSX.Element
   onClick?: () => void
   part?: SessionMessageAssistantTool
   spinner?: boolean
-}) {
-  const { themeV2 } = useTheme().contextual("elevated")
+}
+
+function BlockTool(props: BlockToolProps) {
+  const parentTheme = useTheme()
+  return (
+    <ThemeContextProvider context="elevated">
+      <BlockToolContent {...props} borderColor={parentTheme.themeV2.background.default} />
+    </ThemeContextProvider>
+  )
+}
+
+function BlockToolContent(props: BlockToolProps & { borderColor: RGBA }) {
+  const { themeV2 } = useTheme()
   const ctx = use()
   const data = useData()
   const renderer = useRenderer()
@@ -2380,7 +2496,7 @@ function BlockTool(props: {
       gap={1}
       backgroundColor={hover() ? themeV2.raise(themeV2.background.default) : themeV2.background.default}
       customBorderChars={SplitBorder.customBorderChars}
-      borderColor={themeV2.background.default}
+      borderColor={props.borderColor}
       onMouseOver={() => props.onClick && setHover(true)}
       onMouseOut={() => setHover(false)}
       onMouseUp={() => {
@@ -2439,55 +2555,106 @@ function BlockTool(props: {
   )
 }
 
+const SHELL_DISPLAY_LIMIT = 1024 * 1024
+
 function Shell(props: ToolProps) {
   const { themeV2 } = useTheme()
   const ctx = use()
   const client = useClient()
   const data = useData()
+  const pathFormatter = usePathFormatter()
   const permission = createMemo(() => {
     const request = data.session.permission.list(ctx.sessionID)?.[0]
     return request?.source?.type === "tool" && request.source.callID === props.part.id
   })
   const color = createMemo(() => (permission() ? themeV2.text.feedback.warning.default : themeV2.text.default))
   const shellID = createMemo(() => stringValue(props.metadata.shellID))
+  const background = createMemo(() => Boolean(shellID()) && props.part.state.status !== "running")
   const backgroundRunning = createMemo(() => {
     const id = shellID()
     return Boolean(id && data.shell.get(id))
   })
   const isRunning = createMemo(() => props.part.state.status === "running" || backgroundRunning())
   const command = createMemo(() => stringValue(props.input.command))
+  const workdir = createMemo(() => pathFormatter.format(stringValue(props.input.workdir)))
   const [expanded, setExpanded] = createSignal(false)
   const [backgroundOutput, setBackgroundOutput] = createSignal("")
+  const [outputTruncated, setOutputTruncated] = createSignal(false)
   let loading = false
-  const loadBackgroundOutput = async () => {
+  let drainRequested = false
+  let cursor = 0
+  let wasRunning = false
+  const loadBackgroundOutput = async (drain = false) => {
     const id = shellID()
-    if (!id || loading) return
+    if (!id) return
+    if (loading) {
+      if (drain) drainRequested = true
+      return
+    }
     loading = true
     const location = data.session.get(ctx.sessionID)?.location
-    await client.api.shell
-      .output({
-        id,
-        limit: 1024 * 1024,
-        location: location ? { directory: location.directory, workspace: location.workspaceID } : undefined,
-      })
-      .then((response) => setBackgroundOutput(stripAnsi(response.data.output.trim())))
-      .catch(() => undefined)
+    do {
+      const response = await client.api.shell
+        .output({
+          id,
+          cursor,
+          limit: SHELL_DISPLAY_LIMIT,
+          location: location ? { directory: location.directory, workspace: location.workspaceID } : undefined,
+        })
+        .catch(() => undefined)
+      if (!response) break
+      if (response.data.output)
+        setBackgroundOutput((output) => {
+          const next = stripAnsi(output + response.data.output)
+          if (next.length <= SHELL_DISPLAY_LIMIT) return next
+          setOutputTruncated(true)
+          return next.slice(-SHELL_DISPLAY_LIMIT)
+        })
+      if (response.data.cursor <= cursor) break
+      cursor = response.data.cursor
+      if (!drain || cursor >= response.data.size) break
+      const tail = Math.max(cursor, response.data.size - SHELL_DISPLAY_LIMIT)
+      if (tail > cursor) {
+        cursor = tail
+        setOutputTruncated(true)
+      }
+    } while (true)
     loading = false
+    if (drainRequested) {
+      drainRequested = false
+      void loadBackgroundOutput(true)
+    }
   }
   createEffect(() => {
-    if (!expanded() || !backgroundRunning()) return
+    const running = backgroundRunning()
+    if (!running) {
+      if (wasRunning) void loadBackgroundOutput(true)
+      wasRunning = false
+      return
+    }
+    wasRunning = true
+    if (background() && !expanded()) return
+    void loadBackgroundOutput()
     const interval = setInterval(() => void loadBackgroundOutput(), 1_000)
     onCleanup(() => clearInterval(interval))
   })
   const output = createMemo(() => {
     if (props.part.state.status === "streaming") return ""
-    if (shellID()) return expanded() ? backgroundOutput() : ""
-    const content = props.part.state.content[0]
+    if (shellID()) {
+      if (background() && !expanded()) return ""
+      const text = backgroundOutput().trim()
+      return outputTruncated() ? `[earlier output omitted]\n${text}` : text
+    }
+    const content = toolDisplayContent(props.part.state)[0]
     return stripAnsi(content?.type === "text" ? content.text.trim() : "")
   })
   const maxLines = 10
   const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
-  const input = createMemo(() => (command() ? `${isRunning() ? "" : "$ "}${command()}` : ""))
+  const input = createMemo(() => {
+    if (!command()) return ""
+    const prompt = workdir() && workdir() !== "." ? `${workdir()}$ ` : isRunning() ? "" : "$ "
+    return `${prompt}${command()}`
+  })
   const content = createMemo(() => [input(), output()].filter(Boolean).join("\n\n"))
   const collapsed = createMemo(() => collapseToolOutput(content(), maxLines, maxChars()))
   const limited = createMemo(() => {
@@ -2498,7 +2665,7 @@ function Shell(props: ToolProps) {
   const toggle = () => {
     const next = !expanded()
     setExpanded(next)
-    if (next) void loadBackgroundOutput()
+    if (next) void loadBackgroundOutput(!backgroundRunning())
   }
 
   return (
@@ -2529,7 +2696,7 @@ function Shell(props: ToolProps) {
             </Spinner>
           </Show>
         </Show>
-        <Show when={shellID()}>
+        <Show when={background()}>
           <StatusBadge>Background</StatusBadge>
         </Show>
       </box>
@@ -2643,8 +2810,7 @@ function WebFetch(props: ToolProps) {
 function WebSearch(props: ToolProps) {
   return (
     <InlineTool icon="◈" pending="Searching web..." complete={stringValue(props.input.query)} part={props.part}>
-      {webSearchProviderLabel(props.metadata.provider)} "{stringValue(props.input.query)}"{" "}
-      <Show when={finiteNumber(props.metadata.numResults)}>({finiteNumber(props.metadata.numResults)} results)</Show>
+      {webSearchProviderLabel(props.metadata.provider)} "{stringValue(props.input.query)}"
     </InlineTool>
   )
 }
@@ -2712,7 +2878,7 @@ function Execute(props: ToolProps) {
   const isLoading = createMemo(() => props.part.state.status === "streaming" || props.part.state.status === "running")
   const calls = createMemo(() => executeCalls(props.metadata.toolCalls))
   const output = createMemo(() => stripAnsi(props.output?.trim() ?? ""))
-  const hasRuntimeError = createMemo(() => props.metadata.error === true)
+  const hasRuntimeError = createMemo(() => props.metadata.error === true || props.part.state.status === "error")
   const outputPreview = createMemo(() => collapseToolOutput(output(), 4, 4 * Math.max(20, ctx.width - 6)).output)
   const showOutput = createMemo(() => output() && hasRuntimeError())
   const content = createMemo(() => {
@@ -3046,7 +3212,7 @@ function formatSessionTranscript(session: SessionInfo, messages: SessionMessageI
           ? item.state.error.message
           : item.state.status === "streaming"
             ? ""
-            : item.state.content
+            : toolDisplayContent(item.state)
                 .flatMap((entry) => (entry.type === "text" ? [entry.text] : [entry.name ?? entry.uri]))
                 .join("\n")
       return [`**Tool: ${item.name}**\n\n**Input:**\n\`\`\`json\n${input}\n\`\`\`\n\n${output}`]

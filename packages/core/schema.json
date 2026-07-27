@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "6150dfda-9751-4371-8e67-cc5afcd2fed8",
+  "id": "c84b403c-42cb-4ab9-8d74-bb11a1822b2f",
   "prevIds": [
-    "a4ba73b4-21bc-41ab-a415-94e2ca38d798"
+    "6150dfda-9751-4371-8e67-cc5afcd2fed8"
   ],
   "ddl": [
     {
@@ -40,10 +40,6 @@
     },
     {
       "name": "kv",
-      "entityType": "tables"
-    },
-    {
-      "name": "pairing_device",
       "entityType": "tables"
     },
     {
@@ -603,86 +599,6 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "kv"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "request_id",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "credential_hash",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "invitation_hash",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_created",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_updated",
-      "entityType": "columns",
-      "table": "pairing_device"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "time_revoked",
-      "entityType": "columns",
-      "table": "pairing_device"
     },
     {
       "type": "text",
@@ -1986,15 +1902,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "pairing_device_pk",
-      "table": "pairing_device",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
@@ -2119,48 +2026,6 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
-    },
-    {
-      "columns": [
-        {
-          "value": "request_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "pairing_device_request_id_unique",
-      "entityType": "indexes",
-      "table": "pairing_device"
-    },
-    {
-      "columns": [
-        {
-          "value": "credential_hash",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "pairing_device_credential_hash_unique",
-      "entityType": "indexes",
-      "table": "pairing_device"
-    },
-    {
-      "columns": [
-        {
-          "value": "invitation_hash",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "pairing_device_invitation_hash_unique",
-      "entityType": "indexes",
-      "table": "pairing_device"
     },
     {
       "columns": [

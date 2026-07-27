@@ -6,11 +6,11 @@
 // the run footer + scrollback color model. Falls back to a hardcoded dark-mode
 // palette if detection fails.
 import { RGBA, SyntaxStyle, type CliRenderer, type ColorInput, type TerminalColors } from "@opentui/core"
-import type { TuiThemeCurrent } from "@opencode-ai/plugin/tui"
+import type { TuiThemeCurrent } from "@opencode-ai/plugin/v1/tui"
 import { ansiToRgba } from "../theme/color"
 import { resolveThemeColors } from "../theme/resolve"
 import { terminalMode } from "../theme/system"
-import type { ThemeJson } from "../theme/v1"
+import type { ThemeV1Json } from "../theme/v1"
 import type { EntryKind, RunTuiConfig } from "./types"
 
 type Tone = {
@@ -184,7 +184,7 @@ function splashShadow(indexed: RGBA[], base: RGBA, overlay: RGBA, value: number)
   return nearestIndexed(indexed, mixed)
 }
 
-export function resolveTheme(theme: ThemeJson, pick: "dark" | "light"): TuiThemeCurrent {
+export function resolveTheme(theme: ThemeV1Json, pick: "dark" | "light"): TuiThemeCurrent {
   const resolved = resolveThemeColors(theme, pick, (code) => RGBA.fromIndex(code, ansiToRgba(code)))
   return {
     ...resolved.theme,
@@ -246,7 +246,7 @@ function generateMutedTextColor(bg: RGBA, isDark: boolean, map: (rgba: RGBA) => 
   return map(RGBA.fromInts(gray, gray, gray))
 }
 
-export function generateSystem(colors: TerminalColors, pick: "dark" | "light"): ThemeJson {
+export function generateSystem(colors: TerminalColors, pick: "dark" | "light"): ThemeV1Json {
   const bg_snapshot = RGBA.fromHex(colors.defaultBackground ?? colors.palette[0]!)
   const fg_snapshot = RGBA.fromHex(colors.defaultForeground ?? colors.palette[7]!)
   const bg = RGBA.defaultBackground(bg_snapshot)

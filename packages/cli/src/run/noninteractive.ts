@@ -1,7 +1,7 @@
 import type {
   EventSubscribeOutput,
   JsonValue,
-  LLMToolContent,
+  ToolContent,
   LocationRef,
   OpenCodeClient,
   SessionMessageAssistantTool,
@@ -10,7 +10,7 @@ import type {
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
-import { toolOutputText, type MiniToolPart } from "@opencode-ai/tui/mini/tool"
+import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@opencode-ai/tui/mini/tool"
 import { UI } from "./ui"
 
 type Model = {
@@ -55,8 +55,8 @@ type ToolState = StartedPart & {
   raw?: string
   provider?: unknown
   providerState?: SessionMessageAssistantTool["providerState"]
-  structured: Record<string, JsonValue>
-  content: LLMToolContent[]
+  metadata: Record<string, JsonValue>
+  content: ToolContent[]
 }
 
 type V2Event = EventSubscribeOutput
@@ -177,7 +177,7 @@ export async function runNonInteractivePrompt(input: Input) {
       }
       const event = next.value
 
-      if (event.type === "permission.v2.asked" && submitted && event.data.sessionID === input.sessionID) {
+      if (event.type === "permission.asked" && submitted && event.data.sessionID === input.sessionID) {
         await replyPermission(event.data)
         continue
       }
@@ -211,10 +211,17 @@ export async function runNonInteractivePrompt(input: Input) {
       }
       if (!promoted && event.type === "session.execution.failed") {
         prePromotionError = event.data.error
+        if (finalizing) return
         continue
       }
+      if (
+        !promoted &&
+        finalizing &&
+        (event.type === "session.execution.succeeded" || event.type === "session.execution.interrupted")
+      )
+        return
       if (!promoted) continue
-      if (finalizing) continue
+      if (finalizing && !event.type.startsWith("session.execution.")) continue
 
       if (event.type === "session.step.started") {
         const part = {
@@ -299,7 +306,7 @@ export async function runNonInteractivePrompt(input: Input) {
           assistantMessageID: event.data.assistantMessageID,
           tool: event.data.name,
           input: {},
-          structured: {},
+          metadata: {},
           content: [],
         })
         continue
@@ -327,7 +334,7 @@ export async function runNonInteractivePrompt(input: Input) {
           raw: current?.raw,
           provider: { executed: event.data.executed, state: event.data.state },
           providerState: event.data.state,
-          structured: {},
+          metadata: {},
           content: [],
         })
         continue
@@ -335,8 +342,7 @@ export async function runNonInteractivePrompt(input: Input) {
       if (event.type === "session.tool.progress") {
         const current = tools.get(toolKey(event.data.assistantMessageID, event.data.callID))
         if (current) {
-          current.structured = event.data.structured
-          current.content = event.data.content
+          current.metadata = event.data.metadata
         }
         continue
       }
@@ -353,9 +359,8 @@ export async function runNonInteractivePrompt(input: Input) {
           state: {
             status: "completed",
             input: current.input,
-            structured: event.data.structured,
+            metadata: event.data.metadata,
             content: event.data.content,
-            result: event.data.result,
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
@@ -372,9 +377,8 @@ export async function runNonInteractivePrompt(input: Input) {
             output: toolOutputText(current.tool, event.data.content),
             title: current.tool,
             metadata: {
-              structured: event.data.structured,
+              metadata: event.data.metadata,
               content: event.data.content,
-              result: event.data.result,
               providerCall: current.provider,
               providerResult: { executed: event.data.executed, state: event.data.resultState },
               rawInput: current.raw,
@@ -391,6 +395,8 @@ export async function runNonInteractivePrompt(input: Input) {
         const key = toolKey(event.data.assistantMessageID, event.data.callID)
         const current = tools.get(key) ?? fallbackTool(event)
         const error = event.data.error.message
+        const metadata = event.data.metadata ?? current.metadata
+        const content = event.data.content ?? nonEmptyToolContent(current.content)
         const tool: SessionMessageAssistantTool = {
           type: "tool",
           id: event.data.callID,
@@ -401,10 +407,9 @@ export async function runNonInteractivePrompt(input: Input) {
           state: {
             status: "error",
             input: current.input,
-            structured: current.structured,
-            content: current.content,
+            metadata,
+            content,
             error: event.data.error,
-            result: event.data.result,
           },
           time: { created: current.timestamp, ran: current.timestamp, completed: time },
         }
@@ -420,7 +425,6 @@ export async function runNonInteractivePrompt(input: Input) {
             input: current.input,
             error,
             metadata: {
-              result: event.data.result,
               providerCall: current.provider,
               providerResult: { executed: event.data.executed, state: event.data.resultState },
               rawInput: current.raw,
@@ -432,15 +436,14 @@ export async function runNonInteractivePrompt(input: Input) {
         renderedTools.add(key)
         if (input.compatibility === "v1" && (permissionRejected || formCancelled)) continue
         if (!emit("tool_use", time, { part })) {
-          if (toolOutputText(current.tool, current.content).trim())
+          if (content && toolOutputText(current.tool, content).trim())
             await input.renderTool({
               ...tool,
               state: {
                 status: "completed",
                 input: current.input,
-                structured: current.structured,
-                content: current.content,
-                result: event.data.result,
+                metadata,
+                content,
               },
             })
           await input.renderToolError(tool)
@@ -588,14 +591,14 @@ export async function runNonInteractivePrompt(input: Input) {
                   input: item.state.input,
                   output: toolOutputText(item.name, item.state.content),
                   title: item.name,
-                  metadata: { structured: item.state.structured, content: item.state.content, result: item.state.result },
+                  metadata: { metadata: item.state.metadata, content: item.state.content },
                   time: { start: item.time.ran ?? item.time.created, end: item.time.completed ?? timestamp },
                 }
               : {
                   status: "error",
                   input: item.state.input,
                   error: item.state.error.message,
-                  metadata: { structured: item.state.structured, content: item.state.content, result: item.state.result },
+                  metadata: { metadata: item.state.metadata, content: item.state.content },
                   time: { start: item.time.ran ?? item.time.created, end: item.time.completed ?? timestamp },
                 },
         }
@@ -605,8 +608,16 @@ export async function runNonInteractivePrompt(input: Input) {
           await input.renderTool(item)
           continue
         }
-        if (toolOutputText(item.name, item.state.content).trim()) {
-          await input.renderTool({ ...item, state: { ...item.state, status: "completed" } })
+        if (item.state.content && toolOutputText(item.name, item.state.content).trim()) {
+          await input.renderTool({
+            ...item,
+            state: {
+              status: "completed",
+              input: item.state.input,
+              metadata: item.state.metadata,
+              content: item.state.content,
+            },
+          })
         }
         await input.renderToolError(item)
         UI.error(item.state.error.message)
@@ -618,7 +629,10 @@ export async function runNonInteractivePrompt(input: Input) {
         if (!emit("error", timestamp, { error: message.error })) UI.error(message.error.message)
       }
     }
-    return projected.found
+    return {
+      found: projected.found,
+      responded: projected.messages.some((message) => message.type === "assistant"),
+    }
   }
 
   const interrupt = () => {
@@ -708,9 +722,18 @@ export async function runNonInteractivePrompt(input: Input) {
     const waiting = input.client.session.wait({ sessionID: input.sessionID })
     await Promise.race([waiting, completed.then(() => waiting)])
     finalizing = true
-    controller.abort()
-    const found = await reconcile()
-    if (!found && !interrupted && !permissionRejected && !formCancelled && !emittedError) {
+    const projected = await reconcile()
+    if (
+      !projected.responded &&
+      !interrupted &&
+      !permissionRejected &&
+      !formCancelled &&
+      !emittedError &&
+      !prePromotionError
+    ) {
+      await completed
+    }
+    if (!projected.found && !interrupted && !permissionRejected && !formCancelled && !emittedError) {
       const error = prePromotionError ?? { type: "unknown", message: "Prompt was not promoted" }
       emittedError = true
       process.exitCode = 1
@@ -771,7 +794,7 @@ function fallbackTool(event: {
     assistantMessageID: event.data.assistantMessageID,
     tool: "tool",
     input: {},
-    structured: {},
+    metadata: {},
     content: [],
   }
 }

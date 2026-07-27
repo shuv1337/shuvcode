@@ -4,6 +4,8 @@ The updates Worker serves all selected artifacts for a channel.
 
 ```sh
 curl 'https://update.opencode.ai/api/latest'
+curl 'https://update.opencode.ai/api/latest/cli'
+curl 'https://update.opencode.ai/api/latest/cli/npm'
 ```
 
 The `/admin*` route must be protected by a Cloudflare Access self-hosted application. Configure the application with:

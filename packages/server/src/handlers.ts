@@ -21,18 +21,17 @@ import { QuestionHandler } from "./handlers/question"
 import { ReferenceHandler } from "./handlers/reference"
 import { LocationHandler } from "./handlers/location"
 import { IntegrationHandler } from "./handlers/integration"
+import { WebSearchHandler } from "./handlers/websearch"
 import { McpHandler } from "./handlers/mcp"
 import { CredentialHandler } from "./handlers/credential"
 import { ProjectHandler } from "./handlers/project"
 import { ProjectCopyHandler } from "./handlers/project-copy"
 import { VcsHandler } from "./handlers/vcs"
 import { EventFeed } from "./event-feed"
-import { PairingHandler } from "./handlers/pairing"
 
 export const handlers = Layer.mergeAll(
   HealthHandler,
   ServerHandler,
-  PairingHandler,
   DebugHandler,
   LocationHandler,
   AgentHandler,
@@ -43,6 +42,7 @@ export const handlers = Layer.mergeAll(
   GenerateHandler,
   ProviderHandler,
   IntegrationHandler,
+  WebSearchHandler,
   McpHandler,
   CredentialHandler,
   ProjectHandler,

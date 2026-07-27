@@ -12,6 +12,7 @@ test("down opens subagents from an empty prompt", async () => {
   const [state] = createSignal<FooterState>({
     phase: "idle",
     status: "",
+    notice: "",
     model: "gpt-5",
     usage: "",
     first: false,
@@ -26,7 +27,6 @@ test("down opens subagents from an empty prompt", async () => {
         label: "Explore",
         description: "Inspect the keymap",
         status: "running",
-        lastUpdatedAt: 1,
       },
     ],
     details: {},
@@ -47,6 +47,9 @@ test("down opens subagents from an empty prompt", async () => {
           references={() => []}
           commands={() => []}
           providers={() => undefined}
+          currentAgent={() => "Build"}
+          currentAgentID={() => "build"}
+          currentAgentExplicit={() => false}
           currentModel={() => undefined}
           variants={() => []}
           currentVariant={() => undefined}
@@ -54,8 +57,14 @@ test("down opens subagents from an empty prompt", async () => {
           view={view}
           subagent={subagents}
           theme={() => RUN_THEME_FALLBACK}
-          tuiConfig={config}
-          miniSettings={() => ({ thinking: "hide", shell_output: "hide", turn_summary: "show", footer: "show", mono: false })}
+          miniSettings={() => ({
+            thinking: "hide",
+            shell_output: "hide",
+            turn_summary: "show",
+            footer: "show",
+            splash: "show",
+            mono: false,
+          })}
           mono={false}
           onSubmit={() => true}
           onPermissionReply={() => {}}
@@ -66,6 +75,7 @@ test("down opens subagents from an empty prompt", async () => {
           onEditorOpen={async () => undefined}
           onInputClear={() => {}}
           onExit={() => {}}
+          onAgentSelect={() => {}}
           onModelSelect={() => {}}
           onVariantSelect={() => {}}
           onRows={() => {}}

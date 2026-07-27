@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer"
+import { Tool } from "@opencode-ai/schema/tool"
 import { Effect, Schema, Stream } from "effect"
 import * as Sse from "effect/unstable/encoding/Sse"
 import { Headers, HttpClientRequest } from "effect/unstable/http"
@@ -9,7 +10,6 @@ import {
   type ContentPart,
   type LLMRequest,
   type MediaPart,
-  type ToolFileContent,
   type TextPart,
   type ToolResultPart,
 } from "../schema"
@@ -158,7 +158,8 @@ export const parseToolInput = (route: string, name: string, raw: string) =>
 export const IMAGE_MIMES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const
 export const VIDEO_MIMES = ["video/mp4", "video/webm", "video/quicktime"] as const
 export const AUDIO_MIMES = ["audio/wav", "audio/mp3", "audio/aiff", "audio/aac", "audio/ogg", "audio/flac"] as const
-export const MEDIA_MIMES = [...IMAGE_MIMES, ...VIDEO_MIMES, ...AUDIO_MIMES] as const
+export const PDF_MIMES = ["application/pdf"] as const
+export const MEDIA_MIMES = [...IMAGE_MIMES, ...VIDEO_MIMES, ...AUDIO_MIMES, ...PDF_MIMES] as const
 export const MAX_MEDIA_ENCODED_BYTES = 28 * 1024 * 1024
 export const MAX_MEDIA_DECODED_BYTES = 20 * 1024 * 1024
 
@@ -205,7 +206,7 @@ export const validateMedia = Effect.fn("ProviderShared.validateMedia")(function*
   return { mime, base64, dataUrl: `data:${mime};base64,${base64}`, bytes } satisfies ValidatedMedia
 })
 
-export const validateToolFile = (route: string, part: ToolFileContent, supportedMimes: ReadonlySet<string>) =>
+export const validateToolFile = (route: string, part: Tool.FileContent, supportedMimes: ReadonlySet<string>) =>
   validateMedia(route, { type: "media", mediaType: part.mime, data: part.uri, filename: part.name }, supportedMimes)
 
 export const trimBaseUrl = (value: string) => value.replace(/\/+$/, "")

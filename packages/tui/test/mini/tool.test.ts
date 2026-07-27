@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { normalizeTool, toolOutputText, toolPath } from "../../src/mini/tool"
+import { normalizeTool, toolInlineInfo, toolOutputText, toolPath, toolScroll } from "../../src/mini/tool"
+import { canonicalToolPart } from "./fixture/tool-part"
 
 describe("Mini tool presentation", () => {
   test("uses V2 shell output without the model-facing status", () => {
@@ -27,13 +28,13 @@ describe("Mini tool presentation", () => {
         state: {
           status: "completed",
           input: { patchText: "*** Begin Patch\n*** End Patch" },
-          structured: {
+          metadata: {
             files: [
               {
                 type: "update",
                 filePath: "/tmp/project/src/a.ts",
                 relativePath: "src/a.ts",
-                diff: "@@ -1 +1 @@\n-old\n+new",
+                patch: "@@ -1 +1 @@\n-old\n+new",
               },
             ],
           },
@@ -44,7 +45,7 @@ describe("Mini tool presentation", () => {
     ).toMatchObject({
       name: "patch",
       state: {
-        structured: {
+        metadata: {
           files: [
             {
               status: "modified",
@@ -65,12 +66,65 @@ describe("Mini tool presentation", () => {
         state: {
           status: "running",
           input: { subagent_type: "explore", description: "Inspect" },
-          structured: {},
-          content: [],
+          metadata: {},
         },
         time: { created: 1, ran: 1 },
       }),
     ).toMatchObject({ name: "subagent", state: { input: { agent: "explore" } } })
+  })
+
+  test("renders the skill name from tool metadata with the input id as fallback", () => {
+    const skill = (metadata: { name?: string }) =>
+      canonicalToolPart(
+        "skill",
+        {
+          status: "completed",
+          input: { id: "tigerstyle" },
+          metadata,
+          content: [{ type: "text", text: "" }],
+        },
+        "call-skill",
+      )
+
+    expect(toolInlineInfo(skill({ name: "effect" })).title).toBe('Skill "effect"')
+    expect(toolInlineInfo(skill({})).title).toBe('Skill "tigerstyle"')
+    expect(
+      toolScroll("start", {
+        directory: "/work/project",
+        raw: "",
+        name: "skill",
+        input: { id: "tigerstyle" },
+        meta: { name: "effect" },
+        state: {},
+        status: "completed",
+        error: "",
+        output: "",
+        time: {},
+      }),
+    ).toBe('→ Skill "effect"')
+  })
+
+  test("renders compact search metadata", () => {
+    expect(
+      toolInlineInfo(
+        canonicalToolPart("glob", {
+          status: "completed",
+          input: { pattern: "*.ts" },
+          metadata: { count: 3 },
+          content: [{ type: "text", text: "" }],
+        }),
+      ).description,
+    ).toBe("3 matches")
+    expect(
+      toolInlineInfo(
+        canonicalToolPart("grep", {
+          status: "completed",
+          input: { pattern: "needle" },
+          metadata: { matches: 1 },
+          content: [{ type: "text", text: "" }],
+        }),
+      ).description,
+    ).toBe("1 match")
   })
 
   test("keeps segment-safe contained tool paths relative", () => {

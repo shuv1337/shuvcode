@@ -49,10 +49,10 @@ const DOCUMENT_FORMATS = {
   "text/markdown": "md",
 } as const satisfies Record<string, DocumentFormat>
 
-const documentBlock = (part: MediaPart, format: DocumentFormat, bytes: string): DocumentBlock => ({
+const documentBlock = (name: string, format: DocumentFormat, bytes: string): DocumentBlock => ({
   document: {
     format,
-    name: part.filename ?? `document.${format}`,
+    name,
     source: { bytes },
   },
 })
@@ -77,12 +77,14 @@ export const lower = Effect.fn("BedrockMedia.lower")(function* (part: MediaPart)
     return yield* ProviderShared.invalidRequest(`Bedrock Converse does not support image media type ${part.mediaType}`)
   const documentFormat = DOCUMENT_FORMATS[mime as keyof typeof DOCUMENT_FORMATS]
   if (documentFormat) {
+    if (!part.filename)
+      return yield* ProviderShared.invalidRequest("Bedrock Converse document media requires a filename")
     const media = yield* ProviderShared.validateMedia(
       "Bedrock Converse",
       part,
       new Set<string>(Object.keys(DOCUMENT_FORMATS)),
     )
-    return documentBlock(part, documentFormat, media.base64)
+    return documentBlock(part.filename, documentFormat, media.base64)
   }
   return yield* ProviderShared.invalidRequest(`Bedrock Converse does not support media type ${part.mediaType}`)
 })

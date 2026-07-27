@@ -3,14 +3,17 @@ import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import type { OpenCodeEvent } from "@opencode-ai/client"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
+import { Event } from "@opencode-ai/schema/event"
 import { createEffect, onMount, type ParentProps } from "solid-js"
+import { ConfigProvider } from "../../../src/config"
 import { ClientProvider, useClient } from "../../../src/context/client"
 import { DataProvider as DataProviderBase, useData } from "../../../src/context/data"
 import { LocationProvider, useLocation } from "../../../src/context/location"
 import { createSessionRows, type SessionRow } from "../../../src/routes/session/rows"
 import { createApi, createEventStream, createFetch, directory, json } from "../../fixture/tui-client"
 import { TestTuiContexts } from "../../fixture/tui-environment"
+import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 
 const formFields = [{ key: "authorization", type: "external", url: "https://example.com" }] satisfies [
   {
@@ -32,14 +35,18 @@ function emitEvent(events: ReturnType<typeof createEventStream>, event: OpenCode
   events.emit({ ...event, location: { directory } })
 }
 
+const config = createTuiResolvedConfig()
+
 function DataProvider(props: ParentProps) {
   return (
-    <DataProviderBase>
-      <LocationProvider>
-        <SyncLocation />
-        {props.children}
-      </LocationProvider>
-    </DataProviderBase>
+    <ConfigProvider config={config}>
+      <DataProviderBase>
+        <LocationProvider>
+          <SyncLocation />
+          {props.children}
+        </LocationProvider>
+      </DataProviderBase>
+    </ConfigProvider>
   )
 }
 
@@ -207,6 +214,8 @@ test("refreshes resources into reactive getters", async () => {
         location,
         data: [{ id: "build", request: { headers: {}, body: {} }, mode: "primary", hidden: false, permissions: [] }],
       })
+    if (url.pathname === "/api/websearch/provider")
+      return json({ location, data: [{ id: "standalone", name: "Standalone" }] })
     return undefined
   }, events)
   let data!: ReturnType<typeof useData>
@@ -242,6 +251,7 @@ test("refreshes resources into reactive getters", async () => {
     await data.session.sync("ses_test")
     await data.session.message.sync("ses_test")
     await data.location.agent.sync()
+    await data.location.websearch.refresh()
 
     expect(data.session.get("ses_test")?.title).toBe("Test session")
     expect(data.session.message.list("ses_test").map((message) => message.id)).toEqual(["msg_first", "msg_second"])
@@ -250,6 +260,7 @@ test("refreshes resources into reactive getters", async () => {
     expect(app.captureCharFrame()).toContain("msg_second")
     expect(data.location.default()).toEqual({ directory, workspaceID: undefined })
     expect(data.location.agent.list(location)?.map((agent) => agent.id)).toEqual(["build"])
+    expect(data.location.websearch.list(location)).toEqual([{ id: "standalone", name: "Standalone" }])
   } finally {
     app.renderer.destroy()
   }
@@ -869,7 +880,7 @@ test("removes committed revert messages from local state", async () => {
   try {
     for (const [seq, inputID] of ["msg_001", "msg_002", "msg_003"].entries()) {
       emitEvent(events, {
-        id: EventV2.ID.create(),
+        id: Event.ID.create(),
         created: seq,
         type: "session.input.admitted",
         durable: durable(sessionID, seq),
@@ -879,7 +890,7 @@ test("removes committed revert messages from local state", async () => {
     await wait(() => data.session.message.list(sessionID).length === 3)
 
     emitEvent(events, {
-      id: EventV2.ID.create(),
+      id: Event.ID.create(),
       created: 3,
       type: "session.revert.committed",
       durable: durable(sessionID, 3),
@@ -1802,7 +1813,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_asked_1",
       created: 0,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: {
         id: "per_1",
         sessionID: "ses_1",
@@ -1813,7 +1824,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_asked_2",
       created: 0,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: {
         id: "per_2",
         sessionID: "ses_1",
@@ -1826,7 +1837,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_replied_1",
       created: 0,
-      type: "permission.v2.replied",
+      type: "permission.replied",
       data: { sessionID: "ses_1", requestID: "per_1", reply: "once" },
     })
     await wait(() => data.session.permission.list("ses_1")?.length === 1)
@@ -1835,7 +1846,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_replied_2",
       created: 0,
-      type: "permission.v2.replied",
+      type: "permission.replied",
       data: { sessionID: "ses_1", requestID: "per_2", reply: "reject" },
     })
     await wait(() => data.session.permission.list("ses_1")?.length === 0)
@@ -2332,13 +2343,11 @@ test("settles pending tools when a live failure arrives", async () => {
       id: "evt_progress_1",
       created: 0,
       type: "session.tool.progress",
-      durable: durable("session-1", 5),
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
         callID: "call-1",
-        structured: { sessionID: "session-child", status: "running" },
-        content: [],
+        metadata: { sessionID: "session-child", status: "running" },
       },
     })
 
@@ -2348,7 +2357,7 @@ test("settles pending tools when a live failure arrives", async () => {
         assistant?.type === "assistant" &&
         assistant.content[0]?.type === "tool" &&
         assistant.content[0].state.status === "running" &&
-        assistant.content[0].state.structured.sessionID === "session-child"
+        assistant.content[0].state.metadata.sessionID === "session-child"
       )
     })
 
@@ -2356,7 +2365,7 @@ test("settles pending tools when a live failure arrives", async () => {
       id: "evt_failed_1",
       created: 0,
       type: "session.tool.failed",
-      durable: durable("session-1", 6),
+      durable: durable("session-1", 6, 2),
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
@@ -2387,8 +2396,8 @@ test("settles pending tools when a live failure arrives", async () => {
     if (tool.state.status !== "error") return
     expect(tool.state.error).toEqual({ type: "unknown", message: "aborted" })
     expect(tool.state.input).toEqual({})
-    expect(tool.state.structured).toEqual({ sessionID: "session-child", status: "running" })
-    expect(tool.state.content).toEqual([])
+    expect(tool.state.metadata).toBeUndefined()
+    expect(tool.state.content).toBeUndefined()
     expect(tool.executed).toBe(false)
     expect(tool.providerState).toEqual({ call: true })
     expect(tool.providerResultState).toEqual({ result: true })
@@ -2562,7 +2571,7 @@ test("skips initial instruction state and projects later updates with their mess
     await wait(() => sync.session.message.list("session-1")?.some((message) => message.time.created === 1))
     expect(sync.session.message.list("session-1")).toHaveLength(1)
     expect(sync.session.message.list("session-1")?.[0]).toMatchObject({
-      id: SessionMessage.ID.fromEvent(EventV2.ID.make("evt_instructions_2")),
+      id: SessionMessage.ID.fromEvent(Event.ID.make("evt_instructions_2")),
       type: "system",
       text: "Instructions updated: core/date",
       time: { created: 1 },

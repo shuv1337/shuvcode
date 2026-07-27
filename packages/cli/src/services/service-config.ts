@@ -4,7 +4,6 @@ import { Hash } from "@opencode-ai/util/hash"
 import { Service } from "@opencode-ai/client/effect/service"
 import { Effect, FileSystem, Option, Schema } from "effect"
 import { randomBytes } from "crypto"
-import { Pairing } from "@opencode-ai/schema/pairing"
 import path from "path"
 import { selfCommand } from "../util/process"
 
@@ -185,7 +184,7 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
         .split(",")
         .map((item) => item.trim())
         .filter((item) => item.length > 0)
-      Pairing.advertisedURLs(advertisedUrls)
+      advertisedUrls.forEach((item) => new URL(item))
       yield* Service.stop(yield* options())
       yield* write({ ...(yield* read()), advertisedUrls })
       return
