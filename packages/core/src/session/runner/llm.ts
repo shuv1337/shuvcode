@@ -309,7 +309,7 @@ const layer = Layer.effect(
                   // finished execution always reaches its durable settlement.
                   Effect.flatMap((outcome) => publisher.toolExecution(event.id, event.name, outcome)),
                   Effect.catchTag("Tool.Error", (error) =>
-                    publisher.failTool(event.id, toSessionError(error)).pipe(Effect.asVoid),
+                    publisher.failTool(event.id, toSessionError(error), error.metadata).pipe(Effect.asVoid),
                   ),
                 ),
               ).pipe(Effect.forkScoped),

@@ -119,21 +119,37 @@ const layer = Layer.effect(
         return yield* afterEvent.error
       }
       const content = yield* normalizeImages(execution.value.content)
-      const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
-        ...base,
-        status: "completed",
+      const terminal: { result: Tool.Result; replaced: boolean } = {
         result: {
           ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
           content: content.length > 0 ? content : execution.value.content,
           ...(execution.value.metadata === undefined ? {} : { metadata: execution.value.metadata }),
         },
+        replaced: false,
+      }
+      const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
+        ...base,
+        status: "completed",
+        get result() {
+          return {
+            ...terminal.result,
+            ...(Array.isArray(terminal.result.content) ? { content: [...terminal.result.content] } : {}),
+            ...(terminal.result.metadata === undefined ? {} : { metadata: { ...terminal.result.metadata } }),
+          }
+        },
+        set result(value) {
+          terminal.replaced = true
+          terminal.result = value
+        },
       }
       yield* hooks.trigger("tool", "execute.after", afterEvent)
-      const afterContent = yield* normalizeImages(normalizeContent(afterEvent.result.content, afterEvent.result.output))
+      const afterContent = terminal.replaced
+        ? yield* normalizeImages(normalizeContent(terminal.result.content, execution.value.output))
+        : content
       return {
-        ...(afterEvent.result.output === undefined ? {} : { output: afterEvent.result.output }),
+        ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
         content: afterContent,
-        ...(afterEvent.result.metadata === undefined ? {} : { metadata: afterEvent.result.metadata }),
+        ...(terminal.result.metadata === undefined ? {} : { metadata: terminal.result.metadata }),
       }
     })
 

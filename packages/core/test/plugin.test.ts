@@ -358,6 +358,7 @@ describe("Plugin", () => {
                   if (event.status !== "completed") return
                   event.result = {
                     ...event.result,
+                    output: { text: "after-output" },
                     content: [{ type: "text", text: "after-mutated" }],
                     metadata: { rewritten: true },
                   }
@@ -393,8 +394,8 @@ describe("Plugin", () => {
         content: [{ type: "text", text: '{"text":"before-mutated"}' }],
         metadata: undefined,
       })
-      expect(execution).toMatchObject({
-        status: "completed",
+      expect(execution).toEqual({
+        output: { text: "before-mutated" },
         content: [{ type: "text", text: "after-mutated" }],
         metadata: { rewritten: true },
       })
