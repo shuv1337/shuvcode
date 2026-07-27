@@ -214,7 +214,7 @@ describe("search tools", () => {
               status: "error",
               error: { type: "tool.execution" },
             })
-            if (result.status !== "error") return
+            if (result.status !== "error" || !result.error) return
             expect(result.error.message).toStartWith("Invalid regex pattern:")
             expect(result.error.message).toContain("unclosed character class")
           }),
