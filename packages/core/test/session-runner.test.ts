@@ -286,15 +286,10 @@ const echo = Layer.effectDiscard(
         }),
         storefail: ({
           name: "storefail",
-          description: "Produce output that cannot be persisted",
+          description: "Produce output for a persistence failure test",
           input: Schema.Struct({}),
           output: Schema.Struct({}),
-          execute: () =>
-            Effect.sync(() => {
-              const metadata: Record<string, unknown> = {}
-              metadata.circular = metadata
-              return { output: {}, metadata }
-            }),
+          execute: () => Effect.succeed({ output: {} }),
         }),
       },
       { codemode: false },
@@ -480,6 +475,19 @@ const it = testEffect(
 const sessionID = Session.ID.make("ses_runner_test")
 const otherSessionID = Session.ID.make("ses_runner_other")
 const admit = (session: Session.Interface, text: string) => session.prompt({ sessionID, text, resume: false })
+
+const failToolSuccessPersistence = Effect.gen(function* () {
+  const { db } = yield* Database.Service
+  yield* db.run(`
+    CREATE TEMP TRIGGER fail_tool_success_persistence
+    BEFORE INSERT ON event
+    WHEN NEW.type = 'session.tool.success.2'
+    BEGIN
+      SELECT RAISE(FAIL, 'injected tool success persistence failure');
+    END
+  `)
+  yield* Effect.addFinalizer(() => db.run("DROP TRIGGER fail_tool_success_persistence").pipe(Effect.orDie))
+})
 
 const insertSession = (id: Session.ID) =>
   Effect.gen(function* () {
@@ -3647,6 +3655,7 @@ describe("SessionRunnerLLM", () => {
   it.effect("fails the drain when tool output persistence fails", () =>
     Effect.gen(function* () {
       const session = yield* setup
+      yield* failToolSuccessPersistence
       yield* admit(session, "Call storefail")
 
       responses = [reply.tool("call-storefail", "storefail", {}), []]
@@ -4756,6 +4765,7 @@ describe("SessionRunnerLLM", () => {
   it.effect("preserves the provider failure when tool output persistence also fails", () =>
     Effect.gen(function* () {
       const session = yield* setup
+      yield* failToolSuccessPersistence
       yield* admit(session, "Storage fails while provider fails")
       response = [
         LLMEvent.stepStart({ index: 0 }),

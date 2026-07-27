@@ -17,6 +17,9 @@ import { SessionSchema } from "./session/schema"
 import { definition, execute, normalizeContent } from "./tool/runtime"
 import { Wildcard } from "./util/wildcard"
 
+const MAX_METADATA_BYTES = 64 * 1024
+const Metadata = Schema.Record(Schema.String, Schema.Json)
+
 export class RegistrationError extends Schema.TaggedErrorClass<RegistrationError>()("Tool.RegistrationError", {
   name: Schema.String,
   message: Schema.String,
@@ -48,6 +51,32 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const image = yield* Image.Service
+
+    const terminalMetadata = Effect.fn("Tool.terminalMetadata")(function* (
+      tool: string,
+      callID: string,
+      metadata: Tool.Metadata | undefined,
+    ) {
+      if (metadata === undefined) return undefined
+      const validation = (() => {
+        try {
+          if (!Schema.is(Metadata)(metadata)) return { reason: "not valid JSON" }
+          const bytes = Buffer.byteLength(JSON.stringify(metadata), "utf8")
+          if (bytes > MAX_METADATA_BYTES) return { reason: "exceeds size limit", bytes }
+          return { metadata }
+        } catch {
+          return { reason: "not valid JSON" }
+        }
+      })()
+      if ("metadata" in validation) return validation.metadata
+      yield* Effect.logWarning("Dropping tool result metadata", {
+        tool,
+        callID,
+        reason: validation.reason,
+        ...(validation.bytes === undefined ? {} : { bytes: validation.bytes, limit: MAX_METADATA_BYTES }),
+      })
+      return undefined
+    })
 
     type NormalizedItem = Tool.Content | "decode" | "size"
     const normalizeImages = Effect.fn("Tool.normalizeImages")(function* (content: ReadonlyArray<Tool.Content>) {
@@ -116,7 +145,9 @@ const layer = Layer.effect(
           error: execution.failure,
         }
         yield* hooks.trigger("tool", "execute.after", afterEvent)
-        return yield* afterEvent.error
+        const metadata = yield* terminalMetadata(name, context.callID, afterEvent.error.metadata)
+        if (metadata === afterEvent.error.metadata) return yield* afterEvent.error
+        return yield* new Tool.Error({ message: afterEvent.error.message, error: afterEvent.error.error })
       }
       const content = yield* normalizeImages(execution.value.content)
       const terminal: { result: Tool.Result; replaced: boolean } = {
@@ -146,10 +177,11 @@ const layer = Layer.effect(
       const afterContent = terminal.replaced
         ? yield* normalizeImages(normalizeContent(terminal.result.content, execution.value.output))
         : content
+      const metadata = yield* terminalMetadata(name, context.callID, terminal.result.metadata)
       return {
         ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
         content: afterContent,
-        ...(terminal.result.metadata === undefined ? {} : { metadata: terminal.result.metadata }),
+        ...(metadata === undefined ? {} : { metadata }),
       }
     })
 
