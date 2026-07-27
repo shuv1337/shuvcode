@@ -1,5 +1,5 @@
 /// <reference path="../env.d.ts" />
-import { Plugin } from "@opencode-ai/plugin"
+import { Plugin } from "../../packages/plugin/src/promise/index"
 import { z } from "zod"
 
 async function githubFetch(endpoint: string, options: RequestInit = {}) {
