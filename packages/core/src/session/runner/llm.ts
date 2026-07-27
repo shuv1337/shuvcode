@@ -34,6 +34,10 @@ type CallOutcome = Data.TaggedEnum<{
 }>
 const CallOutcome = Data.taggedEnum<CallOutcome>()
 
+class ToolPersistenceError extends Data.TaggedError("SessionRunner.ToolPersistenceError")<{
+  readonly cause: Cause.Cause<never>
+}> {}
+
 // Declining an interactive prompt halts the drain instead of becoming model-facing tool output.
 const isDecline = (
   error: SessionModelRequest.ExecuteError,
@@ -47,7 +51,7 @@ const isDecline = (
  * fail the assistant and then the drain.
  */
 const classifyToolExits = (
-  settled: Exit.Exit<Array<Exit.Exit<void, SessionModelRequest.ExecuteError>>, never>,
+  settled: Exit.Exit<Array<Exit.Exit<void, SessionModelRequest.ExecuteError | ToolPersistenceError>>, never>,
   calls: ReadonlyArray<ToolCall>,
 ) => {
   // Exits align with calls by construction: one owned fiber per accepted local call.
@@ -55,12 +59,25 @@ const classifyToolExits = (
   const declines = exits.flatMap((exit, index) =>
     exit._tag === "Failure"
       ? exit.cause.reasons.flatMap((reason) =>
-          Cause.isFailReason(reason) && isDecline(reason.error) ? [{ call: calls[index], reason: reason.error }] : [],
+          Cause.isFailReason(reason) &&
+          reason.error._tag !== "SessionRunner.ToolPersistenceError" &&
+          isDecline(reason.error)
+            ? [{ call: calls[index], reason: reason.error }]
+            : [],
         )
       : [],
   )
   const causes =
     settled._tag === "Failure" ? [settled.cause] : exits.flatMap((exit) => (exit._tag === "Failure" ? [exit.cause] : []))
+  const persistence = causes
+    .flatMap((cause) =>
+      cause.reasons.flatMap((reason) =>
+        Cause.isFailReason(reason) && reason.error._tag === "SessionRunner.ToolPersistenceError"
+          ? [reason.error.cause]
+          : [],
+      ),
+    )
+    .at(0)
   // The first non-interrupt, non-decline failure, rebuilt without decline reasons so the
   // drain's error channel never carries a decline.
   const failure = causes.flatMap((cause) => {
@@ -74,6 +91,7 @@ const classifyToolExits = (
     interrupted: causes.some(Cause.hasInterrupts),
     declines,
     failure,
+    persistence,
   }
 }
 
@@ -225,7 +243,7 @@ const layer = Layer.effect(
       // Every local tool call forked here is owned until it reaches one durable settlement.
       const toolRuns: Array<{
         readonly call: ToolCall
-        readonly fiber: Fiber.Fiber<void, SessionModelRequest.ExecuteError>
+        readonly fiber: Fiber.Fiber<void, SessionModelRequest.ExecuteError | ToolPersistenceError>
       }> = []
       const interruptTools = Effect.suspend(() => Fiber.interruptAll(toolRuns.map((run) => run.fiber)))
       const startSnapshot = yield* snapshots.capture()
@@ -305,11 +323,18 @@ const layer = Layer.effect(
                     progress: (update) => publisher.progress(event.id, update),
                   }),
                 ).pipe(
-                  // The fiber owns its call: it publishes its own completion, masked so a
-                  // finished execution always reaches its durable settlement.
-                  Effect.flatMap((outcome) => publisher.toolExecution(event.id, event.name, outcome)),
+                  // Only execution failures are model-visible. Failure to persist either
+                  // terminal event is infrastructure failure owned by the active drain.
+                  Effect.flatMap((outcome) =>
+                    publisher.toolExecution(event.id, event.name, outcome).pipe(
+                      Effect.catchCause((cause) => Effect.fail(new ToolPersistenceError({ cause }))),
+                    ),
+                  ),
                   Effect.catchTag("Tool.Error", (error) =>
-                    publisher.failTool(event.id, toSessionError(error), error.metadata).pipe(Effect.asVoid),
+                    publisher.failTool(event.id, toSessionError(error), error.metadata).pipe(
+                      Effect.asVoid,
+                      Effect.catchCause((cause) => Effect.fail(new ToolPersistenceError({ cause }))),
+                    ),
                   ),
                 ),
               ).pipe(Effect.forkScoped),
@@ -390,6 +415,14 @@ const layer = Layer.effect(
             const error = toSessionError(Cause.squash(tools.failure))
             yield* publisher.failUnsettledTools(error)
           }
+          if (tools.persistence !== undefined) {
+            const error = {
+              type: "unknown" as const,
+              message: `Failed to write tool output: ${Cause.pretty(tools.persistence)}`,
+            }
+            yield* publisher.failUnsettledTools(error)
+            yield* publisher.failAssistant(error)
+          }
           // Local calls have joined, so the remaining sweeps only close hosted calls the
           // provider promised but never resolved.
           if (publisher.record().providerFailed) yield* publisher.failUnsettledTools(TOOLS_INTERRUPTED)
@@ -415,6 +448,8 @@ const layer = Layer.effect(
           if (tools.declines.length > 0) return yield* Effect.interrupt
           if (tools.interrupted && tools.failure) return yield* Effect.failCause(tools.failure)
           if (tools.interrupted && joined._tag === "Failure") return yield* Effect.failCause(joined.cause)
+          if (record.providerFailed && record.failure) return yield* new StepFailedError({ error: record.failure })
+          if (tools.persistence) return yield* Effect.failCause(tools.persistence)
           if (record.failure) return yield* new StepFailedError({ error: record.failure })
           return CallOutcome.Completed({
             // A local call or malformed tool input requires another model step, unless

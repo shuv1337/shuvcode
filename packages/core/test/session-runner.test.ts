@@ -284,7 +284,12 @@ const echo = Layer.effectDiscard(
           description: "Produce output that cannot be persisted",
           input: Schema.Struct({}),
           output: Schema.Struct({}),
-          execute: () => Effect.succeed({ output: {} }),
+          execute: () =>
+            Effect.sync(() => {
+              const metadata: Record<string, unknown> = {}
+              metadata.circular = metadata
+              return { output: {}, metadata }
+            }),
         }),
       },
       { codemode: false },
@@ -4726,7 +4731,9 @@ describe("SessionRunnerLLM", () => {
         LLMEvent.providerError({ message: "Provider unavailable" }),
       ]
 
-      expect(yield* session.resume(sessionID).pipe(Effect.exit)).toMatchObject({ _tag: "Failure" })
+      expect(yield* session.resume(sessionID).pipe(Effect.flip)).toMatchObject({
+        error: { type: "provider.unknown", message: "Provider unavailable" },
+      })
 
       expect(requireAssistant(yield* session.context(sessionID))).toMatchObject({
         error: { type: "provider.unknown", message: "Provider unavailable" },
