@@ -4,6 +4,7 @@ import pkg from "../package.json"
 import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
 import { UpdateArtifact } from "../../../script/update-artifact"
+import { currentRepository, publishPlan } from "../../../script/publish-plan"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -78,10 +79,12 @@ await publishDistribution({
   binary: "shuvcode-node",
   packagePrefix: "shuvcode-node-",
 })
-await UpdateArtifact.publish({
-  channel: Script.channel,
-  name: "cli",
-  distribution: "npm",
-  version: Script.version,
-  metadata: {},
-})
+if (publishPlan(currentRepository()).updateArtifacts) {
+  await UpdateArtifact.publish({
+    channel: Script.channel,
+    name: "cli",
+    distribution: "npm",
+    version: Script.version,
+    metadata: {},
+  })
+}
