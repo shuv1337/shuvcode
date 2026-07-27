@@ -502,7 +502,7 @@ function permissionAsked(
     readonly source?: { readonly type: "tool"; readonly messageID: string; readonly callID: string }
   } = {},
 ) {
-  return ephemeralEvent("permission.v2.asked", {
+  return ephemeralEvent("permission.asked", {
     id,
     sessionID,
     action: input.action ?? "shell",

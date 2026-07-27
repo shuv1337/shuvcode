@@ -7,12 +7,11 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "@opencode-ai/core/location"
-import { PermissionV2 } from "@opencode-ai/core/permission"
+import { Permission } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { PatchTool } from "@opencode-ai/core/tool/patch"
+import { Session } from "@opencode-ai/core/session"
+import { Tool } from "@opencode-ai/core/tool"
+import { PatchTool } from "@opencode-ai/core/tool/plugin/patch"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
@@ -22,11 +21,11 @@ import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "
 const patchToolNode = makeLocationNode({
   name: "test/patch-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(PatchTool.Plugin)),
-  deps: [ToolRegistry.toolsNode, FSUtil.node, Location.node, PermissionV2.node],
+  deps: [Tool.node, FSUtil.node, Location.node, Permission.node],
 })
 
-const sessionID = SessionV2.ID.make("ses_patch_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_patch_tool_test")
+const assertions: Permission.AssertInput[] = []
 let denyAction: string | undefined
 let failRemoveTarget: string | undefined
 let failRemoveErrorTarget: string | undefined
@@ -36,8 +35,8 @@ let editApproved = false
 let afterEditApproval = (): Effect.Effect<void> => Effect.void
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
@@ -47,7 +46,7 @@ const permission = Layer.succeed(
         Effect.andThen(
           input.action === denyAction
             ? Effect.fail(
-                new PermissionV2.BlockedError({
+                new Permission.BlockedError({
                   rules: [],
                   permission: input.action,
                   resources: input.resources,
@@ -120,7 +119,7 @@ const filesystem = Layer.effect(
 
 const withTool = <A, E, R>(
   directory: string,
-  body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>,
+  body: (registry: Tool.Interface) => Effect.Effect<A, E, R>,
   projectDirectory = directory,
 ) => {
   const activeLocation = Layer.succeed(
@@ -130,14 +129,13 @@ const withTool = <A, E, R>(
     ),
   )
   return Effect.gen(function* () {
-    return yield* body(yield* ToolRegistry.Service)
+    return yield* body(yield* Tool.Service)
   }).pipe(
     Effect.provide(
-      AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, patchToolNode]), [
+      AppNodeBuilder.build(LayerNode.group([Tool.node, patchToolNode]), [
         [FSUtil.node, filesystem],
         [Location.node, activeLocation],
-        [PermissionV2.node, permission],
-        [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
+        [Permission.node, permission],
       ]),
     ),
   )
@@ -157,7 +155,7 @@ const exists = (target: string) =>
     ),
   )
 const it = testEffect(Layer.empty)
-const withTempTool = <A, E, R>(body: (directory: string, registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>) =>
+const withTempTool = <A, E, R>(body: (directory: string, registry: Tool.Interface) => Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
     Effect.promise(() => tmpdir()),
     (tmp) => {
@@ -196,7 +194,7 @@ describe("PatchTool", () => {
                     text: "Success. Updated the following files:\nA nested/new.txt\nM update.txt\nD remove.txt",
                   },
                 ])
-                const modelText = settled.content[0]?.type === "text" ? settled.content[0].text : ""
+                const modelText = settled.content?.[0]?.type === "text" ? settled.content[0].text : ""
                 if (process.platform === "win32") expect(modelText).not.toContain("\\")
                 expect(settled.output).toMatchObject({
                   applied: [

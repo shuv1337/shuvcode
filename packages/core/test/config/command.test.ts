@@ -3,18 +3,18 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, PubSub, Schema, Stream } from "effect"
 import { Config as ConfigSchema } from "@opencode-ai/schema/config"
-import { CommandV2 } from "@opencode-ai/core/command"
-import { AgentV2 } from "@opencode-ai/core/agent"
+import { Command } from "@opencode-ai/core/command"
+import { Agent } from "@opencode-ai/core/agent"
 import { Config } from "@opencode-ai/core/config"
 import { ConfigCommandPlugin } from "@opencode-ai/core/config/plugin/command"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { FSUtil } from "@opencode-ai/util/fs-util"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { Location } from "@opencode-ai/core/location"
 import { MCP } from "@opencode-ai/core/mcp/index"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Model } from "@opencode-ai/core/model"
+import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { emptyConfigLayer, emptyMcpLayer, testLocationLayer } from "../fixture/mcp"
 import { tmpdir } from "../fixture/tmpdir"
@@ -22,7 +22,7 @@ import { testEffect } from "../lib/effect"
 import { host } from "../plugin/host"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([CommandV2.node, EventV2.node, FSUtil.node]), [
+  AppNodeBuilder.build(LayerNode.group([Command.node, Bus.node, FSUtil.node]), [
     [MCP.node, emptyMcpLayer],
     [Config.node, emptyConfigLayer],
     [Location.node, testLocationLayer],
@@ -54,9 +54,9 @@ Review files`,
             await fs.writeFile(path.join(tmp.path, "commands", "empty.md"), "")
           })
 
-          const command = yield* CommandV2.Service
-          const events = yield* EventV2.Service
-          const update = yield* events.publish(ConfigSchema.Event.Updated, {})
+          const command = yield* Command.Service
+          const bus = yield* Bus.Service
+          const update = yield* bus.publish(ConfigSchema.Event.Updated, {})
           const updates = yield* PubSub.unbounded<typeof update>()
           yield* ConfigCommandPlugin.Plugin.effect(
             host({
@@ -84,20 +84,20 @@ Review files`,
           )
 
           expect(yield* command.list()).toEqual([
-            CommandV2.Info.make({
+            Command.Info.make({
               name: "review",
               template: "Review files",
               description: "File review",
-              agent: AgentV2.ID.make("reviewer"),
+              agent: Agent.ID.make("reviewer"),
               model: {
-                providerID: ProviderV2.ID.make("anthropic"),
-                id: ModelV2.ID.make("claude"),
-                variant: ModelV2.VariantID.make("high"),
+                providerID: Provider.ID.make("anthropic"),
+                id: Model.ID.make("claude"),
+                variant: Model.VariantID.make("high"),
               },
               subtask: true,
             }),
-            CommandV2.Info.make({ name: "empty", template: "" }),
-            CommandV2.Info.make({ name: "nested/docs", template: "Write docs" }),
+            Command.Info.make({ name: "empty", template: "" }),
+            Command.Info.make({ name: "nested/docs", template: "Write docs" }),
           ])
 
           yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "commands", "review.md"), "Review again"))

@@ -1,6 +1,6 @@
 import { Message, ToolCallPart, ToolResultPart, type ContentPart, type ProviderMetadata } from "@opencode-ai/ai"
 import { Option, Schema } from "effect"
-import type { ModelV2 } from "../../model"
+import type { Model } from "../../model"
 import { SessionMessage } from "../message"
 import type { FileAttachment } from "@opencode-ai/schema/prompt"
 
@@ -108,7 +108,7 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
   }
 }
 
-const assistant = (message: SessionMessage.Assistant, model: ModelV2.Ref, providerMetadataKey: string) => {
+const assistant = (message: SessionMessage.Assistant, model: Model.Ref, providerMetadataKey: string) => {
   const sameProvider = String(message.model.providerID) === String(model.providerID)
   const sameModel = sameProvider && String(message.model.id) === String(model.id)
   const reuseProviderMetadata = sameModel && message.error === undefined
@@ -177,7 +177,7 @@ const assistant = (message: SessionMessage.Assistant, model: ModelV2.Ref, provid
   ]
 }
 
-function toLLMMessage(message: SessionMessage.Info, model: ModelV2.Ref, providerMetadataKey: string): Message[] {
+function toLLMMessage(message: SessionMessage.Info, model: Model.Ref, providerMetadataKey: string): Message[] {
   switch (message.type) {
     case "agent-switched":
     case "model-switched":
@@ -239,9 +239,9 @@ ${message.recent}
   }
 }
 
-/** Translate projected V2 Session history into canonical @opencode-ai/ai context. */
+/** Translate projected Session history into canonical @opencode-ai/ai context. */
 export const toLLMMessages = (
   messages: readonly SessionMessage.Info[],
-  model: ModelV2.Ref,
+  model: Model.Ref,
   providerMetadataKey: string = model.providerID,
 ) => messages.flatMap((message) => toLLMMessage(message, model, providerMetadataKey))

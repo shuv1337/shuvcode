@@ -10,9 +10,9 @@ import { Reference } from "@opencode-ai/schema/reference"
 import { Skill } from "@opencode-ai/schema/skill"
 import { WebSearch } from "@opencode-ai/schema/websearch"
 
-const Plugin = await import("../src/v2/effect/index")
-const PromisePlugin = await import("../src/v2/promise/index")
-const TuiPlugin = await import("../src/v2/tui/index")
+const Plugin = await import("../src/effect/index")
+const PromisePlugin = await import("../src/promise/index")
+const TuiPlugin = await import("../src/tui/index")
 
 test.each([
   ["effect", Plugin],
@@ -43,7 +43,7 @@ test.each([
   ])
 })
 
-test("tui entrypoint exposes the V2 plugin definition", () => {
+test("tui entrypoint exposes the plugin definition", () => {
   const plugin = TuiPlugin.Plugin.define({ id: "demo", setup() {} })
   expect(plugin.id).toBe("demo")
 })

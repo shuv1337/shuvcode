@@ -121,7 +121,7 @@ package version or a local dependency when no watched file changed.
 Export the result of `Plugin.define` as the module default:
 
 ```ts title=".opencode/plugins/reviewer.ts"
-import { Plugin } from "@opencode-ai/plugin/v2"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.reviewer",
@@ -203,7 +203,7 @@ other sources.
 Here's an example that keeps models synced from a remote source:
 
 ```js title=".opencode/plugins/remote-models.js"
-import { Plugin } from "@opencode-ai/plugin/v2"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.remote-models",
@@ -248,13 +248,13 @@ mutable fields:
 | `ctx.aisdk.hook("language", callback)`      | `language`, after inspecting `model`, `sdk`, and `options`                     |
 | `ctx.session.hook("request", callback)`     | `system`, `messages`, and the `tools` record immediately before model dispatch |
 | `ctx.tool.hook("execute.before", callback)` | `input`, before the selected tool executes                                     |
-| `ctx.tool.hook("execute.after", callback)`  | Terminal `content`, `metadata`, and `outputPaths`; `error` on failure          |
+| `ctx.tool.hook("execute.after", callback)`  | Terminal `result` on success or `error` on failure                            |
 
 For example, remove a tool from selected model requests and normalize another
 tool's input:
 
 ```ts title=".opencode/plugins/guards.ts"
-import { Plugin } from "@opencode-ai/plugin/v2"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.guards",
@@ -278,13 +278,11 @@ handle expected errors inside the callback.
 
 ### Add a tool
 
-Create an executable tool with `Tool.make`, then register it with a name
-and registration options. Define its input with JSON Schema and use an async
-executor:
+Register a structural tool definition with a name and registration options.
+Define its input with JSON Schema and use an async executor:
 
 ```js title=".opencode/plugins/greeting.js"
-import { Plugin } from "@opencode-ai/plugin/v2"
-import { Tool } from "@opencode-ai/plugin/v2/tool"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.greeting",
@@ -292,7 +290,7 @@ export default Plugin.define({
     await ctx.tool.transform((tools) => {
       tools.add(
         "greeting",
-        Tool.make({
+        {
           description: "Create a greeting",
           input: {
             type: "object",
@@ -315,7 +313,7 @@ export default Plugin.define({
               content: text,
             }
           },
-        }),
+        },
       )
     })
   },
@@ -342,7 +340,7 @@ without `output` returns model-visible `content` instead.
 ### Add a command
 
 ```js title=".opencode/plugins/review-command.js"
-import { Plugin } from "@opencode-ai/plugin/v2"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.review-command",
@@ -360,7 +358,7 @@ export default Plugin.define({
 ### Set the default model
 
 ```js title=".opencode/plugins/default-model.js"
-import { Plugin } from "@opencode-ai/plugin/v2"
+import { Plugin } from "@opencode-ai/plugin"
 
 export default Plugin.define({
   id: "acme.default-model",
@@ -410,7 +408,7 @@ being resolved.
 ## Effect
 
 OpenCode provides a first-class Effect API for plugins through the
-`@opencode-ai/plugin/v2/effect` entrypoint. Install `effect` alongside the
+`@opencode-ai/plugin/effect` entrypoint. Install `effect` alongside the
 plugin package and export an `effect` function instead of `setup`:
 
 ```sh
@@ -418,7 +416,7 @@ bun add @opencode-ai/plugin@next effect
 ```
 
 ```ts title=".opencode/plugins/reviewer-effect.ts"
-import { Plugin } from "@opencode-ai/plugin/v2/effect"
+import { Plugin } from "@opencode-ai/plugin/effect"
 import { Effect } from "effect"
 
 export default Plugin.define({
@@ -440,7 +438,6 @@ fibers, and registrations are released when the plugin reloads or unloads.
 OpenCode does not expose its private Core services to the plugin; use the
 capabilities on `ctx`.
 
-Typed tools can use `Schema` from `effect` and `Tool.make` from
-`@opencode-ai/plugin/v2/effect/tool`. Effect and Promise plugins use the same
-`tools.add(name, tool, options?)` registration shape. Effect executors
+Typed tools can use `Schema` from `effect`. Effect and Promise plugins use the
+same `tools.add(name, tool, options?)` registration shape. Effect executors
 return an Effect and may fail with the typed tool failure channel.

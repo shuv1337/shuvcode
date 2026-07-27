@@ -28,8 +28,8 @@ import deleteToolProgressEventsMigration from "@opencode-ai/core/database/migrat
 import canonicalToolResultsMigration from "@opencode-ai/core/database/migration/20260722170000_canonical_tool_results"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { EventV2 } from "@opencode-ai/core/event"
-import { ProjectV2 } from "@opencode-ai/core/project"
+import { Bus } from "@opencode-ai/core/bus"
+import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
@@ -968,13 +968,13 @@ describe("DatabaseMigration", () => {
         )
 
         const database = Layer.succeed(Database.Service, { db })
-        yield* EventV2.Service.use((service) =>
+        yield* Bus.Service.use((service) =>
           service.publish(SessionV1.Event.Updated, {
             sessionID: SessionSchema.ID.make("session"),
             info: {
               id: SessionSchema.ID.make("session"),
               slug: "session",
-              projectID: ProjectV2.ID.global,
+              projectID: Project.ID.global,
               directory: "/project",
               title: "After",
               version: "test",
@@ -983,7 +983,7 @@ describe("DatabaseMigration", () => {
           }),
         ).pipe(
           Effect.provide(
-            AppNodeBuilder.build(LayerNode.group([EventV2.node, SessionProjector.node]), [[Database.node, database]]),
+            AppNodeBuilder.build(LayerNode.group([Bus.node, SessionProjector.node]), [[Database.node, database]]),
           ),
         )
 
@@ -1280,7 +1280,7 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
-        const projectID = ProjectV2.ID.make("codec_project")
+        const projectID = Project.ID.make("codec_project")
         const worktree = AbsolutePath.make("C:\\Repo\\Thing")
         const sandbox = AbsolutePath.make("C:\\Repo\\Thing\\sandbox")
         const directory = "C:\\Repo\\Thing\\packages\\api"
@@ -1291,7 +1291,7 @@ describe("DatabaseMigration", () => {
             db
               .insert(ProjectTable)
               .values({
-                id: ProjectV2.ID.make("invalid_path"),
+                id: Project.ID.make("invalid_path"),
                 worktree: AbsolutePath.make("not-absolute"),
                 sandboxes: [],
                 time_created: 1,

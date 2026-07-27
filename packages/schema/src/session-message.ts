@@ -2,7 +2,7 @@ export * as SessionMessage from "./session-message.js"
 
 import { Schema } from "effect"
 import { optional } from "./schema.js"
-import { ToolContent } from "./llm.js"
+import { Content } from "./tool.js"
 import { Model } from "./model.js"
 import { Prompt } from "./prompt.js"
 import { DateTimeUtcFromMillis, PositiveInt, RelativePath, statics } from "./schema.js"
@@ -117,7 +117,7 @@ export interface ToolStateCompleted extends Schema.Schema.Type<typeof ToolStateC
 export const ToolStateCompleted = Schema.Struct({
   status: Schema.tag("completed"),
   input: Schema.Record(Schema.String, Schema.Unknown),
-  content: Schema.NonEmptyArray(ToolContent),
+  content: Schema.NonEmptyArray(Content),
   metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
 }).annotate({ identifier: "Session.Message.ToolState.Completed" })
 
@@ -126,7 +126,7 @@ export const ToolStateError = Schema.Struct({
   status: Schema.tag("error"),
   input: Schema.Record(Schema.String, Schema.Unknown),
   error: SessionError.Error,
-  content: Schema.NonEmptyArray(ToolContent).pipe(optional),
+  content: Schema.NonEmptyArray(Content).pipe(optional),
   metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
 }).annotate({ identifier: "Session.Message.ToolState.Error" })
 
@@ -248,8 +248,6 @@ export const Info = Schema.Union([
   Shell,
   Assistant,
   Compaction,
-])
-  .pipe(Schema.toTaggedUnion("type"))
-  .annotate({ identifier: "Session.Message.Info" })
+]).annotate({ identifier: "Session.Message.Info" })
 export type Info = AgentSelected | ModelSelected | User | Synthetic | System | Skill | Shell | Assistant | Compaction
 export type Type = Info["type"]

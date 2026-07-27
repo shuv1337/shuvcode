@@ -3,7 +3,8 @@ export * as SessionEvent from "./session-event.js"
 import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { Event } from "./event.js"
-import { FinishReason, ToolContent } from "./llm.js"
+import { FinishReason } from "./llm.js"
+import { Content } from "./tool.js"
 import { Model } from "./model.js"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema.js"
 import { FileAttachment } from "./prompt.js"
@@ -429,7 +430,7 @@ export namespace Tool {
     },
     schema: {
       ...ToolBase,
-      content: Schema.NonEmptyArray(ToolContent),
+      content: Schema.NonEmptyArray(Content),
       metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
       executed: Schema.Boolean,
       resultState: SessionMessage.ProviderState.pipe(optional),
@@ -451,7 +452,7 @@ export namespace Tool {
     schema: {
       ...ToolBase,
       error: SessionError.Error,
-      content: Schema.NonEmptyArray(ToolContent).pipe(optional),
+      content: Schema.NonEmptyArray(Content).pipe(optional),
       metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
       executed: Schema.Boolean,
       resultState: SessionMessage.ProviderState.pipe(optional),

@@ -2,22 +2,22 @@ import { expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { AgentV2 } from "@opencode-ai/core/agent"
+import { Agent } from "@opencode-ai/core/agent"
 import { Config } from "@opencode-ai/core/config"
 import { Database } from "@opencode-ai/core/database/database"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { Location } from "@opencode-ai/core/location"
 import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
+import { Session } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { Plugin } from "@opencode-ai/plugin/v2/effect"
+import { Tool } from "@opencode-ai/core/tool"
+import { Plugin } from "@opencode-ai/plugin/effect"
 import { Deferred, Effect, Fiber, Layer, Queue, Stream } from "effect"
 import type { Scope } from "effect/Scope"
 import { SimulatedProvider } from "../src/backend/simulated-provider"
@@ -264,7 +264,7 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
             }),
           )
           expect(yield* Queue.take(messages)).toMatchObject({ id: 1, result: { attached: true } })
-          const registry = yield* ToolRegistry.Service
+          const registry = yield* Tool.Service
           const toolSet = yield* registry.snapshot()
           expect(toolSet.definitions).toContainEqual(
             expect.objectContaining({ name: "lookup", description: "Look up a value" }),
@@ -272,17 +272,17 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           expect(
             (yield* registry.snapshot([{ action: "simulate_lookup", resource: "*", effect: "deny" }])).definitions,
           ).not.toContainEqual(expect.objectContaining({ name: "lookup" }))
-          const secondaryToolSet = yield* ToolRegistry.Service.use((secondaryRegistry) =>
+          const secondaryToolSet = yield* Tool.Service.use((secondaryRegistry) =>
             secondaryRegistry.snapshot(),
           ).pipe(Effect.provide(secondary))
           expect(secondaryToolSet.definitions).toContainEqual(
             expect.objectContaining({ name: "lookup", description: "Look up a value" }),
           )
-          const progress: ToolRegistry.Progress[] = []
+          const progress: Tool.Metadata[] = []
           const executeCall = (callID: string, query: string) =>
             toolSet.execute({
-              sessionID: SessionV2.ID.make("ses_simulated_tools"),
-              agent: AgentV2.ID.make("build"),
+              sessionID: Session.ID.make("ses_simulated_tools"),
+              agent: Agent.ID.make("build"),
               messageID: SessionMessage.ID.make("msg_simulated_tools"),
               progress: (update) => Effect.sync(() => progress.push(update)),
               call: {
@@ -390,13 +390,12 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           )
           expect(yield* Queue.take(messages)).toMatchObject({ id: 23, result: { ok: true } })
           expect(yield* Fiber.join(successful)).toMatchObject({
-            status: "completed",
             output: { answer: 42 },
             content: [{ type: "text", text: "42" }],
           })
           expect(progress).toEqual([{ phase: "searching" }])
 
-          const failed = yield* executeCall("call_failure", "missing").pipe(Effect.forkScoped)
+          const failed = yield* executeCall("call_failure", "missing").pipe(Effect.exit, Effect.forkScoped)
           const failedInvocation = yield* takeToolInvocation(messages)
           const failedID = requireString(requireRecord(failedInvocation.params).id)
           socket.send(
@@ -408,10 +407,9 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
             }),
           )
           expect(yield* Queue.take(messages)).toMatchObject({ id: 4, result: { ok: true } })
-          expect(yield* Fiber.join(failed)).toMatchObject({
-            status: "error",
-            error: { message: "lookup failed" },
-          })
+          const failedExit = yield* Fiber.join(failed)
+          expect(failedExit).toMatchObject({ _tag: "Failure" })
+          expect(failedExit.toString()).toContain("lookup failed")
 
           const concurrent = [
             yield* executeCall("call_first", "first").pipe(Effect.forkScoped),
@@ -443,12 +441,10 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
             expect(yield* Queue.take(messages)).toMatchObject({ id, result: { ok: true } })
           }
           expect(yield* Fiber.join(concurrent[0])).toMatchObject({
-            status: "completed",
             output: "first result",
             content: [{ type: "text", text: "first result" }],
           })
           expect(yield* Fiber.join(concurrent[1])).toMatchObject({
-            status: "completed",
             output: "second result",
             content: [{ type: "text", text: "second result" }],
           })
@@ -564,7 +560,6 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           )
           expect(yield* Queue.take(replacementMessages)).toMatchObject({ id: 10, result: { ok: true } })
           expect(yield* Fiber.join(replayed)).toMatchObject({
-            status: "completed",
             output: "replayed result",
             content: [{ type: "text", text: "replayed result" }],
           })
@@ -585,7 +580,6 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           )
           expect(yield* Queue.take(replacementMessages)).toMatchObject({ id: 27, result: { ok: true } })
           expect(yield* Fiber.join(preserved)).toMatchObject({
-            status: "completed",
             output: "preserved",
             content: [{ type: "text", text: "preserved" }],
           })
@@ -607,7 +601,7 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           const replacedNames = replaced.definitions.map((definition) => definition.name)
           expect(replacedNames).toEqual(expect.arrayContaining(["github_search", "web_search"]))
           expect(replacedNames).not.toContain("lookup")
-          const secondaryReplaced = yield* ToolRegistry.Service.use((secondaryRegistry) =>
+          const secondaryReplaced = yield* Tool.Service.use((secondaryRegistry) =>
             secondaryRegistry.snapshot(),
           ).pipe(Effect.provide(secondary))
           const secondaryNames = secondaryReplaced.definitions.map((definition) => definition.name)
@@ -615,8 +609,8 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           expect(secondaryNames).not.toContain("lookup")
           const routed = yield* replaced
             .execute({
-              sessionID: SessionV2.ID.make("ses_simulated_tools"),
-              agent: AgentV2.ID.make("build"),
+              sessionID: Session.ID.make("ses_simulated_tools"),
+              agent: Agent.ID.make("build"),
               messageID: SessionMessage.ID.make("msg_simulated_tools"),
               call: {
                 type: "tool-call",
@@ -642,14 +636,13 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
           )
           expect(yield* Queue.take(replacementMessages)).toMatchObject({ id: 12, result: { ok: true } })
           expect(yield* Fiber.join(routed)).toMatchObject({
-            status: "completed",
             output: "routed",
             content: [{ type: "text", text: "routed" }],
           })
-          expect(
-            yield* toolSet.execute({
-              sessionID: SessionV2.ID.make("ses_simulated_tools"),
-              agent: AgentV2.ID.make("build"),
+          const stale = yield* toolSet
+            .execute({
+              sessionID: Session.ID.make("ses_simulated_tools"),
+              agent: Agent.ID.make("build"),
               messageID: SessionMessage.ID.make("msg_simulated_tools"),
               call: {
                 type: "tool-call",
@@ -657,11 +650,10 @@ test("controls arbitrary tools through scoped SDK overlays", async () => {
                 name: "lookup",
                 input: { query: "stale" },
               },
-            }),
-          ).toMatchObject({
-            status: "error",
-            error: { message: expect.stringContaining("no longer active") },
-          })
+            })
+            .pipe(Effect.exit)
+          expect(stale).toMatchObject({ _tag: "Failure" })
+          expect(stale.toString()).toContain("no longer active")
           expect(activations).toBe(2)
         }).pipe(Effect.provide(primary))
       }).pipe(Effect.provide(toolLifecycleLayer(endpoint)), Effect.scoped),
@@ -708,7 +700,7 @@ const toolLifecycleLayer = (endpoint: string) => {
     deps: [SdkPlugins.node],
   })
   return AppNodeBuilder.build(
-    LayerNode.group([Database.node, EventV2.node, SdkPlugins.node, LocationServiceMap.node, provider]),
+    LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node, provider]),
     [[Config.node, Layer.succeed(Config.Service, Config.Service.of({ entries: () => Effect.succeed([]) }))]],
   )
 }

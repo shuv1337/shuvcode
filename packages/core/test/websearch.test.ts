@@ -2,12 +2,12 @@ import { describe, expect } from "bun:test"
 import { Effect, Exit, Scope } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { KV } from "@opencode-ai/core/kv"
 import { WebSearch } from "@opencode-ai/core/websearch"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([WebSearch.node, EventV2.node, KV.node])))
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([WebSearch.node, Bus.node, KV.node])))
 
 const register = (id: string) =>
   Effect.gen(function* () {

@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { Content } from "@opencode-ai/schema/tool"
 import { Effect, Schema, Stream } from "effect"
 import {
   GenerationOptions,
@@ -7,7 +8,6 @@ import {
   LLMRequest,
   LLMResponse,
   ToolChoice,
-  ToolContent,
   ToolOutput,
   toDefinitions,
 } from "../src"
@@ -279,7 +279,7 @@ describe("LLMClient tools", () => {
 
   it.effect("models canonical tool files with URIs", () =>
     Effect.sync(() => {
-      const decode = Schema.decodeUnknownSync(ToolContent)
+      const decode = Schema.decodeUnknownSync(Content)
 
       expect(decode({ type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" })).toEqual({
         type: "file",

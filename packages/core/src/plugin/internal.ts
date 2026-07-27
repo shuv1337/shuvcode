@@ -1,11 +1,11 @@
 export * as PluginInternal from "./internal"
 
-import type { Plugin } from "@opencode-ai/plugin/v2/effect/plugin"
+import type { Plugin } from "@opencode-ai/plugin/effect/plugin"
 import { Context, Effect, Scope } from "effect"
 import { HttpClient } from "effect/unstable/http"
-import { AgentV2 } from "../agent"
+import { Agent } from "../agent"
 import { Catalog } from "../catalog"
-import { CommandV2 } from "../command"
+import { Command } from "../command"
 import { Config } from "../config"
 import { ConfigAgentPlugin } from "../config/plugin/agent"
 import { ConfigCommandPlugin } from "../config/plugin/command"
@@ -14,7 +14,7 @@ import { ConfigPolicyPlugin } from "../config/plugin/policy"
 import { ConfigReferencePlugin } from "../config/plugin/reference"
 import { ConfigSkillPlugin } from "../config/plugin/skill"
 import { ConfigWebSearchPlugin } from "../config/plugin/websearch"
-import { EventV2 } from "../event"
+import { Bus } from "../bus"
 import { FileMutation } from "../file-mutation"
 import { Form } from "../form"
 import { FileSystem } from "../filesystem"
@@ -27,28 +27,28 @@ import { Location } from "../location"
 import { LocationMutation } from "../location-mutation"
 import { ModelsDev } from "../models-dev"
 import { Npm } from "@opencode-ai/util/npm"
-import { PermissionV2 } from "../permission"
+import { Permission } from "../permission"
 import { Reference } from "../reference"
 import { WebSearch } from "../websearch"
 import { Ripgrep } from "../ripgrep"
 import { SessionInstructions } from "../session/instructions"
 import { Shell } from "../shell"
-import { SkillV2 } from "../skill"
-import { PatchTool } from "../tool/patch"
-import { EditTool } from "../tool/edit"
-import { GlobTool } from "../tool/glob"
-import { GrepTool } from "../tool/grep"
-import { QuestionTool } from "../tool/question"
+import { Skill } from "../skill"
+import { PatchTool } from "../tool/plugin/patch"
+import { EditTool } from "../tool/plugin/edit"
+import { GlobTool } from "../tool/plugin/glob"
+import { GrepTool } from "../tool/plugin/grep"
+import { QuestionTool } from "../tool/plugin/question"
 import { ReadToolFileSystem } from "../tool/read-filesystem"
-import { ReadTool } from "../tool/read"
-import { ShellTool } from "../tool/shell"
-import { SkillTool } from "../tool/skill"
-import { SubagentTool } from "../tool/subagent"
-import { Tools } from "../tool/tools"
-import { WebFetchTool } from "../tool/webfetch"
-import { WebSearchTool } from "../tool/websearch"
+import { ReadTool } from "../tool/plugin/read"
+import { ShellTool } from "../tool/plugin/shell"
+import { SkillTool } from "../tool/plugin/skill"
+import { SubagentTool } from "../tool/plugin/subagent"
+import { Tool } from "../tool"
+import { WebFetchTool } from "../tool/plugin/webfetch"
+import { WebSearchTool } from "../tool/plugin/websearch"
 import { WellKnown } from "../wellknown"
-import { WriteTool } from "../tool/write"
+import { WriteTool } from "../tool/plugin/write"
 import { AgentPlugin } from "./agent"
 import { CommandPlugin } from "./command"
 import { ModelsDevPlugin } from "./models-dev"
@@ -62,11 +62,11 @@ import { WarmingPlugin } from "./warming"
 import { WellKnownPlugin } from "../wellknown/plugin"
 
 const services = Effect.fn("PluginInternal.services")(function* () {
-  const agent = yield* AgentV2.Service
+  const agent = yield* Agent.Service
   const catalog = yield* Catalog.Service
-  const command = yield* CommandV2.Service
+  const command = yield* Command.Service
   const config = yield* Config.Service
-  const events = yield* EventV2.Service
+  const bus = yield* Bus.Service
   const mutation = yield* FileMutation.Service
   const filesystem = yield* FileSystem.Service
   const fs = yield* FSUtil.Service
@@ -79,7 +79,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const locationMutation = yield* LocationMutation.Service
   const models = yield* ModelsDev.Service
   const npm = yield* Npm.Service
-  const permission = yield* PermissionV2.Service
+  const permission = yield* Permission.Service
   const runtime = yield* PluginRuntime.Service
   const form = yield* Form.Service
   const read = yield* ReadToolFileSystem.Service
@@ -88,15 +88,15 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const ripgrep = yield* Ripgrep.Service
   const instructions = yield* SessionInstructions.Service
   const shell = yield* Shell.Service
-  const skill = yield* SkillV2.Service
-  const tools = yield* Tools.Service
+  const skill = yield* Skill.Service
+  const tools = yield* Tool.Service
   const wellknown = yield* WellKnown.Service
   return Context.mergeAll(
-    Context.make(AgentV2.Service, agent),
+    Context.make(Agent.Service, agent),
     Context.make(Catalog.Service, catalog),
-    Context.make(CommandV2.Service, command),
+    Context.make(Command.Service, command),
     Context.make(Config.Service, config),
-    Context.make(EventV2.Service, events),
+    Context.make(Bus.Service, bus),
     Context.make(FileMutation.Service, mutation),
     Context.make(FileSystem.Service, filesystem),
     Context.make(FSUtil.Service, fs),
@@ -109,7 +109,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(LocationMutation.Service, locationMutation),
     Context.make(ModelsDev.Service, models),
     Context.make(Npm.Service, npm),
-    Context.make(PermissionV2.Service, permission),
+    Context.make(Permission.Service, permission),
     Context.make(PluginRuntime.Service, runtime),
     Context.make(Form.Service, form),
     Context.make(ReadToolFileSystem.Service, read),
@@ -118,8 +118,8 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(Ripgrep.Service, ripgrep),
     Context.make(SessionInstructions.Service, instructions),
     Context.make(Shell.Service, shell),
-    Context.make(SkillV2.Service, skill),
-    Context.make(Tools.Service, tools),
+    Context.make(Skill.Service, skill),
+    Context.make(Tool.Service, tools),
     Context.make(WellKnown.Service, wellknown),
   )
 })

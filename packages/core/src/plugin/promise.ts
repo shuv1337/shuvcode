@@ -1,8 +1,8 @@
 export * as PluginPromise from "./promise"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
-import type { Context, Plugin } from "@opencode-ai/plugin/v2/plugin"
-import type { Any, RegisterOptions } from "@opencode-ai/plugin/v2/tool"
+import { define } from "@opencode-ai/plugin/effect/plugin"
+import type { Context, Plugin } from "@opencode-ai/plugin/promise/plugin"
+import type { Info } from "@opencode-ai/plugin/promise/tool"
 import { Agent } from "@opencode-ai/schema/agent"
 import { Integration } from "@opencode-ai/schema/integration"
 import { Location } from "@opencode-ai/schema/location"
@@ -14,7 +14,7 @@ import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { Workspace } from "@opencode-ai/schema/workspace"
 import { WebSearch } from "@opencode-ai/schema/websearch"
 import { DateTime, Effect, Scope, Stream } from "effect"
-import { Tool } from "../tool/tool"
+import { Tool } from "../tool"
 
 type HostRegistration = { readonly dispose: Effect.Effect<void> }
 type Registration = { readonly dispose: () => Promise<void> }
@@ -23,7 +23,7 @@ type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: s
 
 /**
  * Adapts a Promise plugin into an Effect plugin so the existing Effect-only
- * loader (`PluginV2` / `PluginSupervisor`) can run it unchanged.
+ * loader (`Plugin` / `PluginSupervisor`) can run it unchanged.
  *
  * Hook registrations created during the async `setup` attach to the plugin's
  * scope, so unloading the plugin disposes them. The captured fiber context
@@ -61,7 +61,7 @@ export function fromPromise(plugin: Plugin) {
           app: host.app,
           options: host.options,
           agent: {
-            get: (id) => run(host.agent.get(id)),
+            get: (input) => run(host.agent.get({ ...input, agentID: Agent.ID.make(input.agentID) })),
             list: (input) => run(host.agent.list(input)),
             transform: transform(host.agent),
             reload: () => run(host.agent.reload()),
@@ -77,7 +77,6 @@ export function fromPromise(plugin: Plugin) {
                 run(host.catalog.provider.get({ ...input, providerID: Provider.ID.make(input.providerID) })),
             },
             model: {
-              get: (providerID, modelID) => run(host.catalog.model.get(providerID, modelID)),
               list: (input) => run(host.catalog.model.list(input)),
               default: (input) =>
                 run(host.catalog.model.default(input)).then((result) => ({ ...result, data: result.data ?? null })),
@@ -165,7 +164,44 @@ export function fromPromise(plugin: Plugin) {
                   }),
                 ),
             },
-            transform: transform(host.integration),
+            transform: (callback) =>
+              register(
+                host.integration.transform((draft) =>
+                  callback({
+                    list: draft.list,
+                    get: draft.get,
+                    update: draft.update,
+                    remove: draft.remove,
+                    method: {
+                      list: draft.method.list,
+                      update: (input) => {
+                        if (!("authorize" in input)) return draft.method.update(input)
+                        const refresh = input.refresh
+                        draft.method.update({
+                          ...input,
+                          authorize: (inputs) =>
+                            Effect.promise(() => input.authorize(inputs)).pipe(
+                              Effect.map((authorization) =>
+                                authorization.mode === "auto"
+                                  ? {
+                                      ...authorization,
+                                      callback: Effect.promise(() => authorization.callback),
+                                    }
+                                  : {
+                                      ...authorization,
+                                      callback: (code) => Effect.promise(() => authorization.callback(code)),
+                                    },
+                              ),
+                            ),
+                          refresh:
+                            refresh === undefined ? undefined : (credential) => Effect.promise(() => refresh(credential)),
+                        })
+                      },
+                      remove: draft.method.remove,
+                    },
+                  }),
+                ),
+              ),
             reload: () => run(host.integration.reload()),
             connection: {
               active: (id) => Effect.runPromiseWith(context)(host.integration.connection.active(id)),
@@ -190,8 +226,11 @@ export function fromPromise(plugin: Plugin) {
               register(
                 host.tool.transform((draft) =>
                   callback({
-                    add: (name: string, tool: Any, options?: RegisterOptions) =>
-                      draft.add(name, fromPromiseTool(tool), options),
+                    add: (tool: Info) =>
+                      draft.add({
+                        ...tool,
+                        execute: (input, context) => executePromiseTool(tool, input, context),
+                      }),
                   }),
                 ),
               ),
@@ -333,15 +372,10 @@ function wireEvent(value: unknown): unknown {
   return wire(value)
 }
 
-function fromPromiseTool(tool: Any): Tool.Any {
-  return {
-    ...tool,
-    execute: (input, context) =>
-      Effect.promise(() =>
-        tool.execute(input, {
-          ...context,
-          progress: (update) => Effect.runPromise(context.progress(update)),
-        }),
-      ),
-  }
-}
+const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
+  Effect.promise(() =>
+    tool.execute(input, {
+      ...context,
+      progress: (update) => Effect.runPromise(context.progress(update)),
+    }),
+  )

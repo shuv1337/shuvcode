@@ -1,48 +1,44 @@
 export * as PluginHost from "./host"
 
-import { Plugin } from "@opencode-ai/plugin/v2/effect"
-import type { IntegrationMethodRegistration } from "@opencode-ai/plugin/v2/effect/integration"
+import { Plugin } from "@opencode-ai/plugin/effect"
+import type { IntegrationMethodRegistration } from "@opencode-ai/plugin/effect/integration"
 import type { CredentialOAuth } from "@opencode-ai/sdk/v2/types"
 import { EventManifest } from "@opencode-ai/schema/event-manifest"
 import { App } from "../app"
 import { Effect, Schema, Stream } from "effect"
-import { AgentV2 } from "../agent"
+import { Agent } from "../agent"
 import { AISDK } from "../aisdk"
 import { Catalog } from "../catalog"
-import { CommandV2 } from "../command"
+import { Command } from "../command"
 import { Credential } from "../credential"
-import { EventV2 } from "../event"
+import { Bus } from "../bus"
 import { Integration } from "../integration"
 import { Location } from "../location"
-import { ModelV2 } from "../model"
-import type { PluginV2 } from "../plugin"
+import { Model } from "../model"
 import { PluginRuntime } from "./runtime"
-import { ProviderV2 } from "../provider"
+import { Provider } from "../provider"
 import { Reference } from "../reference"
 import { AbsolutePath, type DeepMutable } from "../schema"
-import { SkillV2 } from "../skill"
-import { Tool } from "../tool/tool"
-import { Tools } from "../tool/tools"
-import { ToolHooks } from "../tool/hooks"
-import { WorkspaceV2 } from "../workspace"
+import { Skill } from "../skill"
+import { Tool } from "../tool"
+import { Workspace } from "../workspace"
 import { WebSearch } from "../websearch"
 import { PluginHooks } from "./hooks"
 
 const mutable = <T>(value: T) => value as DeepMutable<T>
-export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Interface) {
+export const make = Effect.fn("PluginHost.make")(function* (plugin: import("../plugin").Interface) {
   const app = yield* App.Metadata
-  const agents = yield* AgentV2.Service
+  const agents = yield* Agent.Service
   const aisdk = yield* AISDK.Service
   const catalog = yield* Catalog.Service
-  const commands = yield* CommandV2.Service
-  const events = yield* EventV2.Service
+  const commands = yield* Command.Service
+  const bus = yield* Bus.Service
   const integration = yield* Integration.Service
   const location = yield* Location.Service
   const reference = yield* Reference.Service
-  const skill = yield* SkillV2.Service
-  const tools = yield* Tools.Service
+  const skill = yield* Skill.Service
+  const tools = yield* Tool.Service
   const websearch = yield* WebSearch.Service
-  const toolHooks = yield* ToolHooks.Service
   const hooks = yield* PluginHooks.Service
   const runtime = yield* PluginRuntime.Service
   const locationInfo = () =>
@@ -51,7 +47,9 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
       workspaceID: location.workspaceID,
       project: location.project,
     })
-  const locationRef = (input?: Parameters<Plugin.Context["agent"]["list"]>[0]) =>
+  const locationRef = (input?: {
+    readonly location?: { readonly directory?: string; readonly workspace?: string }
+  }) =>
     input?.location === undefined
       ? undefined
       : Location.Ref.make({
@@ -59,7 +57,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
           workspaceID:
             input.location.workspace === undefined
               ? location.workspaceID
-              : WorkspaceV2.ID.make(input.location.workspace),
+              : Workspace.ID.make(input.location.workspace),
         })
   const isCurrentLocation = (ref: Location.Ref) =>
     ref.directory === location.directory && ref.workspaceID === location.workspaceID
@@ -70,7 +68,22 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
     app,
     options: {},
     agent: {
-      get: (id) => agents.get(AgentV2.ID.make(id)),
+      get: (input) => {
+        const ref = locationRef(input)
+        const output =
+          ref && !isCurrentLocation(ref)
+            ? runtime.location.agent
+                .list(ref)
+                .pipe(Effect.map((result) => ({ ...result, data: result.data.find((agent) => agent.id === input.agentID) })))
+            : response(agents.get(input.agentID))
+        return output.pipe(
+          Effect.flatMap((result) =>
+            result.data
+              ? Effect.succeed({ ...result, data: result.data })
+              : Effect.fail(new Error(`Agent not found: ${input.agentID}`)),
+          ),
+        )
+      },
       list: (input) => {
         const ref = locationRef(input)
         if (ref && !isCurrentLocation(ref)) return runtime.location.agent.list(ref)
@@ -81,10 +94,10 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
         agents.transform((draft) => {
           callback({
             list: () => mutable(draft.list()),
-            get: (id) => mutable(draft.get(AgentV2.ID.make(id))),
-            default: (id) => draft.default(id === undefined ? undefined : AgentV2.ID.make(id)),
-            update: (id, update) => draft.update(AgentV2.ID.make(id), update),
-            remove: (id) => draft.remove(AgentV2.ID.make(id)),
+            get: (id) => mutable(draft.get(Agent.ID.make(id))),
+            default: (id) => draft.default(id === undefined ? undefined : Agent.ID.make(id)),
+            update: (id, update) => draft.update(Agent.ID.make(id), update),
+            remove: (id) => draft.remove(Agent.ID.make(id)),
           })
         }),
     },
@@ -121,7 +134,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
         list: () => response(catalog.provider.available()),
         get: (input) =>
           catalog.provider
-            .get(ProviderV2.ID.make(input.providerID))
+            .get(Provider.ID.make(input.providerID))
             .pipe(
               Effect.flatMap((provider) =>
                 provider === undefined
@@ -131,7 +144,6 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
             ),
       },
       model: {
-        get: (providerID, modelID) => catalog.model.get(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
         list: () => response(catalog.model.available()),
         default: () => response(catalog.model.default()),
       },
@@ -141,21 +153,21 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
           callback({
             provider: {
               list: () => mutable(draft.provider.list()),
-              get: (id) => mutable(draft.provider.get(ProviderV2.ID.make(id))),
-              update: (id, update) => draft.provider.update(ProviderV2.ID.make(id), update),
-              remove: (id) => draft.provider.remove(ProviderV2.ID.make(id)),
+              get: (id) => mutable(draft.provider.get(Provider.ID.make(id))),
+              update: (id, update) => draft.provider.update(Provider.ID.make(id), update),
+              remove: (id) => draft.provider.remove(Provider.ID.make(id)),
             },
             model: {
               get: (providerID, modelID) =>
-                mutable(draft.model.get(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID))),
+                mutable(draft.model.get(Provider.ID.make(providerID), Model.ID.make(modelID))),
               update: (providerID, modelID, update) =>
-                draft.model.update(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID), update),
+                draft.model.update(Provider.ID.make(providerID), Model.ID.make(modelID), update),
               remove: (providerID, modelID) =>
-                draft.model.remove(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
+                draft.model.remove(Provider.ID.make(providerID), Model.ID.make(modelID)),
               default: {
                 get: draft.model.default.get,
                 set: (providerID, modelID) =>
-                  draft.model.default.set(ProviderV2.ID.make(providerID), ModelV2.ID.make(modelID)),
+                  draft.model.default.set(Provider.ID.make(providerID), Model.ID.make(modelID)),
               },
             },
           })
@@ -170,7 +182,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
         }),
     },
     event: {
-      subscribe: () => events.subscribe().pipe(Stream.filter(EventManifest.isServer)),
+      subscribe: () => bus.subscribe().pipe(Stream.filter(EventManifest.isServer)),
     },
     integration: {
       list: () => response(integration.list()),
@@ -279,88 +291,21 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: PluginV2.Int
       transform: (callback) =>
         skill.transform((draft) => {
           callback({
-            source: (source) => draft.source(Schema.decodeUnknownSync(SkillV2.Source)(source)),
+            source: (source) => draft.source(Schema.decodeUnknownSync(Skill.Source)(source)),
             list: draft.list,
           })
         }),
     },
     tool: {
       transform: (callback) =>
-        Effect.gen(function* () {
-          const registrations: Array<{
-            readonly name: string
-            readonly tool: Tool.Any
-            readonly options?: Tool.RegisterOptions
-          }> = []
-          yield* Effect.sync(() =>
+        tools
+          .transform((draft) =>
             callback({
-              add: (name, tool, options) => {
-                registrations.push({ name, tool, ...(options ? { options } : {}) })
-              },
+              add: (tool) => draft.add(tool),
             }),
           )
-          yield* tools
-            .registerBatch(
-              registrations.map((registration) => ({
-                tools: { [registration.name]: registration.tool },
-                ...(registration.options === undefined ? {} : { options: registration.options }),
-              })),
-            )
-            .pipe(Effect.orDie)
-          return { dispose: Effect.void }
-        }),
-      hook: (name, callback) => {
-        if (name === "execute.before") {
-          return toolHooks.hook.before((event) => {
-            const output = {
-              tool: event.tool,
-              sessionID: event.sessionID,
-              agent: event.agent,
-              messageID: event.messageID,
-              callID: event.callID,
-              input: event.input,
-            }
-            return Reflect.apply(callback, undefined, [output]).pipe(
-              Effect.tap(() => Effect.sync(() => (event.input = output.input))),
-            )
-          })
-        }
-        return toolHooks.hook.after((event) => {
-          // Decode first so plugin mutations cannot alias the canonical outcome.
-          const output = {
-            tool: event.tool,
-            sessionID: event.sessionID,
-            agent: event.agent,
-            messageID: event.messageID,
-            callID: event.callID,
-            input: event.input,
-            ...Schema.decodeUnknownSync(Tool.ExecuteAfterOutcome)(event),
-          }
-          return Reflect.apply(callback, undefined, [output]).pipe(
-            Effect.tap(() => {
-              const decoded = Schema.decodeUnknownOption(Tool.ExecuteAfterOutcome)(output)
-              if (decoded._tag === "None")
-                return Effect.logWarning("ignoring invalid execute.after tool outcome", { tool: event.tool })
-              if (decoded.value.status !== event.status)
-                return Effect.logWarning("ignoring execute.after tool status change", { tool: event.tool })
-              return Effect.sync(() => {
-                if (event.status === "completed" && decoded.value.status === "completed") {
-                  event.content = decoded.value.content
-                  event.metadata = decoded.value.metadata
-                  event.outputPaths = decoded.value.outputPaths
-                  return
-                }
-                if (event.status === "error" && decoded.value.status === "error") {
-                  event.error = decoded.value.error
-                  event.content = decoded.value.content
-                  event.metadata = decoded.value.metadata
-                  event.outputPaths = decoded.value.outputPaths
-                }
-              })
-            }),
-          )
-        })
-      },
+          .pipe(Effect.orDie, Effect.as({ dispose: Effect.void })),
+      hook: (name, callback) => hooks.register("tool", name, callback),
     },
     websearch: {
       providers: () => response(websearch.providers()),

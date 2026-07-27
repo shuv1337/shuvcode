@@ -9,7 +9,7 @@ import { Permission } from "@opencode-ai/schema/permission"
 import { Config as ConfigSchema } from "@opencode-ai/schema/config"
 import { Integration } from "@opencode-ai/schema/integration"
 import { Credential } from "./credential"
-import { EventV2 } from "./event"
+import { Bus } from "./bus"
 import { Watcher } from "./filesystem/watcher"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Global } from "@opencode-ai/util/global"
@@ -168,7 +168,7 @@ export const Options = Schema.Struct({
 })
 export type Options = typeof Options.Type
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Config") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/Config") {}
 
 export const layer = (options?: Options) => Layer.effect(
   Service,
@@ -177,7 +177,7 @@ export const layer = (options?: Options) => Layer.effect(
     const global = yield* Global.Service
     const location = yield* Location.Service
     const watcher = yield* Watcher.Service
-    const events = yield* EventV2.Service
+    const bus = yield* Bus.Service
     const credentials = yield* Credential.Service
     const wellknown = yield* WellKnown.Service
     const names = ["opencode.json", "opencode.jsonc"]
@@ -375,7 +375,7 @@ export const layer = (options?: Options) => Layer.effect(
           if (isDeepStrictEqual(configs, next)) return
           configs = next
           yield* reconcile(next)
-          yield* events.publish(ConfigSchema.Event.Updated, {})
+          yield* bus.publish(ConfigSchema.Event.Updated, {})
         }),
       ),
     )
@@ -389,7 +389,7 @@ export const layer = (options?: Options) => Layer.effect(
       ),
       Effect.forkScoped({ startImmediately: true }),
     )
-    yield* events.subscribe(Integration.Event.ConnectionUpdated).pipe(
+    yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(
       Stream.filterEffect((event) =>
         wellknown.entries().pipe(
           Effect.map((entries) => entries.some((entry) => entry.integrationID === event.data.integrationID)),
@@ -401,7 +401,7 @@ export const layer = (options?: Options) => Layer.effect(
       ),
       Effect.forkScoped({ startImmediately: true }),
     )
-    yield* events.subscribe(WellKnown.Event.Updated).pipe(
+    yield* bus.subscribe(WellKnown.Event.Updated).pipe(
       Stream.runForEach(() =>
         reload().pipe(Effect.catchCause((cause) => Effect.logError("failed to reload wellknown sources", { cause }))),
       ),
@@ -438,7 +438,7 @@ export function configured(options?: Options) {
   return makeLocationNode({
     service: Service,
     layer: layer(options),
-    deps: [Watcher.node, EventV2.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
+    deps: [Watcher.node, Bus.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
   })
 }
 

@@ -19,7 +19,7 @@ export interface Interface {
  * Restart continuity actions for the managed server. The service is inert until called: only the
  * managed server invokes it, so default, embedded, and stdio servers never suspend or auto-resume.
  */
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionRestart") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRestart") {}
 
 export const layer = Layer.effect(
   Service,

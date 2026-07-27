@@ -3,10 +3,9 @@ export * as SessionRunnerLLM from "./llm"
 import { LLMClient, LLMError, LLMEvent, isContextOverflowFailure, type ProviderErrorEvent, type ToolCall } from "@opencode-ai/ai"
 import { Cause, Data, Effect, Exit, Fiber, FiberSet, Layer, Option, Pull, Schedule, Stream } from "effect"
 import { Database } from "../../database/database"
-import { EventV2 } from "../../event"
-import { PermissionV2 } from "../../permission"
-import { QuestionTool } from "../../tool/question"
-import { ToolOutputStore } from "../../tool-output-store"
+import { Bus } from "../../bus"
+import { Permission } from "../../permission"
+import { QuestionTool } from "../../tool/plugin/question"
 import { InstructionState } from "../instruction-state"
 import { SessionCompaction } from "../compaction"
 import { SessionContext } from "../context"
@@ -38,8 +37,8 @@ const CallOutcome = Data.taggedEnum<CallOutcome>()
 // Declining an interactive prompt halts the drain instead of becoming model-facing tool output.
 const isDecline = (
   error: SessionModelRequest.ExecuteError,
-): error is PermissionV2.DeclinedError | QuestionTool.CancelledError =>
-  error._tag === "PermissionV2.DeclinedError" || error._tag === "QuestionTool.CancelledError"
+): error is Permission.DeclinedError | QuestionTool.CancelledError =>
+  error._tag === "Permission.DeclinedError" || error._tag === "QuestionTool.CancelledError"
 
 /**
  * Classifies how the owned tool fibers ended. Interrupts abort the step; a user decline
@@ -66,8 +65,8 @@ const classifyToolExits = (
   // drain's error channel never carries a decline.
   const failure = causes.flatMap((cause) => {
     if (Cause.hasInterrupts(cause)) return []
-    const reasons = cause.reasons.flatMap((reason): Array<Cause.Reason<ToolOutputStore.Error>> =>
-      Cause.isFailReason(reason) ? (isDecline(reason.error) ? [] : [Cause.makeFailReason(reason.error)]) : [reason],
+    const reasons = cause.reasons.flatMap((reason): Array<Cause.Reason<never>> =>
+      Cause.isFailReason(reason) ? [] : [reason],
     )
     return reasons.length > 0 ? [Cause.fromReasons(reasons)] : []
   }).at(0)
@@ -75,7 +74,6 @@ const classifyToolExits = (
     interrupted: causes.some(Cause.hasInterrupts),
     declines,
     failure,
-    infraError: failure === undefined ? undefined : Option.getOrUndefined(Cause.findErrorOption(failure)),
   }
 }
 
@@ -86,7 +84,7 @@ const RESULT_MISSING = { type: "tool.result-missing", message: "Provider did not
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const events = yield* EventV2.Service
+    const bus = yield* Bus.Service
     const llm = yield* LLMClient.Service
     const store = yield* SessionStore.Service
     const context = yield* SessionContext.Service
@@ -146,7 +144,7 @@ const layer = Layer.effect(
       // compaction boundary, so the rebuilt step needs identity inside the new epoch.
       let assistantMessageID = SessionMessage.ID.create()
       const retry = yield* Schedule.toStepWithSleep(
-        SessionRunnerRetry.schedule(events, sessionID, () => assistantMessageID),
+        SessionRunnerRetry.schedule(bus, sessionID, () => assistantMessageID),
       )
       /**
        * Consumes one retry allowance: sleeps the scheduled backoff, or publishes
@@ -157,7 +155,7 @@ const layer = Layer.effect(
         retry(failure).pipe(
           Effect.as(CallOutcome.Retry({ step: failure.step })),
           Pull.catchDone(() =>
-            events
+            bus
               .publish(SessionEvent.Step.Failed, {
                 sessionID,
                 assistantMessageID,
@@ -203,8 +201,8 @@ const layer = Layer.effect(
       const selected = yield* context.select(sessionID)
       // Establish what the model knows before admitting what the user said, so
       // a blocked first step leaves pending inputs untouched.
-      yield* InstructionState.prepare(db, events, selected.instructions, selected.session.id)
-      const promoted = promotable ? yield* SessionPending.promote(db, events, selected.session.id, promotable) : 0
+      yield* InstructionState.prepare(db, bus, selected.instructions, selected.session.id)
+      const promoted = promotable ? yield* SessionPending.promote(db, bus, selected.session.id, promotable) : 0
       // Promoted input opens a fresh step allowance.
       const currentStep = promoted > 0 ? 1 : step
       const loaded = yield* context.load(selected)
@@ -231,7 +229,7 @@ const layer = Layer.effect(
       }> = []
       const interruptTools = Effect.suspend(() => Fiber.interruptAll(toolRuns.map((run) => run.fiber)))
       const startSnapshot = yield* snapshots.capture()
-      const publisher = createLLMEventPublisher(events, {
+      const publisher = createLLMEventPublisher(bus, {
         sessionID: session.id,
         agent: agent.id,
         // The selected catalog identity, not model.id: route-level ids are provider API
@@ -260,7 +258,7 @@ const layer = Layer.effect(
       const publishStepEnd = (finish: NonNullable<StepRecord["finish"]>) =>
         Effect.gen(function* () {
           const end = yield* captureStepEnd()
-          yield* events.publish(SessionEvent.Step.Ended, {
+          yield* bus.publish(SessionEvent.Step.Ended, {
             sessionID: session.id,
             assistantMessageID: yield* publisher.startAssistant(),
             finish: finish.finish,
@@ -310,6 +308,9 @@ const layer = Layer.effect(
                   // The fiber owns its call: it publishes its own completion, masked so a
                   // finished execution always reaches its durable settlement.
                   Effect.flatMap((outcome) => publisher.toolExecution(event.id, event.name, outcome)),
+                  Effect.catchTag("Tool.Error", (error) =>
+                    publisher.failTool(event.id, toSessionError(error)).pipe(Effect.asVoid),
+                  ),
                 ),
               ).pipe(Effect.forkScoped),
             })
@@ -386,9 +387,8 @@ const layer = Layer.effect(
             yield* publisher.failAssistant(STEP_INTERRUPTED)
           }
           if (tools.failure !== undefined) {
-            const error = toSessionError(tools.infraError ?? Cause.squash(tools.failure))
+            const error = toSessionError(Cause.squash(tools.failure))
             yield* publisher.failUnsettledTools(error)
-            if (tools.infraError !== undefined) yield* publisher.failAssistant(error)
           }
           // Local calls have joined, so the remaining sweeps only close hosted calls the
           // provider promised but never resolved.
@@ -413,8 +413,7 @@ const layer = Layer.effect(
 
           if (stream._tag === "Failure") return yield* Effect.failCause(stream.cause)
           if (tools.declines.length > 0) return yield* Effect.interrupt
-          if ((tools.interrupted || tools.infraError !== undefined) && tools.failure)
-            return yield* Effect.failCause(tools.failure)
+          if (tools.interrupted && tools.failure) return yield* Effect.failCause(tools.failure)
           if (tools.interrupted && joined._tag === "Failure") return yield* Effect.failCause(joined.cause)
           if (record.failure) return yield* new StepFailedError({ error: record.failure })
           return CallOutcome.Completed({
@@ -450,7 +449,7 @@ const layer = Layer.effect(
           if (Exit.isSuccess(compacted)) return
           const unsettled = yield* SessionPending.compaction(db, sessionID)
           if (unsettled)
-            yield* events.publish(SessionEvent.Compaction.Failed, {
+            yield* bus.publish(SessionEvent.Compaction.Failed, {
               sessionID,
               reason: "manual",
               error: Cause.hasInterruptsOnly(compacted.cause)
@@ -471,7 +470,7 @@ const layer = Layer.effect(
         if (message.type !== "assistant") continue
         for (const tool of message.content) {
           if (tool.type !== "tool" || (tool.state.status !== "streaming" && tool.state.status !== "running")) continue
-          yield* events.publish(SessionEvent.Tool.Failed, {
+          yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID: message.id,
             callID: tool.id,
@@ -503,7 +502,7 @@ export const node = makeLocationNode({
   service: Service,
   layer,
   deps: [
-    EventV2.node,
+    Bus.node,
     llmClient,
     SessionContext.node,
     SessionModelRequest.node,

@@ -18,7 +18,7 @@
 import type {
   EventSubscribeOutput,
   OpenCodeClient,
-  PermissionV2Request,
+  PermissionRequest,
   SessionMessageAssistantTool,
   SessionMessageInfo,
 } from "@opencode-ai/client/promise"
@@ -168,14 +168,14 @@ function sourceKey(messageID: string, callID: string) {
   return `${messageID}\u0000${callID}`
 }
 
-function permissionTool(request: PermissionV2Request, tools: Map<string, SessionMessageAssistantTool>) {
+function permissionTool(request: PermissionRequest, tools: Map<string, SessionMessageAssistantTool>) {
   if (request.source?.type !== "tool") return request
   const tool = tools.get(sourceKey(request.source.messageID, request.source.callID))
   return tool ? { ...request, tool } : request
 }
 
 function blockerCategory(event: V2Event): "permission" | "form" | undefined {
-  if (event.type === "permission.v2.asked" || event.type === "permission.v2.replied") return "permission"
+  if (event.type === "permission.asked" || event.type === "permission.replied") return "permission"
   if (event.type === "form.created" || event.type === "form.replied" || event.type === "form.cancelled") return "form"
 }
 
@@ -436,7 +436,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
   const resolvePermissionTools = async (
     sdk: OpenCodeClient,
     child: ChildState,
-    permissions: PermissionV2Request[],
+    permissions: PermissionRequest[],
     epoch: number,
     signal = input.signal,
   ) => {
@@ -859,13 +859,13 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
       notifyDetail(child)
       return
     }
-    if (event.type === "permission.v2.asked") {
+    if (event.type === "permission.asked") {
       if (!child.permissions.some((item) => item.id === event.data.id))
         child.permissions.push(permissionTool(event.data, child.toolSources))
       input.emit()
       return
     }
-    if (event.type === "permission.v2.replied") {
+    if (event.type === "permission.replied") {
       child.permissions = child.permissions.filter((item) => item.id !== event.data.requestID)
       input.emit()
       return

@@ -1,9 +1,8 @@
 import { describe, expect } from "bun:test"
-import { CodeMode } from "@opencode-ai/core/codemode"
 import { CodeModeCatalog } from "@opencode-ai/core/codemode/catalog"
 import { CodeModeInstructions } from "@opencode-ai/core/codemode/instructions"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Tool } from "@opencode-ai/core/tool/tool"
+import { Tool } from "@opencode-ai/core/tool"
 import { Effect, Schema } from "effect"
 import { it } from "../lib/effect"
 import { readInitial, readUpdate } from "../lib/instructions"
@@ -66,32 +65,45 @@ describe("CodeModeInstructions", () => {
   )
 
   it.effect("stores a canonical sorted snapshot so registration order does not churn history", () => {
-    const alpha = Tool.make({
+    const alpha = ({
+      name: "alpha",
       description: "Alpha tool",
       input: Schema.Struct({}),
       output: Schema.String,
       execute: () => Effect.succeed({ output: "alpha" }),
     })
-    const zeta = Tool.make({
+    const zeta = ({
+      name: "zeta",
       description: "Zeta tool",
       input: Schema.Struct({}),
       output: Schema.String,
       execute: () => Effect.succeed({ output: "zeta" }),
     })
-    const layer = AppNodeBuilder.build(CodeMode.node)
+    const layer = AppNodeBuilder.build(Tool.node)
 
     return Effect.gen(function* () {
-      const codeMode = yield* CodeMode.Service
+      const tools = yield* Tool.Service
       const initialized = yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* codeMode.register(Tool.registrationEntries({ zeta, alpha }, { namespace: "tools" }))
-          return yield* readInitial(CodeModeInstructions.make((yield* codeMode.materialize()).catalog))
+          yield* tools.transform((draft) => {
+            draft.add({ ...zeta, options: { namespace: "tools" } })
+            draft.add({ ...alpha, options: { namespace: "tools" } })
+          })
+          return yield* readInitial(
+            CodeModeInstructions.make((yield* tools.snapshot()).codeModeCatalog),
+          )
         }),
       )
       const reordered = yield* Effect.scoped(
         Effect.gen(function* () {
-          yield* codeMode.register(Tool.registrationEntries({ alpha, zeta }, { namespace: "tools" }))
-          return yield* readUpdate(CodeModeInstructions.make((yield* codeMode.materialize()).catalog), initialized)
+          yield* tools.transform((draft) => {
+            draft.add({ ...alpha, options: { namespace: "tools" } })
+            draft.add({ ...zeta, options: { namespace: "tools" } })
+          })
+          return yield* readUpdate(
+            CodeModeInstructions.make((yield* tools.snapshot()).codeModeCatalog),
+            initialized,
+          )
         }),
       )
 

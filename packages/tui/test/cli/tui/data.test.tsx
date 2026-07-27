@@ -3,7 +3,8 @@ import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import type { OpenCodeEvent } from "@opencode-ai/client"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
+import { Event } from "@opencode-ai/schema/event"
 import { createEffect, onMount, type ParentProps } from "solid-js"
 import { ConfigProvider } from "../../../src/config"
 import { ClientProvider, useClient } from "../../../src/context/client"
@@ -879,7 +880,7 @@ test("removes committed revert messages from local state", async () => {
   try {
     for (const [seq, inputID] of ["msg_001", "msg_002", "msg_003"].entries()) {
       emitEvent(events, {
-        id: EventV2.ID.create(),
+        id: Event.ID.create(),
         created: seq,
         type: "session.input.admitted",
         durable: durable(sessionID, seq),
@@ -889,7 +890,7 @@ test("removes committed revert messages from local state", async () => {
     await wait(() => data.session.message.list(sessionID).length === 3)
 
     emitEvent(events, {
-      id: EventV2.ID.create(),
+      id: Event.ID.create(),
       created: 3,
       type: "session.revert.committed",
       durable: durable(sessionID, 3),
@@ -1812,7 +1813,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_asked_1",
       created: 0,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: {
         id: "per_1",
         sessionID: "ses_1",
@@ -1823,7 +1824,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_asked_2",
       created: 0,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: {
         id: "per_2",
         sessionID: "ses_1",
@@ -1836,7 +1837,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_replied_1",
       created: 0,
-      type: "permission.v2.replied",
+      type: "permission.replied",
       data: { sessionID: "ses_1", requestID: "per_1", reply: "once" },
     })
     await wait(() => data.session.permission.list("ses_1")?.length === 1)
@@ -1845,7 +1846,7 @@ test("adds and dismisses permission requests from live events", async () => {
     emitEvent(events, {
       id: "evt_permission_replied_2",
       created: 0,
-      type: "permission.v2.replied",
+      type: "permission.replied",
       data: { sessionID: "ses_1", requestID: "per_2", reply: "reject" },
     })
     await wait(() => data.session.permission.list("ses_1")?.length === 0)
@@ -2570,7 +2571,7 @@ test("skips initial instruction state and projects later updates with their mess
     await wait(() => sync.session.message.list("session-1")?.some((message) => message.time.created === 1))
     expect(sync.session.message.list("session-1")).toHaveLength(1)
     expect(sync.session.message.list("session-1")?.[0]).toMatchObject({
-      id: SessionMessage.ID.fromEvent(EventV2.ID.make("evt_instructions_2")),
+      id: SessionMessage.ID.fromEvent(Event.ID.make("evt_instructions_2")),
       type: "system",
       text: "Instructions updated: core/date",
       time: { created: 1 },

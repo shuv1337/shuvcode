@@ -14,7 +14,7 @@ import {
 } from "@opencode-ai/schema/session-pending"
 import { Event } from "@opencode-ai/schema/event"
 import type { Database } from "../database/database"
-import type { EventV2 } from "../event"
+import { Bus } from "../bus"
 import { EventTable } from "../event/sql"
 import { KeyedMutex } from "../effect/keyed-mutex"
 import { SessionEvent } from "./event"
@@ -38,7 +38,7 @@ const encodeUser = Schema.encodeSync(UserData)
 const decodeSynthetic = Schema.decodeUnknownSync(SyntheticData)
 const encodeSynthetic = Schema.encodeSync(SyntheticData)
 const decodeAdmittedEvent = Schema.decodeUnknownOption(SessionEvent.InputAdmitted.data)
-const admittedEventType = Event.versionedType(
+const admittedEventType = Bus.versionedType(
   SessionEvent.InputAdmitted.type,
   SessionEvent.InputAdmitted.durable.version,
 )
@@ -150,7 +150,7 @@ const promotedFromHistory = Effect.fn("SessionPending.promotedFromHistory")(func
 
 export const admit = Effect.fn("SessionPending.admit")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  bus: Bus.Interface,
   request: {
     readonly id: SessionMessage.ID
     readonly sessionID: SessionSchema.ID
@@ -164,7 +164,7 @@ export const admit = Effect.fn("SessionPending.admit")(function* (
   }
   const promoted = yield* promotedFromHistory(db, request.sessionID, request.id)
   if (promoted !== undefined) return promoted
-  return yield* events
+  return yield* bus
     .publish(SessionEvent.InputAdmitted, {
       inputID: request.id,
       sessionID: request.sessionID,
@@ -198,7 +198,7 @@ export const admit = Effect.fn("SessionPending.admit")(function* (
 
 export const admitCompaction = Effect.fn("SessionPending.admitCompaction")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  bus: Bus.Interface,
   input: { readonly id: SessionMessage.ID; readonly sessionID: SessionSchema.ID },
 ) {
   return yield* inboxLocks.withLock(input.sessionID)(
@@ -210,7 +210,7 @@ export const admitCompaction = Effect.fn("SessionPending.admitCompaction")(funct
       }
       const pending = yield* compaction(db, input.sessionID)
       if (pending) return pending
-      return yield* events
+      return yield* bus
         .publish(SessionEvent.Compaction.Admitted, {
           inputID: input.id,
           sessionID: input.sessionID,
@@ -413,7 +413,7 @@ export const equivalent = (
 
 const publish = Effect.fn("SessionPending.publish")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  bus: Bus.Interface,
   sessionID: SessionSchema.ID,
   rows: ReadonlyArray<typeof SessionPendingTable.$inferSelect>,
 ) {
@@ -423,7 +423,7 @@ const publish = Effect.fn("SessionPending.publish")(function* (
     (row) => {
       const entry = fromRow(row)
       if (entry.type === "compaction") return Effect.die(new LifecycleConflict({ id: entry.id }))
-      return events
+      return bus
         .publish(SessionEvent.InputPromoted, {
           sessionID,
           inputID: entry.id,
@@ -450,7 +450,7 @@ const publish = Effect.fn("SessionPending.publish")(function* (
  */
 export const promote = Effect.fn("SessionPending.promote")(function* (
   db: DatabaseService,
-  events: EventV2.Interface,
+  bus: Bus.Interface,
   sessionID: SessionSchema.ID,
   scope: Promotable,
 ) {
@@ -464,7 +464,7 @@ export const promote = Effect.fn("SessionPending.promote")(function* (
         .orderBy(asc(SessionPendingTable.admitted_seq))
         .all()
         .pipe(Effect.orDie)
-      if (steers.length > 0 || scope === "steer") return yield* publish(db, events, sessionID, steers)
+      if (steers.length > 0 || scope === "steer") return yield* publish(db, bus, sessionID, steers)
 
       const queued = yield* db
         .select()
@@ -475,7 +475,7 @@ export const promote = Effect.fn("SessionPending.promote")(function* (
         .get()
         .pipe(Effect.orDie)
       if (!queued) return 0
-      const promoted = yield* publish(db, events, sessionID, [queued])
+      const promoted = yield* publish(db, bus, sessionID, [queued])
       const arrivedSteers = yield* db
         .select()
         .from(SessionPendingTable)
@@ -483,7 +483,7 @@ export const promote = Effect.fn("SessionPending.promote")(function* (
         .orderBy(asc(SessionPendingTable.admitted_seq))
         .all()
         .pipe(Effect.orDie)
-      return promoted + (yield* publish(db, events, sessionID, arrivedSteers))
+      return promoted + (yield* publish(db, bus, sessionID, arrivedSteers))
     }),
   )
 })

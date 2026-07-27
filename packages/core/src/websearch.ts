@@ -3,7 +3,7 @@ export * as WebSearch from "./websearch"
 import { WebSearch } from "@opencode-ai/schema/websearch"
 import { Context, Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { EventV2 } from "./event"
+import { Bus } from "./bus"
 import { KV } from "./kv"
 import { State } from "./state"
 
@@ -13,7 +13,7 @@ export type ID = WebSearch.ID
 export const Provider = WebSearch.Provider
 export type Provider = WebSearch.Provider
 
-export const Event = WebSearch.Event
+export { Event } from "@opencode-ai/schema/websearch"
 
 export const Input = WebSearch.Input
 export type Input = WebSearch.Input
@@ -56,7 +56,7 @@ export interface Interface extends State.Transformable<Draft> {
   readonly query: (input: Input) => Effect.Effect<Response, Error>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/WebSearch") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/WebSearch") {}
 
 type Data = {
   readonly providers: Map<ID, ProviderImplementation>
@@ -74,7 +74,7 @@ export type Draft = {
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const events = yield* EventV2.Service
+    const bus = yield* Bus.Service
     const kv = yield* KV.Service
     const decodeResults = Schema.decodeUnknownEffect(Schema.Array(Result))
     const state = State.create<Data, Draft>({
@@ -86,7 +86,7 @@ const layer = Layer.effect(
           set: (providerID) => (draft.defaultProviderID = providerID),
         },
       }),
-      finalize: () => events.publish(Event.Updated, {}).pipe(Effect.asVoid),
+      finalize: () => bus.publish(WebSearch.Event.Updated, {}).pipe(Effect.asVoid),
     })
 
     const requireProvider = (providers: Map<ID, ProviderImplementation>, providerID: ID) => {
@@ -140,5 +140,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [EventV2.node, KV.node],
+  deps: [Bus.node, KV.node],
 })

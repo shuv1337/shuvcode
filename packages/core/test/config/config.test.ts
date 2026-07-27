@@ -15,11 +15,11 @@ import { ConfigMigrateV1 } from "@opencode-ai/core/v1/config/migrate"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { Global } from "@opencode-ai/util/global"
 import { Location } from "@opencode-ai/core/location"
 import { Project } from "@opencode-ai/core/project"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { WellKnown } from "@opencode-ai/core/wellknown"
 import { Integration } from "@opencode-ai/schema/integration"
@@ -81,7 +81,7 @@ function testLayer(
       ),
     ),
   )
-  return AppNodeBuilder.build(LayerNode.group([Config.node, EventV2.node]), [
+  return AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node]), [
     [Config.node, Config.configured(options)],
     [Location.node, locationLayer],
     [Global.node, Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })],
@@ -194,8 +194,8 @@ describe("Config", () => {
 
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
-            const events = yield* EventV2.Service
-            const changed = yield* events
+            const bus = yield* Bus.Service
+            const changed = yield* bus
               .subscribe(ConfigSchema.Event.Updated)
               .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
             yield* Effect.sleep("10 millis")
@@ -298,14 +298,14 @@ describe("Config", () => {
 
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
-            const events = yield* EventV2.Service
+            const bus = yield* Bus.Service
             expect(Config.latest(yield* config.entries(), "shell")).toBe("secret")
-            const updated = yield* events
+            const updated = yield* bus
               .subscribe(ConfigSchema.Event.Updated)
               .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
             yield* Effect.yieldNow
             key = "next"
-            yield* events.publish(Integration.Event.ConnectionUpdated, { integrationID })
+            yield* bus.publish(Integration.Event.ConnectionUpdated, { integrationID })
             expect(yield* Fiber.join(updated)).toHaveLength(1)
             expect(Config.latest(yield* config.entries(), "shell")).toBe("next")
           }).pipe(
@@ -331,7 +331,7 @@ describe("Config", () => {
       // V1 lists servers directly under `mcp`, so a file with only `$schema` + `mcp` still migrates.
       expect(ConfigMigrateV1.isV1({ mcp: { context7: { type: "local", command: ["npx"] } } })).toBe(true)
       expect(ConfigMigrateV1.isV1({ $schema: "x", mcp: { executor: { type: "remote", url: "https://x" } } })).toBe(true)
-      // V2 nests under `mcp.servers`, so it must not be misdetected and re-migrated.
+      // Current config nests under `mcp.servers`, so it must not be misdetected and re-migrated.
       expect(ConfigMigrateV1.isV1({ mcp: { servers: { context7: { type: "local", command: ["npx"] } } } })).toBe(false)
       expect(ConfigMigrateV1.isV1({ mcp: {} })).toBe(false)
       expect(ConfigMigrateV1.isV1({ mcp: { timeout: { execution: 1000 } } })).toBe(false)
@@ -396,7 +396,7 @@ describe("Config", () => {
       })
 
       expect(migrated.providers?.bedrock).toMatchObject({
-        package: ProviderV2.aisdk("@ai-sdk/amazon-bedrock"),
+        package: Provider.aisdk("@ai-sdk/amazon-bedrock"),
         settings: { region: "us-east-1", profile: "dev" },
         headers: { "x-test": "1" },
         body: { trace: true },
@@ -1041,7 +1041,7 @@ describe("Config", () => {
               },
             })
             expect(documents[0]?.info.providers?.openai).toMatchObject({
-              package: ProviderV2.aisdk("@ai-sdk/openai"),
+              package: Provider.aisdk("@ai-sdk/openai"),
               settings: { apiKey: "secret", organization: "org" },
               models: {
                 model: {
@@ -1051,7 +1051,7 @@ describe("Config", () => {
               },
             })
             expect(documents[0]?.info.providers?.anthropic).toMatchObject({
-              package: ProviderV2.aisdk("@ai-sdk/anthropic"),
+              package: Provider.aisdk("@ai-sdk/anthropic"),
               models: {
                 model: {
                   settings: {

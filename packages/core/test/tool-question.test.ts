@@ -3,19 +3,18 @@ import { Cause, Effect, Exit, Fiber, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Form } from "@opencode-ai/core/form"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { QuestionTool } from "@opencode-ai/core/tool/question"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { Permission } from "@opencode-ai/core/permission"
+import { Session } from "@opencode-ai/core/session"
+import { Tool } from "@opencode-ai/core/tool"
+import { QuestionTool } from "@opencode-ai/core/tool/plugin/question"
 import { Image } from "@opencode-ai/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 
-const sessionID = SessionV2.ID.make("ses_question_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_question_tool_test")
+const assertions: Permission.AssertInput[] = []
 let captured: Form.CreateInput | undefined
 let reject = false
 let deny = false
@@ -30,14 +29,14 @@ const questionInput = {
   ],
 }
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(
           deny
             ? Effect.fail(
-                new PermissionV2.BlockedError({
+                new Permission.BlockedError({
                   rules: [],
                   permission: input.action,
                   resources: input.resources,
@@ -78,14 +77,13 @@ const form = Layer.succeed(
 const questionToolNode = makeLocationNode({
   name: "test/question-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(QuestionTool.Plugin)),
-  deps: [ToolRegistry.toolsNode, PermissionV2.node, Form.node],
+  deps: [Tool.node, Permission.node, Form.node],
 })
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, questionToolNode]), [
-    [PermissionV2.node, permission],
+  AppNodeBuilder.build(LayerNode.group([Tool.node, questionToolNode]), [
+    [Permission.node, permission],
     [Form.node, form],
-    [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
     [Image.node, imagePassthrough],
   ]),
 )
@@ -95,7 +93,7 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       deny = true
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         (yield* toolDefinitions(registry, [{ action: "question", resource: "*", effect: "deny" }])).map(
@@ -126,7 +124,7 @@ describe("QuestionTool", () => {
       captured = undefined
       reject = false
       deny = false
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
       const questions = [
         {
           question: "What should happen?",
@@ -204,7 +202,7 @@ describe("QuestionTool", () => {
       captured = undefined
       reject = false
       deny = false
-      const registryService = yield* ToolRegistry.Service
+      const registryService = yield* Tool.Service
 
       yield* executeTool(registryService, {
         sessionID,
@@ -234,7 +232,7 @@ describe("QuestionTool", () => {
       captured = undefined
       reject = true
       deny = false
-      const registryService = yield* ToolRegistry.Service
+      const registryService = yield* Tool.Service
       const fiber = yield* executeTool(registryService, {
         sessionID,
         ...toolIdentity,

@@ -14,8 +14,8 @@ import type {
   McpServer,
   ModelInfo,
   PermissionSavedInfo,
-  PermissionV2Request,
-  ProviderV2Info,
+  PermissionRequest,
+  ProviderInfo,
   ReferenceInfo,
   SessionMessageInfo,
   SessionMessageAssistant,
@@ -29,7 +29,7 @@ import type {
   OpenCodeEvent,
   WebSearchProvider,
 } from "@opencode-ai/client"
-import type { Plugin } from "@opencode-ai/plugin/v2/tui"
+import type { Plugin } from "@opencode-ai/plugin/tui"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
@@ -55,7 +55,7 @@ type LocationData = {
     resource?: McpResource[]
   }
   model?: ModelInfo[]
-  provider?: ProviderV2Info[]
+  provider?: ProviderInfo[]
   reference?: ReferenceInfo[]
   websearch?: WebSearchProvider[]
   // Currently running shell commands for this location, keyed by shell id. Entries are removed
@@ -75,7 +75,7 @@ type Store = {
     message: Record<string, SessionMessageInfo[]>
     pending: Record<string, SessionPendingInfo[]>
     input: Record<string, string[]>
-    permission: Record<string, PermissionV2Request[]>
+    permission: Record<string, PermissionRequest[]>
     // Pending forms keyed by owner: a session ID or the temporary "global" elicitation sentinel.
     form: Record<string, FormWithLocation[]>
   }
@@ -808,14 +808,14 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             message.append(draft, index, failed)
           })
           break
-        case "permission.v2.asked":
+        case "permission.asked":
           if (store.session.permission[event.data.sessionID]?.some((request) => request.id === event.data.id)) break
           setStore("session", "permission", event.data.sessionID, [
             ...(store.session.permission[event.data.sessionID] ?? []),
             event.data,
           ])
           break
-        case "permission.v2.replied":
+        case "permission.replied":
           setStore(
             "session",
             "permission",

@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import { Tool } from "@opencode-ai/schema/tool"
 import { Route } from "../route/client"
 import { Auth } from "../route/auth"
 import { Endpoint } from "../route/endpoint"
@@ -16,7 +17,6 @@ import {
   type TextPart,
   type ToolCallPart,
   type ToolDefinition,
-  type ToolContent,
 } from "../schema"
 import { JsonObject, optionalArray, ProviderShared } from "./shared"
 import { GeminiToolSchema } from "./utils/gemini-tool-schema"
@@ -289,7 +289,7 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
         })
         continue
       }
-      const content: ReadonlyArray<ToolContent> = part.result.value
+      const content: ReadonlyArray<Tool.Content> = part.result.value
       const text = content.filter((item) => item.type === "text").map((item) => item.text)
       const media: GeminiInlineDataPart[] = []
       for (const item of content) {

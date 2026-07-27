@@ -3,7 +3,7 @@ export * as SessionRunnerRetry from "./retry"
 import { LLMError } from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Data, Duration, Effect, Schedule } from "effect"
-import { EventV2 } from "../../event"
+import { Bus } from "../../bus"
 import { SessionEvent } from "../event"
 import { SessionMessage } from "../message"
 import { SessionSchema } from "../schema"
@@ -41,7 +41,7 @@ const retryAfter = (failure: RetryableFailure) => {
   return undefined
 }
 
-export const schedule = (events: EventV2.Interface, sessionID: SessionSchema.ID, assistantMessageID: () => SessionMessage.ID) =>
+export const schedule = (bus: Bus.Interface, sessionID: SessionSchema.ID, assistantMessageID: () => SessionMessage.ID) =>
   Schedule.max([Schedule.exponential("2 seconds"), Schedule.recurs(4)]).pipe(
     Schedule.setInputType<RetryableFailure>(),
     Schedule.modifyDelay(({ input: failure, duration: delay }) => {
@@ -49,7 +49,7 @@ export const schedule = (events: EventV2.Interface, sessionID: SessionSchema.ID,
       return Effect.succeed(minimum === undefined ? delay : Duration.max(delay, Duration.millis(minimum)))
     }),
     Schedule.tap((metadata) =>
-      events.publish(SessionEvent.RetryScheduled, {
+      bus.publish(SessionEvent.RetryScheduled, {
         sessionID,
         assistantMessageID: assistantMessageID(),
         attempt: metadata.attempt + 1,

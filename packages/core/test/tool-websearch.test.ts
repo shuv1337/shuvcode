@@ -2,14 +2,13 @@ import { beforeEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { PermissionV2 } from "@opencode-ai/core/permission"
+import { Permission } from "@opencode-ai/core/permission"
 import { Form } from "@opencode-ai/core/form"
 import { KV } from "@opencode-ai/core/kv"
 import { WebSearch } from "@opencode-ai/core/websearch"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { WebSearchTool } from "@opencode-ai/core/tool/websearch"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { Session } from "@opencode-ai/core/session"
+import { Tool } from "@opencode-ai/core/tool"
+import { WebSearchTool } from "@opencode-ai/core/tool/plugin/websearch"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { Image } from "@opencode-ai/core/image"
 import { testEffect } from "./lib/effect"
@@ -25,11 +24,11 @@ const webSearchToolNode = makeLocationNode({
       yield* registerToolPlugin(WebSearchTool.Plugin, { websearch: webSearchHost(websearch) })
     }),
   ),
-  deps: [ToolRegistry.toolsNode, PermissionV2.node, WebSearch.node, Form.node, KV.node],
+  deps: [Tool.node, Permission.node, WebSearch.node, Form.node, KV.node],
 })
 
-const sessionID = SessionV2.ID.make("ses_websearch_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_websearch_test")
+const assertions: Permission.AssertInput[] = []
 const queries: WebSearch.Input[] = []
 let result = new WebSearch.Response({
   providerID: WebSearch.ID.make("exa"),
@@ -46,8 +45,8 @@ beforeEach(() => {
 })
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) => Effect.sync(() => assertions.push(input)),
     ask: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
@@ -92,13 +91,12 @@ const kv = Layer.succeed(
 )
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, WebSearch.node, webSearchToolNode]),
+    LayerNode.group([Tool.node, WebSearch.node, webSearchToolNode]),
     [
-      [PermissionV2.node, permission],
+      [Permission.node, permission],
       [WebSearch.node, websearch],
       [Form.node, form],
       [KV.node, kv],
-      [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
       [Image.node, imagePassthrough],
     ],
   ),
@@ -107,7 +105,7 @@ const it = testEffect(
 describe("WebSearchTool registration", () => {
   it.effect("asserts permission before delegating to WebSearch", () =>
     Effect.gen(function* () {
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["websearch", "execute"])
       expect(
@@ -155,7 +153,7 @@ describe("WebSearchTool registration", () => {
           },
         ],
       })
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -190,7 +188,7 @@ describe("WebSearchTool registration", () => {
   it.effect("uses the concise no-results fallback", () =>
     Effect.gen(function* () {
       result = new WebSearch.Response({ providerID: WebSearch.ID.make("exa"), results: [] })
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {

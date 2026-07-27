@@ -2,21 +2,20 @@ import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { describe, expect } from "bun:test"
-import { Plugin as EffectPlugin } from "@opencode-ai/plugin/v2/effect"
+import { Plugin as EffectPlugin } from "@opencode-ai/plugin/effect"
 import { Config as ConfigSchema } from "@opencode-ai/schema/config"
-import { Plugin } from "@opencode-ai/schema/plugin"
-import { AgentV2 } from "@opencode-ai/core/agent"
+import { Agent } from "@opencode-ai/core/agent"
 import { Catalog } from "@opencode-ai/core/catalog"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { Location } from "@opencode-ai/core/location"
 import { LocationServiceMap } from "@opencode-ai/core/location-services"
-import { PluginV2 } from "@opencode-ai/core/plugin"
+import { Plugin } from "@opencode-ai/core/plugin"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Model } from "@opencode-ai/core/model"
+import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Effect, Logger } from "effect"
 import { Database } from "../../src/database/database"
@@ -24,7 +23,7 @@ import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node, SdkPlugins.node, LocationServiceMap.node])),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node])),
 )
 
 describe("PluginSupervisor config", () => {
@@ -32,7 +31,7 @@ describe("PluginSupervisor config", () => {
     withLocation(
       { plugins: ["-opencode.provider.*", "opencode.provider.openai"] },
       Effect.gen(function* () {
-        const plugins = yield* PluginV2.Service
+        const plugins = yield* Plugin.Service
         yield* ready()
         expect(
           (yield* plugins.list()).map((plugin) => plugin.id).filter((id) => id.startsWith("opencode.provider.")),
@@ -54,8 +53,8 @@ describe("PluginSupervisor config", () => {
       },
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        expect(yield* agents.get(AgentV2.ID.make("configured"))).toMatchObject({
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("configured"))).toMatchObject({
           description: "Loaded from config",
           mode: "subagent",
         })
@@ -69,10 +68,10 @@ describe("PluginSupervisor config", () => {
       { plugins: [plugin, "-config-promise-plugin"] },
       Effect.gen(function* () {
         yield* ready()
-        const plugins = yield* PluginV2.Service
-        const agents = yield* AgentV2.Service
+        const plugins = yield* Plugin.Service
+        const agents = yield* Agent.Service
         expect((yield* plugins.list()).map((item) => String(item.id))).not.toContain("config-promise-plugin")
-        expect(yield* agents.get(AgentV2.ID.make("configured"))).toBeUndefined()
+        expect(yield* agents.get(Agent.ID.make("configured"))).toBeUndefined()
       }),
     )
   })
@@ -83,7 +82,7 @@ describe("PluginSupervisor config", () => {
       { plugins: [plugin, `-${plugin}`] },
       Effect.gen(function* () {
         yield* ready()
-        const plugins = yield* PluginV2.Service
+        const plugins = yield* Plugin.Service
         expect((yield* plugins.list()).map((item) => String(item.id))).toContain("config-promise-plugin")
       }),
     )
@@ -102,8 +101,8 @@ describe("PluginSupervisor config", () => {
       },
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        expect(yield* agents.get(AgentV2.ID.make("effect-configured"))).toMatchObject({
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("effect-configured"))).toMatchObject({
           description: "Effect plugin from config",
           mode: "subagent",
         })
@@ -133,8 +132,8 @@ describe("PluginSupervisor config", () => {
       },
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        expect(yield* agents.get(AgentV2.ID.make("configured"))).toMatchObject({
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("configured"))).toMatchObject({
           description: "Loaded after invalid plugins",
         })
         expect(output).toEqual([
@@ -150,8 +149,8 @@ describe("PluginSupervisor config", () => {
       undefined,
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        expect(yield* agents.get(AgentV2.ID.make("directory"))).toMatchObject({
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("directory"))).toMatchObject({
           description: "Loaded from plugin directory",
         })
       }),
@@ -164,26 +163,26 @@ describe("PluginSupervisor config", () => {
       undefined,
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        const events = yield* EventV2.Service
+        const agents = yield* Agent.Service
+        const bus = yield* Bus.Service
         const location = yield* Location.Service
-        const plugins = yield* PluginV2.Service
+        const plugins = yield* Plugin.Service
         const file = path.join(location.directory, ".opencode", "plugin", "mutable.ts")
         const first = (yield* plugins.list()).find((plugin) => plugin.id === "mutable-plugin")?.id
 
         expect(first).toBeDefined()
-        expect((yield* agents.get(AgentV2.ID.make("mutable")))?.description).toBe("first")
+        expect((yield* agents.get(Agent.ID.make("mutable")))?.description).toBe("first")
 
         yield* Effect.promise(async () => {
           await fs.writeFile(file, mutablePlugin("second"))
           const modified = new Date(Date.now() + 5_000)
           await fs.utimes(file, modified, modified)
         })
-        yield* events.publish(ConfigSchema.Event.Updated, {})
+        yield* bus.publish(ConfigSchema.Event.Updated, {})
         yield* waitUntil(
           Effect.gen(function* () {
             const current = (yield* plugins.list()).find((plugin) => plugin.id === "mutable-plugin")?.id
-            return current === first && (yield* agents.get(AgentV2.ID.make("mutable")))?.description === "second"
+            return current === first && (yield* agents.get(Agent.ID.make("mutable")))?.description === "second"
           }),
         )
       }),
@@ -201,8 +200,8 @@ describe("PluginSupervisor config", () => {
       { plugins: ["-*"] },
       Effect.gen(function* () {
         yield* ready()
-        const agents = yield* AgentV2.Service
-        expect(yield* agents.get(AgentV2.ID.make("directory"))).toBeUndefined()
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("directory"))).toBeUndefined()
       }),
       true,
     ),
@@ -221,7 +220,7 @@ describe("PluginSupervisor config", () => {
         },
         Effect.gen(function* () {
           yield* ready()
-          const registry = yield* PluginV2.Service
+          const registry = yield* Plugin.Service
           const ids = (yield* registry.list()).map((plugin) => String(plugin.id))
           expect(ids.indexOf("opencode.agent")).toBeLessThan(ids.indexOf("sdk-order"))
           expect(ids.indexOf("sdk-order")).toBeLessThan(ids.indexOf("config-promise-plugin"))
@@ -231,7 +230,7 @@ describe("PluginSupervisor config", () => {
 
           const catalog = yield* Catalog.Service
           expect(
-            (yield* catalog.model.get(ProviderV2.ID.make("configured"), ModelV2.ID.make("glm-5.2")))?.variants,
+            (yield* catalog.model.get(Provider.ID.make("configured"), Model.ID.make("glm-5.2")))?.variants,
           ).toEqual([
             expect.objectContaining({ id: "high", headers: { custom: "true" } }),
             expect.objectContaining({ id: "max", settings: { reasoningEffort: "max" } }),
@@ -248,12 +247,12 @@ describe("PluginSupervisor config", () => {
       },
       Effect.gen(function* () {
         yield* ready()
-        const registry = yield* PluginV2.Service
+        const registry = yield* Plugin.Service
         expect((yield* registry.list()).map((plugin) => String(plugin.id))).not.toContain("opencode.variant")
 
         const catalog = yield* Catalog.Service
         expect(
-          (yield* catalog.model.get(ProviderV2.ID.make("configured"), ModelV2.ID.make("glm-5.2")))?.variants,
+          (yield* catalog.model.get(Provider.ID.make("configured"), Model.ID.make("glm-5.2")))?.variants,
         ).toEqual([expect.objectContaining({ id: "high", headers: { custom: "true" } })])
       }),
     ),
@@ -304,7 +303,7 @@ function withLocation<A, E, R>(
 }
 
 function mutablePlugin(description: string) {
-  const plugin = pathToFileURL(path.join(import.meta.dir, "../../../plugin/src/v2/promise/index.ts")).href
+  const plugin = pathToFileURL(path.join(import.meta.dir, "../../../plugin/src/index.ts")).href
   return `
 import { Plugin } from ${JSON.stringify(plugin)}
 

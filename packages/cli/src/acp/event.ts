@@ -71,7 +71,7 @@ export async function streamTurn(input: {
       const next = await stream.next()
       if (next.done) throw new Error("event stream disconnected during prompt execution")
       const event = next.value
-      if (event.type === "permission.v2.asked" && event.data.sessionID === input.sessionID) {
+      if (event.type === "permission.asked" && event.data.sessionID === input.sessionID) {
         const tool = event.data.source?.callID ? tools.get(event.data.source.callID) : undefined
         await replyPermission({
           client: input.client,

@@ -9,14 +9,13 @@ import { FileSystem } from "@opencode-ai/core/filesystem"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "@opencode-ai/core/location"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { PermissionV2 } from "@opencode-ai/core/permission"
+import { Permission } from "@opencode-ai/core/permission"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { GlobTool } from "@opencode-ai/core/tool/glob"
-import { GrepTool } from "@opencode-ai/core/tool/grep"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
+import { Session } from "@opencode-ai/core/session"
+import { GlobTool } from "@opencode-ai/core/tool/plugin/glob"
+import { GrepTool } from "@opencode-ai/core/tool/plugin/grep"
+import { Tool } from "@opencode-ai/core/tool"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -26,47 +25,40 @@ const globToolNode = makeLocationNode({
   name: "test/glob-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(GlobTool.Plugin)),
   deps: [
-    ToolRegistry.toolsNode,
+    Tool.node,
     FSUtil.node,
     Ripgrep.node,
     Location.node,
     LocationMutation.node,
-    PermissionV2.node,
+    Permission.node,
   ],
 })
 const grepToolNode = makeLocationNode({
   name: "test/grep-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(GrepTool.Plugin)),
-  deps: [
-    ToolRegistry.toolsNode,
-    FSUtil.node,
-    Ripgrep.node,
-    Location.node,
-    LocationMutation.node,
-    PermissionV2.node,
-  ],
+  deps: [Tool.node, FSUtil.node, Ripgrep.node, Location.node, LocationMutation.node, Permission.node],
 })
-const sessionID = SessionV2.ID.make("ses_search_tool_test")
+const sessionID = Session.ID.make("ses_search_tool_test")
 
 const withTools = <A, E, R>(
   directory: string,
-  body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>,
-  assertions?: PermissionV2.AssertInput[],
+  body: (registry: Tool.Interface) => Effect.Effect<A, E, R>,
+  assertions?: Permission.AssertInput[],
 ) =>
   Effect.gen(function* () {
-    return yield* body(yield* ToolRegistry.Service)
+    return yield* body(yield* Tool.Service)
   }).pipe(
     Effect.provide(
-      AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, globToolNode, grepToolNode]), [
+      AppNodeBuilder.build(LayerNode.group([Tool.node, globToolNode, grepToolNode]), [
         [
           Location.node,
           Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(directory) }))),
         ],
         [
-          PermissionV2.node,
+          Permission.node,
           Layer.succeed(
-            PermissionV2.Service,
-            PermissionV2.Service.of({
+            Permission.Service,
+            Permission.Service.of({
               assert: (input) =>
                 Effect.sync(() => {
                   assertions?.push(input)
@@ -79,7 +71,6 @@ const withTools = <A, E, R>(
             }),
           ),
         ],
-        [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
       ]),
     ),
   )
@@ -236,7 +227,7 @@ describe("search tools", () => {
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
-        const assertions: PermissionV2.AssertInput[] = []
+        const assertions: Permission.AssertInput[] = []
         return Effect.promise(() => fs.writeFile(path.join(outside.path, "outside.txt"), "needle\n")).pipe(
           Effect.andThen(
             withTools(
@@ -327,7 +318,7 @@ describe("search tools", () => {
     Effect.acquireUseRelease(
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
-        const assertions: PermissionV2.AssertInput[] = []
+        const assertions: Permission.AssertInput[] = []
         return Effect.promise(() => fs.writeFile(path.join(outside.path, "outside.txt"), "outside\n")).pipe(
           Effect.andThen(
             withTools(
@@ -359,7 +350,7 @@ describe("search tools", () => {
       Effect.promise(() => Promise.all([tmpdir(), tmpdir()])),
       ([active, outside]) => {
         if (process.platform === "win32") return Effect.void
-        const assertions: PermissionV2.AssertInput[] = []
+        const assertions: Permission.AssertInput[] = []
         return Effect.promise(async () => {
           await fs.writeFile(path.join(outside.path, "outside.txt"), "outside\n")
           await fs.symlink(outside.path, path.join(active.path, "linked"))

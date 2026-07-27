@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import type { Content } from "@opencode-ai/schema/tool"
 import { HttpTransport } from "../route/transport"
 import { Protocol } from "../route/protocol"
 import {
@@ -14,7 +15,6 @@ import {
   type TextPart,
   type ToolCallPart,
   type ToolDefinition,
-  type ToolContent,
   type ToolResultPart,
 } from "../schema"
 import { JsonObject, optionalArray, optionalNull, ProviderShared } from "./shared"
@@ -371,7 +371,7 @@ const lowerUserContent = Effect.fn("OpenResponses.lowerUserContent")(function* (
 // Tool results may carry structured text, images, and files. Keep media as provider-native
 // content instead of JSON-stringifying base64 into a prompt string.
 const lowerToolResultContentItem = Effect.fn("OpenResponses.lowerToolResultContentItem")(function* (
-  item: ToolContent,
+  item: Content,
   request: LLMRequest,
   extension: Extension,
 ) {
@@ -392,7 +392,7 @@ const lowerToolResultOutput = Effect.fn("OpenResponses.lowerToolResultOutput")(f
   // compatibility with existing cassettes and provider expectations.
   if (part.result.type !== "content") return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
-  const content: ReadonlyArray<ToolContent> = part.result.value
+  const content: ReadonlyArray<Content> = part.result.value
   return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request, extension))
 })
 
@@ -496,7 +496,7 @@ const lowerMessages = Effect.fn("OpenResponses.lowerMessages")(function* (reques
           if (store !== false && itemID && !hostedToolReferences.has(itemID))
             input.push({ type: "item_reference", id: itemID })
           if (store === false && part.result.type === "content") {
-            const content: ReadonlyArray<ToolContent> = part.result.value
+            const content: ReadonlyArray<Content> = part.result.value
             input.push({
               role: "user",
               content: yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request, extension)),

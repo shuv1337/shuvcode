@@ -25,7 +25,7 @@ describe("adaptServerEvent", () => {
     } as OpenCodeEvent
 
     expect(adaptServerEvent(current)).toMatchObject({
-      type: "permission.asked",
+      type: "permission.v2.asked",
       properties: { id: "perm_1", sessionID: "ses_1", permission: "read", patterns: ["src/**"] },
       current,
     })

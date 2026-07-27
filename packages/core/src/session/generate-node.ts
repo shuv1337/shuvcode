@@ -34,8 +34,8 @@ export const layer = Layer.effect(
         const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(selection.session.id)
           ? selection.session.id.slice(4)
           : selection.session.id
-        const toolSet = selection.toolSet
-        const toolDefinitions = toolSet.definitions
+        const tools = selection.tools
+        const toolDefinitions = tools.definitions
         const toolsByName = new Map(toolDefinitions.map((tool) => [tool.name, tool]))
         const contextEvent = yield* hooks.trigger("session", "context", {
           sessionID: selection.session.id,

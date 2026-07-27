@@ -8,12 +8,11 @@ import { FileMutation } from "@opencode-ai/core/file-mutation"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "@opencode-ai/core/location"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
-import { PermissionV2 } from "@opencode-ai/core/permission"
+import { Permission } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { EditTool } from "@opencode-ai/core/tool/edit"
+import { Session } from "@opencode-ai/core/session"
+import { Tool } from "@opencode-ai/core/tool"
+import { EditTool } from "@opencode-ai/core/tool/plugin/edit"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
@@ -23,25 +22,25 @@ import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "
 const editToolNode = makeLocationNode({
   name: "test/edit-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(EditTool.Plugin)),
-  deps: [ToolRegistry.toolsNode, LocationMutation.node, FileMutation.node, FSUtil.node, PermissionV2.node],
+  deps: [Tool.node, LocationMutation.node, FileMutation.node, FSUtil.node, Permission.node],
 })
 
-const sessionID = SessionV2.ID.make("ses_edit_tool_test")
-const assertions: PermissionV2.AssertInput[] = []
+const sessionID = Session.ID.make("ses_edit_tool_test")
+const assertions: Permission.AssertInput[] = []
 const writes: string[] = []
 let reads = 0
 let denyAction: string | undefined
 let afterRead = (_target: string, _content: Uint8Array): Effect.Effect<void> => Effect.void
 
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => assertions.push(input)).pipe(
         Effect.andThen(
           input.action === denyAction
             ? Effect.fail(
-                new PermissionV2.BlockedError({
+                new Permission.BlockedError({
                   rules: [],
                   permission: input.action,
                   resources: input.resources,
@@ -90,19 +89,19 @@ const filesystem = Layer.effect(
   }),
 ).pipe(Layer.provide(LayerNode.compile(FSUtil.node)))
 
-const withTool = <A, E, R>(directory: string, body: (registry: ToolRegistry.Interface) => Effect.Effect<A, E, R>) => {
+const withTool = <A, E, R>(directory: string, body: (registry: Tool.Interface) => Effect.Effect<A, E, R>) => {
   const activeLocation = Layer.succeed(
     Location.Service,
     Location.Service.of(location({ directory: AbsolutePath.make(directory) })),
   )
   return Effect.gen(function* () {
-    return yield* body(yield* ToolRegistry.Service)
+    return yield* body(yield* Tool.Service)
   }).pipe(
     Effect.provide(
       AppNodeBuilder.build(
         LayerNode.group([
-          ToolRegistry.node,
-          ToolRegistry.toolsNode,
+          Tool.node,
+          Tool.node,
           LocationMutation.node,
           FileMutation.node,
           editToolNode,
@@ -110,8 +109,7 @@ const withTool = <A, E, R>(directory: string, body: (registry: ToolRegistry.Inte
         [
           [FSUtil.node, filesystem],
           [Location.node, activeLocation],
-          [PermissionV2.node, permission],
-          [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
+          [Permission.node, permission],
         ],
       ),
     ),

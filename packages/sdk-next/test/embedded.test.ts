@@ -72,8 +72,8 @@ it.live(
               yield* ctx.tool
                 .transform((draft) =>
                   draft.add(
-                    "bootstrap_sdk_tool",
-                    fixture.sdk.Tool.make({
+                    ({
+                      name: "bootstrap_sdk_tool",
                       description: "Marks the initial Location plugin generation",
                       input: Schema.Struct({}),
                       output: Schema.Void,
@@ -99,8 +99,8 @@ it.live(
               yield* ctx.tool
                 .transform((draft) =>
                   draft.add(
-                    "late_sdk_tool",
-                    fixture.sdk.Tool.make({
+                    ({
+                      name: "late_sdk_tool",
                       description: "Tool registered after Location boot",
                       input: Schema.Struct({}),
                       output: Schema.Void,
@@ -220,8 +220,8 @@ it.live(
             ctx.tool
               .transform((draft) =>
                 draft.add(
-                  "embedded_tool",
-                  fixture.sdk.Tool.make({
+                  ({
+                    name: "embedded_tool",
                     description: "Embedded test tool",
                     input: Schema.Struct({}),
                     output: Schema.Struct({ ok: Schema.Boolean }),

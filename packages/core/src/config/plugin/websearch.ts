@@ -1,6 +1,6 @@
 export * as ConfigWebSearchPlugin from "./websearch"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import { define } from "@opencode-ai/plugin/effect/plugin"
 import { Effect, Stream } from "effect"
 import { Config } from "../../config"
 

@@ -3,7 +3,7 @@ import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { TextareaRenderable } from "@opentui/core"
 import { useTheme } from "../../context/theme"
-import type { PermissionV2Request } from "@opencode-ai/client"
+import type { PermissionRequest } from "@opencode-ai/client"
 import { useClient } from "../../context/client"
 import { SplitBorder } from "../../ui/border"
 import { useData } from "../../context/data"
@@ -107,7 +107,7 @@ function EditBody(props: { file?: string; diff?: string; patch?: string }) {
   )
 }
 
-export function PermissionPrompt(props: { request: PermissionV2Request; directory?: string }) {
+export function PermissionPrompt(props: { request: PermissionRequest; directory?: string }) {
   const client = useClient()
   const data = useData()
   const [store, setStore] = createStore({

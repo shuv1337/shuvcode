@@ -3,7 +3,7 @@ import type {
   FormInfo,
   LocationRef,
   OpenCodeClient,
-  PermissionV2Request,
+  PermissionRequest,
   SessionMessageAssistantTool,
   SessionMessageInfo,
   SessionPendingInfo,
@@ -295,7 +295,7 @@ function permissionSourceKey(messageID: string, callID: string) {
   return streamPartKey(messageID, callID)
 }
 
-function permissionTool(request: PermissionV2Request, tools: Map<string, SessionMessageAssistantTool>) {
+function permissionTool(request: PermissionRequest, tools: Map<string, SessionMessageAssistantTool>) {
   if (request.source?.type !== "tool") return request
   const tool = tools.get(permissionSourceKey(request.source.messageID, request.source.callID))
   return tool ? { ...request, tool } : request
@@ -715,7 +715,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
 
   const resolvePermissionSources = async (
     client: OpenCodeClient,
-    permissions: PermissionV2Request[],
+    permissions: PermissionRequest[],
     attempt: Attempt,
   ) => {
     const pending = new Set(
@@ -1098,13 +1098,13 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       renderTool(event.data.assistantMessageID, item)
       return
     }
-    if (event.type === "permission.v2.asked") {
+    if (event.type === "permission.asked") {
       if (!state.permissions.some((item) => item.id === event.data.id))
         state.permissions.push(permissionTool(event.data, state.toolSources))
       syncBlockers()
       return
     }
-    if (event.type === "permission.v2.replied") {
+    if (event.type === "permission.replied") {
       state.permissions = state.permissions.filter((item) => item.id !== event.data.requestID)
       pruneToolSources()
       syncBlockers()

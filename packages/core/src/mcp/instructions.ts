@@ -2,8 +2,8 @@ export * as McpInstructions from "./instructions"
 
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
-import { AgentV2 } from "../agent"
-import { PermissionV2 } from "../permission"
+import { Agent } from "../agent"
+import { Permission } from "../permission"
 import { McpTool } from "../tool/mcp"
 import { MCP } from "./index"
 import { Instructions } from "../instructions/index"
@@ -55,10 +55,10 @@ const update = (previous: ReadonlyArray<Summary>, current: ReadonlyArray<Summary
 }
 
 export interface Interface {
-  readonly load: (agent: AgentV2.Selection) => Effect.Effect<Instructions.Instructions>
+  readonly load: (agent: Agent.Selection) => Effect.Effect<Instructions.Instructions>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/McpInstructions") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/McpInstructions") {}
 
 export const layer = Layer.effect(
   Service,
@@ -83,7 +83,7 @@ export const layer = Layer.effect(
         const [instructions, tools] = yield* Effect.all([mcp.instructions(), mcp.tools()], {
           concurrency: "unbounded",
         })
-        const canExecute = PermissionV2.evaluate("execute", "*", agent.permissions).effect !== "deny"
+        const canExecute = Permission.evaluate("execute", "*", agent.permissions).effect !== "deny"
         // Instructions are useful only when this agent can reach at least one server tool.
         const visible = instructions
           .flatMap((item) => {
@@ -93,7 +93,7 @@ export const layer = Layer.effect(
             if (
               !owned.some(
                 (tool) =>
-                  PermissionV2.evaluate(McpTool.name(tool.server, tool.name), "*", agent.permissions).effect !== "deny",
+                  Permission.evaluate(McpTool.name(tool.server, tool.name), "*", agent.permissions).effect !== "deny",
               )
             )
               return []

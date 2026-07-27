@@ -4279,7 +4279,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/ProviderV2.Info"
+                        "$ref": "#/components/schemas/Provider.Info"
                       }
                     }
                   },
@@ -4396,7 +4396,7 @@
                       "$ref": "#/components/schemas/Location.Info"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/ProviderV2.Info"
+                      "$ref": "#/components/schemas/Provider.Info"
                     }
                   },
                   "required": [
@@ -7466,7 +7466,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/PermissionV2.Request"
+                        "$ref": "#/components/schemas/Permission.Request"
                       }
                     }
                   },
@@ -7664,7 +7664,7 @@
                           ]
                         },
                         "effect": {
-                          "$ref": "#/components/schemas/PermissionV2.Effect"
+                          "$ref": "#/components/schemas/Permission.Effect"
                         }
                       },
                       "required": [
@@ -7762,7 +7762,7 @@
                     "type": "object"
                   },
                   "source": {
-                    "$ref": "#/components/schemas/PermissionV2.Source"
+                    "$ref": "#/components/schemas/Permission.Source"
                   },
                   "agent": {
                     "anyOf": [
@@ -7818,7 +7818,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/PermissionV2.Request"
+                        "$ref": "#/components/schemas/Permission.Request"
                       }
                     }
                   },
@@ -7916,7 +7916,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PermissionV2.Request"
+                      "$ref": "#/components/schemas/Permission.Request"
                     }
                   },
                   "required": [
@@ -8061,7 +8061,7 @@
                 "type": "object",
                 "properties": {
                   "reply": {
-                    "$ref": "#/components/schemas/PermissionV2.Reply"
+                    "$ref": "#/components/schemas/Permission.Reply"
                   },
                   "message": {
                     "anyOf": [
@@ -10456,7 +10456,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/QuestionV2.Request"
+                        "$ref": "#/components/schemas/Question.Request"
                       }
                     }
                   },
@@ -10527,7 +10527,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/QuestionV2.Request"
+                        "$ref": "#/components/schemas/Question.Request"
                       }
                     }
                   },
@@ -10667,7 +10667,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/QuestionV2.Reply"
+                "$ref": "#/components/schemas/Question.Reply"
               }
             }
           },
@@ -11981,7 +11981,7 @@
       "Agent.Color": {
         "type": "string"
       },
-      "PermissionV2.Effect": {
+      "Permission.Effect": {
         "type": "string",
         "enum": [
           "allow",
@@ -11989,7 +11989,7 @@
           "ask"
         ]
       },
-      "PermissionV2.Rule": {
+      "Permission.Rule": {
         "type": "object",
         "properties": {
           "action": {
@@ -11999,7 +11999,7 @@
             "type": "string"
           },
           "effect": {
-            "$ref": "#/components/schemas/PermissionV2.Effect"
+            "$ref": "#/components/schemas/Permission.Effect"
           }
         },
         "required": [
@@ -12009,10 +12009,10 @@
         ],
         "additionalProperties": false
       },
-      "PermissionV2.Ruleset": {
+      "Permission.Ruleset": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/PermissionV2.Rule"
+          "$ref": "#/components/schemas/Permission.Rule"
         }
       },
       "Agent.Info": {
@@ -12059,7 +12059,7 @@
             ]
           },
           "permissions": {
-            "$ref": "#/components/schemas/PermissionV2.Ruleset"
+            "$ref": "#/components/schemas/Permission.Ruleset"
           }
         },
         "required": [
@@ -18537,7 +18537,7 @@
         ],
         "additionalProperties": false
       },
-      "ProviderV2.Info": {
+      "Provider.Info": {
         "type": "object",
         "properties": {
           "id": {
@@ -21466,7 +21466,7 @@
         ],
         "additionalProperties": false
       },
-      "PermissionV2.Source": {
+      "Permission.Source": {
         "anyOf": [
           {
             "type": "object",
@@ -21493,7 +21493,7 @@
           }
         ]
       },
-      "PermissionV2.Request": {
+      "Permission.Request": {
         "type": "object",
         "properties": {
           "id": {
@@ -21531,7 +21531,7 @@
             "type": "object"
           },
           "source": {
-            "$ref": "#/components/schemas/PermissionV2.Source"
+            "$ref": "#/components/schemas/Permission.Source"
           }
         },
         "required": [
@@ -21589,7 +21589,7 @@
         ],
         "additionalProperties": false
       },
-      "PermissionV2.Reply": {
+      "Permission.Reply": {
         "type": "string",
         "enum": [
           "once",
@@ -21935,7 +21935,7 @@
         ],
         "additionalProperties": false
       },
-      "PermissionAction": {
+      "PermissionV1.Action": {
         "type": "string",
         "enum": [
           "allow",
@@ -21943,7 +21943,7 @@
           "ask"
         ]
       },
-      "PermissionRule": {
+      "PermissionV1.Rule": {
         "type": "object",
         "properties": {
           "permission": {
@@ -21953,7 +21953,7 @@
             "type": "string"
           },
           "action": {
-            "$ref": "#/components/schemas/PermissionAction"
+            "$ref": "#/components/schemas/PermissionV1.Action"
           }
         },
         "required": [
@@ -21963,10 +21963,10 @@
         ],
         "additionalProperties": false
       },
-      "PermissionRuleset": {
+      "PermissionV1.Ruleset": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/PermissionRule"
+          "$ref": "#/components/schemas/PermissionV1.Rule"
         }
       },
       "SessionV1.Info": {
@@ -22155,7 +22155,7 @@
             "additionalProperties": false
           },
           "permission": {
-            "$ref": "#/components/schemas/PermissionRuleset"
+            "$ref": "#/components/schemas/PermissionV1.Ruleset"
           },
           "revert": {
             "type": "object",
@@ -22455,10 +22455,10 @@
         ],
         "additionalProperties": false
       },
-      "JSONSchema": {
+      "SessionV1.JSONSchema": {
         "type": "object"
       },
-      "OutputFormat": {
+      "SessionV1.OutputFormat": {
         "anyOf": [
           {
             "type": "object",
@@ -22485,7 +22485,7 @@
                 ]
               },
               "schema": {
-                "$ref": "#/components/schemas/JSONSchema"
+                "$ref": "#/components/schemas/SessionV1.JSONSchema"
               },
               "retryCount": {
                 "anyOf": [
@@ -22518,7 +22518,7 @@
           }
         ]
       },
-      "UserMessage": {
+      "SessionV1.UserMessage": {
         "type": "object",
         "properties": {
           "id": {
@@ -22563,7 +22563,7 @@
           "format": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/OutputFormat"
+                "$ref": "#/components/schemas/SessionV1.OutputFormat"
               },
               {
                 "type": "null"
@@ -22985,7 +22985,7 @@
         ],
         "additionalProperties": false
       },
-      "AssistantMessage": {
+      "SessionV1.AssistantMessage": {
         "type": "object",
         "properties": {
           "id": {
@@ -23218,13 +23218,13 @@
         ],
         "additionalProperties": false
       },
-      "Message": {
+      "SessionV1.Message": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/UserMessage"
+            "$ref": "#/components/schemas/SessionV1.UserMessage"
           },
           {
-            "$ref": "#/components/schemas/AssistantMessage"
+            "$ref": "#/components/schemas/SessionV1.AssistantMessage"
           }
         ]
       },
@@ -23294,7 +23294,7 @@
                 ]
               },
               "info": {
-                "$ref": "#/components/schemas/Message"
+                "$ref": "#/components/schemas/SessionV1.Message"
               }
             },
             "required": [
@@ -23403,7 +23403,7 @@
         ],
         "additionalProperties": false
       },
-      "TextPart": {
+      "SessionV1.TextPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -23518,7 +23518,7 @@
         ],
         "additionalProperties": false
       },
-      "SubtaskPart": {
+      "SessionV1.SubtaskPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -23605,7 +23605,7 @@
         ],
         "additionalProperties": false
       },
-      "ReasoningPart": {
+      "SessionV1.ReasoningPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -23694,7 +23694,7 @@
         ],
         "additionalProperties": false
       },
-      "FilePartSourceText": {
+      "SessionV1.FilePartSourceText": {
         "type": "object",
         "properties": {
           "value": {
@@ -23714,11 +23714,11 @@
         ],
         "additionalProperties": false
       },
-      "FileSource": {
+      "SessionV1.FileSource": {
         "type": "object",
         "properties": {
           "text": {
-            "$ref": "#/components/schemas/FilePartSourceText"
+            "$ref": "#/components/schemas/SessionV1.FilePartSourceText"
           },
           "type": {
             "type": "string",
@@ -23737,7 +23737,7 @@
         ],
         "additionalProperties": false
       },
-      "Range": {
+      "SessionV1.Range": {
         "type": "object",
         "properties": {
           "start": {
@@ -23799,11 +23799,11 @@
         ],
         "additionalProperties": false
       },
-      "SymbolSource": {
+      "SessionV1.SymbolSource": {
         "type": "object",
         "properties": {
           "text": {
-            "$ref": "#/components/schemas/FilePartSourceText"
+            "$ref": "#/components/schemas/SessionV1.FilePartSourceText"
           },
           "type": {
             "type": "string",
@@ -23815,7 +23815,7 @@
             "type": "string"
           },
           "range": {
-            "$ref": "#/components/schemas/Range"
+            "$ref": "#/components/schemas/SessionV1.Range"
           },
           "name": {
             "type": "string"
@@ -23839,11 +23839,11 @@
         ],
         "additionalProperties": false
       },
-      "ResourceSource": {
+      "SessionV1.ResourceSource": {
         "type": "object",
         "properties": {
           "text": {
-            "$ref": "#/components/schemas/FilePartSourceText"
+            "$ref": "#/components/schemas/SessionV1.FilePartSourceText"
           },
           "type": {
             "type": "string",
@@ -23866,20 +23866,20 @@
         ],
         "additionalProperties": false
       },
-      "FilePartSource": {
+      "SessionV1.FilePartSource": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/FileSource"
+            "$ref": "#/components/schemas/SessionV1.FileSource"
           },
           {
-            "$ref": "#/components/schemas/SymbolSource"
+            "$ref": "#/components/schemas/SessionV1.SymbolSource"
           },
           {
-            "$ref": "#/components/schemas/ResourceSource"
+            "$ref": "#/components/schemas/SessionV1.ResourceSource"
           }
         ]
       },
-      "FilePart": {
+      "SessionV1.FilePart": {
         "type": "object",
         "properties": {
           "id": {
@@ -23931,7 +23931,7 @@
           "source": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/FilePartSource"
+                "$ref": "#/components/schemas/SessionV1.FilePartSource"
               },
               {
                 "type": "null"
@@ -23949,7 +23949,7 @@
         ],
         "additionalProperties": false
       },
-      "ToolStatePending": {
+      "SessionV1.ToolStatePending": {
         "type": "object",
         "properties": {
           "status": {
@@ -23972,7 +23972,7 @@
         ],
         "additionalProperties": false
       },
-      "ToolStateRunning": {
+      "SessionV1.ToolStateRunning": {
         "type": "object",
         "properties": {
           "status": {
@@ -24029,7 +24029,7 @@
         ],
         "additionalProperties": false
       },
-      "ToolStateCompleted": {
+      "SessionV1.ToolStateCompleted": {
         "type": "object",
         "properties": {
           "status": {
@@ -24096,7 +24096,7 @@
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/FilePart"
+                  "$ref": "#/components/schemas/SessionV1.FilePart"
                 }
               },
               {
@@ -24115,7 +24115,7 @@
         ],
         "additionalProperties": false
       },
-      "ToolStateError": {
+      "SessionV1.ToolStateError": {
         "type": "object",
         "properties": {
           "status": {
@@ -24175,23 +24175,23 @@
         ],
         "additionalProperties": false
       },
-      "ToolState": {
+      "SessionV1.ToolState": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/ToolStatePending"
+            "$ref": "#/components/schemas/SessionV1.ToolStatePending"
           },
           {
-            "$ref": "#/components/schemas/ToolStateRunning"
+            "$ref": "#/components/schemas/SessionV1.ToolStateRunning"
           },
           {
-            "$ref": "#/components/schemas/ToolStateCompleted"
+            "$ref": "#/components/schemas/SessionV1.ToolStateCompleted"
           },
           {
-            "$ref": "#/components/schemas/ToolStateError"
+            "$ref": "#/components/schemas/SessionV1.ToolStateError"
           }
         ]
       },
-      "ToolPart": {
+      "SessionV1.ToolPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24231,7 +24231,7 @@
             "type": "string"
           },
           "state": {
-            "$ref": "#/components/schemas/ToolState"
+            "$ref": "#/components/schemas/SessionV1.ToolState"
           },
           "metadata": {
             "anyOf": [
@@ -24255,7 +24255,7 @@
         ],
         "additionalProperties": false
       },
-      "StepStartPart": {
+      "SessionV1.StepStartPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24307,7 +24307,7 @@
         ],
         "additionalProperties": false
       },
-      "StepFinishPart": {
+      "SessionV1.StepFinishPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24415,7 +24415,7 @@
         ],
         "additionalProperties": false
       },
-      "SnapshotPart": {
+      "SessionV1.SnapshotPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24461,7 +24461,7 @@
         ],
         "additionalProperties": false
       },
-      "PatchPart": {
+      "SessionV1.PatchPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24514,7 +24514,7 @@
         ],
         "additionalProperties": false
       },
-      "AgentPart": {
+      "SessionV1.AgentPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24597,7 +24597,7 @@
         ],
         "additionalProperties": false
       },
-      "RetryPart": {
+      "SessionV1.RetryPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24670,7 +24670,7 @@
         ],
         "additionalProperties": false
       },
-      "CompactionPart": {
+      "SessionV1.CompactionPart": {
         "type": "object",
         "properties": {
           "id": {
@@ -24741,43 +24741,43 @@
         ],
         "additionalProperties": false
       },
-      "Part": {
+      "SessionV1.Part": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/TextPart"
+            "$ref": "#/components/schemas/SessionV1.TextPart"
           },
           {
-            "$ref": "#/components/schemas/SubtaskPart"
+            "$ref": "#/components/schemas/SessionV1.SubtaskPart"
           },
           {
-            "$ref": "#/components/schemas/ReasoningPart"
+            "$ref": "#/components/schemas/SessionV1.ReasoningPart"
           },
           {
-            "$ref": "#/components/schemas/FilePart"
+            "$ref": "#/components/schemas/SessionV1.FilePart"
           },
           {
-            "$ref": "#/components/schemas/ToolPart"
+            "$ref": "#/components/schemas/SessionV1.ToolPart"
           },
           {
-            "$ref": "#/components/schemas/StepStartPart"
+            "$ref": "#/components/schemas/SessionV1.StepStartPart"
           },
           {
-            "$ref": "#/components/schemas/StepFinishPart"
+            "$ref": "#/components/schemas/SessionV1.StepFinishPart"
           },
           {
-            "$ref": "#/components/schemas/SnapshotPart"
+            "$ref": "#/components/schemas/SessionV1.SnapshotPart"
           },
           {
-            "$ref": "#/components/schemas/PatchPart"
+            "$ref": "#/components/schemas/SessionV1.PatchPart"
           },
           {
-            "$ref": "#/components/schemas/AgentPart"
+            "$ref": "#/components/schemas/SessionV1.AgentPart"
           },
           {
-            "$ref": "#/components/schemas/RetryPart"
+            "$ref": "#/components/schemas/SessionV1.RetryPart"
           },
           {
-            "$ref": "#/components/schemas/CompactionPart"
+            "$ref": "#/components/schemas/SessionV1.CompactionPart"
           }
         ]
       },
@@ -24847,7 +24847,7 @@
                 ]
               },
               "part": {
-                "$ref": "#/components/schemas/Part"
+                "$ref": "#/components/schemas/SessionV1.Part"
               },
               "time": {
                 "type": "number"
@@ -25472,7 +25472,7 @@
         ],
         "additionalProperties": false
       },
-      "permission.v2.asked": {
+      "permission.asked": {
         "type": "object",
         "properties": {
           "id": {
@@ -25492,7 +25492,7 @@
           "type": {
             "type": "string",
             "enum": [
-              "permission.v2.asked"
+              "permission.asked"
             ]
           },
           "location": {
@@ -25536,7 +25536,7 @@
                 "type": "object"
               },
               "source": {
-                "$ref": "#/components/schemas/PermissionV2.Source"
+                "$ref": "#/components/schemas/Permission.Source"
               }
             },
             "required": [
@@ -25556,7 +25556,7 @@
         ],
         "additionalProperties": false
       },
-      "permission.v2.replied": {
+      "permission.replied": {
         "type": "object",
         "properties": {
           "id": {
@@ -25576,7 +25576,7 @@
           "type": {
             "type": "string",
             "enum": [
-              "permission.v2.replied"
+              "permission.replied"
             ]
           },
           "location": {
@@ -25602,7 +25602,7 @@
                 ]
               },
               "reply": {
-                "$ref": "#/components/schemas/PermissionV2.Reply"
+                "$ref": "#/components/schemas/Permission.Reply"
               }
             },
             "required": [
@@ -26327,7 +26327,7 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Option": {
+      "Question.Option": {
         "type": "object",
         "properties": {
           "label": {
@@ -26345,7 +26345,7 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Info": {
+      "Question.Info": {
         "type": "object",
         "properties": {
           "question": {
@@ -26359,7 +26359,7 @@
           "options": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/QuestionV2.Option"
+              "$ref": "#/components/schemas/Question.Option"
             },
             "description": "Available choices"
           },
@@ -26377,7 +26377,7 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Tool": {
+      "Question.Tool": {
         "type": "object",
         "properties": {
           "messageID": {
@@ -26393,7 +26393,7 @@
         ],
         "additionalProperties": false
       },
-      "question.v2.asked": {
+      "question.asked": {
         "type": "object",
         "properties": {
           "id": {
@@ -26413,7 +26413,7 @@
           "type": {
             "type": "string",
             "enum": [
-              "question.v2.asked"
+              "question.asked"
             ]
           },
           "location": {
@@ -26441,12 +26441,12 @@
               "questions": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/QuestionV2.Info"
+                  "$ref": "#/components/schemas/Question.Info"
                 },
                 "description": "Questions to ask"
               },
               "tool": {
-                "$ref": "#/components/schemas/QuestionV2.Tool"
+                "$ref": "#/components/schemas/Question.Tool"
               }
             },
             "required": [
@@ -26465,13 +26465,13 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Answer": {
+      "Question.Answer": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "question.v2.replied": {
+      "question.replied": {
         "type": "object",
         "properties": {
           "id": {
@@ -26491,7 +26491,7 @@
           "type": {
             "type": "string",
             "enum": [
-              "question.v2.replied"
+              "question.replied"
             ]
           },
           "location": {
@@ -26519,7 +26519,7 @@
               "answers": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/QuestionV2.Answer"
+                  "$ref": "#/components/schemas/Question.Answer"
                 }
               }
             },
@@ -26539,7 +26539,7 @@
         ],
         "additionalProperties": false
       },
-      "question.v2.rejected": {
+      "question.rejected": {
         "type": "object",
         "properties": {
           "id": {
@@ -26559,7 +26559,7 @@
           "type": {
             "type": "string",
             "enum": [
-              "question.v2.rejected"
+              "question.rejected"
             ]
           },
           "location": {
@@ -28068,483 +28068,6 @@
         ],
         "additionalProperties": false
       },
-      "permission.asked": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^evt_"
-              }
-            ]
-          },
-          "created": {
-            "type": "number"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "permission.asked"
-            ]
-          },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^per"
-                  }
-                ]
-              },
-              "sessionID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^ses"
-                  }
-                ]
-              },
-              "permission": {
-                "type": "string"
-              },
-              "patterns": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "metadata": {
-                "type": "object"
-              },
-              "always": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "tool": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "messageID": {
-                        "type": "string"
-                      },
-                      "callID": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "messageID",
-                      "callID"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "id",
-              "sessionID",
-              "permission",
-              "patterns",
-              "metadata",
-              "always"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "id",
-          "created",
-          "type",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "permission.replied": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^evt_"
-              }
-            ]
-          },
-          "created": {
-            "type": "number"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "permission.replied"
-            ]
-          },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^ses"
-                  }
-                ]
-              },
-              "requestID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^per"
-                  }
-                ]
-              },
-              "reply": {
-                "type": "string",
-                "enum": [
-                  "once",
-                  "always",
-                  "reject"
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "reply"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "id",
-          "created",
-          "type",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "QuestionOption": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "type": "string",
-            "description": "Display text (1-5 words, concise)"
-          },
-          "description": {
-            "type": "string",
-            "description": "Explanation of choice"
-          }
-        },
-        "required": [
-          "label",
-          "description"
-        ],
-        "additionalProperties": false
-      },
-      "QuestionInfo": {
-        "type": "object",
-        "properties": {
-          "question": {
-            "type": "string",
-            "description": "Complete question"
-          },
-          "header": {
-            "type": "string",
-            "description": "Very short label (max 30 chars)"
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuestionOption"
-            },
-            "description": "Available choices"
-          },
-          "multiple": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Allow selecting multiple choices"
-          },
-          "custom": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Allow typing a custom answer (default: true)"
-          }
-        },
-        "required": [
-          "question",
-          "header",
-          "options"
-        ],
-        "additionalProperties": false
-      },
-      "QuestionTool": {
-        "type": "object",
-        "properties": {
-          "messageID": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^msg"
-              }
-            ]
-          },
-          "callID": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "messageID",
-          "callID"
-        ],
-        "additionalProperties": false
-      },
-      "question.asked": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^evt_"
-              }
-            ]
-          },
-          "created": {
-            "type": "number"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "question.asked"
-            ]
-          },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^que"
-                  }
-                ]
-              },
-              "sessionID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^ses"
-                  }
-                ]
-              },
-              "questions": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/QuestionInfo"
-                },
-                "description": "Questions to ask"
-              },
-              "tool": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/QuestionTool"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "id",
-              "sessionID",
-              "questions"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "id",
-          "created",
-          "type",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "QuestionAnswer": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "question.replied": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^evt_"
-              }
-            ]
-          },
-          "created": {
-            "type": "number"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "question.replied"
-            ]
-          },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^ses"
-                  }
-                ]
-              },
-              "requestID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^que"
-                  }
-                ]
-              },
-              "answers": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/QuestionAnswer"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "answers"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "id",
-          "created",
-          "type",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "question.rejected": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^evt_"
-              }
-            ]
-          },
-          "created": {
-            "type": "number"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "question.rejected"
-            ]
-          },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^ses"
-                  }
-                ]
-              },
-              "requestID": {
-                "type": "string",
-                "allOf": [
-                  {
-                    "pattern": "^que"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "id",
-          "created",
-          "type",
-          "data"
-        ],
-        "additionalProperties": false
-      },
       "session.error": {
         "type": "object",
         "properties": {
@@ -28865,10 +28388,10 @@
             "$ref": "#/components/schemas/reference.updated"
           },
           {
-            "$ref": "#/components/schemas/permission.v2.asked"
+            "$ref": "#/components/schemas/permission.asked"
           },
           {
-            "$ref": "#/components/schemas/permission.v2.replied"
+            "$ref": "#/components/schemas/permission.replied"
           },
           {
             "$ref": "#/components/schemas/plugin.added"
@@ -28910,13 +28433,13 @@
             "$ref": "#/components/schemas/shell.deleted"
           },
           {
-            "$ref": "#/components/schemas/question.v2.asked"
+            "$ref": "#/components/schemas/question.asked"
           },
           {
-            "$ref": "#/components/schemas/question.v2.replied"
+            "$ref": "#/components/schemas/question.replied"
           },
           {
-            "$ref": "#/components/schemas/question.v2.rejected"
+            "$ref": "#/components/schemas/question.rejected"
           },
           {
             "$ref": "#/components/schemas/form.created"
@@ -28962,21 +28485,6 @@
           },
           {
             "$ref": "#/components/schemas/mcp.resources.changed"
-          },
-          {
-            "$ref": "#/components/schemas/permission.asked"
-          },
-          {
-            "$ref": "#/components/schemas/permission.replied"
-          },
-          {
-            "$ref": "#/components/schemas/question.asked"
-          },
-          {
-            "$ref": "#/components/schemas/question.replied"
-          },
-          {
-            "$ref": "#/components/schemas/question.rejected"
           },
           {
             "$ref": "#/components/schemas/session.error"
@@ -29153,7 +28661,7 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Request": {
+      "Question.Request": {
         "type": "object",
         "properties": {
           "id": {
@@ -29175,12 +28683,12 @@
           "questions": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/QuestionV2.Info"
+              "$ref": "#/components/schemas/Question.Info"
             },
             "description": "Questions to ask"
           },
           "tool": {
-            "$ref": "#/components/schemas/QuestionV2.Tool"
+            "$ref": "#/components/schemas/Question.Tool"
           }
         },
         "required": [
@@ -29190,13 +28698,13 @@
         ],
         "additionalProperties": false
       },
-      "QuestionV2.Reply": {
+      "Question.Reply": {
         "type": "object",
         "properties": {
           "answers": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/QuestionV2.Answer"
+              "$ref": "#/components/schemas/Question.Answer"
             },
             "description": "User answers in order of questions (each answer is an array of selected labels)"
           }

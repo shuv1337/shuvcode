@@ -1,23 +1,22 @@
 import { type LLMEvent, type ProviderMetadata, type ToolResultValue } from "@opencode-ai/ai"
 import { Effect } from "effect"
-import { EventV2 } from "../../event"
-import { ModelV2 } from "../../model"
+import { Bus } from "../../bus"
+import { Model } from "../../model"
 import { SessionEvent } from "../event"
 import { SessionMessage } from "../message"
 import { SessionSchema } from "../schema"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Money } from "@opencode-ai/schema/money"
-import { AgentV2 } from "../../agent"
+import { Agent } from "../../agent"
 import { Snapshot } from "../../snapshot"
 import { RelativePath } from "../../schema"
 import { SessionUsage } from "../usage"
-import { Tool } from "../../tool/tool"
-import type { ToolRegistry } from "../../tool/registry"
+import { Tool } from "@opencode-ai/schema/tool"
 
 type Input = {
   readonly sessionID: SessionSchema.ID
-  readonly agent: AgentV2.ID
-  readonly model: ModelV2.Ref
+  readonly agent: Agent.ID
+  readonly model: Model.Ref
   readonly providerMetadataKey: string
   readonly snapshot?: Snapshot.ID
   readonly assistantMessageID: SessionMessage.ID
@@ -48,12 +47,26 @@ export interface StepRecord {
 }
 
 /** Derives canonical model content from a provider-hosted tool result. */
-const hostedContent = (result: ToolResultValue): Tool.NonEmptyContent => {
+type NonEmptyContent = readonly [Tool.Content, ...Tool.Content[]]
+
+const nonEmpty = (content: ReadonlyArray<Tool.Content>): NonEmptyContent | undefined =>
+  content.length > 0 ? (content as NonEmptyContent) : undefined
+
+const stringify = (value: unknown) => {
+  if (typeof value === "string") return value
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const hostedContent = (result: ToolResultValue): NonEmptyContent => {
   if (result.type === "content") {
-    const content = Tool.nonEmpty(result.value)
+    const content = nonEmpty(result.value)
     if (content !== undefined) return content
   }
-  return [{ type: "text", text: Tool.stringify(result.value) }]
+  return [{ type: "text", text: stringify(result.value) }]
 }
 
 /**
@@ -67,7 +80,7 @@ const hostedContent = (result: ToolResultValue): Tool.NonEmptyContent => {
  * order: each publishing fiber is sequential, so per-source order holds by construction,
  * and consumers fold by callID/ordinal rather than global position.
  */
-export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish">, input: Input) => {
+export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, input: Input) => {
   const tools = new Map<
     string,
     {
@@ -76,10 +89,10 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       called: boolean
       settled: boolean
       providerExecuted: boolean
-      progress?: ToolRegistry.Progress
+      progress?: Tool.Metadata
     }
   >()
-  const failureSnapshot = (tool: { readonly progress?: ToolRegistry.Progress }) =>
+  const failureSnapshot = (tool: { readonly progress?: Tool.Metadata }) =>
     tool.progress === undefined ? {} : { metadata: tool.progress }
   const assistantMessageID = input.assistantMessageID
   let stepStarted = false
@@ -92,7 +105,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
   const startAssistant = Effect.fnUntraced(function* () {
     if (stepStarted) return assistantMessageID
     stepStarted = true
-    yield* events.publish(SessionEvent.Step.Started, {
+    yield* bus.publish(SessionEvent.Step.Started, {
       sessionID: input.sessionID,
       agent: input.agent,
       model: input.model,
@@ -151,7 +164,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     "text",
     (_textID, value, ordinal, state) =>
       Effect.gen(function* () {
-        yield* events.publish(SessionEvent.Text.Ended, {
+        yield* bus.publish(SessionEvent.Text.Ended, {
           sessionID: input.sessionID,
           assistantMessageID: yield* currentAssistantMessageID(),
           ordinal,
@@ -165,7 +178,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     "reasoning",
     (_reasoningID, value, ordinal, state) =>
       Effect.gen(function* () {
-        yield* events.publish(SessionEvent.Reasoning.Ended, {
+        yield* bus.publish(SessionEvent.Reasoning.Ended, {
           sessionID: input.sessionID,
           assistantMessageID: yield* currentAssistantMessageID(),
           ordinal,
@@ -179,7 +192,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     Effect.gen(function* () {
       const tool = tools.get(callID)
       if (!tool) return yield* Effect.die(new Error(`Tool input end before start: ${callID}`))
-      yield* events.publish(SessionEvent.Tool.Input.Ended, {
+      yield* bus.publish(SessionEvent.Tool.Input.Ended, {
         sessionID: input.sessionID,
         assistantMessageID: tool.assistantMessageID,
         callID,
@@ -209,7 +222,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       providerExecuted: event.providerExecuted === true,
     })
     yield* toolInput.start(event.id)
-    yield* events.publish(SessionEvent.Tool.Input.Started, {
+    yield* bus.publish(SessionEvent.Tool.Input.Started, {
       sessionID: input.sessionID,
       assistantMessageID,
       callID: event.id,
@@ -242,7 +255,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       return yield* Effect.die(new Error(`Tool input name changed for ${event.id}: ${tool.name} -> ${event.name}`))
     if (toolInput.has(event.id)) yield* endToolInput(event, event.raw)
     tool.settled = true
-    yield* events.publish(SessionEvent.Tool.Failed, {
+    yield* bus.publish(SessionEvent.Tool.Failed, {
       sessionID: input.sessionID,
       assistantMessageID: tool.assistantMessageID,
       callID: event.id,
@@ -263,7 +276,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     const tool = tools.get(callID)
     if (!tool || tool.settled) return false
     tool.settled = true
-    yield* events.publish(SessionEvent.Tool.Failed, {
+    yield* bus.publish(SessionEvent.Tool.Failed, {
       sessionID: input.sessionID,
       assistantMessageID: tool.assistantMessageID,
       callID,
@@ -300,7 +313,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     if (stepFailed || stepFailure === undefined) return
     const assistantMessageID = yield* startAssistant()
     stepFailed = true
-    yield* events.publish(SessionEvent.Step.Failed, {
+    yield* bus.publish(SessionEvent.Step.Failed, {
       sessionID: input.sessionID,
       assistantMessageID,
       error: stepFailure,
@@ -328,7 +341,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       case "text-start":
         outputStarted = true
         const startedTextOrdinal = yield* text.start(event.id, providerState(event.providerMetadata))
-        yield* events.publish(SessionEvent.Text.Started, {
+        yield* bus.publish(SessionEvent.Text.Started, {
           sessionID: input.sessionID,
           assistantMessageID: yield* startAssistant(),
           ordinal: startedTextOrdinal,
@@ -336,7 +349,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         return
       case "text-delta":
         const deltaTextOrdinal = yield* text.append(event.id, event.text, providerState(event.providerMetadata))
-        yield* events.publish(SessionEvent.Text.Delta, {
+        yield* bus.publish(SessionEvent.Text.Delta, {
           sessionID: input.sessionID,
           assistantMessageID: yield* currentAssistantMessageID(),
           ordinal: deltaTextOrdinal,
@@ -349,7 +362,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
       case "reasoning-start":
         outputStarted = true
         const startedReasoningOrdinal = yield* reasoning.start(event.id, providerState(event.providerMetadata))
-        yield* events.publish(SessionEvent.Reasoning.Started, {
+        yield* bus.publish(SessionEvent.Reasoning.Started, {
           sessionID: input.sessionID,
           assistantMessageID: yield* startAssistant(),
           ordinal: startedReasoningOrdinal,
@@ -362,7 +375,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
           event.text,
           providerState(event.providerMetadata),
         )
-        yield* events.publish(SessionEvent.Reasoning.Delta, {
+        yield* bus.publish(SessionEvent.Reasoning.Delta, {
           sessionID: input.sessionID,
           assistantMessageID: yield* currentAssistantMessageID(),
           ordinal: deltaReasoningOrdinal,
@@ -383,7 +396,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
           return yield* Effect.die(new Error(`Tool input name changed for ${event.id}: ${tool.name} -> ${event.name}`))
         if (!toolInput.has(event.id)) return yield* Effect.die(new Error(`Tool input delta after end: ${event.id}`))
         yield* toolInput.append(event.id, event.text)
-        yield* events.publish(SessionEvent.Tool.Input.Delta, {
+        yield* bus.publish(SessionEvent.Tool.Input.Delta, {
           sessionID: input.sessionID,
           assistantMessageID: tool.assistantMessageID,
           callID: event.id,
@@ -408,7 +421,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         if (tool.called) return yield* Effect.die(new Error(`Duplicate tool call: ${event.id}`))
         tool.called = true
         tool.providerExecuted = event.providerExecuted === true
-        yield* events.publish(SessionEvent.Tool.Called, {
+        yield* bus.publish(SessionEvent.Tool.Called, {
           sessionID: input.sessionID,
           assistantMessageID: tool.assistantMessageID,
           callID: event.id,
@@ -434,18 +447,18 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
         const executed = event.providerExecuted === true || tool.providerExecuted
         const resultState = providerState(event.providerMetadata)
         if (event.result.type === "error") {
-          yield* events.publish(SessionEvent.Tool.Failed, {
+          yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID: input.sessionID,
             assistantMessageID: tool.assistantMessageID,
             callID: event.id,
-            error: { type: "tool.execution", message: Tool.stringify(event.result.value) },
+            error: { type: "tool.execution", message: stringify(event.result.value) },
             ...failureSnapshot(tool),
             executed,
             resultState,
           })
           return
         }
-        yield* events.publish(SessionEvent.Tool.Success, {
+        yield* bus.publish(SessionEvent.Tool.Success, {
           sessionID: input.sessionID,
           assistantMessageID: tool.assistantMessageID,
           callID: event.id,
@@ -462,7 +475,7 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
           return yield* Effect.die(new Error(`Tool error name changed for ${event.id}: ${tool.name} -> ${event.name}`))
         if (tool.settled) return yield* Effect.die(new Error(`Duplicate tool error: ${event.id}`))
         tool.settled = true
-        yield* events.publish(SessionEvent.Tool.Failed, {
+        yield* bus.publish(SessionEvent.Tool.Failed, {
           sessionID: input.sessionID,
           assistantMessageID: tool.assistantMessageID,
           callID: event.id,
@@ -495,12 +508,12 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
     }
   })
 
-  const progress = Effect.fnUntraced(function* (callID: string, update: ToolRegistry.Progress) {
+  const progress = Effect.fnUntraced(function* (callID: string, update: Tool.Metadata) {
     const tool = tools.get(callID)
     if (!tool?.called || tool.settled)
       return yield* Effect.die(new Error(`Tool progress outside running call: ${callID}`))
     tool.progress = update
-    yield* events.publish(SessionEvent.Tool.Progress, {
+    yield* bus.publish(SessionEvent.Tool.Progress, {
       sessionID: input.sessionID,
       assistantMessageID: tool.assistantMessageID,
       callID,
@@ -512,42 +525,27 @@ export const createLLMEventPublisher = (events: Pick<EventV2.Interface, "publish
   const toolExecution = Effect.fnUntraced(function* (
     callID: string,
     name: string,
-    execution: ToolRegistry.ToolOutcome,
+    result: Tool.Result,
   ) {
     const tool = tools.get(callID)
     if (!tool?.called) return yield* Effect.die(new Error(`Tool execution before call: ${callID}`))
     if (tool.name !== name)
       return yield* Effect.die(new Error(`Tool execution name changed for ${callID}: ${tool.name} -> ${name}`))
-    if (tool.settled) {
-      if (execution.status === "error") return
-      return yield* Effect.die(new Error(`Duplicate tool execution: ${callID}`))
-    }
+    if (tool.settled) return yield* Effect.die(new Error(`Duplicate tool execution: ${callID}`))
     tool.settled = true
-    if (execution.status === "completed") {
-      yield* events.publish(SessionEvent.Tool.Success, {
-        sessionID: input.sessionID,
-        assistantMessageID: tool.assistantMessageID,
-        callID,
-        content: execution.content,
-        ...(execution.metadata === undefined ? {} : { metadata: execution.metadata }),
-        executed: tool.providerExecuted,
-      })
-      return
-    }
-    // An execution-provided snapshot wins; otherwise fall back to retained progress.
-    const snapshot =
-      execution.content !== undefined || execution.metadata !== undefined
-        ? {
-            ...(execution.content === undefined ? {} : { content: execution.content }),
-            ...(execution.metadata === undefined ? {} : { metadata: execution.metadata }),
-          }
-        : failureSnapshot(tool)
-    yield* events.publish(SessionEvent.Tool.Failed, {
+    const content =
+      typeof result.content === "string"
+        ? [{ type: "text" as const, text: result.content }]
+        : result.content === undefined
+          ? []
+          : [...result.content]
+    if (content.length === 0) return yield* Effect.die(new Error(`Tool execution has no content: ${callID}`))
+    yield* bus.publish(SessionEvent.Tool.Success, {
       sessionID: input.sessionID,
       assistantMessageID: tool.assistantMessageID,
       callID,
-      error: execution.error,
-      ...snapshot,
+      content: [content[0], ...content.slice(1)],
+      ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
       executed: tool.providerExecuted,
     })
   })

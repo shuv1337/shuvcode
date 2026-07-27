@@ -8,7 +8,7 @@ import {
   type FormInfo,
   type MessageListOutput,
   type OpenCodeClient,
-  type PermissionV2Request,
+  type PermissionRequest,
 } from "@opencode-ai/client/promise"
 import { createSessionTransport } from "../../src/mini/stream-v2.transport"
 import type { StreamCommit } from "../../src/mini/types"
@@ -126,7 +126,7 @@ function sdk(input: {
   forms?: Record<string, FormInfo[]>
   globals?: FormInfo[]
   globalLocation?: { directory: string; workspaceID?: string }
-  permissions?: Record<string, PermissionV2Request[]>
+  permissions?: Record<string, PermissionRequest[]>
   pending?: Record<string, Awaited<ReturnType<OpenCodeClient["session"]["pending"]["list"]>>>
   wait?: () => Promise<void>
 }) {
@@ -330,7 +330,7 @@ describe("V2 mini transport", () => {
       ],
       time: { created: 1 },
     }
-    const permission: PermissionV2Request = {
+    const permission: PermissionRequest = {
       id: "per_child_startup",
       sessionID: "ses_child",
       action: "shell",
@@ -1038,7 +1038,7 @@ describe("V2 mini transport", () => {
     events.push({
       id: "evt_permission",
       created: 0,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: { id: "per_1", sessionID: "ses_1", action: "read", resources: ["/tmp/file"] },
     })
 
@@ -2998,7 +2998,7 @@ describe("V2 mini transport", () => {
     events.push({
       id: "evt_child_permission",
       created: 7,
-      type: "permission.v2.asked",
+      type: "permission.asked",
       data: {
         id: "per_child",
         sessionID: "ses_child_progress",

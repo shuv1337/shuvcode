@@ -1,18 +1,17 @@
 export * as PluginSupervisor from "./supervisor"
 
-import type { Plugin } from "@opencode-ai/plugin/v2/effect/plugin"
 import { Event } from "@opencode-ai/schema/config"
 import { Context, Deferred, Effect, Layer, Option, Schema, Semaphore, Stream } from "effect"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
-import { AgentV2 } from "../agent"
+import { Agent } from "../agent"
 import { Catalog } from "../catalog"
-import { CommandV2 } from "../command"
+import { Command } from "../command"
 import { Config } from "../config"
 import { ConfigPlugin } from "../config/plugin"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
-import { EventV2 } from "../event"
+import { Bus } from "../bus"
 import { FileMutation } from "../file-mutation"
 import { FileSystem } from "../filesystem"
 import { Form } from "../form"
@@ -25,16 +24,16 @@ import { Location } from "../location"
 import { LocationMutation } from "../location-mutation"
 import { ModelsDev } from "../models-dev"
 import { Npm } from "@opencode-ai/util/npm"
-import { PermissionV2 } from "../permission"
-import { PluginV2 } from "../plugin"
+import { Permission } from "../permission"
+import { Plugin } from "../plugin"
 import { PluginPromise } from "../plugin/promise"
 import { Reference } from "../reference"
 import { Ripgrep } from "../ripgrep"
 import { SessionInstructions } from "../session/instructions"
 import { Shell } from "../shell"
-import { SkillV2 } from "../skill"
+import { Skill } from "../skill"
 import { ReadToolFileSystem } from "../tool/read-filesystem"
-import { ToolRegistry } from "../tool/registry"
+import { Tool } from "../tool"
 import { WebSearch } from "../websearch"
 import { WellKnown } from "../wellknown"
 import { PluginInternal } from "./internal"
@@ -46,7 +45,9 @@ const PluginModule = Schema.Struct({
   default: Schema.Union([
     Schema.Struct({
       id: Schema.String,
-      effect: Schema.declare<Plugin["effect"]>((input): input is Plugin["effect"] => typeof input === "function"),
+    effect: Schema.declare<import("@opencode-ai/plugin/effect/plugin").Plugin["effect"]>(
+      (input): input is import("@opencode-ai/plugin/effect/plugin").Plugin["effect"] => typeof input === "function",
+    ),
     }),
     Schema.Struct({
       id: Schema.String,
@@ -113,15 +114,15 @@ const scan = Effect.fn("PluginSupervisor.scan")(function* (entries: readonly Con
 })
 
 const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
-  pre: readonly PluginV2.Versioned[],
-  post: readonly PluginV2.Versioned[],
+  pre: readonly Plugin.Versioned[],
+  post: readonly Plugin.Versioned[],
   operations: readonly Operation[],
 ) {
   const matches = (selector: string, target: string) =>
     selector === "*" || (selector.endsWith(".*") ? target.startsWith(selector.slice(0, -1)) : selector === target)
   const definitions = [...pre, ...post]
   const enabled = new Set(definitions.map((plugin) => plugin.id))
-  const packages = new Map<string, PluginV2.Versioned>()
+  const packages = new Map<string, Plugin.Versioned>()
   const plugins = () => [...definitions, ...packages.values()]
 
   for (const operation of operations) {
@@ -183,7 +184,7 @@ const load = Effect.fn("PluginSupervisor.load")(function* (operation: Extract<Op
     id: plugin.id,
     version: JSON.stringify(operation),
     effect: (host) => plugin.effect({ ...host, options: operation.options }),
-  } satisfies PluginV2.Versioned
+  } satisfies Plugin.Versioned
 })
 
 function discoverDirectory(fs: FSUtil.Interface, directory: string) {
@@ -211,10 +212,10 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Pl
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const registry = yield* PluginV2.Service
+    const registry = yield* Plugin.Service
     const sdk = yield* SdkPlugins.Service
     const config = yield* Config.Service
-    const events = yield* EventV2.Service
+    const bus = yield* Bus.Service
     const lock = Semaphore.makeUnsafe(1)
     const ready = yield* Deferred.make<void>()
     let observed = 0
@@ -238,7 +239,7 @@ const layer = Layer.effect(
         }),
       )
     })
-    const updates = yield* events
+    const updates = yield* bus
       .subscribe([Event.Updated, SdkPlugins.Updated])
       .pipe(Stream.toQueue({ capacity: 1, strategy: "sliding" }))
     const signals = yield* Stream.concat(
@@ -276,13 +277,13 @@ export const node = makeLocationNode({
   service: Service,
   layer: nodeLayer,
   deps: [
-    PluginV2.node,
+    Plugin.node,
     SdkPlugins.node,
-    AgentV2.node,
+    Agent.node,
     Catalog.node,
-    CommandV2.node,
+    Command.node,
     Config.node,
-    EventV2.node,
+    Bus.node,
     FileMutation.node,
     FileSystem.node,
     FSUtil.node,
@@ -295,7 +296,7 @@ export const node = makeLocationNode({
     LocationMutation.node,
     ModelsDev.node,
     Npm.node,
-    PermissionV2.node,
+    Permission.node,
     PluginRuntime.node,
     Form.node,
     ReadToolFileSystem.node,
@@ -303,8 +304,8 @@ export const node = makeLocationNode({
     Ripgrep.node,
     SessionInstructions.node,
     Shell.node,
-    SkillV2.node,
-    ToolRegistry.toolsNode,
+    Skill.node,
+    Tool.node,
     WebSearch.node,
     WellKnown.node,
   ],

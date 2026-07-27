@@ -2,29 +2,30 @@ import { expect, test } from "bun:test"
 import { Cause, Effect, Exit, Schema } from "effect"
 import { LLMEvent } from "@opencode-ai/ai"
 import { Money } from "@opencode-ai/schema/money"
-import { EventV2 } from "@opencode-ai/core/event"
-import { AgentV2 } from "@opencode-ai/core/agent"
+import { Bus } from "@opencode-ai/core/bus"
+import { Event } from "@opencode-ai/schema/event"
+import { Agent } from "@opencode-ai/core/agent"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Session } from "@opencode-ai/core/session"
+import { Model } from "@opencode-ai/core/model"
+import { Provider } from "@opencode-ai/core/provider"
 import { RelativePath } from "@opencode-ai/core/schema"
 import { Snapshot } from "@opencode-ai/core/snapshot"
 import { createLLMEventPublisher } from "@opencode-ai/core/session/runner/publish-llm-event"
 
-const sessionID = SessionV2.ID.make("ses_tool_event_test")
+const sessionID = Session.ID.make("ses_tool_event_test")
 const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
 
 const capture = (providerMetadataKey = "anthropic", options?: { readonly interruptProgress?: boolean }) => {
   const published: Array<{ readonly type: string; readonly data: unknown }> = []
-  const events: Pick<EventV2.Interface, "publish"> = {
+  const bus: Pick<Bus.Interface, "publish"> = {
     publish: (definition, data) => {
       const publish = Effect.sync(() => {
-        const event = { id: EventV2.ID.create(), type: definition.type, data } as EventV2.Payload<typeof definition>
+        const event = { id: Event.ID.create(), type: definition.type, data } as Event.Payload<typeof definition>
         published.push({
           type: definition.durable
-            ? EventV2.versionedType(definition.type, definition.durable.version)
+            ? Bus.versionedType(definition.type, definition.durable.version)
             : definition.type,
           data,
         })
@@ -37,12 +38,12 @@ const capture = (providerMetadataKey = "anthropic", options?: { readonly interru
   }
   return {
     published,
-    publisher: createLLMEventPublisher(events, {
+    publisher: createLLMEventPublisher(bus, {
       sessionID,
-      agent: AgentV2.ID.make("build"),
+      agent: Agent.ID.make("build"),
       model: {
-        id: ModelV2.ID.make("model"),
-        providerID: ProviderV2.ID.opencode,
+        id: Model.ID.make("model"),
+        providerID: Provider.ID.opencode,
       },
       providerMetadataKey,
       assistantMessageID: SessionMessage.ID.create(),
@@ -68,7 +69,6 @@ test("local tool success serializes media base64 once through canonical content"
   await Effect.runPromise(publisher.publish(call))
   await Effect.runPromise(
     publisher.toolExecution(call.id, call.name, {
-      status: "completed",
       output: { type: "media", mime: "image/png" },
       content: [
         { type: "text", text: "Image read successfully" },
@@ -227,10 +227,7 @@ test("binary failure emits no success event", async () => {
   const { published, publisher } = capture()
   await Effect.runPromise(publisher.publish(call))
   await Effect.runPromise(
-    publisher.toolExecution(call.id, call.name, {
-      status: "error",
-      error: { type: "tool.execution", message: "Cannot read binary file" },
-    }),
+    publisher.failTool(call.id, { type: "tool.execution", message: "Cannot read binary file" }),
   )
   expect(published.some((event) => event.type === "session.tool.success.2")).toBe(false)
   expect(published.some((event) => event.type === "session.tool.failed.2")).toBe(true)

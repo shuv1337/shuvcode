@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import { Tool } from "@opencode-ai/schema/tool"
 import { Route } from "../route/client"
 import { Auth } from "../route/auth"
 import { Endpoint } from "../route/endpoint"
@@ -17,7 +18,6 @@ import {
   type TextPart,
   type ToolCallPart,
   type ToolDefinition,
-  type ToolContent,
 } from "../schema"
 import { classifyProviderFailure } from "../provider-error"
 import { isRecord, JsonObject, optionalArray, optionalNull, ProviderShared } from "./shared"
@@ -335,7 +335,7 @@ const lowerToolMessages = Effect.fn("OpenAIChat.lowerToolMessages")(function* (m
       messages.push({ role: "tool", tool_call_id: part.id, content: ProviderShared.toolResultText(part) })
       continue
     }
-    const content: ReadonlyArray<ToolContent> = part.result.value
+    const content: ReadonlyArray<Tool.Content> = part.result.value
     const text = content.filter((item) => item.type === "text").map((item) => item.text)
     messages.push({ role: "tool", tool_call_id: part.id, content: text.join("\n") })
     const files = content.filter((item) => item.type === "file")

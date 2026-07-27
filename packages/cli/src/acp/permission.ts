@@ -5,7 +5,7 @@ import { Result } from "effect"
 import { isAbsolute, resolve } from "node:path"
 import { pendingToolCall, stringValue, toLocations, toToolKind, type ToolInput } from "./tool"
 
-type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.v2.asked" }>
+type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.asked" }>
 type Connection = Pick<AgentSideConnection, "requestPermission"> & Partial<Pick<AgentSideConnection, "writeTextFile">>
 type Tool = { readonly name: string; readonly input: ToolInput }
 

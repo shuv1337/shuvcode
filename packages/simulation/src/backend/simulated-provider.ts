@@ -1,6 +1,6 @@
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { Plugin } from "@opencode-ai/plugin/v2/effect"
-import { Tool } from "@opencode-ai/plugin/v2/effect/tool"
+import { Tool } from "@opencode-ai/core/tool"
+import { Plugin } from "@opencode-ai/plugin/effect"
 import { createHash } from "node:crypto"
 import {
   Cause,
@@ -452,10 +452,10 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
     name: string,
     input: unknown,
     context: Tool.Context,
-  ): Effect.Effect<Tool.Response<JsonSchema.JsonSchema>, Tool.Failure> =>
+  ): Effect.Effect<Tool.Result, Tool.Error> =>
     Effect.gen(function* () {
       const encoded = yield* Schema.decodeUnknownEffect(Schema.Json)(input).pipe(
-        Effect.mapError((error) => new Tool.Failure({ message: `Simulated tool input is not JSON: ${error.message}` })),
+        Effect.mapError((error) => new Tool.Error({ message: `Simulated tool input is not JSON: ${error.message}` })),
       )
       const invocation = yield* Effect.uninterruptibleMask((restore) =>
         attachmentLock
@@ -465,7 +465,7 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
                 const current = yield* Ref.get(state)
                 if (current.generation !== registrationGeneration)
                   yield* Effect.fail(
-                    new Tool.Failure({ message: `Simulated tool registration is no longer active: ${name}` }),
+                    new Tool.Error({ message: `Simulated tool registration is no longer active: ${name}` }),
                   )
                 const id = `tool_${current.counter + 1}`
                 const completion = yield* Deferred.make<ToolCompletion>()
@@ -526,9 +526,20 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
           output: invocation.output.structured,
           ...(invocation.output.content.length === 0
             ? {}
-            : { content: invocation.output.content as [Tool.Content, ...Tool.Content[]] }),
+            : {
+                content: invocation.output.content.map((part) =>
+                  part.type === "text"
+                    ? part
+                    : {
+                        type: "file" as const,
+                        uri: `data:${part.mime};base64,${part.data}`,
+                        mime: part.mime,
+                        ...(part.name === undefined ? {} : { name: part.name }),
+                      },
+                ),
+              }),
         }
-      return yield* Effect.fail(new Tool.Failure({ message: invocation.message }))
+      return yield* new Tool.Error({ message: invocation.message })
     })
 
   yield* plugins.register(
@@ -552,8 +563,12 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
                     .transform((draft) => {
                       for (const registration of nextRegistrations)
                         draft.add(
-                          registration.name,
-                          Tool.make({
+                          {
+                            name: registration.name,
+                            options:
+                              registration.permission === undefined
+                                ? registration.options
+                                : { ...registration.options, permission: registration.permission },
                             description: registration.description,
                             input: registration.inputSchema,
                             output: registration.outputSchema ?? {},
@@ -564,10 +579,7 @@ const makeToolDriver = Effect.fn("SimulatedProvider.makeToolDriver")(function* (
                                 input,
                                 context,
                               ),
-                          }),
-                          registration.permission === undefined
-                            ? registration.options
-                            : { ...registration.options, permission: registration.permission },
+                          },
                         )
                     })
                     .pipe(Scope.provide(nextScope)),

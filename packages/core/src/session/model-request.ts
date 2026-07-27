@@ -1,16 +1,16 @@
 export * as SessionModelRequest from "./model-request"
 
-import { LLM, Message, SystemPart, type LLMRequest, type ToolContent } from "@opencode-ai/ai"
+import { LLM, Message, SystemPart, type LLMRequest } from "@opencode-ai/ai"
+import type { Content } from "@opencode-ai/schema/tool"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Cause, Context, Effect, Layer, Result } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { App } from "../app"
-import { ModelV2 } from "../model"
-import { PermissionV2 } from "../permission"
+import { Model } from "../model"
+import { Permission } from "../permission"
 import { PluginHooks } from "../plugin/hooks"
-import { QuestionTool } from "../tool/question"
-import { ToolOutputStore } from "../tool-output-store"
-import { ToolRegistry } from "../tool/registry"
+import { QuestionTool } from "../tool/plugin/question"
+import { Tool } from "../tool"
 import { SessionContext } from "./context"
 import { SessionModelHeaders } from "./model-headers"
 import { MAX_STEPS_PROMPT } from "./runner/max-steps"
@@ -18,16 +18,16 @@ import PROMPT_DEFAULT from "./runner/prompt/base.txt"
 import { toLLMMessages } from "./runner/to-llm-message"
 
 /** Failures a prepared execution can surface: infrastructure errors plus user declines resurfaced from the defect tunnel. */
-export type ExecuteError = ToolOutputStore.Error | PermissionV2.DeclinedError | QuestionTool.CancelledError
+export type ExecuteError = Tool.Error | Permission.DeclinedError | QuestionTool.CancelledError
 
 // User declines dive under the leaves' blanket `mapError` as defects (the deliberate
-// tunnel entered in PermissionV2.assert and the question tool), so a user's "no" can
+// tunnel entered in Permission.assert and the question tool), so a user's "no" can
 // never become model-facing tool output. They resurface as typed failures exactly once,
 // here at the seam the runner executes through.
-const declineDefect = (cause: Cause.Cause<ToolOutputStore.Error>) => {
+const declineDefect = (cause: Cause.Cause<Tool.Error>) => {
   const decline = cause.reasons.flatMap((reason) =>
     Cause.isDieReason(reason) &&
-    (reason.defect instanceof PermissionV2.DeclinedError || reason.defect instanceof QuestionTool.CancelledError)
+    (reason.defect instanceof Permission.DeclinedError || reason.defect instanceof QuestionTool.CancelledError)
       ? [reason.defect]
       : [],
   )[0]
@@ -41,8 +41,8 @@ interface Prepared {
    * step-limit-violating calls fail individually through the same seam.
    */
   readonly executeTool: (
-    input: ToolRegistry.ExecuteInput,
-  ) => Effect.Effect<ToolRegistry.ToolOutcome, ExecuteError>
+    input: Parameters<Tool.Snapshot["execute"]>[0],
+  ) => Effect.Effect<Tool.Result, ExecuteError>
   /** True when this request is the final Step; violating calls are rejected and no continuation follows. */
   readonly stepLimitReached: boolean
 }
@@ -59,7 +59,7 @@ const mimeToModality = (mime: string) => {
   if (mime === "application/pdf") return "pdf"
 }
 
-const unsupportedMedia = (mime: string, name: string | undefined, capabilities: ModelV2.Capabilities) => {
+const unsupportedMedia = (mime: string, name: string | undefined, capabilities: Model.Capabilities) => {
   const modality = mimeToModality(mime)
   if (!modality || capabilities.input.some((item) => item.startsWith(modality))) return
   return {
@@ -68,7 +68,7 @@ const unsupportedMedia = (mime: string, name: string | undefined, capabilities: 
   }
 }
 
-export const unsupportedParts = (messages: LLMRequest["messages"], capabilities: ModelV2.Capabilities) =>
+export const unsupportedParts = (messages: LLMRequest["messages"], capabilities: Model.Capabilities) =>
   messages.map((message) =>
     Message.make({
       ...message,
@@ -81,7 +81,7 @@ export const unsupportedParts = (messages: LLMRequest["messages"], capabilities:
           ...part,
           result: {
             ...part.result,
-            value: part.result.value.map((item: ToolContent) => {
+            value: part.result.value.map((item: Content) => {
               if (item.type !== "file") return item
               return unsupportedMedia(item.mime, item.name, capabilities) ?? item
             }),
@@ -102,7 +102,7 @@ export interface Interface {
 }
 
 /** Location-scoped outbound model-request preparation. */
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionModelRequest") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/SessionModelRequest") {}
 
 export const layer = Layer.effect(
   Service,
@@ -119,14 +119,14 @@ export const layer = Layer.effect(
       const stepLimitReached = agent.info.steps !== undefined && input.step >= agent.info.steps
       // The final Step keeps definitions available to protocols with native "none",
       // preserving their prompt cache prefix. Calls are still rejected at execution.
-      const toolSet = input.context.toolSet
+      const tools = input.context.tools
       const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const system = [agent.info.system ? agent.info.system : PROMPT_DEFAULT, input.context.initial]
         .filter((part) => part.length > 0)
         .map(SystemPart.make)
       const history = toLLMMessages(input.context.messages, resolved.ref, providerMetadataKey)
       const messages = stepLimitReached ? [...history, Message.assistant(MAX_STEPS_PROMPT)] : history
-      const toolDefinitions = toolSet.definitions
+      const toolDefinitions = tools.definitions
       const toolsByName = new Map(toolDefinitions.map((tool) => [tool.name, tool]))
       // Hooks may reshape available definitions but cannot advertise tools omitted by permissions or the Step limit.
       const contextEvent = yield* hooks.trigger("session", "context", {
@@ -142,7 +142,7 @@ export const layer = Layer.effect(
       const hookedTools = Object.entries(contextEvent.tools).flatMap(([name, tool]) => {
         const registered = toolsByName.get(name)
         return registered
-          ? [Object.assign({}, registered, { description: tool.description, inputSchema: tool.input })]
+          ? [{ ...registered, description: tool.description, inputSchema: tool.input }]
           : []
       })
       const request = LLM.request({
@@ -158,16 +158,10 @@ export const layer = Layer.effect(
       })
       const executeTool: Prepared["executeTool"] = (executeInput) => {
         if (stepLimitReached)
-          return Effect.succeed({
-            status: "error",
-            error: { type: "tool.execution", message: "Tools are disabled after the maximum agent steps" },
-          })
+          return new Tool.Error({ message: "Tools are disabled after the maximum agent steps" })
         if (toolsByName.has(executeInput.call.name) && !Object.hasOwn(contextEvent.tools, executeInput.call.name))
-          return Effect.succeed({
-            status: "error",
-            error: { type: "tool.unknown", message: `Tool is not available for this request: ${executeInput.call.name}` },
-          })
-        return toolSet
+          return new Tool.Error({ message: `Tool is not available for this request: ${executeInput.call.name}` })
+        return tools
           .execute(executeInput)
           .pipe(Effect.catchCauseFilter(declineDefect, (decline) => Effect.fail(decline)))
       }

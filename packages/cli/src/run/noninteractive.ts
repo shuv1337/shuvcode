@@ -177,7 +177,7 @@ export async function runNonInteractivePrompt(input: Input) {
       }
       const event = next.value
 
-      if (event.type === "permission.v2.asked" && submitted && event.data.sessionID === input.sessionID) {
+      if (event.type === "permission.asked" && submitted && event.data.sessionID === input.sessionID) {
         await replyPermission(event.data)
         continue
       }

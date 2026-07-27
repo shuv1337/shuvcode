@@ -1,23 +1,23 @@
-import { AgentV2 } from "@opencode-ai/core/agent"
-import type { PermissionV2 } from "@opencode-ai/core/permission"
+import { Agent } from "@opencode-ai/core/agent"
+import type { Permission } from "@opencode-ai/core/permission"
 import { SessionMessage } from "@opencode-ai/core/session/message"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { Tool } from "@opencode-ai/core/tool/tool"
-import { Tools } from "@opencode-ai/core/tool/tools"
-import type { Context as PluginContext } from "@opencode-ai/plugin/v2/effect/plugin"
+import { toSessionError } from "@opencode-ai/core/session/to-session-error"
+import type { SessionError } from "@opencode-ai/schema/session-error"
+import { Tool } from "@opencode-ai/core/tool"
+import type { Context as PluginContext } from "@opencode-ai/plugin/effect/plugin"
 import { Effect, type Scope } from "effect"
 import { host } from "../plugin/host"
 
 export const toolIdentity = {
-  agent: AgentV2.ID.make("build"),
+  agent: Agent.ID.make("build"),
   messageID: SessionMessage.ID.make("msg_tool_test"),
 }
 
-export const toolDefinitions = (registry: ToolRegistry.Interface, permissions?: PermissionV2.Ruleset) =>
+export const toolDefinitions = (registry: Tool.Interface, permissions?: Permission.Ruleset) =>
   registry.snapshot(permissions).pipe(Effect.map((toolSet) => toolSet.definitions))
 
 export function waitForTool(
-  registry: ToolRegistry.Interface,
+  registry: Tool.Interface,
   name: string,
   remaining = 1000,
 ): Effect.Effect<void, Error> {
@@ -33,10 +33,10 @@ export function waitForTool(
 }
 
 export function waitForCodeModeTool(
-  registry: ToolRegistry.Interface,
+  registry: Tool.Interface,
   path: string,
   remaining = 1000,
-): Effect.Effect<ToolRegistry.ToolSet, Error> {
+): Effect.Effect<Tool.Snapshot, Error> {
   return Effect.gen(function* () {
     const toolSet = yield* registry.snapshot()
     if (toolSet.codeModeCatalog?.some((tool) => tool.path === path)) return toolSet
@@ -59,9 +59,9 @@ export const registerToolPlugin = <R>(
     readonly effect: (context: PluginContext) => Effect.Effect<void, never, R>
   },
   overrides: Parameters<typeof host>[0] = {},
-): Effect.Effect<void, never, R | Tools.Service | Scope.Scope> =>
+): Effect.Effect<void, never, R | Tool.Service | Scope.Scope> =>
   Effect.gen(function* () {
-    const tools = yield* Tools.Service
+    const tools = yield* Tool.Service
     const context = host({
       ...overrides,
       session: {
@@ -69,29 +69,31 @@ export const registerToolPlugin = <R>(
       },
       tool: {
         transform: (callback) =>
-          Effect.gen(function* () {
-            const registrations: Array<{
-              readonly name: string
-              readonly tool: Tool.Any
-              readonly options?: Tool.RegisterOptions
-            }> = []
-            callback({
-              add: (name, tool, options) => {
-                registrations.push({ name, tool, ...(options ? { options } : {}) })
-              },
-            })
-            yield* Effect.forEach(
-              registrations,
-              (registration) => tools.register({ [registration.name]: registration.tool }, registration.options),
-              { discard: true },
-            ).pipe(Effect.orDie)
-            return { dispose: Effect.void }
-          }),
+          tools
+            .transform((draft) => callback({ add: (tool) => draft.add(tool) }))
+            .pipe(Effect.orDie, Effect.as({ dispose: Effect.void })),
         hook: () => Effect.die("registerToolPlugin does not support tool hooks"),
       },
     })
     yield* plugin.effect(context)
   })
 
-export const executeTool = (registry: ToolRegistry.Interface, input: ToolRegistry.ExecuteInput) =>
-  registry.snapshot().pipe(Effect.flatMap((toolSet) => toolSet.execute(input)))
+export interface ToolExecution {
+  readonly status: "completed" | "error"
+  readonly output?: any
+  readonly content?: ReadonlyArray<Tool.Content>
+  readonly metadata?: Tool.Metadata
+  readonly error?: SessionError.Error
+}
+
+export const executeTool = (
+  registry: Tool.Interface,
+  input: Parameters<Tool.Snapshot["execute"]>[0],
+): Effect.Effect<ToolExecution> =>
+  registry.snapshot().pipe(
+    Effect.flatMap((tools) => tools.execute(input)),
+    Effect.map((result) => ({ status: "completed" as const, ...result }) satisfies ToolExecution),
+    Effect.catchTag("Tool.Error", (error) =>
+      Effect.succeed({ status: "error" as const, error: toSessionError(error) } satisfies ToolExecution),
+    ),
+  )

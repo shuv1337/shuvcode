@@ -9,15 +9,14 @@ import { FileSystem } from "@opencode-ai/core/filesystem"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Location } from "@opencode-ai/core/location"
 import { Image } from "@opencode-ai/core/image"
-import { PermissionV2 } from "@opencode-ai/core/permission"
-import { SessionV2 } from "@opencode-ai/core/session"
+import { Permission } from "@opencode-ai/core/permission"
+import { Session } from "@opencode-ai/core/session"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Global } from "@opencode-ai/util/global"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
 import { location } from "./fixture/location"
-import { ToolRegistry } from "@opencode-ai/core/tool/registry"
-import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
-import { ReadTool } from "@opencode-ai/core/tool/read"
+import { Tool } from "@opencode-ai/core/tool"
+import { ReadTool } from "@opencode-ai/core/tool/plugin/read"
 import { ReadToolFileSystem } from "@opencode-ai/core/tool/read-filesystem"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { SessionInstructions } from "@opencode-ai/core/session/instructions"
@@ -28,18 +27,18 @@ const readToolNode = makeLocationNode({
   name: "test/read-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(ReadTool.Plugin)),
   deps: [
-    ToolRegistry.toolsNode,
+    Tool.node,
     ReadToolFileSystem.node,
     LocationMutation.node,
     Image.node,
-    PermissionV2.node,
+    Permission.node,
     SessionInstructions.node,
     FSUtil.node,
     Location.node,
   ],
 })
 
-const assertions: PermissionV2.AssertInput[] = []
+const assertions: Permission.AssertInput[] = []
 const missingPath = "__missing_read_target__.txt"
 const missingAbsolutePath = path.join(process.cwd(), missingPath)
 const readCalls: {
@@ -76,8 +75,8 @@ const reader = Layer.succeed(
 )
 let allow = true
 const permission = Layer.succeed(
-  PermissionV2.Service,
-  PermissionV2.Service.of({
+  Permission.Service,
+  Permission.Service.of({
     assert: (input) =>
       Effect.sync(() => {
         assertions.push(input)
@@ -86,7 +85,7 @@ const permission = Layer.succeed(
           allow
             ? Effect.void
             : Effect.fail(
-                new PermissionV2.BlockedError({
+                new Permission.BlockedError({
                   rules: [],
                   permission: input.action,
                   resources: input.resources,
@@ -159,20 +158,19 @@ const unavailableImage = Layer.succeed(
   Image.Service.of({ normalize: () => Effect.fail(new Image.ResizerUnavailableError()) }),
 )
 const readLayer = (imageLayer: Layer.Layer<Image.Service>) =>
-  AppNodeBuilder.build(LayerNode.group([ToolRegistry.node, ToolRegistry.toolsNode, readToolNode]), [
+  AppNodeBuilder.build(LayerNode.group([Tool.node, readToolNode]), [
     [ReadToolFileSystem.node, reader],
-    [PermissionV2.node, permission],
+    [Permission.node, permission],
     [Config.node, config],
     [Image.node, imageLayer],
     [LocationMutation.node, mutation],
     [FSUtil.node, testFileSystem],
     [Location.node, locationLayer],
     [Global.node, Global.layerWith({ data: Global.Path.data })],
-    [ToolOutputStore.node, ToolOutputStore.nodeWithoutConfig],
   ])
 const it = testEffect(readLayer(imageLayer))
 const itWithoutResizer = testEffect(readLayer(unavailableImage))
-const sessionID = SessionV2.ID.make("ses_read_tool_test")
+const sessionID = Session.ID.make("ses_read_tool_test")
 
 describe("ReadTool", () => {
   beforeEach(() => {
@@ -195,7 +193,7 @@ describe("ReadTool", () => {
 
   it.effect("registers, authorizes, and reads through the location filesystem", () =>
     Effect.gen(function* () {
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect((yield* toolDefinitions(registry)).map((tool) => tool.name)).toEqual(["read", "execute"])
       expect(
@@ -229,7 +227,7 @@ describe("ReadTool", () => {
 
   it.effect("asks for external_directory approval before reading an external absolute path", () =>
     Effect.gen(function* () {
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
       const external = path.join(path.parse(process.cwd()).root, "external-read", "notes.txt")
 
       expect(
@@ -261,7 +259,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "image/png",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       const execution = yield* executeTool(registry, {
         sessionID,
@@ -313,7 +311,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "image/png",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       const settled = yield* executeTool(registry, {
         sessionID,
@@ -321,7 +319,6 @@ describe("ReadTool", () => {
         call: { type: "tool-call", id: "call-large-image", name: "read", input: { path: "large.png" } },
       })
 
-      expect(settled.outputPaths).toBeUndefined()
       expect(settled.status).toBe("completed")
       if (settled.status !== "completed") return
       expect(settled.output).toMatchObject({
@@ -347,7 +344,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "image/png",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -371,7 +368,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "image/png",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -412,7 +409,7 @@ describe("ReadTool", () => {
           }),
         }),
       ]
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -451,7 +448,7 @@ describe("ReadTool", () => {
           }),
         }),
       ]
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
       const result = yield* executeTool(registry, {
         sessionID,
         ...toolIdentity,
@@ -460,7 +457,7 @@ describe("ReadTool", () => {
 
       expect(result.status).toBe("completed")
       if (result.status !== "completed") return
-      const media = result.content[1]
+      const media = result.content?.[1]
       expect(media?.type).toBe("file")
       if (media?.type !== "file") return
       const resized = photon.PhotonImage.new_from_byteslice(Buffer.from(media.uri.split(",")[1] ?? "", "base64"))
@@ -490,7 +487,7 @@ describe("ReadTool", () => {
           }),
         }),
       ]
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -518,7 +515,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "image/png",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -536,7 +533,7 @@ describe("ReadTool", () => {
   it.effect("returns expected filesystem failures to the model", () =>
     Effect.gen(function* () {
       readFailure = new ReadToolFileSystem.BinaryFileError({ resource: "archive.dat" })
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -559,7 +556,7 @@ describe("ReadTool", () => {
   it.effect("preserves unexpected filesystem defects", () =>
     Effect.gen(function* () {
       resolveFailure = new Error("unexpected")
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         Exit.isFailure(
@@ -576,7 +573,7 @@ describe("ReadTool", () => {
   it.effect("does not read when permission is denied", () =>
     Effect.gen(function* () {
       allow = false
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -591,7 +588,7 @@ describe("ReadTool", () => {
 
   it.effect("returns missing paths as model-visible tool failures", () =>
     Effect.gen(function* () {
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -610,7 +607,7 @@ describe("ReadTool", () => {
   it.effect("lists a bounded directory page through read", () =>
     Effect.gen(function* () {
       resolvedType = "directory"
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -633,7 +630,7 @@ describe("ReadTool", () => {
     Effect.gen(function* () {
       allow = false
       resolvedType = "directory"
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -648,7 +645,7 @@ describe("ReadTool", () => {
 
   it.effect("preserves unexpected resolution defects", () =>
     Effect.gen(function* () {
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       resolveFailure = new Error("missing")
       expect(
@@ -675,7 +672,7 @@ describe("ReadTool", () => {
         truncated: true,
         next: 3,
       })
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {
@@ -707,7 +704,7 @@ describe("ReadTool", () => {
         encoding: "base64",
         mime: "application/octet-stream",
       }
-      const registry = yield* ToolRegistry.Service
+      const registry = yield* Tool.Service
 
       expect(
         yield* executeTool(registry, {

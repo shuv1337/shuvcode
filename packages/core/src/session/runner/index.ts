@@ -6,7 +6,6 @@ import { SessionSchema } from "../schema"
 import type { AgentNotFoundError, MessageDecodeError, StepFailedError, UserInterruptedError } from "../error"
 import { SessionRunnerModel } from "./model"
 import type { Instructions } from "../../instructions/index"
-import type { ToolOutputStore } from "../../tool-output-store"
 
 export type RunError =
   | LLMError
@@ -16,7 +15,6 @@ export type RunError =
   | StepFailedError
   | UserInterruptedError
   | Instructions.InitializationBlocked
-  | ToolOutputStore.Error
 
 /** Runs one local continuation from already-recorded Session history. */
 export interface Interface {
@@ -27,4 +25,4 @@ export interface Interface {
   }) => Effect.Effect<void, RunError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SessionRunner") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRunner") {}

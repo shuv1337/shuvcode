@@ -1,6 +1,6 @@
 export * as WebSearchExa from "./exa"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import { define } from "@opencode-ai/plugin/effect/plugin"
 import { Effect, Schema, Scope } from "effect"
 import { HttpClient } from "effect/unstable/http"
 import { WebSearchMcp } from "./mcp"

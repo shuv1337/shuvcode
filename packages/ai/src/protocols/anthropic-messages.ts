@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import { Tool } from "@opencode-ai/schema/tool"
 import { Route } from "../route/client"
 import { Auth } from "../route/auth"
 import { Endpoint } from "../route/endpoint"
@@ -19,7 +20,6 @@ import {
   type ProviderMetadata,
   type ToolCallPart,
   type ToolDefinition,
-  type ToolContent,
   type ToolResultPart,
 } from "../schema"
 import { JsonObject, optionalArray, optionalNull, ProviderShared } from "./shared"
@@ -425,7 +425,7 @@ const lowerMedia = Effect.fn("AnthropicMessages.lowerMedia")(function* (part: Me
 // Tool results may carry structured text, images, and documents. Keep media as provider-native
 // content instead of JSON-stringifying base64 into a prompt string.
 const lowerToolResultContentItem = Effect.fn("AnthropicMessages.lowerToolResultContentItem")(function* (
-  item: ToolContent,
+  item: Tool.Content,
 ) {
   if (item.type === "text") return { type: "text" as const, text: item.text } satisfies AnthropicTextBlock
   return yield* lowerMedia({ type: "media", mediaType: item.mime, data: item.uri, filename: item.name })
@@ -436,7 +436,7 @@ const lowerToolResultContent = Effect.fn("AnthropicMessages.lowerToolResultConte
   // with existing cassettes and provider expectations.
   if (part.result.type !== "content") return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
-  const content: ReadonlyArray<ToolContent> = part.result.value
+  const content: ReadonlyArray<Tool.Content> = part.result.value
   return yield* Effect.forEach(content, lowerToolResultContentItem)
 })
 
