@@ -1,5 +1,6 @@
 /// <reference path="../env.d.ts" />
-import { tool } from "@opencode-ai/plugin"
+import { Plugin } from "@opencode-ai/plugin"
+import { z } from "zod"
 
 const TEAM = {
   tui: ["kommander", "simonklee"],
@@ -35,26 +36,33 @@ async function githubFetch(endpoint: string, options: RequestInit = {}) {
   return response.json()
 }
 
-export default tool({
-  description: `Use this tool to assign a GitHub issue.
+export default Plugin.define({
+  id: "repository.github-triage",
+  setup: async (ctx) => {
+    await ctx.tool.transform((tools) => {
+      tools.add({
+        name: "github-triage",
+        options: { codemode: false },
+        description: `Use this tool to assign a GitHub issue.
 
 Provide the team that should own the issue. This tool picks a random assignee from that team and does not apply labels.`,
-  args: {
-    team: tool.schema
-      .enum(Object.keys(TEAM) as [keyof typeof TEAM, ...(keyof typeof TEAM)[]])
-      .describe("The owning team"),
-  },
-  async execute(args) {
-    const issue = getIssueNumber()
-    const owner = "anomalyco"
-    const repo = "opencode"
-    const assignee = pick(TEAM[args.team])
+        input: z.object({
+          team: z.enum(Object.keys(TEAM) as [keyof typeof TEAM, ...(keyof typeof TEAM)[]]).describe("The owning team"),
+        }),
+        async execute(args) {
+          const issue = getIssueNumber()
+          const owner = "anomalyco"
+          const repo = "opencode"
+          const assignee = pick(TEAM[args.team])
 
-    await githubFetch(`/repos/${owner}/${repo}/issues/${issue}/assignees`, {
-      method: "POST",
-      body: JSON.stringify({ assignees: [assignee] }),
+          await githubFetch(`/repos/${owner}/${repo}/issues/${issue}/assignees`, {
+            method: "POST",
+            body: JSON.stringify({ assignees: [assignee] }),
+          })
+
+          return { content: `Assigned @${assignee} from ${args.team} to issue #${issue}` }
+        },
+      })
     })
-
-    return `Assigned @${assignee} from ${args.team} to issue #${issue}`
   },
 })
