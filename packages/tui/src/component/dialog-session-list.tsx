@@ -15,6 +15,7 @@ import { useToast } from "../ui/toast"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { Spinner } from "./spinner"
 import { errorMessage } from "../util/error"
+import { useSessionTabs } from "../context/session-tabs"
 
 export function DialogSessionList() {
   const dialog = useDialog()
@@ -25,6 +26,7 @@ export function DialogSessionList() {
   const mode = themes.mode
   const client = useClient()
   const local = useLocal()
+  const sessionTabs = useSessionTabs()
   const toast = useToast()
   const [filter, setFilter] = createSignal("")
   const shortcuts = Keymap.useShortcuts()
@@ -79,6 +81,7 @@ export function DialogSessionList() {
   })
 
   const quickSwitchHint = createMemo(() => {
+    if (sessionTabs.enabled()) return
     const first = shortcuts.get("session.quick_switch.1")
     const last = shortcuts.get("session.quick_switch.9")
     if (!first || !last) return
@@ -96,7 +99,7 @@ export function DialogSessionList() {
         .filter((session) => !session.parentID)
         .map((session) => [session.id, session]),
     )
-    const pinned = local.session.pinned().filter((sessionID) => sessionMap.has(sessionID))
+    const pinned = sessionTabs.enabled() ? [] : local.session.pinned().filter((sessionID) => sessionMap.has(sessionID))
     const pinnedSet = new Set(pinned)
     const slotByID = new Map(local.session.slots().map((sessionID, index) => [sessionID, index + 1]))
 
@@ -104,7 +107,7 @@ export function DialogSessionList() {
       const directory = session.location.directory
       const footer =
         directory !== data.location.info()?.project.directory ? Locale.truncate(path.basename(directory), 20) : ""
-      const slot = slotByID.get(session.id)
+      const slot = sessionTabs.enabled() ? undefined : slotByID.get(session.id)
       const deleting = toDelete() === session.id
       return {
         title: deleting ? `Press ${shortcuts.get("session.delete")} again to confirm` : session.title,
@@ -164,7 +167,8 @@ export function DialogSessionList() {
         {
           command: "session.pin.toggle",
           title: "pin/unpin",
-          onTrigger: (option: { value: string }) => local.session.togglePin(option.value),
+          hidden: sessionTabs.enabled(),
+          onTrigger: (option) => local.session.togglePin(option.value),
         },
         {
           command: "session.delete",
