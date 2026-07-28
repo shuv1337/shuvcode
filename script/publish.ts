@@ -55,6 +55,9 @@ if (Script.release && !Script.preview) {
   await $`git tag -d ${tag}`.nothrow()
   await $`git tag ${tag}`
   await $`git push origin refs/tags/${tag} --force-with-lease --no-verify`
+}
+
+if (Script.release && !Script.preview && repository !== forkRepository) {
   await new Promise((resolve) => setTimeout(resolve, 5_000))
   await $`git fetch origin`
   await $`git checkout -B dev origin/dev`
