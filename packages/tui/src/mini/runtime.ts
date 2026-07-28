@@ -11,7 +11,7 @@
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import type { LocationRef } from "@opencode-ai/client/promise"
 import type { Config } from "../config"
-import { loadRunAgents, loadRunCommands, loadRunReferences, waitForDefaultModel } from "./catalog.shared"
+import { loadRunAgents, loadRunCommands, loadRunReferences } from "./catalog.shared"
 import {
   resolveMiniSettings,
   resolveModelInfo,
@@ -115,6 +115,7 @@ type RuntimeState = {
   shown: boolean
   aborting: boolean
   model: RunInput["model"]
+  defaultModel: RunInput["model"]
   providers: RunProvider[]
   variants: string[]
   activeVariant: string | undefined
@@ -212,6 +213,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     shown: !session.first,
     aborting: false,
     model: ctx.model ?? session.model,
+    defaultModel: undefined,
     providers: [],
     variants: [],
     activeVariant: resolveVariant(ctx.variant, session.variant, savedVariant, []),
@@ -286,19 +288,24 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       await settleForm(next.sessionID, next.formID)
     },
     onCycleVariant: () => {
-      if (!state.model || state.variants.length === 0) {
+      const model = state.model ?? state.defaultModel
+      if (!model || state.variants.length === 0) {
         return {
           status: "no variants available",
         }
       }
 
+      if (!state.model) state.model = model
       state.activeVariant = cycleVariant(state.activeVariant, state.variants)
-      void input.host.preferences.saveVariant(state.model, state.activeVariant)
+      void input.host.preferences.saveVariant(model, state.activeVariant)
       return {
         status: state.activeVariant ? `variant ${state.activeVariant}` : "variant default",
-        modelLabel: formatModelLabel(state.model, state.activeVariant, state.providers),
+        modelLabel: formatModelLabel(model, state.activeVariant, state.providers),
         variant: state.activeVariant,
       }
+    },
+    onAgentSelect: (agent) => {
+      state.agent = agent
     },
     onModelSelect: async (model) => {
       if (state.model?.providerID === model.providerID && state.model.modelID === model.modelID) {
@@ -335,7 +342,8 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       }
     },
     onVariantSelect: async (variant) => {
-      if (!state.model || state.variants.length === 0) {
+      const model = state.model ?? state.defaultModel
+      if (!model || state.variants.length === 0) {
         return {
           status: "no variants available",
         }
@@ -347,11 +355,12 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         }
       }
 
+      if (!state.model) state.model = model
       state.activeVariant = variant
-      void input.host.preferences.saveVariant(state.model, state.activeVariant)
+      void input.host.preferences.saveVariant(model, state.activeVariant)
       return {
         status: state.activeVariant ? `variant ${state.activeVariant}` : "variant default",
-        modelLabel: formatModelLabel(state.model, state.activeVariant, state.providers),
+        modelLabel: formatModelLabel(model, state.activeVariant, state.providers),
         variant: state.activeVariant,
         variants: state.variants,
       }
@@ -443,6 +452,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         if (footer.isClosed || runtimeController.signal.aborted) return
         state.sessionID = next.sessionID
         state.sessionTitle = next.sessionTitle ?? state.sessionTitle
+        shell.setTitle(state.sessionTitle)
         state.agent = next.agent
         state.location = next.location
         state.model = next.model
@@ -492,39 +502,20 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     const signal = AbortSignal.any([runtimeController.signal, controller.signal])
     modelAttempt = controller
     try {
-      if (selected) {
-        const info = await abortable(resolveModelInfo(sdk, state.location, signal), signal)
-        if (
-          !info ||
-          !currentModelLoad(generation, sdk) ||
-          state.model?.providerID !== selected.providerID ||
-          state.model.modelID !== selected.modelID
-        )
-          return
-        applyModelInfo(info, session.variant, { sdk, generation, signal }, true, savedVariant)
+      const info = await abortable(resolveModelInfo(sdk, state.location, signal), signal)
+      if (
+        !info ||
+        !currentModelLoad(generation, sdk) ||
+        (selected &&
+          (state.model?.providerID !== selected.providerID || state.model.modelID !== selected.modelID))
+      )
         return
-      }
-
-      const model = await waitForDefaultModel({
-        sdk,
-        location: state.location,
-        active: () => currentModelLoad(generation, sdk),
-        signal,
-      })
-      if (!currentModelLoad(generation, sdk)) return
-      const [fallbackSavedVariant, info] = await Promise.all([
-        input.host.preferences.resolveVariant(model),
-        abortable(resolveModelInfo(sdk, state.location, signal), signal),
-      ])
-      if (!info || !currentModelLoad(generation, sdk)) return
-      if (model && !state.model) state.model = model
-      const boot = !!model && state.model?.providerID === model.providerID && state.model.modelID === model.modelID
       applyModelInfo(
         info,
-        boot ? session.variant : state.activeVariant,
+        selected ? session.variant : state.activeVariant,
         { sdk, generation, signal },
-        boot,
-        fallbackSavedVariant,
+        !!selected,
+        savedVariant,
       )
     } finally {
       if (modelAttempt === controller) modelAttempt = undefined
@@ -620,7 +611,8 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
   ) {
     if (!currentClient(attempt)) return
     state.providers = info.providers
-    state.variants = variantsFor(state.providers, state.model)
+    const model = state.model ?? state.defaultModel
+    state.variants = variantsFor(state.providers, model)
     state.activeVariant = boot
       ? resolveVariant(ctx.variant, current, saved, state.variants)
       : current && !state.variants.includes(current)
@@ -629,11 +621,11 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     if (footer.isClosed) return
     footer.event({ type: "models", providers: info.providers })
     footer.event({ type: "variants", variants: state.variants, current: state.activeVariant })
-    if (state.model)
+    if (model)
       footer.event({
         type: "model",
-        model: formatModelLabel(state.model, state.activeVariant, state.providers),
-        selection: state.model,
+        model: formatModelLabel(model, state.activeVariant, state.providers),
+        selection: model,
       })
   }
 
@@ -645,6 +637,50 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         task: Promise<void>
       }
     | undefined
+  let defaultModelLoad: Promise<void> | undefined
+  let defaultModelQueued = false
+  const loadDefaultModel = (attempt: ClientAttempt) => {
+    if (state.model || !currentClient(attempt)) return
+    if (defaultModelLoad) {
+      defaultModelQueued = true
+      return
+    }
+    defaultModelQueued = false
+    defaultModelLoad = attempt.sdk.model
+      .default(
+        {
+          location: {
+            directory: state.location.directory,
+            workspace: state.location.workspaceID,
+          },
+        },
+        { signal: attempt.signal },
+      )
+      .then(async (result) => {
+        if (!result.data || state.model || !currentClient(attempt)) return
+        const model = { providerID: result.data.providerID, modelID: result.data.id }
+        const changed =
+          state.defaultModel?.providerID !== model.providerID || state.defaultModel.modelID !== model.modelID
+        const saved = changed ? await input.host.preferences.resolveVariant(model) : undefined
+        if (state.model || !currentClient(attempt)) return
+        state.defaultModel = model
+        state.variants = variantsFor(state.providers, model)
+        if (changed)
+          state.activeVariant = resolveVariant(ctx.variant, state.activeVariant, saved, state.variants)
+        if (state.activeVariant) state.model = model
+        footer.event({ type: "variants", variants: state.variants, current: state.activeVariant })
+        footer.event({
+          type: "model",
+          model: formatModelLabel(model, state.activeVariant, state.providers),
+          selection: model,
+        })
+      })
+      .catch(() => {})
+      .finally(() => {
+        defaultModelLoad = undefined
+        if (defaultModelQueued) loadDefaultModel(clientAttempt())
+      })
+  }
   const requestCatalogRefresh = (signal?: AbortSignal): Promise<void> => {
     const attempt = clientAttempt(signal)
     if (!currentClient(attempt)) return Promise.resolve()
@@ -676,6 +712,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         if (!currentClient(attempt)) return
         if (catalog) applyCatalog(catalog, attempt)
         if (info) applyModelInfo(info, state.activeVariant, attempt)
+        loadDefaultModel(attempt)
       }
     })()
     refresh.task = task
@@ -760,6 +797,10 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         replayLimit: input.replayLimit,
         footer,
         onCommit: rememberLocal,
+        onSessionTitle: (title) => {
+          state.sessionTitle = title
+          shell.setTitle(title)
+        },
         trace: log,
         onCatalogRefresh: requestCatalogRefresh,
         contextLimit: (model) =>
@@ -876,6 +917,9 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         })
       },
       onAdmissionError: renderPromptError,
+      onCompact: async () => {
+        await state.sdk.session.compact({ sessionID: state.sessionID }, formRequestOptions(state.location))
+      },
       settle: async () => {
         const next = await ensureStream()
         await next.handle.waitForIdle()
@@ -903,6 +947,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
               state.shown = false
               state.sessionID = created.sessionID
               state.sessionTitle = created.sessionTitle
+              shell.setTitle(state.sessionTitle)
               state.agent = created.agent ?? state.agent
               state.location = created.location
               state.model = created.model

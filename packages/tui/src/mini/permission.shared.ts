@@ -53,7 +53,7 @@ export function permissionInfo(request: MiniPermissionRequest, directory?: strin
       resources: request.resources,
       metadata: request.metadata,
       input: state?.status === "streaming" ? undefined : state?.input,
-      structured: state?.status === "streaming" ? undefined : state?.structured,
+      toolMetadata: state?.status === "streaming" ? undefined : state?.metadata,
     },
     (value) => toolPath(value, { home: true, directory }),
   )
@@ -76,7 +76,7 @@ export function permissionLabel(option: PermissionOption): string {
 
 export { permissionAlwaysLines }
 
-export function permissionReply(
+function permissionReply(
   sessionID: string,
   requestID: string,
   reply: PermissionReply["reply"],

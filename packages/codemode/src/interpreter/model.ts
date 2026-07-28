@@ -1,3 +1,4 @@
+import type { Effect } from "effect"
 import type { SafeObject } from "../tool-runtime.js"
 import type { CodeModePromise, CodeModeRegExp, CodeModeURL } from "../values.js"
 
@@ -45,6 +46,27 @@ export class CodeModeFunction {
     readonly body: AstNode,
     readonly capturedScopes: ReadonlyArray<Map<string, Binding>>,
     readonly async: boolean,
+    readonly generator: boolean,
+  ) {}
+}
+
+export type GeneratorRequestKind = "next" | "return" | "throw"
+
+export class CodeModeGenerator {
+  constructor(
+    readonly asynchronous: boolean,
+    readonly request: (
+      kind: GeneratorRequestKind,
+      value: unknown,
+      node: AstNode,
+    ) => Effect.Effect<unknown, unknown, unknown>,
+  ) {}
+}
+
+export class GeneratorMethodReference {
+  constructor(
+    readonly generator: CodeModeGenerator,
+    readonly kind: GeneratorRequestKind | "iterator",
   ) {}
 }
 
@@ -125,6 +147,10 @@ export class UriFunction {
 export class SearchFunction {}
 
 export class ProgramThrow {
+  constructor(readonly value: unknown) {}
+}
+
+export class GeneratorReturn {
   constructor(readonly value: unknown) {}
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, beforeEach, afterAll } from "bun:test"
+import { describe, expect, beforeEach, afterAll, test } from "bun:test"
 import { Money } from "@opencode-ai/schema/money"
 import { Effect, Layer, Ref } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/unstable/http"
@@ -6,14 +6,21 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNodePlatform } from "@opencode-ai/util/effect/app-node-platform"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Global } from "@opencode-ai/util/global"
-import { ModelV2 } from "@opencode-ai/core/model"
+import { Model } from "@opencode-ai/core/model"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Provider } from "@opencode-ai/core/provider"
 import { it } from "./lib/effect"
 import { readFile, rm, writeFile, utimes, mkdir } from "fs/promises"
 import path from "path"
 
 const cacheFile = path.join(Global.Path.cache, "models.json")
+
+test("normalizes permissive interleaved values to compatibility", () => {
+  expect(Model.compatibility("reasoning_text")).toEqual({ reasoningField: "reasoning_text" })
+  expect(Model.compatibility({ field: "vendor_reasoning" })).toEqual({ reasoningField: "vendor_reasoning" })
+  expect(Model.compatibility(true)).toBeUndefined()
+  expect(Model.compatibility(false)).toBeUndefined()
+})
 
 const fixture = {
   acme: {
@@ -30,6 +37,7 @@ const fixture = {
         reasoning: false,
         temperature: true,
         tool_call: true,
+        interleaved: { field: "vendor_reasoning" },
         limit: { context: 128000, output: 8192 },
       },
     },
@@ -39,16 +47,17 @@ const fixture = {
 const fixtureSnapshot = [
   {
     info: {
-      id: ProviderV2.ID.make("acme"),
+      id: Provider.ID.make("acme"),
       name: "Acme",
-      package: ProviderV2.aisdk("@ai-sdk/openai-compatible"),
+      package: Provider.aisdk("@ai-sdk/openai-compatible"),
     },
     models: [
       {
-        id: ModelV2.ID.make("acme-1"),
-        modelID: ModelV2.ID.make("acme-1"),
-        providerID: ProviderV2.ID.make("acme"),
+        id: Model.ID.make("acme-1"),
+        modelID: Model.ID.make("acme-1"),
+        providerID: Provider.ID.make("acme"),
         name: "Acme One",
+        compatibility: { reasoningField: "vendor_reasoning" },
         family: undefined,
         package: undefined,
         settings: undefined,
@@ -100,15 +109,15 @@ const fixture2 = {
 const fixture2Snapshot = [
   {
     info: {
-      id: ProviderV2.ID.make("beta"),
+      id: Provider.ID.make("beta"),
       name: "Beta",
-      package: ProviderV2.aisdk("@ai-sdk/openai-compatible"),
+      package: Provider.aisdk("@ai-sdk/openai-compatible"),
     },
     models: [
       {
-        id: ModelV2.ID.make("beta-1"),
-        modelID: ModelV2.ID.make("beta-1"),
-        providerID: ProviderV2.ID.make("beta"),
+        id: Model.ID.make("beta-1"),
+        modelID: Model.ID.make("beta-1"),
+        providerID: Provider.ID.make("beta"),
         name: "Beta One",
         family: undefined,
         package: undefined,

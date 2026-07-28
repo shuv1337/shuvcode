@@ -39,8 +39,9 @@
   },
   "dependencies": {
     "@kobalte/core": "catalog:",
+    "@opencode-ai/client": "workspace:*",
     "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/sdk": "workspace:*",
+    "@opencode-ai/sdk": "1.18.5",
     "@opencode-ai/ui": "workspace:*",
     "@pierre/diffs": "catalog:",
     "@shikijs/stream": "catalog:",

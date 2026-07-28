@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect"
+import { Tool } from "@opencode-ai/schema/tool"
 import { Route } from "../route/client"
 import { Auth } from "../route/auth"
 import { Endpoint } from "../route/endpoint"
@@ -11,11 +12,11 @@ import {
   type JsonSchema,
   type LLMRequest,
   type MediaPart,
+  type ProviderOptions,
   type ProviderMetadata,
   type TextPart,
   type ToolCallPart,
   type ToolDefinition,
-  type ToolContent,
 } from "../schema"
 import { JsonObject, optionalArray, ProviderShared } from "./shared"
 import { GeminiToolSchema } from "./utils/gemini-tool-schema"
@@ -25,6 +26,18 @@ import { ToolSchemaProjection } from "./utils/tool-schema"
 const ADAPTER = "gemini"
 const MEDIA_MIMES = new Set<string>(ProviderShared.MEDIA_MIMES)
 export const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+export interface OptionsInput {
+  readonly [key: string]: unknown
+  readonly thinkingConfig?: {
+    readonly thinkingBudget?: number
+    readonly includeThoughts?: boolean
+  }
+}
+
+export type ProviderOptionsInput = ProviderOptions & {
+  readonly gemini?: OptionsInput
+}
 
 // =============================================================================
 // Request Body Schema
@@ -41,9 +54,11 @@ const GeminiInlineDataPart = Schema.Struct({
     data: Schema.String,
   }),
 })
+type GeminiInlineDataPart = Schema.Schema.Type<typeof GeminiInlineDataPart>
 
 const GeminiFunctionCallPart = Schema.Struct({
   functionCall: Schema.Struct({
+    id: Schema.optional(Schema.String),
     name: Schema.String,
     args: Schema.Unknown,
   }),
@@ -52,8 +67,10 @@ const GeminiFunctionCallPart = Schema.Struct({
 
 const GeminiFunctionResponsePart = Schema.Struct({
   functionResponse: Schema.Struct({
+    id: Schema.optional(Schema.String),
     name: Schema.String,
     response: Schema.Unknown,
+    parts: Schema.optional(Schema.Array(GeminiInlineDataPart)),
   }),
 })
 
@@ -197,8 +214,15 @@ const thoughtSignature = (providerMetadata: ProviderMetadata | undefined) => {
     : undefined
 }
 
+const functionCallId = (providerMetadata: ProviderMetadata | undefined) => {
+  const google = providerMetadata?.google
+  return ProviderShared.isRecord(google) && typeof google.functionCallId === "string"
+    ? google.functionCallId
+    : undefined
+}
+
 const lowerToolCall = (part: ToolCallPart) => ({
-  functionCall: { name: part.name, args: part.input },
+  functionCall: { id: functionCallId(part.providerMetadata), name: part.name, args: part.input },
   thoughtSignature: thoughtSignature(part.providerMetadata),
 })
 
@@ -255,6 +279,7 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
       if (part.result.type !== "content") {
         parts.push({
           functionResponse: {
+            id: functionCallId(part.providerMetadata),
             name: part.name,
             response: {
               name: part.name,
@@ -264,22 +289,25 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
         })
         continue
       }
-      const content: ReadonlyArray<ToolContent> = part.result.value
+      const content: ReadonlyArray<Tool.Content> = part.result.value
       const text = content.filter((item) => item.type === "text").map((item) => item.text)
+      const media: GeminiInlineDataPart[] = []
+      for (const item of content) {
+        if (item.type === "text") continue
+        const value = yield* ProviderShared.validateToolFile("Gemini", item, MEDIA_MIMES)
+        media.push({ inlineData: { mimeType: value.mime, data: value.base64 } })
+      }
       parts.push({
         functionResponse: {
+          id: functionCallId(part.providerMetadata),
           name: part.name,
           response: {
             name: part.name,
             content: text.join("\n"),
           },
+          parts: media.length > 0 ? media : undefined,
         },
       })
-      for (const item of content) {
-        if (item.type === "text") continue
-        const media = yield* ProviderShared.validateToolFile("Gemini", item, MEDIA_MIMES)
-        parts.push({ inlineData: { mimeType: media.mime, data: media.base64 } })
-      }
     }
     contents.push({ role: "user", parts })
   }
@@ -287,21 +315,22 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
   return contents
 })
 
-const geminiOptions = (request: LLMRequest) => request.providerOptions?.gemini
-
-const thinkingConfig = (request: LLMRequest) => {
-  const value = geminiOptions(request)?.thinkingConfig
-  if (!ProviderShared.isRecord(value)) return undefined
-  const result = {
+const resolveOptions = (request: LLMRequest) => {
+  const value = request.providerOptions?.gemini?.thinkingConfig
+  if (!ProviderShared.isRecord(value)) return {}
+  const thinkingConfig = {
     thinkingBudget: typeof value.thinkingBudget === "number" ? value.thinkingBudget : undefined,
     includeThoughts: typeof value.includeThoughts === "boolean" ? value.includeThoughts : undefined,
   }
-  return Object.values(result).some((item) => item !== undefined) ? result : undefined
+  return {
+    thinkingConfig: Object.values(thinkingConfig).some((item) => item !== undefined) ? thinkingConfig : undefined,
+  }
 }
 
 const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMRequest) {
-  const toolsEnabled = request.tools.length > 0 && request.toolChoice?.type !== "none"
+  const hasTools = request.tools.length > 0
   const generation = request.generation
+  const options = resolveOptions(request)
   const toolSchemaCompatibility = request.model.compatibility?.toolSchema
   const generationConfig = {
     maxOutputTokens: generation?.maxTokens,
@@ -309,14 +338,14 @@ const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMReque
     topP: generation?.topP,
     topK: generation?.topK,
     stopSequences: generation?.stop,
-    thinkingConfig: thinkingConfig(request),
+    thinkingConfig: options.thinkingConfig,
   }
 
   return {
     contents: yield* lowerMessages(request),
     systemInstruction:
       request.system.length === 0 ? undefined : { parts: [{ text: ProviderShared.joinText(request.system) }] },
-    tools: toolsEnabled
+    tools: hasTools
       ? [
           {
             functionDeclarations: request.tools.map((tool) =>
@@ -325,7 +354,7 @@ const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMReque
           },
         ]
       : undefined,
-    toolConfig: toolsEnabled && request.toolChoice ? yield* lowerToolConfig(request.toolChoice) : undefined,
+    toolConfig: hasTools && request.toolChoice ? yield* lowerToolConfig(request.toolChoice) : undefined,
     generationConfig: Object.values(generationConfig).some((value) => value !== undefined)
       ? generationConfig
       : undefined,
@@ -369,10 +398,22 @@ const mapFinishReason = (finishReason: string | undefined, hasToolCalls: boolean
     finishReason === "SAFETY" ||
     finishReason === "BLOCKLIST" ||
     finishReason === "PROHIBITED_CONTENT" ||
-    finishReason === "SPII"
+    finishReason === "SPII" ||
+    finishReason === "MODEL_ARMOR" ||
+    finishReason === "IMAGE_PROHIBITED_CONTENT" ||
+    finishReason === "IMAGE_RECITATION" ||
+    finishReason === "LANGUAGE"
   )
     return "content-filter"
-  if (finishReason === "MALFORMED_FUNCTION_CALL") return "error"
+  if (
+    finishReason === "MALFORMED_FUNCTION_CALL" ||
+    finishReason === "UNEXPECTED_TOOL_CALL" ||
+    finishReason === "NO_IMAGE" ||
+    finishReason === "TOO_MANY_TOOL_CALLS" ||
+    finishReason === "MISSING_THOUGHT_SIGNATURE" ||
+    finishReason === "MALFORMED_RESPONSE"
+  )
+    return "error"
   return "unknown"
 }
 
@@ -389,7 +430,10 @@ const finish = (state: ParserState): ReadonlyArray<LLMEvent> =>
             )
           : state.lifecycle
         Lifecycle.finish(lifecycle, events, {
-          reason: mapFinishReason(state.finishReason, state.hasToolCalls),
+          reason: {
+            normalized: mapFinishReason(state.finishReason, state.hasToolCalls),
+            raw: state.finishReason,
+          },
           usage: state.usage,
         })
         return events
@@ -441,6 +485,10 @@ const step = (state: ParserState, event: GeminiEvent) => {
     if ("functionCall" in part) {
       const input = part.functionCall.args
       const id = `tool_${nextToolCallId++}`
+      const metadata = {
+        ...(part.functionCall.id === undefined ? {} : { functionCallId: part.functionCall.id }),
+        ...(part.thoughtSignature === undefined ? {} : { thoughtSignature: part.thoughtSignature }),
+      }
       lifecycle = Lifecycle.reasoningEnd(
         lifecycle,
         events,
@@ -453,9 +501,7 @@ const step = (state: ParserState, event: GeminiEvent) => {
           id,
           name: part.functionCall.name,
           input,
-          providerMetadata: part.thoughtSignature
-            ? googleMetadata({ thoughtSignature: part.thoughtSignature })
-            : undefined,
+          providerMetadata: Object.keys(metadata).length > 0 ? googleMetadata(metadata) : undefined,
         }),
       )
       hasToolCalls = true

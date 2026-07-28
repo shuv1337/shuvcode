@@ -14,15 +14,43 @@ function abortFromInput(input: RequestInfo | URL, init?: RequestInit) {
 
 describe("checkServerHealth", () => {
   test("returns healthy response with version", async () => {
-    const fetch = (async () =>
-      new Response(JSON.stringify({ healthy: true, version: "1.2.3" }), {
+    let request: URL | undefined
+    const fetch = (async (input: RequestInfo | URL) => {
+      request = input instanceof URL ? input : new URL(input instanceof Request ? input.url : input)
+      return new Response(JSON.stringify({ healthy: true, version: "1.2.3" }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })) as unknown as typeof globalThis.fetch
+      })
+    }) as unknown as typeof globalThis.fetch
 
     const result = await checkServerHealth(server, fetch)
 
     expect(result).toEqual({ healthy: true, version: "1.2.3" })
+    expect(request?.pathname).toBe("/api/health")
+  })
+
+  test("returns unhealthy when the V2 health endpoint is unavailable", async () => {
+    const paths: string[] = []
+    const fetch = (async (input: RequestInfo | URL) => {
+      const url = input instanceof URL ? input : new URL(input instanceof Request ? input.url : input)
+      paths.push(url.pathname)
+      return new Response(undefined, { status: 404 })
+    }) as unknown as typeof globalThis.fetch
+
+    expect(await checkServerHealth(server, fetch)).toEqual({ healthy: false })
+    expect(paths).toEqual(["/api/health"])
+  })
+
+  test("returns unhealthy when the V2 health response is malformed", async () => {
+    const paths: string[] = []
+    const fetch = (async (input: RequestInfo | URL) => {
+      const url = input instanceof URL ? input : new URL(input instanceof Request ? input.url : input)
+      paths.push(url.pathname)
+      return Response.json({})
+    }) as unknown as typeof globalThis.fetch
+
+    expect(await checkServerHealth(server, fetch)).toEqual({ healthy: false })
+    expect(paths).toEqual(["/api/health"])
   })
 
   test("allows slow servers thirty seconds by default", async () => {

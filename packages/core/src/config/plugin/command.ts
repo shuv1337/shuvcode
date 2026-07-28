@@ -1,9 +1,9 @@
 export * as ConfigCommandPlugin from "./command"
 
-import { define } from "@opencode-ai/plugin/v2/effect/plugin"
+import { define } from "@opencode-ai/plugin/effect/plugin"
 import path from "path"
 import { Effect, Option, Schema, Stream } from "effect"
-import { CommandV2 } from "../../command"
+import { Command } from "../../command"
 import { Config } from "../../config"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { ConfigCommand } from "../command"

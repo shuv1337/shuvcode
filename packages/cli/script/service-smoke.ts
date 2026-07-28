@@ -3,7 +3,6 @@
 import { Service } from "@opencode-ai/client/effect/service"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { Schema } from "effect"
-import { randomBytes, randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -65,55 +64,6 @@ try {
     signal: AbortSignal.timeout(5_000),
   })
   if (unauthorizedStop.status !== 401) throw new Error("Compiled service accepted unauthenticated stop")
-
-  const invitationResponse = await fetch(new URL("/api/pairing/invitation", info.url), {
-    method: "POST",
-    headers,
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (invitationResponse.status !== 200) throw new Error("Compiled service failed to create a pairing invitation")
-  const invitation = (await invitationResponse.json()) as { token?: string }
-  if (!invitation.token) throw new Error("Compiled service returned an invalid pairing invitation")
-  const deviceCredential = `scd_v1_${randomBytes(32).toString("base64url")}`
-  const redemptionResponse = await fetch(new URL("/api/pairing/redeem", info.url), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      token: invitation.token,
-      requestID: randomUUID(),
-      deviceName: "Compiled service smoke test",
-      credential: deviceCredential,
-    }),
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (redemptionResponse.status !== 200) throw new Error("Compiled service rejected unauthenticated redemption")
-  const redemption = (await redemptionResponse.json()) as { deviceID?: string }
-  if (!redemption.deviceID) throw new Error("Compiled service returned an invalid pairing redemption")
-  const deviceHeaders = { authorization: `Bearer ${deviceCredential}` }
-  for (const pathname of ["/api/health", "/api/server"]) {
-    const response = await fetch(new URL(pathname, info.url), {
-      headers: deviceHeaders,
-      signal: AbortSignal.timeout(5_000),
-    })
-    if (response.status !== 200) throw new Error(`Compiled service rejected paired device access to ${pathname}`)
-  }
-  const deviceManagement = await fetch(new URL("/api/pairing/invitation", info.url), {
-    method: "POST",
-    headers: deviceHeaders,
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (deviceManagement.status !== 403) throw new Error("Compiled service allowed device pairing management")
-  const revoke = await fetch(new URL(`/api/pairing/device/${encodeURIComponent(redemption.deviceID)}`, info.url), {
-    method: "DELETE",
-    headers,
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (revoke.status !== 204) throw new Error("Compiled service failed to revoke paired device")
-  const revokedHealth = await fetch(new URL("/api/health", info.url), {
-    headers: deviceHeaders,
-    signal: AbortSignal.timeout(5_000),
-  })
-  if (revokedHealth.status !== 401) throw new Error("Compiled service accepted a revoked device credential")
 
   const winner = processes.find((process) => process.pid === info.pid)
   const loser = processes.find((process) => process.pid !== info.pid)

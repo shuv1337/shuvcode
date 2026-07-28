@@ -25,12 +25,12 @@ import { ReferenceGroup } from "./groups/reference.js"
 import { Authorization } from "./middleware/authorization.js"
 import { LocationGroup } from "./groups/location.js"
 import { IntegrationGroup } from "./groups/integration.js"
+import { WebSearchGroup } from "./groups/websearch.js"
 import { McpGroup } from "./groups/mcp.js"
 import { CredentialGroup } from "./groups/credential.js"
 import { ProjectGroup } from "./groups/project.js"
 import { ProjectCopyGroup } from "./groups/project-copy.js"
 import { VcsGroup } from "./groups/vcs.js"
-import { PairingGroup } from "./groups/pairing.js"
 
 type LocationGroups<LocationId extends HttpApiMiddleware.AnyId> =
   | HttpApiGroup.AddMiddleware<typeof LocationGroup, LocationId>
@@ -40,6 +40,7 @@ type LocationGroups<LocationId extends HttpApiMiddleware.AnyId> =
   | HttpApiGroup.AddMiddleware<typeof GenerateGroup, LocationId>
   | HttpApiGroup.AddMiddleware<typeof ProviderGroup, LocationId>
   | HttpApiGroup.AddMiddleware<typeof IntegrationGroup, LocationId>
+  | HttpApiGroup.AddMiddleware<typeof WebSearchGroup, LocationId>
   | HttpApiGroup.AddMiddleware<typeof McpGroup, LocationId>
   | HttpApiGroup.AddMiddleware<typeof CredentialGroup, LocationId>
   | HttpApiGroup.AddMiddleware<typeof ProjectGroup, LocationId>
@@ -83,7 +84,6 @@ type ApiGroups<
 > =
   | typeof HealthGroup
   | typeof ServerGroup
-  | typeof PairingGroup
   | typeof DebugGroup
   | LocationGroups<LocationId>
   | FormGroups<LocationId, LocationService, FormLocationId, FormLocationService>
@@ -146,7 +146,6 @@ const makeApiFromGroup = <
   HttpApi.make("server")
     .add(HealthGroup)
     .add(ServerGroup)
-    .add(PairingGroup)
     .add(LocationGroup.middleware(locationMiddleware))
     .add(AgentGroup.middleware(locationMiddleware))
     .add(PluginGroup.middleware(locationMiddleware))
@@ -172,6 +171,7 @@ const makeApiFromGroup = <
     .add(ProjectCopyGroup.middleware(locationMiddleware))
     .add(VcsGroup.middleware(locationMiddleware))
     .add(DebugGroup)
+    .add(WebSearchGroup.middleware(locationMiddleware))
     .annotateMerge(
       OpenApi.annotations({
         title: "opencode HttpApi",

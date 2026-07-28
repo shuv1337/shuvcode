@@ -1,4 +1,4 @@
-import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
+import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/v1/tui"
 import type { PluginRuntime } from "../plugin/runtime"
 import HomeLogo from "./home/logo"
 import Notifications from "./system/notifications"

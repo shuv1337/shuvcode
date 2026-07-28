@@ -81,8 +81,8 @@ function systemBody(raw: string, phase: StreamCommit["phase"]): RunEntryBody {
 }
 
 function monoBody(body: RunEntryBody): RunEntryBody {
-  if (body.type === "none" || body.type === "text") return body
-  if (body.type === "code" || body.type === "markdown") return textBody(body.content)
+  if (body.type === "none" || body.type === "text" || body.type === "markdown") return body
+  if (body.type === "code") return textBody(body.content)
   const snapshot = body.snapshot
   if (snapshot.kind === "code") return textBody(`${snapshot.title}\n${snapshot.content}`)
   if (snapshot.kind === "diff") {
@@ -214,7 +214,7 @@ export function entryBody(commit: StreamCommit, options?: ScrollbackOptions): Ru
       return commit.interrupted ? textBody("assistant interrupted") : RUN_ENTRY_NONE
     }
 
-    return mono ? textBody(raw) : markdownBody(raw)
+    return markdownBody(raw)
   }
 
   if (commit.kind === "reasoning") {

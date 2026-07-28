@@ -1,7 +1,7 @@
 export * as OpenAICodex from "./openai-codex"
 
 // TEMPORARY SEAM (#34765): plugins have no hook into LLM route construction, so
-// codex routing lives in SessionRunnerModel.fromCatalogModel and catalog filtering
+// Codex routing lives in ModelResolver and catalog filtering.
 // in OpenAIPlugin, sharing this module. Once the native provider packages land
 // (#33689/#33925/#34462) this should collapse into the native OpenAI provider.
 // The eligibility rules mirror V1's CodexAuthPlugin allowlist; models.dev has no
@@ -11,22 +11,6 @@ export * as OpenAICodex from "./openai-codex"
 
 /** ChatGPT-plan requests must target the codex backend instead of the public API. */
 export const baseURL = "https://chatgpt.com/backend-api/codex"
-
-// ChatGPT Codex OAuth exposes a smaller window than the public Responses API.
-// Cap instead of replacing so models with smaller windows retain their limit.
-const contextWindow = 272_000
-
-type Limits = {
-  readonly context: number
-  readonly input?: number
-  readonly output: number
-}
-
-export const limits = (value: Limits): Limits => ({
-  context: Math.min(value.context, contextWindow),
-  ...(value.input === undefined ? {} : { input: Math.min(value.input, contextWindow) }),
-  output: value.output,
-})
 
 const methodIDs: readonly string[] = ["chatgpt-browser", "chatgpt-headless"]
 

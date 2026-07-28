@@ -9,23 +9,12 @@ import {
   LLMRequest,
   LLMResponse,
   Message,
-  type ModelInput as SchemaModelInput,
   SystemPart,
   ToolChoice,
   ToolDefinition,
   type ContentPart,
-  ToolResultPart,
 } from "./schema"
 import { make as makeTool, toDefinitions, type ToolSchema } from "./tool"
-
-export type ModelInput = SchemaModelInput
-
-export type MessageInput = Message.Input
-
-export type ToolChoiceInput = ToolChoice.Input
-export type ToolChoiceMode = ToolChoice.Mode
-
-export type ToolResultInput = Parameters<typeof ToolResultPart.make>[0]
 
 /** Input accepted by `LLM.request`, normalized into the canonical `LLMRequest` class. */
 export type RequestInput = Omit<
@@ -34,9 +23,9 @@ export type RequestInput = Omit<
 > & {
   readonly system?: string | SystemPart | ReadonlyArray<SystemPart>
   readonly prompt?: string | ContentPart | ReadonlyArray<ContentPart>
-  readonly messages?: ReadonlyArray<Message | MessageInput>
+  readonly messages?: ReadonlyArray<Message | Message.Input>
   readonly tools?: ReadonlyArray<ToolDefinition.Input>
-  readonly toolChoice?: ToolChoiceInput
+  readonly toolChoice?: ToolChoice.Input
   readonly generation?: GenerationOptions.Input
   readonly providerOptions?: ConstructorParameters<typeof LLMRequest>[0]["providerOptions"]
   readonly http?: HttpOptions.Input
@@ -45,10 +34,6 @@ export type RequestInput = Omit<
 export const generate = LLMClient.generate
 
 export const stream = LLMClient.stream
-
-export const requestInput = (input: LLMRequest): RequestInput => ({
-  ...LLMRequest.input(input),
-})
 
 export const request = (input: RequestInput) => {
   const {
@@ -74,14 +59,11 @@ export const request = (input: RequestInput) => {
   })
 }
 
-export const updateRequest = (input: LLMRequest, patch: Partial<RequestInput>) =>
-  request({ ...requestInput(input), ...patch })
-
 const GENERATE_OBJECT_TOOL_NAME = "generate_object"
 
 const GENERATE_OBJECT_TOOL_DESCRIPTION = "Return the structured result by calling this tool."
 
-type GenerateObjectBase = Omit<RequestInput, "tools" | "toolChoice" | "responseFormat">
+type GenerateObjectBase = Omit<RequestInput, "tools" | "toolChoice">
 
 export class GenerateObjectResponse<T> {
   constructor(

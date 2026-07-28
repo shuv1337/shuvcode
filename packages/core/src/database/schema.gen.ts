@@ -96,18 +96,6 @@ export default {
         );
       `)
       yield* tx.run(`
-        CREATE TABLE \`pairing_device\` (
-          \`id\` text PRIMARY KEY,
-          \`request_id\` text NOT NULL,
-          \`name\` text NOT NULL,
-          \`credential_hash\` text NOT NULL,
-          \`invitation_hash\` text NOT NULL,
-          \`time_created\` integer NOT NULL,
-          \`time_updated\` integer NOT NULL,
-          \`time_revoked\` integer
-        );
-      `)
-      yield* tx.run(`
         CREATE TABLE \`permission\` (
           \`id\` text PRIMARY KEY,
           \`project_id\` text NOT NULL,
@@ -269,13 +257,6 @@ export default {
       `)
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
-      yield* tx.run(`CREATE UNIQUE INDEX \`pairing_device_request_id_unique\` ON \`pairing_device\` (\`request_id\`);`)
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`pairing_device_credential_hash_unique\` ON \`pairing_device\` (\`credential_hash\`);`,
-      )
-      yield* tx.run(
-        `CREATE UNIQUE INDEX \`pairing_device_invitation_hash_unique\` ON \`pairing_device\` (\`invitation_hash\`);`,
-      )
       yield* tx.run(
         `CREATE UNIQUE INDEX \`permission_project_action_resource_idx\` ON \`permission\` (\`project_id\`,\`action\`,\`resource\`);`,
       )

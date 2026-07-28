@@ -32,6 +32,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
       Flag.withDescription("Session ID to continue"),
       Flag.optional,
     ),
+    prompt: Flag.string("prompt").pipe(Flag.withDescription("Prompt to use"), Flag.optional),
   },
   commands: [
     Spec.make("acp", { description: "Start an Agent Client Protocol server" }),
@@ -139,11 +140,11 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
           Flag.withDefault(false),
         ),
         replay: Flag.boolean("replay").pipe(
-          Flag.withDescription("Replay session history on resume and after resize"),
-          Flag.withDefault(true),
+          Flag.withDescription("Restore session history on resume and resize (disable with --no-replay)"),
+          Flag.optional,
         ),
         replayLimit: Flag.integer("replay-limit").pipe(
-          Flag.withDescription("Cap visible replay to the newest N messages"),
+          Flag.withDescription("Limit replay to the newest N messages (default: 200)"),
           Flag.optional,
         ),
         model: Flag.string("model").pipe(
@@ -220,17 +221,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         Spec.make("unset", {
           description: "Unset service configuration",
           params: { key: Argument.string("key") },
-        }),
-      ],
-    }),
-    Spec.make("pair", { description: "Show server pairing information" }),
-    Spec.make("device", {
-      description: "Manage paired mobile devices",
-      commands: [
-        Spec.make("list", { description: "List paired devices" }),
-        Spec.make("revoke", {
-          description: "Revoke a paired device",
-          params: { deviceID: Argument.string("deviceID").pipe(Argument.withDescription("Paired device ID")) },
         }),
       ],
     }),

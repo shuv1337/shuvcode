@@ -34,6 +34,9 @@ export const layer = Layer.effect(
         const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(selection.session.id)
           ? selection.session.id.slice(4)
           : selection.session.id
+        const tools = selection.tools
+        const toolDefinitions = tools.definitions
+        const toolsByName = new Map(toolDefinitions.map((tool) => [tool.name, tool]))
         const contextEvent = yield* hooks.trigger("session", "context", {
           sessionID: selection.session.id,
           agent: selection.agent.id,
@@ -46,19 +49,36 @@ export const layer = Layer.effect(
             ...(history.instructionUpdate ? [Message.system(history.instructionUpdate)] : []),
             Message.user(input.prompt),
           ],
-          tools: {},
+          tools: Object.fromEntries(
+            toolDefinitions.map((tool) => [
+              tool.name,
+              { description: tool.description, input: { ...tool.inputSchema } },
+            ]),
+          ),
         })
-        return (yield* llm.generate(
+        const hookedTools = Object.entries(contextEvent.tools).flatMap(([name, tool]) => {
+          const registered = toolsByName.get(name)
+          return registered
+            ? [Object.assign({}, registered, { description: tool.description, inputSchema: tool.input })]
+            : []
+        })
+        yield* Effect.logInfo("sending session generation request", {
+          sessionID: selection.session.id,
+          providerID: model.ref.providerID,
+          modelID: model.ref.id,
+        })
+        const response = yield* llm.generate(
           LLM.request({
             model: model.model,
             http: { headers: SessionModelHeaders.make(selection.session, app) },
             providerOptions: { openai: { promptCacheKey } },
             system: contextEvent.system,
             messages: contextEvent.messages,
-            tools: [],
-            toolChoice: "none",
+            tools: hookedTools,
           }),
-        )).text
+        )
+        yield* Effect.logInfo("session generation usage diagnostic", { usage: response.usage })
+        return response.text
       }),
     })
   }),

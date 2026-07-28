@@ -15,11 +15,11 @@ import { ConfigMigrateV1 } from "@opencode-ai/core/v1/config/migrate"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Watcher } from "@opencode-ai/core/filesystem/watcher"
-import { EventV2 } from "@opencode-ai/core/event"
+import { Bus } from "@opencode-ai/core/bus"
 import { Global } from "@opencode-ai/util/global"
 import { Location } from "@opencode-ai/core/location"
 import { Project } from "@opencode-ai/core/project"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { WellKnown } from "@opencode-ai/core/wellknown"
 import { Integration } from "@opencode-ai/schema/integration"
@@ -81,7 +81,7 @@ function testLayer(
       ),
     ),
   )
-  return AppNodeBuilder.build(LayerNode.group([Config.node, EventV2.node]), [
+  return AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node]), [
     [Config.node, Config.configured(options)],
     [Location.node, locationLayer],
     [Global.node, Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })],
@@ -121,23 +121,15 @@ describe("Config", () => {
               const config = yield* Config.Service
               const entries = yield* config.entries()
               expect(
-                entries.flatMap((entry) =>
-                  entry.type === "document" && entry.info.shell ? [entry.info.shell] : [],
-                ),
+                entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
               ).toEqual(["global", "explicit", "project", "content"])
               expect(Config.latest(entries, "shell")).toBe("content")
             }).pipe(
               Effect.provide(
-                testLayer(
-                  project,
-                  global,
-                  project,
-                  undefined,
-                  undefined,
-                  emptyCredentialNode,
-                  emptyWellknownNode,
-                  { file: explicit, content: JSON.stringify({ shell: "content" }) },
-                ),
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  file: explicit,
+                  content: JSON.stringify({ shell: "content" }),
+                }),
               ),
             ),
           ),
@@ -155,31 +147,24 @@ describe("Config", () => {
         const global = path.join(tmp.path, "global")
         const project = path.join(tmp.path, "project")
         return Effect.promise(async () => {
-            await fs.mkdir(global, { recursive: true })
-            await fs.mkdir(project, { recursive: true })
-            await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
-            await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
-          }).pipe(
-            Effect.andThen(
-              Effect.gen(function* () {
-                const config = yield* Config.Service
-                expect(Config.latest(yield* config.entries(), "shell")).toBe("global")
-              }).pipe(
-                Effect.provide(
-                  testLayer(
-                    project,
-                    global,
-                    project,
-                    undefined,
-                    undefined,
-                    emptyCredentialNode,
-                    emptyWellknownNode,
-                    { project: false },
-                  ),
-                ),
+          await fs.mkdir(global, { recursive: true })
+          await fs.mkdir(project, { recursive: true })
+          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
+          await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+        }).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              const config = yield* Config.Service
+              expect(Config.latest(yield* config.entries(), "shell")).toBe("global")
+            }).pipe(
+              Effect.provide(
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  project: false,
+                }),
               ),
             ),
-          )
+          ),
+        )
       }),
     ),
   )
@@ -209,8 +194,8 @@ describe("Config", () => {
 
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
-            const events = yield* EventV2.Service
-            const changed = yield* events
+            const bus = yield* Bus.Service
+            const changed = yield* bus
               .subscribe(ConfigSchema.Event.Updated)
               .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
             yield* Effect.sleep("10 millis")
@@ -313,14 +298,14 @@ describe("Config", () => {
 
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
-            const events = yield* EventV2.Service
+            const bus = yield* Bus.Service
             expect(Config.latest(yield* config.entries(), "shell")).toBe("secret")
-            const updated = yield* events
+            const updated = yield* bus
               .subscribe(ConfigSchema.Event.Updated)
               .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
             yield* Effect.yieldNow
             key = "next"
-            yield* events.publish(Integration.Event.ConnectionUpdated, { integrationID })
+            yield* bus.publish(Integration.Event.ConnectionUpdated, { integrationID })
             expect(yield* Fiber.join(updated)).toHaveLength(1)
             expect(Config.latest(yield* config.entries(), "shell")).toBe("next")
           }).pipe(
@@ -346,7 +331,7 @@ describe("Config", () => {
       // V1 lists servers directly under `mcp`, so a file with only `$schema` + `mcp` still migrates.
       expect(ConfigMigrateV1.isV1({ mcp: { context7: { type: "local", command: ["npx"] } } })).toBe(true)
       expect(ConfigMigrateV1.isV1({ $schema: "x", mcp: { executor: { type: "remote", url: "https://x" } } })).toBe(true)
-      // V2 nests under `mcp.servers`, so it must not be misdetected and re-migrated.
+      // Current config nests under `mcp.servers`, so it must not be misdetected and re-migrated.
       expect(ConfigMigrateV1.isV1({ mcp: { servers: { context7: { type: "local", command: ["npx"] } } } })).toBe(false)
       expect(ConfigMigrateV1.isV1({ mcp: {} })).toBe(false)
       expect(ConfigMigrateV1.isV1({ mcp: { timeout: { execution: 1000 } } })).toBe(false)
@@ -411,11 +396,33 @@ describe("Config", () => {
       })
 
       expect(migrated.providers?.bedrock).toMatchObject({
-        package: ProviderV2.aisdk("@ai-sdk/amazon-bedrock"),
+        package: Provider.aisdk("@ai-sdk/amazon-bedrock"),
         settings: { region: "us-east-1", profile: "dev" },
         headers: { "x-test": "1" },
         body: { trace: true },
       })
+    }),
+  )
+
+  it.effect("migrates v1 interleaved fields to compatibility", () =>
+    Effect.sync(() => {
+      const migrated = ConfigMigrateV1.migrate({
+        provider: {
+          custom: {
+            models: {
+              object: { interleaved: { field: "vendor_reasoning" } },
+              string: { interleaved: "reasoning_text" },
+              boolean: { interleaved: true },
+            },
+          },
+        },
+      })
+
+      expect(migrated.providers?.custom?.models?.object?.compatibility).toEqual({
+        reasoningField: "vendor_reasoning",
+      })
+      expect(migrated.providers?.custom?.models?.string?.compatibility).toEqual({ reasoningField: "reasoning_text" })
+      expect(migrated.providers?.custom?.models?.boolean?.compatibility).toBeUndefined()
     }),
   )
 
@@ -477,7 +484,7 @@ describe("Config", () => {
           const config = yield* Config.Service
           const entries = yield* config.entries()
 
-          expect(entries).toEqual([
+          expect(entries.filter((entry) => entry.path?.startsWith(`${tmp.path}${path.sep}`) === true)).toEqual([
             new Config.Directory({ type: "directory", path: AbsolutePath.make(path.join(tmp.path, "global")) }),
           ])
         }).pipe(Effect.provide(testLayer(tmp.path))),
@@ -716,7 +723,7 @@ describe("Config", () => {
                     system: "Find regressions.",
                     mode: "subagent",
                     hidden: false,
-                    color: "warning",
+                    color: "#ff6b6b",
                     steps: 12,
                     disabled: false,
                     permissions: [{ action: "edit", resource: "*", effect: "deny" }],
@@ -802,7 +809,7 @@ describe("Config", () => {
             expect(reviewer?.system).toBe("Find regressions.")
             expect(reviewer?.mode).toBe("subagent")
             expect(reviewer?.hidden).toBe(false)
-            expect(reviewer?.color).toBe("warning")
+            expect(reviewer?.color).toBe("#ff6b6b")
             expect(reviewer?.steps).toBe(12)
             expect(reviewer?.disabled).toBe(false)
             expect(reviewer?.permissions).toEqual([{ action: "edit", resource: "*", effect: "deny" }])
@@ -1034,7 +1041,7 @@ describe("Config", () => {
               },
             })
             expect(documents[0]?.info.providers?.openai).toMatchObject({
-              package: ProviderV2.aisdk("@ai-sdk/openai"),
+              package: Provider.aisdk("@ai-sdk/openai"),
               settings: { apiKey: "secret", organization: "org" },
               models: {
                 model: {
@@ -1044,7 +1051,7 @@ describe("Config", () => {
               },
             })
             expect(documents[0]?.info.providers?.anthropic).toMatchObject({
-              package: ProviderV2.aisdk("@ai-sdk/anthropic"),
+              package: Provider.aisdk("@ai-sdk/anthropic"),
               models: {
                 model: {
                   settings: {
@@ -1148,19 +1155,20 @@ describe("Config", () => {
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
             const entries = yield* config.entries()
-            const documents = entries.filter((entry) => entry.type === "document")
+            const owned = entries.filter((entry) => entry.path?.startsWith(`${tmp.path}${path.sep}`) === true)
+            const documents = owned.filter((entry) => entry.type === "document")
 
-            expect(entries.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(global),
               AbsolutePath.make(path.join(root, ".opencode")),
               AbsolutePath.make(path.join(directory, ".opencode")),
             ])
-            expect(entries.filter((entry) => entry.type === "agents").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "agents").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(globalAgents),
               AbsolutePath.make(path.join(directory, ".agents")),
               AbsolutePath.make(path.join(root, ".agents")),
             ])
-            expect(entries.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
+            expect(owned.filter((entry) => entry.type === "claude").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(globalClaude),
               AbsolutePath.make(path.join(directory, ".claude")),
               AbsolutePath.make(path.join(root, ".claude")),
@@ -1174,7 +1182,7 @@ describe("Config", () => {
               "root-dot",
               "directory-dot",
             ])
-            expect(entries.map((entry) => (entry.type === "document" ? entry.info.$schema : entry.path))).toEqual([
+            expect(owned.map((entry) => (entry.type === "document" ? entry.info.$schema : entry.path))).toEqual([
               AbsolutePath.make(globalClaude),
               AbsolutePath.make(path.join(directory, ".claude")),
               AbsolutePath.make(path.join(root, ".claude")),

@@ -17,7 +17,7 @@ import type {
   OpenCodeClient,
   LocationGetOutput,
   LocationRef,
-  PermissionV2Request,
+  PermissionRequest,
   ReferenceListOutput,
   SessionMessageAssistantTool,
 } from "@opencode-ai/client/promise"
@@ -53,7 +53,7 @@ export type RunCommand = {
   source?: string
 }
 
-export type RunProviderModel = {
+type RunProviderModel = {
   name?: string
   cost?: {
     input: number
@@ -94,6 +94,7 @@ export type FooterQueuedPrompt = {
 export type RunAgent = {
   id: string
   name: string
+  description?: string
   mode: "subagent" | "primary" | "all"
   hidden: boolean
 }
@@ -159,13 +160,14 @@ export type MiniHost = {
 export type EntryKind = "system" | "user" | "assistant" | "reasoning" | "tool" | "error"
 
 // Whether the assistant is actively processing a turn.
-export type FooterPhase = "idle" | "running"
+type FooterPhase = "idle" | "running"
 
 // Full snapshot of footer status bar state. Every update replaces the whole
 // object in the SolidJS signal so the view re-renders atomically.
 export type FooterState = {
   phase: FooterPhase
   status: string
+  notice: string
   model: string
   usage: string
   first: boolean
@@ -188,14 +190,14 @@ export type ScrollbackOptions = {
   mono?: boolean
 }
 
-export type ToolCodeSnapshot = {
+type ToolCodeSnapshot = {
   kind: "code"
   title: string
   content: string
   file?: string
 }
 
-export type ToolDiffSnapshot = {
+type ToolDiffSnapshot = {
   kind: "diff"
   items: Array<{
     title: string
@@ -205,14 +207,14 @@ export type ToolDiffSnapshot = {
   }>
 }
 
-export type ToolTaskSnapshot = {
+type ToolTaskSnapshot = {
   kind: "task"
   title: string
   rows: string[]
   tail: string
 }
 
-export type ToolQuestionSnapshot = {
+type ToolQuestionSnapshot = {
   kind: "question"
   items: Array<{
     question: string
@@ -223,15 +225,7 @@ export type ToolQuestionSnapshot = {
 
 export type ToolSnapshot = ToolCodeSnapshot | ToolDiffSnapshot | ToolTaskSnapshot | ToolQuestionSnapshot
 
-export type MiniToolState =
-  | { status: "pending"; input: Record<string, unknown>; raw?: string }
-  | {
-      status: "running"
-      input: Record<string, unknown>
-      title?: string
-      metadata?: Record<string, unknown>
-      time: { start: number }
-    }
+type MiniToolState =
   | {
       status: "completed"
       input: Record<string, unknown>
@@ -260,7 +254,7 @@ export type MiniToolPart = {
   state: MiniToolState
 }
 
-export type MiniPermissionRequest = PermissionV2Request & {
+export type MiniPermissionRequest = PermissionRequest & {
   tool?: SessionMessageAssistantTool
 }
 
@@ -293,6 +287,7 @@ export type FooterPromptRoute =
   | { type: "subagent"; sessionID: string }
   | { type: "command" }
   | { type: "skill" }
+  | { type: "agent" }
   | { type: "model" }
   | { type: "variant" }
   | { type: "settings" }
@@ -304,7 +299,6 @@ export type FooterSubagentTab = {
   status: "running" | "completed" | "cancelled" | "error"
   background?: boolean
   title?: string
-  lastUpdatedAt: number
 }
 
 export type FooterSubagentDetail = {
@@ -392,13 +386,14 @@ export type FormCancel = {
   location?: LocationRef
 }
 
-export type RunTuiConfig = Pick<Config.Resolved, "keybinds" | "leader" | "theme" | "session" | "mini">
+export type RunTuiConfig = Pick<Config.Resolved, "keybinds" | "leader" | "theme" | "mini">
 
 export type MiniSettings = {
   thinking: "show" | "hide"
   shell_output: "show" | "hide"
   turn_summary: "show" | "hide"
   footer: "show" | "hide"
+  splash: "show" | "hide"
   mono: boolean
 }
 
@@ -408,11 +403,11 @@ export type MiniSettingChange = {
 
 // Lifecycle phase of a scrollback entry. "start" opens the entry, "progress"
 // appends content (coalesced in the footer queue), "final" closes it.
-export type StreamPhase = "start" | "progress" | "final"
+type StreamPhase = "start" | "progress" | "final"
 
-export type StreamSource = "assistant" | "reasoning" | "tool" | "system"
+type StreamSource = "assistant" | "reasoning" | "tool" | "system"
 
-export type StreamToolState = "running" | "completed" | "error"
+type StreamToolState = "running" | "completed" | "error"
 
 // A single append-only commit to scrollback. The transport produces these from
 // V2 events, and RunFooter.append() queues them for the next

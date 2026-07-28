@@ -3,8 +3,8 @@ export * as SessionEvent from "./session-event.js"
 import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { Event } from "./event.js"
-import { ToolContent } from "./llm.js"
 import { FinishReason } from "./llm.js"
+import { Content } from "./tool.js"
 import { Model } from "./model.js"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema.js"
 import { FileAttachment } from "./prompt.js"
@@ -315,6 +315,7 @@ export namespace Text {
       assistantMessageID: SessionMessage.ID,
       ordinal: NonNegativeInt,
       text: Schema.String,
+      state: SessionMessage.ProviderState.pipe(optional),
     },
   })
   export type Ended = typeof Ended.Type
@@ -410,42 +411,49 @@ export namespace Tool {
   })
   export type Called = typeof Called.Type
 
-  /**
-   * Replayable bounded running-tool state. Tools should checkpoint semantic
-   * transitions or at a bounded cadence, not persist every stdout/stderr chunk.
-   */
-  export const Progress = Event.durable({
+  /** Live replacement metadata for a running tool. */
+  export const Progress = Event.ephemeral({
     type: "session.tool.progress",
-    ...options,
     schema: {
       ...ToolBase,
-      structured: Schema.Record(Schema.String, Schema.Unknown),
-      content: Schema.Array(ToolContent),
+      metadata: Schema.Record(Schema.String, Schema.Json),
     },
   })
   export type Progress = typeof Progress.Type
 
+  /** Canonical terminal success: one non-empty model representation plus optional UI metadata. */
   export const Success = Event.durable({
     type: "session.tool.success",
-    ...options,
+    durable: {
+      aggregate: "sessionID",
+      version: 2,
+    },
     schema: {
       ...ToolBase,
-      structured: Schema.Record(Schema.String, Schema.Unknown),
-      content: Schema.Array(ToolContent),
-      result: Schema.Unknown.pipe(optional),
+      content: Schema.NonEmptyArray(Content),
+      metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
       executed: Schema.Boolean,
       resultState: SessionMessage.ProviderState.pipe(optional),
     },
   })
   export type Success = typeof Success.Type
 
+  /**
+   * Canonical terminal failure: one error plus the final bounded snapshot of
+   * partial progress. The event is self-contained; projection never reaches
+   * into ephemeral progress history.
+   */
   export const Failed = Event.durable({
     type: "session.tool.failed",
-    ...options,
+    durable: {
+      aggregate: "sessionID",
+      version: 2,
+    },
     schema: {
       ...ToolBase,
       error: SessionError.Error,
-      result: Schema.Unknown.pipe(optional),
+      content: Schema.NonEmptyArray(Content).pipe(optional),
+      metadata: Schema.Record(Schema.String, Schema.Json).pipe(optional),
       executed: Schema.Boolean,
       resultState: SessionMessage.ProviderState.pipe(optional),
     },
