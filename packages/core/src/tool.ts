@@ -9,6 +9,8 @@ import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import type { Agent } from "./agent"
 import { CodeModeCatalog } from "./codemode/catalog"
 import { CodeModeTool } from "./codemode/tool"
+import { Config } from "./config"
+import { ConfigCodeMode } from "./config/codemode"
 import { Image } from "./image"
 import { Permission } from "./permission"
 import { PluginHooks } from "./plugin/hooks"
@@ -51,6 +53,21 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const image = yield* Image.Service
+    const config = yield* Config.Service
+
+    const codeModeLimits = Effect.fn("Tool.codeModeLimits")(function* () {
+      const configured: ConfigCodeMode.Info = Object.assign(
+        {},
+        ...(yield* config.entries()).flatMap((entry) =>
+          entry.type === "document" && entry.info.codemode ? [entry.info.codemode] : [],
+        ),
+      )
+      return {
+        timeoutMs: configured.timeout_ms ?? CodeModeTool.DEFAULT_LIMITS.timeoutMs,
+        maxToolCalls: configured.max_tool_calls ?? CodeModeTool.DEFAULT_LIMITS.maxToolCalls,
+        maxOutputBytes: configured.max_output_bytes ?? CodeModeTool.DEFAULT_LIMITS.maxOutputBytes,
+      }
+    })
 
     const terminalMetadata = Effect.fn("Tool.terminalMetadata")(function* (
       tool: string,
@@ -254,7 +271,11 @@ const layer = Layer.effect(
             const executeRule = rules.findLast((rule) => Wildcard.match("execute", rule.action))
             const codemodeEnabled = executeRule?.resource !== "*" || executeRule.effect !== "deny"
             const codemodeTool = codemodeEnabled
-              ? CodeModeTool.create(codemode, (name, tool, input, context) => executeTool(tool, name, input, context))
+              ? CodeModeTool.create(
+                  codemode,
+                  (name, tool, input, context) => executeTool(tool, name, input, context),
+                  yield* codeModeLimits(),
+                )
               : undefined
             const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
             return {
@@ -329,5 +350,5 @@ const normalizedEntries = (tools: ReadonlyArray<Tool.Info>) =>
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, Image.node],
+  deps: [PluginHooks.node, Image.node, Config.node],
 })

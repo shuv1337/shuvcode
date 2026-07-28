@@ -17,6 +17,8 @@ import { tmpdir } from "./fixture/tmpdir"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { testEffect } from "./lib/effect"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { Config } from "@opencode-ai/core/config"
+import { emptyConfigLayer } from "./fixture/mcp"
 
 const patchToolNode = makeLocationNode({
   name: "test/patch-tool-plugin",
@@ -136,6 +138,7 @@ const withTool = <A, E, R>(
         [FSUtil.node, filesystem],
         [Location.node, activeLocation],
         [Permission.node, permission],
+        [Config.node, emptyConfigLayer],
       ]),
     ),
   )

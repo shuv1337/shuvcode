@@ -10,6 +10,8 @@ import type { Info } from "@opencode-ai/schema/tool"
 import { executeTool, toolDefinitions } from "./lib/tool"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaGetter, SchemaIssue, Scope } from "effect"
 import { testEffect } from "./lib/effect"
+import { Config } from "@opencode-ai/core/config"
+import { emptyConfigLayer } from "./fixture/mcp"
 
 const imageStore = Layer.mock(Image.Service, {
   normalize: (resource, content) => {
@@ -29,7 +31,10 @@ const imageStore = Layer.mock(Image.Service, {
     return Effect.succeed({ ...content, content: "bm9ybWFsaXplZA==", mime: "image/jpeg" })
   },
 })
-const registryLayer = AppNodeBuilder.build(Tool.node, [[Image.node, imageStore]])
+const registryLayer = AppNodeBuilder.build(Tool.node, [
+  [Image.node, imageStore],
+  [Config.node, emptyConfigLayer],
+])
 const it = testEffect(registryLayer)
 const identity = {
   agent: Agent.ID.make("build"),

@@ -3,6 +3,7 @@ import { Duration, Effect, Fiber, Layer, Schema } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { Config } from "@opencode-ai/core/config"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { LayerNodePlatform } from "@opencode-ai/util/effect/app-node-platform"
 import { Permission } from "@opencode-ai/core/permission"
@@ -11,6 +12,7 @@ import { Tool } from "@opencode-ai/core/tool"
 import { WebFetchTool } from "@opencode-ai/core/tool/plugin/webfetch"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { Image } from "@opencode-ai/core/image"
+import { emptyConfigLayer } from "./fixture/mcp"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
@@ -51,6 +53,7 @@ const toolLayer = (replacements: LayerNode.Replacements = []) =>
   AppNodeBuilder.build(LayerNode.group([Tool.node, webFetchToolNode]), [
     [Permission.node, permission],
     [Image.node, imagePassthrough],
+    [Config.node, emptyConfigLayer],
     ...replacements,
   ])
 const it = testEffect(toolLayer([[LayerNodePlatform.httpClient, http]]))

@@ -42,6 +42,18 @@ const description = [
   "Await every call whose completion matters; pending calls are interrupted when execution ends. Run independent calls concurrently with `Promise.all`.",
 ].join("\n")
 
+/**
+ * The runtime itself defaults every limit to unlimited, so the ceiling has to come from the host:
+ * without one, model-authored code can spin forever, fan out over tools without bound, or return
+ * an unbounded payload. These are ceilings, not budgets — normal programs never reach them — and
+ * each is overridable through the `codemode` config key.
+ */
+export const DEFAULT_LIMITS = {
+  timeoutMs: 120_000,
+  maxToolCalls: 100,
+  maxOutputBytes: 1024 * 1024,
+} as const satisfies CodeMode.ExecutionLimits
+
 export const create = (
   registrations: ReadonlyMap<string, Info>,
   executeTool: (
@@ -50,6 +62,7 @@ export const create = (
     input: unknown,
     context: Context,
   ) => Effect.Effect<Result, Error>,
+  limits: CodeMode.ExecutionLimits = DEFAULT_LIMITS,
 ) => {
   return ({
     name: "execute",
@@ -104,6 +117,7 @@ export const create = (
               })
             },
           },
+          limits,
         ).execute(code)
         const toolCalls = yield* Ref.get(calls)
         const collected = (yield* Ref.get(files))
@@ -146,6 +160,7 @@ function runtime(
   registrations: ReadonlyMap<string, Info>,
   executeTool: (name: string, tool: Info, input: unknown) => Effect.Effect<unknown, unknown>,
   hooks?: CodeMode.ToolCallHooks,
+  limits?: CodeMode.ExecutionLimits,
 ) {
   const tools: Record<string, Tool.Tool<never>> = {}
   for (const [name, registration] of registrations) {
@@ -165,7 +180,7 @@ function runtime(
   // Declines reach the runtime as defects. Without the tunnel they would be sanitized into a
   // generic "Tool execution failed" and the model would keep going, so a refusal inside `execute`
   // would be weaker than the same refusal on a direct call.
-  return CodeMode.make<typeof tools>({ tools, tunnelDefect: Decline.is, ...hooks })
+  return CodeMode.make<typeof tools>({ tools, tunnelDefect: Decline.is, ...hooks, ...(limits ? { limits } : {}) })
 }
 
 // Tool inputs arrive as parsed JSON, so the JSON value cast is a boundary fact.
