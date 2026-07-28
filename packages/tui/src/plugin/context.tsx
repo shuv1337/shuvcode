@@ -13,7 +13,7 @@ import {
 import path from "path"
 import { stat } from "fs/promises"
 import { fileURLToPath, pathToFileURL } from "url"
-import type { Context, Dialog, Page, Slot, Toast } from "@opencode-ai/plugin/tui/context"
+import type { Context, Dialog, Page, Slot, SlotMap, SlotName, Toast } from "@opencode-ai/plugin/tui/context"
 import { createStore, produce, reconcile as reconcileStore } from "solid-js/store"
 import { useRenderer } from "@opentui/solid"
 import { useConfig } from "../config"
@@ -21,7 +21,7 @@ import { useClient } from "../context/client"
 import { useData } from "../context/data"
 import { Keymap } from "../context/keymap"
 import { useRoute } from "../context/route"
-import { useTuiLifecycle } from "../context/runtime"
+import { useTuiApp, useTuiLifecycle, useTuiPaths } from "../context/runtime"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
 import { DialogAlert } from "../ui/dialog-alert"
@@ -31,6 +31,7 @@ import { DialogSelect } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
 import { useToast } from "../ui/toast"
 import { useAttention } from "../context/attention"
+import { abbreviateHome } from "../util/path-format"
 import { builtins } from "./builtins"
 
 export interface PackageResolver {
@@ -47,7 +48,7 @@ type Value = {
   readonly ready: () => boolean
   readonly list: () => ReadonlyArray<State>
   readonly route: (id: string, name: string) => Page["render"] | undefined
-  readonly slot: (name: string) => ReadonlyArray<Slot>
+  readonly slot: <Name extends SlotName>(name: Name) => ReadonlyArray<Slot<Name>>
   readonly activate: (id: string) => Promise<boolean>
   readonly deactivate: (id: string) => Promise<boolean>
 }
@@ -75,6 +76,8 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
   const shortcuts = Keymap.useShortcuts()
   const keymapState = Keymap.useState()
   const lifecycle = useTuiLifecycle()
+  const app = useTuiApp()
+  const paths = useTuiPaths()
   const location = useLocation()
   const theme = useTheme()
   const dialog = useDialog()
@@ -120,7 +123,6 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
         dialog.setCentered(options.centered ?? false)
       },
       clear() {
-        if (!activeDialog) return
         dialog.clear()
       },
       alert(options) {
@@ -218,11 +220,12 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       get location() {
         return location.current
       },
+      app: { version: app.version, channel: app.channel },
       renderer,
       client: client.api,
       data,
       attention,
-      theme: theme.themeV2,
+      theme,
       keymap: {
         layer: Keymap.createLayer,
         dispatch: keymap.dispatch,
@@ -235,6 +238,9 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       ui: {
         dialog: dialogApi,
         toast: toastApi,
+        format: {
+          path: (value) => abbreviateHome(value, paths.home),
+        },
         router: {
           register(page) {
             if (store.registrations[item.plugin.id]?.routes[page.name])
@@ -530,7 +536,16 @@ export function PluginRoute(props: { readonly fallback: (id: string, name: strin
   return <>{content()}</>
 }
 
-export function PluginSlot(props: { readonly name: string; readonly input?: Record<string, any> }) {
+export function PluginSlot<Name extends SlotName>(props: {
+  readonly name: Name
+  readonly input: SlotMap[Name]
+  readonly mode: "all" | "replace"
+}) {
   const plugins = usePlugin()
-  return <For each={plugins.slot(props.name)}>{(render) => render(props.input ?? {})}</For>
+  const renderers = createMemo(() => {
+    const items = plugins.slot(props.name)
+    if (props.mode === "replace") return items.slice(-1)
+    return items
+  })
+  return <For each={renderers()}>{(render) => render(props.input)}</For>
 }

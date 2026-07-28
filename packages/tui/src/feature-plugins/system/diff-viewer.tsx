@@ -16,7 +16,6 @@ import path from "path"
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import { DiffViewerFileTree } from "./diff-viewer-file-tree"
 import { Panel, PanelGroup, Separator } from "./diff-viewer-ui"
-import { useDialog } from "../../ui/dialog"
 import { DialogSelect } from "../../ui/dialog-select"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useConfig } from "../../config"
@@ -1051,7 +1050,6 @@ function DiffViewerHelpDialog(props: { context: Plugin.Context }) {
 }
 
 function Commands(props: { context: Plugin.Context }) {
-  const dialog = useDialog()
   props.context.keymap.layer(() => ({
     mode: "global",
     commands: [
@@ -1083,7 +1081,7 @@ function Commands(props: { context: Plugin.Context }) {
               returnRoute,
             },
           })
-          dialog.clear()
+          props.context.ui.dialog.clear()
         },
       },
     ],

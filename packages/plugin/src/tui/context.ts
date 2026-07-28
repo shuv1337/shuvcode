@@ -113,7 +113,22 @@ export interface Page {
   readonly render: (input: { readonly data?: Record<string, any> }) => JSX.Element
 }
 
-export type Slot = (props: Record<string, any>) => JSX.Element
+export interface SlotMap {
+  readonly app: Readonly<Record<string, never>>
+  readonly "home.footer": Readonly<Record<string, never>>
+  readonly "sidebar.content": {
+    readonly sessionID: string
+  }
+  readonly "sidebar.footer": Readonly<Record<string, never>>
+}
+
+export type SlotName = keyof SlotMap
+export type Slot<Name extends SlotName = SlotName> = (props: SlotMap[Name]) => JSX.Element
+
+export interface App {
+  readonly version: string
+  readonly channel: string
+}
 
 export type ToastVariant = "info" | "success" | "warning" | "error"
 
@@ -308,17 +323,21 @@ export interface Keymap {
 export interface UI {
   readonly dialog: Dialog
   readonly toast: Toast
+  readonly format: {
+    path(value: string): string
+  }
   readonly router: {
     register(page: Page): () => void
     navigate(destination: Destination): void
     current(): Route
   }
-  readonly slot: (name: string, render: Slot) => () => void
+  readonly slot: <Name extends SlotName>(name: Name, render: Slot<Name>) => () => void
 }
 
 export interface Context {
   readonly options: Readonly<Record<string, any>>
   readonly location: LocationRef | undefined
+  readonly app: App
   readonly renderer: CliRenderer
   readonly client: OpenCodeClient
   readonly data: Data

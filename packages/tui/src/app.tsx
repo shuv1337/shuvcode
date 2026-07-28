@@ -1127,10 +1127,7 @@ function App(props: { pair?: DialogPairCredentials }) {
                 </Match>
               </Switch>
             </box>
-            <box flexShrink={0}>
-              <PluginSlot name="app.bottom" />
-            </box>
-            <PluginSlot name="app" />
+            <PluginSlot name="app" input={{}} mode="all" />
           </Show>
         </box>
       </box>

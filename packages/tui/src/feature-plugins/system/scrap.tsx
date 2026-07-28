@@ -1,12 +1,9 @@
 import { Plugin } from "@opencode-ai/plugin/tui"
 import { useTerminalDimensions } from "@opentui/solid"
-import { Keymap } from "../../context/keymap"
 import { useTheme } from "../../context/theme"
-import { useDialog } from "../../ui/dialog"
 
 function Commands(props: { context: Plugin.Context }) {
-  const dialog = useDialog()
-  Keymap.createLayer(() => ({
+  props.context.keymap.layer(() => ({
     mode: "global",
     commands: [
       {
@@ -16,7 +13,7 @@ function Commands(props: { context: Plugin.Context }) {
         palette: true,
         run() {
           props.context.ui.router.navigate({ type: "plugin", name: "scrap" })
-          dialog.clear()
+          props.context.ui.dialog.clear()
         },
       },
     ],
@@ -29,7 +26,7 @@ function Scrap(props: { context: Plugin.Context }) {
   const { themeV2 } = useTheme()
   const { themeV2: elevatedTheme } = useTheme().contextual("elevated")
 
-  Keymap.createLayer(() => ({
+  props.context.keymap.layer(() => ({
     commands: [
       {
         bind: "escape",

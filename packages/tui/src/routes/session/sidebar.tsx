@@ -53,12 +53,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </pluginRuntime.Slot>
-            <PluginSlot name="sidebar.content" input={{ sessionID: props.sessionID }} />
+            <PluginSlot name="sidebar.content" input={{ sessionID: props.sessionID }} mode="all" />
           </box>
         </scrollbox>
 
         <box flexShrink={0} gap={1} paddingTop={1}>
-          <PluginSlot name="sidebar.footer" />
+          <PluginSlot name="sidebar.footer" input={{}} mode="replace" />
         </box>
       </box>
     </Show>
