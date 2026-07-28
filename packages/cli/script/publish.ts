@@ -23,7 +23,7 @@ async function publish(dir: string, name: string, version: string) {
   if (await published(name, version)) return console.log(`already published ${name}@${version}`)
   if (process.platform !== "win32") await $`chmod -R 755 .`.cwd(dir)
   await $`bun pm pack`.cwd(dir)
-  await $`npm publish *.tgz --access public --tag ${Script.channel}`.cwd(dir)
+  await $`npm publish *.tgz --access public --tag ${Script.channel} --provenance=false`.cwd(dir)
 }
 
 async function prepareDistribution(input: ForkDistribution) {
