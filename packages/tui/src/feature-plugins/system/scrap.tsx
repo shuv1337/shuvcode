@@ -1,6 +1,5 @@
 import { Plugin } from "@opencode-ai/plugin/tui"
 import { useTerminalDimensions } from "@opentui/solid"
-import { useTheme } from "../../context/theme"
 
 function Commands(props: { context: Plugin.Context }) {
   props.context.keymap.layer(() => ({
@@ -23,8 +22,8 @@ function Commands(props: { context: Plugin.Context }) {
 
 function Scrap(props: { context: Plugin.Context }) {
   const dimensions = useTerminalDimensions()
-  const { themeV2 } = useTheme()
-  const { themeV2: elevatedTheme } = useTheme().contextual("elevated")
+  const theme = props.context.theme
+  const elevatedTheme = props.context.theme.contextual("elevated")
 
   props.context.keymap.layer(() => ({
     commands: [
@@ -40,7 +39,7 @@ function Scrap(props: { context: Plugin.Context }) {
   }))
 
   return (
-    <box width={dimensions().width} height={dimensions().height} backgroundColor={themeV2.background.default}>
+    <box width={dimensions().width} height={dimensions().height} backgroundColor={theme.background.default}>
       <box flexGrow={1} />
       <box
         height={1}

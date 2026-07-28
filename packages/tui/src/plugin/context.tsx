@@ -1,4 +1,4 @@
-import type { Plugin } from "@opencode-ai/plugin/tui"
+import { PluginContextProvider, type Plugin } from "@opencode-ai/plugin/tui"
 import {
   batch,
   createContext,
@@ -80,6 +80,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
   const paths = useTuiPaths()
   const location = useLocation()
   const theme = useTheme()
+  const pluginTheme = createPluginTheme(theme)
   const dialog = useDialog()
   const toast = useToast()
   const attention = useAttention()
@@ -100,18 +101,22 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       setStore("registrations", id, "cleanups", [])
     })
     const owned: Dispose[] = []
+    let context: Context
     let activeDialog: symbol | undefined
     const dialogApi: Dialog = {
       show(render, onClose) {
         const token = Symbol()
         let closed = false
         activeDialog = token
-        dialog.replace(render, () => {
-          if (closed) return
-          closed = true
-          if (activeDialog === token) activeDialog = undefined
-          onClose?.()
-        })
+        dialog.replace(
+          () => <PluginContextProvider value={context}>{render()}</PluginContextProvider>,
+          () => {
+            if (closed) return
+            closed = true
+            if (activeDialog === token) activeDialog = undefined
+            onClose?.()
+          },
+        )
         return () => {
           if (closed || activeDialog !== token) return
           dialog.clear()
@@ -215,7 +220,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       },
     }
     owned.push(async () => dialogApi.clear())
-    const context: Context = {
+    context = {
       options: item.options ?? {},
       get location() {
         return location.current
@@ -225,7 +230,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       client: client.api,
       data,
       attention,
-      theme,
+      theme: pluginTheme,
       keymap: {
         layer: Keymap.createLayer,
         dispatch: keymap.dispatch,
@@ -245,7 +250,10 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
           register(page) {
             if (store.registrations[item.plugin.id]?.routes[page.name])
               throw new Error(`Route already registered: ${page.name}`)
-            setStore("registrations", item.plugin.id, "routes", page.name, page)
+            setStore("registrations", item.plugin.id, "routes", page.name, {
+              ...page,
+              render: (input) => <PluginContextProvider value={context}>{page.render(input)}</PluginContextProvider>,
+            })
             let registered = true
             const unregister = () => {
               if (!registered) return
@@ -275,7 +283,9 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
         },
         slot(name, render) {
           if (store.registrations[item.plugin.id]?.slots[name]) throw new Error(`Slot already registered: ${name}`)
-          setStore("registrations", item.plugin.id, "slots", name, () => render)
+          setStore("registrations", item.plugin.id, "slots", name, () => (input: SlotMap[typeof name]) => (
+            <PluginContextProvider value={context}>{render(input)}</PluginContextProvider>
+          ))
           let registered = true
           const unregister = () => {
             if (!registered) return
@@ -516,6 +526,23 @@ function isPlugin(value: unknown): value is Plugin.Definition {
     "setup" in value &&
     typeof value.setup === "function"
   )
+}
+
+type PluginTheme = ReturnType<typeof useTheme>["themeV2"] & {
+  contextual(context: "elevated" | "overlay"): PluginTheme
+  syntaxStyle(): ReturnType<ReturnType<typeof useTheme>["syntax"]>
+}
+
+export function createPluginTheme(theme: ReturnType<typeof useTheme>): PluginTheme {
+  return new Proxy(theme.themeV2 as PluginTheme, {
+    get(target, property, receiver) {
+      if (property === "contextual")
+        return (context: "elevated" | "overlay") => createPluginTheme(theme.contextual(context))
+      if (property === "syntaxStyle") return theme.syntax
+      if (Reflect.has(target, property)) return Reflect.get(target, property, receiver)
+      return Reflect.get(theme, property, theme)
+    },
+  })
 }
 
 export function usePlugin() {

@@ -8,7 +8,7 @@ function View(props: { context: Plugin.Context }) {
   )
   return (
     <Show when={directory()}>
-      {(value) => <FilePath value={value()} maxWidth={38} fg={props.context.theme.themeV2.text.subdued} />}
+      {(value) => <FilePath value={value()} maxWidth={38} fg={props.context.theme.text.subdued} />}
     </Show>
   )
 }

@@ -596,17 +596,20 @@
         "@tsconfig/node22": "catalog:",
         "@types/node": "catalog:",
         "@typescript/native-preview": "catalog:",
+        "solid-js": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
         "@opentui/core": ">=0.4.5",
         "@opentui/keymap": ">=0.4.5",
         "@opentui/solid": ">=0.4.5",
+        "solid-js": ">=1.9.0",
       },
       "optionalPeers": [
         "@opentui/core",
         "@opentui/keymap",
         "@opentui/solid",
+        "solid-js",
       ],
     },
     "packages/protocol": {
