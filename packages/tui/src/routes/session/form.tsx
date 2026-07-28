@@ -746,11 +746,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
         <Show when={!confirm() && answerField()}>
           <box paddingLeft={1} gap={1}>
             <box>
-              <text fg={themeV2.text.default}>
-                {answerField()!.description ?? formLabel(answerField()!)}
-                {answerField()!.required ? " (required)" : ""}
-                {multi() ? " (select all that apply)" : ""}
-              </text>
+              <text fg={themeV2.text.default}>{answerField()!.description ?? formLabel(answerField()!)}</text>
             </box>
             <Show when={textual() ? answerField()!.key : undefined} keyed>
               <box paddingLeft={1}>
