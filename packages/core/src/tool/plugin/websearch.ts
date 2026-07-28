@@ -54,36 +54,62 @@ export const Plugin = {
                   if (!Schema.is(WebSearch.ProviderRequiredError)(error)) return Effect.fail(error)
                   return Effect.gen(function* () {
                     const providers = (yield* ctx.websearch.providers()).data
-                    if (providers.length === 0) return yield* new WebSearch.ProviderRequiredError()
+                    const defaultProvider = providers[0]
+                    if (!defaultProvider) return yield* new WebSearch.ProviderRequiredError()
                     const response = yield* forms.ask({
                       sessionID: context.sessionID,
                       title: "Web Search",
                       metadata: { kind: "websearch.provider" },
                       fields: [
                         {
-                          key: "enabled",
-                          description: "Allow OpenCode to search the web?",
+                          key: "choice",
+                          description: "Allow OpenCode to search the web for up-to-date information?",
                           type: "string",
                           required: true,
                           custom: false,
                           options: [
-                            { value: "yes", label: "Allow web search" },
-                            { value: "no", label: "Disable web search" },
+                            {
+                              value: "allow",
+                              label: `Allow web search via ${defaultProvider.name}`,
+                            },
+                            {
+                              value: "choose",
+                              label: "Choose another provider",
+                            },
+                            { value: "disable", label: "Disable web search" },
                           ],
                         },
                       ],
                     })
                     if (response.status === "cancelled") return yield* Effect.fail(new Error("Web search cancelled"))
-                    const answer = response.answer.enabled
-                    if (answer === "no") {
+                    if (response.answer.choice === "disable") {
                       yield* kv.set("websearch:provider", false)
                       return yield* new WebSearch.DisabledError()
                     }
-                    if (answer === "yes") {
-                      yield* kv.set("websearch:provider", providers[Math.floor(Math.random() * providers.length)].id)
-                      return yield* ctx.websearch.query(input)
-                    }
-                    return yield* new WebSearch.ProviderRequiredError()
+                    const selection =
+                      response.answer.choice === "choose"
+                        ? yield* forms.ask({
+                            sessionID: context.sessionID,
+                            title: "Choose a web search provider",
+                            metadata: { kind: "websearch.provider" },
+                            fields: [
+                              {
+                                key: "provider",
+                                description: "Choose a provider for web search.",
+                                type: "string",
+                                required: true,
+                                custom: false,
+                                options: providers.map((provider) => ({ value: provider.id, label: provider.name })),
+                              },
+                            ],
+                          })
+                        : undefined
+                    if (selection?.status === "cancelled") return yield* Effect.fail(new Error("Web search cancelled"))
+                    const providerID = selection?.answer.provider ?? defaultProvider.id
+                    if (typeof providerID !== "string" || !providers.some((provider) => provider.id === providerID))
+                      return yield* new WebSearch.ProviderRequiredError()
+                    yield* kv.set("websearch:provider", providerID)
+                    return yield* ctx.websearch.query(input)
                   })
                 }),
               )
