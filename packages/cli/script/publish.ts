@@ -28,24 +28,14 @@ async function publish(dir: string, name: string, version: string) {
 
 async function prepareDistribution(input: ForkDistribution) {
   console.log(input.name, "binaries", input.binaries)
+  await $`rm -rf ${input.root}/${input.name}`
   await $`mkdir -p ${input.root}/${input.name}/bin`
-  await $`cp ./script/postinstall.mjs ${input.root}/${input.name}/postinstall.mjs`
-  await Bun.file(`${input.root}/${input.name}/bin/${input.binary}.exe`).write(
-    [
-      `echo "Error: ${input.name}'s postinstall script was not run." >&2`,
-      'echo "" >&2',
-      'echo "This occurs when installation scripts are disabled." >&2',
-      'echo "Run the package postinstall script or reinstall with scripts enabled." >&2',
-      "exit 1",
-      "",
-    ].join("\n"),
-  )
+  await $`cp ./script/launcher.mjs ${input.root}/${input.name}/bin/launcher.mjs`
   await Bun.file(`${input.root}/${input.name}/package.json`).write(
     JSON.stringify(
       {
         name: input.name,
-        bin: { [input.binary]: `./bin/${input.binary}.exe` },
-        scripts: { postinstall: "node ./postinstall.mjs" },
+        bin: { [input.binary]: "./bin/launcher.mjs" },
         version: input.version,
         license: pkg.license,
         repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
