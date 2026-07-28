@@ -178,7 +178,7 @@ const declineRuntime = (code: string, execute: () => Effect.Effect<string>) =>
     }).execute(code),
   )
 
-const decline = () => Effect.die(new DeclinedError()) as unknown as Effect.Effect<string>
+const decline = () => Effect.die(new DeclinedError())
 
 const tunneledDefect = (exit: Exit.Exit<CodeMode.Result, never>) => {
   if (exit._tag !== "Failure") return undefined

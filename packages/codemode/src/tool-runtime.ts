@@ -127,7 +127,7 @@ export type DefectTunnel = {
   readonly record: (defect: unknown) => void
 }
 
-const tunnels = (cause: Cause.Cause<unknown>, tunnel: DefectTunnel | undefined): boolean => {
+const recordTunneled = (cause: Cause.Cause<unknown>, tunnel: DefectTunnel | undefined): boolean => {
   if (tunnel === undefined) return false
   for (const reason of cause.reasons) {
     if (!Cause.isDieReason(reason) || !tunnel.matches(reason.defect)) continue
@@ -148,7 +148,7 @@ const runHost = <A, E, R>(
       // model a generic error and let the step continue. Riding the interrupt path makes it
       // uncatchable in-program, exactly like the direct call it stands in for; the recorded defect
       // is re-raised to the host at the execution boundary.
-      if (tunnels(cause, tunnel)) return Effect.interrupt
+      if (recordTunneled(cause, tunnel)) return Effect.interrupt
       const error = Cause.squash(cause)
       return Effect.fail(error instanceof ToolError ? error : toolError("Tool execution failed", error))
     }),
