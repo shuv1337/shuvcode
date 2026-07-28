@@ -8,6 +8,9 @@ not create caller-specific Shuvcode configuration domains.
 ## Ownership and paths
 
 - Shuvcode owns `shuvcode.service` and its lifecycle.
+- The unit defines a deterministic `PATH` containing common user package and
+  tool directories. It does not depend on a desktop session importing shell
+  startup state before the service starts.
 - The canonical Shuvcode preferences file is
   `~/.config/shuvcode/opencode.json`. Because Shuvcode intentionally retains
   OpenCode's XDG paths for compatibility, `~/.config/opencode/opencode.json`
@@ -83,7 +86,8 @@ checkout through the guarded installer:
 ```
 
 The installer records the resolved preferences target and hash before changing
-the binary and requires both to remain identical after restart. It also refuses
+the binary and requires both to remain identical after restart. It installs and
+reloads the canonical user unit before restarting the service. It also refuses
 to deploy a dirty checkout, a branch other than `integration-v2`, a commit that
 differs from `origin/integration-v2`, or an unsupported Bun version.
 Run `./deploy/install-host.sh --check` for the same preflight without building,

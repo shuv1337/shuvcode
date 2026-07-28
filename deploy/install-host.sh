@@ -52,6 +52,8 @@ link="$HOME/.local/bin/.shuvcode.$sha"
 trap 'rm -f "$link"' EXIT
 ln -s "$destination/shuvcode" "$link"
 mv -Tf "$link" "$HOME/.local/bin/shuvcode"
+install -m 0644 "$root/deploy/systemd/shuvcode.service" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
 systemctl --user restart shuvcode.service
 systemctl --user is-active --quiet shuvcode.service
 
