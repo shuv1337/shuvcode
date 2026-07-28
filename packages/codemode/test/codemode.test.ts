@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Cause, Effect, Schema } from "effect"
+import { Cause, Effect, Exit, Schema } from "effect"
 import { CodeMode, Tool, toolError } from "../src/index.js"
 
 const run = (tool: Tool.Tool<never>) =>
@@ -156,6 +156,81 @@ describe("CodeMode host failure boundary", () => {
     if (exit._tag === "Failure") {
       expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true)
     }
+  })
+})
+
+class DeclinedError extends Schema.TaggedErrorClass<DeclinedError>()("DeclinedError", {}) {}
+
+const declineRuntime = (code: string, execute: () => Effect.Effect<string>) =>
+  Effect.runPromiseExit(
+    CodeMode.make({
+      tools: {
+        host: {
+          call: Tool.make({
+            description: "Ask for permission",
+            input: Schema.Struct({}),
+            output: Schema.String,
+            execute,
+          }),
+        },
+      },
+      tunnelDefect: (defect) => defect instanceof DeclinedError,
+    }).execute(code),
+  )
+
+const decline = () => Effect.die(new DeclinedError()) as unknown as Effect.Effect<string>
+
+const tunneledDefect = (exit: Exit.Exit<CodeMode.Result, never>) => {
+  if (exit._tag !== "Failure") return undefined
+  return exit.cause.reasons.flatMap((reason) => (Cause.isDieReason(reason) ? [reason.defect] : []))[0]
+}
+
+describe("CodeMode host defect tunnel", () => {
+  test("re-raises a tunneled defect instead of reporting a tool diagnostic", async () => {
+    const exit = await declineRuntime("return await tools.host.call({})", decline)
+
+    expect(tunneledDefect(exit)).toBeInstanceOf(DeclinedError)
+  })
+
+  test("program try/catch cannot swallow a tunneled defect", async () => {
+    const exit = await declineRuntime(
+      `
+        try {
+          await tools.host.call({})
+          return "reached"
+        } catch (error) {
+          return "caught"
+        } finally {
+          const ignored = 1
+        }
+      `,
+      decline,
+    )
+
+    expect(tunneledDefect(exit)).toBeInstanceOf(DeclinedError)
+  })
+
+  test("a tunneled defect from an un-awaited call still aborts the execution", async () => {
+    const exit = await declineRuntime(
+      `
+        tools.host.call({})
+        return "done"
+      `,
+      decline,
+    )
+
+    expect(tunneledDefect(exit)).toBeInstanceOf(DeclinedError)
+  })
+
+  test("leaves unmatched defects sanitized", async () => {
+    const exit = await declineRuntime("return await tools.host.call({})", () =>
+      Effect.die(new Error("postgres://user:defect-secret@example.invalid")),
+    )
+
+    expect(exit._tag).toBe("Success")
+    if (exit._tag !== "Success" || exit.value.ok) throw new Error("expected a sanitized diagnostic")
+    expect(exit.value.error).toStrictEqual({ kind: "ToolFailure", message: "Tool execution failed" })
+    expect(JSON.stringify(exit.value)).not.toMatch(/defect-secret/)
   })
 })
 

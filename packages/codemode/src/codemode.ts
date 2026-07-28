@@ -38,6 +38,14 @@ export type ExecuteOptions<Provided extends Record<string, unknown> = {}> = {
   tools?: Provided & Tools<Services<Provided>>
   /** Per-execution overrides for the default resource limits. */
   limits?: ExecutionLimits
+  /**
+   * Classifies host defects the host deliberately tunnels through this runtime — a user's
+   * permission decline, for example. A matching defect tears the execution down the way an
+   * interruption does, so program `try`/`catch` cannot observe it, and is re-raised to the
+   * caller unchanged instead of being sanitized into a `ToolFailure` diagnostic. Absent means
+   * every defect is sanitized.
+   */
+  tunnelDefect?: (defect: unknown) => boolean
   /** Observes decoded tool input immediately before tool execution. */
   onToolCallStart?: (call: ToolRuntime.ToolCallStarted) => Effect.Effect<void, never, Services<Provided>>
   /** Observes each admitted tool call as it succeeds, fails, or is interrupted. */

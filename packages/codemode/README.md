@@ -142,6 +142,11 @@ Diagnostic kinds:
 Unknown host failures, defects, and invalid outputs are sanitized. `toolError("safe message")` explicitly exposes a
 safe refusal to the model; its optional cause remains private.
 
+`tunnelDefect` opts specific host defects out of that sanitization. A defect it accepts — a user's permission decline,
+for example — is not a tool failure but a decision to stop, so it tears the execution down the way an interruption
+does (program `try`/`catch` cannot observe it) and is re-raised to the caller as a defect rather than becoming a
+`ToolFailure` the model can ignore. Everything else is still sanitized.
+
 ## Discovery
 
 `runtime.catalog()` returns structured descriptors — exact path, description, and generated TypeScript signature — for

@@ -3,6 +3,7 @@ export * as CodeModeTool from "./tool"
 import { CodeMode, Tool, toolError } from "@opencode-ai/codemode"
 import type { Content, Context, Error, Info, Metadata, Result } from "@opencode-ai/schema/tool"
 import { Effect, Ref, Schema, Semaphore } from "effect"
+import { Decline } from "../decline"
 import { definition } from "../tool/runtime"
 
 const ExecuteFile = Schema.Struct({
@@ -161,7 +162,10 @@ function runtime(
       execute: (input) => executeTool(name, registration, input),
     })
   }
-  return CodeMode.make<typeof tools>({ tools, ...hooks })
+  // Declines reach the runtime as defects. Without the tunnel they would be sanitized into a
+  // generic "Tool execution failed" and the model would keep going, so a refusal inside `execute`
+  // would be weaker than the same refusal on a direct call.
+  return CodeMode.make<typeof tools>({ tools, tunnelDefect: Decline.is, ...hooks })
 }
 
 // Tool inputs arrive as parsed JSON, so the JSON value cast is a boundary fact.
