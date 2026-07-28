@@ -12,6 +12,8 @@ import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
+import { Config } from "@opencode-ai/core/config"
+import { emptyConfigLayer } from "./fixture/mcp"
 
 const sessionID = Session.ID.make("ses_question_tool_test")
 const assertions: Permission.AssertInput[] = []
@@ -85,6 +87,7 @@ const it = testEffect(
     [Permission.node, permission],
     [Form.node, form],
     [Image.node, imagePassthrough],
+    [Config.node, emptyConfigLayer],
   ]),
 )
 

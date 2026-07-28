@@ -3,6 +3,7 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { Config } from "@opencode-ai/core/config"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Permission } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -10,6 +11,7 @@ import { Session } from "@opencode-ai/core/session"
 import { Skill } from "@opencode-ai/core/skill"
 import { SkillTool } from "@opencode-ai/core/tool/plugin/skill"
 import { Tool } from "@opencode-ai/core/tool"
+import { emptyConfigLayer } from "./fixture/mcp"
 import { tmpdir } from "./fixture/tmpdir"
 import { Image } from "@opencode-ai/core/image"
 import { it } from "./lib/effect"
@@ -91,6 +93,7 @@ describe("SkillTool", () => {
               [Permission.node, permission],
               [Skill.node, skills],
               [Image.node, imagePassthrough],
+              [Config.node, emptyConfigLayer],
             ],
           )
 

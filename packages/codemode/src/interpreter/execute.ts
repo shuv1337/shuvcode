@@ -24,6 +24,19 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
 
   // Allocate execution state inside suspension so reused Effects never share it.
   return Effect.suspend(() => {
+    // First tunneled defect wins: it is the decision that aborted the program, and whatever
+    // teardown produced afterwards is a consequence of it.
+    let tunneled: { readonly defect: unknown } | undefined
+    const matches = options.tunnelDefect
+    const tunnel: ToolRuntime.DefectTunnel | undefined =
+      matches === undefined
+        ? undefined
+        : {
+            matches,
+            record: (defect) => {
+              tunneled ??= { defect }
+            },
+          }
     const tools = ToolRuntime.make(
       (options.tools ?? {}) as Tools<Services<Provided>>,
       limits.maxToolCalls,
@@ -32,6 +45,7 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
         onToolCallStart: options.onToolCallStart,
         onToolCallEnd: options.onToolCallEnd,
       },
+      tunnel,
     )
     const logs: Array<string> = []
     const logged = () => (logs.length > 0 ? { logs: [...logs] } : {})
@@ -102,15 +116,20 @@ export const executeWithLimits = <const Provided extends Record<string, unknown>
 
     return operation.pipe(
       Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.interrupt
-          : Effect.succeed({
-              ok: false,
-              error: normalizeError(Cause.squash(cause)),
-              ...logged(),
-              toolCalls: tools.calls,
-            } satisfies Result),
+        tunneled !== undefined
+          ? Effect.die(tunneled.defect)
+          : Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.succeed({
+                ok: false,
+                error: normalizeError(Cause.squash(cause)),
+                ...logged(),
+                toolCalls: tools.calls,
+              } satisfies Result),
       ),
+      // An un-awaited call can be declined without the program itself failing. The decline still
+      // aborts the execution, so it outranks an otherwise successful result.
+      Effect.flatMap((result) => (tunneled === undefined ? Effect.succeed(result) : Effect.die(tunneled.defect))),
       Effect.map((result) =>
         limits.maxOutputBytes === undefined ? result : boundOutput(result, limits.maxOutputBytes),
       ),

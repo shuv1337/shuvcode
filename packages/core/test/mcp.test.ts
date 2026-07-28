@@ -34,6 +34,7 @@ import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
 import { location } from "./fixture/location"
 import { executeTool, toolDefinitions, toolIdentity, waitForCodeModeTool, waitForTool } from "./lib/tool"
+import { emptyConfigLayer } from "./fixture/mcp"
 
 let assertion: Deferred.Deferred<Permission.AssertInput> | undefined
 let decision: Effect.Effect<void, Permission.Error> = Effect.void
@@ -300,6 +301,7 @@ const it = testEffect(
     [Permission.node, permissions],
     [Bus.node, events],
     [Image.node, imagePassthrough],
+    [Config.node, emptyConfigLayer],
   ]),
 )
 
