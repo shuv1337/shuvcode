@@ -171,19 +171,25 @@ async function renderDiffViewer(vcsDiff: unknown[], height = 20, initialRoute?: 
           })
         },
         dispatch() {},
-        shortcut: () => undefined,
+        shortcuts: () => [],
         mode: { current: () => "base", push: () => () => {} },
       },
       ui: {
+        dialog: {
+          show: () => () => {},
+          set() {},
+          clear() {},
+        },
         router: {
           register(page: Page) {
             if (page.name === "diff") renderDiff = page.render
-          return () => {}
+            return () => {}
           },
           navigate(destination: Destination) {
-            current = destination.type === "plugin" && !("id" in destination)
-              ? { ...destination, id: "diff-viewer" }
-              : destination
+            current =
+              destination.type === "plugin" && !("id" in destination)
+                ? { ...destination, id: "diff-viewer" }
+                : destination
           },
           current: () => current,
         },

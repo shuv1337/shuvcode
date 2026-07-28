@@ -88,6 +88,7 @@ import { DialogVariant } from "./component/dialog-variant"
 import { win32DisableProcessedInput, win32FlushInputBuffer } from "./terminal-win32"
 import { destroyRenderer } from "./util/renderer"
 import { cliErrorMessage, errorFormat } from "./util/error"
+import { AttentionProvider } from "./context/attention"
 
 registerOpencodeSpinner()
 
@@ -346,18 +347,20 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                             <PromptHistoryProvider>
                                                               <PromptRefProvider>
                                                                 <EditorContextProvider>
-                                                                  <PluginProvider packages={input.packages}>
-                                                                    <App
-                                                                      pair={
-                                                                        input.server.endpoint.auth
-                                                                          ? input.server.endpoint.auth
-                                                                          : {
-                                                                              username: "opencode",
-                                                                              password: "",
-                                                                            }
-                                                                      }
-                                                                    />
-                                                                  </PluginProvider>
+                                                                  <AttentionProvider>
+                                                                    <PluginProvider packages={input.packages}>
+                                                                      <App
+                                                                        pair={
+                                                                          input.server.endpoint.auth
+                                                                            ? input.server.endpoint.auth
+                                                                            : {
+                                                                                username: "opencode",
+                                                                                password: "",
+                                                                              }
+                                                                        }
+                                                                      />
+                                                                    </PluginProvider>
+                                                                  </AttentionProvider>
                                                                 </EditorContextProvider>
                                                               </PromptRefProvider>
                                                             </PromptHistoryProvider>

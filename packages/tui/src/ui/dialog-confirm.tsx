@@ -11,7 +11,10 @@ export type DialogConfirmProps = {
   message: string
   onConfirm?: () => void
   onCancel?: () => void
-  label?: string
+  label?: {
+    confirm?: string
+    cancel?: string
+  }
 }
 
 export type DialogConfirmResult = boolean | undefined
@@ -81,7 +84,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
               }}
             >
               <text fg={key === store.active ? themeV2.text.action.primary.focused : themeV2.text.subdued}>
-                {Locale.titlecase(key === "cancel" ? (props.label ?? key) : key)}
+                {Locale.titlecase(props.label?.[key] ?? key)}
               </text>
             </box>
           )}
@@ -91,7 +94,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
   )
 }
 
-DialogConfirm.show = (dialog: DialogContext, title: string, message: string, label?: string) => {
+DialogConfirm.show = (dialog: DialogContext, title: string, message: string, label?: DialogConfirmProps["label"]) => {
   return new Promise<DialogConfirmResult>((resolve) => {
     dialog.replace(
       () => (
