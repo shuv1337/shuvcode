@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "url"
 import type { Context, Dialog, Page, Slot, SlotMap, SlotName, Toast } from "@opencode-ai/plugin/tui/context"
 import { createStore, produce, reconcile as reconcileStore } from "solid-js/store"
 import { useRenderer } from "@opentui/solid"
+import { ensureRuntimePluginSupport } from "@opentui/solid/runtime-plugin-support/configure"
 import { useConfig } from "../config"
 import { useClient } from "../context/client"
 import { useData } from "../context/data"
@@ -34,6 +35,8 @@ import { useAttention } from "../context/attention"
 import { abbreviateHome } from "../util/path-format"
 import { builtins } from "./builtins"
 import { discoverTuiPlugins } from "./discovery"
+
+ensureRuntimePluginSupport()
 
 export interface PackageResolver {
   readonly resolve: (spec: string) => Promise<string | undefined>
