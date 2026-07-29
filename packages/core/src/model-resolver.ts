@@ -17,6 +17,7 @@ import { Credential } from "./credential"
 import { Integration } from "./integration"
 import { Capabilities, ID, Info, Ref, VariantID } from "./model"
 import { Npm } from "@opencode-ai/util/npm"
+import { AnthropicClaudeCode } from "./plugin/provider/anthropic-claude-code"
 import { OpenAICodex } from "./plugin/provider/openai-codex"
 import { Provider } from "./provider"
 
@@ -165,6 +166,22 @@ export const fromCatalogModel = (
     )
   }
   if (Provider.isAISDK(resolved.package) && packageName === "@ai-sdk/anthropic") {
+    // A Claude Pro/Max subscription authenticates as Bearer and only draws on
+    // the plan when the request presents as Claude Code, so it needs different
+    // headers and a shaped body. Same seam as the ChatGPT-plan branch above.
+    if (AnthropicClaudeCode.isSubscription(credential)) {
+      const shaped = produce(resolved, (draft) => {
+        draft.headers = Provider.mergeHeaders(draft.headers, AnthropicClaudeCode.headers(draft.headers))
+      })
+      return Effect.succeed(
+        withDefaults(shaped, AnthropicMessages.route)
+          .with({
+            auth: key === undefined ? Auth.none : Auth.bearer(key),
+            transport: AnthropicClaudeCode.transport(AnthropicMessages.route.transport),
+          })
+          .model({ id: shaped.modelID ?? shaped.id, compatibility: shaped.compatibility }),
+      )
+    }
     return Effect.succeed(
       withDefaults(resolved, AnthropicMessages.route)
         .with({ auth: key === undefined ? Auth.none : Auth.header("x-api-key", key) })
