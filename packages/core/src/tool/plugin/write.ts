@@ -9,7 +9,10 @@ export * as WriteTool from "./write"
 import type { Context as PluginContext } from "@opencode-ai/plugin/effect/plugin"
 import { ToolFailure } from "@opencode-ai/ai"
 import { Effect, Schema } from "effect"
+import { Bom } from "@opencode-ai/util/bom"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { FileMutation } from "../../file-mutation"
+import { Formatter } from "../../formatter"
 import { LocationMutation } from "../../location-mutation"
 import { Permission } from "../../permission"
 
@@ -36,7 +39,6 @@ export const toModelOutput = (output: Output) =>
   `${output.existed ? "Wrote" : "Created"} file successfully: ${output.resource}`
 
 /** Deferred write UX integrations remain visible at the model-facing seam. */
-// TODO: Add formatter integration after formatter runtime exists.
 // TODO: Publish watcher/file-edit events after watcher integration exists.
 // TODO: Add snapshots / undo after design exists.
 // TODO: Add LSP notification and diagnostics after LSP runtime exists.
@@ -46,6 +48,8 @@ export const Plugin = {
   effect: Effect.fn("WriteTool.Plugin")(function* (ctx: PluginContext) {
     const mutation = yield* LocationMutation.Service
     const files = yield* FileMutation.Service
+    const formatter = yield* Formatter.Service
+    const fs = yield* FSUtil.Service
     const permission = yield* Permission.Service
 
     yield* ctx.tool
@@ -82,7 +86,10 @@ export const Plugin = {
                     agent: context.agent,
                     source,
                   })
-                  return yield* files.writeTextPreservingBom({ target, content: input.content })
+                  const result = yield* files.writeTextPreservingBom({ target, content: input.content })
+                  const bom = (yield* Bom.readFile(fs, target.canonical)).bom
+                  if (yield* formatter.file(target.canonical)) yield* Bom.syncFile(fs, target.canonical, bom)
+                  return result
                 }).pipe(
                   Effect.map((output) => ({ output, content: toModelOutput(output) })),
                   Effect.mapError((error) => new ToolFailure({ message: `Unable to write ${input.path}`, error })),
