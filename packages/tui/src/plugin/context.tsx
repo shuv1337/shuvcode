@@ -32,6 +32,7 @@ import { DialogSelect } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
 import { useToast } from "../ui/toast"
 import { useAttention } from "../context/attention"
+import { useStorage } from "../context/storage"
 import { abbreviateHome } from "../util/path-format"
 import { builtins } from "./builtins"
 import { discoverTuiPlugins } from "./discovery"
@@ -96,6 +97,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
   const dialog = useDialog()
   const toast = useToast()
   const attention = useAttention()
+  const storage = useStorage()
   const directory = config.path ? path.dirname(config.path) : process.cwd()
   const [store, setStore] = createStore({
     ready: false,
@@ -233,6 +235,9 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
         pending: keymapState.pending,
         active: keymapState.active,
         mode: keymap.mode,
+      },
+      storage: {
+        store: (key, options) => storage.store(`plugin.${item.plugin.id}.${key}`, options),
       },
       ui: {
         dialog: dialogApi,

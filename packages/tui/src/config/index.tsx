@@ -127,6 +127,9 @@ export const Info = Schema.Struct({
       enabled: Schema.optional(Schema.Boolean).annotate({
         description: "Use a persistent session tab strip instead of pinned quick-switch sessions",
       }),
+      scope: Schema.optional(Schema.Literals(["global", "cwd"])).annotate({
+        description: "Share session tabs globally or keep a separate set for each working directory",
+      }),
     }),
   ).annotate({ description: "Session tab settings" }),
   mini: Schema.optional(
