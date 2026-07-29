@@ -49,12 +49,12 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
     let history: SessionTabHistory = { entries: [], index: -1 }
 
     function state() {
-      if (config.tabs?.scope !== "cwd") return store.global
+      if (config.tabs?.scope === "global") return store.global
       return store.cwd[paths.cwd] ?? fallback
     }
 
     function update(mutation: (draft: TabsState) => void) {
-      const scope = config.tabs?.scope ?? "global"
+      const scope = config.tabs?.scope ?? "cwd"
       void updateStore((draft) => mutation(scope === "cwd" ? (draft.cwd[paths.cwd] ??= empty()) : draft.global)).catch(
         () => {},
       )
