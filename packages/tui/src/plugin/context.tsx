@@ -33,6 +33,7 @@ import { useToast } from "../ui/toast"
 import { useAttention } from "../context/attention"
 import { abbreviateHome } from "../util/path-format"
 import { builtins } from "./builtins"
+import { discoverTuiPlugins } from "./discovery"
 
 export interface PackageResolver {
   readonly resolve: (spec: string) => Promise<string | undefined>
@@ -353,7 +354,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
         .filter(([, registration]) => registration.active)
         .map(([id]) => deactivate(id)),
     )
-    const entries = config.data.plugins ?? []
+    const entries = [...(await discoverTuiPlugins(paths.cwd)), ...(config.data.plugins ?? [])]
     batch(() => {
       setStore("registrations", reconcileStore({}))
       setStore("states", [])
