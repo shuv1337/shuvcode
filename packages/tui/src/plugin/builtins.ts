@@ -1,4 +1,5 @@
 import HomeFooter from "../feature-plugins/home/footer"
+import PromptFooter from "../feature-plugins/prompt/footer"
 import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
 import SidebarLsp from "../feature-plugins/sidebar/lsp"
@@ -10,6 +11,7 @@ import Scrap from "../feature-plugins/system/scrap"
 
 export const builtins = [
   HomeFooter,
+  PromptFooter,
   SidebarContext,
   SidebarMcp,
   SidebarLsp,

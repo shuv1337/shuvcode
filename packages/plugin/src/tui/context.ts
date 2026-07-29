@@ -116,6 +116,10 @@ export interface Page {
 export interface SlotMap {
   readonly app: Readonly<Record<string, never>>
   readonly "home.footer": Readonly<Record<string, never>>
+  readonly "prompt.footer.end": {
+    readonly sessionID?: string
+    readonly mode: "normal" | "shell"
+  }
   readonly "sidebar.content": {
     readonly sessionID: string
   }
