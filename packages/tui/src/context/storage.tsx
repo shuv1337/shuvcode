@@ -82,7 +82,7 @@ function createStorage(root: string, channel: string) {
 const Context = createContext<Storage>()
 
 export function StorageProvider(props: ParentProps) {
-  const result = createStorage(path.join(useTuiPaths().state, "storage"), useTuiApp().channel)
+  const result = createStorage(useTuiPaths().state, useTuiApp().channel)
   onCleanup(result.close)
   return <Context.Provider value={result.storage}>{props.children}</Context.Provider>
 }
