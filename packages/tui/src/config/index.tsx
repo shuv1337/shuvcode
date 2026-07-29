@@ -2,8 +2,10 @@ export * as Config from "."
 
 import { createBindingLookup } from "@opentui/keymap/extras"
 import { Schema } from "effect"
-import { createContext, type JSX, useContext } from "solid-js"
+import { createContext, onCleanup, type JSX, useContext } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
+import { watch } from "fs"
+import path from "path"
 import { TuiKeybind } from "./keybind"
 
 export interface Interface {
@@ -238,12 +240,23 @@ export function ConfigProvider(props: {
 }) {
   const [config, setConfig] = createStore(props.config)
   const host = props.service
+  const apply = (info: Info) => setConfig(reconcile(resolve(info, props.options ?? { terminalSuspend: true })))
   const update = async (update: (draft: any) => void) => {
     if (!host) throw new Error("Config updates are not available")
     const info = await host.update(update)
-    setConfig(reconcile(resolve(info, props.options ?? { terminalSuspend: true })))
+    apply(info)
     return info
   }
+  let reload = Promise.resolve()
+  const watcher = host?.path
+    ? watch(path.dirname(host.path), () => {
+        reload = reload
+          .then(() => host.get())
+          .then(apply)
+          .catch(() => {})
+      })
+    : undefined
+  onCleanup(() => watcher?.close())
   return (
     <ConfigContext.Provider value={{ data: config, path: host?.path, update }}>{props.children}</ConfigContext.Provider>
   )
