@@ -43,13 +43,7 @@ export type PromptMention = { start: number; end: number; text: string }
 
 export type SessionPendingSyntheticData = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
 
-export type SessionPendingCompaction = {
-  admittedSeq: number
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "compaction"
-}
+export type SessionPendingCompaction = { id: string; sessionID: string; timeCreated: number; type: "compaction" }
 
 export type SessionMessageAgentSelected = {
   id: string
@@ -1210,7 +1204,6 @@ export type PromptFileAttachment = {
 export type PromptAgentAttachment = { name: string; mention?: PromptMention }
 
 export type SessionPendingSynthetic = {
-  admittedSeq: number
   id: string
   sessionID: string
   timeCreated: number
@@ -1966,7 +1959,6 @@ export type AgentInfo = {
 export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
 
 export type SessionPendingUser = {
-  admittedSeq: number
   id: string
   sessionID: string
   timeCreated: number

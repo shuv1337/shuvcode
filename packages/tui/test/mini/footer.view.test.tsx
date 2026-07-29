@@ -919,7 +919,6 @@ test("direct pending panel shows durable delivery without edit actions", async (
       messageID: "m-1",
       prompt: { text: "fix the auth test", parts: [] },
       delivery: "queue" as const,
-      admittedSeq: 1,
     },
   ])
 
@@ -1284,7 +1283,6 @@ test("direct footer shows authoritative pending work while running", async () =>
               messageID: "m-queued",
               prompt: { text: "follow up", parts: [] },
               delivery: "queue",
-              admittedSeq: 1,
             },
           ]}
           theme={() => RUN_THEME_FALLBACK}

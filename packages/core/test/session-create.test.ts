@@ -484,7 +484,6 @@ describe("Session.create", () => {
           type: "user",
           data: { text: "Replay lifecycle" },
           delivery: "steer",
-          admittedSeq: 1,
         })
         expect(yield* store.context(created.id)).toEqual([])
 
