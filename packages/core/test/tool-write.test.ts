@@ -140,6 +140,17 @@ describe("WriteTool", () => {
               "created",
             )
             expect(assertions).toMatchObject([{ sessionID, action: "edit", resources: ["src/new.txt"], save: ["*"] }])
+            expect(assertions[0]?.metadata).toMatchObject({
+              files: [
+                {
+                  file: "src/new.txt",
+                  status: "added",
+                  additions: 1,
+                  deletions: 0,
+                  patch: expect.stringContaining("+created"),
+                },
+              ],
+            })
             expect(writes).toEqual([path.join(yield* Effect.promise(() => fs.realpath(tmp.path)), "src", "new.txt")])
           }),
         )
@@ -187,6 +198,17 @@ describe("WriteTool", () => {
               if (settled.status !== "completed") return
               expect(settled.content).toEqual([{ type: "text", text: "Wrote file successfully: existing.txt" }])
               expect(settled.output).toMatchObject({ resource: "existing.txt", existed: true })
+              expect(assertions[0]?.metadata).toMatchObject({
+                files: [
+                  {
+                    file: "existing.txt",
+                    status: "modified",
+                    additions: 1,
+                    deletions: 1,
+                    patch: expect.stringMatching(/-before[\s\S]*\+after/),
+                  },
+                ],
+              })
               expect(yield* Effect.promise(() => fs.readFile(path.join(tmp.path, "existing.txt"), "utf8"))).toBe(
                 "after",
               )

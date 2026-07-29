@@ -153,14 +153,6 @@ export const Plugin = {
                     })
                   }
 
-                  yield* permission.assert({
-                    action: "edit",
-                    resources: [target.resource],
-                    save: ["*"],
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source: permissionSource,
-                  })
                   const info = yield* fs.stat(target.canonical).pipe(
                     Effect.catchReason("PlatformError", "NotFound", () =>
                       Effect.fail(new ToolFailure({ message: `File not found: ${input.path}` })),
@@ -184,6 +176,26 @@ export const Plugin = {
                       : findLineOccurrences(source, oldString)
                   const matches = exact.length > 0 ? exact : unicode.length > 0 ? unicode : trailing
                   const replacements = matches.length
+                  const replaced = (input.replaceAll === true ? matches : matches.slice(0, 1))
+                    .toReversed()
+                    .reduce(
+                      (content, match) =>
+                        `${content.slice(0, match.start)}${newString}${content.slice(match.end)}`,
+                      source,
+                    )
+                  const preview =
+                    replacements > 0 && (replacements === 1 || input.replaceAll === true)
+                      ? fileDiff(target.resource, source, replaced)
+                      : undefined
+                  yield* permission.assert({
+                    action: "edit",
+                    resources: [target.resource],
+                    save: ["*"],
+                    metadata: preview ? { files: [preview] } : undefined,
+                    sessionID: context.sessionID,
+                    agent: context.agent,
+                    source: permissionSource,
+                  })
                   if (replacements === 0) {
                     return yield* new ToolFailure({
                       message: `Could not find oldString in ${input.path}. It must match exactly, including whitespace and indentation.`,
@@ -194,14 +206,6 @@ export const Plugin = {
                       message: `Found ${replacements} matches for oldString, but expected exactly one. Add more surrounding context to make oldString unique, or set replaceAll to true to replace every occurrence.`,
                     })
                   }
-
-                  const replaced = (input.replaceAll === true ? matches : matches.slice(0, 1))
-                    .toReversed()
-                    .reduce(
-                      (content, match) =>
-                        `${content.slice(0, match.start)}${newString}${content.slice(match.end)}`,
-                      source,
-                    )
                   const replacementBom = replaced.startsWith("\uFEFF")
                   const result = yield* files.write({
                     target,
@@ -211,22 +215,8 @@ export const Plugin = {
                   const formatted = (yield* formatter.file(target.canonical))
                     ? yield* Bom.syncFile(fs, target.canonical, bom)
                     : (yield* Bom.readFile(fs, target.canonical)).text
-                  const counts = diffLines(source, formatted).reduce(
-                    (result, item) => ({
-                      additions: result.additions + (item.added ? (item.count ?? 0) : 0),
-                      deletions: result.deletions + (item.removed ? (item.count ?? 0) : 0),
-                    }),
-                    { additions: 0, deletions: 0 },
-                  )
                   return {
-                    files: [
-                      {
-                        file: result.resource,
-                        patch: createTwoFilesPatch(result.resource, result.resource, source, formatted),
-                        status: "modified" as const,
-                        ...counts,
-                      },
-                    ],
+                    files: [fileDiff(result.resource, source, formatted)],
                     replacements,
                   } satisfies Output
                 }).pipe(
@@ -247,4 +237,20 @@ export const Plugin = {
       )
       .pipe(Effect.orDie)
   }),
+}
+
+function fileDiff(file: string, before: string, after: string): typeof FileDiff.Info.Type {
+  const counts = diffLines(before, after).reduce(
+    (result, item) => ({
+      additions: result.additions + (item.added ? (item.count ?? 0) : 0),
+      deletions: result.deletions + (item.removed ? (item.count ?? 0) : 0),
+    }),
+    { additions: 0, deletions: 0 },
+  )
+  return {
+    file,
+    patch: createTwoFilesPatch(file, file, before, after),
+    status: "modified",
+    ...counts,
+  }
 }

@@ -179,6 +179,17 @@ describe("EditTool", () => {
                 })
                 expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\nrest\n")
                 expect(assertions).toMatchObject([{ sessionID, action: "edit", resources: ["hello.txt"], save: ["*"] }])
+                expect(assertions[0]?.metadata).toMatchObject({
+                  files: [
+                    {
+                      file: "hello.txt",
+                      status: "modified",
+                      additions: 1,
+                      deletions: 1,
+                      patch: expect.stringContaining("-before\n+after"),
+                    },
+                  ],
+                })
                 expect(writes).toEqual([yield* Effect.promise(() => fs.realpath(target))])
               }),
             ),
@@ -343,7 +354,7 @@ describe("EditTool", () => {
             error: { type: "permission.rejected", message: "Permission denied: edit" },
           })
           expect(assertions.map((input) => input.action)).toEqual(["external_directory", "edit"])
-          expect(reads).toBe(0)
+          expect(reads).toBe(1)
           expect(writes).toEqual([])
           expect(yield* Effect.promise(() => fs.readFile(external, "utf8"))).toBe("before")
         }),
@@ -354,7 +365,7 @@ describe("EditTool", () => {
     ),
   )
 
-  it.live("denied edit reads no target content and does not disclose whether oldString matches", () =>
+  it.live("denied edit does not disclose whether oldString matches", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => {
@@ -380,7 +391,7 @@ describe("EditTool", () => {
                 })
                 expect(missing).toEqual(matching)
                 expect(assertions.map((input) => input.action)).toEqual(["edit", "edit"])
-                expect(reads).toBe(0)
+                expect(reads).toBe(2)
                 expect(writes).toEqual([])
               }),
             ),

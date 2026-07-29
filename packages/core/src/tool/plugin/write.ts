@@ -8,7 +8,9 @@ export * as WriteTool from "./write"
 
 import type { Context as PluginContext } from "@opencode-ai/plugin/effect/plugin"
 import { ToolFailure } from "@opencode-ai/ai"
+import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { Effect, Schema } from "effect"
+import { createTwoFilesPatch, diffLines } from "diff"
 import { Bom } from "@opencode-ai/util/bom"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { FileMutation } from "../../file-mutation"
@@ -21,8 +23,7 @@ export const name = "write"
 // TODO: Revisit whether model-facing mutation schemas should prefer absolute `filePath` naming for trained-in compatibility after evaluating model behavior.
 export const Input = Schema.Struct({
   path: Schema.String.annotate({
-    description:
-      "File path to write. Relative paths resolve within the active Location. Absolute paths inside that Location are accepted; external absolute paths require external_directory approval.",
+    description: "Path to the file to write to",
   }),
   content: Schema.String.annotate({ description: "Content to write to the file" }),
 })
@@ -59,7 +60,7 @@ export const Plugin = {
               name,
               options: { codemode: false, permission: "edit" },
               description:
-                "Write content to one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval.",
+                "Writes a file to the local filesystem, overwriting if one exists.\n\nMissing parent directories are created automatically.\n\nUse this tool to create new files or overwrite existing files. For partial changes, use the edit tool instead.",
               input: Input,
               output: Output,
               execute: (input, context) =>
@@ -78,10 +79,28 @@ export const Plugin = {
                       agent: context.agent,
                       source,
                     })
+                  const current = yield* Bom.readFile(fs, target.canonical).pipe(
+                    Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)),
+                  )
+                  const next = Bom.split(input.content)
+                  const counts = diffLines(current?.text ?? "", next.text).reduce(
+                    (result, item) => ({
+                      additions: result.additions + (item.added ? (item.count ?? 0) : 0),
+                      deletions: result.deletions + (item.removed ? (item.count ?? 0) : 0),
+                    }),
+                    { additions: 0, deletions: 0 },
+                  )
+                  const preview: typeof FileDiff.Info.Type = {
+                    file: target.resource,
+                    patch: createTwoFilesPatch(target.resource, target.resource, current?.text ?? "", next.text),
+                    status: current ? "modified" : "added",
+                    ...counts,
+                  }
                   yield* permission.assert({
                     action: "edit",
                     resources: [target.resource],
                     save: ["*"],
+                    metadata: { files: [preview] },
                     sessionID: context.sessionID,
                     agent: context.agent,
                     source,
