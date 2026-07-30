@@ -2,8 +2,10 @@ import { PluginContextProvider, type Plugin } from "@opencode-ai/plugin/tui"
 import {
   batch,
   createContext,
+  createEffect,
   createMemo,
   For,
+  on,
   onCleanup,
   onMount,
   useContext,
@@ -372,13 +374,13 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
     return true
   }
 
-  const reconcile = async () => {
+  const reconcile = async (configured = config.data.plugins ?? []) => {
     await Promise.all(
       Object.entries(store.registrations)
         .filter(([, registration]) => registration.active)
         .map(([id]) => deactivate(id)),
     )
-    const entries = [...(await discoverTuiPlugins(paths.cwd)), ...(config.data.plugins ?? [])]
+    const entries = [...(await discoverTuiPlugins(paths.cwd)), ...configured]
     batch(() => {
       setStore("registrations", reconcileStore({}))
       setStore("states", [])
@@ -452,8 +454,21 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       ])
     }
   }
+  let loading = Promise.resolve()
+  createEffect(
+    on(
+      () => JSON.stringify(config.data.plugins ?? []),
+      () => {
+        const configured = config.data.plugins ?? []
+        loading = loading.catch(() => undefined).then(() => reconcile(configured))
+        void loading.then(
+          () => setStore("ready", true),
+          () => setStore("ready", true),
+        )
+      },
+    ),
+  )
   onMount(() => {
-    const loading = reconcile()
     let disposing: Promise<void> | undefined
     const dispose = () => {
       if (disposing) return disposing
@@ -474,7 +489,6 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       unregister()
       void dispose()
     })
-    void loading.finally(() => setStore("ready", true))
   })
 
   return (
