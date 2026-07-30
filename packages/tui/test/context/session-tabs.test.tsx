@@ -24,7 +24,7 @@ async function wait(fn: () => boolean, timeout = 2_000) {
   }
 }
 
-test("user prompt admissions pulse an already-busy background tab", async () => {
+async function renderSessionTabs(initialSessionID: string) {
   const state = mkdtempSync(path.join(tmpdir(), "opencode-session-tabs-"))
   const events = createEventStream()
   const calls = createFetch(undefined, events)
@@ -44,7 +44,7 @@ test("user prompt admissions pulse an already-busy background tab", async () => 
       <TuiAppProvider value={{ name: "test", version: "test", channel: "test" }}>
         <StorageProvider>
           <ConfigProvider config={createTuiResolvedConfig({ tabs: { enabled: true } })}>
-            <RouteProvider initialRoute={{ type: "session", sessionID: "background" }}>
+            <RouteProvider initialRoute={{ type: "session", sessionID: initialSessionID }}>
               <ClientProvider api={createApi(calls.fetch)}>
                 <DataProvider>
                   <SessionTabsProvider>
@@ -59,7 +59,20 @@ test("user prompt admissions pulse an already-busy background tab", async () => 
     </TestTuiContexts>
   ))
 
-  const emit = (event: OpenCodeEvent) => events.emit({ ...event, location: { directory } })
+  await wait(() => client.connection.status() === "connected")
+  return {
+    tabs,
+    route,
+    emit: (event: OpenCodeEvent) => events.emit({ ...event, location: { directory } }),
+    destroy() {
+      app.renderer.destroy()
+      rmSync(state, { recursive: true, force: true })
+    },
+  }
+}
+
+test("user prompt admissions pulse an already-busy background tab", async () => {
+  const setup = await renderSessionTabs("background")
   const admitted = (sessionID: string, inputID: string): OpenCodeEvent => ({
     id: `evt_${inputID}`,
     created: Date.now(),
@@ -73,13 +86,11 @@ test("user prompt admissions pulse an already-busy background tab", async () => 
   })
 
   try {
-    await wait(
-      () => client.connection.status() === "connected" && tabs.tabs().some((tab) => tab.sessionID === "background"),
-    )
-    route.navigate({ type: "session", sessionID: "active" })
-    await wait(() => tabs.current() === "active" && tabs.tabs().length === 2)
+    await wait(() => setup.tabs.tabs().some((tab) => tab.sessionID === "background"))
+    setup.route.navigate({ type: "session", sessionID: "active" })
+    await wait(() => setup.tabs.current() === "active" && setup.tabs.tabs().length === 2)
 
-    emit({
+    setup.emit({
       id: "evt_context",
       created: Date.now(),
       type: "session.input.admitted",
@@ -91,20 +102,52 @@ test("user prompt admissions pulse an already-busy background tab", async () => 
       },
     })
     await Bun.sleep(20)
-    expect(tabs.status("background").promptPulse).toBe(0)
+    expect(setup.tabs.status("background").promptPulse).toBe(0)
 
-    emit(admitted("background", "msg_1"))
-    await wait(() => tabs.status("background").promptPulse === 1 && tabs.status("background").busy)
+    setup.emit(admitted("background", "msg_1"))
+    await wait(
+      () => setup.tabs.status("background").promptPulse === 1 && setup.tabs.status("background").busy,
+    )
 
-    emit(admitted("background", "msg_2"))
-    await wait(() => tabs.status("background").promptPulse === 2)
+    setup.emit(admitted("background", "msg_2"))
+    await wait(() => setup.tabs.status("background").promptPulse === 2)
 
-    emit(admitted("active", "msg_3"))
+    setup.emit(admitted("active", "msg_3"))
     await Bun.sleep(20)
-    expect(tabs.status("active").promptPulse).toBe(0)
-    expect(tabs.status("background")).toMatchObject({ promptPulse: 2, busy: true })
+    expect(setup.tabs.status("active").promptPulse).toBe(0)
+    expect(setup.tabs.status("background")).toMatchObject({ promptPulse: 2, busy: true })
   } finally {
-    app.renderer.destroy()
-    rmSync(state, { recursive: true, force: true })
+    setup.destroy()
+  }
+})
+
+test("tracks a temporary new session tab across close and creation", async () => {
+  const setup = await renderSessionTabs("first")
+
+  try {
+    await wait(() => setup.tabs.current() === "first")
+    setup.route.navigate({ type: "session", sessionID: "second" })
+    await wait(() => setup.tabs.current() === "second" && setup.tabs.tabs().length === 2)
+    setup.route.navigate({ type: "session", sessionID: "first" })
+    await wait(() => setup.tabs.current() === "first")
+
+    setup.route.navigate({ type: "home" })
+    await wait(() => setup.tabs.newTab() && setup.tabs.current() === undefined)
+    expect(setup.tabs.tabs().map((tab) => tab.sessionID)).toEqual(["first", "second"])
+    setup.tabs.close()
+    await wait(() => setup.route.data.type === "session")
+
+    expect(setup.route.data).toEqual({ type: "session", sessionID: "first" })
+
+    setup.route.navigate({ type: "home" })
+    await wait(() => setup.tabs.newTab())
+    setup.route.navigate({ type: "session", sessionID: "third" })
+    await wait(
+      () => setup.tabs.current() === "third" && setup.tabs.tabs().some((tab) => tab.sessionID === "third"),
+    )
+
+    expect(setup.tabs.newTab()).toBe(false)
+  } finally {
+    setup.destroy()
   }
 })
