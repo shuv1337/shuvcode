@@ -11,6 +11,7 @@ import type {
   OpenCodeEvent,
   PermissionSavedInfo,
   PermissionRequest,
+  Project,
   ProviderInfo,
   ReferenceInfo,
   SessionInfo,
@@ -77,6 +78,10 @@ export interface Data {
     }
   }
   readonly project: {
+    list(): Project[]
+    get(projectID: string): Project | undefined
+    sync(): Promise<void>
+    invalidate(): void
     readonly permission: {
       list(projectID: string): PermissionSavedInfo[] | undefined
       sync(projectID: string): Promise<void>

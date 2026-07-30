@@ -11,7 +11,7 @@ import { ClientProvider, useClient } from "../../../src/context/client"
 import { DataProvider as DataProviderBase, useData } from "../../../src/context/data"
 import { LocationProvider, useLocation } from "../../../src/context/location"
 import { createSessionRows, type SessionRow } from "../../../src/routes/session/rows"
-import { createApi, createEventStream, createFetch, directory, json } from "../../fixture/tui-client"
+import { createApi, createEventStream, createFetch, directory, json, worktree } from "../../fixture/tui-client"
 import { TestTuiContexts } from "../../fixture/tui-environment"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
 
@@ -71,11 +71,13 @@ function durable(sessionID: string, seq = 0, version = 1) {
   return { aggregateID: sessionID, seq, version }
 }
 
-test("preloads root sessions before applying the session limit", async () => {
+test("does not preload session summaries into the data context", async () => {
   const events = createEventStream()
-  let request: URL | undefined
+  let location = false
+  let sessions = false
   const calls = createFetch((url) => {
-    if (url.pathname === "/api/session") request = url
+    if (url.pathname === "/api/location") location = true
+    if (url.pathname === "/api/session") sessions = true
     return undefined
   }, events)
 
@@ -92,10 +94,58 @@ test("preloads root sessions before applying the session limit", async () => {
   ))
 
   try {
-    await wait(() => request !== undefined)
-    expect(request?.searchParams.get("project")).toBe("proj_test")
-    expect(request?.searchParams.get("limit")).toBe("50")
-    expect(request?.searchParams.get("parentID")).toBe("null")
+    await wait(() => location)
+    await Bun.sleep(20)
+    expect(sessions).toBe(false)
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("proactively syncs project metadata", async () => {
+  const events = createEventStream()
+  const calls = createFetch((url) => {
+    if (url.pathname !== "/api/project") return
+    return json([
+      {
+        id: "proj_test",
+        canonical: worktree,
+        name: "OpenCode",
+        time: { created: 1, updated: 2 },
+        sandboxes: [],
+      },
+    ])
+  }, events)
+  let data!: ReturnType<typeof useData>
+
+  function Probe() {
+    data = useData()
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <ClientProvider api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </ClientProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await wait(() => data.project.get("proj_test") !== undefined)
+    expect(data.project.list()).toEqual([
+      {
+        id: "proj_test",
+        canonical: worktree,
+        name: "OpenCode",
+        time: { created: 1, updated: 2 },
+        sandboxes: [],
+      },
+    ])
   } finally {
     app.renderer.destroy()
   }
@@ -2619,8 +2669,18 @@ function sessionInfo(id: string, parentID: string | undefined, cost = 0) {
 // the family-index tests below.
 async function mountData(parents: Record<string, string>, costs: Record<string, number> = {}) {
   const calls = createFetch((url) => {
+    if (url.pathname === "/api/session") {
+      const parentID = url.searchParams.get("parentID")
+      return json({
+        data: Object.entries(parents)
+          .filter(([, parent]) => parent === parentID)
+          .map(([id, parent]) => sessionInfo(id, parent, costs[id])),
+        cursor: {},
+      })
+    }
     const match = url.pathname.match(/^\/api\/session\/([^/]+)$/)
-    if (match && match[1] !== "active") return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
+    if (match && match[1] !== "active")
+      return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
   })
   let data!: ReturnType<typeof useData>
   let ready!: () => void
@@ -2646,6 +2706,20 @@ async function mountData(parents: Record<string, string>, costs: Record<string, 
   await mounted
   return { data, app }
 }
+
+test("syncs direct child session info with a navigated root", async () => {
+  const { data, app } = await mountData({ child: "root", sibling: "root", grandchild: "child" })
+  try {
+    await data.session.sync("root", { children: true })
+    expect(data.session.get("root")?.id).toBe("root")
+    expect(data.session.get("child")?.parentID).toBe("root")
+    expect(data.session.get("sibling")?.parentID).toBe("root")
+    expect(data.session.get("grandchild")).toBeUndefined()
+    expect(data.session.family("root")).toEqual(["root", "child", "sibling"])
+  } finally {
+    app.renderer.destroy()
+  }
+})
 
 test("groups an orphan child under its missing parent until the root arrives", async () => {
   const { data, app } = await mountData({ child: "root" })

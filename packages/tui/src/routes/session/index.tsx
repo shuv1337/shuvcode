@@ -256,7 +256,7 @@ export function Session() {
     const sessionID = route.sessionID
     void (async () => {
       await Promise.all([
-        data.session.sync(sessionID),
+        data.session.sync(sessionID, { children: true }),
         data.session.permission.sync(sessionID),
         data.session.form.sync(sessionID),
       ])
