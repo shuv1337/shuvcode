@@ -1,6 +1,6 @@
 import { createMemo, createSignal } from "solid-js"
 import { useConfig } from "../config"
-import { useTheme } from "../context/theme"
+import { useThemes } from "../context/theme"
 import { DialogSelect } from "../ui/dialog-select"
 import { useToast } from "../ui/toast"
 
@@ -15,14 +15,16 @@ type Setting = {
   min?: number
   max?: number
   format?: (value: unknown) => string
+  keywords?: readonly string[]
 }
 
-const settings: Setting[] = [
+export const settings: Setting[] = [
   {
     title: "Theme",
     category: "Appearance",
     path: ["theme", "name"],
     default: "opencode",
+    keywords: ["color scheme", "colors"],
   },
   {
     title: "Color mode",
@@ -30,6 +32,7 @@ const settings: Setting[] = [
     path: ["theme", "mode"],
     default: "system",
     values: ["system", "dark", "light"],
+    keywords: ["dark mode", "light mode", "system theme"],
   },
   {
     title: "Animations",
@@ -38,6 +41,7 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["motion", "effects"],
   },
   {
     title: "Onboarding",
@@ -46,6 +50,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["hints", "getting started", "guidance"],
   },
   {
     title: "Sidebar",
@@ -53,6 +58,7 @@ const settings: Setting[] = [
     path: ["session", "sidebar"],
     default: "auto",
     values: ["hide", "auto"],
+    keywords: ["side panel"],
   },
   {
     title: "Scrollbar",
@@ -61,6 +67,7 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["scroll bar"],
   },
   {
     title: "Thinking",
@@ -68,6 +75,7 @@ const settings: Setting[] = [
     path: ["session", "thinking"],
     default: "hide",
     values: ["hide", "show"],
+    keywords: ["reasoning", "chain of thought"],
   },
   {
     title: "Markdown",
@@ -75,6 +83,7 @@ const settings: Setting[] = [
     path: ["session", "markdown"],
     default: "rendered",
     values: ["source", "rendered"],
+    keywords: ["syntax", "concealment", "rendering"],
   },
   {
     title: "Grouping",
@@ -82,6 +91,23 @@ const settings: Setting[] = [
     path: ["session", "grouping"],
     default: "auto",
     values: ["none", "auto"],
+    keywords: ["transcript", "messages"],
+  },
+  {
+    title: "Enabled",
+    category: "Tabs",
+    path: ["tabs", "enabled"],
+    default: false,
+    values: [false, true],
+    labels: ["off", "on"],
+  },
+  {
+    title: "Scope",
+    category: "Tabs",
+    path: ["tabs", "scope"],
+    default: "cwd",
+    values: ["cwd", "global"],
+    labels: ["current directory", "global"],
   },
   {
     title: "Layout",
@@ -89,6 +115,7 @@ const settings: Setting[] = [
     path: ["diffs", "view"],
     default: "auto",
     values: ["auto", "split", "unified"],
+    keywords: ["diff layout", "split diff", "unified diff"],
   },
   {
     title: "Wrapping",
@@ -96,6 +123,7 @@ const settings: Setting[] = [
     path: ["diffs", "wrap"],
     default: "word",
     values: ["none", "word"],
+    keywords: ["diff wrap", "word wrap", "line wrap"],
   },
   {
     title: "File tree",
@@ -104,6 +132,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["diff files"],
   },
   {
     title: "Single patch",
@@ -112,6 +141,7 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["one file", "selected file"],
   },
   {
     title: "Scroll speed",
@@ -122,6 +152,7 @@ const settings: Setting[] = [
     min: 0.25,
     max: 10,
     format: (value) => Number(value).toFixed(2),
+    keywords: ["scrolling"],
   },
   {
     title: "Acceleration",
@@ -130,6 +161,7 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["scroll acceleration"],
   },
   {
     title: "Mouse",
@@ -138,6 +170,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["mouse capture"],
   },
   {
     title: "Editor context",
@@ -146,6 +179,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["file context", "prompt context", "editor selection"],
   },
   {
     title: "Large pastes",
@@ -153,6 +187,7 @@ const settings: Setting[] = [
     path: ["prompt", "paste"],
     default: "compact",
     values: ["compact", "full"],
+    keywords: ["paste summary", "clipboard", "pasted content"],
   },
   {
     title: "Leader timeout",
@@ -163,6 +198,7 @@ const settings: Setting[] = [
     min: 250,
     max: 10000,
     format: (value) => `${value} ms`,
+    keywords: ["leader key", "shortcut timeout"],
   },
   {
     title: "Attention",
@@ -171,6 +207,7 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["alerts"],
   },
   {
     title: "Notifications",
@@ -179,6 +216,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["system notifications", "desktop notifications", "alerts"],
   },
   {
     title: "Sounds",
@@ -187,6 +225,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["audio", "sound effects"],
   },
   {
     title: "Volume",
@@ -197,6 +236,7 @@ const settings: Setting[] = [
     min: 0,
     max: 1,
     format: (value) => `${Math.round(Number(value) * 100)}%`,
+    keywords: ["sound volume", "audio volume"],
   },
   {
     title: "Window title",
@@ -205,6 +245,7 @@ const settings: Setting[] = [
     default: true,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["terminal title", "tab title"],
   },
   {
     title: "Copy on select",
@@ -213,6 +254,7 @@ const settings: Setting[] = [
     default: process.platform !== "win32",
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["selection", "clipboard"],
   },
   {
     title: "DevTools",
@@ -221,22 +263,32 @@ const settings: Setting[] = [
     default: false,
     values: [false, true],
     labels: ["off", "on"],
+    keywords: ["debug bar", "developer tools"],
   },
   {
     title: "Turn token usage",
     category: "Debug",
     path: ["debug", "turn_tokens"],
     default: false,
-    values: [false, true],
-    labels: ["off", "on"],
+    values: [false, true, "verbose"],
+    labels: ["off", "on", "verbose"],
+    keywords: ["tokens", "usage", "debug"],
   },
 ]
 
-export function DialogConfig() {
+export function settingID(setting: Setting) {
+  return setting.path.join(".")
+}
+
+export function DialogConfig(props: { current?: string }) {
   const config = useConfig()
   const toast = useToast()
-  const themeState = useTheme()
-  const [selected, setSelected] = createSignal(0)
+  const themes = useThemes()
+  const current = Math.max(
+    0,
+    settings.findIndex((setting) => settingID(setting) === props.current),
+  )
+  const [selected, setSelected] = createSignal(current)
   const [saving, setSaving] = createSignal(false)
 
   const value = (setting: Setting) => {
@@ -244,12 +296,12 @@ export function DialogConfig() {
       if (!result || typeof result !== "object") return undefined
       return (result as Record<string, unknown>)[key]
     }, config.data)
-    if (setting.path.join(".") === "theme.name") return current ?? themeState.selected
+    if (setting.path.join(".") === "theme.name") return current ?? themes.selected
     return current ?? setting.default
   }
   const values = (setting: Setting) =>
     setting.path.join(".") === "theme.name"
-      ? Object.keys(themeState.all()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+      ? Object.keys(themes.all()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
       : setting.values
   const display = (setting: Setting) => {
     const current = value(setting)
@@ -261,6 +313,7 @@ export function DialogConfig() {
     settings.map((setting, index) => ({
       title: setting.title,
       category: setting.category,
+      searchText: setting.keywords?.join(" "),
       footer: display(setting),
       value: index,
     })),
@@ -292,6 +345,8 @@ export function DialogConfig() {
     <DialogSelect
       title="Settings"
       options={options()}
+      current={current}
+      filterThreshold={0.7}
       onMove={(option) => setSelected(option.value)}
       onSelect={(option) => void change(1, option.value)}
       footerHints={[{ title: "←/→", label: "change" }]}

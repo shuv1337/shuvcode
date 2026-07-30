@@ -1,29 +1,26 @@
 import { Plugin } from "@opencode-ai/plugin/tui"
 import { createMemo, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
-import { useTuiApp, useTuiPaths } from "../../context/runtime"
-import { useTheme } from "../../context/theme"
-import { abbreviateHome } from "../../runtime"
-import { FilePath } from "../../ui/file-path"
 import { stringWidth } from "../../util/string-width"
 import { homeFooterLayout } from "../../util/responsive"
+import { FadeFilePath } from "../../ui/fade-file-path"
 
 function Directory(props: { context: Plugin.Context; maxWidth: number }) {
-  const { themeV2 } = useTheme()
-  const paths = useTuiPaths()
   const directory = createMemo(() =>
-    props.context.location ? abbreviateHome(props.context.location.directory, paths.home) : undefined,
+    props.context.location ? props.context.ui.format.path(props.context.location.directory) : undefined,
   )
 
   return (
-    <Show when={directory()}>
-      {(value) => <FilePath value={value()} maxWidth={props.maxWidth} fg={themeV2.text.subdued} />}
-    </Show>
+    <FadeFilePath
+      value={directory()}
+      maxWidth={props.maxWidth}
+      fg={props.context.theme.text.subdued}
+      bg={props.context.theme.background.default}
+    />
   )
 }
 
 function Mcp(props: { context: Plugin.Context }) {
-  const { themeV2 } = useTheme()
   const list = createMemo(() => props.context.data.location.mcp.server.list(props.context.location) ?? [])
   const failed = createMemo(() => list().some((item) => item.status.status === "failed"))
   const count = createMemo(() => list().filter((item) => item.status.status === "connected").length)
@@ -31,26 +28,31 @@ function Mcp(props: { context: Plugin.Context }) {
   return (
     <Show when={list().length}>
       <box gap={1} flexDirection="row" flexShrink={0}>
-        <text fg={themeV2.text.default}>
+        <text fg={props.context.theme.text.default}>
           <Switch>
             <Match when={failed()}>
-              <span style={{ fg: themeV2.text.feedback.error.default }}>⊙ </span>
+              <span style={{ fg: props.context.theme.text.feedback.error.default }}>⊙ </span>
             </Match>
             <Match when={true}>
-              <span style={{ fg: count() > 0 ? themeV2.text.feedback.success.default : themeV2.text.subdued }}>⊙ </span>
+              <span
+                style={{
+                  fg:
+                    count() > 0 ? props.context.theme.text.feedback.success.default : props.context.theme.text.subdued,
+                }}
+              >
+                ⊙{" "}
+              </span>
             </Match>
           </Switch>
           {count()} MCP
         </text>
-        <text fg={themeV2.text.subdued}>/status</text>
+        <text fg={props.context.theme.text.subdued}>/status</text>
       </box>
     </Show>
   )
 }
 
 function View(props: { context: Plugin.Context }) {
-  const { themeV2 } = useTheme()
-  const app = useTuiApp()
   const dimensions = useTerminalDimensions()
   const mcpWidth = createMemo(() => {
     const list = props.context.data.location.mcp.server.list(props.context.location) ?? []
@@ -58,7 +60,7 @@ function View(props: { context: Plugin.Context }) {
     const count = list.filter((item) => item.status.status === "connected").length
     return stringWidth(`⊙ ${count} MCP /status`) + 2
   })
-  const layout = createMemo(() => homeFooterLayout(dimensions().width, stringWidth(app.version), mcpWidth()))
+  const layout = createMemo(() => homeFooterLayout(dimensions().width, stringWidth(props.context.app.version), mcpWidth()))
 
   return (
     <box
@@ -77,7 +79,7 @@ function View(props: { context: Plugin.Context }) {
       </Show>
       <box flexGrow={1} />
       <box flexShrink={0}>
-        <text fg={themeV2.text.subdued}>{app.version}</text>
+        <text fg={props.context.theme.text.subdued}>{props.context.app.version}</text>
       </box>
     </box>
   )

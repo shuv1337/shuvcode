@@ -88,7 +88,6 @@ export type FooterQueuedPrompt = {
   messageID: string
   prompt: RunPrompt
   delivery: "steer" | "queue"
-  admittedSeq: number
 }
 
 export type RunAgent = {
@@ -418,6 +417,7 @@ export type StreamCommit = {
   text: string
   phase: StreamPhase
   source: StreamSource
+  compaction?: true
   summary?: TurnSummary
   messageID?: string
   partID?: string

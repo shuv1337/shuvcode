@@ -77,7 +77,6 @@ function durable(sessionID: string, seq = 0, version: 1 | 2 = 1) {
 
 function promptAdmission(input: Parameters<OpenCodeClient["session"]["prompt"]>[0], sessionID = "ses_1") {
   return {
-    admittedSeq: 1,
     id: input.id ?? "msg_prompt",
     sessionID,
     type: "user" as const,
@@ -97,6 +96,19 @@ function footer() {
 }
 
 type SessionMessages = MessageListOutput["data"]
+
+function compaction(status: "running" | "completed", summary: string): SessionMessages[number] {
+  const message = {
+    id: "msg_compaction",
+    type: "compaction" as const,
+    reason: "auto" as const,
+    summary,
+    recent: "",
+    time: { created: 1 },
+  }
+  if (status === "running") return { ...message, status }
+  return { ...message, status }
+}
 
 function form(id: string, sessionID: string, title = id): FormInfo {
   return {
@@ -155,7 +167,11 @@ function sdk(input: {
       location: {
         directory: input.globalLocation?.directory ?? "/tmp",
         workspaceID: input.globalLocation?.workspaceID,
-        project: { id: "proj_1", directory: input.globalLocation?.directory ?? "/tmp" },
+        project: {
+          id: "proj_1",
+          directory: input.globalLocation?.directory ?? "/tmp",
+          canonical: input.globalLocation?.directory ?? "/tmp",
+        },
       },
       data: input.globals ?? [],
     }),
@@ -200,6 +216,71 @@ afterEach(() => {
 })
 
 describe("V2 mini transport", () => {
+  test("renders projected compactions as labeled transcript boundaries", async () => {
+    const events = feed()
+    events.push(connected())
+    const ui = footer()
+    const transport = await createSessionTransport({
+      sdk: sdk({
+        streams: [events],
+        messages: {
+          ses_1: [compaction("completed", "## Transport")],
+        },
+      }),
+      sessionID: "ses_1",
+      thinking: false,
+      replay: true,
+      footer: ui.api,
+    })
+
+    expect(ui.commits).toMatchObject([
+      { text: "Compaction", compaction: true, messageID: "msg_compaction" },
+      { text: "## Transport", phase: "progress", messageID: "msg_compaction" },
+      { text: "", phase: "final", messageID: "msg_compaction" },
+    ])
+    await transport.close()
+  })
+
+  test("shows an active compaction boundary before live summary output without history replay", async () => {
+    const events = feed()
+    events.push(connected())
+    const ui = footer()
+    const transport = await createSessionTransport({
+      sdk: sdk({
+        streams: [events],
+        active: () => ({ ses_1: { type: "running" } }),
+        messages: {
+          ses_1: [compaction("running", "")],
+        },
+      }),
+      sessionID: "ses_1",
+      thinking: false,
+      footer: ui.api,
+    })
+
+    events.push({
+      id: "evt_compaction_delta",
+      created: 2,
+      type: "session.compaction.delta",
+      data: { sessionID: "ses_1", text: "Transport" },
+    })
+    events.push({
+      id: "evt_compaction_ended",
+      created: 3,
+      type: "session.compaction.ended",
+      durable: durable("ses_1", 3),
+      data: { sessionID: "ses_1", reason: "auto", text: "Transport", recent: "" },
+    })
+
+    while (!ui.commits.some((commit) => commit.phase === "final")) await Bun.sleep(0)
+    expect(ui.commits).toMatchObject([
+      { text: "Compaction", compaction: true, messageID: "msg_compaction" },
+      { text: "Transport", phase: "progress", messageID: "msg_compaction" },
+      { text: "", phase: "final", messageID: "msg_compaction" },
+    ])
+    await transport.close()
+  })
+
   test("reports session title changes", async () => {
     const events = feed()
     events.push(connected())
@@ -581,7 +662,6 @@ describe("V2 mini transport", () => {
       pending: {
         ses_1: [
           {
-            admittedSeq: 1,
             id: "msg_queued",
             sessionID: "ses_1",
             timeCreated: 1,
@@ -602,9 +682,9 @@ describe("V2 mini transport", () => {
     const pending = () =>
       ui.events
         .findLast((item) => item.type === "queued.prompts")
-        ?.prompts.map((item) => [item.messageID, item.delivery, item.admittedSeq])
+        ?.prompts.map((item) => [item.messageID, item.delivery])
 
-    expect(pending()).toEqual([["msg_queued", "queue", 1]])
+    expect(pending()).toEqual([["msg_queued", "queue"]])
     events.push({
       id: "evt_promoted",
       created: 2,
@@ -619,7 +699,7 @@ describe("V2 mini transport", () => {
     )
     expect(pending()).toEqual([])
     const prompt = spyOn(client.session, "prompt").mockImplementation(
-      (request) => ok({ ...promptAdmission(request), admittedSeq: 2 }) as never,
+      (request) => ok(promptAdmission(request)) as never,
     )
     await transport.queuePromptTurn({
       agent: "review",
@@ -648,8 +728,8 @@ describe("V2 mini transport", () => {
       await Bun.sleep(0)
     }
     expect(pending()).toEqual([
-      ["msg_earlier", "steer", 1],
-      ["msg_next", "queue", 2],
+      ["msg_next", "queue"],
+      ["msg_earlier", "steer"],
     ])
     await transport.close()
   })
@@ -2616,7 +2696,6 @@ describe("V2 mini transport", () => {
         })
       })
       return ok({
-        admittedSeq: 1,
         id: input.id ?? "msg_cmd",
         sessionID: "ses_1",
         type: "user" as const,

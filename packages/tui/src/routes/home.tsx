@@ -5,7 +5,6 @@ import { useArgs } from "../context/args"
 import { useRouteData } from "../context/route"
 import { usePromptRef } from "../context/prompt"
 import { useLocal } from "../context/local"
-import { usePluginRuntime } from "../plugin/runtime"
 import { useEditorContext } from "../context/editor"
 import { useData } from "../context/data"
 import { useLocation } from "../context/location"
@@ -22,7 +21,6 @@ const placeholder = {
 }
 
 export function Home() {
-  const pluginRuntime = usePluginRuntime()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const [ref, setRef] = createSignal<PromptRef | undefined>()
@@ -36,10 +34,11 @@ export function Home() {
   const promptMaxWidth = createMemo(() => homePromptMaxWidth(dimensions().width, config.prompt?.max_width))
   const logoVisible = createMemo(() => showHomeLogo(dimensions().width, dimensions().height))
   // Global MCP elicitations can arrive without a session route, so keep them reachable from Home.
-  const forms = createMemo(() => data.session.form.list("global", data.location.default()) ?? [])
+  const currentLocation = () => route.location ?? data.location.default()
+  const forms = createMemo(() => data.session.form.list("global", currentLocation()) ?? [])
   let sent = false
 
-  createEffect(() => location.set(data.location.default()))
+  createEffect(() => location.set(currentLocation()))
 
   onMount(() => {
     editor.clearSelection()
@@ -78,27 +77,17 @@ export function Home() {
         <box height={4} minHeight={0} flexShrink={1} />
         <Show when={logoVisible()}>
           <box flexShrink={0}>
-            <pluginRuntime.Slot name="home_logo" mode="replace">
-              <Logo />
-            </pluginRuntime.Slot>
+            <Logo />
           </box>
           <box height={1} minHeight={0} flexShrink={1} />
         </Show>
         <box width="100%" maxWidth={promptMaxWidth()} zIndex={1000} paddingTop={1} flexShrink={0}>
-          <pluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
-            <Prompt
-              ref={bind}
-              right={<pluginRuntime.Slot name="home_prompt_right" />}
-              placeholders={placeholder}
-              disabled={forms().length > 0}
-            />
-          </pluginRuntime.Slot>
+          <Prompt ref={bind} placeholders={placeholder} disabled={forms().length > 0} />
         </box>
-        <PluginSlot name="home.bottom" />
         <box flexGrow={1} minHeight={0} />
       </box>
       <box width="100%" flexShrink={0}>
-        <PluginSlot name="home.footer" />
+        <PluginSlot name="home.footer" input={{}} mode="replace" />
       </box>
       <Show when={forms()[0]?.id} keyed>
         {(_) => {

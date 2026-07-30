@@ -1,6 +1,13 @@
 import { CliRenderEvents, SyntaxStyle, type TerminalColors } from "@opentui/core"
 import { useRenderer } from "@opentui/solid"
 import {
+  generateSyntax,
+  resolveThemeDocument,
+  themeModes,
+  type ResolvedTheme,
+  type ContextName,
+} from "@opencode-ai/theme/tui"
+import {
   DEFAULT_THEMES,
   addTheme,
   allThemes,
@@ -14,12 +21,9 @@ import {
   type Theme,
   type ThemeDocumentSource,
 } from "../theme"
-import { generateSyntax } from "../theme/v2/syntax"
 import { generateSystem, terminalMode } from "../theme/system"
 import { discoverThemes, themeDirectories } from "../theme/discovery"
-import { createComponentTheme, type ComponentTheme } from "../theme/v2/component"
-import { resolveThemeDocument } from "../theme/v2/resolve"
-import { themeModes } from "../theme/v2/select"
+import { createComponentTheme, type ComponentTheme } from "../theme/component"
 import { createEffect, createMemo, onCleanup, onMount, type Accessor, type ParentProps } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
@@ -97,14 +101,13 @@ type State = {
   ready: boolean
 }
 
-type ContextName = "elevated" | "overlay"
-type ThemeService = {
-  themeV2: ComponentTheme
-  contextual(context: ContextName): ThemeService
+type Themes = {
+  current: ComponentTheme
+  currentTokens: Accessor<ResolvedTheme>
   readonly selected: string
   all: typeof allThemes
   has: typeof hasTheme
-  syntax: Accessor<SyntaxStyle>
+  currentSyntax: Accessor<SyntaxStyle>
   mode: Accessor<"dark" | "light">
   modes: Accessor<readonly ("dark" | "light")[]>
   supports(mode: "dark" | "light"): boolean
@@ -114,6 +117,12 @@ type ThemeService = {
   setMode(mode?: "dark" | "light", persist?: boolean): boolean
   set(theme: string): boolean
   onError(handler: ThemeErrorHandler): () => void
+  readonly ready: boolean
+}
+
+type ThemeContextValue = {
+  current: ComponentTheme["contextual"][ContextName]
+  themes: Themes
   readonly ready: boolean
 }
 
@@ -129,7 +138,7 @@ subscribeThemes((themes) => setStore("themes", themes))
 
 const themeContext = createSimpleContext({
   name: "Theme",
-  init: (props: { mode: "dark" | "light"; source?: ThemeSource }) => {
+  init: (props: { mode: "dark" | "light"; source?: ThemeSource }): ThemeContextValue => {
     const renderer = useRenderer()
     const configState = useConfig()
     const config = configState.data
@@ -310,27 +319,20 @@ const themeContext = createSimpleContext({
     const valuesV2 = () => selected().theme
     valuesV2()
     themePerformance.set("Init", `${(performance.now() - initStarted).toFixed(2)} ms`)
-    const themeV2 = createComponentTheme(valuesV2, mode)
-    const contextsV2 = {
-      elevated: createComponentTheme(() => valuesV2().contexts["@context:elevated"] ?? valuesV2(), mode),
-      overlay: createComponentTheme(() => valuesV2().contexts["@context:overlay"] ?? valuesV2(), mode),
-    }
+    const current = createComponentTheme(valuesV2, mode)
 
     createEffect(() => renderer.setBackgroundColor(valuesV2().background.default))
 
-    const syntax = createSyntaxStyleMemo(() => generateSyntax(valuesV2(), mode()))
-    function contextual(context: ContextName) {
-      return contextualServices[context]
-    }
-    const service: ThemeService = {
-      themeV2,
-      contextual,
+    const currentSyntax = createSyntaxStyleMemo(() => generateSyntax(valuesV2(), mode()))
+    const service: Themes = {
+      current,
+      currentTokens: valuesV2,
+      currentSyntax,
       get selected() {
         return store.active
       },
       all: allThemes,
       has: hasTheme,
-      syntax,
       mode,
       modes,
       supports: (requested) => modes().includes(requested),
@@ -357,21 +359,33 @@ const themeContext = createSimpleContext({
         return store.ready
       },
     }
-    const contextualServices = {
-      elevated: Object.assign(Object.create(service) as ThemeService, { themeV2: contextsV2.elevated }),
-      overlay: Object.assign(Object.create(service) as ThemeService, { themeV2: contextsV2.overlay }),
+    return {
+      current,
+      themes: service,
+      get ready() {
+        return service.ready
+      },
     }
-    return service
   },
 })
 
-export const useTheme = themeContext.use
+export function useThemes() {
+  return themeContext.use().themes
+}
+export function useTheme(): ComponentTheme
+export function useTheme(context: ContextName): ComponentTheme["contextual"][ContextName]
+export function useTheme(context?: ContextName) {
+  const value = themeContext.use()
+  return context ? value.themes.current.contextual[context] : value.current
+}
 export const ThemeProvider = themeContext.provider
 
 export function ThemeContextProvider(props: ParentProps<{ context: ContextName }>) {
-  const theme = useTheme()
+  const value = themeContext.use()
   return (
-    <themeContext.context.Provider value={theme.contextual(props.context)}>
+    <themeContext.context.Provider
+      value={{ current: value.themes.current.contextual[props.context], themes: value.themes, ready: value.ready }}
+    >
       {props.children}
     </themeContext.context.Provider>
   )

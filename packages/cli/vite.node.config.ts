@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { defineConfig, type Plugin, type UserConfig } from "vite"
 import solid from "vite-plugin-solid"
-import { nodeExecArgv, nodeTarget, type NodeTarget, photonWasmAsset } from "./src/node/target"
+import {
+  nodeExecArgv,
+  nodeTarget,
+  type NodeTarget,
+  photonWasmAsset,
+  shellParserWasmAssets,
+} from "./src/node/target"
 
 const dir = import.meta.dirname
 
@@ -26,6 +32,44 @@ function runtimeRequirePlugin(): Plugin {
       const transformed = code.replace("    var domino = require('@mixmark-io/domino');", "")
       if (transformed === code) this.error("Failed to rewrite Turndown's Domino require")
       return `import domino from "@mixmark-io/domino"\n${transformed}`
+    },
+  }
+}
+
+function fffNodePlugin(): Plugin {
+  return {
+    name: "opencode:fff-node",
+    enforce: "pre",
+    transform(code, id) {
+      const normalized = id.replaceAll("\\", "/")
+      if (normalized.endsWith("/ffi-rs/index.js")) {
+        const start = code.indexOf("if (!nativeBinding) {")
+        if (start === -1) this.error("Failed to rewrite ffi-rs native binding loader")
+        return `const unavailable = () => { throw new Error("ffi-rs native binding unavailable") }
+const nativeBinding = globalThis.__OPENCODE_FFF_FFI ?? {
+  DataType: new Proxy({}, { get: (target, key) => target[key] ?? key }),
+  PointerType: {},
+  FFITypeTag: {},
+  open: unavailable,
+  close: unavailable,
+  load: unavailable,
+  isNullPointer: unavailable,
+  createPointer: unavailable,
+  restorePointer: unavailable,
+  unwrapPointer: unavailable,
+  wrapPointer: unavailable,
+  freePointer: unavailable,
+}
+const loadError = undefined
+${code.slice(start)}`
+      }
+      if (!normalized.endsWith("/fff-node/dist/src/binary.js")) return
+      const transformed = code.replace(
+        "export function findBinary() {",
+        "export function findBinary() { if (process.env.FFF_BINARY_PATH) return process.env.FFF_BINARY_PATH;",
+      )
+      if (transformed === code) this.error("Failed to rewrite FFF binary loader")
+      return transformed
     },
   }
 }
@@ -156,6 +200,14 @@ process.env.OTUI_ASSET_ROOT = __ocAssetRoot
 process.env.OPENCODE_NODE_PTY_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.nodePtyEntryAsset)})
 process.env.OPENCODE_PARCEL_WATCHER_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.parcelWatcherAsset)})
 process.env.OPENCODE_PHOTON_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(photonWasmAsset)})
+process.env.OPENCODE_TREE_SITTER_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.runtime)})
+process.env.OPENCODE_TREE_SITTER_BASH_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.bash)})
+process.env.OPENCODE_TREE_SITTER_POWERSHELL_WASM_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(shellParserWasmAssets.powershell)})
+process.env.FFF_BINARY_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.fffAsset)})
+process.env.OPENCODE_FFF_FFI_PATH = __ocPath.join(__ocAssetRoot, ${JSON.stringify(input.target.fffFfiAsset)})
+try {
+  globalThis.__OPENCODE_FFF_FFI = require(process.env.OPENCODE_FFF_FFI_PATH)
+} catch {}
 globalThis.__OPENCODE_PHOTON_WASM_PATH = process.env.OPENCODE_PHOTON_WASM_PATH
 if (process.platform === "linux") process.env.OPENTUI_LIBC = "glibc"`
 }
@@ -174,6 +226,7 @@ export function mainConfig(input: NodeBuildInput): UserConfig {
     plugins: [
       rawTextPlugin(),
       runtimeRequirePlugin(),
+      fffNodePlugin(),
       solid({
         solid: {
           generate: "universal",

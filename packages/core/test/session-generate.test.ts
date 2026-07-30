@@ -15,7 +15,6 @@ import { Location } from "@opencode-ai/core/location"
 import { McpInstructions } from "@opencode-ai/core/mcp/instructions"
 import { ID } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { Provider } from "@opencode-ai/core/provider"
 import { ReferenceInstructions } from "@opencode-ai/core/reference/instructions"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -49,7 +48,6 @@ const sessionID = SessionSchema.ID.make("ses_generate_test")
 
 const model = Model.make({ id: "generate-model", provider: "test", route: OpenAIChat.route })
 const client = Layer.mock(LLMClient.Service)({
-  prepare: () => Effect.die(new Error("unused")),
   stream: () => Stream.die(new Error("unused")),
   generate: (request) =>
     Effect.sync(() => {
@@ -192,11 +190,6 @@ const setup = Effect.gen(function* () {
       agent.mode = "primary"
     }),
   )
-  yield* db
-    .insert(ProjectTable)
-    .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
-    .run()
-    .pipe(Effect.orDie)
   yield* db
     .insert(SessionTable)
     .values({

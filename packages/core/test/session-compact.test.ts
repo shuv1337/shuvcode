@@ -34,14 +34,13 @@ const projects = Layer.succeed(
   Project.Service,
   Project.Service.of({
     list: () => Effect.succeed([]),
-    resolve: (directory) => Effect.succeed({ id: Project.ID.global, directory }),
+    resolve: (directory) => Effect.succeed({ id: Project.ID.global, directory, canonical: directory }),
     directories: () => Effect.succeed([]),
     commit: () => Effect.void,
   }),
 )
 let requests: LLMRequest[] = []
 const client = Layer.mock(LLMClient.Service)({
-  prepare: () => Effect.die("unused"),
   stream: (request: LLMRequest) => {
     requests.push(request)
     return Stream.make(LLMEvent.textDelta({ id: "summary", text: "manual session summary" }))

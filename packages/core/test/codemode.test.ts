@@ -8,7 +8,7 @@ import { Permission } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Session } from "@opencode-ai/core/session"
 import { Tool } from "@opencode-ai/core/tool"
-import { Cause, Effect, Exit, Layer, Schema } from "effect"
+import { Cause, Effect, Exit, Layer, Schema, Stream } from "effect"
 import { it } from "./lib/effect"
 import { toolIdentity } from "./lib/tool"
 
@@ -22,6 +22,7 @@ const configLayer = (info?: ConfigCodeMode.Info) =>
             ? []
             : [new Config.Document({ type: "document", info: new Config.Info({ codemode: info }) })],
         ),
+      changes: () => Stream.empty,
     }),
   )
 
@@ -66,6 +67,7 @@ describe("CodeMode", () => {
             description: "Echo text",
             input: Schema.Struct({ text: Schema.String }),
             output: Schema.String,
+            options: { pinned: true },
             execute: ({ text }) => Effect.succeed({ output: text }),
         }),
       )
@@ -77,6 +79,7 @@ describe("CodeMode", () => {
           path: "echo",
           description: "Echo text",
           signature: "tools.echo(input: {\n  text: string,\n}): Promise<string>",
+          pinned: true,
         },
       ])
     }).pipe(Effect.scoped, Effect.provide(toolNode)),

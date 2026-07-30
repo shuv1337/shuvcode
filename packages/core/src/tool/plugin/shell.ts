@@ -12,89 +12,70 @@ import { PluginRuntime } from "../../plugin/runtime"
 import { NonNegativeInt } from "../../schema"
 import { SessionSchema } from "../../session/schema"
 import { Shell } from "../../shell"
+import { ShellParse } from "../../shell/parse"
 
 export const name = "shell"
 export const DEFAULT_TIMEOUT_MS = 2 * 60 * 1_000
-export const MAX_TIMEOUT_MS = 10 * 60 * 1_000
 export const MAX_CAPTURE_BYTES = 1024 * 1024
 
 const BACKGROUND_STARTED = "The command was moved to the background."
 const BACKGROUND_INSTRUCTION =
   "You will be notified automatically when the command finishes. DO NOT sleep, poll, or proactively check on its progress."
+const OS =
+  process.platform === "darwin"
+    ? "macOS"
+    : process.platform === "win32"
+      ? "Windows"
+      : process.platform === "linux"
+        ? "Linux"
+        : process.platform
+const description = (shell?: string) =>
+  [
+    "Execute a shell command and return its output.",
+    ...(shell ? [`Commands run on ${OS} using ${shell}.`] : []),
+    "Quote file paths containing spaces or special characters.",
+    "Prefer dedicated tools over shell commands when possible.",
+    "When output is large, the full result is saved to a file and a truncated preview is returned.",
+    "Rely on automatic truncation unless filtering the output is more useful.",
+    "Commands accept an optional timeout, background commands have no timeout by default.",
+    "Background commands return immediately, and you will be notified when they complete.",
+  ].join(" ")
 
 export const Input = Schema.Struct({
   command: Schema.String.annotate({ description: "Shell command string to execute" }),
-  workdir: Schema.String.pipe(Schema.optional).annotate({
-    description: "Working directory. Defaults to the active Location; relative paths resolve from that Location.",
+  workdir: Schema.optionalKey(Schema.String).annotate({
+    description:
+      "Working directory to execute the command in. Defaults to the current working directory. When possible, avoid changing directories in the command and set the working directory here instead.",
   }),
-  timeout: NonNegativeInt.check(Schema.isLessThanOrEqualTo(MAX_TIMEOUT_MS))
-    .pipe(Schema.optional)
-    .annotate({
-      description: `Optional timeout in milliseconds. Zero means unlimited. Foreground commands default to ${DEFAULT_TIMEOUT_MS}; background commands default to unlimited. May not exceed ${MAX_TIMEOUT_MS}.`,
-    }),
-  background: Schema.Boolean.pipe(Schema.optional).annotate({
+  timeout: Schema.optionalKey(NonNegativeInt).annotate({
+    description: `Timeout in milliseconds. Set to 0 to disable the timeout. Defaults to ${DEFAULT_TIMEOUT_MS} for foreground commands. Background commands have no timeout by default.`,
+  }),
+  background: Schema.optionalKey(Schema.Boolean).annotate({
     description:
       "Run the command in the background and return immediately. You will be notified when it completes. DO NOT poll its progress.",
   }),
 })
 
 const StructuredOutput = Schema.Struct({
-  exit: Schema.Number.pipe(Schema.optional),
-  shellID: Schema.String.pipe(Schema.optional),
+  exit: Schema.optionalKey(Schema.Number),
+  shellID: Schema.optionalKey(Schema.String),
   truncated: Schema.Boolean,
-  timeout: Schema.Boolean.pipe(Schema.optional),
+  timeout: Schema.optionalKey(Schema.Boolean),
 })
 
 const Output = Schema.Struct({
   ...StructuredOutput.fields,
   output: Schema.String,
-  status: Schema.Literals(["completed", "running"]).pipe(Schema.optional),
-  warnings: Schema.Array(Schema.String).pipe(Schema.optional),
+  status: Schema.optionalKey(Schema.Literals(["completed", "running"])),
 })
 
 type Output = typeof Output.Type
 
 const modelOutput = (output: Output): string | undefined => {
-  const warnings = output.warnings?.length
-    ? `\n\nWarnings:\n${output.warnings.map((warning) => `- ${warning}`).join("\n")}`
-    : ""
-  if (output.status === "running") return `${warnings.trimStart()}${warnings ? "\n\n" : ""}${BACKGROUND_INSTRUCTION}`
-  if (output.timeout) return `${warnings.trimStart()}${warnings ? "\n\n" : ""}Command timed out before completion.`
-  return `${warnings.trimStart()}${warnings ? "\n\n" : ""}Command exited with code ${output.exit}.`
+  if (output.status === "running") return BACKGROUND_INSTRUCTION
+  if (output.timeout) return "Command timed out before completion."
+  return `Command exited with code ${output.exit}.`
 }
-
-/**
- * Minimal core shell boundary. Keep parity debt visible without pulling the
- * legacy shell runtime into core.
- */
-// TODO: Port tree-sitter bash / PowerShell parser-based approval reduction.
-// TODO: Port BashArity reusable command-prefix approvals.
-// TODO: Replace token-based command-argument external-directory advisories with parser-based detection.
-// TODO: Restore PowerShell and cmd-specific invocation/path handling on Windows.
-// TODO: Add plugin shell.env environment augmentation once plugin hooks exist.
-// TODO: Persist job status and define restart recovery before exposing remote observation.
-// TODO: Add HTTP job observation only after durable status, restart recovery, and authorization are defined.
-// TODO: Revisit process-group cleanup and platform coverage with shell-specific tests if current AppProcess semantics do not fully cover it.
-// TODO: Revisit binary output handling if stdout/stderr decoding is text-only.
-// TODO: Stream full shell output into managed storage while retaining only a bounded in-memory preview.
-
-const shellTokens = (command: string) => command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []
-const unquote = (value: string) => value.replace(/^(['"])(.*)\1$/, "$2")
-const externalCommandDirectories = Effect.fn("ShellTool.externalCommandDirectories")(function* (
-  fs: FSUtil.Interface,
-  command: string,
-  cwd: string,
-) {
-  const directories = new Set<string>()
-  for (const token of shellTokens(command)) {
-    const value = unquote(token).replace(/[;,|&]+$/, "")
-    if (!path.isAbsolute(value)) continue
-    const resolved = yield* fs.resolve(value)
-    if (FSUtil.contains(cwd, resolved)) continue
-    directories.add(yield* fs.resolve(path.dirname(resolved)))
-  }
-  return [...directories]
-})
 
 export const Plugin = {
   id: "opencode.tool.shell",
@@ -145,7 +126,7 @@ export const Plugin = {
           ({
             name,
             options: { codemode: false },
-            description: `Execute one shell command string with the host user's filesystem, process, and network authority. The active Location is the default working directory. Relative workdir values resolve from that Location. External workdir values require external_directory approval; best-effort command-argument path warnings are advisory only. An optional timeout may be provided in milliseconds (zero: unlimited; foreground default: ${DEFAULT_TIMEOUT_MS}; maximum: ${MAX_TIMEOUT_MS}). Background commands default to unlimited. Uses the configured shell when set; otherwise uses /bin/sh on POSIX and COMSPEC or cmd.exe on Windows. Background mode (background=true) launches the command asynchronously and returns immediately; you are notified when it finishes.`,
+            description: description(),
             input: Input,
             output: Output,
             execute: (input, context) =>
@@ -155,43 +136,59 @@ export const Plugin = {
                   messageID: context.messageID,
                   callID: context.callID,
                 }
-                const target = yield* mutation.resolve({ path: input.workdir ?? ".", kind: "directory" })
-                const external = target.externalDirectory
-                if (external)
-                  yield* permission.assert({
-                    ...LocationMutation.externalDirectoryPermission(external),
-                    sessionID: context.sessionID,
-                    agent: context.agent,
-                    source,
-                  })
-                const warnings = (yield* externalCommandDirectories(fsUtil, input.command, target.canonical)).map(
-                  (directory) =>
-                    `Command argument references external directory ${path.join(directory, "*").replaceAll("\\", "/")}. Shell runs with host-user filesystem, process, and network authority; this scan is advisory only.`,
-                )
-                yield* permission.assert({
-                  action: name,
-                  resources: [input.command],
-                  save: [input.command],
-                  sessionID: context.sessionID,
-                  agent: context.agent,
-                  source,
-                })
-
-                if ((yield* fsUtil.stat(target.canonical)).type !== "Directory")
-                  return yield* Effect.fail(new Error(`Working directory is not a directory: ${target.canonical}`))
-
                 const timeout = input.background === true ? (input.timeout ?? 0) : (input.timeout ?? DEFAULT_TIMEOUT_MS)
-                const info = yield* shell.create({
-                  command: input.command,
-                  cwd: target.canonical,
-                  timeout,
-                  metadata: { sessionID: context.sessionID },
-                })
+                let finalTimeout = timeout
+                const info = yield* shell.create(
+                  {
+                    command: input.command,
+                    cwd: input.workdir,
+                    timeout,
+                    metadata: { sessionID: context.sessionID },
+                  },
+                  (invocation) =>
+                    Effect.gen(function* () {
+                      const target = yield* mutation.resolve({ path: invocation.cwd, kind: "directory" })
+                      const parsed = yield* ShellParse.scan(invocation.command, invocation.shell, target.canonical)
+                      const directories = yield* Effect.forEach(parsed.directories, (directory) =>
+                        mutation.resolve({ path: path.resolve(target.canonical, directory), kind: "directory" }),
+                      )
+                      invocation.cwd = target.canonical
+                      finalTimeout = invocation.timeout
+                      const external = [target, ...directories]
+                        .map((item) => item.externalDirectory)
+                        .filter((item) => item !== undefined)
+                        .filter((item, index, items) => items.findIndex((other) => other.resource === item.resource) === index)
+                      if (external.length > 0)
+                        yield* permission.assert({
+                          action: "external_directory",
+                          resources: external.map((item) => item.resource),
+                          save: external.map((item) => item.save),
+                          sessionID: context.sessionID,
+                          agent: context.agent,
+                          source,
+                        })
+                      if (parsed.commands.length > 0)
+                        yield* permission.assert({
+                          action: name,
+                          resources: parsed.commands.map((command) => command.resource),
+                          save: parsed.commands.map((command) => command.save),
+                          sessionID: context.sessionID,
+                          agent: context.agent,
+                          source,
+                        })
+                      if ((yield* fsUtil.stat(target.canonical)).type !== "Directory")
+                        return yield* Effect.fail(new Error(`Working directory is not a directory: ${target.canonical}`))
+                    }),
+                )
                 yield* context.progress({ shellID: info.id })
 
                 const captureShell = Effect.fn("ShellTool.captureShell")(function* () {
-                  const page = yield* shell.output(info.id, { limit: MAX_CAPTURE_BYTES })
-                  const truncated = page.size > page.cursor
+                  const latest = yield* shell.output(info.id, { cursor: Number.MAX_SAFE_INTEGER })
+                  const truncated = latest.size > MAX_CAPTURE_BYTES
+                  const page = yield* shell.output(info.id, {
+                    cursor: Math.max(0, latest.size - MAX_CAPTURE_BYTES),
+                    limit: MAX_CAPTURE_BYTES,
+                  })
                   const notice = truncated ? `\n\n[output truncated; full output saved to: ${info.file}]` : ""
                   return {
                     output: `${page.output || "(no output)"}${notice}`,
@@ -201,20 +198,22 @@ export const Plugin = {
 
                 const settleShell = Effect.fn("ShellTool.settleShell")(function* () {
                   const final = yield* shell.wait(info.id)
+                  const capture = yield* captureShell()
 
+                  // `exit` is optionalKey in the Output schema; a present-but-undefined key
+                  // fails output encoding, so omit it when the process has no exit code.
                   if (final.status === "timeout") {
                     return {
-                      exit: final.exit,
-                      output: `Command exceeded timeout of ${timeout} ms. Retry with a larger timeout if the command is expected to take longer.`,
-                      truncated: false,
+                      ...(final.exit !== undefined ? { exit: final.exit } : {}),
+                      output: `${capture.output}\n\nCommand exceeded timeout of ${finalTimeout} ms. Retry with a larger timeout if the command is expected to take longer.`,
+                      truncated: capture.truncated,
                       timeout: true,
                       status: "completed" as const,
                     }
                   }
 
-                  const capture = yield* captureShell()
                   return {
-                    exit: final.exit,
+                    ...(final.exit !== undefined ? { exit: final.exit } : {}),
                     output: capture.output,
                     truncated: capture.truncated,
                     status: "completed" as const,
@@ -230,20 +229,19 @@ export const Plugin = {
                 const job = yield* runtime.job.start({
                   id: context.callID,
                   type: name,
-                  title: input.command,
+                  title: info.command,
                   metadata: { sessionID: context.sessionID, shellID: info.id },
                   run,
                 })
 
                 if (input.background === true) {
                   yield* runtime.job.background(job.id)
-                  yield* notifyWhenDone(context.sessionID, context.callID, input.command)
+                  yield* notifyWhenDone(context.sessionID, context.callID, info.command)
                   return {
                     output: BACKGROUND_STARTED,
                     shellID: info.id,
                     truncated: false,
                     status: "running" as const,
-                    ...(warnings.length ? { warnings } : {}),
                   }
                 }
 
@@ -252,20 +250,19 @@ export const Plugin = {
                 )
                 if (result?.type === "backgrounded") {
                   yield* shell.timeout(info.id, 0)
-                  yield* notifyWhenDone(context.sessionID, context.callID, input.command)
+                  yield* notifyWhenDone(context.sessionID, context.callID, info.command)
                   return {
                     output: BACKGROUND_STARTED,
                     shellID: info.id,
                     truncated: false,
                     status: "running" as const,
-                    ...(warnings.length ? { warnings } : {}),
                   }
                 }
                 if (result?.info.status === "error")
                   return yield* Effect.fail(new Error(result.info.error ?? "Command failed"))
                 if (result?.info.status === "cancelled") return yield* Effect.fail(new Error("Command cancelled"))
 
-                return { ...(yield* Deferred.await(settled)), ...(warnings.length ? { warnings } : {}) }
+                return yield* Deferred.await(settled)
               }).pipe(
                 Effect.map((output) => {
                   const content: Array<Content> = [{ type: "text", text: output.output }]
@@ -290,5 +287,13 @@ export const Plugin = {
         ),
       )
       .pipe(Effect.orDie)
+
+    yield* ctx.session.hook("context", (event) =>
+      Effect.gen(function* () {
+        const tool = event.tools[name]
+        if (!tool) return
+        tool.description = description(yield* shell.name())
+      }),
+    )
   }),
 }

@@ -1,4 +1,5 @@
 import { createStore, reconcile } from "solid-js/store"
+import type { LocationRef } from "@opencode-ai/client"
 import { createSimpleContext } from "./helper"
 import type { PromptInfo } from "../prompt/history"
 import { useTuiStartup } from "./runtime"
@@ -6,6 +7,7 @@ import { useTuiStartup } from "./runtime"
 export type HomeRoute = {
   type: "home"
   prompt?: PromptInfo
+  location?: LocationRef
 }
 
 export type SessionRoute = {
@@ -55,6 +57,11 @@ function initialRoute(value: unknown): Route | undefined {
     "name" in value &&
     typeof value.name === "string"
   ) {
+    const data =
+      "data" in value && typeof value.data === "object" && value.data !== null && !Array.isArray(value.data)
+        ? (value.data as Record<string, unknown>)
+        : undefined
+    if (data) return { type: "plugin", id: value.id, name: value.name, data }
     return { type: "plugin", id: value.id, name: value.name }
   }
 }

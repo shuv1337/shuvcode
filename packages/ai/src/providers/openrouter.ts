@@ -5,6 +5,7 @@ import { Framing } from "../route/framing"
 import { Protocol } from "../route/protocol"
 import { AuthOptions, type ProviderAuthOption } from "../route/auth-options"
 import { ProviderID, type ModelID, type ProviderOptions } from "../schema"
+import type { ProviderPackage } from "../provider-package"
 import * as OpenAICompatibleProfiles from "./openai-compatible-profile"
 import * as OpenAIChat from "../protocols/openai-chat"
 import { isRecord } from "../protocols/shared"
@@ -29,6 +30,12 @@ export type ModelOptions = Omit<RouteDefaultsInput, "providerOptions"> &
     readonly baseURL?: string
     readonly providerOptions?: OpenRouterProviderOptionsInput
   }
+
+export interface Settings extends ProviderPackage.Settings {
+  readonly apiKey?: string
+  readonly baseURL?: string
+  readonly providerOptions?: OpenRouterProviderOptionsInput
+}
 
 const OpenRouterBody = Schema.StructWithRest(Schema.Struct(OpenAIChat.bodyFields), [
   Schema.Record(Schema.String, Schema.Any),
@@ -107,10 +114,21 @@ export const configure = (input: ModelOptions = {}) => {
   const route = configuredRoute(input)
   return {
     id,
-    model: (modelID: string | ModelID) => route.model({ id: modelID }),
+    model: (modelID: string | ModelID) => route.model<OpenRouterProviderOptionsInput>({ id: modelID }),
     configure,
   }
 }
 
 export const provider = configure()
-export const model = provider.model
+export const model: ProviderPackage.Definition<Settings, OpenRouterProviderOptionsInput>["model"] = (
+  modelID,
+  settings,
+) =>
+  configure({
+    apiKey: settings.apiKey,
+    baseURL: settings.baseURL,
+    headers: settings.headers,
+    http: settings.body === undefined ? undefined : { body: { ...settings.body } },
+    limits: settings.limits,
+    providerOptions: settings.providerOptions,
+  }).model(modelID)

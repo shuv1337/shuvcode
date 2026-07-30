@@ -1,6 +1,6 @@
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { Keymap, type KeymapCommand } from "../context/keymap"
-import { useTheme } from "../context/theme"
+import { useTheme, useThemes } from "../context/theme"
 import { entries, filter, flatMap, groupBy, pipe } from "remeda"
 import { batch, createEffect, createMemo, createSignal, For, Show, type JSX, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -22,6 +22,7 @@ export interface DialogSelectProps<T> {
   noMatchView?: JSX.Element
   options: DialogSelectOption<T>[]
   flat?: boolean
+  filterThreshold?: number
   ref?: (ref: DialogSelectRef<T>) => void
   onMove?: (option: DialogSelectOption<T>) => void
   onFilter?: (query: string) => void
@@ -64,6 +65,8 @@ export interface DialogSelectOption<T = any> {
   titleView?: JSX.Element
   value: T
   description?: string
+  searchText?: string
+  searchFooter?: JSX.Element | string
   details?: string[]
   detailsColor?: RGBA
   detailsWrap?: boolean
@@ -92,7 +95,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   type VisibleAction = (Action & { label: string }) | FooterHint
 
   const dialog = useDialog()
-  const { themeV2, mode } = useTheme().contextual("elevated")
+  const themes = useThemes()
+  const theme = useTheme("elevated")
+  const mode = themes.mode
   const config = useConfig().data
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
 
@@ -164,12 +169,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     )
     if (!needle) return options
 
-    // prioritize title matches (weight: 2) over category matches (weight: 1).
+    // prioritize title matches (weight: 2) over category and supplemental search text matches (weight: 1).
     // users typically search by the item name, and not its category.
     const result = fuzzysort
       .go(needle, options, {
-        keys: ["title", "category"],
-        scoreFn: (r) => r[0].score * 2 + r[1].score,
+        keys: ["title", "category", "searchText"],
+        scoreFn: (r) => r[0].score * 2 + r[1].score + r[2].score,
+        threshold: props.filterThreshold,
       })
       .map((x) => x.obj)
 
@@ -518,10 +524,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     if (!isActionItem(action.item))
       return (
         <text>
-          <span style={{ fg: themeV2.text.default }}>
+          <span style={{ fg: theme.text.default }}>
             <b>{action.item.title}</b>{" "}
           </span>
-          <span style={{ fg: themeV2.text.subdued }}>{action.item.label}</span>
+          <span style={{ fg: theme.text.subdued }}>{action.item.label}</span>
         </text>
       )
     const item = action.item
@@ -530,16 +536,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     return (
       <box
         flexDirection="row"
-        backgroundColor={active() ? themeV2.background.action.primary.focused : RGBA.fromInts(0, 0, 0, 0)}
+        backgroundColor={active() ? theme.background.action.primary.focused : RGBA.fromInts(0, 0, 0, 0)}
         onMouseUp={() => trigger(item)}
       >
         <text
           fg={
             disabled()
-              ? themeV2.text.action.primary.disabled
+              ? theme.text.action.primary.disabled
               : active()
-                ? themeV2.text.action.primary.focused
-                : themeV2.text.default
+                ? theme.text.action.primary.focused
+                : theme.text.default
           }
           attributes={active() ? TextAttributes.BOLD : undefined}
         >
@@ -548,10 +554,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <text
           fg={
             disabled()
-              ? themeV2.text.action.primary.disabled
+              ? theme.text.action.primary.disabled
               : active()
-                ? themeV2.text.action.primary.focused
-                : themeV2.text.subdued
+                ? theme.text.action.primary.focused
+                : theme.text.subdued
           }
         >
           {" " + item.label}
@@ -565,11 +571,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       <box paddingLeft={4} paddingRight={4}>
         <box flexDirection="row" justifyContent="space-between">
           {props.titleView ?? (
-            <text fg={themeV2.text.default} attributes={TextAttributes.BOLD}>
+            <text fg={theme.text.default} attributes={TextAttributes.BOLD}>
               {props.title}
             </text>
           )}
-          <text fg={themeV2.text.subdued} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.text.subdued} onMouseUp={() => dialog.clear()}>
             esc
           </text>
         </box>
@@ -583,9 +589,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                   props.onFilter?.(e)
                 })
               }}
-              focusedBackgroundColor={themeV2.background.formfield.focused}
-              cursorColor={themeV2.text.formfield.focused}
-              focusedTextColor={themeV2.text.formfield.focused}
+              focusedBackgroundColor={theme.background.formfield.focused}
+              cursorColor={theme.text.formfield.focused}
+              focusedTextColor={theme.text.formfield.focused}
               ref={(r) => {
                 input = r
                 input.traits = { status: "FILTER" }
@@ -596,7 +602,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                 }, 1)
               }}
               placeholder={props.placeholder ?? "Search"}
-              placeholderColor={themeV2.text.subdued}
+              placeholderColor={theme.text.subdued}
             />
           </box>
         </Show>
@@ -609,15 +615,15 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               when={props.renderFilter !== false && store.filter.length > 0}
               fallback={
                 props.emptyView ?? (
-                  <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-                    <text fg={themeV2.text.subdued}>No items available</text>
+                  <box paddingLeft={4} paddingRight={4}>
+                    <text fg={theme.text.subdued}>No items available</text>
                   </box>
                 )
               }
             >
               {props.noMatchView ?? (
-                <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-                  <text fg={themeV2.text.subdued}>No results found</text>
+                <box paddingLeft={4} paddingRight={4}>
+                  <text fg={theme.text.subdued}>No results found</text>
                 </box>
               )}
             </Show>
@@ -639,10 +645,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                       <Show
                         when={options[0]?.categoryView}
                         fallback={
-                          <text
-                            fg={themeV2.hue.accent[mode() === "light" ? 800 : 200]}
-                            attributes={TextAttributes.BOLD}
-                          >
+                          <text fg={theme.hue.accent[mode() === "light" ? 800 : 200]} attributes={TextAttributes.BOLD}>
                             {category}
                           </text>
                         }
@@ -691,8 +694,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                             backgroundColor={
                               active()
                                 ? actionFocused()
-                                  ? themeV2.background.surface.overlay
-                                  : (option.bg ?? themeV2.background.action.primary.focused)
+                                  ? theme.background.surface.overlay
+                                  : (option.bg ?? theme.background.action.primary.focused)
                                 : RGBA.fromInts(0, 0, 0, 0)
                             }
                           >
@@ -704,7 +707,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                             <Option
                               title={option.title}
                               titleView={option.titleView}
-                              footer={flatten() ? (option.category ?? option.footer) : option.footer}
+                              footer={
+                                flatten() ? (option.searchFooter ?? option.category ?? option.footer) : option.footer
+                              }
                               titleWidth={option.titleWidth}
                               truncateTitle={option.truncateTitle}
                               description={option.description !== category ? option.description : undefined}
@@ -719,7 +724,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                             {(detail) => (
                               <box paddingLeft={3} paddingRight={3}>
                                 <text
-                                  fg={option.detailsColor ?? themeV2.text.subdued}
+                                  fg={option.detailsColor ?? theme.text.subdued}
                                   wrapMode={option.detailsWrap ? "word" : "none"}
                                 >
                                   {option.detailsWrap
@@ -768,12 +773,12 @@ function Option(props: {
   activeColor?: RGBA
   onMouseOver?: () => void
 }) {
-  const { themeV2 } = useTheme().contextual("elevated")
+  const theme = useTheme("elevated")
   const text = createMemo(() => {
-    if (props.active && !props.muted) return props.activeColor ?? themeV2.text.action.primary.focused
-    if (props.muted && (props.active || props.current)) return themeV2.text.subdued
-    if (props.current) return themeV2.text.formfield.selected
-    return themeV2.text.default
+    if (props.active && !props.muted) return props.activeColor ?? theme.text.action.primary.focused
+    if (props.muted && (props.active || props.current)) return theme.text.subdued
+    if (props.current) return theme.text.formfield.selected
+    return theme.text.default
   })
 
   return (
@@ -803,14 +808,14 @@ function Option(props: {
               ? Locale.truncateLeft(props.title, props.titleWidth ?? 61)
               : Locale.truncate(props.title, props.titleWidth ?? 61))}
         <Show when={props.description}>
-          <span style={{ fg: props.active && !props.muted ? text() : themeV2.text.subdued }}>
+          <span style={{ fg: props.active && !props.muted ? text() : theme.text.subdued }}>
             {" " + props.description}
           </span>
         </Show>
       </text>
       <Show when={props.footer}>
         <box flexShrink={0}>
-          <text fg={props.active && !props.muted ? text() : themeV2.text.subdued}>{props.footer}</text>
+          <text fg={props.active && !props.muted ? text() : theme.text.subdued}>{props.footer}</text>
         </box>
       </Show>
     </>

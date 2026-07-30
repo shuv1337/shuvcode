@@ -72,7 +72,7 @@ const transform = (
 ) =>
   service.transform((draft) =>
     Object.entries(tools).forEach(([name, tool]) =>
-      draft.add({ ...tool, name, options: { ...tool.options, ...options } }),
+      draft.add({ ...tool, name, options: options ?? tool.options }),
     ),
   )
 
@@ -142,6 +142,22 @@ describe("Tool", () => {
 
       expect(first).toEqual(second)
       expect(first.map((definition) => definition.name)).toEqual(["alpha", "alpha_beta", "zeta", "execute"])
+    }),
+  )
+
+  it.effect("snapshots external tools with missing input schemas", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* service.transform((draft) =>
+        draft.add({
+          ...make(),
+          input: undefined,
+        } as unknown as Info),
+      )
+
+      const snapshot = yield* service.snapshot()
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
+      expect(snapshot.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
     }),
   )
 

@@ -14,7 +14,7 @@ import { Model } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { Provider } from "@opencode-ai/core/provider"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
 import { Session } from "@opencode-ai/core/session"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
@@ -32,7 +32,7 @@ const projects = Layer.succeed(
   Project.Service,
   Project.Service.of({
     list: () => Effect.succeed([]),
-    resolve: (directory) => Effect.succeed({ id: Project.ID.global, directory }),
+    resolve: (directory) => Effect.succeed({ id: Project.ID.global, directory, canonical: directory }),
     directories: () => Effect.succeed([]),
     commit: () => Effect.void,
   }),
@@ -171,6 +171,30 @@ describe("Session.create", () => {
     }),
   )
 
+  it.effect("orders sessions by their latest prompt", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const { db } = yield* Database.Service
+      const active = yield* session.create({ location, title: "active" })
+      const newer = yield* session.create({ location, title: "newer" })
+
+      yield* db
+        .update(SessionTable)
+        .set({ time_created: -2, time_updated: -2 })
+        .where(eq(SessionTable.id, active.id))
+        .run()
+      yield* db
+        .update(SessionTable)
+        .set({ time_created: -1, time_updated: -1 })
+        .where(eq(SessionTable.id, newer.id))
+        .run()
+
+      yield* session.prompt({ sessionID: active.id, text: "continue", resume: false })
+
+      expect((yield* session.list()).data.map((item) => item.id)).toEqual([active.id, newer.id])
+    }),
+  )
+
   it.effect("filters direct child sessions by parent ID", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
@@ -181,6 +205,26 @@ describe("Session.create", () => {
       const page = yield* session.list({ parentID: parent.id })
 
       expect(page.data.map((item) => item.id)).toEqual([child.id])
+    }),
+  )
+
+  it.effect("filters project sessions by subpath", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const { db } = yield* Database.Service
+      const root = yield* session.create({ location, title: "root" })
+      const nested = yield* session.create({ location, title: "nested" })
+
+      yield* db.update(SessionTable).set({ path: "packages/tui" }).where(eq(SessionTable.id, nested.id)).run()
+
+      const page = yield* session.list({
+        project: Project.ID.global,
+        subpath: RelativePath.make("packages/tui"),
+        parentID: null,
+      })
+
+      expect(page.data.map((item) => item.id)).toEqual([nested.id])
+      expect(page.data.map((item) => item.id)).not.toContain(root.id)
     }),
   )
 
@@ -199,7 +243,7 @@ describe("Session.create", () => {
       yield* session.synthetic({ sessionID: parent.id, text: "parent note", resume: false })
       yield* SessionPending.promote(db, bus, parent.id, "steer")
 
-      const forked = yield* session.fork({ sessionID: parent.id })
+      const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
       const parentContext = yield* session.context(parent.id)
       const forkContext = yield* session.context(forked.id)
       const history = Array.from(yield* Stream.runCollect(logEvents(session, forked.id)))
@@ -252,6 +296,17 @@ describe("Session.create", () => {
     }),
   )
 
+  it.effect("rejects forking an empty session", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const parent = yield* session.create({ location })
+
+      expect(
+        yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } }).pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Session.ForkEmptyError", sessionID: parent.id })
+    }),
+  )
+
   it.effect("forks before the selected boundary message", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service
@@ -286,16 +341,27 @@ describe("Session.create", () => {
         tokens: { input: 6, output: 3, reasoning: 1, cache: { read: 2, write: 1 } },
       })
 
-      const forked = yield* session.fork({ sessionID: parent.id, messageID: second.id })
-      const beforeFirst = yield* session.fork({ sessionID: parent.id, messageID: first.id })
-      const complete = yield* session.fork({ sessionID: parent.id })
+      const forked = yield* session.fork({
+        sessionID: parent.id,
+        boundary: { type: "before", messageID: second.id },
+      })
+      const beforeFirst = yield* session.fork({
+        sessionID: parent.id,
+        boundary: { type: "before", messageID: first.id },
+      })
+      const complete = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
 
       const context = yield* session.context(forked.id)
       const history = Array.from(yield* Stream.runCollect(logEvents(session, forked.id)))
-      expect(forked.fork).toEqual({ sessionID: parent.id, messageID: second.id })
+      expect(forked.fork).toEqual({
+        sessionID: parent.id,
+        boundary: { type: "before", messageID: second.id },
+      })
       expect(context).toMatchObject([{ text: "First" }])
       expect(context[0]?.id).not.toBe(first.id)
-      expect(history[0]).toMatchObject({ data: { from: second.id } })
+      expect(history[0]).toMatchObject({
+        data: { boundary: { type: "before", messageID: second.id } },
+      })
       expect(forked).toMatchObject({ cost: 0, tokens: { input: 0, output: 0, reasoning: 0 } })
       expect(yield* session.context(beforeFirst.id)).toEqual([])
       expect(beforeFirst).toMatchObject({ cost: 0, tokens: { input: 0, output: 0, reasoning: 0 } })
@@ -484,7 +550,6 @@ describe("Session.create", () => {
           type: "user",
           data: { text: "Replay lifecycle" },
           delivery: "steer",
-          admittedSeq: 1,
         })
         expect(yield* store.context(created.id)).toEqual([])
 

@@ -14,6 +14,8 @@ export type PermissionEffect = "allow" | "deny" | "ask"
 
 export type PluginInfo = { id: string }
 
+export type SessionForkBoundary = { type: "before"; messageID: string } | { type: "through"; messageID: string }
+
 export type MoneyUSD = number
 
 export type TokenUsageInfo = {
@@ -43,13 +45,7 @@ export type PromptMention = { start: number; end: number; text: string }
 
 export type SessionPendingSyntheticData = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
 
-export type SessionPendingCompaction = {
-  admittedSeq: number
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "compaction"
-}
+export type SessionPendingCompaction = { id: string; sessionID: string; timeCreated: number; type: "compaction" }
 
 export type SessionMessageAgentSelected = {
   id: string
@@ -283,7 +279,7 @@ export type ProjectCommands = { start?: string }
 
 export type ProjectTime = { created: number; updated: number; initialized?: number }
 
-export type ProjectCurrent = { id: string; directory: string }
+export type ProjectCurrent = { id: string; directory: string; canonical: string }
 
 export type ProjectDirectory = { directory: string; strategy?: string }
 
@@ -628,7 +624,7 @@ export type SessionForked = {
   type: "session.forked"
   durable: { aggregateID: string; seq: number; version: 2 }
   location?: LocationRef
-  data: { sessionID: string; parentID: string; parentSeq: number; from?: string }
+  data: { sessionID: string; parentID: string; boundary: SessionForkBoundary; instructions?: { [x: string]: string } }
 }
 
 export type SessionInputPromoted = {
@@ -1210,7 +1206,6 @@ export type PromptFileAttachment = {
 export type PromptAgentAttachment = { name: string; mention?: PromptMention }
 
 export type SessionPendingSynthetic = {
-  admittedSeq: number
   id: string
   sessionID: string
   timeCreated: number
@@ -1435,7 +1430,7 @@ export type McpResourceCatalog = { resources: Array<McpResource>; templates: Arr
 
 export type Project = {
   id: string
-  worktree: string
+  canonical: string
   vcs?: ProjectVcs
   name?: string
   icon?: ProjectIcon
@@ -1755,7 +1750,7 @@ export type PermissionRuleset = Array<PermissionRule>
 export type SessionInfo = {
   id: string
   parentID?: string
-  fork?: { sessionID: string; messageID?: string }
+  fork?: { sessionID: string; boundary: SessionForkBoundary }
   projectID: string
   agent?: string
   model?: ModelRef
@@ -1966,7 +1961,6 @@ export type AgentInfo = {
 export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
 
 export type SessionPendingUser = {
-  admittedSeq: number
   id: string
   sessionID: string
   timeCreated: number
@@ -2521,7 +2515,11 @@ export type LocationGetInput = {
   }["location"]
 }
 
-export type LocationGetOutput = { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+export type LocationGetOutput = {
+  directory: string
+  workspaceID?: string
+  project: { id: string; directory: string; canonical: string }
+}
 
 export type AgentListInput = {
   readonly location?: {
@@ -2530,7 +2528,7 @@ export type AgentListInput = {
 }
 
 export type AgentListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<AgentInfo>
 }
 
@@ -2542,7 +2540,7 @@ export type AgentGetInput = {
 }
 
 export type AgentGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: AgentInfo
 }
 
@@ -2553,7 +2551,7 @@ export type PluginListInput = {
 }
 
 export type PluginListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<PluginInfo>
 }
 
@@ -2702,7 +2700,9 @@ export type SessionRemoveOutput = void
 
 export type SessionForkInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly messageID?: { readonly messageID?: string | undefined }["messageID"]
+  readonly boundary: {
+    readonly boundary: { readonly type: "before"; readonly messageID: string } | { readonly type: "through" }
+  }["boundary"]
 }
 
 export type SessionForkOutput = { data: SessionInfo }["data"]
@@ -3235,7 +3235,7 @@ export type ModelListInput = {
 }
 
 export type ModelListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<ModelInfo>
 }
 
@@ -3246,7 +3246,7 @@ export type ModelDefaultInput = {
 }
 
 export type ModelDefaultOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ModelInfo | null
 }
 
@@ -3273,7 +3273,7 @@ export type ProviderListInput = {
 }
 
 export type ProviderListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<ProviderInfo>
 }
 
@@ -3285,7 +3285,7 @@ export type ProviderGetInput = {
 }
 
 export type ProviderGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ProviderInfo
 }
 
@@ -3296,7 +3296,7 @@ export type IntegrationListInput = {
 }
 
 export type IntegrationListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<IntegrationInfo>
 }
 
@@ -3308,7 +3308,7 @@ export type IntegrationGetInput = {
 }
 
 export type IntegrationGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: IntegrationInfo | null
 }
 
@@ -3355,7 +3355,7 @@ export type IntegrationOauthConnectInput = {
 }
 
 export type IntegrationOauthConnectOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: {
     attemptID: string
     url: string
@@ -3374,7 +3374,7 @@ export type IntegrationOauthStatusInput = {
 }
 
 export type IntegrationOauthStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: IntegrationAttemptStatus
 }
 
@@ -3409,7 +3409,7 @@ export type IntegrationCommandConnectInput = {
 }
 
 export type IntegrationCommandConnectOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: IntegrationCommandAttempt
 }
 
@@ -3422,7 +3422,7 @@ export type IntegrationCommandStatusInput = {
 }
 
 export type IntegrationCommandStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: IntegrationCommandAttemptStatus
 }
 
@@ -3443,7 +3443,7 @@ export type McpListInput = {
 }
 
 export type McpListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<McpServer>
 }
 
@@ -3532,7 +3532,7 @@ export type McpResourceCatalogInput = {
 }
 
 export type McpResourceCatalogOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: McpResourceCatalog
 }
 
@@ -3581,7 +3581,7 @@ export type FormRequestListInput = {
 }
 
 export type FormRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<FormInfo>
 }
 
@@ -4437,7 +4437,7 @@ export type PermissionRequestListInput = {
 }
 
 export type PermissionRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<PermissionRequest>
 }
 
@@ -4559,7 +4559,7 @@ export type FileListInput = {
 }
 
 export type FileListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<FileSystemEntry>
 }
 
@@ -4591,7 +4591,7 @@ export type FileFindInput = {
 }
 
 export type FileFindOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<FileSystemEntry>
 }
 
@@ -4602,7 +4602,7 @@ export type CommandListInput = {
 }
 
 export type CommandListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<CommandInfo>
 }
 
@@ -4613,7 +4613,7 @@ export type SkillListInput = {
 }
 
 export type SkillListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<SkillInfo>
 }
 
@@ -4626,7 +4626,7 @@ export type PtyListInput = {
 }
 
 export type PtyListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<Pty>
 }
 
@@ -4672,7 +4672,7 @@ export type PtyCreateInput = {
 }
 
 export type PtyCreateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Pty
 }
 
@@ -4684,7 +4684,7 @@ export type PtyGetInput = {
 }
 
 export type PtyGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Pty
 }
 
@@ -4701,7 +4701,7 @@ export type PtyUpdateInput = {
 }
 
 export type PtyUpdateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Pty
 }
 
@@ -4721,7 +4721,7 @@ export type ShellListInput = {
 }
 
 export type ShellListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<ShellInfo1>
 }
 
@@ -4756,7 +4756,7 @@ export type ShellCreateInput = {
 }
 
 export type ShellCreateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ShellInfo1
 }
 
@@ -4768,7 +4768,7 @@ export type ShellGetInput = {
 }
 
 export type ShellGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ShellInfo1
 }
 
@@ -4781,7 +4781,7 @@ export type ShellTimeoutInput = {
 }
 
 export type ShellTimeoutOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: ShellInfo1
 }
 
@@ -4805,7 +4805,7 @@ export type ShellOutputInput = {
 }
 
 export type ShellOutputOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: { output: string; cursor: number; size: number; truncated: boolean }
 }
 
@@ -4825,7 +4825,7 @@ export type QuestionRequestListInput = {
 }
 
 export type QuestionRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<QuestionRequest>
 }
 
@@ -4855,7 +4855,7 @@ export type ReferenceListInput = {
 }
 
 export type ReferenceListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<ReferenceInfo>
 }
 
@@ -4898,7 +4898,7 @@ export type VcsStatusInput = {
 }
 
 export type VcsStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<VcsFileStatus>
 }
 
@@ -4921,7 +4921,7 @@ export type VcsDiffInput = {
 }
 
 export type VcsDiffOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<FileDiffInfo>
 }
 
@@ -4942,7 +4942,7 @@ export type WebsearchProvidersInput = {
 }
 
 export type WebsearchProvidersOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: Array<WebSearchProvider>
 }
 
@@ -4955,6 +4955,6 @@ export type WebsearchQueryInput = {
 }
 
 export type WebsearchQueryOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string } }
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
   data: { providerID: string; results: Array<WebSearchResult> }
 }

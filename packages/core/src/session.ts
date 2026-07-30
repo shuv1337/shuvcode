@@ -3,7 +3,7 @@ export * from "./session/schema"
 
 import { Effect, Layer, Schema, Context, Stream, Scope } from "effect"
 import { ListAnchor } from "@opencode-ai/schema/session"
-import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
+import { and, asc, desc, eq, gt, isNotNull, isNull, like, lt, ne, or, type SQL } from "drizzle-orm"
 import { Project } from "./project"
 import { Workspace } from "./workspace"
 import { Model } from "./model"
@@ -28,11 +28,12 @@ import { fromRow } from "./session/info"
 import { SessionRunner } from "./session/runner/index"
 import { SessionStore } from "./session/store"
 import { SessionExecution } from "./session/execution"
-import { MessageDecodeError, NotFoundError } from "./session/error"
+import { ForkEmptyError, MessageDecodeError, NotFoundError } from "./session/error"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { LocationServiceMap } from "./location-service-map"
 import { SessionEvent } from "./session/event"
 import { SessionPending } from "./session/pending"
+import { InstructionState } from "./session/instruction-state"
 import { SessionGenerate } from "./session/generate"
 import { Snapshot } from "./snapshot"
 import { SessionRevert } from "./session/revert"
@@ -106,7 +107,7 @@ type CompactInput = {
 
 type ForkInput = {
   sessionID: SessionSchema.ID
-  messageID?: SessionMessage.ID
+  boundary: Session.ForkRequestBoundary
 }
 
 export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
@@ -181,7 +182,9 @@ export interface Interface {
     readonly data: SessionSchema.Info[]
   }>
   readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError>
-  readonly fork: (input: ForkInput) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError>
+  readonly fork: (
+    input: ForkInput,
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly remove: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError>
   readonly messages: (input: {
@@ -322,6 +325,22 @@ const layer = Layer.effect(
     const shellLocks = KeyedMutex.makeUnsafe<SessionSchema.ID>()
     const decodeMessage = Schema.decodeUnknownEffect(SessionMessage.Info)
     const isDurableSessionEvent = Schema.is(SessionEvent.Durable)
+    const persistProject = (project: Project.Resolved) => {
+      const vcs = project.vcs?.type
+      return db
+        .insert(ProjectTable)
+        .values({ id: project.id, worktree: project.canonical, vcs, sandboxes: [] })
+        .onConflictDoUpdate({
+          target: ProjectTable.id,
+          set: { worktree: project.canonical, vcs: vcs ?? null },
+          setWhere: or(
+            ne(ProjectTable.worktree, project.canonical),
+            vcs ? or(isNull(ProjectTable.vcs), ne(ProjectTable.vcs, vcs)) : isNotNull(ProjectTable.vcs),
+          ),
+        })
+        .run()
+        .pipe(Effect.orDie)
+    }
     const decode = (row: typeof SessionMessageTable.$inferSelect) =>
       decodeMessage({ ...row.data, id: row.id, type: row.type }).pipe(
         Effect.mapError(
@@ -344,12 +363,7 @@ const layer = Layer.effect(
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)
-        yield* db
-          .insert(ProjectTable)
-          .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
-          .onConflictDoNothing()
-          .run()
-          .pipe(Effect.orDie)
+        yield* persistProject(project)
         const now = Date.now()
         const info = SessionV1.SessionInfo.make({
           id: sessionID,
@@ -395,25 +409,33 @@ const layer = Layer.effect(
       }),
       fork: Effect.fn("Session.fork")(function* (input) {
         const parent = yield* result.get(input.sessionID)
-        const boundary = input.messageID
-          ? yield* db
-              .select({ seq: SessionMessageTable.seq })
-              .from(SessionMessageTable)
-              .where(
-                and(eq(SessionMessageTable.session_id, input.sessionID), eq(SessionMessageTable.id, input.messageID)),
-              )
-              .get()
-              .pipe(Effect.orDie)
-          : undefined
-        if (input.messageID && !boundary)
-          return yield* new MessageNotFoundError({ sessionID: input.sessionID, messageID: input.messageID })
+        const boundary = yield* db
+          .select({ id: SessionMessageTable.id, seq: SessionMessageTable.seq })
+          .from(SessionMessageTable)
+          .where(
+            and(
+              eq(SessionMessageTable.session_id, input.sessionID),
+              input.boundary.type === "before" ? eq(SessionMessageTable.id, input.boundary.messageID) : undefined,
+            ),
+          )
+          .orderBy(desc(SessionMessageTable.seq))
+          .limit(1)
+          .get()
+          .pipe(Effect.orDie)
+        if (!boundary && input.boundary.type === "before")
+          return yield* new MessageNotFoundError({
+            sessionID: input.sessionID,
+            messageID: input.boundary.messageID,
+          })
+        if (!boundary) return yield* new ForkEmptyError({ sessionID: input.sessionID })
         const sessionID = SessionSchema.ID.create()
-        const parentSeq = boundary ? boundary.seq - 1 : yield* Bus.latestSequence(db, parent.id)
+        const instructionThrough =
+          input.boundary.type === "before" ? boundary.seq - 1 : yield* Bus.latestSequence(db, parent.id)
         yield* bus.publish(SessionEvent.Forked, {
           sessionID,
           parentID: parent.id,
-          parentSeq,
-          from: input.messageID,
+          boundary: { ...input.boundary, messageID: boundary.id },
+          instructions: yield* InstructionState.valuesAt(db, parent.id, instructionThrough),
         })
         return yield* result.get(sessionID).pipe(Effect.orDie)
       }),
@@ -440,6 +462,7 @@ const layer = Layer.effect(
         if ("directory" in input) conditions.push(eq(SessionTable.directory, input.directory))
         if (input.workspaceID) conditions.push(eq(SessionTable.workspace_id, input.workspaceID))
         if ("project" in input) conditions.push(eq(SessionTable.project_id, input.project))
+        if ("project" in input && input.subpath !== undefined) conditions.push(eq(SessionTable.path, input.subpath))
         if (input.search) conditions.push(like(SessionTable.title, `%${input.search}%`))
         if (input.parentID !== undefined)
           conditions.push(
@@ -721,12 +744,7 @@ const layer = Layer.effect(
         )
           return
         const project = yield* projects.resolve(directory)
-        yield* db
-          .insert(ProjectTable)
-          .values({ id: project.id, worktree: project.directory, vcs: project.vcs?.type, sandboxes: [] })
-          .onConflictDoNothing()
-          .run()
-          .pipe(Effect.orDie)
+        yield* persistProject(project)
         if ((yield* execution.active).has(input.sessionID)) {
           yield* execution.interrupt(input.sessionID)
           yield* execution.awaitIdle(input.sessionID)

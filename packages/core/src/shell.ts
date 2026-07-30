@@ -12,6 +12,8 @@ import { Bus } from "./bus"
 import { Location } from "./location"
 import { Global } from "@opencode-ai/util/global"
 import { ShellSelect } from "./shell/select"
+import type { ShellCreateBefore } from "@opencode-ai/plugin/effect/shell"
+import { PluginHooks } from "./plugin/hooks"
 
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Shell.NotFoundError", {
   id: Shell.ID,
@@ -44,7 +46,11 @@ type Active = {
  * here; callers (e.g. `ShellTool`) own that association and store the shell ID.
  */
 export interface Interface {
-  readonly create: (input: Shell.CreateInput) => Effect.Effect<Shell.Info>
+  readonly name: () => Effect.Effect<string>
+  readonly create: <E = never, R = never>(
+    input: Shell.CreateInput,
+    before?: (input: ShellCreateBefore) => Effect.Effect<void, E, R>,
+  ) => Effect.Effect<Shell.Info, E, R>
   // Currently running commands only; exited shells are retained for get/output but excluded here.
   readonly list: () => Effect.Effect<Shell.Info[]>
   readonly get: (id: Shell.ID) => Effect.Effect<Shell.Info, NotFoundError>
@@ -67,6 +73,7 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
     const config = yield* Config.Service
     const global = yield* Global.Service
     const appProcess = yield* AppProcess.Service
+    const hooks = yield* PluginHooks.Service
     const context = yield* Effect.context()
     const runFork = Effect.runForkWith(context)
     const sessions = new Map<string, Active>()
@@ -134,6 +141,13 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
       return session.info
     })
 
+    const resolve = () =>
+      config
+        .entries()
+        .pipe(Effect.map((entries) => ShellSelect.preferred(Config.latest(entries, "shell"), options)))
+
+    const name = () => resolve().pipe(Effect.map(ShellSelect.name))
+
     const output = Effect.fn("Shell.output")(function* (id: Shell.ID, input?: Shell.OutputInput) {
       const session = yield* require(id)
       const cursor = input?.cursor ?? 0
@@ -164,25 +178,34 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
       }
     })
 
-    const create = Effect.fn("Shell.create")(function* (input: Shell.CreateInput) {
+    const create = Effect.fn("Shell.create")(function* <E = never, R = never>(
+      input: Shell.CreateInput,
+      before?: (input: ShellCreateBefore) => Effect.Effect<void, E, R>,
+    ) {
+      const invocation: ShellCreateBefore = {
+        command: input.command,
+        cwd: input.cwd ?? location.directory,
+        timeout: input.timeout,
+        shell: yield* resolve(),
+        env: {
+          ...process.env,
+          TERM: "xterm-256color",
+          OPENCODE_TERMINAL: "1",
+        },
+      }
+      yield* hooks.trigger("shell", "create.before", invocation)
+      if (before) yield* before(invocation)
+
       const id = Shell.ID.ascending()
-      const cwd = input.cwd ?? location.directory
-      const configShell = Config.latest(yield* config.entries(), "shell")
-      const shell = ShellSelect.preferred(configShell, options)
-      const args = ShellSelect.args(shell, input.command)
+      const args = ShellSelect.args(invocation.shell, invocation.command)
       const file = path.join(outputDir, `${id}.out`)
-      const env = {
-        ...process.env,
-        TERM: "xterm-256color",
-        OPENCODE_TERMINAL: "1",
-      } as Record<string, string>
 
       const info: Info = {
         id,
         status: "running",
-        command: input.command,
-        cwd,
-        shell,
+        command: invocation.command,
+        cwd: invocation.cwd,
+        shell: invocation.shell,
         file,
         metadata: input.metadata ?? {},
         time: { started: Date.now() },
@@ -196,9 +219,9 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
         Effect.scoped(
           Effect.gen(function* () {
             const handle = yield* appProcess.spawn(
-              ChildProcess.make(shell, args, {
-                cwd,
-                env,
+              ChildProcess.make(invocation.shell, args, {
+                cwd: invocation.cwd,
+                env: invocation.env,
                 stdin: "ignore",
                 detached: process.platform !== "win32",
                 forceKillAfter: Duration.seconds(3),
@@ -290,7 +313,7 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
                 )
               })
 
-            yield* session.timeout(input.timeout)
+            yield* session.timeout(invocation.timeout)
 
             runFork(
               handle.exitCode.pipe(
@@ -312,7 +335,7 @@ export const layer = (options?: ShellSelect.Options) => Layer.effect(
       return session.info
     })
 
-    return Service.of({ create, list, get, wait, timeout, output, remove })
+    return Service.of({ name, create, list, get, wait, timeout, output, remove })
   }),
 )
 
@@ -320,7 +343,7 @@ export function configured(options?: ShellSelect.Options) {
   return makeLocationNode({
     service: Service,
     layer: layer(options),
-    deps: [Bus.node, Location.node, Config.node, Global.node, AppProcess.node],
+    deps: [Bus.node, Location.node, Config.node, Global.node, AppProcess.node, PluginHooks.node],
   })
 }
 

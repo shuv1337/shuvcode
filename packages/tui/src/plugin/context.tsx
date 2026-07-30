@@ -1,9 +1,11 @@
-import type { Plugin } from "@opencode-ai/plugin/tui"
+import { PluginContextProvider, type Plugin } from "@opencode-ai/plugin/tui"
 import {
   batch,
   createContext,
+  createEffect,
   createMemo,
   For,
+  on,
   onCleanup,
   onMount,
   useContext,
@@ -13,16 +15,30 @@ import {
 import path from "path"
 import { stat } from "fs/promises"
 import { fileURLToPath, pathToFileURL } from "url"
-import type { Context, Page, Slot } from "@opencode-ai/plugin/tui/context"
+import type { Context, Dialog, Page, Slot, SlotMap, SlotName, Toast } from "@opencode-ai/plugin/tui/context"
 import { createStore, produce, reconcile as reconcileStore } from "solid-js/store"
+import { useRenderer } from "@opentui/solid"
+import "#runtime-plugin-support"
 import { useConfig } from "../config"
 import { useClient } from "../context/client"
 import { useData } from "../context/data"
 import { Keymap } from "../context/keymap"
 import { useRoute } from "../context/route"
-import { useTuiLifecycle } from "../context/runtime"
+import { useTuiApp, useTuiLifecycle, useTuiPaths } from "../context/runtime"
 import { useLocation } from "../context/location"
+import { useThemes } from "../context/theme"
+import { DialogAlert } from "../ui/dialog-alert"
+import { DialogConfirm } from "../ui/dialog-confirm"
+import { DialogPrompt } from "../ui/dialog-prompt"
+import { DialogSelect } from "../ui/dialog-select"
+import { useDialog } from "../ui/dialog"
+import { useToast } from "../ui/toast"
+import { useAttention } from "../context/attention"
+import { useStorage } from "../context/storage"
+import { useSessionTabs } from "../context/session-tabs"
+import { abbreviateHome } from "../util/path-format"
 import { builtins } from "./builtins"
+import { discoverTuiPlugins } from "./discovery"
 
 export interface PackageResolver {
   readonly resolve: (spec: string) => Promise<string | undefined>
@@ -34,19 +50,26 @@ type State =
   | { readonly target: string; readonly status: "unsupported" }
   | { readonly target: string; readonly status: "failed"; readonly error: string }
 
+type RegisteredPlugin = {
+  readonly id: string
+  readonly source: "builtin" | "external"
+  readonly active: boolean
+}
+
 type Value = {
   readonly ready: () => boolean
   readonly list: () => ReadonlyArray<State>
+  readonly registered: () => ReadonlyArray<RegisteredPlugin>
   readonly route: (id: string, name: string) => Page["render"] | undefined
-  readonly slot: (name: string) => ReadonlyArray<Slot>
+  readonly slot: <Name extends SlotName>(name: Name) => ReadonlyArray<Slot<Name>>
   readonly activate: (id: string) => Promise<boolean>
   readonly deactivate: (id: string) => Promise<boolean>
 }
 
 type Dispose = () => Promise<void>
 type Registration = {
-  target: string
   plugin: Plugin.Definition
+  source: RegisteredPlugin["source"]
   options?: Readonly<Record<string, any>>
   active: boolean
   routes: Record<string, Page>
@@ -57,14 +80,24 @@ type Registration = {
 const PluginContext = createContext<Value>()
 
 export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>) {
+  const renderer = useRenderer()
   const client = useClient()
   const data = useData()
   const route = useRoute()
   const config = useConfig()
   const keymap = Keymap.use()
   const shortcuts = Keymap.useShortcuts()
+  const keymapState = Keymap.useState()
   const lifecycle = useTuiLifecycle()
+  const app = useTuiApp()
+  const paths = useTuiPaths()
   const location = useLocation()
+  const themes = useThemes()
+  const dialog = useDialog()
+  const toast = useToast()
+  const attention = useAttention()
+  const storage = useStorage()
+  const sessionTabs = useSessionTabs()
   const directory = config.path ? path.dirname(config.path) : process.cwd()
   const [store, setStore] = createStore({
     ready: false,
@@ -82,25 +115,146 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       setStore("registrations", id, "cleanups", [])
     })
     const owned: Dispose[] = []
-    const context: Context = {
+    let context: Context
+    const dialogApi: Dialog = {
+      show(render, onClose) {
+        dialog.replace(() => <PluginContextProvider value={context}>{render()}</PluginContextProvider>, onClose)
+      },
+      set(options) {
+        dialog.setSize(options.size ?? "medium")
+        dialog.setCentered(options.centered ?? false)
+      },
+      clear() {
+        dialog.clear()
+      },
+      alert(options) {
+        return new Promise<void>((resolve) => {
+          let settled = false
+          const done = () => {
+            if (settled) return
+            settled = true
+            resolve()
+          }
+          dialogApi.show(() => <DialogAlert title={options.title} message={options.message} onConfirm={done} />, done)
+        })
+      },
+      confirm(options) {
+        return new Promise<boolean | undefined>((resolve) => {
+          let settled = false
+          const done = (result: boolean | undefined) => {
+            if (settled) return
+            settled = true
+            resolve(result)
+          }
+          dialogApi.show(
+            () => (
+              <DialogConfirm
+                title={options.title}
+                message={options.message}
+                label={options.label}
+                onConfirm={() => done(true)}
+                onCancel={() => done(false)}
+              />
+            ),
+            () => done(undefined),
+          )
+        })
+      },
+      prompt(options) {
+        return new Promise<string | undefined>((resolve) => {
+          let settled = false
+          const done = (result: string | undefined) => {
+            if (settled) return
+            settled = true
+            resolve(result)
+          }
+          dialogApi.show(
+            () => (
+              <DialogPrompt
+                title={options.title}
+                description={options.description ? () => <text>{options.description}</text> : undefined}
+                placeholder={options.placeholder}
+                value={options.value}
+                onConfirm={(value) => {
+                  done(value)
+                  dialogApi.clear()
+                }}
+              />
+            ),
+            () => done(undefined),
+          )
+        })
+      },
+      select(options) {
+        return new Promise((resolve) => {
+          let settled = false
+          const done = (result: (typeof options.options)[number]["value"] | undefined) => {
+            if (settled) return
+            settled = true
+            resolve(result)
+          }
+          dialogApi.show(
+            () => (
+              <DialogSelect
+                title={options.title}
+                placeholder={options.placeholder}
+                options={options.options.map((option) => ({ ...option }))}
+                current={options.current}
+                onSelect={(option) => {
+                  done(option.value)
+                  dialogApi.clear()
+                }}
+              />
+            ),
+            () => done(undefined),
+          )
+        })
+      },
+    }
+    const toastApi: Toast = {
+      show(options) {
+        toast.show({ ...options, variant: options.variant ?? "info" })
+      },
+    }
+    context = {
       options: item.options ?? {},
       get location() {
         return location.current
       },
+      app: { version: app.version, channel: app.channel },
+      renderer,
       client: client.api,
       data,
+      attention,
+      get theme() {
+        return themes.currentTokens()
+      },
       keymap: {
         layer: Keymap.createLayer,
         dispatch: keymap.dispatch,
-        shortcut: shortcuts.get,
+        shortcuts: shortcuts.list,
+        commands: keymapState.commands,
+        pending: keymapState.pending,
+        active: keymapState.active,
         mode: keymap.mode,
       },
+      storage: {
+        store: (key, options) => storage.store(`plugin.${item.plugin.id}.${key}`, options),
+      },
       ui: {
+        dialog: dialogApi,
+        toast: toastApi,
+        format: {
+          path: (value) => abbreviateHome(value, paths.home),
+        },
         router: {
           register(page) {
             if (store.registrations[item.plugin.id]?.routes[page.name])
               throw new Error(`Route already registered: ${page.name}`)
-            setStore("registrations", item.plugin.id, "routes", page.name, page)
+            setStore("registrations", item.plugin.id, "routes", page.name, {
+              ...page,
+              render: (input) => <PluginContextProvider value={context}>{page.render(input)}</PluginContextProvider>,
+            })
             let registered = true
             const unregister = () => {
               if (!registered) return
@@ -128,9 +282,38 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
             return route.data
           },
         },
+        tabs: {
+          enabled: sessionTabs.enabled,
+          list: () =>
+            sessionTabs.tabs().map((tab) => ({
+              ...tab,
+              active: sessionTabs.current() === tab.sessionID,
+              ...sessionTabs.status(tab.sessionID),
+            })),
+          open(sessionID) {
+            if (!sessionTabs.enabled()) return false
+            sessionTabs.select(sessionID)
+            return true
+          },
+          focus(sessionID) {
+            if (!sessionTabs.enabled()) return false
+            if (!sessionTabs.tabs().some((tab) => tab.sessionID === sessionID)) return false
+            sessionTabs.select(sessionID)
+            return true
+          },
+          close(sessionID) {
+            if (!sessionTabs.enabled()) return false
+            const target = sessionID ?? sessionTabs.current()
+            if (!target || !sessionTabs.tabs().some((tab) => tab.sessionID === target)) return false
+            sessionTabs.close(target)
+            return true
+          },
+        },
         slot(name, render) {
           if (store.registrations[item.plugin.id]?.slots[name]) throw new Error(`Slot already registered: ${name}`)
-          setStore("registrations", item.plugin.id, "slots", name, () => render)
+          setStore("registrations", item.plugin.id, "slots", name, () => (input: SlotMap[typeof name]) => (
+            <PluginContextProvider value={context}>{render(input)}</PluginContextProvider>
+          ))
           let registered = true
           const unregister = () => {
             if (!registered) return
@@ -191,13 +374,13 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
     return true
   }
 
-  const reconcile = async () => {
+  const reconcile = async (configured = config.data.plugins ?? []) => {
     await Promise.all(
       Object.entries(store.registrations)
         .filter(([, registration]) => registration.active)
         .map(([id]) => deactivate(id)),
     )
-    const entries = config.data.plugins ?? []
+    const entries = [...(await discoverTuiPlugins(paths.cwd)), ...configured]
     batch(() => {
       setStore("registrations", reconcileStore({}))
       setStore("states", [])
@@ -205,8 +388,8 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
 
     for (const plugin of builtins) {
       setStore("registrations", plugin.id, {
-        target: plugin.id,
         plugin,
+        source: "builtin",
         active: false,
         routes: {},
         slots: {},
@@ -250,28 +433,42 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
         continue
       }
 
-      const item = { target, plugin, options }
-      setStore("registrations", item.plugin.id, {
-        ...item,
+      setStore("registrations", plugin.id, {
+        plugin,
+        source: "external",
+        options,
         active: false,
         routes: {},
         slots: {},
         cleanups: [],
       })
-      const error = await activate(item.plugin.id).then(
+      const error = await activate(plugin.id).then(
         () => undefined,
         (error) => (error instanceof Error ? error.message : String(error)),
       )
       setStore("states", (items) => [
-        ...items.filter((state) => state.target !== item.target && (!("id" in state) || state.id !== item.plugin.id)),
+        ...items.filter((state) => state.target !== target && (!("id" in state) || state.id !== plugin.id)),
         error
-          ? { target: item.target, status: "failed", error }
-          : { target: item.target, id: item.plugin.id, status: "active" },
+          ? { target, status: "failed", error }
+          : { target, id: plugin.id, status: "active" },
       ])
     }
   }
+  let loading = Promise.resolve()
+  createEffect(
+    on(
+      () => JSON.stringify(config.data.plugins ?? []),
+      () => {
+        const configured = config.data.plugins ?? []
+        loading = loading.catch(() => undefined).then(() => reconcile(configured))
+        void loading.then(
+          () => setStore("ready", true),
+          () => setStore("ready", true),
+        )
+      },
+    ),
+  )
   onMount(() => {
-    const loading = reconcile()
     let disposing: Promise<void> | undefined
     const dispose = () => {
       if (disposing) return disposing
@@ -292,7 +489,6 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       unregister()
       void dispose()
     })
-    void loading.finally(() => setStore("ready", true))
   })
 
   return (
@@ -300,6 +496,8 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver }>
       value={{
         ready: () => store.ready,
         list: () => store.states,
+        registered: () =>
+          Object.entries(store.registrations).map(([id, plugin]) => ({ id, source: plugin.source, active: plugin.active })),
         route: (id, name) => store.registrations[id]?.routes[name]?.render,
         slot: (name) =>
           Object.values(store.registrations).flatMap((registration) =>
@@ -391,7 +589,16 @@ export function PluginRoute(props: { readonly fallback: (id: string, name: strin
   return <>{content()}</>
 }
 
-export function PluginSlot(props: { readonly name: string; readonly input?: Record<string, any> }) {
+export function PluginSlot<Name extends SlotName>(props: {
+  readonly name: Name
+  readonly input: SlotMap[Name]
+  readonly mode: "all" | "replace"
+}) {
   const plugins = usePlugin()
-  return <For each={plugins.slot(props.name)}>{(render) => render(props.input ?? {})}</For>
+  const renderers = createMemo(() => {
+    const items = plugins.slot(props.name)
+    if (props.mode === "replace") return items.slice(-1)
+    return items
+  })
+  return <For each={renderers()}>{(render) => render(props.input)}</For>
 }
