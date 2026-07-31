@@ -180,21 +180,20 @@ export function fromPromise(plugin: Plugin) {
                         draft.method.update({
                           ...input,
                           authorize: (inputs) =>
-                            Effect.promise(() => input.authorize(inputs)).pipe(
+                            lift(() => input.authorize(inputs)).pipe(
                               Effect.map((authorization) =>
                                 authorization.mode === "auto"
                                   ? {
                                       ...authorization,
-                                      callback: Effect.promise(() => authorization.callback),
+                                      callback: lift(() => authorization.callback),
                                     }
                                   : {
                                       ...authorization,
-                                      callback: (code) => Effect.promise(() => authorization.callback(code)),
+                                      callback: (code) => lift(() => authorization.callback(code)),
                                     },
                               ),
                             ),
-                          refresh:
-                            refresh === undefined ? undefined : (credential) => Effect.promise(() => refresh(credential)),
+                          refresh: refresh === undefined ? undefined : (credential) => lift(() => refresh(credential)),
                         })
                       },
                       remove: draft.method.remove,
@@ -341,6 +340,17 @@ export function fromPromise(plugin: Plugin) {
 
 function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
   return Effect.tryPromise({ try: evaluate, catch: (cause) => cause })
+}
+
+/** Promise plugins written against the older Effect-passthrough bridge return
+ * Effect values from integration method callbacks; accept both flavors instead
+ * of dying with a cryptic non-thenable TypeError inside Effect.promise. */
+function lift<A>(evaluate: () => A | Promise<A> | Effect.Effect<A>): Effect.Effect<A> {
+  return Effect.suspend(() => {
+    const result = evaluate()
+    if (Effect.isEffect(result)) return result as Effect.Effect<A>
+    return Effect.promise(() => Promise.resolve(result))
+  })
 }
 
 function model(input: { readonly id: string; readonly providerID: string; readonly variant?: string }) {

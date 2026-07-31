@@ -3,6 +3,8 @@ import { Message, SystemPart } from "@opencode-ai/ai"
 import { DateTime, Effect, Schema } from "effect"
 import { Agent } from "@opencode-ai/core/agent"
 import { Catalog } from "@opencode-ai/core/catalog"
+import { Credential } from "@opencode-ai/core/credential"
+import { Integration } from "@opencode-ai/core/integration"
 import { Model } from "@opencode-ai/core/model"
 import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
@@ -15,6 +17,7 @@ import { SessionPending } from "@opencode-ai/core/session/pending"
 import { Tool } from "@opencode-ai/core/tool"
 import { Provider } from "@opencode-ai/core/provider"
 import { define } from "@opencode-ai/plugin/promise/plugin"
+import type { IntegrationMethodRegistration } from "@opencode-ai/plugin/promise/integration"
 import type { SessionHooks } from "@opencode-ai/plugin/effect/session"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
@@ -92,6 +95,53 @@ describe("fromPromise", () => {
         delivery: undefined,
         resume: undefined,
       })
+    }),
+  )
+
+  it.effect("accepts Effect-returning integration oauth callbacks", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const plugin = yield* Plugin.Service
+      const host = yield* PluginHost.make(plugin)
+      const integrationID = Integration.ID.make("anthropic")
+      const methodID = Integration.MethodID.make("claude-pro-max")
+
+      // Models a plugin written for the older Effect-passthrough bridge: its
+      // oauth callbacks return Effect values despite the Promise typings.
+      const registration = {
+        integrationID: "anthropic",
+        method: { id: "claude-pro-max", type: "oauth", label: "Claude Pro/Max" },
+        authorize: () =>
+          Effect.succeed({
+            mode: "code",
+            url: "https://example.com/authorize",
+            instructions: "Paste the code",
+            callback: (code: string) =>
+              Effect.succeed(
+                Credential.OAuth.make({ type: "oauth", methodID, access: code, refresh: "refresh", expires: 1 }),
+              ),
+          }),
+        refresh: (credential: Credential.OAuth) =>
+          Effect.succeed({ ...credential, access: "fresh", expires: Number.MAX_SAFE_INTEGER }),
+      } as unknown as IntegrationMethodRegistration
+
+      yield* PluginPromise.fromPromise(
+        define({
+          id: "promise-effect-oauth",
+          setup: async (ctx) => {
+            await ctx.integration.transform((draft) => draft.method.update(registration))
+          },
+        }),
+      ).effect(host)
+
+      yield* credentials.create({
+        integrationID,
+        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
+      })
+      const connection = yield* integrations.connection.active(integrationID)
+      expect(connection).toBeDefined()
+      expect(yield* integrations.connection.resolve(connection!)).toMatchObject({ access: "fresh" })
     }),
   )
 
