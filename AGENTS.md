@@ -172,3 +172,10 @@ const table = sqliteTable("session", {
 - Record upstream sync state in `.github/last-synced-tag` as a V2 commit SHA.
 - The CLI binary and npm package are named `shuvcode`.
 - Keep `packages/util/src/global.ts` `app = "opencode"` for XDG path compatibility.
+- Releases are cut by dispatching the `publish` workflow on `integration-v2` with an explicit version, e.g. `gh workflow run publish.yml --ref integration-v2 -f version=2.0.0-alpha-6`. The run creates the tag, draft release, npm packages (trusted publishing), and takes ~15 minutes.
+
+## Anthropic Claude Pro/Max subscription path
+
+- Subscription support is fully in-tree (ported from the retired external `opencode-anthropic-oauth` plugin): `packages/core/src/plugin/provider/anthropic-claude-code.ts` owns OAuth + wire shaping (system identity, `<env>` normalization with billing canary, tool-name casing, headers), and `anthropic-claude-code-proxy.ts` is a loopback authorizer proxy that resolves a fresh access token per request. When a subscription connection is active, `anthropic.ts` points the provider `settings.baseURL` at the proxy; an explicitly configured baseURL wins.
+- Shaping lives only in the claude-code route transport; the proxy is auth-only. Do not duplicate shaping into the proxy.
+- Anthropic OAuth refresh tokens rotate on use. `Integration.connection.resolve` single-flights refreshes per credential; never run concurrent refreshes with the same refresh token (the loser invalidates the stored credential). When testing anthropic from the dev tree, remember the dev channel uses `opencode-local.db` while the installed service uses `opencode.db` — copying a credential between them and then refreshing in one desyncs the other.
