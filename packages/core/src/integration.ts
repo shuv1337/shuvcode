@@ -364,8 +364,11 @@ const layer = Layer.effect(
         connections,
       })
 
+    // Wraps plugin-implemented surfaces (authorize/callback/refresh): defects
+    // from broken plugins must surface as AuthorizationError rather than crash
+    // the caller (for refresh, the whole session drain).
     const authorize = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-      effect.pipe(Effect.mapError((cause) => new AuthorizationError({ cause })))
+      effect.pipe(Effect.catchCause((cause) => Effect.fail(new AuthorizationError({ cause: Cause.squash(cause) }))))
 
     const close = (attemptScope: Scope.Closeable) =>
       Scope.close(attemptScope, Exit.void).pipe(Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)

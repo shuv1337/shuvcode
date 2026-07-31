@@ -449,6 +449,40 @@ describe("Integration", () => {
     }),
   )
 
+  it.effect("fails resolve with AuthorizationError when refresh dies", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("anthropic")
+      const methodID = Integration.MethodID.make("claude-pro-max")
+      yield* integrations.transform((editor) =>
+        editor.method.update({
+          integrationID,
+          method: { id: methodID, type: "oauth", label: "Claude Pro/Max" },
+          authorize: () =>
+            Effect.succeed({
+              mode: "auto" as const,
+              url: "https://example.com/authorize",
+              instructions: "Sign in",
+              callback: Effect.never,
+            }),
+          // A broken plugin refresh (e.g. returning a non-Promise to a promise
+          // bridge) surfaces as a defect; resolve must contain it.
+          refresh: () => Effect.die(new TypeError("result.then is not a function")),
+        }),
+      )
+      yield* credentials.create({
+        integrationID,
+        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
+      })
+
+      const connection = yield* integrations.connection.active(integrationID)
+      expect(connection).toBeDefined()
+      const error = yield* integrations.connection.resolve(connection!).pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Integration.AuthorizationError)
+    }),
+  )
+
   it.effect("projects credential and env connections", () => {
     const integrationID = Integration.ID.make("acme")
     return Effect.acquireUseRelease(
