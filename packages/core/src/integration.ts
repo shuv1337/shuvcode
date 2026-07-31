@@ -13,6 +13,7 @@ import {
   Schedule,
   Schema,
   Scope,
+  Semaphore,
   Stream,
   SynchronizedRef,
   Types,
@@ -370,6 +371,9 @@ const layer = Layer.effect(
     const authorize = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(Effect.catchCause((cause) => Effect.fail(new AuthorizationError({ cause: Cause.squash(cause) }))))
 
+    const refreshWindow = Duration.toMillis(Duration.minutes(5))
+    const refreshGates = new Map<Credential.ID, Semaphore.Semaphore>()
+
     const close = (attemptScope: Scope.Closeable) =>
       Scope.close(attemptScope, Exit.void).pipe(Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
 
@@ -687,16 +691,30 @@ const layer = Layer.effect(
           const credential = yield* credentials.get(connection.id)
           if (!credential) return undefined
           if (credential.value.type === "key") return credential.value
-          const implementation = state
+          const refresh = state
             .get()
             .integrations.get(credential.integrationID)
-            ?.implementations.get(credential.value.methodID)
-          if (!implementation?.refresh) return credential.value
+            ?.implementations.get(credential.value.methodID)?.refresh
+          if (!refresh) return credential.value
           const now = yield* Clock.currentTimeMillis
-          if (credential.value.expires > now + Duration.toMillis(Duration.minutes(5))) return credential.value
-          const value = yield* authorize(implementation.refresh(credential.value))
-          yield* credentials.update(credential.id, { value })
-          return value
+          if (credential.value.expires > now + refreshWindow) return credential.value
+          // Single-flight per credential: providers rotate refresh tokens, so
+          // concurrent refreshes race each other and the loser invalidates the
+          // stored credential. Waiters re-read state under the permit and skip
+          // the refresh the winner already persisted.
+          const gate = refreshGates.get(credential.id) ?? Semaphore.makeUnsafe(1)
+          refreshGates.set(credential.id, gate)
+          return yield* gate.withPermit(
+            Effect.gen(function* () {
+              const current = yield* credentials.get(connection.id)
+              if (!current || current.value.type !== "oauth") return current?.value
+              const now = yield* Clock.currentTimeMillis
+              if (current.value.expires > now + refreshWindow) return current.value
+              const value = yield* authorize(refresh(current.value))
+              yield* credentials.update(current.id, { value })
+              return value
+            }),
+          )
         }),
         key: Effect.fn("Integration.connection.key")(function* (input) {
           const method = state
