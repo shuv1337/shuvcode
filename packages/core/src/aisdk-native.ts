@@ -32,7 +32,7 @@ export function map(packageName: string | undefined, settings: Readonly<Record<s
         settings: {
           ...baseSettings,
           ...mapAPIKey(settings),
-          ...mapProviderOptions("xai", settings),
+          ...mapXAIOptions(settings),
         },
       }
   }
@@ -46,6 +46,16 @@ function mapBaseSettings(settings: Readonly<Record<string, unknown>>) {
 
 function mapAPIKey(settings: Readonly<Record<string, unknown>>) {
   return typeof settings.apiKey === "string" ? { apiKey: settings.apiKey } : {}
+}
+
+function mapXAIOptions(settings: Readonly<Record<string, unknown>>) {
+  const options = {
+    ...(typeof settings.reasoningEffort === "string" ? { reasoningEffort: settings.reasoningEffort } : {}),
+    ...(typeof settings.store === "boolean" ? { store: settings.store } : {}),
+    ...(typeof settings.promptCacheKey === "string" ? { promptCacheKey: settings.promptCacheKey } : {}),
+  }
+  if (Object.keys(options).length === 0) return {}
+  return { providerOptions: { xai: options } }
 }
 
 function mapProviderOptions(namespace: string, settings: Readonly<Record<string, unknown>>) {
