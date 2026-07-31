@@ -5,6 +5,7 @@ import { Bus } from "../../bus"
 import { Integration } from "../../integration"
 import { Provider } from "../../provider"
 import { AnthropicClaudeCode } from "./anthropic-claude-code"
+import { AnthropicClaudeCodeProxy } from "./anthropic-claude-code-proxy"
 
 const claudeProMax = {
   integrationID: AnthropicClaudeCode.integrationID,
@@ -60,6 +61,45 @@ export const AnthropicPlugin = define({
       return subscription
     })
 
+    // Request-time credential for the subscription proxy. Resolving through the
+    // Integration service means a stale token is refreshed (and persisted)
+    // before it authorizes a request, instead of riding on whatever the model
+    // resolver saw when the session started.
+    const accessToken = Effect.fn("AnthropicPlugin.accessToken")(function* () {
+      const connection = yield* ctx.integration.connection.active(AnthropicClaudeCode.integrationID)
+      const credential = connection
+        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        : undefined
+      if (!AnthropicClaudeCode.isSubscription(credential)) return undefined
+      if (credential?.type === "oauth") return credential.access
+      if (credential?.type === "key") return credential.key
+      return undefined
+    })
+
+    // Subscription requests route through a loopback proxy that authorizes at
+    // request time; body shaping stays in the claude-code route transport. The
+    // proxy exists only while a subscription connection does.
+    let proxy: AnthropicClaudeCodeProxy.Proxy | undefined
+    const syncProxy = Effect.fn("AnthropicPlugin.syncProxy")(function* () {
+      if (subscription === Boolean(proxy)) return
+      if (!subscription) {
+        const owned = proxy
+        proxy = undefined
+        if (owned) yield* Effect.promise(() => owned.close())
+        return
+      }
+      proxy = yield* Effect.promise(() =>
+        AnthropicClaudeCodeProxy.start({ getAccessToken: () => Effect.runPromise(accessToken()) }),
+      ).pipe(Effect.catch(() => Effect.succeed(undefined)))
+    })
+    yield* Effect.addFinalizer(() =>
+      Effect.promise(() => {
+        const owned = proxy
+        proxy = undefined
+        return owned ? owned.close() : Promise.resolve()
+      }),
+    )
+
     yield* ctx.integration.transform((draft) => {
       draft.method.update(claudeProMax)
       // A `claude setup-token` value is the only credential a headless host can
@@ -71,6 +111,7 @@ export const AnthropicPlugin = define({
       })
     })
     yield* load()
+    yield* syncProxy()
 
     // Note: no `aisdk.hook("sdk")` here. ModelResolver short-circuits the
     // `@ai-sdk/anthropic` package to the native AnthropicMessages route, so
@@ -99,6 +140,14 @@ export const AnthropicPlugin = define({
       if (!subscription) return
       const item = evt.provider.get(Provider.ID.make("anthropic"))
       if (!item) return
+      const proxyURL = proxy?.url
+      evt.provider.update(item.provider.id, (provider) => {
+        // The route composes `${baseURL}${path}` with a versioned base, so the
+        // override must carry `/v1` for paths to reconstruct correctly. An
+        // explicitly configured baseURL wins over the proxy.
+        if (proxyURL && typeof provider.settings?.baseURL !== "string")
+          provider.settings = { ...provider.settings, baseURL: `${proxyURL}/v1` }
+      })
       for (const model of item.models.values()) {
         // The subscription covers usage, so per-token cost is not meaningful.
         evt.model.update(item.provider.id, model.id, (draft) => {
@@ -107,7 +156,8 @@ export const AnthropicPlugin = define({
       }
     })
 
-    const reload = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
+    const reload = () =>
+      loading.withPermit(load().pipe(Effect.andThen(syncProxy()), Effect.andThen(ctx.catalog.reload())))
     yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(
       Stream.filter((event) => event.data.integrationID === AnthropicClaudeCode.integrationID),
       Stream.runForEach(reload),
