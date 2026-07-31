@@ -84,6 +84,7 @@ export function DialogOpen() {
         value: { type: "session", sessionID: session.id } as OpenTarget,
         category: "Sessions",
         footer: `${name ? `${Locale.truncate(name, 20)} · ` : ""}${timeAgo(session.time.updated)}`,
+        onSelect: () => location.set(session.location),
         gutter: running
           ? () => <Spinner />
           : tabs.has(session.id)

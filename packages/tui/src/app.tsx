@@ -646,7 +646,10 @@ function App(props: { pair?: DialogPairCredentials }) {
         run: () => {
           route.navigate({
             type: "home",
-            location: route.data.type === "session" ? data.session.get(route.data.sessionID)?.location : undefined,
+            location:
+              route.data.type === "session"
+                ? (data.session.get(route.data.sessionID)?.location ?? location.ref)
+                : undefined,
           })
           dialog.clear()
         },
