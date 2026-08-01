@@ -1,5 +1,6 @@
 import type { SessionApi } from "@opencode-ai/client/effect/api"
 import type { Message, SystemPart } from "@opencode-ai/ai"
+import type { HttpRequest } from "@opencode-ai/ai/route"
 import type { Agent } from "@opencode-ai/schema/agent"
 import type { Model } from "@opencode-ai/schema/model"
 import type { Session } from "@opencode-ai/schema/session"
@@ -15,13 +16,20 @@ export interface SessionContext {
   tools: Record<string, { description: string; input: JsonSchema.JsonSchema }>
 }
 
+export interface SessionRequest extends HttpRequest {
+  readonly sessionID: Session.ID
+  readonly agent: Agent.ID
+  readonly model: Model.Ref
+}
+
 export interface SessionHooks {
   readonly context: SessionContext
+  readonly request: SessionRequest
 }
 
 export type SessionDomain = Pick<
   SessionApi<unknown>,
-  "create" | "get" | "prompt" | "generate" | "command" | "synthetic" | "interrupt"
+  "create" | "get" | "prompt" | "generate" | "command" | "synthetic" | "interrupt" | "rename" | "wait"
 > & {
   readonly hook: Hooks<SessionHooks>
 }

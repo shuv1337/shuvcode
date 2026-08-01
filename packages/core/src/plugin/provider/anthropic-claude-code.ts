@@ -9,14 +9,14 @@ export * as AnthropicClaudeCode from "./anthropic-claude-code"
 // pay-as-you-go "extra usage" instead of against the subscription. So this
 // module is two things at once: an OAuth method, and a wire-shaping middleware.
 //
-// Why middleware and not a ModelResolver branch like OpenAICodex: the ChatGPT
-// plan only needs a different baseURL and auth, which route construction can
+// Why middleware and not an OpenAI-plugin-style ownership model: the ChatGPT
+// plan only needs a different baseURL and auth, which the OpenAI plugin can
 // express. This needs the request body rewritten *and* the streaming response
 // rewritten back, which is inherently request/response middleware. The provider
 // is nominally `aisdk:@ai-sdk/anthropic`, but ModelResolver short-circuits that
 // package to the native AnthropicMessages route, so `aisdk.hook("sdk")` never
 // runs for it. The seam is therefore a wrapped route transport, selected by a
-// guarded branch in ModelResolver -- the same place OpenAICodex is selected.
+// guarded subscription branch in ModelResolver.
 //
 // Token plumbing deliberately lives nowhere in here. Integration.connection
 // .resolve refreshes and persists the credential, and ModelResolver injects the

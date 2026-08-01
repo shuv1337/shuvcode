@@ -10,7 +10,7 @@
 // back to the usual two-press exit sequence through RunFooter.requestExit().
 import path from "path"
 import { CliRenderEvents, createCliRenderer, type CliRenderer, type ScrollbackWriter } from "@opentui/core"
-import { isDefaultTitle } from "../util/session"
+import { isFallbackTitle } from "@opencode-ai/util/session-title-fallback"
 import { monoSnapshot } from "./mono"
 import { entrySplash, exitSplash, splashMeta } from "./splash"
 import { resolveRunTheme } from "./theme"
@@ -105,7 +105,7 @@ function shutdown(renderer: CliRenderer): void {
 }
 
 function splashInfo(title: string | undefined, history: RunPrompt[]) {
-  if (title && !isDefaultTitle(title)) {
+  if (title && !isFallbackTitle(title)) {
     return {
       title,
       showSession: true,
@@ -176,8 +176,8 @@ export async function createRuntimeLifecycle(input: LifecycleInput): Promise<Lif
   if (mono) renderer.on(CliRenderEvents.EXTERNAL_OUTPUT, monoSnapshot)
   const setTitle = (title?: string) => {
     if (input.host.platform !== "linux") return
-    if (!title || isDefaultTitle(title)) return renderer.setTerminalTitle("Shuvcode")
-    renderer.setTerminalTitle(`OC | ${title.length > 40 ? title.slice(0, 37) + "..." : title}`)
+    if (!title || isFallbackTitle(title)) return renderer.setTerminalTitle("Shuvcode")
+    renderer.setTerminalTitle(`SC | ${title.length > 40 ? title.slice(0, 37) + "..." : title}`)
   }
   setTitle(input.sessionTitle)
   const theme = await resolveRunTheme(renderer, tuiConfig.theme, mono)

@@ -22,6 +22,7 @@ import { useData } from "../../context/data"
 import { SplitBorder } from "../../ui/border"
 import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
 import { Spinner, SPINNER_FRAMES } from "../../component/spinner"
+import { PatchDiff } from "../../component/patch-diff"
 import { ThemeContextProvider, useTheme, useThemes } from "../../context/theme"
 import { BoxRenderable, ScrollBoxRenderable, addDefaultParsers, TextAttributes, RGBA } from "@opentui/core"
 import { Prompt, type PromptRef } from "../../component/prompt"
@@ -79,6 +80,7 @@ import { collapseToolOutput } from "../../util/collapse-tool-output"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { usePathFormatter } from "../../context/path-format"
 import { useLocation } from "../../context/location"
+import { PluginSlot } from "../../plugin/render"
 import {
   cacheReuseDrop,
   createSessionRows,
@@ -92,6 +94,7 @@ import { switchLabel } from "../../util/model"
 import { findMessageBoundary, messageNavigationSlack } from "./message-navigation"
 import { stringWidth } from "../../util/string-width"
 import { useArgs } from "../../context/args"
+import { withTimestampedFallback } from "@opencode-ai/util/session-title-fallback"
 
 addDefaultParsers(parsers.parsers)
 
@@ -142,8 +145,8 @@ export function Session() {
   const promptRef = usePromptRef()
   const session = createMemo(() => data.session.get(route.sessionID))
   const messages = () => data.session.message.list(route.sessionID)
-  const location = createMemo(() => session()?.location)
   const currentLocation = useLocation()
+  const location = createMemo(() => session()?.location ?? currentLocation.ref)
 
   createEffect(() => currentLocation.set(location()))
 
@@ -884,22 +887,6 @@ export function Session() {
         dialog.clear()
       },
     },
-    {
-      title: "Next subagent",
-      id: "session.child.next",
-      group: "Session",
-      palette: undefined,
-      enabled: !!session()?.parentID,
-      run: () => unavailable("Subagent navigation"),
-    },
-    {
-      title: "Previous subagent",
-      id: "session.child.previous",
-      group: "Session",
-      palette: undefined,
-      enabled: !!session()?.parentID,
-      run: () => unavailable("Subagent navigation"),
-    },
   ])
 
   const commands = createMemo(() =>
@@ -957,7 +944,14 @@ export function Session() {
       }}
     >
       <box flexDirection="row" flexGrow={1} minHeight={0}>
-        <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+        <box
+          flexGrow={1}
+          minHeight={0}
+          paddingBottom={1}
+          paddingLeft={dimensions().width < 44 ? 1 : 2}
+          paddingRight={dimensions().width < 44 ? 1 : 2}
+          gap={1}
+        >
           <Show when={session()}>
             <scrollbox
               ref={(r) => (scroll = r)}
@@ -1002,6 +996,7 @@ export function Session() {
               </Show>
             </scrollbox>
             <box flexShrink={0}>
+              <PluginSlot name="session.composer.top" input={{ sessionID: route.sessionID }} mode="all" />
               <Composer
                 sessionID={route.sessionID}
                 open={composer.open || (!!session()?.parentID && forms().length === 0)}
@@ -1539,6 +1534,7 @@ function SessionGroupView(props: {
 function AssistantFooter(props: { message: SessionMessageAssistant }) {
   const ctx = use()
   const local = useLocal()
+  const dimensions = useTerminalDimensions()
   const theme = useTheme("elevated")
   const model = createMemo(
     () =>
@@ -1572,8 +1568,10 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
           <span style={{ fg: props.message.error ? theme.text.subdued : local.agent.color(props.message.agent) }}>
             {Locale.titlecase(props.message.agent)}
           </span>
-          <span style={{ fg: theme.text.subdued }}> · {model()}</span>
-          <Show when={duration()}>
+          <Show when={dimensions().width >= 28}>
+            <span style={{ fg: theme.text.subdued }}> · {model()}</span>
+          </Show>
+          <Show when={duration() && (dimensions().width < 28 || dimensions().width >= 36)}>
             <span style={{ fg: theme.text.subdued }}> · {Locale.duration(duration())}</span>
           </Show>
           <Show when={interrupted()}>
@@ -1911,122 +1909,6 @@ function UserMessage(props: { message: SessionMessageUser }) {
   )
 }
 
-function AssistantMessage(props: { message: SessionMessageAssistant; last: boolean }) {
-  const ctx = use()
-  const local = useLocal()
-  const theme = useTheme("elevated")
-  const model = createMemo(
-    () =>
-      ctx
-        .models()
-        .find((model) => model.providerID === props.message.model.providerID && model.id === props.message.model.id)
-        ?.name ?? `${props.message.model.providerID}/${props.message.model.id}`,
-  )
-
-  const final = createMemo(() => {
-    return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
-  })
-
-  const duration = createMemo(() => {
-    if (!final()) return 0
-    if (!props.message.time.completed) return 0
-    return props.message.time.completed - props.message.time.created
-  })
-
-  const exploration = createMemo(() => {
-    const grouped = new Map<string, { first: boolean; parts: SessionMessageAssistantTool[]; active: boolean }>()
-    if (!ctx.groupExploration()) return grouped
-    const runs = props.message.content
-      .map((part) =>
-        part.type === "tool" &&
-        ["read", "glob", "grep"].includes(toolDisplay(part.name)) &&
-        part.state.status !== "streaming"
-          ? part
-          : undefined,
-      )
-      .reduce<SessionMessageAssistantTool[][]>(
-        (runs, part) => {
-          if (part) runs[runs.length - 1].push(part)
-          if (!part && runs[runs.length - 1].length) runs.push([])
-          return runs
-        },
-        [[]],
-      )
-      .filter((run) => run.length > 0)
-    for (const run of runs) {
-      const summary = {
-        parts: run,
-        active: false,
-      }
-      run.forEach((part, index) => grouped.set(part.id, { ...summary, first: index === 0 }))
-    }
-    return grouped
-  })
-
-  return (
-    <>
-      <For each={props.message.content}>
-        {(content, index) => (
-          <Switch>
-            <Match when={content.type === "text"}>
-              <TextPart
-                part={content as SessionMessageAssistantText}
-                last={index() === props.message.content.length - 1}
-              />
-            </Match>
-            <Match when={content.type === "reasoning"}>
-              <ReasoningPart
-                part={content as SessionMessageAssistantReasoning}
-                message={props.message}
-                last={index() === props.message.content.length - 1}
-              />
-            </Match>
-            <Match when={content.type === "tool"}>
-              <Show when={exploration().get((content as SessionMessageAssistantTool).id)?.first !== false}>
-                <Show
-                  when={exploration().get((content as SessionMessageAssistantTool).id)}
-                  fallback={<ToolPart part={content as SessionMessageAssistantTool} />}
-                >
-                  {(summary) => <ExplorationSummary {...summary()} />}
-                </Show>
-              </Show>
-            </Match>
-          </Switch>
-        )}
-      </For>
-      <Show when={props.message.error}>
-        <box
-          border={["left"]}
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          backgroundColor={theme.background.default}
-          customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.text.feedback.error.default}
-        >
-          <text fg={theme.text.subdued}>{errorMessage(props.message.error)}</text>
-        </box>
-      </Show>
-      <AssistantRetry retry={props.message.retry} />
-      <Switch>
-        <Match when={props.last || final() || props.message.error}>
-          <box paddingLeft={3}>
-            <text>
-              <span style={{ fg: props.message.error ? theme.text.subdued : local.agent.color(props.message.agent) }}>
-                {Locale.titlecase(props.message.agent)}
-              </span>
-              <span style={{ fg: theme.text.subdued }}> · {model()}</span>
-              <Show when={duration()}>
-                <span style={{ fg: theme.text.subdued }}> · {Locale.duration(duration())}</span>
-              </Show>
-            </text>
-          </box>
-        </Match>
-      </Switch>
-    </>
-  )
-}
-
 function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
   const theme = useTheme()
   return (
@@ -2039,40 +1921,6 @@ function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
         </box>
       )}
     </Show>
-  )
-}
-
-function ExplorationSummary(props: { parts: SessionMessageAssistantTool[]; active: boolean }) {
-  const theme = useTheme()
-  const pathFormatter = usePathFormatter()
-  const label = (part: SessionMessageAssistantTool) => {
-    const input = typeof part.state.input === "string" ? {} : part.state.input
-    const tool = toolDisplay(part.name)
-    if (tool === "read") return `Read ${pathFormatter.format(stringValue(input.path))}`
-    if (tool === "glob") return `Glob "${stringValue(input.pattern)}"`
-    return `Grep "${stringValue(input.pattern)}"`
-  }
-  return (
-    <box flexDirection="column">
-      <InlineToolRow
-        icon="✱"
-        color={theme.text.subdued}
-        complete={!props.active}
-        pending="Exploring"
-        spinner={props.active}
-      >
-        {props.active ? "Exploring" : "Explored"}
-      </InlineToolRow>
-      <For each={props.parts}>
-        {(part, index) => (
-          <box paddingLeft={5}>
-            <text fg={part.state.status === "error" ? theme.text.feedback.error.default : theme.text.subdued}>
-              {index() === props.parts.length - 1 ? "└" : "├"} {label(part)}
-            </text>
-          </box>
-        )}
-      </For>
-    </box>
   )
 }
 
@@ -2940,10 +2788,6 @@ export function isBackgroundSubagent(
   return status === "completed" && metadata.status === "running"
 }
 
-export function formatSubagentRetry(attempt: number, message: string) {
-  return `Retrying (attempt ${attempt}) · ${message}`
-}
-
 type ExecuteCall = { tool: string; status: "running" | "completed" | "error"; input?: Record<string, unknown> }
 
 function executeCalls(value: unknown): ExecuteCall[] {
@@ -3027,8 +2871,9 @@ function Edit(props: ToolProps) {
         {(item) => (
           <BlockTool path={{ label: "← Edit", value: pathFormatter.format(path()) }} part={props.part}>
             <box paddingLeft={1}>
-              <diff
+              <PatchDiff
                 diff={item().patch}
+                hunkFg={theme.diff.text.hunkHeader}
                 view={view()}
                 filetype={filetype(path())}
                 syntaxStyle={syntax()}
@@ -3116,8 +2961,9 @@ function ApplyPatch(props: ToolProps) {
                   }
                 >
                   <box paddingLeft={1}>
-                    <diff
+                    <PatchDiff
                       diff={file.patch}
+                      hunkFg={theme.diff.text.hunkHeader}
                       view={view()}
                       filetype={filetype(file.relativePath)}
                       syntaxStyle={syntax()}
@@ -3307,7 +3153,7 @@ function formatSessionTranscript(session: SessionInfo, messages: SessionMessageI
     })
     return [`## Assistant\n\n${content.join("\n\n")}`]
   })
-  return `# ${session.title}\n\n**Session ID:** ${session.id}\n**Created:** ${new Date(session.time.created).toLocaleString()}\n**Updated:** ${new Date(session.time.updated).toLocaleString()}\n\n---\n\n${body.join("\n\n---\n\n")}\n`
+  return `# ${withTimestampedFallback(session)}\n\n**Session ID:** ${session.id}\n**Created:** ${new Date(session.time.created).toLocaleString()}\n**Updated:** ${new Date(session.time.updated).toLocaleString()}\n\n---\n\n${body.join("\n\n---\n\n")}\n`
 }
 
 export function parseApplyPatchFiles(value: unknown) {

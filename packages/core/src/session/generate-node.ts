@@ -71,7 +71,7 @@ export const layer = Layer.effect(
           LLM.request({
             model: model.model,
             http: { headers: SessionModelHeaders.make(selection.session, app) },
-            providerOptions: { openai: { promptCacheKey } },
+            providerOptions: { [providerMetadataKey]: { promptCacheKey } },
             system: contextEvent.system,
             messages: contextEvent.messages,
             tools: hookedTools,

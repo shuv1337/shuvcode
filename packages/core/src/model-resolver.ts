@@ -12,13 +12,13 @@ import { Auth, type AnyRoute } from "@opencode-ai/ai/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { AISDK } from "./aisdk"
+import { AISDKNative } from "./aisdk-native"
 import { Catalog } from "./catalog"
 import { Credential } from "./credential"
 import { Integration } from "./integration"
 import { Capabilities, ID, Info, Ref, VariantID } from "./model"
 import { Npm } from "@opencode-ai/util/npm"
 import { AnthropicClaudeCode } from "./plugin/provider/anthropic-claude-code"
-import { OpenAICodex } from "./plugin/provider/openai-codex"
 import { Provider } from "./provider"
 
 export class VariantUnavailableError extends Schema.TaggedErrorClass<VariantUnavailableError>()(
@@ -82,7 +82,7 @@ const withDefaults = (model: Info, route: AnyRoute) =>
     headers: providerHeaders(model),
     providerOptions: providerOptions(model),
     http: model.body === undefined ? undefined : { body: model.body },
-    limits: { context: model.limit.context, output: model.limit.output },
+    limits: { context: model.limit.context, input: model.limit.input, output: model.limit.output },
   })
 
 const providerHeaders = (model: Info) => {
@@ -97,9 +97,7 @@ const providerHeaders = (model: Info) => {
   return Provider.mergeHeaders(generated.size === 0 ? undefined : Object.fromEntries(generated), model.headers)
 }
 
-const providerOptions = (
-  model: Info,
-): { readonly [key: string]: { readonly [key: string]: unknown } } | undefined => {
+const providerOptions = (model: Info): { readonly [key: string]: { readonly [key: string]: unknown } } | undefined => {
   if (!Provider.isAISDK(model.package) || model.settings === undefined) return undefined
   const { apiKey: _, baseURL: _baseURL, ...settings } = model.settings
   if (Object.keys(settings).length === 0) return undefined
@@ -153,12 +151,7 @@ export const fromCatalogModel = (
   const packageName = Provider.packageName(resolved.package)
   const key = apiKey(resolved, credential)
 
-  if (OpenAICodex.isChatGPT(credential) && !Provider.isAISDK(resolved.package) && isNativeOpenAI(resolved.package)) {
-    return Effect.succeed(codexModel(resolved, credential, key))
-  }
-
   if (Provider.isAISDK(resolved.package) && packageName === "@ai-sdk/openai") {
-    if (OpenAICodex.isChatGPT(credential)) return Effect.succeed(codexModel(resolved, credential, key))
     return Effect.succeed(
       withDefaults(resolved, OpenAIResponses.route)
         .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })
@@ -199,8 +192,10 @@ export const fromCatalogModel = (
         .model({ id: resolved.modelID ?? resolved.id, compatibility: resolved.compatibility }),
     )
   }
-  const native = Provider.isAISDK(resolved.package) ? nativePackage(packageName) : resolved.package
-  if (Provider.isAISDK(resolved.package) && !native) {
+  const configured = { ...resolved.settings, ...credential?.metadata }
+  const mapping = Provider.isAISDK(resolved.package) ? AISDKNative.map(packageName, configured) : undefined
+  const native = mapping?.package ?? resolved.package
+  if (Provider.isAISDK(resolved.package) && !mapping) {
     if (!dependencies?.loadAISDK) return Effect.fail(unsupported(resolved))
     const runtime = produce(resolved, (draft) => {
       draft.settings = Provider.mergeOverlay(draft.settings, {
@@ -218,15 +213,13 @@ export const fromCatalogModel = (
     const module = yield* (dependencies?.loadPackage ?? Provider.loadPackage)(specifier).pipe(
       Effect.mapError(() => unsupported(resolved)),
     )
-    const configured = { ...resolved.settings, ...credential?.metadata }
-    const providerOptions = nativeProviderOptions(packageName, configured)
+    const mapped = mapping?.settings ?? configured
     const settings = {
-      ...(credential ? withoutNativeAuthSettings(configured) : configured),
+      ...(credential ? withoutNativeAuthSettings(mapped) : mapped),
       ...nativeCredentialSettings(specifier, credential),
-      headers: resolved.headers,
-      body: resolved.body,
-      limits: { context: resolved.limit.context, output: resolved.limit.output },
-      ...(providerOptions ? { providerOptions } : {}),
+      headers: Provider.mergeHeaders(mapping?.headers, resolved.headers),
+      body: Provider.mergeOverlay(mapping?.body, resolved.body),
+      limits: { context: resolved.limit.context, input: resolved.limit.input, output: resolved.limit.output },
     }
     return yield* Effect.try({
       try: () => {
@@ -242,30 +235,6 @@ export const fromCatalogModel = (
     })
   })
 }
-
-const nativePackage = (packageName: string | undefined) => {
-  if (packageName === "@ai-sdk/google") return "@opencode-ai/ai/providers/google"
-  if (packageName === "@openrouter/ai-sdk-provider") return "@opencode-ai/ai/providers/openrouter"
-  if (packageName === "@ai-sdk/xai") return "@opencode-ai/ai/providers/xai"
-  return undefined
-}
-
-const nativeProviderOptions = (packageName: string | undefined, settings: Readonly<Record<string, unknown>>) => {
-  const values = Object.fromEntries(
-    Object.entries(settings).filter(
-      ([key]) => !["apiKey", "authToken", "baseURL", "chunkTimeout", "fetch", "timeout"].includes(key),
-    ),
-  )
-  if (Object.keys(values).length === 0) return undefined
-  if (packageName === "@ai-sdk/google") return { gemini: values }
-  if (packageName === "@openrouter/ai-sdk-provider") return { openrouter: values }
-  if (packageName === "@ai-sdk/xai") return { xai: values }
-  return undefined
-}
-
-const isNativeOpenAI = (packageName: string | undefined) =>
-  packageName === "@opencode-ai/ai/providers/openai" ||
-  packageName?.startsWith("@opencode-ai/ai/providers/openai/") === true
 
 const nativeCredentialSettings = (specifier: string, credential: Credential.Value | undefined) => {
   if (!credential) return {}
@@ -286,22 +255,6 @@ const nativeCredentialSettings = (specifier: string, credential: Credential.Valu
 const withoutNativeAuthSettings = (settings: Record<string, unknown>) => {
   const { accessToken: _accessToken, apiKey: _apiKey, authToken: _authToken, ...rest } = settings
   return rest
-}
-
-const codexModel = (
-  model: Info,
-  credential: Credential.Value | undefined,
-  key: ReturnType<typeof Auth.value> | undefined,
-) => {
-  const account = OpenAICodex.accountID(credential)
-  return withDefaults(model, OpenAIResponses.route)
-    .with({
-      endpoint: { baseURL: OpenAICodex.baseURL },
-      auth: (key === undefined ? Auth.none : Auth.bearer(key)).andThen(
-        account === undefined ? Auth.none : Auth.headers({ "chatgpt-account-id": account }),
-      ),
-    })
-    .model({ id: model.modelID ?? model.id, compatibility: model.compatibility })
 }
 
 const unsupported = (model: Info) =>
@@ -328,10 +281,7 @@ export const layer = Layer.effect(
     const integrations = yield* Integration.Service
     const npm = yield* Npm.Service
     const aisdk = yield* AISDK.Service
-    const load = Effect.fn("ModelResolver.resolveModel")(function* (
-      selected: Info,
-      variant?: VariantID,
-    ) {
+    const load = Effect.fn("ModelResolver.resolveModel")(function* (selected: Info, variant?: VariantID) {
       const provider = yield* catalog.provider.get(selected.providerID)
       const connection = yield* integrations.connection.active(
         provider?.integrationID ?? Integration.ID.make(selected.providerID),

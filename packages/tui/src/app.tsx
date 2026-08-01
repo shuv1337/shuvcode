@@ -66,23 +66,24 @@ import { DialogThemeList } from "./component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { DialogAgent } from "./component/dialog-agent"
 import { DialogSessionList } from "./component/dialog-session-list"
-import { DialogProject } from "./component/dialog-project"
+import { DialogOpen } from "./component/dialog-open"
 import { SessionTabs } from "./component/session-tabs"
 import { ThemeErrorToast } from "./component/theme-error-toast"
 import { ThemeProvider, useTheme, useThemes } from "./context/theme"
 import { Home } from "./routes/home"
 import { Session } from "./routes/session"
-import { PromptHistoryProvider } from "./component/prompt/history"
-import { FrecencyProvider } from "./component/prompt/frecency"
-import { PromptStashProvider } from "./component/prompt/stash"
+import { PromptHistoryProvider } from "./prompt/history"
+import { FrecencyProvider } from "./prompt/frecency"
+import { PromptStashProvider } from "./prompt/stash"
 import { Toast, ToastProvider, useToast } from "./ui/toast"
-import { isDefaultTitle } from "./util/session"
+import { isFallbackTitle } from "@opencode-ai/util/session-title-fallback"
 import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { Config, ConfigProvider, useConfig } from "./config"
-import { PluginProvider, PluginRoute, PluginSlot, usePlugin, type PackageResolver } from "./plugin/context"
+import { PluginProvider, usePlugin, type PackageResolver } from "./plugin/context"
+import { PluginRoute, PluginSlot } from "./plugin/render"
 import { CommandPaletteDialog } from "./component/command-palette"
 import { COMMAND_PALETTE_COMMAND, Keymap, type KeymapCommand } from "./context/keymap"
 
@@ -95,13 +96,11 @@ import { StorageProvider } from "./context/storage"
 
 registerOpencodeSpinner()
 
-const appGlobalBindingCommands = ["session.list", "session.new"] as const
+const appGlobalBindingCommands = ["session.list", "session.new", "open.menu"] as const
 
 const sessionTabBindingCommands = [
   "session.tab.next",
   "session.tab.previous",
-  "session.tab.history.back",
-  "session.tab.history.forward",
   "session.tab.next_unread",
   "session.tab.previous_unread",
   "session.tab.close",
@@ -525,29 +524,31 @@ function App(props: { pair?: DialogPairCredentials }) {
     renderer.useMouse = config.data.mouse
   })
 
+  let active: { id: string; title?: string } | undefined
   // Update terminal window title based on current route and session
   createEffect(() => {
+    const session = route.data.type === "session" ? data.session.get(route.data.sessionID) : undefined
+    if (session) active = { id: session.id, title: session.title }
     if (!terminalTitleEnabled()) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle("Shuvcode")
       return
     }
 
     if (route.data.type === "session") {
-      const session = data.session.get(route.data.sessionID)
-      if (!session || isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("OpenCode")
+      const title = session?.title
+      if (!title || isFallbackTitle(title)) {
+        renderer.setTerminalTitle("Shuvcode")
         return
       }
 
-      const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      renderer.setTerminalTitle(`OC | ${title}`)
+      renderer.setTerminalTitle(`SC | ${title.length > 40 ? title.slice(0, 37) + "..." : title}`)
       return
     }
 
     if (route.data.type === "plugin") {
-      renderer.setTerminalTitle(`OC | ${route.data.name}`)
+      renderer.setTerminalTitle(`SC | ${route.data.name}`)
     }
   })
 
@@ -646,17 +647,21 @@ function App(props: { pair?: DialogPairCredentials }) {
         run: () => {
           route.navigate({
             type: "home",
+            location:
+              route.data.type === "session"
+                ? (data.session.get(route.data.sessionID)?.location ?? location.ref)
+                : undefined,
           })
           dialog.clear()
         },
       },
       {
-        name: "project.switch",
-        title: "Switch project",
+        name: "open.menu",
+        title: "Open session or project",
         category: "Session",
-        slash: { name: "projects", aliases: ["project"] },
+        slash: { name: "open", aliases: ["projects", "project"] },
         run: () => {
-          dialog.replace(() => <DialogProject />)
+          dialog.replace(() => <DialogOpen />)
         },
       },
       ...Array.from({ length: 9 }, (_, i) => ({
@@ -682,22 +687,6 @@ function App(props: { pair?: DialogPairCredentials }) {
         palette: undefined,
         enabled: sessionTabs.enabled,
         run: () => sessionTabs.cycle(-1),
-      },
-      {
-        name: "session.tab.history.back",
-        title: "Back in tab history",
-        category: "Session",
-        palette: undefined,
-        enabled: sessionTabs.enabled,
-        run: () => sessionTabs.history(-1),
-      },
-      {
-        name: "session.tab.history.forward",
-        title: "Forward in tab history",
-        category: "Session",
-        palette: undefined,
-        enabled: sessionTabs.enabled,
-        run: () => sessionTabs.history(1),
       },
       {
         name: "session.tab.next_unread",
@@ -1160,10 +1149,11 @@ function App(props: { pair?: DialogPairCredentials }) {
 
   event.on("session.deleted", (evt) => {
     if (route.data.type === "session" && route.data.sessionID === evt.data.sessionID) {
+      const title = active?.id === evt.data.sessionID ? active.title : undefined
       route.navigate({ type: "home" })
       toast.show({
         variant: "info",
-        message: "The current session was deleted",
+        message: title ? `Session "${title}" was deleted` : "The current session was deleted",
       })
     }
   })

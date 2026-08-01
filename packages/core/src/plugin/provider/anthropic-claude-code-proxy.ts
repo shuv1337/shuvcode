@@ -74,7 +74,7 @@ export async function start(input: {
     const upstream = await fetchImpl(ANTHROPIC_ORIGIN + (req.url ?? "/"), {
       method,
       headers,
-      body: raw && raw.byteLength > 0 ? raw : undefined,
+      body: raw && raw.byteLength > 0 ? Buffer.from(raw) : undefined,
     })
 
     const outHeaders: Record<string, string> = {}

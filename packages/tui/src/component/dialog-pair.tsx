@@ -68,7 +68,7 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
           </box>
           <Show when={value.urls.some((url) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname))}>
             <text fg={theme.text.subdued} wrapMode="word">
-              Run `opencode service set hostname 0.0.0.0` to access the service remotely.
+              Run `shuvcode service set hostname 0.0.0.0` to access the service remotely.
             </text>
           </Show>
         </box>

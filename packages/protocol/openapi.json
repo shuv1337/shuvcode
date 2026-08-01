@@ -851,6 +851,16 @@
                       }
                     ]
                   },
+                  "title": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "agent": {
                     "anyOf": [
                       {
@@ -12032,11 +12042,15 @@
               },
               "directory": {
                 "type": "string"
+              },
+              "canonical": {
+                "type": "string"
               }
             },
             "required": [
               "id",
-              "directory"
+              "directory",
+              "canonical"
             ],
             "additionalProperties": false
           }
@@ -12498,7 +12512,6 @@
           "cost",
           "tokens",
           "time",
-          "title",
           "location"
         ],
         "additionalProperties": false
@@ -20765,7 +20778,7 @@
           "id": {
             "type": "string"
           },
-          "worktree": {
+          "canonical": {
             "type": "string"
           },
           "vcs": {
@@ -20792,7 +20805,7 @@
         },
         "required": [
           "id",
-          "worktree",
+          "canonical",
           "time",
           "sandboxes"
         ],
@@ -20806,11 +20819,15 @@
           },
           "directory": {
             "type": "string"
+          },
+          "canonical": {
+            "type": "string"
           }
         },
         "required": [
           "id",
-          "directory"
+          "directory",
+          "canonical"
         ],
         "additionalProperties": false
       },
@@ -22445,7 +22462,6 @@
           "slug",
           "projectID",
           "directory",
-          "title",
           "version",
           "time"
         ],

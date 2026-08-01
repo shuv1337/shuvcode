@@ -299,8 +299,6 @@ export const locationLayer = Layer.effect(
   }),
 )
 
-export const defaultLayer = locationLayer
-
 function modelFromLanguage(info: Info, language: LanguageModelV3) {
   const packageName = Provider.packageName(info.package!)
   const projected = mapBodyToProviderOptions(info, packageName)
@@ -332,7 +330,7 @@ function modelFromLanguage(info: Info, language: LanguageModelV3) {
               body: projected.body === undefined ? undefined : { ...projected.body },
               headers: info.headers,
             },
-      limits: { context: info.limit.context, output: info.limit.output },
+      limits: { context: info.limit.context, input: info.limit.input, output: info.limit.output },
       providerOptions,
     },
     body: {

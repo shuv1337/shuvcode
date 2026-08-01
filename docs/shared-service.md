@@ -28,8 +28,9 @@ not create caller-specific Shuvcode configuration domains.
   administrator credential and managed-service registration used by trusted
   loopback clients. Use `shuvcode service` commands instead of selecting a file
   by name.
-- Mobile clients receive independently revocable device credentials through
-  pairing. A bridge may keep its own client-facing credential domain while
+- Pairing presents the administrator credential and advertised URLs as a QR
+  code for trusted setup. It does not issue independently revocable device
+  credentials. A bridge may keep its own client-facing credential domain while
   using the administrator credential on loopback.
 
 Install the user unit from this repository:

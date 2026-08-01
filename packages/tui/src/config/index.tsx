@@ -99,9 +99,6 @@ export const Info = Schema.Struct({
   ).annotate({ description: "Terminal integration settings" }),
   prompt: Schema.optional(
     Schema.Struct({
-      max_width: Schema.optional(
-        Schema.Union([Schema.Int.check(Schema.isGreaterThan(0)), Schema.Literal("auto")]),
-      ).annotate({ description: "Prompt width in columns; 'auto' follows the terminal width" }),
       editor: Schema.optional(Schema.Boolean).annotate({
         description: "Include the active editor file or selection as prompt context",
       }),
@@ -165,11 +162,6 @@ export const Info = Schema.Struct({
       }),
     }),
   ).annotate({ description: "Mini transcript presentation settings" }),
-  hints: Schema.optional(
-    Schema.Struct({
-      onboarding: Schema.optional(Schema.Boolean).annotate({ description: "Show getting-started guidance" }),
-    }),
-  ).annotate({ description: "In-product guidance settings" }),
   debug: Schema.optional(
     Schema.Struct({
       devtools: Schema.optional(Schema.Boolean).annotate({ description: "Show the DevTools debug bar" }),
@@ -269,8 +261,4 @@ export function useConfig() {
   const value = useContext(ConfigContext)
   if (!value) throw new Error("ConfigProvider is missing")
   return value
-}
-
-export function useConfigOptional() {
-  return useContext(ConfigContext)
 }
