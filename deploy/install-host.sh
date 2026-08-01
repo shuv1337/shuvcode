@@ -54,8 +54,11 @@ ln -s "$destination/shuvcode" "$link"
 mv -Tf "$link" "$HOME/.local/bin/shuvcode"
 install -m 0644 "$root/deploy/systemd/shuvcode.service" "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
+"$HOME/.local/bin/shuvcode" service set manager systemd
 systemctl --user restart shuvcode.service
 systemctl --user is-active --quiet shuvcode.service
+test "$("$HOME/.local/bin/shuvcode" service get manager)" = "systemd"
+test "$("$HOME/.local/bin/shuvcode" service status)" != "stopped"
 
 test "$(readlink -f "$config")" = "$target_before"
 test "$(sha256sum "$target_before" | cut -d ' ' -f 1)" = "$hash_before"

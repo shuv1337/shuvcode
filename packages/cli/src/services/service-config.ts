@@ -9,17 +9,22 @@ import { selfCommand } from "../util/process"
 
 // The CLI's service configuration file, plus the Service.EnsureOptions binding that
 // points the client package's service operations at this CLI: which
-// registration file (by channel), which version, and how to spawn opencode.
+// registration file (by channel), which version, and whether startup is
+// portable or delegated to a configured host service manager.
+
+export const Manager = Schema.Literals(["systemd"])
+export type Manager = typeof Manager.Type
 
 export const Info = Schema.Struct({
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535))),
   password: Schema.optional(Schema.String),
   advertisedUrls: Schema.optional(Schema.Array(Schema.String)),
+  manager: Schema.optional(Manager),
 })
 export type Info = typeof Info.Type
 
-const keys = ["hostname", "port", "password", "advertised-urls"] as const
+const keys = ["hostname", "port", "password", "advertised-urls", "manager"] as const
 type Key = (typeof keys)[number]
 
 const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
@@ -99,13 +104,16 @@ const paths = Effect.gen(function* () {
   }
 })
 
-export const options = Effect.fnUntraced(function* () {
+export const options = Effect.fnUntraced(function* (config?: Info) {
   const { file, legacyRegistrationFiles } = yield* paths
   yield* Effect.forEach(legacyRegistrationFiles, (legacy) => migrateRegistration(legacy, file))
   return {
     file,
     version: OPENCODE_VERSION,
-    command: [...selfCommand(), "serve", "--service"],
+    command:
+      (config ?? (yield* read())).manager === "systemd"
+        ? [process.env.OPENCODE_SYSTEMCTL ?? "systemctl", "--user", "start", "shuvcode.service"]
+        : [...selfCommand(), "serve", "--service"],
   }
 })
 
@@ -156,6 +164,9 @@ export const get = Effect.fn("cli.service-config.get")(function* (key?: string) 
     case "advertised-urls": {
       return ((yield* read()).advertisedUrls ?? []).join(",")
     }
+    case "manager": {
+      return (yield* read()).manager ?? ""
+    }
   }
   throw new Error(`Unknown service config key: ${key}`)
 })
@@ -189,6 +200,12 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
       yield* write({ ...(yield* read()), advertisedUrls })
       return
     }
+    case "manager": {
+      const manager = Schema.decodeUnknownSync(Manager)(value)
+      yield* Service.stop(yield* options())
+      yield* write({ ...(yield* read()), manager })
+      return
+    }
   }
 })
 
@@ -215,6 +232,12 @@ export const unset = Effect.fn("cli.service-config.unset")(function* (key: strin
     case "advertised-urls": {
       yield* Service.stop(yield* options())
       const { advertisedUrls: _advertisedUrls, ...next } = yield* read()
+      yield* write(next)
+      return
+    }
+    case "manager": {
+      yield* Service.stop(yield* options())
+      const { manager: _manager, ...next } = yield* read()
       yield* write(next)
       return
     }

@@ -7,10 +7,13 @@ not create caller-specific Shuvcode configuration domains.
 
 ## Ownership and paths
 
-- Shuvcode owns `shuvcode.service` and its lifecycle.
+- Shuvcode owns `shuvcode.service` and its lifecycle. Host deployments persist
+  `manager: "systemd"` in the channel service config so automatic CLI startup
+  and explicit `shuvcode service` commands delegate to the same user unit.
 - The unit defines a deterministic `PATH` containing common user package and
   tool directories. It does not depend on a desktop session importing shell
-  startup state before the service starts.
+  startup state before the service starts. Its `ExecStart` leaves hostname and
+  port unset so the persisted `shuvcode service set` values remain authoritative.
 - The canonical Shuvcode preferences file is
   `~/.config/shuvcode/opencode.json`. Because Shuvcode intentionally retains
   OpenCode's XDG paths for compatibility, `~/.config/opencode/opencode.json`
@@ -42,6 +45,7 @@ systemctl --user daemon-reload
 shuvcode service set hostname 127.0.0.1
 shuvcode service set port 4096
 shuvcode service set advertised-urls https://<host>.<tailnet>.ts.net:10001
+shuvcode service set manager systemd
 systemctl --user enable --now shuvcode.service
 tailscale serve --bg --https=10001 http://127.0.0.1:4096
 ```
@@ -60,8 +64,9 @@ preferences into `~/.config/shuvcode/opencode.json`, then atomically point
 merely because it already contains required plugins. Preserve the active
 service password through `shuvcode service`, then update dependent loopback
 clients to the same value without printing it. Remove any systemd drop-in that
-sets `OPENCODE_CONFIG_DIR`, reload the user manager, and restart Shuvcode before
-its dependants.
+sets `OPENCODE_CONFIG_DIR`, persist `manager: "systemd"` with
+`shuvcode service set manager systemd`, reload the user manager, and restart
+Shuvcode before its dependants.
 
 Migrate plugins as part of the configuration merge. A V1-shaped document keeps
 the singular `plugin` field because the V2 loader migrates the whole document;
@@ -102,6 +107,7 @@ pre-deploy state before restarting any dependent callers.
 ```sh
 systemctl --user show shuvcode.service \
   -p ActiveState -p SubState -p ExecStart -p Environment
+shuvcode service get manager
 test "$(readlink -f ~/.config/opencode/opencode.json)" = \
   "$HOME/.config/shuvcode/opencode.json"
 ss -ltnp | rg '127\.0\.0\.1:4096'

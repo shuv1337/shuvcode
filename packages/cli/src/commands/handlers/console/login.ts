@@ -4,7 +4,7 @@ import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { AppProcess } from "@opencode-ai/util/process"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { ServiceConfig } from "../../../services/service-config"
+import { ServiceLifecycle } from "../../../services/service-lifecycle"
 import { createTimelineHost, type TimelineHost } from "../../../ui/timeline"
 
 const integrationID = "opencode"
@@ -35,7 +35,7 @@ const login = Effect.fn("cli.console.login.run")(function* (timeline: TimelineHo
   yield* request(() => timeline.intro("Log in"))
   yield* request(() => timeline.pending("Connecting to OpenCode..."))
 
-  const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
+  const endpoint = yield* ServiceLifecycle.ensure()
   const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   const found = yield* request((signal) => client.integration.get({ integrationID, location }, { signal }))
   const integration = yield* required(found.data, "OpenCode Console integration is unavailable")

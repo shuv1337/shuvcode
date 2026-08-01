@@ -4,14 +4,12 @@ import { OpenCode } from "@opencode-ai/client"
 import { Service } from "@opencode-ai/client/effect/service"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { ServiceConfig } from "../../../services/service-config"
+import { ServiceLifecycle } from "../../../services/service-lifecycle"
 
 export default Runtime.handler(
   Commands.commands.plugin.commands.list,
   Effect.fn("cli.plugin.list")(function* () {
-    const options = yield* ServiceConfig.options()
-    const found = yield* Service.discover(options)
-    const endpoint = found ?? (yield* Service.ensure(options))
+    const endpoint = yield* ServiceLifecycle.ensure()
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     const response = yield* Effect.promise(() => client.plugin.list({ location: { directory: process.cwd() } }))
     const plugins = response.data.toSorted((a, b) => a.id.localeCompare(b.id))

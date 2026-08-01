@@ -3,11 +3,12 @@ import { Service, type Info } from "@opencode-ai/client/effect/service"
 import { Global } from "@opencode-ai/util/global"
 import { OPENCODE_VERSION } from "../src/version"
 import { expect, test } from "bun:test"
-import { Effect, Schema } from "effect"
+import { Effect, Layer, Schema } from "effect"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { ServiceConfig } from "../src/services/service-config"
+import { ServiceLifecycle } from "../src/services/service-lifecycle"
 
 test("managed service ports are stable per installation channel", () => {
   expect(ServiceConfig.defaultPort("latest")).toBe(0xc0de)
@@ -34,6 +35,194 @@ test("local channel stores service config with the local service filename", asyn
       advertisedUrls: ["https://shuvdev.example:10001", "http://127.0.0.1:4096"],
     })
     expect(await Bun.file(path.join(root, "config", "service.json")).exists()).toBe(false)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test("systemd service manager changes automatic startup command", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-manager-"))
+  const layer = Layer.merge(
+    Global.layerWith({ config: path.join(root, "config"), state: path.join(root, "state") }),
+    NodeFileSystem.layer,
+  )
+  try {
+    await Effect.runPromise(ServiceConfig.set("manager", "systemd").pipe(Effect.provide(layer)))
+    expect(await Effect.runPromise(ServiceConfig.get("manager").pipe(Effect.provide(layer)))).toBe("systemd")
+    expect((await Effect.runPromise(ServiceConfig.options().pipe(Effect.provide(layer)))).command).toEqual([
+      process.env.OPENCODE_SYSTEMCTL ?? "systemctl",
+      "--user",
+      "start",
+      "shuvcode.service",
+    ])
+    expect(await Bun.file(path.join(root, "config", "service-local.json")).json()).toEqual({ manager: "systemd" })
+
+    await Effect.runPromise(ServiceConfig.unset("manager").pipe(Effect.provide(layer)))
+    expect(await Effect.runPromise(ServiceConfig.get("manager").pipe(Effect.provide(layer)))).toBe("")
+    const portable = (await Effect.runPromise(ServiceConfig.options().pipe(Effect.provide(layer)))).command
+    expect(portable[0]).toBe(process.execPath)
+    expect(portable.slice(-2)).toEqual(["serve", "--service"])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test("systemd lifecycle delegates stop and status to the configured user unit", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-systemd-"))
+  const executable = path.join(root, "systemctl")
+  const log = path.join(root, "systemctl.log")
+  const previous = process.env.OPENCODE_SYSTEMCTL
+  const previousLog = process.env.OPENCODE_SYSTEMCTL_LOG
+  const layer = Layer.merge(
+    Global.layerWith({ config: path.join(root, "config"), state: path.join(root, "state") }),
+    NodeFileSystem.layer,
+  )
+  try {
+    await fs.mkdir(path.join(root, "config"), { recursive: true })
+    await fs.writeFile(path.join(root, "config", "service-local.json"), JSON.stringify({ manager: "systemd" }))
+    await fs.writeFile(
+      executable,
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> "$OPENCODE_SYSTEMCTL_LOG"\ncase "$*" in\n  *is-active*) exit 3 ;;\nesac\n`,
+      { mode: 0o755 },
+    )
+    process.env.OPENCODE_SYSTEMCTL = executable
+    process.env.OPENCODE_SYSTEMCTL_LOG = log
+
+    await Effect.runPromise(ServiceLifecycle.stop().pipe(Effect.provide(layer)))
+    expect(await Effect.runPromise(ServiceLifecycle.status().pipe(Effect.provide(layer)))).toBeUndefined()
+    expect((await Bun.file(log).text()).trim().split("\n")).toEqual([
+      "--user stop shuvcode.service",
+      "--user is-active --quiet shuvcode.service",
+    ])
+  } finally {
+    if (previous === undefined) delete process.env.OPENCODE_SYSTEMCTL
+    else process.env.OPENCODE_SYSTEMCTL = previous
+    if (previousLog === undefined) delete process.env.OPENCODE_SYSTEMCTL_LOG
+    else process.env.OPENCODE_SYSTEMCTL_LOG = previousLog
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test("systemd ensure replaces a portable incumbent with a supervised owner", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-systemd-converge-"))
+  const executable = path.join(root, "systemctl")
+  const pidfile = path.join(root, "systemd.pid")
+  const port = await availablePort()
+  const config = path.join(root, "config", "opencode")
+  const state = path.join(root, "state", "opencode")
+  const registration = path.join(state, "service-local.json")
+  const previous = process.env.OPENCODE_SYSTEMCTL
+  const layer = Layer.merge(Global.layerWith({ config, state }), NodeFileSystem.layer)
+  const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`
+  await fs.mkdir(config, { recursive: true })
+  await fs.writeFile(path.join(config, "service-local.json"), JSON.stringify({ manager: "systemd", port }))
+  await fs.writeFile(
+    executable,
+    `#!/bin/sh
+set -eu
+pidfile=${quote(pidfile)}
+start_service() {
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then return; fi
+  env HOME=${quote(root)} OPENCODE_DB=${quote(path.join(root, "opencode.db"))} OPENCODE_TEST_HOME=${quote(root)} XDG_CACHE_HOME=${quote(path.join(root, "cache"))} XDG_CONFIG_HOME=${quote(path.join(root, "config"))} XDG_DATA_HOME=${quote(path.join(root, "data"))} XDG_STATE_HOME=${quote(path.join(root, "state"))} ${quote(process.execPath)} ${quote(path.join(import.meta.dir, "../src/index.ts"))} serve --service >/dev/null 2>&1 &
+  echo $! > "$pidfile"
+}
+stop_service() {
+  if [ ! -f "$pidfile" ]; then return; fi
+  pid=$(cat "$pidfile")
+  kill "$pid" 2>/dev/null || true
+  i=0
+  while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 100 ]; do i=$((i + 1)); sleep 0.05; done
+  rm -f "$pidfile"
+}
+case "$2" in
+  is-active) if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then exit 0; fi; exit 3 ;;
+  show) cat "$pidfile" ;;
+  start) start_service ;;
+  stop) stop_service ;;
+  restart) stop_service; start_service ;;
+esac
+`,
+    { mode: 0o755 },
+  )
+  process.env.OPENCODE_SYSTEMCTL = executable
+  const incumbent = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
+    env: serviceEnv(root),
+    stderr: "pipe",
+    stdout: "ignore",
+  })
+  try {
+    const before = await waitForInfo(registration)
+    expect(before.pid).toBe(incumbent.pid)
+
+    const endpoint = await Effect.runPromise(ServiceLifecycle.ensure().pipe(Effect.provide(layer)))
+    const after = await waitForInfo(registration, (info) => info.pid !== before.pid)
+    expect(endpoint.url).toBe(after.url)
+    expect(after.pid).toBe(Number((await Bun.file(pidfile).text()).trim()))
+    expect(await waitForExit(incumbent)).toBe(true)
+  } finally {
+    await Effect.runPromise(ServiceLifecycle.stop().pipe(Effect.provide(layer))).catch(() => undefined)
+    incumbent.kill("SIGTERM")
+    await incumbent.exited
+    if (previous === undefined) delete process.env.OPENCODE_SYSTEMCTL
+    else process.env.OPENCODE_SYSTEMCTL = previous
+    await fs.rm(root, { recursive: true, force: true })
+  }
+}, 30_000)
+
+test("systemd status requires the unit process tree to own registration", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-systemd-owner-"))
+  const executable = path.join(root, "systemctl")
+  const previous = process.env.OPENCODE_SYSTEMCTL
+  const previousPID = process.env.OPENCODE_SYSTEMCTL_PID
+  const layer = Layer.merge(
+    Global.layerWith({ config: path.join(root, "config"), state: path.join(root, "state") }),
+    NodeFileSystem.layer,
+  )
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => Response.json({ healthy: true, version: OPENCODE_VERSION, pid: process.pid }),
+  })
+  try {
+    await fs.mkdir(path.join(root, "config"), { recursive: true })
+    await fs.mkdir(path.join(root, "state"), { recursive: true })
+    await fs.writeFile(path.join(root, "config", "service-local.json"), JSON.stringify({ manager: "systemd" }))
+    await fs.writeFile(
+      path.join(root, "state", "service-local.json"),
+      JSON.stringify({ id: "owned", version: OPENCODE_VERSION, url: server.url.toString(), pid: process.pid }),
+    )
+    await fs.writeFile(
+      executable,
+      `#!/bin/sh\ncase "$*" in\n  *is-active*) exit 0 ;;\n  *MainPID*) printf '%s\\n' "$OPENCODE_SYSTEMCTL_PID"; exit 0 ;;\nesac\nexit 1\n`,
+      { mode: 0o755 },
+    )
+    process.env.OPENCODE_SYSTEMCTL = executable
+    process.env.OPENCODE_SYSTEMCTL_PID = String(process.ppid)
+
+    expect((await Effect.runPromise(ServiceLifecycle.status().pipe(Effect.provide(layer))))?.url).toBe(
+      server.url.toString(),
+    )
+    process.env.OPENCODE_SYSTEMCTL_PID = "2147483647"
+    expect(await Effect.runPromise(ServiceLifecycle.status().pipe(Effect.provide(layer)))).toBeUndefined()
+  } finally {
+    if (previous === undefined) delete process.env.OPENCODE_SYSTEMCTL
+    else process.env.OPENCODE_SYSTEMCTL = previous
+    if (previousPID === undefined) delete process.env.OPENCODE_SYSTEMCTL_PID
+    else process.env.OPENCODE_SYSTEMCTL_PID = previousPID
+    await server.stop(true)
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test("service manager rejects unsupported values", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-manager-invalid-"))
+  try {
+    const result = await Effect.runPromiseExit(
+      ServiceConfig.set("manager", "launchd").pipe(
+        Effect.provide(Global.layerWith({ config: path.join(root, "config"), state: path.join(root, "state") })),
+        Effect.provide(NodeFileSystem.layer),
+      ),
+    )
+    expect(result._tag).toBe("Failure")
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }

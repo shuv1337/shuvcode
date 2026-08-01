@@ -174,6 +174,11 @@ const table = sqliteTable("session", {
 - Keep `packages/util/src/global.ts` `app = "opencode"` for XDG path compatibility.
 - Releases are cut by dispatching the `publish` workflow on `integration-v2` with an explicit version, e.g. `gh workflow run publish.yml --ref integration-v2 -f version=2.0.0-alpha-6`. The run creates the tag, draft release, npm packages (trusted publishing), and takes ~15 minutes.
 
+## Host service lifecycle
+
+- Host deployments persist `manager: "systemd"` in the channel service config. Managed CLI auto-start and `shuvcode service start|stop|restart|status` must delegate to `shuvcode.service`; portable installs without a manager retain detached `Service.ensure` startup.
+- `deploy/install-host.sh` installs the user unit, persists the manager before restart, and verifies systemd activity, the configured manager, and registered ownership. Keep `docs/shared-service.md` aligned with lifecycle changes.
+
 ## Anthropic Claude Pro/Max subscription path
 
 - Subscription support is fully in-tree (ported from the retired external `opencode-anthropic-oauth` plugin): `packages/core/src/plugin/provider/anthropic-claude-code.ts` owns OAuth + wire shaping (system identity, `<env>` normalization with billing canary, tool-name casing, headers), and `anthropic-claude-code-proxy.ts` is a loopback authorizer proxy that resolves a fresh access token per request. When a subscription connection is active, `anthropic.ts` points the provider `settings.baseURL` at the proxy; an explicitly configured baseURL wins.

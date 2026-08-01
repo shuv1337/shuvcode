@@ -4,7 +4,7 @@ import { Service } from "@opencode-ai/client/effect/service"
 import { OpenCode, type IntegrationCommandStatusOutput, type OpenCodeClient } from "@opencode-ai/client/promise"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
-import { ServiceConfig } from "../../../services/service-config"
+import { ServiceLifecycle } from "../../../services/service-lifecycle"
 
 const location = { directory: process.cwd() }
 
@@ -12,7 +12,7 @@ export default Runtime.handler(
   Commands.commands.auth.commands.connect,
   Effect.fn("cli.auth.connect")(function* (input) {
     process.stdout.write("Connecting..." + EOL + EOL)
-    const endpoint = yield* Service.ensure(yield* ServiceConfig.options())
+    const endpoint = yield* ServiceLifecycle.ensure()
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     yield* request(() => client.integration.wellknown.add({ url: input.url, location }))
     const integrationID = input.url.replace(/\/+$/, "")
