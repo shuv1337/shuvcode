@@ -58,7 +58,14 @@ systemctl --user daemon-reload
 systemctl --user restart shuvcode.service
 systemctl --user is-active --quiet shuvcode.service
 test "$("$HOME/.local/bin/shuvcode" service get manager)" = "systemd"
-test "$("$HOME/.local/bin/shuvcode" service status)" != "stopped"
+service_status=stopped
+for _ in $(seq 1 120); do
+  service_status=$("$HOME/.local/bin/shuvcode" service status 2>/dev/null || true)
+  if [[ -n "$service_status" && "$service_status" != "stopped" ]]; then break; fi
+  sleep 0.25
+done
+test -n "$service_status"
+test "$service_status" != "stopped"
 
 test "$(readlink -f "$config")" = "$target_before"
 test "$(sha256sum "$target_before" | cut -d ' ' -f 1)" = "$hash_before"
