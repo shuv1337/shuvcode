@@ -1,14 +1,14 @@
 import { defineConfig } from "blume"
 
 export default defineConfig({
-  title: "OpenCode",
+  title: "Shuvcode",
   description: "The open source AI coding agent.",
   basePath: "/docs",
   logo: {
     image: {
       light: "/assets/logo-light.svg",
       dark: "/assets/logo-dark.svg",
-      alt: "OpenCode",
+      alt: "Shuvcode",
     },
     text: "",
     href: "/",
@@ -17,8 +17,8 @@ export default defineConfig({
     root: "content/docs",
   },
   github: {
-    owner: "anomalyco",
-    repo: "opencode",
+    owner: "Latitudes-Dev",
+    repo: "shuvcode",
     branch: "dev",
     dir: "packages/www",
   },
@@ -38,6 +38,6 @@ export default defineConfig({
     adapter: "cloudflare",
     base: "/v2/",
     output: "server",
-    site: process.env.BLUME_ENV === "dev" ? "https://dev.opencode.ai" : "https://opencode.ai",
+    site: process.env.BLUME_ENV === "dev" ? "https://dev.shuv.ai" : "https://shuv.ai",
   },
 })

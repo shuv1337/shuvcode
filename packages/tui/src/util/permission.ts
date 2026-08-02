@@ -154,9 +154,9 @@ function wildcardDirectory(value: string) {
 export function permissionAlwaysLines(input: { action: string; save?: ReadonlyArray<string> }): string[] {
   const save = input.save ?? []
   if (save.length === 1 && save[0] === "*") {
-    return [`This will allow ${input.action} until OpenCode is restarted.`]
+    return [`This will allow ${input.action} until shuvcode is restarted.`]
   }
-  return ["This will allow the following patterns until OpenCode is restarted.", ...save.map((item) => `- ${item}`)]
+  return ["This will allow the following patterns until shuvcode is restarted.", ...save.map((item) => `- ${item}`)]
 }
 
 export function permissionOptionLabel(option: "once" | "always" | "reject" | "confirm" | "cancel") {

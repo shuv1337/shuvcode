@@ -66,7 +66,8 @@ framework.
 | Owner                                            | Responsibility                                                                                      |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | `packages/client/src/effect/service.ts`          | Effect-native discovery, start, and stop lifecycle operations                                       |
-| `packages/cli/src/services/service-config.ts`    | CLI registration path, installed version, and daemon command                                        |
+| `packages/cli/src/services/service-config.ts`    | CLI registration path, installed version, and persisted host service manager                        |
+| `packages/cli/src/services/service-lifecycle.ts` | Converge startup and explicit lifecycle operations on the configured manager or portable daemon     |
 | `packages/cli/src/services/server-connection.ts` | Resolve an endpoint and, only for the shared service, grouped reconnect and restart Effects         |
 | `packages/cli/src/server-process.ts`             | Daemon election, registration, and server process boot                                              |
 | `packages/server/src/process.ts`                 | HTTP lifecycle shell and application transport                                                      |

@@ -174,7 +174,8 @@ ultimate source of truth.
       interrupted when the program returns; rejections that settled un-awaited become `Success.warnings`
       diagnostics. A combinator abandoned inside its final settlement turn counts as pending and is interrupted
       without a warning.
-- [x] `try`/`catch` can handle awaited tool and promise failures.
+- [x] `try`/`catch` can handle awaited tool and promise failures, except a defect the host's `tunnelDefect`
+      classifier accepts: that tears execution down like an interruption, so no program `catch` observes it.
 - [x] `Promise.any`: first fulfillment wins; all-rejected rejects with an `AggregateError` whose `errors` array holds
       the catch-normalized reasons in input order, and empty input rejects with an empty `AggregateError`.
 - [x] `new Promise((resolve, reject) => ...)`: the executor runs synchronously and receives first-class resolve/reject

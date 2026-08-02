@@ -16,7 +16,7 @@ describe("CLI frontend import boundaries", () => {
   })
 
   test("exposes only the intentional package entrypoints", async () => {
-    const run = await import("@opencode-ai/cli/run")
+    const run = await import("shuvcode/run")
     const mini = await import("@opencode-ai/tui/mini")
     const tool = await import("@opencode-ai/tui/mini/tool")
     const cli = await Bun.file(path.join(root, "packages/cli/package.json")).json()

@@ -438,10 +438,14 @@ const lowerToolResultContent = Effect.fn("AnthropicMessages.lowerToolResultConte
   return yield* Effect.forEach(content, lowerToolResultContentItem)
 })
 
-// Mid-conversation system messages are a native Claude API feature only for
-// Opus 4.8. Other Anthropic models intentionally use the same visible wrapped-
-// user fallback as non-Anthropic routes rather than sending a role they reject.
-const supportsNativeSystemUpdates = (request: LLMRequest) => String(request.model.id) === "claude-opus-4-8"
+// Mid-conversation system messages are a native Claude API feature on a subset
+// of Anthropic models. Notably Sonnet 5 does NOT support them. Other Anthropic
+// models intentionally use the same visible wrapped-user fallback as
+// non-Anthropic routes rather than sending a role they reject.
+const NATIVE_SYSTEM_UPDATE_MODELS = new Set(["claude-opus-4-8", "claude-opus-5", "claude-fable-5"])
+
+const supportsNativeSystemUpdates = (request: LLMRequest) =>
+  NATIVE_SYSTEM_UPDATE_MODELS.has(String(request.model.id))
 
 const endsInServerToolUse = (message: LLMRequest["messages"][number]) => {
   const last = message.content.at(-1)

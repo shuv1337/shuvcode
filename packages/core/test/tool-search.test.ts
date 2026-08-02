@@ -20,6 +20,8 @@ import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { executeTool, registerToolPlugin, toolIdentity } from "./lib/tool"
+import { Config } from "@opencode-ai/core/config"
+import { emptyConfigLayer } from "./fixture/mcp"
 
 const globToolNode = makeLocationNode({
   name: "test/glob-tool-plugin",
@@ -71,6 +73,7 @@ const withTools = <A, E, R>(
             }),
           ),
         ],
+        [Config.node, emptyConfigLayer],
       ]),
     ),
   )

@@ -918,7 +918,9 @@ const materializeAttachment = Effect.fn("Session.materializeAttachment")(functio
         name: undefined,
         mime: undefined,
       }
-    : yield* readFileAttachment(fs, input.uri)
+    : input.uri.startsWith("http:")
+      ? yield* readLoopbackAttachment(input.uri)
+      : yield* readFileAttachment(fs, input.uri)
   if (resolved.bytes.byteLength > MAX_ATTACHMENT_BYTES)
     return yield* new AttachmentError({
       uri: input.uri,
@@ -950,6 +952,64 @@ const materializeAttachment = Effect.fn("Session.materializeAttachment")(functio
     description: input.description,
     mention: input.mention,
   })
+})
+
+const readLoopbackAttachment = Effect.fn("Session.readLoopbackAttachment")(function* (uri: string) {
+  const url = yield* Effect.try({
+    try: () => new URL(uri),
+    catch: () => new AttachmentError({ uri, message: `Invalid attachment URI: ${uri}` }),
+  })
+  if (url.protocol !== "http:" || (url.hostname !== "127.0.0.1" && url.hostname !== "[::1]"))
+    return yield* new AttachmentError({ uri, message: `Unsupported attachment URI: ${uri}` })
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000)
+  const response = yield* Effect.tryPromise({
+    try: () => fetch(url, { redirect: "error", signal: controller.signal }),
+    catch: () => new AttachmentError({ uri, message: `Unable to read attachment: ${uri}` }),
+  }).pipe(Effect.ensuring(Effect.sync(() => clearTimeout(timeout))))
+  const body = response.body
+  if (!response.ok || !body)
+    return yield* new AttachmentError({ uri, message: `Unable to read attachment: ${uri}` })
+
+  const declared = Number(response.headers.get("content-length"))
+  if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES)
+    return yield* new AttachmentError({
+      uri,
+      message: `Attachment exceeds the ${MAX_ATTACHMENT_BYTES} byte limit: ${uri}`,
+    })
+
+  const bytes = yield* Effect.tryPromise({
+    try: async () => {
+      const chunks: Uint8Array[] = []
+      const reader = body.getReader()
+      let size = 0
+      while (true) {
+        const chunk = await reader.read()
+        if (chunk.done) break
+        size += chunk.value.byteLength
+        if (size > MAX_ATTACHMENT_BYTES) {
+          await reader.cancel()
+          throw new Error("attachment too large")
+        }
+        chunks.push(chunk.value)
+      }
+      return Buffer.concat(chunks, size)
+    },
+    catch: () =>
+      new AttachmentError({
+        uri,
+        message: `Attachment exceeds the ${MAX_ATTACHMENT_BYTES} byte limit or could not be read: ${uri}`,
+      }),
+  })
+  return {
+    bytes,
+    source: { type: "inline" as const },
+    start: undefined,
+    end: undefined,
+    name: path.basename(decodeURIComponent(url.pathname)) || undefined,
+    mime: undefined,
+  }
 })
 
 const normalizeImageAttachment = Effect.fn("Session.normalizeImageAttachment")(function* (

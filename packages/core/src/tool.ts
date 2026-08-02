@@ -9,6 +9,8 @@ import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import type { Agent } from "./agent"
 import { CodeModeCatalog } from "./codemode/catalog"
 import { CodeModeTool } from "./codemode/tool"
+import { Config } from "./config"
+import { ConfigCodeMode } from "./config/codemode"
 import { Image } from "./image"
 import { Permission } from "./permission"
 import { PluginHooks } from "./plugin/hooks"
@@ -16,6 +18,9 @@ import { SessionMessage } from "./session/message"
 import { SessionSchema } from "./session/schema"
 import { definition, execute, normalizeContent } from "./tool/runtime"
 import { Wildcard } from "./util/wildcard"
+
+const MAX_METADATA_BYTES = 64 * 1024
+const Metadata = Schema.Record(Schema.String, Schema.Json)
 
 export class RegistrationError extends Schema.TaggedErrorClass<RegistrationError>()("Tool.RegistrationError", {
   name: Schema.String,
@@ -48,6 +53,47 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const image = yield* Image.Service
+    const config = yield* Config.Service
+
+    const codeModeLimits = Effect.fn("Tool.codeModeLimits")(function* () {
+      const configured: ConfigCodeMode.Info = Object.assign(
+        {},
+        ...(yield* config.entries()).flatMap((entry) =>
+          entry.type === "document" && entry.info.codemode ? [entry.info.codemode] : [],
+        ),
+      )
+      return {
+        timeoutMs: configured.timeout_ms ?? CodeModeTool.DEFAULT_LIMITS.timeoutMs,
+        maxToolCalls: configured.max_tool_calls ?? CodeModeTool.DEFAULT_LIMITS.maxToolCalls,
+        maxOutputBytes: configured.max_output_bytes ?? CodeModeTool.DEFAULT_LIMITS.maxOutputBytes,
+      }
+    })
+
+    const terminalMetadata = Effect.fn("Tool.terminalMetadata")(function* (
+      tool: string,
+      callID: string,
+      metadata: Tool.Metadata | undefined,
+    ) {
+      if (metadata === undefined) return undefined
+      const validation = (() => {
+        try {
+          if (!Schema.is(Metadata)(metadata)) return { reason: "not valid JSON" }
+          const bytes = Buffer.byteLength(JSON.stringify(metadata), "utf8")
+          if (bytes > MAX_METADATA_BYTES) return { reason: "exceeds size limit", bytes }
+          return { metadata }
+        } catch {
+          return { reason: "not valid JSON" }
+        }
+      })()
+      if ("metadata" in validation) return validation.metadata
+      yield* Effect.logWarning("Dropping tool result metadata", {
+        tool,
+        callID,
+        reason: validation.reason,
+        ...(validation.bytes === undefined ? {} : { bytes: validation.bytes, limit: MAX_METADATA_BYTES }),
+      })
+      return undefined
+    })
 
     type NormalizedItem = Tool.Content | "decode" | "size"
     const normalizeImages = Effect.fn("Tool.normalizeImages")(function* (content: ReadonlyArray<Tool.Content>) {
@@ -116,24 +162,43 @@ const layer = Layer.effect(
           error: execution.failure,
         }
         yield* hooks.trigger("tool", "execute.after", afterEvent)
-        return yield* afterEvent.error
+        const metadata = yield* terminalMetadata(name, context.callID, afterEvent.error.metadata)
+        if (metadata === afterEvent.error.metadata) return yield* afterEvent.error
+        return yield* new Tool.Error({ message: afterEvent.error.message, error: afterEvent.error.error })
       }
       const content = yield* normalizeImages(execution.value.content)
-      const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
-        ...base,
-        status: "completed",
+      const terminal: { result: Tool.Result; replaced: boolean } = {
         result: {
           ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
           content: content.length > 0 ? content : execution.value.content,
           ...(execution.value.metadata === undefined ? {} : { metadata: execution.value.metadata }),
         },
+        replaced: false,
+      }
+      const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
+        ...base,
+        status: "completed",
+        get result() {
+          return {
+            ...terminal.result,
+            ...(Array.isArray(terminal.result.content) ? { content: [...terminal.result.content] } : {}),
+            ...(terminal.result.metadata === undefined ? {} : { metadata: { ...terminal.result.metadata } }),
+          }
+        },
+        set result(value) {
+          terminal.replaced = true
+          terminal.result = value
+        },
       }
       yield* hooks.trigger("tool", "execute.after", afterEvent)
-      const afterContent = yield* normalizeImages(normalizeContent(afterEvent.result.content, afterEvent.result.output))
+      const afterContent = terminal.replaced
+        ? yield* normalizeImages(normalizeContent(terminal.result.content, execution.value.output))
+        : content
+      const metadata = yield* terminalMetadata(name, context.callID, terminal.result.metadata)
       return {
-        ...(afterEvent.result.output === undefined ? {} : { output: afterEvent.result.output }),
+        ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
         content: afterContent,
-        ...(afterEvent.result.metadata === undefined ? {} : { metadata: afterEvent.result.metadata }),
+        ...(metadata === undefined ? {} : { metadata }),
       }
     })
 
@@ -206,7 +271,11 @@ const layer = Layer.effect(
             const executeRule = rules.findLast((rule) => Wildcard.match("execute", rule.action))
             const codemodeEnabled = executeRule?.resource !== "*" || executeRule.effect !== "deny"
             const codemodeTool = codemodeEnabled
-              ? CodeModeTool.create(codemode, (name, tool, input, context) => executeTool(tool, name, input, context))
+              ? CodeModeTool.create(
+                  codemode,
+                  (name, tool, input, context) => executeTool(tool, name, input, context),
+                  yield* codeModeLimits(),
+                )
               : undefined
             const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
             return {
@@ -281,5 +350,5 @@ const normalizedEntries = (tools: ReadonlyArray<Tool.Info>) =>
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, Image.node],
+  deps: [PluginHooks.node, Image.node, Config.node],
 })

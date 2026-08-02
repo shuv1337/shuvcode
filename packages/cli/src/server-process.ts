@@ -77,6 +77,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           hostname,
           port,
           password,
+          advertisedURLs: config.advertisedUrls,
           simulation: truthy(process.env.OPENCODE_SIMULATE),
           database: {
             path:
@@ -108,9 +109,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             gitbash: process.env.OPENCODE_GIT_BASH_PATH,
           },
           fs: {
-            filewatcher: !truthy(
-              process.env.OPENCODE_FILEWATCHER_DISABLE ?? process.env.OPENCODE_DISABLE_FILEWATCHER,
-            ),
+            filewatcher: !truthy(process.env.OPENCODE_FILEWATCHER_DISABLE ?? process.env.OPENCODE_DISABLE_FILEWATCHER),
             fff:
               process.env.OPENCODE_DISABLE_FFF === undefined
                 ? process.platform !== "win32"
@@ -138,7 +137,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
                 : Effect.fail(
                     new Error(
                       `Managed service port ${port} on ${hostname} is already in use by another process. ` +
-                        "Configure another port with `opencode service set port <port>` and start the service again.",
+                        "Configure another port with `shuvcode service set port <port>` and start the service again.",
                       { cause: error },
                     ),
                   ),

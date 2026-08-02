@@ -4,6 +4,7 @@ import { OPENCODE_VERSION } from "../version"
 import { Effect, Redacted } from "effect"
 import { Env } from "../env"
 import { ServiceConfig } from "./service-config"
+import { ServiceLifecycle } from "./service-lifecycle"
 import { Standalone } from "./standalone"
 
 export type Args = {
@@ -45,35 +46,27 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
   const options = yield* ServiceConfig.options()
   return {
     endpoint: yield* resolveManaged({ ...options, onStart: args.onStart }, args.mismatch ?? "replace"),
-    service: managedService(options),
+    service: managedService(),
   } satisfies Resolved
 })
 
-function managedService(options: EnsureOptions) {
-  const reconnectOptions = { ...options, version: undefined }
+function managedService() {
   return {
-    reconnect: () => Service.ensure(reconnectOptions),
-    restart: () =>
-      Effect.gen(function* () {
-        yield* Service.stop(options)
-        yield* Service.ensure(reconnectOptions)
-      }),
+    reconnect: () => ServiceLifecycle.ensure({ version: undefined }),
+    restart: () => ServiceLifecycle.restart({ version: undefined }).pipe(Effect.asVoid),
   }
 }
 
-const resolveManaged = Effect.fnUntraced(function* (
-  options: EnsureOptions,
-  mismatch: NonNullable<Args["mismatch"]>,
-) {
-  if (mismatch === "replace") return yield* Service.ensure(options)
-  if (mismatch === "ignore") return yield* Service.ensure({ ...options, version: undefined })
+const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mismatch: NonNullable<Args["mismatch"]>) {
+  if (mismatch === "replace") return yield* ServiceLifecycle.ensure({ onStart: options.onStart })
+  if (mismatch === "ignore") return yield* ServiceLifecycle.ensure({ version: undefined, onStart: options.onStart })
 
   const compatible = yield* Service.discover(options)
   if (compatible !== undefined) return compatible
   const existing = yield* Service.discover({ ...options, version: undefined })
   if (existing !== undefined)
     return yield* Effect.fail(new Error("Background server version does not match this client"))
-  return yield* Service.ensure(options)
+  return yield* ServiceLifecycle.ensure({ onStart: options.onStart })
 })
 
 function connectError(endpoint: Endpoint, cause: unknown) {

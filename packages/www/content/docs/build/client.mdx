@@ -1,10 +1,10 @@
 ---
 title: "Client"
-description: "Connect an application to the OpenCode HTTP API."
+description: "Connect an application to the Shuvcode HTTP API."
 ---
 
-`@opencode-ai/client` is the generated TypeScript client for the OpenCode HTTP
-API. Use it when your application connects to an OpenCode server over the
+`@opencode-ai/client` is the generated TypeScript client for the Shuvcode HTTP
+API. Use it when your application connects to an Shuvcode server over the
 network. Its types and methods are generated from the same contract as the
 [API reference](/api).
 
@@ -102,7 +102,7 @@ service command, and `onStart` callback:
 const endpoint = await Service.ensure({
   file: "/var/run/opencode/service.json",
   version: "2.0.0",
-  command: ["opencode", "serve", "--service"],
+  command: ["shuvcode", "serve", "--service"],
   onStart(reason, previousVersion) {
     console.log(reason, previousVersion)
   },
@@ -110,13 +110,13 @@ const endpoint = await Service.ensure({
 ```
 
 Omit these options to use the standard registration path and
-`opencode serve --service` command.
+`shuvcode serve --service` command.
 
 ## Effect
 
-OpenCode provides a first-class Effect client through the
+Shuvcode provides a first-class Effect client through the
 `@opencode-ai/client/effect` entrypoint. It returns typed Effects and Streams
-and decodes responses into OpenCode schema values.
+and decodes responses into Shuvcode schema values.
 
 ```sh
 bun add @opencode-ai/client@next effect

@@ -32,14 +32,16 @@ export default Runtime.handler(Commands, (input) =>
       },
     }).pipe(
       Effect.tapError(() =>
-        Effect.promise(() => preflight.fail("OpenCode update could not start the new background service")),
+        Effect.promise(() => preflight.fail("shuvcode update could not start the new background service")),
       ),
     )
     preflight.loading()
     const config = yield* Config.Service
     const npm = yield* Npm.Service
     const fileSystem = yield* FileSystem.FileSystem
-    const runServicePromise = Effect.runPromiseWith(Context.make(FileSystem.FileSystem, fileSystem))
+    const global = yield* Global.Service
+    const serviceContext = Context.make(FileSystem.FileSystem, fileSystem).pipe(Context.add(Global.Service, global))
+    const runServicePromise = Effect.runPromiseWith(serviceContext)
     const context = yield* Effect.context<FileSystem.FileSystem>()
     const runFork = Effect.runForkWith(context)
     const runPromise = Effect.runPromiseWith(context)

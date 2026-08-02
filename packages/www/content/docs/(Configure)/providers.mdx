@@ -3,7 +3,7 @@ title: "Providers"
 description: ""
 ---
 
-OpenCode builds its provider and model catalog from [Models.dev](https://models.dev), then applies the `providers`
+Shuvcode builds its provider and model catalog from [Models.dev](https://models.dev), then applies the `providers`
 overlays from your [configuration](/config). A provider needs both a usable runtime package and, when required, an
 active connection.
 
@@ -16,7 +16,7 @@ Run `/connect` in the TUI, choose an integration, and complete one of the method
 ```
 
 An integration may support an API key, OAuth, environment variables, or a combination of them. API keys and OAuth
-tokens entered through `/connect` are stored by the OpenCode service in its database. Run `/connect` again to replace
+tokens entered through `/connect` are stored by the Shuvcode service in its database. Run `/connect` again to replace
 or remove a stored credential.
 
 Providers from Models.dev also declare their standard environment variables. A non-empty declared variable is exposed
@@ -39,7 +39,7 @@ For a custom provider, `env` declares the variables that can supply its key:
 }
 ```
 
-When several credential sources exist, OpenCode uses the stored credential first, then the first non-empty variable in
+When several credential sources exist, Shuvcode uses the stored credential first, then the first non-empty variable in
 `env`, then `settings.apiKey`. Use config substitution instead of committing a literal key:
 
 ```jsonc title="opencode.jsonc"
@@ -174,14 +174,14 @@ The `package` field supports two runtime contracts:
 | `"aisdk:@ai-sdk/openai-compatible"` | An AI SDK provider package. The `aisdk:` prefix is required. |
 
 Native packages receive the merged `settings` plus the resolved `apiKey`, `headers`, `body`, and `limits`. AI SDK
-packages receive their merged provider options. Use a package's own documentation for accepted settings; OpenCode does
+packages receive their merged provider options. Use a package's own documentation for accepted settings; Shuvcode does
 not validate package-specific keys.
 
 `package` may also be set on one model to override the provider package for that model.
 
 ### Models
 
-Add a model under a provider's `models` map. The object key is the model ID used in OpenCode; `modelID` is the ID sent to
+Add a model under a provider's `models` map. The object key is the model ID used in Shuvcode; `modelID` is the ID sent to
 the provider:
 
 ```jsonc title="opencode.jsonc"

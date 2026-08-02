@@ -1,10 +1,10 @@
 ---
 title: "Get started"
-description: "Get started with OpenCode."
+description: "Get started with Shuvcode."
 ---
 
 <Callout type="warning">
-  These docs are for the beta version of OpenCode, which will become OpenCode 2.0. The beta is still changing: we may
+  These docs are for the beta version of Shuvcode, which will become Shuvcode 2.0. The beta is still changing: we may
   wipe your data, things may break, and APIs, configuration, and plugin APIs may change.
 </Callout>
 
@@ -22,28 +22,30 @@ You can also install it with the following package managers.
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install -g @opencode-ai/cli@next
+    npm install -g shuvcode@next
     ```
   </Tab>
   <Tab title="bun">
     ```bash
-    bun install -g --trust @opencode-ai/cli@next
+    bun install -g --trust shuvcode@next
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm add -g --allow-build=@opencode-ai/cli @opencode-ai/cli@next
+    pnpm add -g --allow-build=shuvcode shuvcode@next
     ```
   </Tab>
   <Tab title="Yarn">
     ```bash
-    yarn global add @opencode-ai/cli@next
+    yarn global add shuvcode@next
     ```
   </Tab>
 </Tabs>
 
-The package uses a trusted postinstall script to select the native `opencode2` binary for your platform. The Bun and pnpm
-commands above explicitly allow that script to run.
+The package uses a trusted postinstall script to select the native binary for your platform. The Bun and pnpm commands
+above explicitly allow that script to run.
+
+<Callout type="note">The binary is called `shuvcode`.</Callout>
 
 ### Homebrew
 
@@ -82,7 +84,7 @@ Standalone binaries are not available in beta.
 
 #### Prerequisites
 
-To use OpenCode in your terminal, you'll need:
+To use Shuvcode in your terminal, you'll need:
 
 1. A modern terminal emulator like:
    - [Ghostty](https://ghostty.org), Linux and macOS
@@ -95,19 +97,13 @@ To use OpenCode in your terminal, you'll need:
 
 ## Connect
 
-With OpenCode you can use any LLM provider by configuring its API key.
+With Shuvcode you can use any LLM provider by configuring its API key.
 
 Run `/connect` in the TUI and select your provider.
 
 ```text
 /connect
 ```
-
-If you'd like easy access to all the best coding models you can try out
-[OpenCode Console](https://console.opencode.ai).
-
-You can also try [OpenCode Go](https://opencode.ai/go) a $10/month subscription
-plan that grants you access to the best open source models.
 
 Use `/models` to browse the providers and models available to your project. See [Providers](/providers) for connection and
 configuration details.
@@ -116,11 +112,11 @@ configuration details.
 
 ## Usage
 
-You are now ready to use OpenCode in your project. Here are a few common workflows.
+You are now ready to use Shuvcode in your project. Here are a few common workflows.
 
 ### Ask questions
 
-Ask OpenCode to explain your codebase.
+Ask Shuvcode to explain your codebase.
 
 <Callout type="tip">Use `@` to fuzzy search for files in the project.</Callout>
 
@@ -130,7 +126,7 @@ How is authentication handled in @packages/functions/src/api/index.ts
 
 ### Add features
 
-Ask OpenCode to add a feature by describing the desired behavior and providing relevant context.
+Ask Shuvcode to add a feature by describing the desired behavior and providing relevant context.
 
 ```text
 When a user deletes a note, flag it as deleted in the database.
@@ -138,7 +134,7 @@ Create a screen that shows recently deleted notes.
 From this screen, the user can restore a note or permanently delete it.
 ```
 
-<Callout type="tip">Give OpenCode plenty of context and examples.</Callout>
+<Callout type="tip">Give Shuvcode plenty of context and examples.</Callout>
 
 ### Undo changes
 
@@ -148,7 +144,7 @@ Use `/undo` when a change isn't what you wanted.
 /undo
 ```
 
-OpenCode stages a conversation revert and restores your original message so you can revise it. In a Git repository, it
+Shuvcode stages a conversation revert and restores your original message so you can revise it. In a Git repository, it
 also restores file changes when snapshots were captured successfully. Run `/undo` multiple times to move the conversation
 boundary back, or use `/redo` to restore the staged conversation and files. See [Undo](/snapshots) for
 limitations and safety details.
@@ -161,6 +157,5 @@ limitations and safety details.
 
 ## Customize
 
-Make OpenCode your own by [picking a theme](/themes), [customizing
-keybinds](https://opencode.ai/docs/keybinds), [configuring formatters](/formatters), [creating commands](/commands), or
-editing the [OpenCode config](/config).
+Make Shuvcode your own by [picking a theme](/themes), [configuring formatters](/formatters), [creating commands](/commands),
+or editing the [Shuvcode config](/config).

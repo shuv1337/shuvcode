@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "opencode-www",
+  "name": "shuvcode-www",
   "compatibility_date": "2026-07-25",
   "workers_dev": false,
   "preview_urls": false,
@@ -12,20 +12,20 @@
   },
   "env": {
     "dev": {
-      "name": "opencode-www-dev",
+      "name": "shuvcode-www-dev",
       "routes": [
         {
-          "pattern": "dev.opencode.ai/v2*",
-          "zone_name": "opencode.ai"
+          "pattern": "dev.shuv.ai/v2*",
+          "zone_name": "shuv.ai"
         }
       ]
     },
     "production": {
-      "name": "opencode-www-production",
+      "name": "shuvcode-www-production",
       "routes": [
         {
-          "pattern": "opencode.ai/v2*",
-          "zone_name": "opencode.ai"
+          "pattern": "shuv.ai/v2*",
+          "zone_name": "shuv.ai"
         }
       ]
     }

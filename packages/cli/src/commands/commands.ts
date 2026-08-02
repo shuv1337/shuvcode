@@ -26,13 +26,13 @@ const PermissionParams = {
   ),
 }
 
-export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "opencode", {
-  description: "OpenCode 2.0 preview command line interface",
+export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "shuvcode", {
+  description: "shuvcode — OpenCode v2 fork command line interface",
   params: {
     ...ServerParams,
     ...PermissionParams,
     directory: Argument.string("directory").pipe(
-      Argument.withDescription("Directory to start OpenCode in"),
+      Argument.withDescription("Directory to start shuvcode in"),
       Argument.optional,
     ),
     continue: Flag.boolean("continue").pipe(
@@ -170,7 +170,7 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
       },
     }),
     Spec.make("run", {
-      description: "Run OpenCode with a message",
+      description: "Run shuvcode with a message",
       params: {
         ...ServerParams,
         message: Argument.string("message").pipe(
@@ -232,7 +232,6 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
         }),
       ],
     }),
-    Spec.make("pair", { description: "Show server pairing information" }),
     Spec.make("serve", {
       description: "Start the v2 API server",
       params: {

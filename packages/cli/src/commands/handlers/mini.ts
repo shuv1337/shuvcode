@@ -3,6 +3,7 @@ import { Commands } from "../commands"
 import { Runtime } from "../../framework/runtime"
 import { ServerConnection } from "../../services/server-connection"
 import { Config } from "../../config"
+import { Global } from "@opencode-ai/util/global"
 import { resolve } from "@opencode-ai/tui/config"
 
 export default Runtime.handler(Commands.commands.mini, (input) =>
@@ -14,7 +15,9 @@ export default Runtime.handler(Commands.commands.mini, (input) =>
     const config = yield* Config.Service
     const resolved = resolve(yield* config.get(), { terminalSuspend: process.platform !== "win32" })
     const fileSystem = yield* FileSystem.FileSystem
-    const runServicePromise = Effect.runPromiseWith(Context.make(FileSystem.FileSystem, fileSystem))
+    const global = yield* Global.Service
+    const serviceContext = Context.make(FileSystem.FileSystem, fileSystem).pipe(Context.add(Global.Service, global))
+    const runServicePromise = Effect.runPromiseWith(serviceContext)
     const service = server.service
     yield* Effect.promise(() =>
       runMini({

@@ -57,7 +57,7 @@ const builder =
     : undefined
 
 for (const target of targets) {
-  console.log(`building cli-node-${targetName(target)}`)
+  console.log(`building shuvcode-node-${targetName(target)}`)
   const assets = await collectNodeAssets(target)
   await rm("dist-node", { recursive: true, force: true })
   const assetHash = await hashNodeAssets(assets)
@@ -73,8 +73,8 @@ for (const target of targets) {
   }
   if (bundleOnly) continue
 
-  const name = `cli-node-${targetName(target)}`
-  const binary = target.platform === "win32" ? "opencode2-node.exe" : "opencode2-node"
+  const name = `shuvcode-node-${targetName(target)}`
+  const binary = target.platform === "win32" ? "shuvcode-node.exe" : "shuvcode-node"
   const output = path.join(outdir, name, "bin", binary)
   if (!builder) throw new Error("Node SEA builder is unavailable")
   await mkdir(path.dirname(output), { recursive: true })
@@ -101,10 +101,10 @@ for (const target of targets) {
     path.join(outdir, name, "package.json"),
     `${JSON.stringify(
       {
-        name: `@opencode-ai/${name}`,
+        name,
         version: Script.version,
         license: pkg.license,
-        repository: { type: "git", url: "git+https://github.com/anomalyco/opencode.git" },
+        repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
         os: [target.platform],
         cpu: [target.arch],
       },
@@ -183,7 +183,7 @@ async function resolveTargetNode(target: NodeTarget, host?: string) {
 }
 
 async function smoke(output: string) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "opencode-node-smoke-"))
+  const root = await mkdtemp(path.join(os.tmpdir(), "shuvcode-node-smoke-"))
   const executable = path.join(root, path.basename(output))
   await copyFile(output, executable)
   if (process.platform !== "win32") await chmod(executable, 0o755)

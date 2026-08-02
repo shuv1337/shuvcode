@@ -6,6 +6,7 @@ import { Agent } from "@opencode-ai/core/agent"
 import { Bus } from "@opencode-ai/core/bus"
 import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { Session } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { Tool } from "@opencode-ai/core/tool"
@@ -358,6 +359,7 @@ describe("Plugin", () => {
                   if (event.status !== "completed") return
                   event.result = {
                     ...event.result,
+                    output: { text: "after-output" },
                     content: [{ type: "text", text: "after-mutated" }],
                     metadata: { rewritten: true },
                   }
@@ -393,10 +395,112 @@ describe("Plugin", () => {
         content: [{ type: "text", text: '{"text":"before-mutated"}' }],
         metadata: undefined,
       })
-      expect(execution).toMatchObject({
-        content: [{ type: "text", text: '{"text":"before-mutated"}' }],
+      expect(execution).toEqual({
+        output: { text: "before-mutated" },
+        content: [{ type: "text", text: "after-mutated" }],
         metadata: { rewritten: true },
       })
+    }),
+  )
+
+  it.effect("preserves valid tool result metadata", () =>
+    Effect.gen(function* () {
+      const registry = yield* Tool.Service
+      yield* registry.transform((draft) =>
+        draft.add({
+          name: "metadata",
+          options: { codemode: false },
+          description: "Return metadata",
+          input: Schema.Struct({}),
+          execute: () => Effect.succeed({ content: "ok", metadata: { nested: { valid: true }, count: 2 } }),
+        }),
+      )
+      const toolSet = yield* registry.snapshot()
+
+      expect(
+        yield* toolSet.execute({
+          sessionID: Session.ID.make("ses_metadata_valid"),
+          agent: Agent.ID.make("build"),
+          messageID: SessionMessage.ID.make("msg_metadata_valid"),
+          call: { type: "tool-call", id: "call-metadata-valid", name: "metadata", input: {} },
+        }),
+      ).toMatchObject({ metadata: { nested: { valid: true }, count: 2 } })
+    }),
+  )
+
+  it.effect("drops circular, non-JSON, and oversized tool result metadata", () =>
+    Effect.gen(function* () {
+      const registry = yield* Tool.Service
+      yield* registry.transform((draft) => {
+        draft.add({
+          name: "invalid_metadata",
+          options: { codemode: false },
+          description: "Return invalid metadata",
+          input: Schema.Struct({ kind: Schema.Literals(["circular", "non-json"]) }),
+          execute: ({ kind }) =>
+            Effect.sync(() => {
+              if (kind === "non-json") return { content: "ok", metadata: { value: 1n } }
+              const metadata: Record<string, unknown> = {}
+              metadata.self = metadata
+              return { content: "ok", metadata }
+            }),
+        })
+        draft.add({
+          name: "oversized_metadata",
+          options: { codemode: false },
+          description: "Return oversized metadata",
+          input: Schema.Struct({}),
+          execute: () => Effect.succeed({ content: "ok", metadata: { value: "x".repeat(64 * 1024) } }),
+        })
+      })
+      const toolSet = yield* registry.snapshot()
+      const execute = (name: string, input: Record<string, unknown>) =>
+        toolSet.execute({
+          sessionID: Session.ID.make("ses_metadata_invalid"),
+          agent: Agent.ID.make("build"),
+          messageID: SessionMessage.ID.make("msg_metadata_invalid"),
+          call: { type: "tool-call", id: `call-${name}`, name, input },
+        })
+
+      expect(yield* execute("invalid_metadata", { kind: "circular" })).not.toHaveProperty("metadata")
+      expect(yield* execute("invalid_metadata", { kind: "non-json" })).not.toHaveProperty("metadata")
+      expect(yield* execute("oversized_metadata", {})).not.toHaveProperty("metadata")
+    }),
+  )
+
+  it.effect("drops invalid failure metadata after execute.after hooks", () =>
+    Effect.gen(function* () {
+      const registry = yield* Tool.Service
+      const hooks = yield* PluginHooks.Service
+      yield* hooks.register("tool", "execute.after", (event) =>
+        Effect.sync(() => {
+          if (event.status !== "error") return
+          const metadata: Record<string, unknown> = {}
+          metadata.self = metadata
+          event.error = new Tool.Error({ message: event.error.message, metadata })
+        }),
+      )
+      yield* registry.transform((draft) =>
+        draft.add({
+          name: "failure_metadata",
+          options: { codemode: false },
+          description: "Fail with hook metadata",
+          input: Schema.Struct({}),
+          execute: () => new Tool.Error({ message: "failed" }),
+        }),
+      )
+      const toolSet = yield* registry.snapshot()
+      const failure = yield* toolSet
+        .execute({
+          sessionID: Session.ID.make("ses_metadata_failure"),
+          agent: Agent.ID.make("build"),
+          messageID: SessionMessage.ID.make("msg_metadata_failure"),
+          call: { type: "tool-call", id: "call-metadata-failure", name: "failure_metadata", input: {} },
+        })
+        .pipe(Effect.flip)
+
+      expect(failure.message).toBe("failed")
+      expect(failure).not.toHaveProperty("metadata")
     }),
   )
 })

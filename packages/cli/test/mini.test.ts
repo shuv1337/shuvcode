@@ -118,7 +118,7 @@ describe("mini command", () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain("mini       Start the minimal interactive interface")
-    expect(result.stdout).toContain("run        Run OpenCode with a message")
+    expect(result.stdout).toContain("run        Run shuvcode with a message")
   })
 
   test("exposes run without legacy interactive, attach, or command modes", async () => {
@@ -226,7 +226,7 @@ describe("mini command", () => {
       const result = await cli(args)
 
       expect(result.exitCode).toBe(1)
-      expect(result.stderr).toContain("opencode mini requires a TTY stdout")
+      expect(result.stderr).toContain("shuvcode mini requires a TTY stdout")
     }
   })
 })

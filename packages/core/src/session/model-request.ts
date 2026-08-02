@@ -7,10 +7,9 @@ import { SessionError } from "@opencode-ai/schema/session-error"
 import { Cause, Config, Context, Effect, Layer, Result } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { App } from "../app"
+import { Decline } from "../decline"
 import { Model } from "../model"
-import { Permission } from "../permission"
 import { PluginHooks } from "../plugin/hooks"
-import { QuestionTool } from "../tool/plugin/question"
 import { Tool } from "../tool"
 import { SessionContext } from "./context"
 import { SessionModelHeaders } from "./model-headers"
@@ -25,18 +24,16 @@ const IMAGE_REMOVED =
   "[This image was removed to reduce the request size and is no longer visible. Do not make claims about its contents from memory. If needed, retrieve it again with an available tool or ask the user to attach it again.]"
 
 /** Failures a prepared execution can surface: infrastructure errors plus user declines resurfaced from the defect tunnel. */
-export type ExecuteError = Tool.Error | Permission.DeclinedError | QuestionTool.CancelledError
+export type ExecuteError = Tool.Error | Decline.Error
 
 // User declines dive under the leaves' blanket `mapError` as defects (the deliberate
 // tunnel entered in Permission.assert and the question tool), so a user's "no" can
 // never become model-facing tool output. They resurface as typed failures exactly once,
-// here at the seam the runner executes through.
+// here at the seam the runner executes through — including declines raised inside a Code Mode
+// program, which the Code Mode host re-raises as the same defect.
 const declineDefect = (cause: Cause.Cause<Tool.Error>) => {
   const decline = cause.reasons.flatMap((reason) =>
-    Cause.isDieReason(reason) &&
-    (reason.defect instanceof Permission.DeclinedError || reason.defect instanceof QuestionTool.CancelledError)
-      ? [reason.defect]
-      : [],
+    Cause.isDieReason(reason) && Decline.is(reason.defect) ? [reason.defect] : [],
   )[0]
   return decline ? Result.succeed(decline) : Result.fail(cause)
 }

@@ -1,0 +1,18 @@
+[Unit]
+Description=Shared Shuvcode V2 server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/share/omarchy/bin:%h/.local/bin:%h/.bun/bin:%h/.cargo/bin:%h/.npm-global/bin:%h/.atuin/bin:%h/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=%h/.local/bin/shuvcode serve --service
+SuccessExitStatus=130
+Restart=on-failure
+RestartSec=2s
+KillMode=control-group
+TimeoutStopSec=20s
+UMask=0077
+
+[Install]
+WantedBy=default.target

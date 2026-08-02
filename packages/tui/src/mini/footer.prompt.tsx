@@ -396,7 +396,7 @@ export function createPromptState(input: PromptInput): PromptState {
         display: "/compact",
         description: "summarize the session to reduce context usage",
       } satisfies SlashOption,
-      { kind: "slash", name: "exit", display: "/exit", description: "close OpenCode" } satisfies SlashOption,
+      { kind: "slash", name: "exit", display: "/exit", description: "close Shuvcode" } satisfies SlashOption,
     ]
     const hidden = new Set(builtins.map((item) => item.name))
     const showSkillMenu = !shell() && skillCommands().length > 0 && !hasSkillsCommand()

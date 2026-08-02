@@ -162,13 +162,13 @@ export function make(input: { readonly client: OpenCodeClient; readonly connecti
     initialize: async (params) => {
       capabilities.writeTextFile = params.clientCapabilities?.fs?.writeTextFile === true
       const authMethod: AuthMethod = {
-        description: "Run `opencode auth login` in the terminal",
-        name: "Login with opencode",
+        description: "Run `shuvcode auth login` in the terminal",
+        name: "Login with shuvcode",
         id: AuthMethodID,
       }
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
-          "terminal-auth": { command: "opencode", args: ["auth", "login"], label: "OpenCode Login" },
+          "terminal-auth": { command: "shuvcode", args: ["auth", "login"], label: "Shuvcode Login" },
         }
       }
       return {
@@ -180,7 +180,7 @@ export function make(input: { readonly client: OpenCodeClient; readonly connecti
           sessionCapabilities: { close: {}, delete: {}, fork: {}, list: {}, resume: {} },
         },
         authMethods: [authMethod],
-        agentInfo: { name: "OpenCode", version: OPENCODE_VERSION },
+        agentInfo: { name: "Shuvcode", version: OPENCODE_VERSION },
       }
     },
     authenticate: async (params) => {

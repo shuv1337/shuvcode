@@ -54,9 +54,11 @@ export const migrations = (
     import("./migration/20260709163752_time_suspended"),
     import("./migration/20260709190621_session_pending_table"),
     import("./migration/20260710025429_instruction_sync"),
+    import("./migration/20260714225613_mobile_pairing"),
     import("./migration/20260716020354_kv"),
     import("./migration/20260722011141_delete_tool_progress_events"),
     import("./migration/20260722170000_canonical_tool_results"),
+    import("./migration/20260727074609_drop_mobile_pairing"),
     import("./migration/20260729022634_session_fork_boundary"),
     import("./migration/20260730195856_optional_session_title"),
   ])

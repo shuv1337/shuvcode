@@ -80,6 +80,8 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
           password,
         },
         () => {
+          if (options.advertisedURLs && options.advertisedURLs.length > 0)
+            return ServerInfo.advertisedURLs(options.advertisedURLs)
           const address = bound.server.address()
           if (address === null || typeof address === "string") return []
           const host = address.family === "IPv6" ? `[${address.address}]` : address.address
@@ -158,6 +160,9 @@ function dispatch(
   return Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.url, "http://localhost")
+    const state = yield* status.current
+    const app = yield* Ref.get(application)
+    const ready = state.type === "ready" && Option.isSome(app)
     const lifecycle =
       request.method === "GET" && url.pathname === "/api/health"
         ? "health"
@@ -168,10 +173,8 @@ function dispatch(
       if (!(yield* authorizedRequest(request, auth))) return unauthorized()
       return yield* control(request, lifecycle, status, () => Deferred.doneUnsafe(shutdown, Effect.void), version)
     }
-    const state = yield* status.current
-    const app = yield* Ref.get(application)
-    const ready = state.type === "ready" && Option.isSome(app)
-    if ((!ready || !hasPtyConnectTicketURL(url)) && !(yield* authorizedRequest(request, auth))) return unauthorized()
+    if (ready && hasPtyConnectTicketURL(url)) return yield* app.value
+    if (!(yield* authorizedRequest(request, auth))) return unauthorized()
     if (ready) return yield* app.value
     return unavailable(state)
   })
@@ -228,7 +231,7 @@ function unavailable(status: Status.State) {
       {
         code: "service_failed",
         message: "The background service could not start.",
-        action: "Run `opencode service restart` after checking the service logs.",
+        action: "Run `shuvcode service restart` after checking the service logs.",
       },
       { status: 503 },
     )

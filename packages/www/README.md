@@ -1,8 +1,8 @@
-# OpenCode website
+# Shuvcode website
 
-The OpenCode V2 website, powered by Blume and deployed with Wrangler at `https://opencode.ai/v2/`. Blume mounts the documentation at `/v2/docs`, and `https://v2.opencode.ai` redirects to the same deployment.
+The Shuvcode V2 website, powered by Blume and deployed with Wrangler at `https://shuv.ai/v2/`. Blume mounts the documentation at `/v2/docs`.
 
-Wrangler deploys the site through Blume's Cloudflare server adapter. Documentation pages are prerendered, while custom dynamic routes and endpoints can run in the Worker. Production uses `opencode-www` at `opencode.ai/v2/`; dev uses `opencode-www-dev` at `dev.opencode.ai/v2/`. The `v2.opencode.ai` alias is handled by a Cloudflare Redirect Rule outside this project.
+Wrangler deploys the site through Blume's Cloudflare server adapter. Documentation pages are prerendered, while custom dynamic routes and endpoints can run in the Worker. Production uses `shuvcode-www-production` at `shuv.ai/v2/`; dev uses `shuvcode-www-dev` at `dev.shuv.ai/v2/`.
 
 The `deploy-www` GitHub workflow deploys the `dev` branch to the dev Worker and the `v2` branch to the production Worker.
 

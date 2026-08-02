@@ -342,7 +342,7 @@ function RejectPrompt(props: {
           <text fg={theme.text.default}>Reject permission</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.text.subdued}>Tell OpenCode what to do differently</text>
+          <text fg={theme.text.subdued}>Tell shuvcode what to do differently</text>
         </box>
       </box>
       <box

@@ -4,7 +4,7 @@ description: ""
 ---
 
 Agents combine a system prompt, model preference, tool permissions, and display
-metadata into a reusable assistant profile. OpenCode includes agents for common
+metadata into a reusable assistant profile. Shuvcode includes agents for common
 workflows, and you can override them or add your own in configuration or
 Markdown files.
 
@@ -13,11 +13,11 @@ Markdown files.
 | Agent | Mode | Purpose |
 | --- | --- | --- |
 | **Build** (`build`) | `primary` | Default coding agent. Tools are allowed by default, sensitive environment-file reads ask for approval, and access outside the workspace asks for approval. |
-| **Plan** (`plan`) | `primary` | Planning agent. File edits are denied except for OpenCode plan files. Shell commands are not generally denied. |
+| **Plan** (`plan`) | `primary` | Planning agent. File edits are denied except for Shuvcode plan files. Shell commands are not generally denied. |
 | **General** (`general`) | `subagent` | General-purpose research and multi-step work. It has broad tool access but cannot launch more subagents. |
 | **Explore** (`explore`) | `subagent` | Read-only code and web exploration using `read`, `glob`, `grep`, `webfetch`, and `websearch`. |
 
-OpenCode also has hidden `compaction`, `title`, and `summary` system agents.
+Shuvcode also has hidden `compaction`, `title`, and `summary` system agents.
 They run internal maintenance tasks and are not selectable. There is no built-in
 `scout` agent in V2.
 
@@ -36,7 +36,7 @@ Set the primary agent used when a session has not selected one:
 ```
 
 The configured agent must exist, must not have `mode: "subagent"`, and must not
-be hidden. If it is unavailable, OpenCode falls back to `build`, then to the
+be hidden. If it is unavailable, Shuvcode falls back to `build`, then to the
 first visible agent that can run as a primary agent. This selection does not
 rewrite the agent already stored on an existing session.
 
@@ -77,7 +77,7 @@ The recommended file locations are:
 .opencode/agents/<name>.md
 ```
 
-OpenCode discovers project `.opencode` directories from the current directory
+Shuvcode discovers project `.opencode` directories from the current directory
 up to the project root. The path below `agents/` becomes the agent ID, so
 `.opencode/agents/team/reviewer.md` defines `team/reviewer`.
 
@@ -106,7 +106,7 @@ List findings in severity order with file and line references.
 
 ### JSON or JSONC
 
-Use the `agents` field in any [OpenCode configuration file](/config):
+Use the `agents` field in any [Shuvcode configuration file](/config):
 
 ```jsonc title="opencode.jsonc"
 {
@@ -144,7 +144,7 @@ so a later agent rule can refine a global rule.
 ### `description`
 
 Explains the agent's purpose. It is optional, but strongly recommended for
-subagents because OpenCode includes it in the subagent catalog shown to the
+subagents because Shuvcode includes it in the subagent catalog shown to the
 model.
 
 ### `mode`
@@ -189,7 +189,7 @@ ID does not itself change that session model.
 
 ### `system`
 
-Sets the agent's system prompt. A non-empty value replaces OpenCode's
+Sets the agent's system prompt. A non-empty value replaces Shuvcode's
 provider-specific base prompt for that agent. Project instructions, skills,
 references, and other instruction sources are still added separately.
 
@@ -239,7 +239,7 @@ expanded.
 ### `steps`
 
 Sets a positive maximum number of model steps. On the final allowed step,
-OpenCode removes tools and asks the model to summarize its work in text. New
+Shuvcode removes tools and asks the model to summarize its work in text. New
 user input resets the allowance.
 
 ### `hidden`

@@ -30,4 +30,15 @@ describe("updater", () => {
   test("upgrades when latest is lower (rollback)", () => {
     expect(action("1.2.4", "1.2.3", true)).toBe("upgrade")
   })
+
+  test("fork builds ignore bare upstream versions", () => {
+    expect(action("1.17.18-1", "1.17.18", true)).toBe("none")
+    expect(action("1.17.18-2", "1.17.18", "notify")).toBe("none")
+  })
+
+  test("fork builds upgrade only to newer fork versions", () => {
+    expect(action("1.17.18-1", "1.17.18-2", true)).toBe("upgrade")
+    expect(action("1.17.18-1", "1.17.19-1", true)).toBe("upgrade")
+    expect(action("1.17.18-2", "1.17.18-1", true)).toBe("none")
+  })
 })

@@ -4,12 +4,17 @@ import { Script } from "@opencode-ai/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 import { UpdateArtifact } from "./update-artifact"
+import { currentRepository, forkRepository, publishPlan } from "./publish-plan"
+import { preflightForkPublish } from "../packages/cli/script/publish-ownership"
 
 console.log("=== publishing ===\n")
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
-process.chdir(dir)
 const tag = `v${Script.version}`
+const repository = currentRepository()
+const plan = publishPlan(repository)
+if (repository === forkRepository) await preflightForkPublish(repository, Script.version)
+process.chdir(dir)
 
 const pkgjsons = await Array.fromAsync(
   new Bun.Glob("**/package.json").scan({
@@ -35,34 +40,12 @@ if (Script.release && !Script.preview) {
 
 await prepareReleaseFiles()
 
-console.log("\n=== schema ===\n")
-await $`bun ./packages/schema/script/publish.ts`
+for (const name of plan.packages) {
+  console.log(`\n=== ${name} ===\n`)
+  await $`bun ${`./packages/${name}/script/publish.ts`}`
+}
 
-console.log("\n=== theme ===\n")
-await $`bun ./packages/theme/script/publish.ts`
-
-console.log("\n=== ai ===\n")
-await $`bun ./packages/ai/script/publish.ts`
-
-console.log("\n=== util ===\n")
-await $`bun ./packages/util/script/publish.ts`
-
-console.log("\n=== protocol ===\n")
-await $`bun ./packages/protocol/script/publish.ts`
-
-console.log("\n=== client ===\n")
-await $`bun ./packages/client/script/publish.ts`
-
-console.log("\n=== cli ===\n")
-await $`bun ./packages/cli/script/publish.ts`
-
-console.log("\n=== plugin ===\n")
-await $`bun ./packages/plugin/script/publish.ts`
-
-console.log("\n=== ui ===\n")
-await $`bun ./packages/ui/script/publish.ts`
-
-if (Script.release) {
+if (Script.release && plan.desktop) {
   await $`bun ./packages/desktop/scripts/finalize-latest-json.ts`
   await $`bun ./packages/desktop/scripts/finalize-latest-yml.ts`
 }
@@ -72,6 +55,9 @@ if (Script.release && !Script.preview) {
   await $`git tag -d ${tag}`.nothrow()
   await $`git tag ${tag}`
   await $`git push origin refs/tags/${tag} --force-with-lease --no-verify`
+}
+
+if (Script.release && !Script.preview && repository !== forkRepository) {
   await new Promise((resolve) => setTimeout(resolve, 5_000))
   await $`git fetch origin`
   await $`git checkout -B dev origin/dev`
@@ -81,14 +67,16 @@ if (Script.release && !Script.preview) {
 }
 
 if (Script.release) {
-  await $`gh release edit ${tag} --draft=false --repo ${process.env.GH_REPO}`
-  const repo = process.env.GH_REPO
-  if (!repo) throw new Error("GH_REPO is required")
-  await UpdateArtifact.publish({
-    channel: Script.channel,
-    name: "desktop",
-    distribution: "github",
-    version: Script.version,
-    metadata: await UpdateArtifact.desktopMetadata(Script.version, repo),
-  })
+  const repo = repository === forkRepository ? repository : (process.env.GH_REPO ?? repository)
+  if (!repo) throw new Error("Release repository is required")
+  await $`gh release edit ${tag} --draft=false --repo ${repo}`
+  if (plan.updateArtifacts) {
+    await UpdateArtifact.publish({
+      channel: Script.channel,
+      name: "desktop",
+      distribution: "github",
+      version: Script.version,
+      metadata: await UpdateArtifact.desktopMetadata(Script.version, repo),
+    })
+  }
 }

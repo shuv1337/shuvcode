@@ -117,10 +117,38 @@ export class ToolRuntimeError extends Error {
   }
 }
 
-const runHost = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, ToolError, R> =>
+/**
+ * Carries a host defect that must abort the whole execution instead of being sanitized into a
+ * tool diagnostic. `matches` classifies the defect; `record` hands it to the execution boundary,
+ * which re-raises it once teardown finishes.
+ */
+export type DefectTunnel = {
+  readonly matches: (defect: unknown) => boolean
+  readonly record: (defect: unknown) => void
+}
+
+const recordTunneled = (cause: Cause.Cause<unknown>, tunnel: DefectTunnel | undefined): boolean => {
+  if (tunnel === undefined) return false
+  for (const reason of cause.reasons) {
+    if (!Cause.isDieReason(reason) || !tunnel.matches(reason.defect)) continue
+    tunnel.record(reason.defect)
+    return true
+  }
+  return false
+}
+
+const runHost = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  tunnel: DefectTunnel | undefined,
+): Effect.Effect<A, ToolError, R> =>
   effect.pipe(
     Effect.catchCause((cause) => {
       if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
+      // A tunneled defect is a user's "no", not a tool failure: sanitizing it here would hand the
+      // model a generic error and let the step continue. Riding the interrupt path makes it
+      // uncatchable in-program, exactly like the direct call it stands in for; the recorded defect
+      // is re-raised to the host at the execution boundary.
+      if (recordTunneled(cause, tunnel)) return Effect.interrupt
       const error = Cause.squash(cause)
       return Effect.fail(error instanceof ToolError ? error : toolError("Tool execution failed", error))
     }),
@@ -492,6 +520,7 @@ export const make = <R>(
   maxToolCalls: number | undefined,
   searchIndex: ReadonlyArray<SearchEntry>,
   hooks?: ToolCallHooks<R>,
+  tunnel?: DefectTunnel,
 ): ToolRuntime<R> => {
   const calls: Array<ToolCall> = []
   const root = toolTrie(tools)
@@ -548,7 +577,10 @@ export const make = <R>(
       return yield* observeEnd(
         Effect.gen(function* () {
           if (hooks?.onToolCallStart !== undefined) yield* hooks.onToolCallStart(call)
-          const raw = yield* runHost(Effect.suspend(() => tool.execute(input)))
+          const raw = yield* runHost(
+            Effect.suspend(() => tool.execute(input)),
+            tunnel,
+          )
           const result = yield* Effect.try({
             try: () => decodeToolOutput(tool, raw),
             catch: () => new ToolRuntimeError("InvalidToolOutput", `Invalid output from tool '${name}'.`),

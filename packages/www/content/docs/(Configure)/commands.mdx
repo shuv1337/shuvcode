@@ -12,7 +12,7 @@ command in the TUI, followed by any arguments:
 
 ## Configure with Markdown
 
-OpenCode discovers `.md` command files in `commands/` directories:
+Shuvcode discovers `.md` command files in `commands/` directories:
 
 ```text
 ~/.config/opencode/commands/       # Global
@@ -47,7 +47,7 @@ Run it with:
 
 ## Configure with JSON
 
-Add commands under the `commands` key in any OpenCode JSON or JSONC
+Add commands under the `commands` key in any Shuvcode JSON or JSONC
 [configuration file](/config). Each entry's key is the command name and
 `template` is required.
 
@@ -115,7 +115,7 @@ only `$1`, then `$1` receives the full parsed argument list. Missing positions
 become empty strings.
 
 If a template contains neither positional placeholders nor `$ARGUMENTS`,
-OpenCode appends non-empty arguments to the template after a blank line.
+Shuvcode appends non-empty arguments to the template after a blank line.
 
 ## Shell interpolation
 
@@ -132,7 +132,7 @@ Review this diff:
 !`git diff --stat && git diff`
 ```
 
-OpenCode runs each interpolation with the configured shell in the active
+Shuvcode runs each interpolation with the configured shell in the active
 project location and inserts its combined output into the template. Argument
 interpolation happens first, so avoid placing untrusted arguments inside shell
 interpolations.

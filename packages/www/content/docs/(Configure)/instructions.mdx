@@ -22,7 +22,7 @@ V2 loads:
 2. Every `AGENTS.md` from the current Location up to and including the project
    root.
 
-For example, when the Location is `packages/web`, OpenCode can load all three
+For example, when the Location is `packages/web`, Shuvcode can load all three
 project files below:
 
 ```text
@@ -36,7 +36,7 @@ my-project/
 
 The files are combined rather than selecting a single winner. They are rendered
 in this order: global, then project files from the Location toward the project
-root. OpenCode does not resolve conflicts between their contents, so keep broad
+root. Shuvcode does not resolve conflicts between their contents, so keep broad
 guidance global and put scoped guidance in the relevant project directory.
 
 If the Location is outside the project root, only the global file is loaded.
@@ -45,13 +45,13 @@ discovery but does not disable the global file.
 
 <Callout type="note">
   Current V2 discovery only recognizes `AGENTS.md`. The `CLAUDE.md` fallback
-  and related precedence described by older OpenCode documentation do not apply.
+  and related precedence described by older Shuvcode documentation do not apply.
 </Callout>
 
 ### Nested instructions
 
 An `AGENTS.md` below the Location is not part of the initial upward scan. When
-the read tool successfully reads a file or lists a directory, OpenCode discovers
+the read tool successfully reads a file or lists a directory, Shuvcode discovers
 `AGENTS.md` files from that target upward to, but not including, the Location.
 It adds newly discovered files to the session in nearest-first order.
 
@@ -92,7 +92,7 @@ See [Config](/config) for config locations and general precedence.
 
 ## Ordering
 
-The selected agent or provider system prompt is sent first. OpenCode then sends
+The selected agent or provider system prompt is sent first. Shuvcode then sends
 the session's initial instructions, composed in this order:
 
 1. Built-in environment and date context.
@@ -123,6 +123,6 @@ latest admitted source values:
   safe boundary requires one complete source read before promoting input.
 
 The durable event stores changed source keys and value hashes, not rendered
-prose. During request assembly, OpenCode renders the epoch's initial values and
+prose. During request assembly, Shuvcode renders the epoch's initial values and
 interleaves later changes as chronological System messages. Clients see changed
 keys but never the privileged value bodies.

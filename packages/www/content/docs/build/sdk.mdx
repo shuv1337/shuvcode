@@ -1,24 +1,24 @@
 ---
 title: "SDK"
-description: "Embed OpenCode directly in your application."
+description: "Embed Shuvcode directly in your application."
 ---
 
-We're working on a general-purpose SDK for embedding OpenCode directly inside
+We're working on a general-purpose SDK for embedding Shuvcode directly inside
 your application. The regular SDK is coming soon.
 
 An Effect-native version is available now for applications built with Effect.
-Its current documentation is below. For other applications, run OpenCode as a
+Its current documentation is below. For other applications, run Shuvcode as a
 server and use the [TypeScript client](/build/client) in the meantime.
 
 ## Effect
 
-`@opencode-ai/sdk-next` hosts OpenCode in-process. Unlike the
-[network client](/build/client), it assembles the OpenCode server and routes API
+`@opencode-ai/sdk-next` hosts Shuvcode in-process. Unlike the
+[network client](/build/client), it assembles the Shuvcode server and routes API
 calls through its HTTP router in memory. It opens no HTTP listener and adds no
 network hop between the client and server.
 
 <Callout type="warning">
-  The V2 SDK is beta and currently private to the OpenCode workspace. It is not
+  The V2 SDK is beta and currently private to the Shuvcode workspace. It is not
   published for external installation yet, and its package name and API may
   change before release.
 </Callout>
@@ -32,7 +32,7 @@ the router, location services, fibers, and scoped plugin registrations.
 import {
   AbsolutePath,
   Location,
-  OpenCode,
+  Shuvcode,
 } from "@opencode-ai/sdk-next"
 import { Effect } from "effect"
 

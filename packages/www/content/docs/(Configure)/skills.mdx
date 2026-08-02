@@ -3,7 +3,7 @@ title: "Skills"
 description: ""
 ---
 
-Skills are Markdown instructions that OpenCode can advertise to an agent and
+Skills are Markdown instructions that Shuvcode can advertise to an agent and
 load when they are relevant. A skill can include supporting scripts,
 references, and other files in the same directory.
 
@@ -41,7 +41,7 @@ Paths in a skill are relative to the directory containing `SKILL.md`.
 
 ## Discovery
 
-OpenCode automatically adds the following source directories:
+Shuvcode automatically adds the following source directories:
 
 | Scope | Sources |
 | --- | --- |
@@ -50,10 +50,10 @@ OpenCode automatically adds the following source directories:
 | Project | `.opencode/skills` |
 | Project compatibility | `.claude/skills`, `.agents/skills` |
 
-For project sources, OpenCode searches from the current directory upward to
+For project sources, Shuvcode searches from the current directory upward to
 the project root and includes matching directories at every level.
 
-Within each source directory, OpenCode discovers:
+Within each source directory, Shuvcode discovers:
 
 - Markdown files at the source root, such as `skills/git-release.md`
 - `SKILL.md` files at any depth, such as `skills/git-release/SKILL.md`
@@ -78,7 +78,7 @@ directories or HTTP catalogs:
 }
 ```
 
-Relative paths are resolved from the active OpenCode working directory, not
+Relative paths are resolved from the active Shuvcode working directory, not
 from the directory containing the config file. Paths beginning with `~/` use
 the current user's home directory. Only `http://` and `https://` values are
 treated as URL sources.
@@ -105,7 +105,7 @@ An HTTP source is a base URL containing an `index.json`:
 }
 ```
 
-OpenCode downloads those files from
+Shuvcode downloads those files from
 `<base-url>/git-release/<file>`. File paths must be safe, relative,
 same-origin paths. Each entry must include either `SKILL.md` or a Markdown file
 named after the index entry, such as `git-release.md`.
@@ -113,7 +113,7 @@ named after the index entry, such as `git-release.md`.
 Use the named Markdown form for HTTP catalogs. Each downloaded skill directory
 is itself a source root, so `git-release.md` produces the ID `git-release`; a
 root-level `SKILL.md` produces the literal ID `SKILL` in the current V2
-implementation. Increment `version` when files change so OpenCode refreshes
+implementation. Increment `version` when files change so Shuvcode refreshes
 the cached copy.
 
 ## Frontmatter
@@ -174,12 +174,12 @@ Avoid duplicate IDs unless an override is intentional.
 
 ## Runtime loading
 
-At each model step, OpenCode advertises permitted skills that have a
+At each model step, Shuvcode advertises permitted skills that have a
 description and do not set `opencode/autoinvoke` to `false`. The advertisement
 contains only each skill's ID, name, and description; it does not add every
 skill body to the prompt.
 
-When the model calls the `skill` tool with an exact ID, OpenCode:
+When the model calls the `skill` tool with an exact ID, Shuvcode:
 
 1. Resolves the current winning definition for that ID
 2. Checks the `skill` permission for the selected agent

@@ -1,9 +1,12 @@
-export const logo = {
-  left: ["                   ", "█▀▀█ █▀▀█ █▀▀█ █▀▀▄", "█__█ █__█ █^^^ █__█", "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀~~▀"],
-  right: ["             ▄     ", "█▀▀▀ █▀▀█ █▀▀█ █▀▀█", "█___ █__█ █__█ █^^^", "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"],
-}
+import { logo as shuvLogo } from "./shuv-logo"
+
+export const logo = shuvLogo
 
 export const go = {
-  left: ["    ", "█▀▀▀", "█_^█", "▀▀▀▀"],
-  right: ["    ", "█▀▀█", "█__█", "▀▀▀▀"],
+  left: ["    ", "█▀▀▀", "▀▀▀█", "▀▀▀▀"],
+  right: ["    ", "█▀▀▀", "▀▀▀█", "▀▀▀▀"],
 }
+
+export const shuvcodeMark = ["█▀▀▀", "▀▀▀█", "▀▀▀▀"]
+
+export const marks = "_^~,"

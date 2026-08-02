@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store"
 import { dedupeWith } from "effect/Array"
 import { createSimpleContext } from "./helper"
-import { batch, createMemo } from "solid-js"
+import { batch, createEffect, createMemo } from "solid-js"
 import { useEvent } from "./event"
 import path from "path"
 import { useTuiPaths } from "./runtime"
@@ -42,6 +42,16 @@ export function recentModels(model: ModelPreferenceModel, recent: ModelPreferenc
     })
     .slice(0, 10)
     .map((item) => ({ providerID: item.providerID, modelID: item.modelID }))
+}
+
+export function configuredAgentModelWarning(
+  agent: { id: string; model?: { providerID: string; id: string } },
+  models: { providerID: string; id: string }[] | undefined,
+) {
+  if (!agent.model) return
+  if (!models) return
+  if (models.some((item) => item.providerID === agent.model?.providerID && item.id === agent.model.id)) return
+  return `Agent ${agent.id}'s configured model ${agent.model.providerID}/${agent.model.id} is not valid`
 }
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
@@ -447,6 +457,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     }
 
     const session = createSession()
+
+    createEffect(() => {
+      const value = agent.current()
+      if (!value) return
+      const message = configuredAgentModelWarning(value, data.location.model.list())
+      if (!message) return
+      toast.show({
+        variant: "warning",
+        message,
+        duration: 3000,
+      })
+    })
 
     const result = {
       model,

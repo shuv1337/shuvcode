@@ -1,6 +1,6 @@
 // Entry and exit splash banners for direct interactive mode scrollback.
 //
-// Renders the full opencode entry logo and a compact [O] exit badge, plus
+// Renders the full shuvcode entry logo and a compact exit badge, plus
 // session metadata and the resume command. These are scrollback snapshots, so
 // they become immutable terminal history once committed.
 //
@@ -18,7 +18,7 @@ import {
   type ScrollbackWriter,
 } from "@opentui/core"
 import { Locale } from "../util/locale"
-import { go } from "../logo"
+import { shuvcodeMark } from "../logo"
 import { monoTruncate, monoTruncateMiddle } from "./mono"
 import type { RunSplashTheme } from "./theme"
 
@@ -40,6 +40,15 @@ type SplashWriterInput = SplashInput & {
 export type SplashMeta = {
   title: string
   session_id: string
+}
+
+export function splashResumeCommand(sessionID: string) {
+  return `shuvcode mini -s ${sessionID}`
+}
+
+export const splashMark = {
+  mono: ["[S]"],
+  full: shuvcodeMark,
 }
 
 type Cell = {
@@ -183,7 +192,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
   let height = 1
 
   if (kind === "entry") {
-    const mark = input.mono ? ["[O]"] : go.right.slice(1)
+    const mark = input.mono ? splashMark.mono : splashMark.full
     const top = 1
     const body_left = (mark[0]?.length ?? 0) + 2
 
@@ -196,7 +205,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
       })
     }
 
-    push(lines, body_left, top, "OpenCode", right, undefined, TextAttributes.BOLD)
+    push(lines, body_left, top, "shuvcode", right, undefined, TextAttributes.BOLD)
     if (input.detail) {
       push(
         lines,
@@ -213,7 +222,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
   }
 
   if (kind === "exit") {
-    const mark = input.mono ? ["[O]"] : go.right.slice(1)
+    const mark = input.mono ? splashMark.mono : splashMark.full
     const top = 1
     const body_left = (mark[0]?.length ?? 0) + 2
     const session = "Session  "
@@ -238,7 +247,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
       lines,
       body_left + label.length,
       top + 1,
-      `opencode mini -s ${meta.session_id}`,
+      splashResumeCommand(meta.session_id),
       right,
       undefined,
       TextAttributes.BOLD,

@@ -1,4 +1,6 @@
-import { logo } from "../logo"
+import { logo } from "../shuv-logo"
+
+export const presentationLogo = logo
 
 const reset = "\x1b[0m"
 const bold = "\x1b[1m"
@@ -16,9 +18,9 @@ function wordmark(pad = "") {
       })
       .join("")
 
-  return logo.left.map((line, index) => {
+  return presentationLogo.left.map((line, index) => {
     const left = draw(line, dim, "\x1b[38;5;235m", "\x1b[48;5;235m")
-    const right = draw(logo.right[index] ?? "", reset, "\x1b[38;5;238m", "\x1b[48;5;238m")
+    const right = draw(presentationLogo.right[index] ?? "", reset, "\x1b[38;5;238m", "\x1b[48;5;238m")
     return `${pad}${left} ${right}`
   })
 }
@@ -29,7 +31,7 @@ export function sessionEpilogue(input: { title: string; sessionID?: string }) {
     ...wordmark("  "),
     "",
     `  ${weak("Session")}${bold}${input.title}${reset}`,
-    `  ${weak("Continue")}${bold}opencode2 -s ${input.sessionID}${reset}`,
+    `  ${weak("Continue")}${bold}shuvcode -s ${input.sessionID}${reset}`,
     "",
   ].join("\n")
 }

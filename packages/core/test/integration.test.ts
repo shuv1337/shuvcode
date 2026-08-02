@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
+import { Cause, Clock, Deferred, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -446,6 +446,89 @@ describe("Integration", () => {
           expect(attempt.time).toEqual({ created, expires: expiresAt })
         })
       })
+    }),
+  )
+
+  it.effect("coalesces concurrent refreshes into a single flight", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("anthropic")
+      const methodID = Integration.MethodID.make("claude-pro-max")
+      const latch = yield* Deferred.make<void>()
+      let refreshes = 0
+      yield* integrations.transform((editor) =>
+        editor.method.update({
+          integrationID,
+          method: { id: methodID, type: "oauth", label: "Claude Pro/Max" },
+          authorize: () =>
+            Effect.succeed({
+              mode: "auto" as const,
+              url: "https://example.com/authorize",
+              instructions: "Sign in",
+              callback: Effect.never,
+            }),
+          // Providers rotate refresh tokens, so a second concurrent refresh
+          // with the same token would be rejected upstream; resolve must run
+          // exactly one flight and share its result.
+          refresh: (credential) =>
+            Deferred.await(latch).pipe(
+              Effect.map(() => {
+                refreshes++
+                return { ...credential, access: "fresh", expires: Number.MAX_SAFE_INTEGER }
+              }),
+            ),
+        }),
+      )
+      yield* credentials.create({
+        integrationID,
+        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
+      })
+
+      const connection = yield* integrations.connection.active(integrationID)
+      const first = yield* integrations.connection.resolve(connection!).pipe(Effect.forkChild({ startImmediately: true }))
+      const second = yield* integrations.connection.resolve(connection!).pipe(Effect.forkChild({ startImmediately: true }))
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(latch, undefined)
+      const values = [yield* Fiber.join(first), yield* Fiber.join(second)]
+
+      expect(refreshes).toBe(1)
+      for (const value of values) expect(value).toMatchObject({ type: "oauth", access: "fresh" })
+      expect((yield* credentials.list(integrationID))[0]?.value).toMatchObject({ access: "fresh" })
+    }),
+  )
+
+  it.effect("fails resolve with AuthorizationError when refresh dies", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("anthropic")
+      const methodID = Integration.MethodID.make("claude-pro-max")
+      yield* integrations.transform((editor) =>
+        editor.method.update({
+          integrationID,
+          method: { id: methodID, type: "oauth", label: "Claude Pro/Max" },
+          authorize: () =>
+            Effect.succeed({
+              mode: "auto" as const,
+              url: "https://example.com/authorize",
+              instructions: "Sign in",
+              callback: Effect.never,
+            }),
+          // A broken plugin refresh (e.g. returning a non-Promise to a promise
+          // bridge) surfaces as a defect; resolve must contain it.
+          refresh: () => Effect.die(new TypeError("result.then is not a function")),
+        }),
+      )
+      yield* credentials.create({
+        integrationID,
+        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
+      })
+
+      const connection = yield* integrations.connection.active(integrationID)
+      expect(connection).toBeDefined()
+      const error = yield* integrations.connection.resolve(connection!).pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Integration.AuthorizationError)
     }),
   )
 

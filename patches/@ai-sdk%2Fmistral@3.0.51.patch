@@ -9,7 +9,7 @@ index 1bde0b9f8cbe6771a52c1041095c9dddfe8e5b6c..0ca2ffb2a0c9327aed5ddcf0004500dc
 +    promptCacheKey: z.ZodOptional<z.ZodString>;
  }, z.core.$strip>;
  type MistralLanguageModelOptions = z.infer<typeof mistralLanguageModelOptions>;
- 
+
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 index 1bde0b9f8cbe6771a52c1041095c9dddfe8e5b6c..0ca2ffb2a0c9327aed5ddcf0004500dc8b42569f 100644
 --- a/dist/index.d.ts
@@ -21,7 +21,7 @@ index 1bde0b9f8cbe6771a52c1041095c9dddfe8e5b6c..0ca2ffb2a0c9327aed5ddcf0004500dc
 +    promptCacheKey: z.ZodOptional<z.ZodString>;
  }, z.core.$strip>;
  type MistralLanguageModelOptions = z.infer<typeof mistralLanguageModelOptions>;
- 
+
 diff --git a/dist/index.js b/dist/index.js
 index d3f904c12a1d582cc7b9e9a2d30273e1a8505b28..267f34e20ea392b7a85ad5259d72d50605a6f971 100644
 --- a/dist/index.js
@@ -72,7 +72,7 @@ index d3f904c12a1d582cc7b9e9a2d30273e1a8505b28..267f34e20ea392b7a85ad5259d72d506
 +  reasoningEffort: import_v4.z.enum(["high", "none"]).optional(),
 +  promptCacheKey: import_v4.z.string().optional()
  });
- 
+
  // src/mistral-error.ts
 @@ -407,6 +418,7 @@ var MistralChatLanguageModel = class {
        stop: stopSequences,
@@ -271,7 +271,7 @@ index d2eff622c1b84a96bdeb4012cb0206a33012a04d..3bff11ddd6136ada45809568828cbc8f
 +  reasoningEffort: z.enum(["high", "none"]).optional(),
 +  promptCacheKey: z.string().optional()
  });
- 
+
  // src/mistral-error.ts
 @@ -397,6 +408,7 @@ var MistralChatLanguageModel = class {
        stop: stopSequences,
@@ -435,10 +435,10 @@ index 3c6914f8da615d7517bc43dd56198298d0a50247..8cd6f4c7577f746ef41e8a0aee682234
 +  MistralThinkChunk,
 +} from './mistral-chat-prompt';
  import { convertToBase64 } from '@ai-sdk/provider-utils';
- 
+
  function formatFileUrl({
 @@ -76,6 +80,8 @@ export function convertToMistralChatMessages(
- 
+
        case 'assistant': {
          let text = '';
 +        const structuredContent: Array<MistralAssistantMessageContent> = [];
@@ -470,7 +470,7 @@ index 3c6914f8da615d7517bc43dd56198298d0a50247..8cd6f4c7577f746ef41e8a0aee682234
              }
              default: {
 @@ -113,7 +128,7 @@ export function convertToMistralChatMessages(
- 
+
          messages.push({
            role: 'assistant',
 -          content: text,
@@ -487,7 +487,7 @@ index 7e4a7ab552f1b41b7074e1b3cada8a51d791268d..847d26f9dfe03572a969a122f8c96b8b
        random_seed: seed,
        reasoning_effort: options.reasoningEffort,
 +      prompt_cache_key: options.promptCacheKey,
- 
+
        // response format:
        response_format:
 @@ -201,9 +202,11 @@ export class MistralChatLanguageModel implements LanguageModelV3 {
@@ -510,9 +510,9 @@ index 7e4a7ab552f1b41b7074e1b3cada8a51d791268d..847d26f9dfe03572a969a122f8c96b8b
      let activeText = false;
      let activeReasoningId: string | null = null;
 +    let activeThinking: z.infer<typeof mistralThinkChunkSchema> | null = null;
- 
+
      const generateId = this.generateId;
- 
+
 @@ -326,20 +330,21 @@ export class MistralChatLanguageModel implements LanguageModelV3 {
                for (const part of delta.content) {
                  if (part.type === 'thinking') {
@@ -573,7 +573,7 @@ index 7e4a7ab552f1b41b7074e1b3cada8a51d791268d..847d26f9dfe03572a969a122f8c96b8b
              if (activeText) {
 @@ -437,7 +449,7 @@ export class MistralChatLanguageModel implements LanguageModelV3 {
  }
- 
+
  function extractReasoningContent(
 -  thinking: Array<{ type: string; text: string }>,
 +  thinking: Array<z.infer<typeof mistralThinkingContentSchema>>,
@@ -583,7 +583,7 @@ index 7e4a7ab552f1b41b7074e1b3cada8a51d791268d..847d26f9dfe03572a969a122f8c96b8b
 @@ -445,6 +457,17 @@ function extractReasoningContent(
      .join('');
  }
- 
+
 +function mergeThinking(
 +  current: z.infer<typeof mistralThinkChunkSchema> | null,
 +  next: z.infer<typeof mistralThinkChunkSchema>,
@@ -601,7 +601,7 @@ index 7e4a7ab552f1b41b7074e1b3cada8a51d791268d..847d26f9dfe03572a969a122f8c96b8b
 @@ -478,6 +501,32 @@ function extractTextContent(content: z.infer<typeof mistralContentSchema>) {
    return textContent.length ? textContent.join('') : undefined;
  }
- 
+
 +const mistralThinkingContentSchema = z.discriminatedUnion('type', [
 +  z.object({
 +    type: z.literal('text'),
@@ -662,14 +662,14 @@ index 54b29c08517d348995b6ca093b11160e453d5c8b..de30c3e7d924889339e38b1067cb26e9
 +   */
 +  promptCacheKey: z.string().optional(),
  });
- 
+
  export type MistralLanguageModelOptions = z.infer<
 diff --git a/src/mistral-chat-prompt.ts b/src/mistral-chat-prompt.ts
 index 13f1dced55ac4be084128127a57fbdd58115bc28..172b11dde3dd326c2f3befd99237474ed8c79285 100644
 --- a/src/mistral-chat-prompt.ts
 +++ b/src/mistral-chat-prompt.ts
 @@ -23,7 +23,7 @@ export type MistralUserMessageContent =
- 
+
  export interface MistralAssistantMessage {
    role: 'assistant';
 -  content: string;
@@ -680,7 +680,7 @@ index 13f1dced55ac4be084128127a57fbdd58115bc28..172b11dde3dd326c2f3befd99237474e
 @@ -32,6 +32,29 @@ export interface MistralAssistantMessage {
    }>;
  }
- 
+
 +export type MistralAssistantMessageContent =
 +  | { type: 'text'; text: string }
 +  | MistralThinkChunk;

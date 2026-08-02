@@ -131,22 +131,29 @@ function makeRoutes<AuthError, AuthServices>(
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
-      const requestServices = Layer.merge(
-        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context)),
+      const requestServices = Layer.mergeAll(
+        Layer.succeedContext(
+          Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context),
+        ),
         ServerInfo.layer(serviceURLs, options.app),
       )
-      return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+      const routes = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services))),
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
         Layer.provide(layer),
-        Layer.provide(authorizationLayer),
+        Layer.provide(authorizationLayer.pipe(Layer.provide(services))),
         Layer.provide(schemaErrorLayer),
         Layer.provide(auth),
         HttpRouter.provideRequest(requestServices),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
       )
+      return routes as Layer.Layer<
+        Layer.Success<typeof routes>,
+        Layer.Error<typeof routes>,
+        Exclude<Layer.Services<typeof routes>, HttpRouter.Request<"Requires", ServerInfo.Service>>
+      >
     }),
     Layer.provide(observability),
   )

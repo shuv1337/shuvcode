@@ -3,7 +3,7 @@ title: "Themes"
 description: "Choose a built-in TUI theme or create a custom color scheme."
 ---
 
-OpenCode includes built-in light and dark themes and can load custom themes
+Shuvcode includes built-in light and dark themes and can load custom themes
 from your global configuration or a project directory. The default theme is
 `opencode`.
 
@@ -18,7 +18,7 @@ In the full-screen TUI, run:
 You can also open the picker with `ctrl+x`, then `t`, using the
 default keybindings.
 
-Use `/settings` to change both the theme and its color mode. OpenCode supports
+Use `/settings` to change both the theme and its color mode. Shuvcode supports
 three modes:
 
 | Mode     | Behavior                                                 |
@@ -46,7 +46,7 @@ path under `$XDG_CONFIG_HOME`:
 
 ## Built-in themes
 
-OpenCode currently includes:
+Shuvcode currently includes:
 
 |              |                     |                        |
 | ------------ | ------------------- | ---------------------- |
@@ -62,7 +62,7 @@ OpenCode currently includes:
 | `solarized`  | `synthwave84`       | `tokyonight`           |
 | `vercel`     | `vesper`            | `zenburn`              |
 
-When OpenCode can read your terminal palette, the picker also includes
+When Shuvcode can read your terminal palette, the picker also includes
 `system`. The `system` theme generates its colors from your terminal's
 foreground, background, and ANSI palette.
 
@@ -75,7 +75,7 @@ Create a JSON file in either of these locations:
 .opencode/themes/my-theme.json
 ```
 
-OpenCode checks the global theme directory first, followed by every
+Shuvcode checks the global theme directory first, followed by every
 `.opencode/themes` directory from the filesystem root down to the current
 directory. A more local file with the same filename overrides an earlier one.
 The filename becomes the theme name, so `my-theme.json` appears as `my-theme`.
@@ -94,7 +94,7 @@ to `2` and define at least one of `light` or `dark`:
   completed.
 </Callout>
 
-By default, a theme inherits OpenCode's complete theme, so you only need to
+By default, a theme inherits Shuvcode's complete theme, so you only need to
 define overrides. Set `mergeMode` to `true` to inherit one mode from the other
 before applying that mode's overrides. Set `standalone` to `true` only when you
 intend to supply a complete independent theme.
@@ -111,7 +111,7 @@ semantic tokens can reference any semantic token.
 
 <ThemeTokens />
 
-If you add or edit a custom theme while OpenCode is running, restart the TUI to
+If you add or edit a custom theme while Shuvcode is running, restart the TUI to
 reload it.
 
 ## Terminal colors
@@ -124,4 +124,4 @@ echo $COLORTERM
 ```
 
 Most modern terminals report `truecolor` or `24bit`. Without truecolor,
-OpenCode approximates theme colors using the available terminal palette.
+Shuvcode approximates theme colors using the available terminal palette.

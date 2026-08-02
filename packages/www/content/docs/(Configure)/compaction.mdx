@@ -54,7 +54,7 @@ The CLI has no separate `compact` subcommand. Use the TUI command or the server
 API. For example:
 
 ```bash
-opencode2 api v2.session.compact \
+shuvcode api v2.session.compact \
   --param sessionID=ses_example \
   --data '{}'
 ```
@@ -62,7 +62,7 @@ opencode2 api v2.session.compact \
 The equivalent raw request is:
 
 ```bash
-opencode2 api post /api/session/ses_example/compact --data '{}'
+shuvcode api post /api/session/ses_example/compact --data '{}'
 ```
 
 `POST /api/session/:sessionID/compact` returns the admitted compaction input;
@@ -74,7 +74,7 @@ conflict.
 
 ## Configuration
 
-Add `compaction` to any [OpenCode configuration file](/config):
+Add `compaction` to any [Shuvcode configuration file](/config):
 
 ```jsonc title="opencode.jsonc"
 {
@@ -83,10 +83,10 @@ Add `compaction` to any [OpenCode configuration file](/config):
     "auto": true,
     "prune": false,
     "keep": {
-      "tokens": 8000
+      "tokens": 8000,
     },
-    "buffer": 20000
-  }
+    "buffer": 20000,
+  },
 }
 ```
 

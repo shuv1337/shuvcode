@@ -8,12 +8,12 @@ import os from "node:os"
 import path from "node:path"
 
 const nodeBuild = process.argv.includes("--node")
-const target = `cli${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+const target = `shuvcode${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
 const directory = path.join(import.meta.dir, "..", "dist", ...(nodeBuild ? ["node"] : []), target, "bin")
-const binary = path.join(directory, `opencode2${nodeBuild ? "-node" : ""}${process.platform === "win32" ? ".exe" : ""}`)
+const binary = path.join(directory, `shuvcode${nodeBuild ? "-node" : ""}${process.platform === "win32" ? ".exe" : ""}`)
 if (!(await Bun.file(binary).exists())) throw new Error(`Missing compiled CLI in ${directory}`)
 
-const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-smoke-")))
+const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "shuvcode-service-smoke-")))
 const env = {
   ...process.env,
   HOME: root,
@@ -40,15 +40,13 @@ try {
   const token = encodeURIComponent(credential)
   const health = await waitForReady(info.url, headers)
   if (health.pid !== info.pid) throw new Error("Health process does not match registration")
-  const tokenHealth = await fetch(
-    new URL(`/api/health?auth_token=${token}`, info.url),
-    { signal: AbortSignal.timeout(5_000) },
-  )
+  const tokenHealth = await fetch(new URL(`/api/health?auth_token=${token}`, info.url), {
+    signal: AbortSignal.timeout(5_000),
+  })
   if (tokenHealth.status !== 200) throw new Error("Compiled service rejected query authentication")
-  const tokenOpenApi = await fetch(
-    new URL(`/openapi.json?auth_token=${token}`, info.url),
-    { signal: AbortSignal.timeout(5_000) },
-  )
+  const tokenOpenApi = await fetch(new URL(`/openapi.json?auth_token=${token}`, info.url), {
+    signal: AbortSignal.timeout(5_000),
+  })
   if (tokenOpenApi.status !== 200) throw new Error("Compiled application rejected query authentication")
   if ((await pluginIDs(info.url, headers)).includes("smoke")) throw new Error("Smoke plugin existed before creation")
   const plugin = path.join(root, ".opencode", "plugins", "smoke.ts")
@@ -63,7 +61,8 @@ try {
   const unauthorizedOpenApi = await fetch(new URL("/openapi.json", info.url), {
     signal: AbortSignal.timeout(5_000),
   })
-  if (unauthorizedOpenApi.status !== 401) throw new Error("Compiled service exposed application routes without authentication")
+  if (unauthorizedOpenApi.status !== 401)
+    throw new Error("Compiled service exposed application routes without authentication")
   const unauthorizedStop = await fetch(new URL("/api/service/stop", info.url), {
     method: "POST",
     headers: { "content-type": "application/json" },

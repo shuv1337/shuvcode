@@ -16,13 +16,22 @@ import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { Model } from "@opencode-ai/core/model"
 import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Global } from "@opencode-ai/util/global"
 import { Effect, Fiber, Logger, Stream } from "effect"
 import { Database } from "../../src/database/database"
 import { tmpdir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node])),
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node]), [
+    [
+      Global.node,
+      Global.layerWith({
+        config: path.join(import.meta.dir, "fixtures", "global", "config"),
+        home: path.join(import.meta.dir, "fixtures", "global", "home"),
+      }),
+    ],
+  ]),
 )
 
 describe("PluginSupervisor config", () => {

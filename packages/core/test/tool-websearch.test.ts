@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { Config } from "@opencode-ai/core/config"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Permission } from "@opencode-ai/core/permission"
 import { Form } from "@opencode-ai/core/form"
@@ -13,6 +14,7 @@ import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { Image } from "@opencode-ai/core/image"
 import { testEffect } from "./lib/effect"
 import { imagePassthrough } from "./lib/image"
+import { emptyConfigLayer } from "./fixture/mcp"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 import { webSearchHost } from "./plugin/host"
 
@@ -112,13 +114,17 @@ const kv = Layer.succeed(
   }),
 )
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Tool.node, WebSearch.node, webSearchToolNode]), [
-    [Permission.node, permission],
-    [WebSearch.node, websearch],
-    [Form.node, form],
-    [KV.node, kv],
-    [Image.node, imagePassthrough],
-  ]),
+  AppNodeBuilder.build(
+    LayerNode.group([Tool.node, WebSearch.node, webSearchToolNode]),
+    [
+      [Permission.node, permission],
+      [WebSearch.node, websearch],
+      [Form.node, form],
+      [KV.node, kv],
+      [Image.node, imagePassthrough],
+      [Config.node, emptyConfigLayer],
+    ],
+  ),
 )
 
 describe("WebSearchTool registration", () => {

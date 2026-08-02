@@ -8,6 +8,8 @@ import { Tool } from "@opencode-ai/core/tool"
 import { Effect, Schema } from "effect"
 import { it } from "../lib/effect"
 import { readInitial, readUpdate } from "../lib/instructions"
+import { Config } from "@opencode-ai/core/config"
+import { emptyConfigLayer } from "../fixture/mcp"
 
 const echo: CodeModeCatalog.Entry = {
   path: "notes.echo",
@@ -86,6 +88,7 @@ describe("CodeModeInstructions", () => {
     })
     const layer = AppNodeBuilder.build(Tool.node, [
       [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
+      [Config.node, emptyConfigLayer],
     ])
 
     return Effect.gen(function* () {

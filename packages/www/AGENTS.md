@@ -2,7 +2,7 @@
 
 ## Structure
 
-- This package owns the `opencode.ai` website.
+- This package owns the Shuvcode website at `shuv.ai`.
 - Add custom marketing routes as Astro files under `pages/`.
 - The whole project is mounted at `/v2/` by `deployment.base`, and documentation lives under `content/docs/` at `/v2/docs` through `basePath` in `blume.config.ts`.
 - Write documentation in MDX. Every page should have `title` and `description` frontmatter.

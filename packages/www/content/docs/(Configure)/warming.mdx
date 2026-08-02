@@ -8,7 +8,7 @@ This can preserve provider-side prompt caches or other short-lived session
 state while you pause between prompts.
 
 Warming is disabled by default. Enable it with the default settings in any
-[OpenCode configuration file](/config):
+[Shuvcode configuration file](/config):
 
 ```jsonc title="opencode.jsonc"
 {
@@ -17,7 +17,7 @@ Warming is disabled by default. Enable it with the default settings in any
 }
 ```
 
-With the defaults, OpenCode sends a warming request after a session has made no
+With the defaults, Shuvcode sends a warming request after a session has made no
 model request for four minutes. It repeats this while the session remains idle,
 but stops 30 minutes after the last non-warming request. New model activity
 starts a new 30-minute window.
@@ -69,7 +69,7 @@ ends when the configured duration expires.
 
 Warming requests are real provider requests. They can consume tokens, incur
 costs, count against rate limits, and fail for the same reasons as other model
-requests. OpenCode logs warming failures without failing or changing the
+requests. Shuvcode logs warming failures without failing or changing the
 session, then waits for the next interval before trying again.
 
 Enable warming only when the provider-side benefit is worth the additional

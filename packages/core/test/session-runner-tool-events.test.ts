@@ -17,7 +17,10 @@ import { createLLMEventPublisher } from "@opencode-ai/core/session/runner/publis
 const sessionID = Session.ID.make("ses_tool_event_test")
 const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
 
-const capture = (providerMetadataKey = "anthropic", options?: { readonly interruptProgress?: boolean }) => {
+const capture = (
+  providerMetadataKey = "anthropic",
+  options?: { readonly interruptProgress?: boolean; readonly failToolSuccess?: boolean },
+) => {
   const published: Array<{ readonly type: string; readonly data: unknown }> = []
   const bus: Pick<Bus.Interface, "publish"> = {
     publish: (definition, data) => {
@@ -31,9 +34,11 @@ const capture = (providerMetadataKey = "anthropic", options?: { readonly interru
         })
         return event
       })
-      return definition.type === SessionEvent.Tool.Progress.type && options?.interruptProgress
-        ? publish.pipe(Effect.andThen(Effect.interrupt))
-        : publish
+      if (definition.type === SessionEvent.Tool.Progress.type && options?.interruptProgress)
+        return publish.pipe(Effect.andThen(Effect.interrupt))
+      if (definition.type === SessionEvent.Tool.Success.type && options?.failToolSuccess)
+        return Effect.die("tool success persistence failed")
+      return publish
     },
   }
   return {
@@ -231,6 +236,25 @@ test("binary failure emits no success event", async () => {
   )
   expect(published.some((event) => event.type === "session.tool.success.2")).toBe(false)
   expect(published.some((event) => event.type === "session.tool.failed.2")).toBe(true)
+})
+
+test("failed success persistence leaves the tool available for durable failure settlement", async () => {
+  const { published, publisher } = capture("anthropic", { failToolSuccess: true })
+  await Effect.runPromise(publisher.publish(call))
+
+  expect(
+    Exit.isFailure(
+      await Effect.runPromiseExit(
+        publisher.toolExecution(call.id, call.name, { output: {}, content: "unpersisted output" }),
+      ),
+    ),
+  ).toBe(true)
+  await Effect.runPromise(publisher.failUnsettledTools({ type: "unknown", message: "persistence failed" }))
+
+  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+    callID: call.id,
+    error: { type: "unknown", message: "persistence failed" },
+  })
 })
 
 test("success event data can carry provider-executed result state", () => {

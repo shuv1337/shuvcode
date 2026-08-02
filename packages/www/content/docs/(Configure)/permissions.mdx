@@ -52,12 +52,12 @@ case-insensitive on Windows. For shell convenience, a pattern ending in
 both `git status` and `git status --short`.
 
 The **last matching rule wins**. Put broad rules first and exceptions later.
-Rules from lower-priority configuration files are loaded first. OpenCode then
+Rules from lower-priority configuration files are loaded first. Shuvcode then
 appends all global rules before agent-specific rules, so a matching agent rule
 overrides a global rule.
 
 Some operations check several resources at once, such as a patch touching
-multiple files. OpenCode denies the operation if any resource resolves to
+multiple files. Shuvcode denies the operation if any resource resolves to
 `deny`; otherwise it asks if any resolves to `ask`; otherwise it allows it.
 
 ## Actions and resources
@@ -138,7 +138,7 @@ tools, ask for external directories, ask for `.env` reads, and allow
 | Agent | Effective default policy |
 | --- | --- |
 | `build` | Allows most actions; asks for external directories and `.env` reads; allows questions and entering plan mode; denies exiting plan mode |
-| `plan` | Uses the same base, allows questions and exiting plan mode, and denies edits except OpenCode plan files |
+| `plan` | Uses the same base, allows questions and exiting plan mode, and denies edits except Shuvcode plan files |
 | `general` | Uses the base policy but cannot launch another subagent; questions and plan transitions remain denied |
 | `explore` | Denies everything except `read`, `glob`, `grep`, `webfetch`, and `websearch`; cannot launch subagents and asks for external directories |
 | Hidden maintenance agents | Deny all actions |
@@ -154,7 +154,7 @@ The base read rules are ordered as follows:
 ]
 ```
 
-OpenCode also permits its managed tool-output, shell-output, temporary, and
+Shuvcode also permits its managed tool-output, shell-output, temporary, and
 global configuration directories. These exceptions apply only to the
 external-directory boundary for every agent; the underlying action still uses
 its own permission rules. The environment instructions identify the temporary
@@ -209,6 +209,6 @@ shell proposes the exact command text, and skills and subagents propose their
 IDs. Review the confirmation carefully and remove saved approvals that are no
 longer needed.
 
-For non-interactive runs, `opencode2 run --auto` replies `once` to permission
+For non-interactive runs, `shuvcode run --auto` replies `once` to permission
 requests. It does not save approvals, and explicit `deny` rules remain enforced.
 Without `--auto`, a non-interactive run rejects permission requests.

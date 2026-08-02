@@ -3,7 +3,7 @@ title: "References"
 description: ""
 ---
 
-References give OpenCode named access to directories outside the current
+References give Shuvcode named access to directories outside the current
 project. Use them for documentation, shared libraries, examples, or source from
 another repository.
 
@@ -82,7 +82,7 @@ Git URLs, host/path forms, and SCP-style remotes are supported.
 }
 ```
 
-Without `branch`, OpenCode checks out and refreshes the remote's default
+Without `branch`, Shuvcode checks out and refreshes the remote's default
 branch. Branch names may contain letters, numbers, `/`, `_`, `.`, and `-`, but
 cannot start with `-` or contain `..`. Local `file:` repositories are not
 supported.
@@ -100,7 +100,7 @@ Git references also support shorthand:
 
 ### Cloning and storage
 
-OpenCode normalizes a remote and stores one checkout under its global data
+Shuvcode normalizes a remote and stores one checkout under its global data
 directory at `opencode/repos/<host>/<repository-path>`. On a typical Linux
 installation, for example, `Effect-TS/effect` is stored at:
 

@@ -3,7 +3,7 @@ title: "Attachments"
 description: ""
 ---
 
-OpenCode can add local context to a prompt as text or image media. Current V2
+Shuvcode can add local context to a prompt as text or image media. Current V2
 sessions make these attachment types visible to the model:
 
 | Input | Model receives |
@@ -18,7 +18,7 @@ request. Some clients may let you select a PDF, but V2 does not yet make that
 PDF visible to the model.
 
 <Callout type="warning">
-  Use a model that supports image input before attaching an image. OpenCode
+  Use a model that supports image input before attaching an image. Shuvcode
   passes supported image media to the selected provider, but the provider and
   model still enforce their own formats, dimensions, file counts, and size
   limits. A text-only model may reject the request.
@@ -48,10 +48,10 @@ total; the server also applies the per-attachment limit described below.
 
 ### CLI
 
-Pass `--file` or `-f` to `opencode2 run`. Repeat the flag for multiple files:
+Pass `--file` or `-f` to `shuvcode run`. Repeat the flag for multiple files:
 
 ```bash
-opencode2 run -f src/server.ts -f screenshot.png "Explain the failure"
+shuvcode run -f src/server.ts -f screenshot.png "Explain the failure"
 ```
 
 The run command accepts at most 100 file flags and reads at most 10 MiB per
@@ -64,7 +64,7 @@ The V2 prompt and command payloads accept a `files` array. Each item requires a
 `uri` and can include `name` and `description`:
 
 ```bash
-opencode2 api post /api/session/ses_example/prompt --data '{
+shuvcode api post /api/session/ses_example/prompt --data '{
   "text": "Review this file",
   "files": [
     {
@@ -91,7 +91,7 @@ data URL:
 }
 ```
 
-HTTP and HTTPS attachment URLs are not supported. OpenCode materializes each
+HTTPS and non-loopback HTTP attachment URLs are not supported. Shuvcode materializes each loopback HTTP or local
 attachment before admitting the prompt and rejects invalid URLs, unreadable
 paths, non-files other than directories, and attachments over 20 MiB decoded.
 For a text `file:` URL, optional positive `start` and `end` query parameters
@@ -142,7 +142,7 @@ The `read` tool recognizes PNG, JPEG, GIF, and WebP by their contents and will
 ingest at most 20 MiB of source image bytes. It decodes the image and compares
 its width, height, and encoded Base64 length with all three configured limits.
 
-When `auto_resize` is `true`, OpenCode preserves the aspect ratio, scales the
+When `auto_resize` is `true`, Shuvcode preserves the aspect ratio, scales the
 image down to the dimension limits, and tries progressively smaller PNG and
 JPEG encodings until the Base64 limit is met. The resulting media type can
 therefore change to PNG or JPEG. If no encoding fits, the tool call fails.
@@ -163,6 +163,6 @@ upload or security boundary.
   multimodal model. Large text read through the `read` tool has separate
   paging and truncation limits.
 - Image attachments use provider-native image input. Provider errors can still
-  occur when OpenCode's limits pass but the selected model's limits do not.
+  occur when Shuvcode's limits pass but the selected model's limits do not.
 - PDFs and other unsupported binary prompt attachments should be converted to
   text or supported images before attaching them.

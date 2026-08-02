@@ -18,6 +18,7 @@ import { AbsolutePath } from "./schema"
 import { ConfigAgent } from "./config/agent"
 import { ConfigMedia } from "./config/media"
 import { ConfigCompaction } from "./config/compaction"
+import { ConfigCodeMode } from "./config/codemode"
 import { ConfigCommand } from "./config/command"
 import { ConfigExperimental } from "./config/experimental"
 import { ConfigFormatter } from "./config/formatter"
@@ -90,6 +91,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   tool_output: ConfigToolOutput.Info.pipe(Schema.optional).annotate({
     description: "Tool output truncation thresholds",
+  }),
+  codemode: ConfigCodeMode.Info.pipe(Schema.optional).annotate({
+    description: "Code Mode execution limits",
   }),
   mcp: ConfigMCP.Info.pipe(Schema.optional).annotate({
     description: "MCP server configuration",

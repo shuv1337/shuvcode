@@ -3,7 +3,7 @@ title: "Undo"
 description: ""
 ---
 
-OpenCode snapshots let the default interactive TUI roll back conversation history and related file changes. They are a
+Shuvcode snapshots let the default interactive TUI roll back conversation history and related file changes. They are a
 convenience for revising recent work, not a replacement for Git commits or backups.
 
 ## Configuration
@@ -24,10 +24,10 @@ were already stored.
 
 ## What is captured
 
-For each model step, OpenCode attempts to capture the worktree immediately before the model call and after a cleanly
+For each model step, Shuvcode attempts to capture the worktree immediately before the model call and after a cleanly
 completed step. It records the paths changed between those two points on the assistant message.
 
-Snapshots use a separate internal Git object database in the OpenCode data directory. They do not create commits, move
+Snapshots use a separate internal Git object database in the Shuvcode data directory. They do not create commits, move
 branches, or intentionally modify your repository's Git index. Capture is limited to the session's active directory, which
 may be a subdirectory of the repository.
 
@@ -35,7 +35,7 @@ Within that directory, snapshots include tracked files and untracked files that 
 untracked file larger than 2 MiB is excluded. Ignored files, files outside the active directory, and changes to Git
 metadata are not captured.
 
-During undo, OpenCode does not check out an entire tree. It restores only paths attributed to cleanly completed assistant
+During undo, Shuvcode does not check out an entire tree. It restores only paths attributed to cleanly completed assistant
 steps after the selected conversation boundary. Each path is restored to its state before the first affected step.
 
 ## Undo
@@ -54,7 +54,7 @@ The TUI finds the latest non-empty user message and stages a revert at that mess
   steps are removed when they did not exist in the earlier snapshot.
 - A summary shows the staged message count and restored paths.
 
-Running `/undo` again moves the staged boundary to an earlier user message. OpenCode keeps the filesystem state from
+Running `/undo` again moves the staged boundary to an earlier user message. Shuvcode keeps the filesystem state from
 immediately before the first undo as the redo baseline, so repeated undos form one wider staged revert rather than a redo
 stack.
 
@@ -96,7 +96,7 @@ are not included.
 - Other processes can edit the worktree between capture and restore. The server rejects revert operations while the
   session is actively running, but it cannot protect against external editors or commands.
 - Snapshot objects can contain complete contents of tracked and non-ignored untracked files. They are stored locally in
-  the OpenCode data directory; do not treat snapshots as secret-free metadata.
+  the Shuvcode data directory; do not treat snapshots as secret-free metadata.
 - Undo is not secure erasure. Committing a revert removes messages from the active projection, not from durable session
   history or existing snapshot storage.
 

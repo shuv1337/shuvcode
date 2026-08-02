@@ -92,8 +92,12 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       progress?: Tool.Metadata
     }
   >()
-  const failureSnapshot = (tool: { readonly progress?: Tool.Metadata }) =>
-    tool.progress === undefined ? {} : { metadata: tool.progress }
+  const failureSnapshot = (tool: { readonly progress?: Tool.Metadata }, metadata?: Tool.Metadata) =>
+    metadata === undefined
+      ? tool.progress === undefined
+        ? {}
+        : { metadata: tool.progress }
+      : { metadata }
   const assistantMessageID = input.assistantMessageID
   let stepStarted = false
   let stepFailed = false
@@ -265,14 +269,18 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       },
       ...failureSnapshot(tool),
       executed: false,
-    })
+    }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
   })
 
   const flush = Effect.fn("SessionRunner.flush")(function* () {
     yield* flushFragments()
   })
 
-  const failTool = Effect.fnUntraced(function* (callID: string, error: SessionError.Error) {
+  const failTool = Effect.fnUntraced(function* (
+    callID: string,
+    error: SessionError.Error,
+    metadata?: Tool.Metadata,
+  ) {
     const tool = tools.get(callID)
     if (!tool || tool.settled) return false
     tool.settled = true
@@ -281,9 +289,9 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       assistantMessageID: tool.assistantMessageID,
       callID,
       error,
-      ...failureSnapshot(tool),
+      ...failureSnapshot(tool, metadata),
       executed: tool.providerExecuted,
-    })
+    }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
     return true
   })
 
@@ -455,7 +463,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
             ...failureSnapshot(tool),
             executed,
             resultState,
-          })
+          }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
           return
         }
         yield* bus.publish(SessionEvent.Tool.Success, {
@@ -465,7 +473,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
           content: hostedContent(event.result),
           executed,
           resultState,
-        })
+        }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
         return
       }
       case "tool-error": {
@@ -486,7 +494,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
           ...failureSnapshot(tool),
           executed: tool.providerExecuted,
           resultState: providerState(event.providerMetadata),
-        })
+        }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
         return
       }
       case "step-finish":
@@ -547,7 +555,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       content: [content[0], ...content.slice(1)],
       ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
       executed: tool.providerExecuted,
-    })
+    }).pipe(Effect.onError(() => Effect.sync(() => (tool.settled = false))))
   })
 
   return {

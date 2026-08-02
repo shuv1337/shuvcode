@@ -15,6 +15,7 @@ import {
 import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
 import { TestLLM } from "@opencode-ai/ai/testing"
 import { Catalog } from "@opencode-ai/core/catalog"
+import { CodeModeCatalog } from "@opencode-ai/core/codemode/catalog"
 import { Database } from "@opencode-ai/core/database/database"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -132,6 +133,8 @@ const testLLM = TestLLM.layer({
 const client = TestLLM.clientLayer
 const model = LanguageModel.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
 const defaultSystem = PROMPT_DEFAULT
+const withCodeModeGuidance = (...instructions: ReadonlyArray<string>) =>
+  instructions.join("\n\n")
 const replacementModel = LanguageModel.make({ id: "replacement", provider: "fake", route: OpenAIChat.route })
 const compactModel = LanguageModel.make({
   id: "compact",
@@ -259,7 +262,7 @@ const echo = Layer.effectDiscard(
         },
         storefail: {
           name: "storefail",
-          description: "Produce output that cannot be persisted",
+          description: "Produce output for a persistence failure test",
           input: Schema.Struct({}),
           output: Schema.Struct({}),
           execute: () => Effect.succeed({ output: {} }),
@@ -446,6 +449,19 @@ const runPrompt = Effect.fnUntraced(function* (session: Session.Interface, text:
   const message = yield* admit(session, text)
   yield* session.resume(sessionID)
   return message
+})
+
+const failToolSuccessPersistence = Effect.gen(function* () {
+  const { db } = yield* Database.Service
+  yield* db.run(`
+    CREATE TEMP TRIGGER fail_tool_success_persistence
+    BEFORE INSERT ON event
+    WHEN NEW.type = 'session.tool.success.2'
+    BEGIN
+      SELECT RAISE(FAIL, 'injected tool success persistence failure');
+    END
+  `)
+  yield* Effect.addFinalizer(() => db.run("DROP TRIGGER fail_tool_success_persistence").pipe(Effect.orDie))
 })
 
 const insertSession = (id: Session.ID) =>
@@ -1265,8 +1281,11 @@ describe("SessionRunnerLLM", () => {
       yield* session.resume(sessionID)
 
       expect(requests).toHaveLength(1)
-      expect(requests[0]?.system.map((part) => part.text)).toEqual([defaultSystem, "Initial context"])
-      expect(messageRoles(requests[0])).toEqual(["user", "user"])
+      expect(requests[0]?.system.map((part) => part.text)).toEqual([
+        defaultSystem,
+        withCodeModeGuidance("Initial context"),
+      ])
+      expect(requests[0]?.messages.map((message) => message.role)).toEqual(["user", "user"])
       expect(
         yield* db
           .select({ id: EventTable.id })
@@ -1295,8 +1314,8 @@ describe("SessionRunnerLLM", () => {
         ),
       ).toEqual({ status: "append-only", previousMessages: 1, currentMessages: 3 })
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(messageRoles(requests[1])).toEqual(["user", "system", "user"])
       expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Changed context" }])
@@ -1312,7 +1331,10 @@ describe("SessionRunnerLLM", () => {
       expect(updates).toHaveLength(2)
       expect(updates[0]?.data).toMatchObject({
         sessionID,
-        delta: { "test/context": Instructions.hash("Initial context") },
+        delta: {
+          "test/context": Instructions.hash("Initial context"),
+          "core/codemode": Instructions.hash(CodeModeCatalog.summarize([])),
+        },
       })
       expect(updates[1]?.data).toEqual({
         sessionID,
@@ -1334,7 +1356,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
         expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
-        "Initial context",
+        withCodeModeGuidance("Initial context"),
       ])
     }),
   )
@@ -1357,7 +1379,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
         expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
-        "Initial context",
+        withCodeModeGuidance("Initial context"),
       ])
     }),
   )
@@ -1377,7 +1399,10 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(TestLLM.text("Done", "text-build"))
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Build agent instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
     }),
   )
 
@@ -1401,7 +1426,10 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(TestLLM.text("Done", "text-reviewer"))
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Reviewer instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Reviewer instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
       expect((yield* session.messages({ sessionID }))[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
     }),
   )
@@ -1421,7 +1449,10 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(TestLLM.text("Done", "text-no-system"))
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Build agent instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
     }),
   )
 
@@ -1447,7 +1478,10 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(TestLLM.text("Done", "text-selected"))
       yield* session.resume(sessionID)
 
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual(["Reviewer instructions", "Initial context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        "Reviewer instructions",
+        withCodeModeGuidance("Initial context"),
+      ])
       expect((yield* session.messages({ sessionID }))[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
     }),
   )
@@ -1520,8 +1554,8 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "Second")
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context\n\nBuild skills"],
-        [defaultSystem, "Initial context\n\nBuild skills"],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
       ])
       expect(systemTexts(requests[1])).toContainEqual(expect.stringContaining("Reviewer skills"))
     }),
@@ -1547,7 +1581,7 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "First")
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context\n\nBuild skills"],
+        [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
       ])
     }),
   )
@@ -1570,7 +1604,7 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "First")
       expect(requests.map((request) => request.model)).toEqual([model])
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
     }),
   )
@@ -1600,7 +1634,10 @@ describe("SessionRunnerLLM", () => {
       // String values render verbatim inside the initial tagged block.
       expect(requests[0]?.system.map((part) => part.text)).toEqual([
         defaultSystem,
-        ["Initial context", "", '<context key="deploy-target">', "production", "</context>"].join("\n"),
+        withCodeModeGuidance(
+          "Initial context",
+          ['<context key="deploy-target">', "production", "</context>"].join("\n"),
+        ),
       ])
 
       // Non-string JSON pretty-prints; the change narrates as a System update.
@@ -1690,9 +1727,9 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "Third")
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(messageRoles(requests[1])).toEqual(["user", "system", "user"])
       expect(requests[2]?.messages.filter((message) => message.role === "system")).toHaveLength(2)
@@ -1724,9 +1761,9 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "Third")
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
     }),
   )
@@ -1751,8 +1788,8 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "Second")
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(messageRoles(requests[1])).toEqual(["user", "system", "user"])
       expect(requests[1]?.messages.at(1)?.content).toEqual([{ type: "text", text: "Replacement context" }])
@@ -2272,7 +2309,10 @@ describe("SessionRunnerLLM", () => {
       yield* runPrompt(session, "Third")
 
       // Compaction already moved current values into the new epoch before the unavailable read.
-      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, "Changed context"])
+      expect(requests.at(-1)?.system.map((part) => part.text)).toEqual([
+        defaultSystem,
+        withCodeModeGuidance("Changed context"),
+      ])
       expect(systemTexts(requests.at(-1)!)).not.toContain("Changed context")
     }),
   )
@@ -2435,8 +2475,8 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.map((request) => request.model)).toEqual([model, replacementModel])
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
-        [defaultSystem, "Initial context"],
-        [defaultSystem, "Initial context"],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
+        [defaultSystem, withCodeModeGuidance("Initial context")],
       ])
       expect(systemTexts(requests[1])).toContain("Replacement context")
     }),
@@ -3481,6 +3521,42 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
+  it.effect("fails the drain when tool output persistence fails", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      yield* failToolSuccessPersistence
+      yield* admit(session, "Call storefail")
+
+      yield* TestLLM.push(TestLLM.tool("call-storefail", "storefail", {}), [])
+
+      const exit = yield* session.resume(sessionID).pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBe(true)
+      expect(requests).toHaveLength(1)
+      expect(yield* session.context(sessionID)).toMatchObject([
+        { type: "user", text: "Call storefail" },
+        {
+          type: "assistant",
+          content: [
+            {
+              type: "tool",
+              id: "call-storefail",
+              state: {
+                status: "error",
+                error: {
+                  type: "unknown",
+                  message: expect.stringContaining("Failed to write tool output"),
+                },
+              },
+            },
+          ],
+          finish: "error",
+          error: { type: "unknown", message: expect.stringContaining("Failed to write tool output") },
+        },
+      ])
+    }),
+  )
+
   it.effect("returns configured permission denials to the model and continues", () =>
     Effect.gen(function* () {
       const session = yield* setup
@@ -4518,6 +4594,7 @@ describe("SessionRunnerLLM", () => {
   it.effect("preserves the provider failure when tool output persistence also fails", () =>
     Effect.gen(function* () {
       const session = yield* setup
+      yield* failToolSuccessPersistence
       yield* admit(session, "Storage fails while provider fails")
       yield* TestLLM.push([
         LLMEvent.stepStart({ index: 0 }),
@@ -4525,8 +4602,8 @@ describe("SessionRunnerLLM", () => {
         LLMEvent.providerError({ message: "Provider unavailable" }),
       ])
 
-      expect(yield* session.resume(sessionID).pipe(Effect.exit)).toMatchObject({
-        _tag: "Failure",
+      expect(yield* session.resume(sessionID).pipe(Effect.flip)).toMatchObject({
+        error: { type: "provider.unknown", message: "Provider unavailable" },
       })
 
       expect(requireAssistant(yield* session.context(sessionID))).toMatchObject({

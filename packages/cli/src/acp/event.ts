@@ -400,7 +400,7 @@ function response(
   if (error?.type === "provider.auth") throw new ACPError.AuthRequiredError()
   if (error && error.type !== "aborted" && error.type !== "provider.content-filter") {
     throw new ACPError.ServiceFailureError({
-      safeMessage: error.message || "OpenCode prompt failed",
+      safeMessage: error.message || "Shuvcode prompt failed",
       service: "session",
       errorName: error.type,
     })

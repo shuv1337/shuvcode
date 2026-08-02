@@ -4,12 +4,12 @@ description: ""
 ---
 
 <Callout type="tip">
-  You shouldn't have to configure OpenCode manually. Ask OpenCode to update its configuration for you.
+  You shouldn't have to configure Shuvcode manually. Ask Shuvcode to update its configuration for you.
 </Callout>
 
 ## Format
 
-OpenCode supports both **JSON** and **JSONC** (JSON with Comments) configuration files.
+Shuvcode supports both **JSON** and **JSONC** (JSON with Comments) configuration files.
 
 ```jsonc title="opencode.jsonc"
 {
@@ -30,7 +30,7 @@ OpenCode supports both **JSON** and **JSONC** (JSON with Comments) configuration
 
 ## Locations
 
-OpenCode loads global configuration from:
+Shuvcode loads global configuration from:
 
 ```text
 ~/.config/opencode/opencode.json(c)
@@ -43,7 +43,7 @@ Project-specific configuration can use either form:
 /home/user/projects/my-app/.opencode/opencode.json(c)
 ```
 
-When OpenCode starts, it searches for configuration files from the current
+When Shuvcode starts, it searches for configuration files from the current
 directory upward to the project root. It merges direct `opencode.json(c)` files
 from the project root toward the current directory, then does the same for
 files inside `.opencode` directories. A `.opencode` config therefore overrides
@@ -51,7 +51,7 @@ every direct config, even when the direct config is closer to the current
 directory. Avoid mixing the two forms across one project hierarchy unless this
 precedence is intentional.
 
-For example, consider a monorepo with OpenCode started from
+For example, consider a monorepo with Shuvcode started from
 `/home/user/projects/acme/packages/web`:
 
 ```text
@@ -65,7 +65,7 @@ For example, consider a monorepo with OpenCode started from
         └── src/
 ```
 
-OpenCode applies these files from lowest to highest precedence:
+Shuvcode applies these files from lowest to highest precedence:
 
 1. `~/.config/opencode/opencode.json`
 2. `/home/user/projects/acme/opencode.json`
@@ -77,7 +77,7 @@ config. Settings that do not conflict are preserved from every file.
 
 ## Schema
 
-The complete OpenCode configuration schema is available at
+The complete Shuvcode configuration schema is available at
 [opencode.ai/config.json](https://opencode.ai/config.json).
 
 Add the `$schema` field to your configuration file to enable validation and
@@ -359,7 +359,7 @@ and cost considerations.
 
 ### Skills
 
-Add directories or URLs that OpenCode should search for agent skills.
+Add directories or URLs that Shuvcode should search for agent skills.
 
 ```jsonc
 {

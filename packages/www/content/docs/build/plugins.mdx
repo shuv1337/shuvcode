@@ -1,9 +1,9 @@
 ---
 title: "Plugins"
-description: "Extend OpenCode with plugins."
+description: "Extend Shuvcode with plugins."
 ---
 
-Plugins extend OpenCode in-process. They can transform agents, models, commands,
+Plugins extend Shuvcode in-process. They can transform agents, models, commands,
 integrations, references, skills, and tools; intercept model requests and tool
 execution; and call a subset of the V2 client.
 
@@ -45,7 +45,7 @@ with `./` or `../` and resolve relative to the configuration file containing
 the entry. Absolute paths and `file://` URLs are also supported. Both scoped
 packages and versioned package specifiers are supported.
 
-Use the object form to pass JSON configuration to the plugin. OpenCode passes
+Use the object form to pass JSON configuration to the plugin. Shuvcode passes
 `options` unchanged as `ctx.options`; omitted options become an empty object.
 The plugin owns validation and defaults for its options.
 
@@ -55,7 +55,7 @@ precedence rather than replacing the entire array.
 
 ### Local discovery
 
-OpenCode automatically scans this directory in every discovered OpenCode config
+Shuvcode automatically scans this directory in every discovered Shuvcode config
 directory:
 
 ```text
@@ -64,7 +64,7 @@ directory:
 
 The equivalent global directory is `~/.config/opencode/plugins/`. Direct `.ts`
 and `.js` children are loaded. An immediate child directory is also loaded as a
-package when OpenCode can resolve a string `exports`, `module`, or `main`
+package when Shuvcode can resolve a string `exports`, `module`, or `main`
 entrypoint, or an `index.ts` or `index.js` file.
 
 A `plugins/` directory beside a project-root `opencode.json` is not discovered
@@ -88,19 +88,19 @@ selectors. Use the `id` from the plugin's default export to disable it. A later
 ID entry re-enables a loaded or built-in plugin. Explicit config directives run
 after local auto-discovery, so they can disable discovered plugins by ID.
 
-User plugins are activated in configured order between OpenCode's internal
+User plugins are activated in configured order between Shuvcode's internal
 plugin phases. Hooks run sequentially in registration order, and later hooks
 observe earlier mutations. Do not depend on the internal phase ordering while
 the API is beta.
 
 ### Installation and dependencies
 
-OpenCode installs bare package entries and their production dependencies into
+Shuvcode installs bare package entries and their production dependencies into
 an isolated cache. Package installation does not run lifecycle scripts.
 Published packages should expose their plugin entrypoint and include every
 runtime import in `dependencies`.
 
-Local files and local package directories are imported directly. OpenCode does
+Local files and local package directories are imported directly. Shuvcode does
 **not** install their dependencies. Install dependencies in a `package.json`
 visible from the plugin file, for example:
 
@@ -109,11 +109,11 @@ cd .opencode
 bun add @opencode-ai/plugin@next
 ```
 
-Match the plugin package version to the OpenCode release you target.
+Match the plugin package version to the Shuvcode release you target.
 
 Configuration and discovered plugin files under watched config directories are
 reloaded when they change. Reloading replaces the active plugin generation and
-releases its scoped registrations. Restart OpenCode after changing an npm
+releases its scoped registrations. Restart Shuvcode after changing an npm
 package version or a local dependency when no watched file changed.
 
 ## Create a plugin
@@ -141,7 +141,7 @@ export default Plugin.define({
 
 `setup` runs each time the plugin is activated. Register long-lived behavior
 during setup; do not wait there on an infinite event stream. It may return a
-synchronous or asynchronous cleanup function. OpenCode awaits that cleanup
+synchronous or asynchronous cleanup function. Shuvcode awaits that cleanup
 when the plugin is disabled, reloaded, or shut down:
 
 ```ts
@@ -162,7 +162,7 @@ connections, and background tasks.
 
 ### Context
 
-The plugin context is essentially an [OpenCode server client](/build/client).
+The plugin context is essentially an [Shuvcode server client](/build/client).
 Its read and action methods use the same inputs and responses as the client. It
 adds plugin-only methods for transforms, runtime hooks, reloads, registrations,
 and plugin options.
@@ -186,7 +186,7 @@ and plugin options.
 
 ### Transform hooks
 
-Transform hooks let a plugin modify how OpenCode is configured. Use them to add
+Transform hooks let a plugin modify how Shuvcode is configured. Use them to add
 or remove definitions, override settings, choose defaults, and provide tools or
 other sources.
 
@@ -235,7 +235,7 @@ export default Plugin.define({
 `ctx.catalog.reload()` replays every catalog transform to derive the new
 catalog. Each plugin's logic remains composed with the others, so a later
 plugin can still modify models added by an earlier one. The catalog updates
-without restarting OpenCode.
+without restarting Shuvcode.
 
 ### Runtime hooks
 
@@ -387,7 +387,7 @@ manifest is:
 }
 ```
 
-Use versions compatible with the OpenCode release you target and test the
+Use versions compatible with the Shuvcode release you target and test the
 installed package, not only a workspace-linked copy. Because the plugin API is
 beta, publish compatible plugin updates when V2 entrypoints or contracts
 change.
@@ -397,7 +397,7 @@ change.
 List active plugin IDs through the V2 API:
 
 ```sh
-opencode2 api get /api/plugin
+shuvcode api get /api/plugin
 ```
 
 If a plugin is absent, check the server log described in
@@ -407,7 +407,7 @@ being resolved.
 
 ## Effect
 
-OpenCode provides a first-class Effect API for plugins through the
+Shuvcode provides a first-class Effect API for plugins through the
 `@opencode-ai/plugin/effect` entrypoint. Install `effect` alongside the
 plugin package and export an `effect` function instead of `setup`:
 
@@ -435,7 +435,7 @@ export default Plugin.define({
 
 Context operations return Effects. The plugin effect is scoped, so finalizers,
 fibers, and registrations are released when the plugin reloads or unloads.
-OpenCode does not expose its private Core services to the plugin; use the
+Shuvcode does not expose its private Core services to the plugin; use the
 capabilities on `ctx`.
 
 Typed tools can use `Schema` from `effect`. Effect and Promise plugins use the
