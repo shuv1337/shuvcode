@@ -176,14 +176,20 @@ export const fromCatalogModel = (
     )
   }
   const configured = { ...resolved.settings, ...credential?.metadata }
-  const mapping = Provider.isAISDK(resolved.package) ? AISDKNative.map(packageName, configured) : undefined
+  const mapping = Provider.isAISDK(resolved.package)
+    ? AISDKNative.map({
+        packageName,
+        settings: configured,
+        modelID: resolved.modelID ?? resolved.id,
+        hasCredential: key !== undefined,
+      })
+    : undefined
   const native = mapping?.package ?? resolved.package
   if (Provider.isAISDK(resolved.package) && !mapping) {
     if (!dependencies?.loadAISDK) return Effect.fail(unsupported(resolved))
     const runtime = produce(resolved, (draft) => {
       draft.settings = Provider.mergeOverlay(draft.settings, {
-        ...(credential?.type === "key" ? { apiKey: credential.key } : {}),
-        ...(credential?.type === "oauth" ? { apiKey: credential.access } : {}),
+        ...nativeCredentialSettings(resolved.package ?? "", credential),
         ...credential?.metadata,
       })
     })
