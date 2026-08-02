@@ -5,11 +5,75 @@ const map = (packageName: string, settings: Readonly<Record<string, unknown>>, m
   AISDKNative.map({ packageName, settings, modelID })
 
 describe("AISDKNative", () => {
+  test("maps both models.dev Bedrock packages to native providers", () => {
+    expect(map("@ai-sdk/amazon-bedrock", { region: "us-east-1" })).toEqual({
+      package: "@opencode-ai/ai/providers/amazon-bedrock",
+      settings: { region: "us-east-1" },
+    })
+    expect(map("@ai-sdk/amazon-bedrock/mantle", { region: "us-east-1" }, "openai.gpt-oss-120b")).toEqual({
+      package: "@opencode-ai/ai/providers/amazon-bedrock/mantle/responses",
+      settings: { region: "us-east-1" },
+    })
+  })
+
+  test("maps Bedrock provider and request options", () => {
+    expect(
+      map(
+        "@ai-sdk/amazon-bedrock",
+        {
+          region: "us-east-1",
+          topP: 0.8,
+          headers: { "x-test": "value" },
+          additionalModelRequestFields: {
+            existing: true,
+            anthropic_beta: ["existing-beta"],
+            output_config: { format: "text" },
+          },
+          reasoningConfig: { type: "adaptive", display: "summarized", maxReasoningEffort: "high" },
+          anthropicBeta: ["context-1m-2025-08-07"],
+          serviceTier: "priority",
+        },
+        "anthropic.claude-sonnet-4-6-v1",
+      ),
+    ).toEqual({
+      package: "@opencode-ai/ai/providers/amazon-bedrock",
+      settings: { region: "us-east-1", topP: 0.8 },
+      headers: { "x-test": "value" },
+      body: {
+        additionalModelRequestFields: {
+          existing: true,
+          anthropic_beta: ["existing-beta", "context-1m-2025-08-07"],
+          thinking: { type: "adaptive", display: "summarized" },
+          output_config: { format: "text", effort: "high" },
+        },
+        serviceTier: { type: "priority" },
+      },
+    })
+
+    expect(
+      map(
+        "@ai-sdk/amazon-bedrock",
+        { reasoningConfig: { type: "enabled", maxReasoningEffort: "max" } },
+        "amazon.nova-2-lite-v1:0",
+      )?.body,
+    ).toEqual({
+      additionalModelRequestFields: {
+        reasoningConfig: { type: "enabled", maxReasoningEffort: "max" },
+      },
+    })
+
+    expect(
+      map("@ai-sdk/amazon-bedrock", { reasoningConfig: { maxReasoningEffort: "high" } }, "openai.gpt-oss-120b-1:0")
+        ?.body,
+    ).toEqual({ additionalModelRequestFields: { reasoning_effort: "high" } })
+  })
+
   test("maps Bedrock Mantle models to their supported native APIs", () => {
     const settings = {
       bearerToken: "token",
       region: "us-west-2",
       baseURL: "https://mantle.test/v1",
+      headers: { "x-test": "value" },
       reasoningEffort: "high",
       reasoningSummary: "auto",
       include: ["reasoning.encrypted_content"],
@@ -29,6 +93,7 @@ describe("AISDKNative", () => {
           },
         },
       },
+      headers: { "x-test": "value" },
     })
     expect(map("@ai-sdk/amazon-bedrock/mantle", settings, "openai.gpt-oss-safeguard-20b")?.package).toBe(
       "@opencode-ai/ai/providers/amazon-bedrock/mantle/chat",
@@ -66,12 +131,6 @@ describe("AISDKNative", () => {
         providerOptions: { openai: { store: false } },
       },
     })
-  })
-
-  test("keeps Bedrock Mantle on the AI SDK when native static auth is unavailable", () => {
-    expect(
-      map("@ai-sdk/amazon-bedrock/mantle", { region: "us-east-1", profile: "production" }, "openai.gpt-oss-120b"),
-    ).toBeUndefined()
   })
 
   test("maps the legacy Bedrock endpoint override", () => {
