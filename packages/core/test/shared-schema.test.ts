@@ -166,7 +166,7 @@ test("Core reuses the canonical shared schemas", async () => {
   ]
   for (const [core, shared] of schemas) expect(core).toBe(shared)
 
-  expect(Agent.Info.empty(Agent.ID.make("test"))).toEqual(Agent.Info.empty(Agent.ID.make("test")))
+  expect(Agent.Info.default(Agent.ID.make("test"))).toEqual(Agent.Info.default(Agent.ID.make("test")))
   expect(coreModel.Info.default(coreProvider.ID.make("test"), coreModel.ID.make("model"))).toEqual(
     Model.Info.default(Provider.ID.make("test"), Model.ID.make("model")),
   )
