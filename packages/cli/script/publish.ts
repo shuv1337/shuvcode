@@ -7,6 +7,7 @@ import { UpdateArtifact } from "../../../script/update-artifact"
 import { currentRepository, publishPlan } from "../../../script/publish-plan"
 import { preflightForkPublish, type ForkDistribution } from "./publish-ownership"
 import { publishDistributions } from "./publish-order"
+import { restoreExecutableBinaries } from "./binary-modes"
 import { smokeDistribution } from "./package-smoke"
 
 const repository = currentRepository()
@@ -29,6 +30,7 @@ async function publish(dir: string, name: string, version: string) {
 
 async function prepareDistribution(input: ForkDistribution) {
   console.log(input.name, "binaries", input.binaries)
+  await restoreExecutableBinaries(input)
   await $`rm -rf ${input.root}/${input.name}`
   await $`mkdir -p ${input.root}/${input.name}/bin`
   await $`cp ./script/launcher.mjs ${input.root}/${input.name}/bin/launcher.mjs`
@@ -68,7 +70,10 @@ async function prepareDistribution(input: ForkDistribution) {
 
 await publishDistributions(preflight.distributions, {
   prepare: prepareDistribution,
-  verify: smokeDistribution,
+  verify: async (distribution) => {
+    await restoreExecutableBinaries(distribution)
+    await smokeDistribution(distribution)
+  },
   publish,
 })
 if (plan.updateArtifacts) {
