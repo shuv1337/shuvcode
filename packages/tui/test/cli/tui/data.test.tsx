@@ -880,7 +880,7 @@ test("completes exploration when a queued prompt is promoted", async () => {
       data: {
         sessionID,
         assistantMessageID: "message-assistant",
-        callID: "call-read",
+        id: "call-read",
         name: "read",
       },
     })
@@ -951,7 +951,7 @@ test("classifies live tool rows independently of their call ID", async () => {
       data: {
         sessionID,
         assistantMessageID: "message-assistant",
-        callID: "reasoning:0",
+        id: "reasoning:0",
         name: "bash",
       },
     })
@@ -2485,7 +2485,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         name: "bash",
       },
     })
@@ -2497,7 +2497,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         input: {},
         executed: false,
         state: { call: true },
@@ -2510,7 +2510,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         metadata: { sessionID: "session-child", status: "running" },
       },
     })
@@ -2533,7 +2533,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         error: { type: "unknown", message: "aborted" },
         executed: false,
         resultState: { result: true },

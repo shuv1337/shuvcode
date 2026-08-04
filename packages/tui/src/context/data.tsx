@@ -208,10 +208,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         const item = messages.findLast((item) => item.type === "compaction" && item.status === "running")
         return item?.type === "compaction" ? item : undefined
       },
-      latestTool(assistant: SessionMessageAssistant | undefined, callID?: string) {
+      latestTool(assistant: SessionMessageAssistant | undefined, id?: string) {
         return assistant?.content.findLast(
           (item): item is SessionMessageAssistantTool =>
-            item.type === "tool" && (callID === undefined || item.id === callID),
+            item.type === "tool" && (id === undefined || item.id === id),
         )
       },
       latestText(assistant: SessionMessageAssistant | undefined) {
@@ -592,7 +592,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             message.assistant(draft, index, event.data.assistantMessageID)?.content.push({
               type: "tool",
-              id: event.data.callID,
+              id: event.data.id,
               name: event.data.name,
               time: { created: event.created },
               state: { status: "streaming", input: "" },
@@ -603,7 +603,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (match?.state.status === "streaming") match.state.input += event.data.delta
           })
@@ -612,7 +612,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (match?.state.status === "streaming") match.state.input = event.data.text
           })
@@ -621,7 +621,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (!match) return
             match.time.ran = event.created
@@ -634,7 +634,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (match?.state.status !== "running") return
             match.state.metadata = event.data.metadata
@@ -644,7 +644,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (match?.state.status !== "running") return
             match.state = {
@@ -662,7 +662,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           message.update(event.data.sessionID, (draft, index) => {
             const match = message.latestTool(
               message.assistant(draft, index, event.data.assistantMessageID),
-              event.data.callID,
+              event.data.id,
             )
             if (!match || (match.state.status !== "streaming" && match.state.status !== "running")) return
             match.state = {

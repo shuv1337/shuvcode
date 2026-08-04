@@ -935,7 +935,7 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(TestLLM.tool("call-location", "location_context", { query: "hello" }), [])
       const bus = yield* Bus.Service
       const progressFiber = yield* bus.subscribe(SessionEvent.Tool.Progress).pipe(
-        Stream.filter((event) => event.data.sessionID === sessionID && event.data.callID === "call-location"),
+        Stream.filter((event) => event.data.sessionID === sessionID && event.data.id === "call-location"),
         Stream.take(1),
         Stream.runCollect,
         Effect.forkScoped({ startImmediately: true }),
@@ -949,7 +949,7 @@ describe("SessionRunnerLLM", () => {
           sessionID,
           agent: Agent.ID.make("build"),
           messageID: expect.stringMatching(/^msg_/),
-          callID: Tool.CallID.make("call-location"),
+          id: Tool.CallID.make("call-location"),
           progress: expect.any(Function),
         },
       ])
@@ -2382,7 +2382,7 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests).toHaveLength(2)
       expect(messageRoles(requests[1])).toEqual(["user", "assistant", "tool"])
-      expect(authorizations).toMatchObject([{ sessionID, callID: "call-echo" }])
+      expect(authorizations).toMatchObject([{ sessionID, id: "call-echo" }])
       expect(executions).toEqual(["hello"])
       const context = yield* session.context(sessionID)
       expect(context).toMatchObject([
@@ -2994,19 +2994,19 @@ describe("SessionRunnerLLM", () => {
       yield* bus.publish(SessionEvent.Tool.Input.Started, {
         sessionID,
         assistantMessageID,
-        callID: "call-interrupted",
+        id: "call-interrupted",
         name: "echo",
       })
       yield* bus.publish(SessionEvent.Tool.Input.Ended, {
         sessionID,
         assistantMessageID,
-        callID: "call-interrupted",
+        id: "call-interrupted",
         text: '{"text":"stale"}',
       })
       yield* bus.publish(SessionEvent.Tool.Called, {
         sessionID,
         assistantMessageID,
-        callID: "call-interrupted",
+        id: "call-interrupted",
         input: { text: "stale" },
         executed: false,
       })
@@ -3051,19 +3051,19 @@ describe("SessionRunnerLLM", () => {
       yield* bus.publish(SessionEvent.Tool.Input.Started, {
         sessionID,
         assistantMessageID,
-        callID: "call-hosted-interrupted",
+        id: "call-hosted-interrupted",
         name: "web_search",
       })
       yield* bus.publish(SessionEvent.Tool.Input.Ended, {
         sessionID,
         assistantMessageID,
-        callID: "call-hosted-interrupted",
+        id: "call-hosted-interrupted",
         text: '{"query":"stale"}',
       })
       yield* bus.publish(SessionEvent.Tool.Called, {
         sessionID,
         assistantMessageID,
-        callID: "call-hosted-interrupted",
+        id: "call-hosted-interrupted",
         input: { query: "stale" },
         executed: true,
         state: { itemId: "call-hosted-interrupted" },
@@ -3102,7 +3102,7 @@ describe("SessionRunnerLLM", () => {
       yield* bus.publish(SessionEvent.Tool.Input.Started, {
         sessionID,
         assistantMessageID,
-        callID: "call-pending-interrupted",
+        id: "call-pending-interrupted",
         name: "echo",
       })
       requests.length = 0
@@ -4120,7 +4120,7 @@ describe("SessionRunnerLLM", () => {
         {
           type: "session.tool.failed.2",
           data: {
-            callID: "call-malformed",
+            id: "call-malformed",
             error: { type: "provider.invalid-output", message: "Invalid JSON input for tool call echo" },
           },
         },
@@ -4220,7 +4220,7 @@ describe("SessionRunnerLLM", () => {
         .all()
         .pipe(Effect.orDie)
       expect(durable.find((event) => event.type === "session.tool.input.ended.1")?.data).toMatchObject({
-        callID: "call-malformed",
+        id: "call-malformed",
         text: raw,
       })
     }),
@@ -4616,13 +4616,13 @@ describe("SessionRunnerLLM", () => {
 
       const assistant = requireAssistant(yield* session.context(sessionID))
       const bus = yield* recordedStepSettlementEvents(sessionID, assistant.id)
-      expect(bus.map((event) => ({ type: event.type, callID: event.data.callID }))).toEqual([
-        { type: "session.step.started.1", callID: undefined },
-        { type: "session.tool.called.1", callID: "call-local-raw-failure" },
-        { type: "session.tool.called.1", callID: "call-hosted-raw-failure-pair" },
-        { type: "session.tool.failed.2", callID: "call-local-raw-failure" },
-        { type: "session.tool.failed.2", callID: "call-hosted-raw-failure-pair" },
-        { type: "session.step.failed.1", callID: undefined },
+      expect(bus.map((event) => ({ type: event.type, id: event.data.id }))).toEqual([
+        { type: "session.step.started.1", id: undefined },
+        { type: "session.tool.called.1", id: "call-local-raw-failure" },
+        { type: "session.tool.called.1", id: "call-hosted-raw-failure-pair" },
+        { type: "session.tool.failed.2", id: "call-local-raw-failure" },
+        { type: "session.tool.failed.2", id: "call-hosted-raw-failure-pair" },
+        { type: "session.step.failed.1", id: undefined },
       ])
       expect(
         bus.filter((event) => event.type.startsWith("session.step.") && event.type !== "session.step.started.1"),
