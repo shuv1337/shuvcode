@@ -15,6 +15,7 @@ const failingCredentialNode = makeGlobalNode({
   layer: Layer.succeed(
     Credential.Service,
     Credential.Service.of({
+      status: () => Effect.succeed({ storage: "available", profiles: [] }),
       all: () => Effect.succeed([]),
       list: () => Effect.succeed([]),
       get: () => Effect.succeed(undefined),
@@ -44,6 +45,78 @@ function eventually<A, E, R>(
 }
 
 describe("Integration", () => {
+  it.effect("reports no authentication as not ready", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      expect(yield* integrations.auth.status()).toEqual({
+        ready: false,
+        storage: "available",
+        verification: "not_performed",
+        profiles: [],
+      })
+    }),
+  )
+
+  it.effect("reports stored and environment authentication with local-only semantics", () => {
+    const environmentProvider = Integration.ID.make("environment-provider")
+    return Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = process.env.INTEGRATION_AUTH_STATUS_SECRET
+        process.env.INTEGRATION_AUTH_STATUS_SECRET = "environment-secret"
+        return previous
+      }),
+      () =>
+        Effect.gen(function* () {
+          const integrations = yield* Integration.Service
+          const credentials = yield* Credential.Service
+          const storedProvider = Integration.ID.make("stored-provider")
+          yield* integrations.transform((editor) =>
+            editor.method.update({
+              integrationID: environmentProvider,
+              method: { type: "env", names: ["INTEGRATION_AUTH_STATUS_SECRET"] },
+            }),
+          )
+          const stored = yield* credentials.create({
+            integrationID: storedProvider,
+            value: Credential.Key.make({ type: "key", key: "stored-secret" }),
+          })
+
+          const status = yield* integrations.auth.status()
+          expect(status).toEqual({
+            ready: true,
+            storage: "available",
+            verification: "not_performed",
+            profiles: [
+              {
+                providerID: environmentProvider,
+                source: "environment",
+                type: "key",
+                usable: true,
+                reason: "configured",
+              },
+              {
+                providerID: storedProvider,
+                profileID: stored.id,
+                source: "stored",
+                type: "key",
+                usable: true,
+                reason: "configured",
+              },
+            ],
+          })
+          const serialized = JSON.stringify(status)
+          expect(serialized).not.toContain("environment-secret")
+          expect(serialized).not.toContain("stored-secret")
+          expect(serialized).not.toContain("INTEGRATION_AUTH_STATUS_SECRET")
+        }),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.INTEGRATION_AUTH_STATUS_SECRET
+          else process.env.INTEGRATION_AUTH_STATUS_SECRET = previous
+        }),
+    )
+  })
+
   it.effect("registers integrations through the editor", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service
@@ -486,8 +559,12 @@ describe("Integration", () => {
       })
 
       const connection = yield* integrations.connection.active(integrationID)
-      const first = yield* integrations.connection.resolve(connection!).pipe(Effect.forkChild({ startImmediately: true }))
-      const second = yield* integrations.connection.resolve(connection!).pipe(Effect.forkChild({ startImmediately: true }))
+      const first = yield* integrations.connection
+        .resolve(connection!)
+        .pipe(Effect.forkChild({ startImmediately: true }))
+      const second = yield* integrations.connection
+        .resolve(connection!)
+        .pipe(Effect.forkChild({ startImmediately: true }))
       yield* Effect.yieldNow
       yield* Deferred.succeed(latch, undefined)
       const values = [yield* Fiber.join(first), yield* Fiber.join(second)]

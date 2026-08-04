@@ -35,6 +35,8 @@ export type FileDiffInfo = {
   status: "added" | "deleted" | "modified"
 }
 
+export type SessionPolicyToolID = string
+
 export type SessionActive = { type: "running" }
 
 export type PromptBase64 = string
@@ -42,6 +44,8 @@ export type PromptBase64 = string
 export type PromptFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
 export type PromptMention = { start: number; end: number; text: string }
+
+export type StructuredOutputJsonSchema = { [x: string]: JsonValue }
 
 export type SessionPendingSyntheticData = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
 
@@ -109,6 +113,8 @@ export type ToolTextContent = { type: "text"; text: string }
 export type ToolFileContent = { type: "file"; uri: string; mime: string; name?: string | null }
 
 export type SessionStructuredError = { type: string; message: string; status?: number }
+
+export type SessionMessageAssistantStructured = { type: "structured"; value: JsonValue }
 
 export type SessionMessageCompactionRunning = {
   type: "compaction"
@@ -248,6 +254,15 @@ export type IntegrationCommandAttemptStatus =
       status: "expired"
       time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
     }
+
+export type AuthProfile = {
+  providerID: string
+  profileID?: string
+  source: "stored" | "environment"
+  type: "key" | "oauth" | "unknown"
+  usable: boolean
+  reason: "configured" | "expired" | "empty" | "malformed"
+}
 
 export type McpStatusConnected = { status: "connected" }
 
@@ -619,16 +634,6 @@ export type SessionDeleted = {
   data: { sessionID: string }
 }
 
-export type SessionForked = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.forked"
-  durable: { aggregateID: string; seq: number; version: 2 }
-  location?: LocationRef
-  data: { sessionID: string; parentID: string; boundary: SessionForkBoundary; instructions?: { [x: string]: string } }
-}
-
 export type SessionInputPromoted = {
   id: string
   created: number
@@ -735,6 +740,16 @@ export type SessionTextStarted = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string; ordinal: number }
+}
+
+export type SessionStructuredCompleted = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.structured.completed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; value: JsonValue }
 }
 
 export type SessionToolInputStarted = {
@@ -1196,6 +1211,8 @@ export type V2EventServerConnected = {
 
 export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
 
+export type SessionPolicyTools = { allow: Array<SessionPolicyToolID> }
+
 export type PromptFileAttachment = {
   data: PromptBase64
   mime: string
@@ -1206,6 +1223,8 @@ export type PromptFileAttachment = {
 }
 
 export type PromptAgentAttachment = { name: string; mention?: PromptMention }
+
+export type StructuredOutputRequest = { schema: StructuredOutputJsonSchema; name?: string; description?: string }
 
 export type SessionPendingSynthetic = {
   id: string
@@ -1265,6 +1284,16 @@ export type SessionStepFailed = {
     snapshot?: string
     files?: Array<string>
   }
+}
+
+export type SessionStructuredFailed = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.structured.failed"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; assistantMessageID: string; error: SessionStructuredError }
 }
 
 export type SessionRetryScheduled = {
@@ -1415,6 +1444,13 @@ export type IntegrationSelectPrompt = {
 }
 
 export type ConnectionInfo = ConnectionCredentialInfo | ConnectionEnvInfo
+
+export type AuthStatus = {
+  ready: boolean
+  storage: "available" | "unavailable"
+  verification: "not_performed"
+  profiles: Array<AuthProfile>
+}
 
 export type McpServer = {
   name: string
@@ -1751,22 +1787,6 @@ export type VcsInfo = { branch: VcsBranch }
 
 export type PermissionRuleset = Array<PermissionRule>
 
-export type SessionInfo = {
-  id: string
-  parentID?: string
-  fork?: { sessionID: string; boundary: SessionForkBoundary }
-  projectID: string
-  agent?: string
-  model?: ModelRef
-  cost: MoneyUSD
-  tokens: TokenUsageInfo
-  time: { created: number; updated: number; archived?: number }
-  title?: string
-  location: LocationRef
-  subpath?: string
-  revert?: SessionRevert
-}
-
 export type SessionRevertStaged = {
   id: string
   created: number
@@ -1777,10 +1797,13 @@ export type SessionRevertStaged = {
   data: { sessionID: string; revert: SessionRevert }
 }
 
+export type SessionPolicy = { tools: SessionPolicyTools }
+
 export type SessionPendingUserData = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
+  output?: StructuredOutputRequest
   metadata?: { [x: string]: JsonValue }
 }
 
@@ -1791,6 +1814,7 @@ export type SessionMessageUser = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
+  output?: StructuredOutputRequest
   type: "user"
 }
 
@@ -1798,6 +1822,7 @@ export type SessionPendingUserData1 = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
+  output?: StructuredOutputRequest
   metadata?: { [x: string]: any }
 }
 
@@ -1962,7 +1987,38 @@ export type AgentInfo = {
   permissions: PermissionRuleset
 }
 
-export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
+export type SessionInfo = {
+  id: string
+  parentID?: string
+  fork?: { sessionID: string; boundary: SessionForkBoundary }
+  projectID: string
+  agent?: string
+  model?: ModelRef
+  cost: MoneyUSD
+  tokens: TokenUsageInfo
+  time: { created: number; updated: number; archived?: number }
+  title?: string
+  location: LocationRef
+  subpath?: string
+  revert?: SessionRevert
+  policy?: SessionPolicy
+}
+
+export type SessionForked = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.forked"
+  durable: { aggregateID: string; seq: number; version: 2 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    parentID: string
+    boundary: SessionForkBoundary
+    instructions?: { [x: string]: string }
+    policy?: SessionPolicy
+  }
+}
 
 export type SessionPendingUser = {
   id: string
@@ -2018,6 +2074,7 @@ export type SessionV1Info = {
   time: { created: number; updated: number; compacting?: number; archived?: number }
   permission?: PermissionV1Ruleset
   revert?: { messageID: string; partID?: string; snapshot?: string; diff?: string }
+  policy?: SessionPolicy
 }
 
 export type SessionV1Message = SessionV1UserMessage | SessionV1AssistantMessage
@@ -2035,6 +2092,8 @@ export type SessionV1FilePart = {
 
 export type FormFields1 = [FormField1, ...Array<FormField1>]
 
+export type SessionsResponse = { data: Array<SessionInfo>; cursor: { previous?: string | null; next?: string | null } }
+
 export type SessionPendingInfo = SessionPendingUser | SessionPendingSynthetic | SessionPendingCompaction
 
 export type SessionPendingMessage = SessionPendingUserMessage | SessionPendingSyntheticMessage
@@ -2046,7 +2105,12 @@ export type SessionMessageAssistant = {
   type: "assistant"
   agent: string
   model: ModelRef
-  content: Array<SessionMessageAssistantText | SessionMessageAssistantReasoning | SessionMessageAssistantTool>
+  content: Array<
+    | SessionMessageAssistantText
+    | SessionMessageAssistantReasoning
+    | SessionMessageAssistantTool
+    | SessionMessageAssistantStructured
+  >
   snapshot?: { start?: string; end?: string; files?: Array<string> }
   finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
   cost?: MoneyUSD
@@ -2177,6 +2241,8 @@ export type SessionEventDurable =
   | SessionTextEnded
   | SessionReasoningStarted
   | SessionReasoningEnded
+  | SessionStructuredCompleted
+  | SessionStructuredFailed
   | SessionToolInputStarted
   | SessionToolInputEnded
   | SessionToolCalled
@@ -2274,6 +2340,8 @@ export type V2Event =
   | SessionReasoningStarted
   | SessionReasoningDelta
   | SessionReasoningEnded
+  | SessionStructuredCompleted
+  | SessionStructuredFailed
   | SessionToolInputStarted
   | SessionToolInputDelta
   | SessionToolInputEnded
@@ -2670,6 +2738,7 @@ export type SessionCreateInput = {
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
   }["id"]
   readonly title?: {
     readonly id?: string | null
@@ -2677,6 +2746,7 @@ export type SessionCreateInput = {
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
   }["title"]
   readonly agent?: {
     readonly id?: string | null
@@ -2684,6 +2754,7 @@ export type SessionCreateInput = {
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
   }["agent"]
   readonly model?: {
     readonly id?: string | null
@@ -2691,6 +2762,7 @@ export type SessionCreateInput = {
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
   }["model"]
   readonly location?: {
     readonly id?: string | null
@@ -2698,7 +2770,16 @@ export type SessionCreateInput = {
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
   }["location"]
+  readonly policy?: {
+    readonly id?: string | null
+    readonly title?: string | null
+    readonly agent?: string | null
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
+    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | null
+  }["policy"]
 }
 
 export type SessionCreateOutput = { data: SessionInfo }["data"]
@@ -2717,7 +2798,12 @@ export type SessionForkInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly boundary: {
     readonly boundary: { readonly type: "before"; readonly messageID: string } | { readonly type: "through" }
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | undefined
   }["boundary"]
+  readonly policy?: {
+    readonly boundary: { readonly type: "before"; readonly messageID: string } | { readonly type: "through" }
+    readonly policy?: { readonly tools: { readonly allow: ReadonlyArray<string> } } | undefined
+  }["policy"]
 }
 
 export type SessionForkOutput = { data: SessionInfo }["data"]
@@ -2768,6 +2854,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -2785,6 +2876,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -2802,6 +2898,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -2819,10 +2920,37 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
   }["agents"]
+  readonly output?: {
+    readonly id?: string | null
+    readonly text: string
+    readonly files?: ReadonlyArray<{
+      readonly uri: string
+      readonly name?: string
+      readonly description?: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }>
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
+    readonly metadata?: { readonly [x: string]: JsonValue }
+    readonly delivery?: "steer" | "queue" | null
+    readonly resume?: boolean | null
+  }["output"]
   readonly metadata?: {
     readonly id?: string | null
     readonly text: string
@@ -2836,6 +2964,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -2853,6 +2986,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -2870,6 +3008,11 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
+    readonly output?: {
+      readonly schema: { readonly [x: string]: JsonValue }
+      readonly name?: string
+      readonly description?: string
+    }
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: "steer" | "queue" | null
     readonly resume?: boolean | null
@@ -3450,6 +3593,17 @@ export type IntegrationCommandCancelInput = {
 }
 
 export type IntegrationCommandCancelOutput = void
+
+export type AuthStatusInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type AuthStatusOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  data: AuthStatus
+}
 
 export type McpListInput = {
   readonly location?: {

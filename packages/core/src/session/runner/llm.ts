@@ -32,6 +32,7 @@ import { StepFailedError } from "../error"
 import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
 import { SessionUsage } from "../usage"
+import { SessionStructuredOutput } from "../structured-output"
 
 /** How one model call ended: settled, awaiting a scheduled retry, or restarted by compaction. */
 type CallOutcome = Data.TaggedEnum<{
@@ -250,6 +251,10 @@ const layer = Layer.effect(
         context: loaded,
         step: currentStep,
       })
+      const structuredValidator = prepared.structuredOutput
+        ? yield* SessionStructuredOutput.compile(prepared.structuredOutput.schema).pipe(Effect.orDie)
+        : undefined
+      let structuredCompleted = false
       // Every local tool call forked here is owned until it reaches one durable settlement.
       const toolRuns: Array<{
         readonly call: ToolCall
@@ -320,6 +325,27 @@ const layer = Layer.effect(
             yield* publisher.publish(event)
             if (event.type !== "tool-call" || event.providerExecuted) return
             const assistantMessageID = yield* publisher.assistantMessageID(event.id)
+            if (event.name === SessionStructuredOutput.ToolName && structuredValidator) {
+              const result = yield* Effect.result(SessionStructuredOutput.validate(structuredValidator, event.input))
+              if (result._tag === "Success") {
+                yield* publisher.toolExecution(event.id, event.name, { content: "Structured output accepted." })
+                yield* bus.publish(SessionEvent.Structured.Completed, {
+                  sessionID: session.id,
+                  assistantMessageID,
+                  value: result.success,
+                })
+                structuredCompleted = true
+                return
+              }
+              const error = {
+                type: "structured_output.validation",
+                message: `Structured output did not match the requested schema: ${result.failure.message}`,
+              }
+              yield* publisher.failTool(event.id, error)
+              yield* bus.publish(SessionEvent.Structured.Failed, { sessionID: session.id, assistantMessageID, error })
+              yield* publisher.failAssistant(error)
+              return
+            }
             toolRuns.push({
               call: event,
               fiber: yield* Effect.uninterruptibleMask((restore) =>
@@ -448,6 +474,22 @@ const layer = Layer.effect(
             if (hostedResultMissing && !publisher.record().finish) yield* publisher.failAssistant(RESULT_MISSING)
           }
 
+          const beforeStructuredSettlement = publisher.record()
+          if (
+            prepared.structuredOutput &&
+            !structuredCompleted &&
+            !beforeStructuredSettlement.failure &&
+            !beforeStructuredSettlement.calls.some((call) => call.name !== SessionStructuredOutput.ToolName)
+          ) {
+            const error = {
+              type: "structured_output.generation",
+              message: "Model completed without returning the requested structured output",
+            }
+            const assistantMessageID = yield* publisher.startAssistant()
+            yield* bus.publish(SessionEvent.Structured.Failed, { sessionID: session.id, assistantMessageID, error })
+            yield* publisher.failAssistant(error)
+          }
+
           // One terminal event: Step.Ended on a clean finish, Step.Failed otherwise.
           const record = publisher.record()
           if (record.finish && !record.failure) yield* publishStepEnd(record.finish)
@@ -471,7 +513,12 @@ const layer = Layer.effect(
             // this step already exhausted the agent's allowance.
             needsContinuation:
               !prepared.stepLimitReached &&
-              record.calls.some((call) => !call.providerExecuted && (call.called || call.settled)),
+              record.calls.some(
+                (call) =>
+                  call.name !== SessionStructuredOutput.ToolName &&
+                  !call.providerExecuted &&
+                  (call.called || call.settled),
+              ),
             step: currentStep,
           })
         }),

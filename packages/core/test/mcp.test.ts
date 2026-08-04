@@ -191,6 +191,7 @@ function resourceMcpLayer(
           },
         }),
         Layer.mock(Integration.Service, {
+          auth: { status: unusedIntegration },
           connection: {
             active: unusedIntegration,
             resolve: unusedIntegration,
@@ -910,16 +911,18 @@ it.effect("waits for permission before calling an MCP tool", () =>
     const registry = yield* Tool.Service
     const toolSet = yield* waitForCodeModeTool(registry, "demo.search")
 
-    const fiber = yield* toolSet.execute({
-      sessionID: Session.ID.make("ses_mcp_permission"),
-      ...toolIdentity,
-      call: {
-        type: "tool-call",
-        id: "call_mcp_permission",
-        name: "execute",
-        input: { code: "return await tools.demo.search({})" },
-      },
-    }).pipe(Effect.forkScoped)
+    const fiber = yield* toolSet
+      .execute({
+        sessionID: Session.ID.make("ses_mcp_permission"),
+        ...toolIdentity,
+        call: {
+          type: "tool-call",
+          id: "call_mcp_permission",
+          name: "execute",
+          input: { code: "return await tools.demo.search({})" },
+        },
+      })
+      .pipe(Effect.forkScoped)
     expect(yield* Deferred.await(assertion)).toEqual({
       action: "demo_search",
       resources: ["*"],

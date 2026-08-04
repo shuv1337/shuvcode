@@ -1,10 +1,10 @@
 export * as SessionModelRequest from "./model-request"
 
-import { LLM, Message, SystemPart, type LLMRequest } from "@opencode-ai/ai"
+import { LLM, Message, SystemPart, ToolChoice, ToolDefinition, type LLMRequest } from "@opencode-ai/ai"
 import type { StreamOptions } from "@opencode-ai/ai/route"
 import type { Content } from "@opencode-ai/schema/tool"
 import { SessionError } from "@opencode-ai/schema/session-error"
-import { Cause, Config, Context, Effect, Layer, Result } from "effect"
+import { Cause, Config, Context, Effect, JsonSchema, Layer, Result } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { App } from "../app"
 import { Decline } from "../decline"
@@ -17,6 +17,8 @@ import { PromptCacheDiagnostics } from "./prompt-cache-diagnostics"
 import { MAX_STEPS_PROMPT } from "./runner/max-steps"
 import PROMPT_DEFAULT from "./runner/prompt/base.txt"
 import { toLLMMessages } from "./runner/to-llm-message"
+import { SessionStructuredOutput } from "./structured-output"
+import type { StructuredOutput } from "@opencode-ai/schema/structured-output"
 
 const IMAGE_BYTES_TRIGGER = 25 * 1024 * 1024 // 25 MiB
 const IMAGE_BYTES_TARGET = 15 * 1024 * 1024 // 15 MiB
@@ -50,6 +52,7 @@ interface Prepared {
   ) => Effect.Effect<Tool.Result, ExecuteError>
   /** True when this request is the final Step; violating calls are rejected and no continuation follows. */
   readonly stepLimitReached: boolean
+  readonly structuredOutput?: StructuredOutput.Request
 }
 
 interface PrepareInput {
@@ -194,6 +197,7 @@ export const layer = Layer.effect(
           (tool) => [{ description: tool.description, input: { ...tool.inputSchema } }, tool] as const,
         ),
       )
+      const structuredOutput = input.context.messages.findLast((message) => message.type === "user")?.output
       // Hooks mutate this record in place: edit descriptions and schemas, rename, or remove.
       const context = yield* hooks.trigger("session", "context", {
         sessionID: session.id,
@@ -214,6 +218,13 @@ export const layer = Layer.effect(
           return [[name, { ...tool, description: definition.description, inputSchema: definition.input }] as const]
         }),
       )
+      const structuredTool = structuredOutput
+        ? ToolDefinition.make({
+            name: SessionStructuredOutput.ToolName,
+            description: structuredOutput.description ?? "Return the final structured result.",
+            inputSchema: structuredOutput.schema as JsonSchema.JsonSchema,
+          })
+        : undefined
       const request = LLM.request({
         model,
         http: {
@@ -222,8 +233,16 @@ export const layer = Layer.effect(
         providerOptions: { [providerMetadataKey]: { promptCacheKey } },
         system: context.system,
         messages: boundImages(unsupportedParts(context.messages, resolved.capabilities)),
-        tools: Array.from(hooked, ([name, tool]) => ({ ...tool, name })),
-        toolChoice: stepLimitReached ? "none" : undefined,
+        tools: structuredTool
+          ? [...Array.from(hooked, ([name, tool]) => ({ ...tool, name })), structuredTool]
+          : Array.from(hooked, ([name, tool]) => ({ ...tool, name })),
+        toolChoice: structuredTool
+          ? hooked.size > 0 && !stepLimitReached
+            ? ToolChoice.make("required")
+            : ToolChoice.named(SessionStructuredOutput.ToolName)
+          : stepLimitReached
+            ? "none"
+            : undefined,
       })
       const options: StreamOptions = {
         transform: (request) =>
@@ -278,6 +297,7 @@ export const layer = Layer.effect(
         options,
         executeTool,
         stepLimitReached,
+        structuredOutput,
       }
     })
 

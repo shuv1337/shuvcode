@@ -12,6 +12,7 @@ import { Money } from "./money.js"
 import { TokenUsage } from "./token-usage.js"
 import { Revert } from "./session-revert.js"
 import { SessionFork } from "./session-fork.js"
+import { SessionPolicy } from "./session-policy.js"
 
 export const ID = SessionID
 export type ID = SessionID
@@ -23,6 +24,8 @@ export const ForkBoundary = SessionFork.Boundary
 export type ForkBoundary = SessionFork.Boundary
 export const ForkRequestBoundary = SessionFork.RequestBoundary
 export type ForkRequestBoundary = SessionFork.RequestBoundary
+export const Policy = SessionPolicy.Info
+export type Policy = SessionPolicy.Info
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -46,6 +49,7 @@ export const Info = Schema.Struct({
   location: Location.Ref,
   subpath: RelativePath.pipe(optional),
   revert: Revert.pipe(optional),
+  policy: Policy.pipe(optional),
 }).annotate({ identifier: "Session.Info" })
 
 export const ListAnchor = Schema.Struct({

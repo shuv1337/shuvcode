@@ -133,8 +133,7 @@ const testLLM = TestLLM.layer({
 const client = TestLLM.clientLayer
 const model = LanguageModel.make({ id: "fake-model", provider: "fake", route: OpenAIChat.route })
 const defaultSystem = PROMPT_DEFAULT
-const withCodeModeGuidance = (...instructions: ReadonlyArray<string>) =>
-  instructions.join("\n\n")
+const withCodeModeGuidance = (...instructions: ReadonlyArray<string>) => instructions.join("\n\n")
 const replacementModel = LanguageModel.make({ id: "replacement", provider: "fake", route: OpenAIChat.route })
 const compactModel = LanguageModel.make({
   id: "compact",
@@ -3360,6 +3359,41 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
+  it.effect("enforces session policy at dispatch and exposes only a sanitized denial", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const { db } = yield* Database.Service
+      yield* db
+        .update(SessionTable)
+        .set({ policy: { tools: { allow: [] } } })
+        .where(eq(SessionTable.id, sessionID))
+        .run()
+        .pipe(Effect.orDie)
+      yield* session.prompt({
+        sessionID,
+        text: "Call echo",
+        metadata: { policy: { tools: { allow: ["echo"] } } },
+        resume: false,
+      })
+      yield* TestLLM.push(TestLLM.tool("call-policy-denied", "echo", { text: "must not run" }), TestLLM.stop())
+
+      yield* session.resume(sessionID)
+
+      expect(requests[0]?.tools.map((tool) => tool.name)).not.toContain("echo")
+      expect(executions).toEqual([])
+      const denied = (yield* session.context(sessionID))
+        .flatMap((message) => (message.type === "assistant" ? message.content : []))
+        .find((content) => content.type === "tool" && content.id === "call-policy-denied")
+      expect(denied).toMatchObject({
+        type: "tool",
+        state: {
+          status: "error",
+          error: { type: "session.policy.denied", message: "Tool denied by session policy: echo" },
+        },
+      })
+    }),
+  )
+
   it.effect("returns unexpected local tool defects to the model and continues", () =>
     Effect.gen(function* () {
       const session = yield* setup
@@ -4846,6 +4880,90 @@ describe("SessionRunnerLLM", () => {
       expect(defect).toBeInstanceOf(Error)
       if (!(defect instanceof Error)) return
       expect(defect.message).toBe("Tool input delta before start: call-1")
+    }),
+  )
+
+  it.effect("validates and projects requested structured output", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      yield* TestLLM.push(TestLLM.tool("call-structured", "__opencode_structured_output", { summary: "Ready" }))
+      yield* session.prompt({
+        sessionID,
+        text: "Summarize",
+        output: {
+          schema: {
+            type: "object",
+            properties: { summary: { type: "string" } },
+            required: ["summary"],
+          },
+        },
+        resume: false,
+      })
+
+      yield* session.resume(sessionID)
+
+      expect(
+        requests[0]?.tools.find((tool) => tool.name === "__opencode_structured_output")?.inputSchema,
+      ).toMatchObject({
+        type: "object",
+        required: ["summary"],
+      })
+      const context = yield* session.context(sessionID)
+      expect(context).toMatchObject([
+        { type: "user", output: { schema: { type: "object" } } },
+        { type: "assistant" },
+      ])
+      expect(requireAssistant(context).content).toContainEqual({ type: "structured", value: { summary: "Ready" } })
+      expect(yield* recordedEventTypes(sessionID)).toContain("session.structured.completed.1")
+    }),
+  )
+
+  it.effect("fails the step when generated structured output violates the schema", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      yield* TestLLM.push(TestLLM.tool("call-structured", "__opencode_structured_output", { summary: 42 }))
+      yield* session.prompt({
+        sessionID,
+        text: "Summarize",
+        output: {
+          schema: {
+            type: "object",
+            properties: { summary: { type: "string" } },
+            required: ["summary"],
+          },
+        },
+        resume: false,
+      })
+
+      const failure = yield* session.resume(sessionID).pipe(Effect.flip)
+
+      expect(failure._tag).toBe("Session.StepFailedError")
+      expect(yield* session.context(sessionID)).toMatchObject([
+        { type: "user" },
+        { type: "assistant", error: { type: "structured_output.validation" }, finish: "error" },
+      ])
+      expect(yield* recordedEventTypes(sessionID)).toContain("session.structured.failed.1")
+    }),
+  )
+
+  it.effect("fails the step when the model omits requested structured output", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      yield* TestLLM.push(TestLLM.text("Plain text", "text-unstructured"))
+      yield* session.prompt({
+        sessionID,
+        text: "Return a count",
+        output: { schema: { type: "object", properties: { count: { type: "number" } }, required: ["count"] } },
+        resume: false,
+      })
+
+      yield* session.resume(sessionID).pipe(Effect.flip)
+
+      expect(yield* session.context(sessionID)).toMatchObject([
+        { type: "user" },
+        { type: "assistant", error: { type: "structured_output.generation" }, finish: "error" },
+      ])
+      expect(yield* recordedEventTypes(sessionID)).toContain("session.structured.failed.1")
     }),
   )
 })

@@ -16,6 +16,7 @@ test("exposes every standard HTTP API group", () => {
     "generate",
     "provider",
     "integration",
+    "auth",
     "mcp",
     "credential",
     "project",
@@ -42,12 +43,47 @@ test("exposes every standard HTTP API group", () => {
   expect(Object.keys(client.integration.connect)).toEqual(["key"])
   expect(Object.keys(client.integration.oauth)).toEqual(["connect", "status", "complete", "cancel"])
   expect(Object.keys(client.integration.command)).toEqual(["connect", "status", "cancel"])
+  expect(Object.keys(client.auth)).toEqual(["status"])
   expect(Object.keys(client.websearch)).toEqual(["providers", "query"])
   expect(Object.keys(client.file)).toEqual(["read", "list", "find"])
   expect(Object.keys(client.vcs)).toEqual(["get", "status", "diff"])
   expect(Object.keys(client.pty)).toEqual(["list", "create", "get", "update", "remove"])
   expect(Object.keys(client.shell)).toEqual(["list", "create", "get", "timeout", "output", "remove"])
   expect(Object.keys(client.project)).toEqual(["list", "current", "directories"])
+})
+
+test("auth.status uses the secret-safe local readiness contract", async () => {
+  let request: Request | undefined
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input) => {
+      request = input instanceof Request ? input : new Request(input)
+      return Response.json({
+        location: { directory: "/tmp/project", project: { id: "proj_test", directory: "/tmp/project" } },
+        data: {
+          ready: true,
+          storage: "available",
+          verification: "not_performed",
+          profiles: [
+            {
+              providerID: "anthropic",
+              profileID: "cred_profile",
+              source: "stored",
+              type: "oauth",
+              usable: true,
+              reason: "configured",
+            },
+          ],
+        },
+      })
+    },
+  })
+
+  const result = await client.auth.status()
+  expect(result.data.verification).toBe("not_performed")
+  expect(result.data.profiles[0]?.providerID).toBe("anthropic")
+  expect(request?.method).toBe("GET")
+  expect(request?.url).toBe("http://localhost:3000/api/auth/status")
 })
 
 test("websearch.query uses the public HTTP contract", async () => {
@@ -253,6 +289,32 @@ test("session.get returns the wire projection", async () => {
   const result = await client.session.get({ sessionID: "ses_test" })
 
   expect(result.time.created).toBe(1_717_171_717_000)
+})
+
+test("session create and fork send immutable tool policy through the public Promise client", async () => {
+  const requests: Request[] = []
+  const policy = { tools: { allow: ["read", "grep"] } }
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      requests.push(request)
+      return Response.json({ ...session, data: { ...session.data, policy } })
+    },
+  })
+
+  await client.session.create({ location: { directory: "/tmp/project" }, policy })
+  await client.session.fork({
+    sessionID: "ses_test",
+    boundary: { type: "through" },
+    policy: { tools: { allow: ["read"] } },
+  })
+
+  expect(await requests[0]?.json()).toEqual({ location: { directory: "/tmp/project" }, policy })
+  expect(await requests[1]?.json()).toEqual({
+    boundary: { type: "through" },
+    policy: { tools: { allow: ["read"] } },
+  })
 })
 
 test("session instructions methods use the public HTTP contract", async () => {

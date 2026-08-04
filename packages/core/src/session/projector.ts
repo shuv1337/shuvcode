@@ -92,6 +92,7 @@ function sessionRow(info: SessionV1.SessionInfo): typeof SessionTable.$inferInse
         }
       : null,
     permission: info.permission ? [...info.permission] : undefined,
+    policy: info.policy,
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
@@ -220,6 +221,7 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
       title: forkTitle(parent.title ?? undefined),
       agent: parent.agent,
       model: parent.model,
+      policy: event.data.policy,
       version: parent.version,
       cost: 0,
       tokens_input: 0,
@@ -634,6 +636,7 @@ const layer = Layer.effectDiscard(
                 text: input.data.text,
                 files: input.data.files,
                 agents: input.data.agents,
+                output: input.data.output,
                 time: { created: event.created },
               }
             : {
@@ -711,6 +714,8 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Tool.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Structured.Completed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Structured.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Ended, (event) =>

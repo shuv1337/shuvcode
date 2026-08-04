@@ -11,6 +11,7 @@ import { Location } from "./location"
 import { SessionMessage } from "./session/message"
 import { Base64, FileAttachment, Prompt } from "@opencode-ai/schema/prompt"
 import { PromptInput } from "@opencode-ai/schema/prompt-input"
+import { StructuredOutput } from "@opencode-ai/schema/structured-output"
 import { Bus } from "./bus"
 import { Database } from "./database/database"
 import { SessionProjector } from "./session/projector"
@@ -51,6 +52,7 @@ import { Global } from "@opencode-ai/util/global"
 import { Shell as ShellSchema } from "@opencode-ai/schema/shell"
 import { KeyedMutex } from "./effect/keyed-mutex"
 import { fileURLToPath } from "url"
+import { SessionStructuredOutput } from "./session/structured-output"
 
 export const RevertState = Session.Revert
 export type RevertState = Session.Revert
@@ -96,6 +98,7 @@ type CreateBaseInput = {
   title?: string
   agent?: Agent.ID
   model?: Model.Ref
+  policy?: Session.Policy
 }
 type CreateInput = CreateBaseInput &
   ({ location: Location.Ref; parentID?: never } | { parentID: SessionSchema.ID; location?: never })
@@ -108,6 +111,7 @@ type CompactInput = {
 type ForkInput = {
   sessionID: SessionSchema.ID
   boundary: Session.ForkRequestBoundary
+  policy?: Session.Policy
 }
 
 export class OperationUnavailableError extends Schema.TaggedErrorClass<OperationUnavailableError>()(
@@ -134,6 +138,10 @@ export class AttachmentError extends Schema.TaggedErrorClass<AttachmentError>()(
   uri: Schema.String,
   message: Schema.String,
 }) {}
+export class StructuredOutputSchemaError extends Schema.TaggedErrorClass<StructuredOutputSchemaError>()(
+  "Session.StructuredOutputSchemaError",
+  { message: Schema.String },
+) {}
 export class CompactionConflictError extends Schema.TaggedErrorClass<CompactionConflictError>()(
   "Session.CompactionConflictError",
   {
@@ -157,6 +165,12 @@ export class DestinationNotDirectoryError extends Schema.TaggedErrorClass<Destin
   "Session.DestinationNotDirectoryError",
   { directory: AbsolutePath },
 ) {}
+export class PolicyWideningError extends Schema.TaggedErrorClass<PolicyWideningError>()("Session.PolicyWideningError", {
+  tools: Schema.Array(Schema.String),
+}) {}
+export class PolicyDeniedError extends Schema.TaggedErrorClass<PolicyDeniedError>()("Session.PolicyDeniedError", {
+  tool: Schema.String,
+}) {}
 export const MessageNotFoundError = SessionRevert.MessageNotFoundError
 export type MessageNotFoundError = SessionRevert.MessageNotFoundError
 
@@ -167,11 +181,14 @@ export type Error =
   | PromptConflictError
   | SyntheticConflictError
   | AttachmentError
+  | StructuredOutputSchemaError
   | CompactionConflictError
   | BusyError
   | SkillNotFoundError
   | DestinationNotFoundError
   | DestinationNotDirectoryError
+  | PolicyWideningError
+  | PolicyDeniedError
   | Command.NotFoundError
   | Command.EvaluationError
   | MessageNotFoundError
@@ -181,10 +198,10 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<{
     readonly data: SessionSchema.Info[]
   }>
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError | PolicyWideningError>
   readonly fork: (
     input: ForkInput,
-  ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError>
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError | PolicyWideningError>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly remove: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError>
   readonly messages: (input: {
@@ -221,14 +238,8 @@ export interface Interface {
     after?: number
     follow?: boolean
   }) => Stream.Stream<SessionEvent.DurableEvent | EventLog.Synced, NotFoundError>
-  readonly switchAgent: (input: {
-    sessionID: SessionSchema.ID
-    agent: Agent.ID
-  }) => Effect.Effect<void, NotFoundError>
-  readonly switchModel: (input: {
-    sessionID: SessionSchema.ID
-    model: Model.Ref
-  }) => Effect.Effect<void, NotFoundError>
+  readonly switchAgent: (input: { sessionID: SessionSchema.ID; agent: Agent.ID }) => Effect.Effect<void, NotFoundError>
+  readonly switchModel: (input: { sessionID: SessionSchema.ID; model: Model.Ref }) => Effect.Effect<void, NotFoundError>
   readonly rename: (input: { sessionID: SessionSchema.ID; title: string }) => Effect.Effect<void, NotFoundError>
   readonly move: (input: {
     sessionID: SessionSchema.ID
@@ -241,10 +252,14 @@ export interface Interface {
     text: string
     files?: PromptInput.Prompt["files"]
     agents?: PromptInput.Prompt["agents"]
+    output?: StructuredOutput.Request
     metadata?: Record<string, unknown>
     delivery?: SessionPending.Delivery
     resume?: boolean
-  }) => Effect.Effect<SessionPending.User, NotFoundError | PromptConflictError | AttachmentError>
+  }) => Effect.Effect<
+    SessionPending.User,
+    NotFoundError | PromptConflictError | AttachmentError | StructuredOutputSchemaError
+  >
   /** Generates text from current Session context without admitting input or mutating history. */
   readonly generate: (input: {
     sessionID: SessionSchema.ID
@@ -263,13 +278,18 @@ export interface Interface {
     resume?: boolean
   }) => Effect.Effect<
     SessionPending.User,
-    NotFoundError | PromptConflictError | AttachmentError | Command.NotFoundError | Command.EvaluationError
+    | NotFoundError
+    | PromptConflictError
+    | AttachmentError
+    | Command.NotFoundError
+    | Command.EvaluationError
+    | StructuredOutputSchemaError
   >
   readonly shell: (input: {
     id?: Event.ID
     sessionID: SessionSchema.ID
     command: string
-  }) => Effect.Effect<void, NotFoundError>
+  }) => Effect.Effect<void, NotFoundError | PolicyDeniedError>
   readonly skill: (input: {
     id?: SessionMessage.ID
     sessionID: SessionSchema.ID
@@ -362,6 +382,7 @@ const layer = Layer.effect(
         const location = parent?.location ?? input.location
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
+        const policy = yield* narrowPolicy(parent?.policy, input.policy)
         const project = yield* projects.resolve(location.directory)
         yield* persistProject(project)
         const now = Date.now()
@@ -383,6 +404,7 @@ const layer = Layer.effect(
                 variant: input.model.variant,
               }
             : undefined,
+          policy,
           cost: Money.USD.zero,
           tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
           time: { created: now, updated: now },
@@ -409,6 +431,7 @@ const layer = Layer.effect(
       }),
       fork: Effect.fn("Session.fork")(function* (input) {
         const parent = yield* result.get(input.sessionID)
+        const policy = yield* narrowPolicy(parent.policy, input.policy)
         const boundary = yield* db
           .select({ id: SessionMessageTable.id, seq: SessionMessageTable.seq })
           .from(SessionMessageTable)
@@ -436,6 +459,7 @@ const layer = Layer.effect(
           parentID: parent.id,
           boundary: { ...input.boundary, messageID: boundary.id },
           instructions: yield* InstructionState.valuesAt(db, parent.id, instructionThrough),
+          policy,
         })
         return yield* result.get(sessionID).pipe(Effect.orDie)
       }),
@@ -555,15 +579,18 @@ const layer = Layer.effect(
         Effect.uninterruptible(
           Effect.gen(function* () {
             const session = yield* result.get(input.sessionID)
+            if (input.output)
+              yield* SessionStructuredOutput.compile(input.output.schema).pipe(
+                Effect.mapError((error) => new StructuredOutputSchemaError({ message: error.message })),
+              )
             // A staged revert must be committed before admitting new input so the prompt
             // continues from the reverted boundary rather than stale post-boundary history.
-            if (session.revert)
-              yield* SessionRevert.commit(session).pipe(Effect.provideService(Bus.Service, bus))
+            if (session.revert) yield* SessionRevert.commit(session).pipe(Effect.provideService(Bus.Service, bus))
             // Resolved lazily so prompt admission only boots location services when an
             // image attachment actually needs the resizer.
             const image = Image.Service.pipe(Effect.provide(locations.get(session.location)))
             const prompt = yield* resolvePrompt(
-              { text: input.text, files: input.files, agents: input.agents },
+              { text: input.text, files: input.files, agents: input.agents, output: input.output },
               image,
             ).pipe(Effect.provideService(FSUtil.Service, fs))
             const messageID = input.id ?? SessionMessage.ID.create()
@@ -636,6 +663,8 @@ const layer = Layer.effect(
       }),
       shell: Effect.fn("Session.shell")(function* (input) {
         const session = yield* result.get(input.sessionID)
+        if (session.policy && !session.policy.tools.allow.includes("bash"))
+          return yield* new PolicyDeniedError({ tool: "bash" })
         yield* shellLocks.withLock(input.sessionID)(
           Effect.gen(function* () {
             activeShells.add(input.sessionID)
@@ -738,11 +767,7 @@ const layer = Layer.effect(
         const info = yield* fs.stat(directory).pipe(Effect.catch(() => Effect.succeed(undefined)))
         if (!info) return yield* new DestinationNotFoundError({ directory })
         if (info.type !== "Directory") return yield* new DestinationNotDirectoryError({ directory })
-        if (
-          current.location.directory === directory &&
-          current.location.workspaceID === input.workspaceID
-        )
-          return
+        if (current.location.directory === directory && current.location.workspaceID === input.workspaceID) return
         const project = yield* projects.resolve(directory)
         yield* persistProject(project)
         if ((yield* execution.active).has(input.sessionID)) {
@@ -835,9 +860,7 @@ const layer = Layer.effect(
           }),
         ),
       ),
-      interrupt: Effect.fn("Session.interrupt")((sessionID) =>
-        Effect.uninterruptible(execution.interrupt(sessionID)),
-      ),
+      interrupt: Effect.fn("Session.interrupt")((sessionID) => Effect.uninterruptible(execution.interrupt(sessionID))),
       revert: {
         stage: Effect.fn("Session.revert.stage")(function* (input) {
           const session = yield* result.get(input.sessionID)
@@ -899,7 +922,7 @@ const resolvePrompt = Effect.fn("Session.resolvePrompt")(function* (
   const files = input.files
     ? yield* Effect.forEach(input.files, (file) => materializeAttachment(fs, file, image), { concurrency: 8 })
     : undefined
-  return Prompt.make({ text: input.text, agents: input.agents, files })
+  return Prompt.make({ text: input.text, agents: input.agents, files, output: input.output })
 })
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
@@ -938,12 +961,7 @@ const materializeAttachment = Effect.fn("Session.materializeAttachment")(functio
             .join("\n"),
         )
       : resolved.bytes
-  const normalized = yield* normalizeImageAttachment(
-    input,
-    Buffer.from(content).toString("base64"),
-    mime,
-    image,
-  )
+  const normalized = yield* normalizeImageAttachment(input, Buffer.from(content).toString("base64"), mime, image)
   return FileAttachment.create({
     data: normalized.data,
     mime: normalized.mime,
@@ -969,8 +987,7 @@ const readLoopbackAttachment = Effect.fn("Session.readLoopbackAttachment")(funct
     catch: () => new AttachmentError({ uri, message: `Unable to read attachment: ${uri}` }),
   }).pipe(Effect.ensuring(Effect.sync(() => clearTimeout(timeout))))
   const body = response.body
-  if (!response.ok || !body)
-    return yield* new AttachmentError({ uri, message: `Unable to read attachment: ${uri}` })
+  if (!response.ok || !body) return yield* new AttachmentError({ uri, message: `Unable to read attachment: ${uri}` })
 
   const declared = Number(response.headers.get("content-length"))
   if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES)
@@ -1101,6 +1118,14 @@ function positiveInt(value: string | null) {
   if (value === null) return
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function narrowPolicy(parent: Session.Policy | undefined, requested: Session.Policy | undefined) {
+  if (!parent) return Effect.succeed(requested)
+  if (!requested) return Effect.succeed(parent)
+  const allowed = new Set(parent.tools.allow)
+  const widened = requested.tools.allow.filter((tool) => !allowed.has(tool))
+  return widened.length === 0 ? Effect.succeed(requested) : Effect.fail(new PolicyWideningError({ tools: widened }))
 }
 
 // Mirrors the shell tool's in-memory preview safety limit.

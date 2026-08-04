@@ -129,6 +129,8 @@ describe("public event manifest", () => {
         "session.tool.failed.2",
         "session.reasoning.started.1",
         "session.reasoning.ended.1",
+        "session.structured.completed.1",
+        "session.structured.failed.1",
         "session.retry.scheduled.1",
         "session.compaction.admitted.1",
         "session.compaction.started.1",

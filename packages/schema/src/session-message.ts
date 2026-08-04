@@ -16,6 +16,7 @@ import { Skill as SkillSchema } from "./skill.js"
 import { Money } from "./money.js"
 import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
+import { StructuredOutput } from "./structured-output.js"
 
 export const ID = Schema.String.check(Schema.isStartsWith("msg_")).pipe(
   Schema.brand("Session.Message.ID"),
@@ -58,6 +59,7 @@ export const User = Schema.Struct({
   text: Prompt.fields.text,
   files: Prompt.fields.files,
   agents: Prompt.fields.agents,
+  output: Prompt.fields.output,
   type: Schema.tag("user"),
 }).annotate({ identifier: "Session.Message.User" })
 
@@ -169,10 +171,19 @@ export const AssistantReasoning = Schema.Struct({
   }).pipe(optional),
 }).annotate({ identifier: "Session.Message.Assistant.Reasoning" })
 
-export const AssistantContent = Schema.Union([AssistantText, AssistantReasoning, AssistantTool]).pipe(
-  Schema.toTaggedUnion("type"),
-)
-export type AssistantContent = AssistantText | AssistantReasoning | AssistantTool
+export interface AssistantStructured extends Schema.Schema.Type<typeof AssistantStructured> {}
+export const AssistantStructured = Schema.Struct({
+  type: Schema.tag("structured"),
+  value: StructuredOutput.Result.fields.value,
+}).annotate({ identifier: "Session.Message.Assistant.Structured" })
+
+export const AssistantContent = Schema.Union([
+  AssistantText,
+  AssistantReasoning,
+  AssistantTool,
+  AssistantStructured,
+]).pipe(Schema.toTaggedUnion("type"))
+export type AssistantContent = AssistantText | AssistantReasoning | AssistantTool | AssistantStructured
 
 export interface AssistantRetry extends Schema.Schema.Type<typeof AssistantRetry> {}
 export const AssistantRetry = Schema.Struct({

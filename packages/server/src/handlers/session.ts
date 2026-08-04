@@ -81,6 +81,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 agent: ctx.payload.agent,
                 model: ctx.payload.model,
                 location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
+                policy: ctx.payload.policy,
               })
               .pipe(Effect.orDie),
           }
@@ -132,29 +133,44 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         "session.fork",
         Effect.fn(function* (ctx) {
           return {
-            data: yield* session.fork({ sessionID: ctx.params.sessionID, boundary: ctx.payload.boundary }).pipe(
-              Effect.catchTag(
-                "Session.NotFoundError",
-                (error) =>
-                  new SessionNotFoundError({
-                    sessionID: error.sessionID,
-                    message: `Session not found: ${error.sessionID}`,
-                  }),
+            data: yield* session
+              .fork({
+                sessionID: ctx.params.sessionID,
+                boundary: ctx.payload.boundary,
+                policy: ctx.payload.policy,
+              })
+              .pipe(
+                Effect.catchTag(
+                  "Session.NotFoundError",
+                  (error) =>
+                    new SessionNotFoundError({
+                      sessionID: error.sessionID,
+                      message: `Session not found: ${error.sessionID}`,
+                    }),
+                ),
+                Effect.catchTag(
+                  "Session.MessageNotFoundError",
+                  (error) =>
+                    new MessageNotFoundError({
+                      sessionID: error.sessionID,
+                      messageID: error.messageID,
+                      message: `Message not found: ${error.messageID}`,
+                    }),
+                ),
+                Effect.catchTag(
+                  "Session.ForkEmptyError",
+                  (error) => new InvalidRequestError({ message: error.message, kind: "empty_session" }),
+                ),
+                Effect.catchTag(
+                  "Session.PolicyWideningError",
+                  (error) =>
+                    new InvalidRequestError({
+                      message: `Fork policy cannot allow tools denied by its parent: ${error.tools.join(", ")}`,
+                      kind: "session.policy.widening",
+                      field: "policy.tools.allow",
+                    }),
+                ),
               ),
-              Effect.catchTag(
-                "Session.MessageNotFoundError",
-                (error) =>
-                  new MessageNotFoundError({
-                    sessionID: error.sessionID,
-                    messageID: error.messageID,
-                    message: `Message not found: ${error.messageID}`,
-                  }),
-              ),
-              Effect.catchTag(
-                "Session.ForkEmptyError",
-                (error) => new InvalidRequestError({ message: error.message, kind: "empty_session" }),
-              ),
-            ),
           }
         }),
       )
@@ -245,6 +261,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 text: ctx.payload.text,
                 files: ctx.payload.files,
                 agents: ctx.payload.agents,
+                output: ctx.payload.output,
                 metadata: ctx.payload.metadata,
                 delivery: ctx.payload.delivery,
                 resume: ctx.payload.resume,
@@ -268,6 +285,15 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 ),
                 Effect.catchTag("Session.AttachmentError", (error) =>
                   Effect.fail(new InvalidRequestError({ message: error.message, field: "files" })),
+                ),
+                Effect.catchTag("Session.StructuredOutputSchemaError", (error) =>
+                  Effect.fail(
+                    new InvalidRequestError({
+                      message: `Invalid structured output schema: ${error.message}`,
+                      kind: "structured_output.schema",
+                      field: "output.schema",
+                    }),
+                  ),
                 ),
               ),
           }
@@ -325,6 +351,15 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 ),
                 Effect.catchTag("Session.AttachmentError", (error) =>
                   Effect.fail(new InvalidRequestError({ message: error.message, field: "files" })),
+                ),
+                Effect.catchTag("Session.StructuredOutputSchemaError", (error) =>
+                  Effect.fail(
+                    new InvalidRequestError({
+                      message: `Invalid structured output schema: ${error.message}`,
+                      kind: "structured_output.schema",
+                      field: "output.schema",
+                    }),
+                  ),
                 ),
               ),
           }
@@ -403,6 +438,14 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                     message: `Session not found: ${error.sessionID}`,
                   }),
                 ),
+              ),
+              Effect.catchTag(
+                "Session.PolicyDeniedError",
+                (error) =>
+                  new InvalidRequestError({
+                    message: `Tool denied by session policy: ${error.tool}`,
+                    kind: "session.policy.denied",
+                  }),
               ),
             )
           return HttpApiSchema.NoContent.make()

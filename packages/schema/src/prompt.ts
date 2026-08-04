@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { statics } from "./schema.js"
+import { StructuredOutput } from "./structured-output.js"
 
 export interface PromptMention extends Schema.Schema.Type<typeof PromptMention> {}
 export const PromptMention = Schema.Struct({
@@ -57,16 +58,18 @@ export const Prompt = Schema.Struct({
   text: Schema.String,
   files: Schema.Array(FileAttachment).pipe(optional),
   agents: Schema.Array(AgentAttachment).pipe(optional),
+  output: StructuredOutput.Request.pipe(optional),
 })
   .annotate({ identifier: "Prompt" })
   .pipe(
     statics((schema) => ({
       equivalence: Schema.toEquivalence(schema),
-      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents">) =>
+      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents" | "output">) =>
         schema.make({
           text: input.text,
           ...(input.files === undefined ? {} : { files: input.files }),
           ...(input.agents === undefined ? {} : { agents: input.agents }),
+          ...(input.output === undefined ? {} : { output: input.output }),
         }),
     })),
   )

@@ -153,6 +153,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           agent: Agent.ID.pipe(Schema.optional),
           model: Model.Ref.pipe(Schema.optional),
           location: Location.Ref.pipe(Schema.optional),
+          policy: Session.Policy.pipe(Schema.optional),
         }),
         success: Schema.Struct({ data: Session.Info }),
       }).annotateMerge(
@@ -208,7 +209,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.fork", "/api/session/:sessionID/fork", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ boundary: Session.ForkRequestBoundary }),
+        payload: Schema.Struct({ boundary: Session.ForkRequestBoundary, policy: Session.Policy.pipe(Schema.optional) }),
         success: Schema.Struct({ data: Session.Info }),
         error: [SessionNotFoundError, MessageNotFoundError, InvalidRequestError],
       })
@@ -385,7 +386,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           command: Schema.String,
         }),
         success: HttpApiSchema.NoContent,
-        error: SessionNotFoundError,
+        error: [SessionNotFoundError, InvalidRequestError],
       })
         .middleware(sessionLocationMiddleware)
         .annotateMerge(

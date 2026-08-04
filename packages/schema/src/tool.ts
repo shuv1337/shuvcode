@@ -62,6 +62,11 @@ export class Error extends Schema.TaggedErrorClass<Error>()("Tool.Error", {
   metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 }) {}
 
+export class PolicyDeniedError extends Schema.TaggedErrorClass<PolicyDeniedError>()("Tool.PolicyDeniedError", {
+  tool: Schema.String,
+  message: Schema.String,
+}) {}
+
 export interface TextContent extends Schema.Schema.Type<typeof TextContent> {}
 export const TextContent = Schema.Struct({
   type: Schema.Literal("text"),

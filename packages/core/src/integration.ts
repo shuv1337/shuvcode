@@ -19,6 +19,7 @@ import {
   Types,
 } from "effect"
 import { Integration } from "@opencode-ai/schema/integration"
+import { Auth } from "@opencode-ai/schema/auth"
 import { Credential } from "./credential"
 import { State } from "./state"
 import { Bus } from "./bus"
@@ -158,6 +159,10 @@ export type Draft = {
 }
 
 export interface Interface extends State.Transformable<Draft> {
+  readonly auth: {
+    /** Reports local authentication readiness without contacting providers. */
+    readonly status: () => Effect.Effect<Auth.Status>
+  }
   /** Registers a scoped transform over the integration registry. */
   /** Returns one integration with its methods and current connections. */
   readonly get: (id: ID) => Effect.Effect<Info | undefined>
@@ -667,6 +672,35 @@ const layer = Layer.effect(
     return Service.of({
       transform: state.transform,
       reload: state.reload,
+      auth: {
+        status: Effect.fn("Integration.auth.status")(function* () {
+          const stored = yield* credentials.status()
+          const environment = Array.from(state.get().integrations.values()).flatMap((entry) => {
+            const configured = entry.methods.some(
+              (method) => method.type === "env" && method.names.some((name) => Boolean(process.env[name])),
+            )
+            if (!configured) return []
+            return [
+              Auth.Profile.make({
+                providerID: entry.ref.id,
+                source: "environment",
+                type: "key",
+                usable: true,
+                reason: "configured",
+              }),
+            ]
+          })
+          const profiles = [...stored.profiles, ...environment].toSorted((a, b) =>
+            a.providerID.localeCompare(b.providerID),
+          )
+          return Auth.Status.make({
+            ready: profiles.some((profile) => profile.usable),
+            storage: stored.storage,
+            verification: "not_performed",
+            profiles,
+          })
+        }),
+      },
       get: Effect.fn("Integration.get")(function* (id) {
         const entry = state.get().integrations.get(id)
         if (!entry) return undefined

@@ -317,6 +317,17 @@ async function replayMessage(
       })
       continue
     }
+    if (part.type === "structured") {
+      await connection.sessionUpdate({
+        sessionId: sessionID,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          messageId: message.id,
+          content: { type: "text", text: JSON.stringify(part.value, null, 2) },
+        },
+      })
+      continue
+    }
     await connection.sessionUpdate({
       sessionId: sessionID,
       update: {

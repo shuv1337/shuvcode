@@ -1,5 +1,5 @@
 export * as Tool from "./tool.js"
-export { CallID, Content, Error, FileContent, TextContent } from "@opencode-ai/schema/tool"
+export { CallID, Content, Error, FileContent, PolicyDeniedError, TextContent } from "@opencode-ai/schema/tool"
 export type { Context, Metadata, Options, Result } from "@opencode-ai/schema/tool"
 
 import type { ToolCall, ToolDefinition } from "@opencode-ai/ai"
@@ -18,6 +18,7 @@ import { SessionMessage } from "./session/message"
 import { SessionSchema } from "./session/schema"
 import { definition, execute, normalizeContent } from "./tool/runtime"
 import { Wildcard } from "./util/wildcard"
+import type { SessionPolicy } from "@opencode-ai/schema/session-policy"
 
 const MAX_METADATA_BYTES = 64 * 1024
 const Metadata = Schema.Record(Schema.String, Schema.Json)
@@ -31,7 +32,7 @@ export interface Interface {
   readonly transform: (
     callback: (draft: { readonly add: (tool: Tool.Info) => void }) => void,
   ) => Effect.Effect<void, RegistrationError, Scope.Scope>
-  readonly snapshot: (permissions?: Permission.Ruleset) => Effect.Effect<Snapshot>
+  readonly snapshot: (permissions?: Permission.Ruleset, policy?: SessionPolicy.Info) => Effect.Effect<Snapshot>
 }
 
 export interface Snapshot {
@@ -255,21 +256,29 @@ const layer = Layer.effect(
 
     return Service.of({
       transform,
-      snapshot: Effect.fn("Tool.snapshot")((permissions) =>
+      snapshot: Effect.fn("Tool.snapshot")((permissions, policy) =>
         lock.withPermit(
           Effect.gen(function* () {
             const active = new Map<string, Tool.Info>()
             const rules = permissions ?? []
+            const allowed = policy ? new Set(policy.tools.allow) : undefined
+            const policyDenied = new Set<string>()
             for (const [name, entries] of local) {
               const tool = entries.at(-1)?.tool
               if (!tool) continue
+              if (allowed && (!allowed.has(name) || whollyDisabled(tool.options?.permission ?? name, rules))) {
+                policyDenied.add(name)
+                continue
+              }
               if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
               active.set(name, tool)
             }
             const direct = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode === false))
             const codemode = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode !== false))
             const executeRule = rules.findLast((rule) => Wildcard.match("execute", rule.action))
-            const codemodeEnabled = executeRule?.resource !== "*" || executeRule.effect !== "deny"
+            const codemodeEnabled =
+              (allowed === undefined || codemode.size > 0) &&
+              (executeRule?.resource !== "*" || executeRule.effect !== "deny")
             const codemodeTool = codemodeEnabled
               ? CodeModeTool.create(
                   codemode,
@@ -302,6 +311,23 @@ const layer = Layer.effect(
                 }
                 if (input.call.name === "execute" && codemodeTool)
                   return executeTool(codemodeTool, input.call.name, input.call.input, context)
+                if (allowed && (!allowed.has(input.call.name) || policyDenied.has(input.call.name))) {
+                  const tool = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(input.call.name) ? input.call.name : "<invalid>"
+                  return Effect.logWarning("Session tool policy denied execution", {
+                    sessionID: input.sessionID,
+                    tool,
+                  }).pipe(
+                    Effect.andThen(
+                      new Tool.Error({
+                        message: `Tool denied by session policy: ${tool}`,
+                        error: new Tool.PolicyDeniedError({
+                          tool,
+                          message: `Tool denied by session policy: ${tool}`,
+                        }),
+                      }),
+                    ),
+                  )
+                }
                 const tool = direct.get(input.call.name)
                 if (tool) return executeTool(tool, input.call.name, input.call.input, context)
                 return new Tool.Error({ message: `Unknown tool: ${input.call.name}` })

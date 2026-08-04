@@ -104,6 +104,8 @@ import type {
   IntegrationCommandStatusOutput,
   IntegrationCommandCancelInput,
   IntegrationCommandCancelOutput,
+  AuthStatusInput,
+  AuthStatusOutput,
   McpListInput,
   McpListOutput,
   McpAddInput,
@@ -468,6 +470,7 @@ export function make(options: ClientOptions) {
               agent: input?.["agent"],
               model: input?.["model"],
               location: input?.["location"],
+              policy: input?.["policy"],
             },
             successStatus: 200,
             declaredStatuses: [401, 400],
@@ -513,7 +516,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/fork`,
-            body: { boundary: input["boundary"] },
+            body: { boundary: input["boundary"], policy: input["policy"] },
             successStatus: 200,
             declaredStatuses: [404, 400, 401],
             empty: false,
@@ -578,6 +581,7 @@ export function make(options: ClientOptions) {
               text: input["text"],
               files: input["files"],
               agents: input["agents"],
+              output: input["output"],
               metadata: input["metadata"],
               delivery: input["delivery"],
               resume: input["resume"],
@@ -1059,6 +1063,20 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    auth: {
+      status: (input?: AuthStatusInput, requestOptions?: RequestOptions) =>
+        request<AuthStatusOutput>(
+          {
+            method: "GET",
+            path: `/api/auth/status`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     mcp: {
       list: (input?: McpListInput, requestOptions?: RequestOptions) =>

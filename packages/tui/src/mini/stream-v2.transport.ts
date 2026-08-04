@@ -735,6 +735,23 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
           ])
         continue
       }
+      if (item.type === "structured") {
+        const fragment = fragmentRef(message.id, "text", textOrdinal++)
+        const text = JSON.stringify(item.value, null, 2)
+        const update = state.fragments.project(fragment, text, render)
+        if (render && text.length > update.previous.length)
+          write([
+            {
+              kind: "assistant",
+              source: "assistant",
+              text: text.slice(update.previous.length),
+              phase: "progress",
+              messageID: message.id,
+              partID: fragment.partID,
+            },
+          ])
+        continue
+      }
       renderTool(message.id, item, render)
     }
     if (message.error && !state.errors.has(message.id)) {

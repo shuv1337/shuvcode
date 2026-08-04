@@ -1054,6 +1054,25 @@ describe("Session.prompt", () => {
       ).toEqual(["First prompt", "Background completion", "Second prompt"])
     }),
   )
+
+  it.effect("rejects an invalid structured output schema before admission", () =>
+    Effect.gen(function* () {
+      yield* setup
+      const session = yield* Session.Service
+
+      const failure = yield* session
+        .prompt({
+          sessionID,
+          text: "Return data",
+          output: { schema: { type: "not-a-json-schema-type" } },
+          resume: false,
+        })
+        .pipe(Effect.flip)
+
+      expect(failure).toMatchObject({ _tag: "Session.StructuredOutputSchemaError" })
+      expect(yield* session.pending(sessionID)).toEqual([])
+    }),
+  )
 })
 
 describe("Session.pending", () => {

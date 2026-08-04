@@ -34,6 +34,7 @@ const catalog = Layer.mock(Catalog.Service, {
   },
 })
 const integrations = Layer.mock(Integration.Service, {
+  auth: { status: () => Effect.die("unused") },
   connection: {
     active: () => Effect.succeed(undefined),
     resolve: () => Effect.die("unused"),

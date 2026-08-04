@@ -890,6 +890,16 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "policy": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Session.Policy"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -1208,6 +1218,16 @@
                 "properties": {
                   "boundary": {
                     "$ref": "#/components/schemas/Session.ForkRequestBoundary"
+                  },
+                  "policy": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Session.Policy"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -1701,6 +1721,9 @@
                     "items": {
                       "$ref": "#/components/schemas/Prompt.AgentAttachment"
                     }
+                  },
+                  "output": {
+                    "$ref": "#/components/schemas/StructuredOutput.Request"
                   },
                   "metadata": {
                     "type": "object"
@@ -2266,7 +2289,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestError"
+                    }
+                  ]
                 }
               }
             }
@@ -5842,6 +5872,104 @@
         },
         "description": "Cancel a command authentication attempt and terminate its process.",
         "summary": "Cancel command connection"
+      }
+    },
+    "/api/auth/status": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "v2.auth.status",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workspace": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "$ref": "#/components/schemas/Location.Info"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Auth.Status"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Report locally detectable authentication readiness. This does not contact providers, verify credentials externally, refresh OAuth tokens, or expose credential values.",
+        "summary": "Get authentication status"
       }
     },
     "/api/mcp": {
@@ -12517,6 +12645,43 @@
         ],
         "additionalProperties": false
       },
+      "Session.Policy.ToolID": {
+        "type": "string",
+        "allOf": [
+          {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+            "description": "Exact effective tool identifier. Wildcards are not supported."
+          }
+        ]
+      },
+      "Session.Policy.Tools": {
+        "type": "object",
+        "properties": {
+          "allow": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session.Policy.ToolID"
+            }
+          }
+        },
+        "required": [
+          "allow"
+        ],
+        "additionalProperties": false,
+        "description": "Deny-by-default tool policy. Only exact identifiers in allow may execute."
+      },
+      "Session.Policy": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "$ref": "#/components/schemas/Session.Policy.Tools"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "additionalProperties": false
+      },
       "Session.Info": {
         "type": "object",
         "properties": {
@@ -12602,6 +12767,9 @@
           },
           "revert": {
             "$ref": "#/components/schemas/Session.Revert"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Session.Policy"
           }
         },
         "required": [
@@ -12878,6 +13046,27 @@
         ],
         "additionalProperties": false
       },
+      "StructuredOutput.JsonSchema": {
+        "type": "object"
+      },
+      "StructuredOutput.Request": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "$ref": "#/components/schemas/StructuredOutput.JsonSchema"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema"
+        ],
+        "additionalProperties": false
+      },
       "Prompt.Base64": {
         "type": "string",
         "allOf": [
@@ -12970,6 +13159,9 @@
             "items": {
               "$ref": "#/components/schemas/Prompt.AgentAttachment"
             }
+          },
+          "output": {
+            "$ref": "#/components/schemas/StructuredOutput.Request"
           },
           "metadata": {
             "type": "object"
@@ -13443,6 +13635,9 @@
             "items": {
               "$ref": "#/components/schemas/Prompt.AgentAttachment"
             }
+          },
+          "output": {
+            "$ref": "#/components/schemas/StructuredOutput.Request"
           },
           "type": {
             "type": "string",
@@ -14071,6 +14266,23 @@
         ],
         "additionalProperties": false
       },
+      "Session.Message.Assistant.Structured": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "structured"
+            ]
+          },
+          "value": {}
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "additionalProperties": false
+      },
       "Session.Message.Assistant.Retry": {
         "type": "object",
         "properties": {
@@ -14149,6 +14361,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/Session.Message.Assistant.Tool"
+                },
+                {
+                  "$ref": "#/components/schemas/Session.Message.Assistant.Structured"
                 }
               ]
             }
@@ -15033,6 +15248,9 @@
                     ]
                   }
                 }
+              },
+              "policy": {
+                "$ref": "#/components/schemas/Session.Policy"
               }
             },
             "required": [
@@ -15159,6 +15377,9 @@
             "items": {
               "$ref": "#/components/schemas/Prompt.AgentAttachment"
             }
+          },
+          "output": {
+            "$ref": "#/components/schemas/StructuredOutput.Request"
           },
           "metadata": {
             "type": "object"
@@ -16999,6 +17220,192 @@
         ],
         "additionalProperties": false
       },
+      "session.structured.completed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^evt_"
+              }
+            ]
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.structured.completed"
+            ]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "minimum": 0
+                  }
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              }
+            },
+            "required": [
+              "aggregateID",
+              "seq",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "allOf": [
+                  {
+                    "pattern": "^ses"
+                  }
+                ]
+              },
+              "assistantMessageID": {
+                "type": "string",
+                "allOf": [
+                  {
+                    "pattern": "^msg_"
+                  }
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "sessionID",
+              "assistantMessageID",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "created",
+          "type",
+          "durable",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "session.structured.failed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^evt_"
+              }
+            ]
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "session.structured.failed"
+            ]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "minimum": 0
+                  }
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              }
+            },
+            "required": [
+              "aggregateID",
+              "seq",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "allOf": [
+                  {
+                    "pattern": "^ses"
+                  }
+                ]
+              },
+              "assistantMessageID": {
+                "type": "string",
+                "allOf": [
+                  {
+                    "pattern": "^msg_"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "#/components/schemas/Session.StructuredError"
+              }
+            },
+            "required": [
+              "sessionID",
+              "assistantMessageID",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "created",
+          "type",
+          "durable",
+          "data"
+        ],
+        "additionalProperties": false
+      },
       "session.tool.input.started": {
         "type": "object",
         "properties": {
@@ -18516,6 +18923,12 @@
           },
           {
             "$ref": "#/components/schemas/session.reasoning.ended"
+          },
+          {
+            "$ref": "#/components/schemas/session.structured.completed"
+          },
+          {
+            "$ref": "#/components/schemas/session.structured.failed"
           },
           {
             "$ref": "#/components/schemas/session.tool.input.started"
@@ -20303,6 +20716,86 @@
             "additionalProperties": false
           }
         ]
+      },
+      "Auth.Profile": {
+        "type": "object",
+        "properties": {
+          "providerID": {
+            "type": "string"
+          },
+          "profileID": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "stored",
+              "environment"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "key",
+              "oauth",
+              "unknown"
+            ]
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "expired",
+              "empty",
+              "malformed"
+            ]
+          }
+        },
+        "required": [
+          "providerID",
+          "source",
+          "type",
+          "usable",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "Auth.Status": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "not_performed"
+            ]
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Auth.Profile"
+            }
+          }
+        },
+        "required": [
+          "ready",
+          "storage",
+          "verification",
+          "profiles"
+        ],
+        "additionalProperties": false
       },
       "Mcp.Status.Connected": {
         "type": "object",
@@ -22562,6 +23055,9 @@
               "messageID"
             ],
             "additionalProperties": false
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Session.Policy"
           }
         },
         "required": [
@@ -28708,6 +29204,12 @@
             "$ref": "#/components/schemas/session.reasoning.ended"
           },
           {
+            "$ref": "#/components/schemas/session.structured.completed"
+          },
+          {
+            "$ref": "#/components/schemas/session.structured.failed"
+          },
+          {
             "$ref": "#/components/schemas/session.tool.input.started"
           },
           {
@@ -29427,6 +29929,9 @@
     {
       "name": "integration",
       "description": "Integration discovery and authentication routes."
+    },
+    {
+      "name": "auth"
     },
     {
       "name": "mcp",

@@ -133,6 +133,7 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
         : item.text.length > 0
           ? [{ type: "text", text: item.text }]
           : []
+    if (item.type === "structured") return []
     const reuseToolProviderMetadata =
       reuseProviderMetadata ||
       (sameModel && item.executed === true && (item.state.status === "completed" || item.state.status === "error"))

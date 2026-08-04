@@ -8,6 +8,7 @@ export const emptyCredentialNode = makeGlobalNode({
   layer: Layer.succeed(
     Credential.Service,
     Credential.Service.of({
+      status: () => Effect.succeed({ storage: "available", profiles: [] }),
       all: () => Effect.succeed([]),
       list: () => Effect.succeed([]),
       get: () => Effect.succeed(undefined),

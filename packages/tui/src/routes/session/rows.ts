@@ -306,7 +306,7 @@ export function reduceSessionRows(
       return rows
     }
     usage?.steps.push(message)
-    const ordinals = { text: 0, reasoning: 0 }
+    const ordinals = { text: 0, reasoning: 0, structured: 0 }
     message.content.forEach((part) => {
       const partID = part.type === "tool" ? part.id : `${part.type}:${ordinals[part.type]++}`
       if ((part.type === "text" || part.type === "reasoning") && !part.text.trim()) return
@@ -393,13 +393,17 @@ function rowBoundaryMessageID(row: SessionRow, messages: Map<string, SessionMess
 export function resolvePart(message: SessionMessageAssistant, partID: string) {
   const tool = message.content.find((part) => part.type === "tool" && part.id === partID)
   if (tool) return tool
-  const match = /^(text|reasoning):(\d+)$/.exec(partID)
+  const match = /^(text|reasoning|structured):(\d+)$/.exec(partID)
   if (!match) return
   const ordinal = Number(match[2])
   return message.content.filter((part) => part.type === match[1])[ordinal]
 }
 
-type AppendPart = { type: "text" } | { type: "reasoning" } | { type: "tool"; name: string }
+type AppendPart =
+  | { type: "text" }
+  | { type: "reasoning" }
+  | { type: "structured" }
+  | { type: "tool"; name: string }
 
 function append(rows: SessionRow[], ref: PartRef, part: AppendPart, index = rows.length) {
   if (part.type === "reasoning") {

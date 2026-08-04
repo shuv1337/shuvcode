@@ -1,7 +1,8 @@
 export * as Credential from "./credential"
 
 import { asc, eq } from "drizzle-orm"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Auth } from "@opencode-ai/schema/auth"
 import { Credential } from "@opencode-ai/schema/credential"
 import { Integration } from "@opencode-ai/schema/integration"
 import { Database } from "./database/database"
@@ -28,6 +29,11 @@ export class Info extends Schema.Class<Info>("Credential.Info")({
 }) {}
 
 export interface Interface {
+  /** Inspects stored credentials without returning secret material. */
+  readonly status: () => Effect.Effect<{
+    readonly storage: "available" | "unavailable"
+    readonly profiles: Auth.Profile[]
+  }>
   /** Returns every stored credential. */
   readonly all: () => Effect.Effect<Info[]>
   /** Returns stored credentials belonging to one integration. */
@@ -64,6 +70,58 @@ const layer = Layer.effect(
     }
 
     return Service.of({
+      status: Effect.fn("Credential.status")(function* () {
+        return yield* db
+          .select()
+          .from(CredentialTable)
+          .orderBy(asc(CredentialTable.time_created))
+          .all()
+          .pipe(
+            Effect.map((rows) => ({
+              storage: "available" as const,
+              profiles: rows.flatMap((row) => {
+                if (!row.integration_id) return []
+                const value = Schema.decodeUnknownOption(Value)(row.value)
+                if (Option.isNone(value)) {
+                  return [
+                    Auth.Profile.make({
+                      providerID: row.integration_id,
+                      profileID: row.id,
+                      source: "stored",
+                      type: "unknown",
+                      usable: false,
+                      reason: "malformed",
+                    }),
+                  ]
+                }
+                if (value.value.type === "key") {
+                  return [
+                    Auth.Profile.make({
+                      providerID: row.integration_id,
+                      profileID: row.id,
+                      source: "stored",
+                      type: "key",
+                      usable: value.value.key.length > 0,
+                      reason: value.value.key.length > 0 ? "configured" : "empty",
+                    }),
+                  ]
+                }
+                const usable = value.value.access.length > 0 && value.value.refresh.length > 0
+                return [
+                  Auth.Profile.make({
+                    providerID: row.integration_id,
+                    profileID: row.id,
+                    source: "stored",
+                    type: "oauth",
+                    usable: usable && value.value.expires > Date.now(),
+                    reason: !usable ? "empty" : value.value.expires <= Date.now() ? "expired" : "configured",
+                  }),
+                ]
+              }),
+            })),
+            Effect.catchCause(() => Effect.succeed({ storage: "unavailable" as const, profiles: [] })),
+          )
+      }),
       all: Effect.fn("Credential.all")(function* () {
         return (yield* db
           .select()

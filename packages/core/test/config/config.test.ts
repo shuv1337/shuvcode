@@ -328,6 +328,7 @@ describe("Config", () => {
             layer: Layer.succeed(
               Credential.Service,
               Credential.Service.of({
+                status: () => Effect.succeed({ storage: "available", profiles: [] }),
                 all: () => Effect.die("unused Credential.all"),
                 list: () =>
                   Effect.succeed([

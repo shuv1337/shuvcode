@@ -11,6 +11,7 @@ import { WebSearch } from "@opencode-ai/schema/websearch"
 import { Session } from "@opencode-ai/schema/session"
 import { SessionPending } from "@opencode-ai/schema/session-pending"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
+import { StructuredOutput } from "@opencode-ai/schema/structured-output"
 import { Workspace } from "@opencode-ai/schema/workspace"
 import { Api } from "@opencode-ai/server/api"
 import { ClientApi, groupNames, promiseOmitEndpoints } from "@opencode-ai/protocol/client"
@@ -27,6 +28,7 @@ test("re-exports canonical contracts directly from Schema", () => {
   expect(SDK.Model).toBe(Model)
   expect(SDK.WebSearch).toBe(WebSearch)
   expect(SDK.Session).toBe(Session)
+  expect(SDK.StructuredOutput).toBe(StructuredOutput)
   expect(Object.keys(SDK).sort()).toEqual([
     "AbsolutePath",
     "Agent",
@@ -53,6 +55,7 @@ test("re-exports canonical contracts directly from Schema", () => {
     "SessionMessage",
     "SessionPending",
     "Skill",
+    "StructuredOutput",
     "Tool",
     "WebSearch",
   ])

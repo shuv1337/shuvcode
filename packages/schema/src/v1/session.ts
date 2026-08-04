@@ -9,6 +9,7 @@ import { NonNegativeInt, optional, statics } from "../schema.js"
 import { ascending } from "../identifier.js"
 import { SessionID } from "../session-id.js"
 import { WorkspaceID } from "../workspace-id.js"
+import { SessionPolicy } from "../session-policy.js"
 import { PermissionV1 } from "./permission.js"
 import { FileDiff } from "../file-diff.js"
 
@@ -565,6 +566,7 @@ export const SessionInfo = Schema.Struct({
   }),
   permission: optional(PermissionV1.Ruleset),
   revert: optional(SessionRevert),
+  policy: optional(SessionPolicy.Info),
 }).annotate({ identifier: "SessionV1.Info" })
 export type SessionInfo = typeof SessionInfo.Type
 

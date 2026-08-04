@@ -72,6 +72,7 @@
       "drizzle-orm": "1.0.0-rc.2",
       "effect": "4.0.0-beta.101",
       "ai": "6.0.168",
+      "ajv": "8.20.0",
       "cross-spawn": "7.0.6",
       "hono": "4.10.7",
       "hono-openapi": "1.1.2",

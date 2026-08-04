@@ -21,8 +21,10 @@ import { Money } from "./money.js"
 import { Snapshot } from "./snapshot.js"
 import { TokenUsage } from "./token-usage.js"
 import { SessionPending } from "./session-pending.js"
+import { StructuredOutput } from "./structured-output.js"
 import { Project } from "./project.js"
 import { SessionFork } from "./session-fork.js"
+import { SessionPolicy } from "./session-policy.js"
 
 export { FileAttachment }
 
@@ -130,6 +132,7 @@ export const Forked = Event.durable({
     parentID: SessionID,
     boundary: SessionFork.Boundary,
     instructions: Instruction.Values.pipe(optional),
+    policy: SessionPolicy.Info.pipe(optional),
   },
 })
 export type Forked = typeof Forked.Type
@@ -361,6 +364,30 @@ export namespace Reasoning {
   export type Ended = typeof Ended.Type
 }
 
+export namespace Structured {
+  export const Completed = Event.durable({
+    type: "session.structured.completed",
+    ...options,
+    schema: {
+      ...Base,
+      assistantMessageID: SessionMessage.ID,
+      value: StructuredOutput.Result.fields.value,
+    },
+  })
+  export type Completed = typeof Completed.Type
+
+  export const Failed = Event.durable({
+    type: "session.structured.failed",
+    ...options,
+    schema: {
+      ...Base,
+      assistantMessageID: SessionMessage.ID,
+      error: SessionError.Error,
+    },
+  })
+  export type Failed = typeof Failed.Type
+}
+
 export namespace Tool {
   const ToolBase = {
     ...Base,
@@ -574,6 +601,8 @@ export const Definitions = Event.inventory(
   Reasoning.Started,
   Reasoning.Delta,
   Reasoning.Ended,
+  Structured.Completed,
+  Structured.Failed,
   Tool.Input.Started,
   Tool.Input.Delta,
   Tool.Input.Ended,

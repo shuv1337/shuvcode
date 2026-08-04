@@ -441,6 +441,14 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
           }
         })
       },
+      "session.structured.completed": (event) => {
+        return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+          draft.content.push(
+            castDraft(SessionMessage.AssistantStructured.make({ type: "structured", value: event.data.value })),
+          )
+        })
+      },
+      "session.structured.failed": () => Effect.void,
       "session.retry.scheduled": (event) => {
         return updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
           draft.retry = {
