@@ -13,6 +13,30 @@ The Effect entrypoint uses canonical decoded values such as `Session.ID`, `Locat
 
 The Promise root remains structural and has no Core or Effect runtime dependency. `/effect` depends only on Effect, Schema, and Protocol and is browser-bundle safe. Bundle-boundary tests enforce both import graphs.
 
+Fork releases bundle the Promise surface into the matching `shuvcode` CLI package. External fork consumers should import `OpenCode` and generated request/response types from `shuvcode/client`; `@opencode-ai/client` remains the upstream package name.
+
+The packed Promise client creates a deny-by-default review session with an exact tool allowlist:
+
+```ts
+import { OpenCode } from "shuvcode/client"
+
+const client = OpenCode.make({ baseUrl })
+const session = await client.session.create({
+  location: { directory: workspace },
+  policy: { tools: { allow: ["read", "grep", "glob"] } },
+})
+```
+
+The server persists this policy, intersects it with process and agent permissions at actual dispatch, and allows forked sessions to inherit or narrow it. Prompt text, metadata, events, and model output cannot widen it.
+
+Packed clients can inspect non-sensitive authentication readiness without making a provider request:
+
+```ts
+const status = await client.auth.status()
+```
+
+`status.data.verification` is always `"not_performed"`: the server checks only local credential structure, OAuth expiry metadata, and whether a configured environment value is non-empty. It does not refresh OAuth, contact a provider, consume model quota, or prove that a provider will accept a credential. Expired OAuth is therefore reported unusable until the normal connection path refreshes it. The response never includes credential values, environment variable names, filesystem paths, request headers, or raw provider/storage errors.
+
 Effect consumers construct canonical decoded inputs:
 
 ```ts

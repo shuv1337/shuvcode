@@ -11,8 +11,7 @@
     "bin"
   ],
   "exports": {
-    "./run": "./src/run/index.ts",
-    "./server-process": "./src/server-process.ts"
+    "./run": "./src/run/index.ts"
   },
   "scripts": {
     "build": "bun run script/build.ts",

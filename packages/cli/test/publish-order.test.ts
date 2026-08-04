@@ -28,6 +28,9 @@ test("prepares every wrapper, then publishes all platforms before either umbrell
     prepare: async (distribution) => {
       events.push(`prepare:${distribution.name}`)
     },
+    verify: async (distribution) => {
+      events.push(`verify:${distribution.name}`)
+    },
     publish: async (_root, name) => {
       events.push(`publish:${name}`)
     },
@@ -35,6 +38,8 @@ test("prepares every wrapper, then publishes all platforms before either umbrell
   expect(events).toEqual([
     "prepare:shuvcode",
     "prepare:shuvcode-node",
+    "verify:shuvcode",
+    "verify:shuvcode-node",
     "publish:shuvcode-a",
     "publish:shuvcode-b",
     "publish:shuvcode-node-a",

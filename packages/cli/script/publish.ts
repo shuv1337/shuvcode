@@ -7,6 +7,7 @@ import { UpdateArtifact } from "../../../script/update-artifact"
 import { currentRepository, publishPlan } from "../../../script/publish-plan"
 import { preflightForkPublish, type ForkDistribution } from "./publish-ownership"
 import { publishDistributions } from "./publish-order"
+import { smokeDistribution } from "./package-smoke"
 
 const repository = currentRepository()
 const plan = publishPlan(repository)
@@ -31,11 +32,27 @@ async function prepareDistribution(input: ForkDistribution) {
   await $`rm -rf ${input.root}/${input.name}`
   await $`mkdir -p ${input.root}/${input.name}/bin`
   await $`cp ./script/launcher.mjs ${input.root}/${input.name}/bin/launcher.mjs`
+  const client = input.name === "shuvcode"
+  if (client) {
+    await $`bun run --cwd ../client build:promise`
+    await $`cp -R ../client/dist-promise/promise ${input.root}/${input.name}/client`
+    const result = await Bun.build({
+      entrypoints: ["../client/src/promise/index.ts"],
+      outdir: `${input.root}/${input.name}/client`,
+      target: "node",
+      format: "esm",
+      minify: true,
+    })
+    if (!result.success) throw new AggregateError(result.logs, "Failed to bundle Promise client")
+  }
   await Bun.file(`${input.root}/${input.name}/package.json`).write(
     JSON.stringify(
       {
         name: input.name,
+        type: "module",
         bin: { [input.binary]: "./bin/launcher.mjs" },
+        files: client ? ["bin", "client"] : ["bin"],
+        exports: client ? { "./client": { types: "./client/index.d.ts", import: "./client/index.js" } } : undefined,
         version: input.version,
         license: pkg.license,
         repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
@@ -49,7 +66,11 @@ async function prepareDistribution(input: ForkDistribution) {
   )
 }
 
-await publishDistributions(preflight.distributions, { prepare: prepareDistribution, publish })
+await publishDistributions(preflight.distributions, {
+  prepare: prepareDistribution,
+  verify: smokeDistribution,
+  publish,
+})
 if (plan.updateArtifacts) {
   await UpdateArtifact.publish({
     channel: Script.channel,
