@@ -4,7 +4,7 @@
 
 import { Plugin } from "@opencode-ai/plugin"
 import { randomUUID } from "node:crypto"
-import { SOURCE, commandTemplate } from "./prompt"
+import { SOURCE, TEMPLATE_MARKER, commandTemplate } from "./prompt"
 import type { GoalOptions } from "./service"
 import { createGoalService, mergeLimits } from "./service"
 import { DEFAULT_LIMITS } from "./state"
@@ -24,14 +24,46 @@ export default Plugin.define({
       log: (message, data) => console.log(`${message} ${JSON.stringify(data)}`),
     })
 
+    // The released alpha-17 host exposes add/execute commands, while the
+    // current host stores prompt templates through get/update.
+    type SessionPromptInput = Parameters<typeof ctx.session.prompt>[0]
+    type LegacyCommandDraft = {
+      add(definition: {
+        name: string
+        description: string
+        execute(input: {
+          sessionID: SessionPromptInput["sessionID"]
+          prompt: Pick<SessionPromptInput, "text" | "files" | "agents" | "skills">
+          delivery: SessionPromptInput["delivery"]
+        }): Promise<void>
+      }): void
+    }
+    type TemplateCommandDraft = {
+      get(name: string): { template: string } | undefined
+      update(name: string, update: (command: { description?: string; template: string }) => void): void
+    }
     const commands = await ctx.command.list()
-    if (commands.data.some((command) => command.name === options.command))
-      throw new Error(
-        `goal plugin: a "${options.command}" command already exists; configure a different name through the "command" plugin option`,
-      )
-
+    let collision = false
     await ctx.command.transform((draft) => {
-      draft.add({
+      const compatible = draft as typeof draft & Partial<LegacyCommandDraft> & Partial<TemplateCommandDraft>
+      if (typeof compatible.get === "function" && typeof compatible.update === "function") {
+        const existing = compatible.get(options.command)
+        if (existing && !existing.template.includes(TEMPLATE_MARKER)) {
+          collision = true
+          return
+        }
+        compatible.update(options.command, (command) => {
+          command.description = "Start or manage a bounded Session goal"
+          command.template = commandTemplate()
+        })
+        return
+      }
+      if (typeof compatible.add !== "function") throw new Error("goal plugin: unsupported command registry API")
+      if (commands.data.some((command) => command.name === options.command)) {
+        collision = true
+        return
+      }
+      compatible.add({
         name: options.command,
         description: "Start or manage a bounded Session goal",
         execute: async (input) => {
@@ -46,6 +78,10 @@ export default Plugin.define({
         },
       })
     })
+    if (collision)
+      throw new Error(
+        `goal plugin: a "${options.command}" command already exists; configure a different name through the "command" plugin option`,
+      )
 
     const { createGoalTools } = await import("./tools")
     await ctx.tool.transform((draft) => {

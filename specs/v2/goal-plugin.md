@@ -129,10 +129,10 @@ A goal package is a directory, typically `goals/<slug>/`, containing:
 
 | File              | Role                                                                     |
 | ----------------- | ------------------------------------------------------------------------ |
-| `goal.md`         | The articulated goal, references to the other documents, done condition. |
-| `facts.md`        | The user-accepted, individually testable facts.                          |
-| `facts.meta.json` | Each accepted fact with its `automatedVerification` flag.                |
-| `plan.md`         | The Plannotator-gated execution plan with ordered, verified steps.       |
+| `goal.md`         | The articulated goal, references to the other documents, done condition.  |
+| `facts.md`        | The user-accepted, individually testable facts.                           |
+| `facts.meta.json` | Each accepted fact with its `automatedVerification` flag.                 |
+| `plan.md`         | The Plannotator-gated execution plan with ordered, verified steps.        |
 
 The `/goal` template instructs the agent to recognize a package path, read the documents, and map them onto the goal contract:
 
@@ -154,7 +154,7 @@ The following user intents map to typed tools:
 /goal clear
 ```
 
-The first release does not make these zero-model-call command handlers. The command callback substitutes the invocation arguments into the goal instructions and re-prompts the same Session with the invocation's prompt attachments, mentions, and delivery mode. The agent then calls the matching lifecycle tool.
+The first release cannot make these direct, zero-model-call command handlers. V2 exposes replayable command definition transforms but not a public command-execution interception hook. Commands therefore submit normal durable user prompts, as documented by the [V2 commands guide](https://opencode.ai/v2/docs/commands), and the agent calls the matching lifecycle tool. This limitation must be documented in the package README and must not be hidden by unsupported hook emulation.
 
 The `/goal` template must distinguish a control keyword from an objective. Its instructions are:
 
@@ -166,7 +166,7 @@ The `/goal` template must distinguish a control keyword from an objective. Its i
 | `clear`, `cancel`, or `stop` | Call `goal_clear`.    |
 | anything else                | Call `goal_set`.      |
 
-The plugin must not parse command arguments from the event stream. The public command callback receives the parsed prompt and delivery directly, so reconstructing command provenance from message text would be ambiguous and unnecessary.
+The plugin must not parse command arguments from the event stream. Command argument text is already represented as a durable user input; attempting to reconstruct command provenance from message text would be ambiguous and would duplicate command parsing owned by OpenCode.
 
 ### Completion
 
@@ -281,7 +281,7 @@ paused | blocked | limited | completed | active
 
 - `user` pauses an active goal.
 - `superseded` does not immediately pause. A newer admitted user input owns the next decision; see continuation fencing below.
-- `shutdown` leaves the goal active in storage but records that no automatic continuation is authorized by the old execution. On plugin restart, active goals recover as paused with reason `restart_recovery`. Session execution claims also remain inert: startup performs no provider work, and continuing admitted work requires new user input. Hard-crash recovery and retry of ambiguous provider or tool work remain out of scope.
+- `shutdown` leaves the goal active in storage but records that no automatic continuation is authorized by the old execution. On plugin restart, active goals recover as paused with reason `restart_recovery`. Note the platform is less conservative than the plugin here: the accepted [managed restart continuation](./session-restart-continuation.md) decision resumes suspended Sessions' already-admitted work automatically after a graceful managed restart. That resumed drain runs normally; the paused goal only means the plugin schedules no new continuation from its boundaries until the user resumes. What the plugin does share with that decision is its exclusion: hard-crash recovery and retry of ambiguous provider or tool work remain out of scope.
 
 ## Plugin Contract
 
@@ -328,52 +328,38 @@ An Effect entrypoint is not required for the first release. Promise and Effect p
 
 ### Command registration
 
-The plugin checks the public command list for a collision, then adds `goal` through `ctx.command.transform`:
+The plugin adds or updates `goal` through `ctx.command.transform`:
 
 ```ts
-const commands = await ctx.command.list()
-if (commands.data.some((command) => command.name === "goal"))
-  throw new Error('goal plugin: a "goal" command already exists')
-
 await ctx.command.transform((commands) => {
-  commands.add({
-    name: "goal",
-    description: "Start or manage a bounded Session goal",
-    execute: async (input) => {
-      await ctx.session.prompt({
-        sessionID: input.sessionID,
-        text: GOAL_COMMAND_TEMPLATE.replace("$ARGUMENTS", () => input.prompt.text),
-        files: input.prompt.files,
-        agents: input.prompt.agents,
-        skills: input.prompt.skills,
-        delivery: input.delivery,
-      })
-    },
+  commands.update("goal", (command) => {
+    command.description = "Start or manage a bounded Session goal"
+    command.template = GOAL_COMMAND_TEMPLATE
   })
 })
 ```
 
-The Promise command domain exposes `list` as the public read seam, while the transform draft exposes only `add({ name, description, execute })` in [`packages/plugin/src/promise/command.ts`](../../packages/plugin/src/promise/command.ts). Registration must not overwrite an existing command silently. Collision policy:
+The current transform API supports `list`, `get`, `update`, and `remove` on the command draft in [`packages/plugin/src/promise/command.ts`](../../packages/plugin/src/promise/command.ts). `update` creates the command when the name is absent — the core draft seeds a `{ name, template: "" }` record — so registration and update are one operation. The plugin must therefore check `get(name)` before updating and must not overwrite an existing command silently. Proposed collision policy:
 
-1. Call `ctx.command.list()` before registering.
-2. If the configured name exists, fail plugin setup with a clear collision error and allow the user to configure another name through plugin options.
-3. Otherwise add the callback command. Its `execute` re-prompts `input.sessionID`, forwards `input.prompt` and `input.delivery`, and substitutes the invocation text into the existing goal instructions.
+1. If `get` returns nothing for the configured name, update it into existence.
+2. If the command exists and carries plugin-owned metadata once command metadata is supported ([`Command.Info`](../../packages/schema/src/command.ts) has no metadata field today), update it.
+3. Otherwise fail plugin setup with a clear collision error and allow the user to configure another command name through plugin options.
 
-The package option `command` defaults to `goal`; users resolving a collision set a different name explicitly.
+Until command metadata exists, the package option `command` defaults to `goal`; users resolving a collision set a different name explicitly.
 
 ### Tool registration
 
 The plugin uses `ctx.tool.transform`. Input and output schemas may be raw JSON Schema, a Standard Schema, or an Effect codec — `Tool.ValueSchema` accepts all three — and this plugin uses raw JSON Schema, matching the V2 plugin guide. Tools are directly exposed rather than CodeMode-namespaced because they are small lifecycle operations the model must be able to call reliably. Registration therefore uses `{ codemode: false }`.
 
-| Tool            | Purpose                                                                    | Mutates state |
-| --------------- | -------------------------------------------------------------------------- | ------------- |
-| `goal_set`      | Create one explicit goal.                                                  | yes           |
-| `goal_status`   | Return active or latest terminal state.                                    | no            |
-| `goal_pause`    | Pause automatic continuation.                                              | yes           |
-| `goal_resume`   | Start a new bounded Window; `takeover: true` force-replaces a stale owner. | yes           |
-| `goal_block`    | Record a concrete external blocker.                                        | yes           |
-| `goal_complete` | Submit a structured evidence-backed claim.                                 | yes           |
-| `goal_clear`    | Remove retained goal state for the Session.                                | yes           |
+| Tool            | Purpose                                     | Mutates state |
+| --------------- | ------------------------------------------- | ------------- |
+| `goal_set`      | Create one explicit goal.                   | yes           |
+| `goal_status`   | Return active or latest terminal state.     | no            |
+| `goal_pause`    | Pause automatic continuation.               | yes           |
+| `goal_resume`   | Start a new bounded Window; `takeover: true` force-replaces a stale owner. | yes |
+| `goal_block`    | Record a concrete external blocker.         | yes           |
+| `goal_complete` | Submit a structured evidence-backed claim.  | yes           |
+| `goal_clear`    | Remove retained goal state for the Session. | yes           |
 
 All tool outputs use a stable JSON envelope:
 
@@ -784,24 +770,24 @@ Local plugin dependencies are not installed automatically, so development uses w
 
 ## Failure Semantics
 
-| Failure                                 | Result                                                                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Invalid plugin options                  | Plugin setup fails with a field-specific message.                                                                               |
-| Command name collision                  | Plugin setup fails or user selects another configured command name.                                                             |
-| State missing                           | Treat as no goal; do not reconstruct from chat text.                                                                            |
-| State invalid/corrupt                   | Preserve file, pause access, return `persistence_failed`; bounded ledger may aid repair.                                        |
-| State version newer than plugin         | Fail closed without rewriting it.                                                                                               |
-| State write fails                       | Pause in memory; do not schedule continuation.                                                                                  |
-| Event stream ends unexpectedly          | Stop automatic continuation; tools remain available where setup generation survives.                                            |
-| Duplicate execution event               | Persisted event fence makes it a no-op.                                                                                         |
-| Synthetic admission exact retry         | Reconcile using the same input ID and content.                                                                                  |
-| Synthetic admission conflicting retry   | Fail closed and pause; this is a plugin invariant violation.                                                                    |
-| Execution fails                         | Pause; require explicit resume.                                                                                                 |
-| User interrupts                         | Pause with `interrupted_by_user`.                                                                                               |
-| Server shuts down                       | Recover active goal as paused on next activation.                                                                               |
+| Failure                                 | Result                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Invalid plugin options                  | Plugin setup fails with a field-specific message.                                        |
+| Command name collision                  | Plugin setup fails or user selects another configured command name.                      |
+| State missing                           | Treat as no goal; do not reconstruct from chat text.                                     |
+| State invalid/corrupt                   | Preserve file, pause access, return `persistence_failed`; bounded ledger may aid repair. |
+| State version newer than plugin         | Fail closed without rewriting it.                                                        |
+| State write fails                       | Pause in memory; do not schedule continuation.                                           |
+| Event stream ends unexpectedly          | Stop automatic continuation; tools remain available where setup generation survives.     |
+| Duplicate execution event               | Persisted event fence makes it a no-op.                                                  |
+| Synthetic admission exact retry         | Reconcile using the same input ID and content.                                           |
+| Synthetic admission conflicting retry   | Fail closed and pause; this is a plugin invariant violation.                             |
+| Execution fails                         | Pause; require explicit resume.                                                          |
+| User interrupts                         | Pause with `interrupted_by_user`.                                                        |
+| Server shuts down                       | Recover active goal as paused on next activation.                                        |
 | Another process owns the shard          | Return `owned_elsewhere`; never create an unpersisted divergent copy. Recovery is explicit `goal_resume` with `takeover: true`. |
-| Completion evidence rejected            | Keep active and return exact deficiencies.                                                                                      |
-| Future independent verifier unavailable | Pause with `verification_failed`.                                                                                               |
+| Completion evidence rejected            | Keep active and return exact deficiencies.                                               |
+| Future independent verifier unavailable | Pause with `verification_failed`.                                                        |
 
 ## Observability
 
@@ -973,6 +959,7 @@ None. The previously open decisions — package ownership, ledger inclusion, own
 - [Current Session contract](../../packages/schema/src/session.ts)
 - [Pending input contract](../../packages/schema/src/session-pending.ts)
 - [V2 Session behavior](./session.md)
+- [Managed restart continuation decision](./session-restart-continuation.md)
 
 ### Prior art
 

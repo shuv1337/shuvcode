@@ -84,13 +84,25 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
   let requestedAt = 0
   let running = false
   let closed = false
+  let dirty = false
   let waiters: { generation: number; done: Deferred.Deferred<void> }[] = []
   const semaphore = Semaphore.makeUnsafe(1)
 
   const commit = Effect.fn("State.commit")(function* (next: State) {
     state = next
+    dirty = false
     if (options.finalize) yield* options.finalize(options.draft(next))
   })
+
+  const read = () => {
+    if (!dirty) return state
+    const next = options.initial()
+    const api = options.draft(next)
+    for (const transform of transforms) transform.run(api)
+    state = next
+    dirty = false
+    return state
+  }
 
   const materialize = Effect.fnUntraced(function* () {
     if (closed) return
@@ -140,7 +152,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
   })
 
   return {
-    get: () => state,
+    get: read,
     transform: Effect.fn("State.transform")(function* (update) {
       yield* Effect.annotateCurrentSpan("state", options.name ?? "anonymous")
       const scope = yield* Scope.Scope
@@ -154,6 +166,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
                 if (!active) return Effect.void
                 active = false
                 transforms = transforms.filter((item) => item !== transform)
+                dirty = true
                 return Effect.gen(function* () {
                   const batch = yield* CurrentBatch
                   if (batch?.active) {
@@ -173,6 +186,7 @@ export function create<State, DraftApi>(options: Options<State, DraftApi>): Inte
           yield* semaphore.withPermit(
             Effect.sync(() => {
               transforms = [...transforms, transform]
+              dirty = true
             }),
           )
           yield* Scope.addFinalizer(scope, dispose)

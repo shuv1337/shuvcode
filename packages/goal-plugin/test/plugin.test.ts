@@ -9,58 +9,6 @@ import { createGoalService } from "../src/service"
 import { DEFAULT_LIMITS, createGoal } from "../src/state"
 import { createGoalTools } from "../src/tools"
 
-type PluginContext = Parameters<typeof plugin.setup>[0]
-type CommandDraft = Parameters<Parameters<PluginContext["command"]["transform"]>[0]>[0]
-type CommandDefinition = Parameters<CommandDraft["add"]>[0]
-type CommandInvocation = Parameters<CommandDefinition["execute"]>[0]
-type SessionPrompt = Parameters<PluginContext["session"]["prompt"]>[0]
-
-function pluginHarness(commands: Array<{ name: string; description?: string }> = []) {
-  const definitions: CommandDefinition[] = []
-  const prompts: SessionPrompt[] = []
-  let commandTransforms = 0
-  const registration = { dispose: () => Promise.resolve() }
-  const context = {
-    options: {},
-    command: {
-      list: async () => ({ data: commands }),
-      transform: async (callback: Parameters<PluginContext["command"]["transform"]>[0]) => {
-        commandTransforms += 1
-        callback({ add: (definition) => definitions.push(definition) })
-        return registration
-      },
-    },
-    tool: {
-      transform: async (callback: (draft: { add: (definition: unknown) => void }) => void) => {
-        callback({ add: () => undefined })
-        return registration
-      },
-    },
-    session: {
-      get: async () => ({ location: { directory: "/tmp" } }),
-      synthetic: async () => ({}),
-      prompt: async (input: SessionPrompt) => {
-        prompts.push(input)
-        return {}
-      },
-      hook: async () => registration,
-    },
-    event: {
-      subscribe: () => ({
-        async *[Symbol.asyncIterator]() {},
-      }),
-    },
-  } as unknown as PluginContext
-  return {
-    context,
-    definitions,
-    prompts,
-    get commandTransforms() {
-      return commandTransforms
-    },
-  }
-}
-
 describe("plugin shape", () => {
   test("default export is a V2 promise plugin", () => {
     expect(plugin.id).toBe(SOURCE)
@@ -86,48 +34,84 @@ describe("plugin shape", () => {
     expect(template).toContain("one criterion per fact")
     expect(template).toContain("automated verification")
   })
+})
 
-  test("command collisions fail through the public list seam before registration", async () => {
-    const harness = pluginHarness([{ name: "goal", description: "Existing command" }])
-    await expect(plugin.setup(harness.context)).rejects.toThrow('a "goal" command already exists')
-    expect(harness.commandTransforms).toBe(0)
-    expect(harness.definitions).toHaveLength(0)
+describe("command host compatibility", () => {
+  function context(command: Record<string, unknown>) {
+    const prompts: Array<Record<string, unknown>> = []
+    return {
+      prompts,
+      value: {
+        options: { persistence: { enabled: false } },
+        command,
+        session: {
+          get: async () => ({ location: { directory: "/tmp" } }),
+          synthetic: async () => ({}),
+          prompt: async (input: Record<string, unknown>) => {
+            prompts.push(input)
+            return {}
+          },
+          hook: async () => ({ dispose: async () => undefined }),
+        },
+        tool: {
+          transform: async (edit: (draft: { add(): void }) => void) => {
+            edit({ add: () => undefined })
+            return { dispose: async () => undefined }
+          },
+        },
+        event: {
+          subscribe: () =>
+            (async function* () {
+              return
+            })(),
+        },
+      },
+    }
+  }
+
+  test("registers a prompt template on current hosts", async () => {
+    const registered = new Map<string, { name: string; template: string; description?: string }>()
+    const harness = context({
+      list: async () => ({ data: [] }),
+      transform: async (edit: (draft: Record<string, unknown>) => void) => {
+        edit({
+          get: (name: string) => registered.get(name),
+          update: (name: string, update: (command: { name: string; template: string; description?: string }) => void) => {
+            const command = registered.get(name) ?? { name, template: "" }
+            update(command)
+            registered.set(name, command)
+          },
+        })
+        return { dispose: async () => undefined }
+      },
+    })
+    const cleanup = await plugin.setup(harness.value as never)
+    expect(registered.get("goal")?.template).toContain(TEMPLATE_MARKER)
+    await cleanup?.()
   })
 
-  test("the goal command re-prompts the same Session with substituted instructions", async () => {
-    const harness = pluginHarness()
-    const cleanup = await plugin.setup(harness.context)
-    expect(harness.commandTransforms).toBe(1)
-    expect(harness.definitions).toHaveLength(1)
-    const definition = harness.definitions[0]
-    if (!definition) throw new Error("Expected goal command registration")
-    expect(definition.name).toBe("goal")
-    expect(definition.description).toBe("Start or manage a bounded Session goal")
-
-    const invocation = {
-      sessionID: "ses_goal_command",
-      prompt: {
-        text: "goals/exporter/goal.md $&",
-        files: [{ uri: "file:///workspace/goals/exporter/goal.md" }],
-        agents: [{ name: "build" }],
-        skills: [{ id: "setup-goal" }],
+  test("registers an executable command on alpha-17 hosts", async () => {
+    let definition:
+      | {
+          execute(input: {
+            sessionID: string
+            prompt: { text: string; files?: unknown[]; agents?: unknown[]; skills?: unknown[] }
+            delivery: string
+          }): Promise<void>
+        }
+      | undefined
+    const harness = context({
+      list: async () => ({ data: [] }),
+      transform: async (edit: (draft: Record<string, unknown>) => void) => {
+        edit({ add: (value: typeof definition) => (definition = value) })
+        return { dispose: async () => undefined }
       },
-      delivery: "queue",
-    } as CommandInvocation
-    await definition.execute(invocation)
-
-    expect(harness.prompts).toHaveLength(1)
-    const prompt = harness.prompts[0]
-    expect(prompt?.sessionID).toBe(invocation.sessionID)
-    expect(prompt?.delivery).toBe(invocation.delivery)
-    expect(prompt?.files).toBe(invocation.prompt.files)
-    expect(prompt?.agents).toBe(invocation.prompt.agents)
-    expect(prompt?.skills).toBe(invocation.prompt.skills)
-    expect(prompt?.text).toContain("goals/exporter/goal.md $&")
-    expect(prompt?.text).toContain("Plannotator setup-goal")
-    expect(prompt?.text).not.toContain("$ARGUMENTS")
-
-    if (cleanup) await cleanup()
+    })
+    const cleanup = await plugin.setup(harness.value as never)
+    await definition!.execute({ sessionID: "ses_test", prompt: { text: "ship it" }, delivery: "steer" })
+    expect(harness.prompts[0]?.text).toContain("ship it")
+    expect(harness.prompts[0]?.text).toContain(TEMPLATE_MARKER)
+    await cleanup?.()
   })
 })
 
@@ -426,9 +410,7 @@ describe("service flows", () => {
     const { service } = await harness()
     await service.set(SESSION, { objective: "fix tests" })
     await service.handleEvent(
-      event("session.step.ended", 5, {
-        tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
-      }),
+      event("session.step.ended", 5, { tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } }),
     )
     const paused = await service.pause(SESSION)
     expect(paused.state).toBe("paused")

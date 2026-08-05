@@ -191,6 +191,22 @@ describe("State", () => {
     }),
   )
 
+  it.effect("exposes pending batched transforms to reads", () =>
+    Effect.gen(function* () {
+      const state = State.create({
+        initial: () => ({ values: [] as string[] }),
+        draft: (draft) => ({ add: (item: string) => draft.values.push(item) }),
+      })
+
+      yield* State.batch(
+        Effect.gen(function* () {
+          yield* state.transform((draft) => draft.add("visible"))
+          expect(state.get().values).toEqual(["visible"])
+        }),
+      )
+    }),
+  )
+
   it.effect("debounces reload bursts", () =>
     Effect.gen(function* () {
       let finalized = 0
