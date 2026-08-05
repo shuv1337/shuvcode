@@ -176,7 +176,12 @@ export const Plugin = {
                           agent: context.agent,
                           source,
                         })
-                      if ((yield* fsUtil.stat(target.canonical)).type !== "Directory")
+                      const workdir = yield* fsUtil.stat(target.canonical).pipe(
+                        Effect.catchReason("PlatformError", "NotFound", () =>
+                          Effect.fail(new Error(`Working directory does not exist: ${target.canonical}`)),
+                        ),
+                      )
+                      if (workdir.type !== "Directory")
                         return yield* Effect.fail(new Error(`Working directory is not a directory: ${target.canonical}`))
                     }),
                 )
