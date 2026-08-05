@@ -258,9 +258,6 @@ function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync }
   }
 
   const list = async (directory: string) => {
-    if ((await input.sdk.protocol) === "v1") {
-      return (await input.sdk.client.permission.list({ directory })).data ?? []
-    }
     return input.sdk.api.permission.request
       .list({ location: { directory } })
       .then((result) => result.data.map(normalizePermissionRequest))

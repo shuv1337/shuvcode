@@ -5,7 +5,6 @@ import type {
   ProviderAuthResponse,
   SessionStatus,
 } from "@/types"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { type Accessor, batch, createMemo, getOwner, onCleanup, onMount, untrack } from "solid-js"
@@ -60,6 +59,7 @@ import type {
 import { toggleMcp } from "./global-sync/mcp"
 import { createServerSession, type ServerSession } from "./server-session"
 import { usePlatform } from "./platform"
+import type { LegacyCapabilities } from "@/utils/server-compat"
 
 type GlobalStore = {
   ready: boolean
@@ -132,10 +132,11 @@ export const loadMcpResourcesQuery = (
     placeholderData: {},
   })
 
-export const loadLspQuery = (scope: ServerScope, directory: string, sdk: OpencodeClient) =>
+export const loadLspQuery = (scope: ServerScope, directory: string, legacy: LegacyCapabilities, enabled = true) =>
   queryOptions({
     queryKey: [scope, directory, "lsp"] as const,
-    queryFn: () => sdk.lsp.status().then((r) => r.data ?? []),
+    queryFn: () => legacy.lsp.status(directory),
+    enabled,
   })
 
 export const loadActiveSessionsQuery = (
@@ -166,22 +167,20 @@ export function seedActiveSessionStatuses(
 
 function makeQueryOptionsApi(
   scope: ServerScope,
-  serverSDK: () => OpencodeClient,
   serverAPI: ServerApi,
-  sdkFor: (dir: PathKey) => OpencodeClient,
-  protocol: Promise<"v1" | "v2">,
+  protocolKind: Accessor<"v1" | "v2" | undefined>,
+  legacy: LegacyCapabilities,
 ) {
   return {
-    globalConfig: () => loadGlobalConfigQuery(scope, serverSDK()),
+    globalConfig: () => loadGlobalConfigQuery(scope, legacy, protocolKind() === "v1"),
     projects: () => loadProjectsQuery(scope, serverAPI.project),
     providers: (directory: PathKey | null) => loadProvidersQuery(scope, directory, serverAPI),
-    path: (directory: PathKey | null) =>
-      loadPathQuery(scope, directory, serverAPI.location, directory ? sdkFor(directory) : serverSDK(), protocol),
+    path: (directory: PathKey | null) => loadPathQuery(scope, directory, serverAPI.location),
     agents: (directory: PathKey) => loadAgentsQuery(scope, directory, serverAPI.agent),
     references: (directory: PathKey) => loadReferencesQuery(scope, directory, serverAPI.reference),
     mcp: (directory: PathKey) => loadMcpQuery(scope, directory, serverAPI.mcp),
     mcpResources: (directory: PathKey) => loadMcpResourcesQuery(scope, directory, serverAPI.mcp),
-    lsp: (directory: PathKey) => loadLspQuery(scope, directory, sdkFor(directory)),
+    lsp: (directory: PathKey) => loadLspQuery(scope, directory, legacy, protocolKind() === "v1"),
     sessions: (directory: PathKey) => ({ queryKey: [scope, directory, "loadSessions"] as const }),
   }
 }
@@ -193,30 +192,24 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   const owner = getOwner()
   if (!owner) throw new Error("ServerSync must be created within owner")
 
-  const sdkCache = new Map<string, OpencodeClient>()
   const booting = new Map<string, Promise<void>>()
   const sessionLoads = new Map<string, Promise<void>>()
   const sessionMeta = new Map<string, { limit: number }>()
 
-  const sdkFor = (directory: string) => {
-    const key = directoryKey(directory)
-    const cached = sdkCache.get(key)
-    if (cached) return cached
-    const sdk = serverSDK.createClient({
-      directory,
-      throwOnError: true,
-    })
-    sdkCache.set(key, sdk)
-    return sdk
-  }
-
-  const session = createServerSession(serverSDK.client, serverSDK.currentApi.session, serverSDK.currentApi.message)
+  const session = createServerSession(
+    { session: serverSDK.legacy.session },
+    serverSDK.currentApi.session,
+    serverSDK.currentApi.message,
+    {
+      protocol: serverSDK.protocol,
+      legacy: serverSDK.legacy,
+    },
+  )
   const queryOptionsApi = makeQueryOptionsApi(
     serverSDK.scope,
-    () => serverSDK.client,
     serverSDK.currentApi,
-    sdkFor,
-    serverSDK.protocol,
+    serverSDK.protocolKind,
+    serverSDK.legacy,
   )
 
   const [configQuery, providerQuery, pathQuery] = useQueries(() => ({
@@ -293,7 +286,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     queryKey: [serverSDK.scope, "bootstrap"],
     queryFn: async () => {
       await bootstrapGlobal({
-        serverSDK: serverSDK.client,
+        legacy: serverSDK.legacy,
         serverAPI: serverSDK.currentApi,
         protocol: serverSDK.protocol,
         scope: serverSDK.scope,
@@ -349,7 +342,6 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       const key = directoryKey(directory)
       queue.clear(key)
       sessionMeta.delete(key)
-      sdkCache.delete(key)
       clearProviderRev(serverSDK.scope, key)
     },
     translate: language.t,
@@ -446,7 +438,6 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       const child = children.ensureChild(directory)
       const cache = children.vcsCache.get(key)
       if (!cache) return
-      const sdk = sdkFor(directory)
       await bootstrapDirectory({
         directory,
         scope: serverSDK.scope,
@@ -457,7 +448,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
           project: globalStore.project,
           provider: globalStore.provider,
         },
-        sdk,
+        legacy: serverSDK.legacy,
         api: serverSDK.currentApi,
         store: child[0],
         setStore: child[1],
@@ -577,6 +568,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       permission: session.data.permission,
       vcsCache: children.vcsCache.get(key),
       loadLsp: () => {
+        if (serverSDK.protocolKind() !== "v1") return
         if (!children.active(key)) return
         void queryClient.fetchQuery(queryOptionsApi.lsp(key))
       },
@@ -625,7 +617,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   }
 
   const updateConfigMutation = useMutation(() => ({
-    mutationFn: (config: Config) => serverSDK.client.global.config.update({ config }),
+    mutationFn: (config: Config) => serverSDK.legacy.config.update(config),
     onSuccess: () => {
       bootstrap.refetch()
       // Invalidate all provider queries so newly configured custom providers

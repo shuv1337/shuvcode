@@ -119,9 +119,7 @@ export const SettingsProvidersV2: Component<{
 
   const disconnect = async (providerID: string, name: string) => {
     if (isConfigCustom(providerID)) {
-      await serverSdk()
-        .client.auth.remove({ providerID })
-        .catch(() => undefined)
+      await serverSdk().legacy.auth.remove({ providerID }).catch(() => undefined)
       await disableProvider(providerID, name)
       return
     }

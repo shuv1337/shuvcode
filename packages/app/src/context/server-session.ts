@@ -10,7 +10,7 @@ import type {
   SessionStatus,
   Todo,
 } from "@/types"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
+import type { LegacyCapabilities } from "@/utils/server-compat"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import { batch } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -183,10 +183,14 @@ function reconcileFetched<T extends { id: string }>(
   return [...result.values()].sort((a, b) => cmp(a.id, b.id))
 }
 
-type ServerSessionOptions = { retry?: typeof retry; protocol?: Promise<"v1" | "v2"> }
+type ServerSessionOptions = {
+  retry?: typeof retry
+  protocol?: Promise<"v1" | "v2">
+  legacy?: LegacyCapabilities
+}
 
 export function createServerSession(
-  client: OpencodeClient,
+  client: { session: Pick<LegacyCapabilities["session"], "get" | "messages" | "message"> },
   sessionApiOrOptions?: SessionApi | ServerSessionOptions,
   messageApi?: MessageApi,
   currentOptions?: ServerSessionOptions,
@@ -1389,14 +1393,16 @@ export function createServerSession(
       touch(sessionID)
       if (data.todo[sessionID] !== undefined && !request?.force) return
       if ((await options?.protocol) === "v2") {
+        // TODO: Restore todos when the V2 API exposes a session todo snapshot.
         setData("todo", sessionID, [])
         return
       }
       return runInflight(inflightTodo, sessionID, () => {
         const active = generation(sessionID)
-        return (options?.retry ?? retry)(() => client.session.todo({ sessionID })).then((result) => {
+        if (!options?.legacy) return Promise.resolve()
+        return (options.retry ?? retry)(() => options.legacy!.session.todo(sessionID)).then((result) => {
           if (generations.get(sessionID) !== active) return
-          setData("todo", sessionID, reconcile(result.data ?? [], { key: "id" }))
+          setData("todo", sessionID, reconcile(result, { key: "id" }))
         })
       })
     },

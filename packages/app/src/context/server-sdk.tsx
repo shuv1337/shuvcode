@@ -12,7 +12,12 @@ import { createRefCountMap } from "@/utils/refcount"
 import { useGlobal } from "./global"
 import { ServerScope } from "@/utils/server-scope"
 import { detectServerProtocol, type ServerProtocol } from "@/utils/server-protocol"
-import { createCompatibleApi, type CompatibleApi } from "@/utils/server-compat"
+import {
+  createCompatibleApi,
+  createLegacyCapabilities,
+  type CompatibleApi,
+  type LegacyCapabilities,
+} from "@/utils/server-compat"
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
 
 const isAbortError = (error: unknown) =>
@@ -166,6 +171,7 @@ type ServerSDKBase = {
   url: string
   client: ReturnType<typeof createSdkForServer>
   api: CompatibleApi
+  legacy: LegacyCapabilities
   currentApi: ServerApi
   event: {
     on: ServerEventEmitter["on"]
@@ -329,6 +335,7 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
       directory,
     })
   const api = createCompatibleApi({ protocol, current: currentApi, legacy })
+  const capabilities = createLegacyCapabilities({ protocol, current: currentApi, legacy })
 
   return {
     server,
@@ -338,6 +345,7 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     url: server.http.url,
     client: sdk,
     api,
+    legacy: capabilities,
     currentApi,
     event: {
       on: emitter.on.bind(emitter),
@@ -365,6 +373,7 @@ export type DirectorySDK = {
   client: OpencodeClient
   currentApi: ServerApi
   api: CompatibleApi
+  legacy: LegacyCapabilities
   event: ReturnType<typeof createGlobalEmitter<SDKEventMap>>
   readonly url: string
   createClient: ServerSDKBase["createClient"]
@@ -423,6 +432,12 @@ function createDirSdkContext(directory: string, serverSDK: ServerSDKBase): Direc
     client,
     currentApi: serverSDK.currentApi,
     api: createCompatibleApi({
+      protocol: serverSDK.protocol,
+      current: serverSDK.currentApi,
+      legacy: (next) => serverSDK.createClient({ directory: next ?? directory, throwOnError: true }),
+      directory,
+    }),
+    legacy: createLegacyCapabilities({
       protocol: serverSDK.protocol,
       current: serverSDK.currentApi,
       legacy: (next) => serverSDK.createClient({ directory: next ?? directory, throwOnError: true }),

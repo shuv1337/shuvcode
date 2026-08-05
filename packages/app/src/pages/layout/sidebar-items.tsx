@@ -87,6 +87,7 @@ export type SessionItemProps = {
   clearHoverProjectSoon: () => void
   prefetchSession: (session: Session, priority?: "high" | "low") => void
   archiveSession: (session: Session) => Promise<void>
+  canArchive: Accessor<boolean>
 }
 
 const SessionRow = (props: {
@@ -241,7 +242,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
             </Show>
           </div>
 
-          <Show when={!props.level}>
+          <Show when={!props.level && props.canArchive()}>
             <div
               class="shrink-0 overflow-hidden transition-[width,opacity]"
               classList={{

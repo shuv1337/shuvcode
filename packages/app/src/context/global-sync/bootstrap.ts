@@ -8,7 +8,7 @@ import type {
   ReferenceInfo,
   Session,
 } from "@/types"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
+import type { LegacyCapabilities } from "@/utils/server-compat"
 import type {
   AgentListInput,
   AgentListOutput,
@@ -107,10 +107,11 @@ function showErrors(input: {
   })
 }
 
-export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient) =>
+export const loadGlobalConfigQuery = (scope: ServerScope, legacy: LegacyCapabilities, enabled = true) =>
   queryOptions({
     queryKey: [scope, "config"],
-    queryFn: () => retry(() => sdk.global.config.get().then((x) => x.data!)),
+    queryFn: () => retry(() => legacy.config.global()),
+    enabled,
   })
 
 type ProjectApi = {
@@ -141,7 +142,7 @@ export const loadProjectsQuery = (scope: ServerScope, api: ProjectApi) =>
   })
 
 export async function bootstrapGlobal(input: {
-  serverSDK: OpencodeClient
+  legacy: LegacyCapabilities
   serverAPI: CatalogApi & { readonly location: LocationApi; readonly project: ProjectApi }
   protocol?: Promise<ServerProtocol>
   scope: ServerScope
@@ -151,21 +152,22 @@ export async function bootstrapGlobal(input: {
   setGlobalStore: SetStoreFunction<GlobalStore>
   queryClient: QueryClient
 }) {
+  const protocol = await input.protocol
   const slow = [
-    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.serverSDK)),
+    protocol === "v1" && (() => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.legacy))),
     () =>
       input.queryClient.fetchQuery(
         loadProvidersQuery(input.scope, null, input.serverAPI),
       ),
     () =>
       input.queryClient.fetchQuery(
-        loadPathQuery(input.scope, null, input.serverAPI.location, input.serverSDK, input.protocol),
+        loadPathQuery(input.scope, null, input.serverAPI.location),
       ),
     () =>
       input.queryClient
         .fetchQuery(loadProjectsQuery(input.scope, input.serverAPI.project))
         .then((data) => input.setGlobalStore("project", data)),
-  ]
+  ].filter(Boolean) as Array<() => Promise<unknown>>
   await runAll(slow)
   // showErrors({
   //   errors: errors(),
@@ -273,22 +275,17 @@ export const loadPathQuery = (
   scope: ServerScope,
   directory: string | null,
   api: LocationApi,
-  sdk: OpencodeClient,
-  protocol?: Promise<ServerProtocol>,
 ) =>
   queryOptions<Path>({
     queryKey: [scope, directory, "path"],
-    queryFn: async () => {
-      if ((await protocol) === "v1")
-        return retry(() => sdk.path.get({ directory: directory ?? undefined }).then((result) => result.data!))
-      return retry(() => api.get(directory ? { location: { directory } } : undefined)).then((location) => ({
+    queryFn: () =>
+      retry(() => api.get(directory ? { location: { directory } } : undefined)).then((location) => ({
         state: "",
         config: "",
         worktree: location.project.directory,
         directory: location.directory,
         home: "",
-      }))
-    },
+      })),
   })
 
 export const loadReferencesQuery = (
@@ -307,7 +304,7 @@ export async function bootstrapDirectory(input: {
   directory: string
   scope: ServerScope
   mcp: boolean
-  sdk: OpencodeClient
+  legacy: LegacyCapabilities
   api: CatalogApi & {
     readonly agent: AgentListApi
     readonly command: CommandListApi
@@ -355,35 +352,13 @@ export async function bootstrapDirectory(input: {
         input.queryClient
           .ensureQueryData(loadAgentsQuery(input.scope, input.directory, input.api.agent))
           .then((data) => input.setStore("agent", data)),
-      () =>
-        retry(() => input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))),
-      () =>
-        retry(() =>
-          (async () => {
-            if ((await input.protocol) !== "v1") return
-            const x = await input.sdk.session.status()
-            if (!input.session) {
-              input.setStore("session_status", x.data!)
-              return
-            }
-            const statuses = x.data ?? {}
-            input.session.set(
-              "session_status",
-              produce((draft) => {
-                for (const sessionID of Object.keys(draft)) {
-                  if (statuses[sessionID]) continue
-                  if (input.session?.get(sessionID)?.directory === input.directory) delete draft[sessionID]
-                }
-              }),
-            )
-            for (const [sessionID, status] of Object.entries(statuses)) {
-              input.session.set("session_status", sessionID, reconcile(status))
-            }
-            await Promise.all(
-              Object.keys(statuses).map((sessionID) => input.session!.resolve(sessionID).catch(() => undefined)),
-            )
-          })(),
-        ),
+      (await input.protocol) === "v1" &&
+        (() =>
+          retry(() =>
+            input.legacy.config
+              .directory(input.directory)
+              .then((config) => input.setStore("config", reconcile(config, { merge: false }))),
+          )),
       !seededProject &&
         (() =>
           retry(() => input.api.project.current({ location: { directory: input.directory } })).then((project) =>
@@ -393,21 +368,12 @@ export async function bootstrapDirectory(input: {
         (() =>
           input.queryClient
             .ensureQueryData(
-              loadPathQuery(input.scope, input.directory, input.api.location, input.sdk, input.protocol),
+              loadPathQuery(input.scope, input.directory, input.api.location),
             )
             .then((data) => {
               const next = projectID(data.directory ?? input.directory, input.global.project)
               if (next) input.setStore("project", next)
             })),
-      () =>
-        retry(async () => {
-          if ((await input.protocol) !== "v1") return
-          return input.sdk.vcs.get().then((result) => {
-            const next = { branch: result.data?.branch, default_branch: result.data?.default_branch }
-            input.setStore("vcs", next)
-            if (next) input.vcsCache.setStore("value", next)
-          })
-        }),
       input.mcp &&
         (() =>
           loadCommands(input.directory, input.api.command).then((commands) =>
@@ -419,12 +385,10 @@ export async function bootstrapDirectory(input: {
         ),
       () =>
         retry(() =>
-          (async () => {
-            if ((await input.protocol) === "v1") return (await input.sdk.permission.list()).data ?? []
-            return input.api.permission.request
-              .list({ location: { directory: input.directory } })
-              .then((result) => result.data.map(normalizePermissionRequest))
-          })().then((permissions) => {
+          input.api.permission.request
+            .list({ location: { directory: input.directory } })
+            .then((result) => result.data.map(normalizePermissionRequest))
+            .then((permissions) => {
             const ids = permissions.map((permission) => permission.sessionID)
             const grouped = groupBySession(
               permissions.filter((permission) => !!permission.id && !!permission.sessionID),
@@ -455,12 +419,10 @@ export async function bootstrapDirectory(input: {
         ),
       () =>
         retry(() =>
-          (async () => {
-            if ((await input.protocol) === "v1") return (await input.sdk.question.list()).data ?? []
-            return input.api.question.request
-              .list({ location: { directory: input.directory } })
-              .then((result) => result.data)
-          })().then((questions) => {
+          input.api.question.request
+            .list({ location: { directory: input.directory } })
+            .then((result) => result.data)
+            .then((questions) => {
             const ids = questions.map((question) => question.sessionID)
             const grouped = groupBySession(
               questions.filter((question) => !!question.id && !!question.sessionID) as QuestionRequest[],

@@ -62,11 +62,8 @@ export function DialogSelectDirectory(props: DialogSelectDirectoryProps) {
     () => (missingBase() ? true : undefined),
     async (): Promise<Path | undefined> => {
       if ((await sdk.protocol) === "v1")
-        return sdk.client.path
-          .get()
-          .then((result) => result.data)
-          .catch(() => undefined)
-      return sdk.currentApi.location
+        return sdk.legacy.path.get().catch(() => undefined)
+      return sdk.api.location
         .get()
         .then((location) => ({
           state: "",

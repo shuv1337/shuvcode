@@ -872,17 +872,12 @@ export default function LegacyLayout(props: ParentProps) {
   }
 
   async function archiveSession(session: Session) {
-    if ((await serverSDK().protocol) !== "v1") return
     const [store, setStore] = serverSync().child(session.directory)
     const sessions = store.session ?? []
     const index = sessions.findIndex((s) => s.id === session.id)
     const nextSession = sessions[index + 1] ?? sessions[index - 1]
 
-    await serverSDK().client.session.update({
-      sessionID: session.id,
-      directory: session.directory,
-      time: { archived: Date.now() },
-    })
+    await serverSDK().legacy.session.archive(session.id, session.directory)
     setStore(
       produce((draft) => {
         const match = Binary.search(draft.session, session.id, (s) => s.id)
@@ -980,6 +975,7 @@ export default function LegacyLayout(props: ParentProps) {
         title: language.t("command.session.archive"),
         category: language.t("command.category.session"),
         keybind: "mod+shift+backspace",
+        hidden: serverSDK().protocolKind() !== "v1",
         disabled: !params.dir || !params.id,
         onSelect: () => {
           const session = currentSessions().find((s) => s.id === params.id)
@@ -1304,13 +1300,10 @@ export default function LegacyLayout(props: ParentProps) {
     const name = next === getFilename(project.worktree) ? "" : next
 
     if (project.id && project.id !== "global") {
-      const sdk = serverSDK()
-      if ((await sdk.protocol) !== "v1") return
-      const result = await sdk.client.project
+      const result = await serverSDK().legacy.project
         .update({ projectID: project.id, directory: project.worktree, name })
         .then((response) => response.data)
       if (!result) return
-      // const result = await serverSDK().api.project.update({ projectID: project.id, name })
       serverSync().set("project", (items) =>
         items.map((item) => (item.id === result.id ? normalizeProjectInfo(result) : item)),
       )
@@ -1477,12 +1470,8 @@ export default function LegacyLayout(props: ParentProps) {
       platform,
       serverSDK().scope,
     )
-    await serverSDK()
-      .client.instance.dispose({ directory })
-      .catch(() => undefined)
-
     const result = await serverSDK()
-      .client.worktree.reset({ directory: root, worktreeResetInput: { directory } })
+      .legacy.workspace.reset(root, directory)
       .then((x) => x.data)
       .catch((err) => {
         showToast({
@@ -1504,11 +1493,7 @@ export default function LegacyLayout(props: ParentProps) {
           .filter((session) => session.time.archived === undefined)
           .map((session) =>
             serverSDK()
-              .client.session.update({
-                sessionID: session.id,
-                directory: session.directory,
-                time: { archived: Date.now() },
-              })
+              .legacy.session.archive(session.id, session.directory)
               .catch(() => undefined),
           ),
       )
@@ -1895,6 +1880,8 @@ export default function LegacyLayout(props: ParentProps) {
     clearHoverProjectSoon,
     prefetchSession,
     archiveSession,
+    canArchive: () => serverSDK().protocolKind() === "v1",
+    canResetWorkspace: () => serverSDK().protocolKind() === "v1",
     workspaceName,
     renameWorkspace,
     editorOpen,
@@ -1931,6 +1918,7 @@ export default function LegacyLayout(props: ParentProps) {
     openSidebar: () => layout.sidebar.open(),
     closeProject,
     showEditProjectDialog: (proj) => showEditProjectDialog(server.current!, proj),
+    canEditProject: () => serverSDK().protocolKind() === "v1",
     toggleProjectWorkspaces,
     workspacesEnabled: (project) => project.vcs === "git" && layout.sidebar.workspaces(project.worktree)(),
     workspaceIds,
@@ -1941,6 +1929,7 @@ export default function LegacyLayout(props: ParentProps) {
       clearHoverProjectSoon,
       prefetchSession,
       archiveSession,
+      canArchive: () => serverSDK().protocolKind() === "v1",
     },
   }
 
@@ -2031,16 +2020,19 @@ export default function LegacyLayout(props: ParentProps) {
               <div class="shrink-0 pl-1 py-1">
                 <div class="group/project flex items-start justify-between gap-2 py-2 pl-2 pr-0">
                   <div class="flex flex-col min-w-0">
-                    <InlineEditor
-                      id={`project:${projectId()}`}
-                      value={projectName}
-                      onSave={(next) => {
-                        void renameProject(project, next)
-                      }}
-                      class="text-14-medium text-text-strong truncate"
-                      displayClass="text-14-medium text-text-strong truncate"
-                      stopPropagation
-                    />
+                    <Show
+                      when={serverSDK().protocolKind() === "v1" || !project.id || project.id === "global"}
+                      fallback={<span class="text-14-medium text-text-strong truncate">{projectName()}</span>}
+                    >
+                      <InlineEditor
+                        id={`project:${projectId()}`}
+                        value={projectName}
+                        onSave={(next) => void renameProject(project, next)}
+                        class="text-14-medium text-text-strong truncate"
+                        displayClass="text-14-medium text-text-strong truncate"
+                        stopPropagation
+                      />
+                    </Show>
 
                     <Tooltip
                       placement="bottom"
@@ -2075,13 +2067,11 @@ export default function LegacyLayout(props: ParentProps) {
                     />
                     <DropdownMenu.Portal>
                       <DropdownMenu.Content class="mt-1">
-                        <DropdownMenu.Item
-                          onSelect={() => {
-                            showEditProjectDialog(server.current!, project)
-                          }}
-                        >
-                          <DropdownMenu.ItemLabel>{language.t("common.edit")}</DropdownMenu.ItemLabel>
-                        </DropdownMenu.Item>
+                        <Show when={serverSDK().protocolKind() === "v1"}>
+                          <DropdownMenu.Item onSelect={() => showEditProjectDialog(server.current!, project)}>
+                            <DropdownMenu.ItemLabel>{language.t("common.edit")}</DropdownMenu.ItemLabel>
+                          </DropdownMenu.Item>
+                        </Show>
                         <DropdownMenu.Item
                           data-action="project-workspaces-toggle"
                           data-project={slug()}
