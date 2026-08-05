@@ -361,16 +361,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                     >
                                       <Keymap.Provider>
                                         <ToastProvider>
-                                          <RouteProvider
-                                            initialRoute={
-                                              input.args.continue
-                                                ? {
-                                                    type: "session",
-                                                    sessionID: "dummy",
-                                                  }
-                                                : undefined
-                                            }
-                                          >
+                                          <RouteProvider>
                                             <ClientProvider api={api} url={input.server.endpoint.url} service={service}>
                                               <PermissionProvider>
                                                 <DataProvider directory={directory}>

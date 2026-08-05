@@ -67,6 +67,7 @@ export function Home() {
     if (!r) return
     if (!local.model.ready) return
     if (!args.prompt) return
+    if (args.continue || args.sessionID) return
     if (r.current.text !== args.prompt) return
     sent = true
     r.submit()

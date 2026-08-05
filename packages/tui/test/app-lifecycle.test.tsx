@@ -258,6 +258,66 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
   }
 })
 
+test("continue opens the latest session without requesting a placeholder session", async () => {
+  const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
+  const events = createEventStream()
+  const requested: string[] = []
+  const opened = Promise.withResolvers<void>()
+  const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
+  setup.renderer.setTerminalTitle = (title) => {
+    if (title === "SC | Latest session") opened.resolve()
+    setTitle(title)
+  }
+  const session = {
+    id: "ses_latest",
+    title: "Latest session",
+    projectID: "project",
+    location: { directory: process.cwd() },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 0, updated: 0 },
+  }
+  const calls = createFetch((url) => {
+    requested.push(`${url.pathname}${url.search}`)
+    if (url.pathname === "/api/session") return json({ data: [session], cursor: {} })
+    if (url.pathname === "/api/session/ses_latest") return json({ data: session })
+    if (url.pathname === "/api/session/ses_latest/message") return json({ data: [], cursor: {} })
+    if (url.pathname === "/api/session/ses_latest/inbox") return json({ data: [] })
+    if (url.pathname === "/api/session/ses_latest/permission") return json({ data: [] })
+  }, events)
+  const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
+
+  try {
+    const { run } = await import("../src/app")
+    const task = Effect.runPromise(
+      run({
+        app: { name: "test", version: "test", channel: "test" },
+        server: { endpoint: { url: server.url.toString() } },
+        config: { get: async () => ({ tabs: { enabled: false } }), update: async () => ({}) },
+        packages: { resolve: async () => undefined },
+        terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: () => {} }),
+        args: { continue: true },
+        log: () => {},
+      }).pipe(Effect.provide(AppNodeBuilder.build(Global.node)), Effect.provide(FileSystem.layerNoop({}))),
+    )
+
+    await Promise.race([
+      opened.promise,
+      Bun.sleep(2_000).then(() => {
+        throw new Error("latest session was not opened")
+      }),
+    ])
+    setup.renderer.destroy()
+    await task
+
+    expect(requested.some((url) => url.includes("dummy"))).toBe(false)
+    expect(requested.some((url) => url.startsWith("/api/session?"))).toBe(true)
+  } finally {
+    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
+    await server.stop()
+  }
+})
+
 test("session lifecycle updates the terminal title and prints the epilogue after cleanup", async () => {
   const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
   let initialTitle!: () => void
