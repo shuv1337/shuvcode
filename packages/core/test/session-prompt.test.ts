@@ -68,6 +68,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
+      [Bus.node, Bus.configured({ persist: true })],
       [SessionExecution.node, execution],
       [LocationServiceMap.node, locations],
     ],

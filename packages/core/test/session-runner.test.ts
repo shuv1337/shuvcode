@@ -423,6 +423,7 @@ const it = testEffect(
       Session.node,
     ]),
     [
+      [Bus.node, Bus.configured({ persist: true })],
       [LayerNodePlatform.llmClient, client],
       [Permission.node, permission],
       [Catalog.node, promptCatalog],

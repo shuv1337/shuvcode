@@ -83,6 +83,7 @@ function makeRoutes<AuthError, AuthServices>(
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const replacements: LayerNode.Replacements = [
     [Database.node, Database.configured(options.database)],
+    [Bus.node, Bus.configured({ persist: options.events?.persist })],
     [App.node, App.configured(options.app)],
     [ModelsDev.node, ModelsDev.configured(options.models)],
     [Watcher.node, Watcher.configured({ enabled: options.fs?.filewatcher })],

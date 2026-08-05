@@ -31,7 +31,11 @@ import {
 import { testEffect } from "./lib/effect"
 import { Snapshot } from "@opencode-ai/core/snapshot"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node])))
+const it = testEffect(
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
+    [Bus.node, Bus.configured({ persist: true })],
+  ]),
+)
 const sessionsLayer = AppNodeBuilder.build(Session.node, [[SessionExecution.node, SessionExecution.noopLayer]])
 const sessionID = Session.ID.make("ses_projector_test")
 const created = DateTime.makeUnsafe(0)
