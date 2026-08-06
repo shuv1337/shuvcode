@@ -179,7 +179,7 @@ export const Info = Schema.Struct({
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
-export type Resolved = Omit<Info, "attention" | "keybinds" | "leader" | "mouse"> & {
+export type Resolved = Omit<Info, "attention" | "keybinds" | "leader" | "mouse" | "tabs"> & {
   attention: {
     enabled: boolean
     notifications: boolean
@@ -191,6 +191,11 @@ export type Resolved = Omit<Info, "attention" | "keybinds" | "leader" | "mouse">
   keybinds: TuiKeybind.BindingLookupView
   leader: { timeout: number }
   mouse: boolean
+  tabs: {
+    enabled: boolean
+    scope: "global" | "cwd"
+    vertical?: boolean
+  }
 }
 
 export function resolve(input: Info, options: { terminalSuspend: boolean }): Resolved {
@@ -221,6 +226,11 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
     }),
     leader: { timeout: input.leader?.timeout ?? 2000 },
     mouse: input.mouse ?? true,
+    tabs: {
+      ...input.tabs,
+      enabled: input.tabs?.enabled ?? true,
+      scope: input.tabs?.scope ?? "cwd",
+    },
   }
 }
 

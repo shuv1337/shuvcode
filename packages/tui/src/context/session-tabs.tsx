@@ -49,7 +49,7 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
     const event = useEvent()
     const config = useConfig().data
     const paths = useTuiPaths()
-    const enabled = () => config.tabs?.enabled ?? false
+    const enabled = () => config.tabs.enabled
     // Keyed reconcile keeps tab object identity across reorders, so strip rows move instead of
     // mutating in place, which per-row animations and drag state depend on.
     const [store, updateStore] = useStorage().store<PersistedState>("tabs", {
@@ -66,12 +66,12 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
     let closedTabs: ClosedSessionTab[] = []
 
     function state() {
-      if (config.tabs?.scope === "cwd") return store.cwd[paths.cwd] ?? fallback
+      if (config.tabs.scope === "cwd") return store.cwd[paths.cwd] ?? fallback
       return store.global
     }
 
     function update(mutation: (draft: TabsState) => void) {
-      const scope = config.tabs?.scope ?? "global"
+      const scope = config.tabs.scope
       void updateStore((draft) => mutation(scope === "cwd" ? (draft.cwd[paths.cwd] ??= empty()) : draft.global)).catch(
         // Failed writes lose only tab layout, but silence would hide tabs resetting every launch.
         (error) => console.error("Failed to persist session tabs", error),

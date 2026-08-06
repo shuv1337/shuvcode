@@ -60,8 +60,8 @@ async function renderSessionTabs(
     await Bun.write(
       file,
       JSON.stringify({
-        global: { tabs: options.persisted.map((sessionID) => ({ sessionID })), unread: {} },
-        cwd: {},
+        global: { tabs: [], unread: {} },
+        cwd: { [directory]: { tabs: options.persisted.map((sessionID) => ({ sessionID })), unread: {} } },
       }),
     )
   }
@@ -153,15 +153,15 @@ test("loads persisted tab metadata concurrently on connect", async () => {
   }
 })
 
-test("stores session tabs globally by default", async () => {
+test("stores session tabs for the current working directory by default", async () => {
   const setup = await renderSessionTabs("first")
 
   try {
     const file = path.join(setup.state, "test", "tui", "tabs.json")
     await wait(() => Bun.file(file).size > 0)
     expect(await Bun.file(file).json()).toEqual({
-      global: { tabs: [{ sessionID: "first" }], unread: {} },
-      cwd: {},
+      global: { tabs: [], unread: {} },
+      cwd: { [directory]: { tabs: [{ sessionID: "first" }], unread: {} } },
     })
   } finally {
     setup.destroy()
@@ -180,7 +180,7 @@ test("concurrent TUIs do not alternate shared tab titles from divergent session 
     await titled.data.session.sync("shared")
     await wait(async () => {
       if (!(await Bun.file(file).exists())) return false
-      return (await Bun.file(file).json()).global.tabs[0]?.title === "Generated title"
+      return (await Bun.file(file).json()).cwd[directory]?.tabs[0]?.title === "Generated title"
     })
     const observed = ["Generated title"]
     const pending = new Set<Promise<void>>()
@@ -189,7 +189,7 @@ test("concurrent TUIs do not alternate shared tab titles from divergent session 
       const read = Bun.file(file)
         .json()
         .then((value) => {
-          const title = value.global.tabs[0]?.title
+          const title = value.cwd[directory]?.tabs[0]?.title
           if (title && observed.at(-1) !== title) observed.push(title)
         })
         .catch(() => undefined)
