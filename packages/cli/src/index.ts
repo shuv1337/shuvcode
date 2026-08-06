@@ -35,6 +35,7 @@ const Handlers = Runtime.handlers(Commands, {
   plugin: {
     list: () => import("./commands/handlers/plugin/list"),
   },
+  models: () => import("./commands/handlers/models"),
   mini: () => import("./commands/handlers/mini"),
   run: () => import("./commands/handlers/run"),
   pair: () => import("./commands/handlers/pair"),

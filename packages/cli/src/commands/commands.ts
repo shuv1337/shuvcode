@@ -133,6 +133,10 @@ export const Commands = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCO
       description: "Manage plugins",
       commands: [Spec.make("list", { description: "List active plugins" })],
     }),
+    Spec.make("models", {
+      description: "List all available models",
+      params: ServerParams,
+    }),
     Spec.make("mini", {
       description: "Start the minimal interactive interface",
       params: {
