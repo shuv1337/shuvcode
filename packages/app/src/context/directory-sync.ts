@@ -26,7 +26,6 @@ export const createDirSyncContext = (
   serverSync: ReturnType<typeof createServerSyncContextInner>,
   serverSDK: ReturnType<typeof createServerSdkContext>,
 ) => {
-  const client = serverSDK.createClient({ directory, throwOnError: true })
   const current = createMemo(() => serverSync.child(directory, { mcp: true }))
   const absolute = (path: string) => (current()[0].path.directory + "/" + path).replace("//", "/")
   const data = new Proxy({} as State, {
@@ -124,7 +123,7 @@ export const createDirSyncContext = (
       fetch: async (count = 10) => {
         const [store, setStore] = current()
         setStore("limit", (value) => value + count)
-        const response = await serverSDK.currentApi.session.list({ directory, limit: store.limit, order: "desc" })
+        const response = await serverSDK.api.session.list({ directory, limit: store.limit, order: "desc" })
         const sessions = response.data
           .map(normalizeSessionInfo)
           .sort((a, b) => cmp(a.id, b.id))
@@ -134,14 +133,8 @@ export const createDirSyncContext = (
       },
       more: createMemo(() => current()[0].session.length >= current()[0].limit),
       archive: async (sessionID: string) => {
-        await serverSDK.legacy.session.archive(sessionID, directory)
-        current()[1](
-          "session",
-          produce((draft) => {
-            const match = Binary.search(draft, sessionID, (session) => session.id)
-            if (match.found) draft.splice(match.index, 1)
-          }),
-        )
+        // TODO: Restore archiving when the V2 client exposes a session archive API.
+        void sessionID
       },
     },
     mcp: {

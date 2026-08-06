@@ -6,10 +6,10 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { displayLabel } from "@opencode-ai/util/session-title-fallback"
 import { useLanguage } from "@/context/language"
 import { ServerConnection } from "@/context/server"
 import { SessionTabAvatarView } from "@/pages/layout/session-tab-avatar"
+import { sessionTitle } from "@/utils/session-title"
 import { shouldOpenSessionInBackground } from "../home-session-open"
 import {
   HomeSessionStatusController,
@@ -43,7 +43,6 @@ export type HomeSessionsViewProps = {
   showProjectName: Accessor<boolean>
   server: Accessor<ServerConnection.Key>
   canCreateSession: Accessor<boolean>
-  canArchiveSession: Accessor<boolean>
   searchValue: Accessor<string>
   searchPlaceholder: Accessor<string>
   searchOpen: Accessor<boolean>
@@ -345,7 +344,7 @@ function HomeSessionSearchResultRow(
     selected: boolean
   },
 ) {
-  const title = createMemo(() => displayLabel(props.record.session))
+  const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
   const showProjectName = () => props.showProjectName() && props.record.projectName
   const key = () => homeSessionSearchKey(props.record)
 
@@ -416,7 +415,7 @@ function HomeSessionGroupHeader(props: {
 }
 
 function HomeSessionRow(props: HomeSessionsViewProps & { record: HomeSessionRecord }) {
-  const title = createMemo(() => displayLabel(props.record.session))
+  const title = createMemo(() => sessionTitle(props.record.session.title) || props.record.session.id)
   const showProjectName = () => props.showProjectName() && props.record.projectName
 
   return (
@@ -461,8 +460,7 @@ function HomeSessionRow(props: HomeSessionsViewProps & { record: HomeSessionReco
             group-hover/session:opacity-100 focus-within:opacity-100
           `}
         >
-          <Show when={props.canArchiveSession()}>
-            <TooltipV2 class="flex shrink-0 items-center" placement="bottom" value={props.language.t("common.archive")}>
+          <TooltipV2 class="flex shrink-0 items-center" placement="bottom" value={props.language.t("common.archive")}>
             <IconButtonV2
               data-action="home-session-archive"
               variant="ghost-muted"
@@ -475,8 +473,7 @@ function HomeSessionRow(props: HomeSessionsViewProps & { record: HomeSessionReco
                 void props.onArchiveSession(props.record.session)
               }}
             />
-            </TooltipV2>
-          </Show>
+          </TooltipV2>
         </div>
       </Show>
     </div>

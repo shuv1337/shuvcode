@@ -8,7 +8,6 @@ import type {
   ReferenceInfo,
   Session,
 } from "@/types"
-import type { LegacyCapabilities } from "@/utils/server-compat"
 import type {
   AgentListInput,
   AgentListOutput,
@@ -45,7 +44,6 @@ import { loadMcpQuery, loadMcpResourcesQuery } from "../server-sync"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { ScopedKey, type ServerScope } from "@/utils/server-scope"
 import { normalizeSessionInfo } from "@/utils/session"
-import type { ServerProtocol } from "@/utils/server-protocol"
 import type { ServerApi } from "@/utils/server"
 
 type GlobalStore = {
@@ -107,11 +105,11 @@ function showErrors(input: {
   })
 }
 
-export const loadGlobalConfigQuery = (scope: ServerScope, legacy: LegacyCapabilities, enabled = true) =>
+export const loadGlobalConfigQuery = (scope: ServerScope) =>
   queryOptions({
     queryKey: [scope, "config"],
-    queryFn: () => retry(() => legacy.config.global()),
-    enabled,
+    // TODO: Restore config loading when the V2 client exposes a config API.
+    queryFn: async (): Promise<Config> => ({}),
   })
 
 type ProjectApi = {
@@ -142,9 +140,7 @@ export const loadProjectsQuery = (scope: ServerScope, api: ProjectApi) =>
   })
 
 export async function bootstrapGlobal(input: {
-  legacy: LegacyCapabilities
   serverAPI: CatalogApi & { readonly location: LocationApi; readonly project: ProjectApi }
-  protocol?: Promise<ServerProtocol>
   scope: ServerScope
   requestFailedTitle: string
   translate: (key: string, vars?: Record<string, string | number>) => string
@@ -152,22 +148,18 @@ export async function bootstrapGlobal(input: {
   setGlobalStore: SetStoreFunction<GlobalStore>
   queryClient: QueryClient
 }) {
-  const protocol = await input.protocol
   const slow = [
-    protocol === "v1" && (() => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.legacy))),
+    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope)),
     () =>
       input.queryClient.fetchQuery(
         loadProvidersQuery(input.scope, null, input.serverAPI),
       ),
-    () =>
-      input.queryClient.fetchQuery(
-        loadPathQuery(input.scope, null, input.serverAPI.location),
-      ),
+    () => input.queryClient.fetchQuery(loadPathQuery(input.scope, null, input.serverAPI.location)),
     () =>
       input.queryClient
         .fetchQuery(loadProjectsQuery(input.scope, input.serverAPI.project))
         .then((data) => input.setGlobalStore("project", data)),
-  ].filter(Boolean) as Array<() => Promise<unknown>>
+  ]
   await runAll(slow)
   // showErrors({
   //   errors: errors(),
@@ -279,7 +271,7 @@ export const loadPathQuery = (
   queryOptions<Path>({
     queryKey: [scope, directory, "path"],
     queryFn: () =>
-      retry(() => api.get(directory ? { location: { directory } } : undefined)).then((location) => ({
+      api.get(directory ? { location: { directory } } : undefined).then((location) => ({
         state: "",
         config: "",
         worktree: location.project.directory,
@@ -304,7 +296,6 @@ export async function bootstrapDirectory(input: {
   directory: string
   scope: ServerScope
   mcp: boolean
-  legacy: LegacyCapabilities
   api: CatalogApi & {
     readonly agent: AgentListApi
     readonly command: CommandListApi
@@ -330,7 +321,6 @@ export async function bootstrapDirectory(input: {
   }
   queryClient: QueryClient
   session?: ServerSession
-  protocol?: Promise<ServerProtocol>
 }) {
   const loading = input.store.status !== "complete"
   const seededProject = projectID(input.directory, input.global.project)
@@ -352,13 +342,6 @@ export async function bootstrapDirectory(input: {
         input.queryClient
           .ensureQueryData(loadAgentsQuery(input.scope, input.directory, input.api.agent))
           .then((data) => input.setStore("agent", data)),
-      (await input.protocol) === "v1" &&
-        (() =>
-          retry(() =>
-            input.legacy.config
-              .directory(input.directory)
-              .then((config) => input.setStore("config", reconcile(config, { merge: false }))),
-          )),
       !seededProject &&
         (() =>
           retry(() => input.api.project.current({ location: { directory: input.directory } })).then((project) =>
@@ -367,9 +350,7 @@ export async function bootstrapDirectory(input: {
       !seededPath &&
         (() =>
           input.queryClient
-            .ensureQueryData(
-              loadPathQuery(input.scope, input.directory, input.api.location),
-            )
+            .ensureQueryData(loadPathQuery(input.scope, input.directory, input.api.location))
             .then((data) => {
               const next = projectID(data.directory ?? input.directory, input.global.project)
               if (next) input.setStore("project", next)

@@ -212,7 +212,6 @@ function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync }
   )
 
   function enableConfiguredDirectory(directory: string) {
-    if (input.sdk.protocolKind() !== "v1") return
     if (meta.disposed || !ready()) return
     const [childStore] = input.sync.child(directory)
     if (childStore.config.permission !== "allow") return
@@ -250,7 +249,6 @@ function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync }
         sessionID: request.sessionID,
         requestID: request.permissionID,
         reply: request.response,
-        location: request.directory ? { directory: request.directory } : undefined,
       })
       .catch(() => {
         responded.delete(request.permissionID)

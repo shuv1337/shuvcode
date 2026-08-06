@@ -42,8 +42,6 @@ export type WorkspaceSidebarContext = {
   clearHoverProjectSoon: () => void
   prefetchSession: (session: Session, priority?: "high" | "low") => void
   archiveSession: (session: Session) => Promise<void>
-  canArchive: Accessor<boolean>
-  canResetWorkspace: Accessor<boolean>
   workspaceName: (directory: string, projectId?: string, branch?: string) => string | undefined
   renameWorkspace: (directory: string, next: string, projectId?: string, branch?: string) => void
   editorOpen: (id: string) => boolean
@@ -153,7 +151,6 @@ const WorkspaceActions = (props: {
   workspaceValue: Accessor<string>
   openEditor: WorkspaceSidebarContext["openEditor"]
   showResetWorkspaceDialog: WorkspaceSidebarContext["showResetWorkspaceDialog"]
-  canResetWorkspace: WorkspaceSidebarContext["canResetWorkspace"]
   showDeleteWorkspaceDialog: WorkspaceSidebarContext["showDeleteWorkspaceDialog"]
   root: string
   clearHoverProjectSoon: WorkspaceSidebarContext["clearHoverProjectSoon"]
@@ -202,14 +199,13 @@ const WorkspaceActions = (props: {
           >
             <DropdownMenu.ItemLabel>{props.language.t("common.rename")}</DropdownMenu.ItemLabel>
           </DropdownMenu.Item>
-          <Show when={props.canResetWorkspace()}>
-            <DropdownMenu.Item
-              disabled={props.local() || props.busy()}
-              onSelect={() => props.showResetWorkspaceDialog(props.root, props.directory)}
-            >
-              <DropdownMenu.ItemLabel>{props.language.t("common.reset")}</DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-          </Show>
+          <DropdownMenu.Item
+            // TODO: Restore reset when V2 exposes project-copy reset and instance disposal.
+            // onSelect={() => props.showResetWorkspaceDialog(props.root, props.directory)}
+            disabled
+          >
+            <DropdownMenu.ItemLabel>{props.language.t("common.reset")}</DropdownMenu.ItemLabel>
+          </DropdownMenu.Item>
           <DropdownMenu.Item
             disabled={props.local() || props.busy()}
             onSelect={() => props.showDeleteWorkspaceDialog(props.root, props.directory)}
@@ -277,7 +273,6 @@ const WorkspaceSessionList = (props: {
           clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
           prefetchSession={props.ctx.prefetchSession}
           archiveSession={props.ctx.archiveSession}
-          canArchive={props.ctx.canArchive}
         />
       )}
     </For>
@@ -422,7 +417,6 @@ export const SortableWorkspace = (props: {
                 workspaceValue={workspaceValue}
                 openEditor={props.ctx.openEditor}
                 showResetWorkspaceDialog={props.ctx.showResetWorkspaceDialog}
-                canResetWorkspace={props.ctx.canResetWorkspace}
                 showDeleteWorkspaceDialog={props.ctx.showDeleteWorkspaceDialog}
                 root={props.project.worktree}
                 clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}

@@ -58,20 +58,7 @@ export function normalizeProviderList(
   defaultModel?: ModelDefaultOutput["data"],
 ): NormalizedProviderListResponse {
   if (!Array.isArray(providers)) {
-    return {
-      ...providers,
-      all: new Map(
-        providers.all.map((provider) => [
-          provider.id,
-          {
-            ...provider,
-            models: Object.fromEntries(
-              Object.entries(provider.models).filter(([, model]) => model.status !== "deprecated"),
-            ),
-          },
-        ]),
-      ),
-    }
+    return providers
   }
   const all = new Map<string, Provider>()
 
