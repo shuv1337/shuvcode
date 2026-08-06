@@ -23,6 +23,7 @@ import { SessionPending } from "@opencode-ai/core/session/pending"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionStore } from "@opencode-ai/core/session/store"
+import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { Workspace } from "@opencode-ai/core/workspace"
 import { testEffect } from "./lib/effect"
 import { tmpdir } from "./fixture/tmpdir"
@@ -37,7 +38,14 @@ const projects = Layer.succeed(
 )
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionProjector.node,
+      SessionStore.node,
+      Session.node,
+      SessionTransfer.node,
+    ]),
     [
       [Bus.node, Bus.configured({ persist: true })],
       [Project.node, projects],
@@ -737,6 +745,80 @@ describe("Session.create", () => {
             Effect.map((error) => error._tag),
           ),
       ).toBe("Session.NotFoundError")
+    }),
+  )
+})
+
+describe("SessionTransfer", () => {
+  it.effect("imports projected messages and reserves their aggregate sequence", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const transfer = yield* SessionTransfer.Service
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      const template = yield* session.create({ location, title: "Exported" })
+      const sessionID = Session.ID.create()
+      const sourceMessageID = SessionMessage.ID.create()
+      const errorMessageID = SessionMessage.ID.create()
+
+      const imported = yield* transfer.import({
+        data: {
+          info: { ...template, id: sessionID },
+          messages: [
+            {
+              id: sourceMessageID,
+              type: "user",
+              text: "Imported message",
+              time: { created: DateTime.makeUnsafe(100) },
+            },
+            {
+              id: errorMessageID,
+              type: "compaction",
+              status: "failed",
+              reason: "manual",
+              error: { type: "test_error", message: "Original error" },
+              time: { created: DateTime.makeUnsafe(101) },
+            },
+          ],
+        },
+        location,
+      })
+      const messages = yield* session.messages({ sessionID, order: "asc" })
+
+      expect(imported).toMatchObject({ id: sessionID, title: "Exported", location })
+      expect(messages).toMatchObject([
+        { id: sourceMessageID, type: "user", text: "Imported message" },
+        { id: errorMessageID, type: "compaction", error: { type: "test_error", message: "Original error" } },
+      ])
+      expect(yield* Bus.latestSequence(db, sessionID)).toBe(2)
+      expect((yield* transfer.export({ sessionID })).messages).toEqual(messages)
+      expect((yield* transfer.export({ sessionID, sanitize: true })).messages).toMatchObject([
+        { id: sourceMessageID, text: `[redacted:text:${sourceMessageID}]` },
+        { id: errorMessageID, error: { type: "test_error", message: "Original error" } },
+      ])
+
+      yield* session.prompt({ sessionID, text: "Continue", resume: false })
+      yield* SessionPending.promote(db, bus, sessionID, "steer")
+
+      expect((yield* session.messages({ sessionID, order: "asc" })).map((message) => message.type)).toEqual([
+        "user",
+        "compaction",
+        "user",
+      ])
+      expect(yield* Bus.latestSequence(db, sessionID)).toBe(4)
+    }),
+  )
+
+  it.effect("rejects an existing session ID without changing its transcript", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const transfer = yield* SessionTransfer.Service
+      const existing = yield* session.create({ location, title: "Existing" })
+      const exit = yield* Effect.exit(transfer.import({ data: { info: existing, messages: [] }, location }))
+
+      expect(exit._tag).toBe("Failure")
+      expect((yield* session.get(existing.id)).title).toBe("Existing")
+      expect(yield* session.messages({ sessionID: existing.id })).toEqual([])
     }),
   )
 })
