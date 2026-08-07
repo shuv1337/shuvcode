@@ -5,7 +5,6 @@ import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { Switch } from "@opencode-ai/ui/v2/switch-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
 import { usePlatform } from "@/context/platform"
@@ -27,7 +26,6 @@ import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
 import { Link } from "../link"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
-import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-transition"
 import "./settings-v2.css"
 
 let demoSoundState = {
@@ -87,7 +85,6 @@ export const SettingsGeneralV2: Component<{
   const language = useLanguage()
   const permission = usePermission()
   const platform = usePlatform()
-  const dialog = useDialog()
   const settings = useSettings()
   const serverSync = useServerSync()
   const mobile = createMediaQuery("(max-width: 767px)")
@@ -224,31 +221,6 @@ export const SettingsGeneralV2: Component<{
       playDemoSound(option.id)
     },
   })
-
-  const InterfaceSection = () => (
-    <LayoutTransitionToggle
-      title={language.t("settings.general.row.newInterface.title")}
-      badge={language.t("settings.general.row.newInterface.badge")}
-      description={language.t("settings.general.row.newInterface.description")}
-      checked={settings.general.newLayoutDesigns()}
-      onChange={(checked) => {
-        settings.general.setNewLayoutDesigns(checked)
-        if (checked) return
-        void import("@/components/dialog-settings").then((module) => {
-          void dialog.show(() => <module.DialogSettings />)
-        })
-      }}
-    />
-  )
-
-  const InterfaceNoticeSection = () => (
-    <LayoutRetirementNotice
-      title={language.t("settings.general.row.newInterfaceNotice.title")}
-      description={language.t("settings.general.row.newInterfaceNotice.description")}
-      dismiss={language.t("settings.general.row.newInterfaceNotice.dismiss")}
-      onDismiss={settings.general.dismissNewInterfaceNotice}
-    />
-  )
 
   const GeneralSection = () => (
     <div class="settings-v2-section">
@@ -689,14 +661,6 @@ export const SettingsGeneralV2: Component<{
       </div>
 
       <div class="settings-v2-tab-body">
-        <Show when={settings.general.layoutTransitionAvailable()}>
-          <InterfaceSection />
-        </Show>
-
-        <Show when={settings.general.newInterfaceNoticeVisible()}>
-          <InterfaceNoticeSection />
-        </Show>
-
         <GeneralSection />
 
         <AppearanceSection />
