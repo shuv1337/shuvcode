@@ -3,10 +3,12 @@ import { Agent } from "@opencode-ai/core/agent"
 import type { Permission } from "@opencode-ai/core/permission"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Image } from "@opencode-ai/core/image"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { Session } from "@opencode-ai/core/session"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Info } from "@opencode-ai/schema/tool"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { executeTool, toolDefinitions } from "./lib/tool"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Option, Schema, SchemaGetter, SchemaIssue, Scope } from "effect"
 import { testEffect } from "./lib/effect"
@@ -26,10 +28,14 @@ const imageStore = Layer.mock(Image.Service, {
           maxBytes: 5,
         }),
       )
-    return Effect.succeed({ ...content, content: "bm9ybWFsaXplZA==", mime: "image/jpeg" })
+    return Effect.succeed({
+      ...content,
+      content: Buffer.from(`${Buffer.from(content.content, "base64").toString()} normalized`).toString("base64"),
+      mime: "image/jpeg",
+    })
   },
 })
-const registryLayer = AppNodeBuilder.build(Tool.node, [[Image.node, imageStore]])
+const registryLayer = AppNodeBuilder.build(LayerNode.group([Tool.node, PluginHooks.node]), [[Image.node, imageStore]])
 const it = testEffect(registryLayer)
 const identity = {
   agent: Agent.ID.make("build"),
@@ -344,7 +350,7 @@ describe("Tool", () => {
     }),
   )
 
-  it.effect("normalizes image tool output at execution and drops unresizable images", () =>
+  it.effect("normalizes image tool output once and drops unresizable images", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
       yield* transform(service,
@@ -376,10 +382,43 @@ describe("Tool", () => {
 
       const execution = yield* executeTool(service, call("snapshot"))
       expect(execution.content).toEqual([
-        { type: "file", uri: "data:image/jpeg;base64,bm9ybWFsaXplZA==", mime: "image/jpeg", name: "frame.png" },
+        {
+          type: "file",
+          uri: "data:image/jpeg;base64,aW1hZ2Ugbm9ybWFsaXplZA==",
+          mime: "image/jpeg",
+          name: "frame.png",
+        },
         { type: "text", text: "snapshot" },
         { type: "text", text: "[1 image omitted: could not be decoded.]" },
         { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
+      ])
+    }),
+  )
+
+  it.effect("normalizes image content added by an after hook", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const hooks = yield* PluginHooks.Service
+      yield* transform(service, { hooked: constant("original") }, { codemode: false })
+      yield* hooks.register("tool", "execute.after", (event) =>
+        Effect.sync(() => {
+          if (event.status !== "completed") return
+          event.result = {
+            ...event.result,
+            content: [
+              { type: "file", uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "hook.png" },
+            ],
+          }
+        }),
+      )
+
+      expect((yield* executeTool(service, call("hooked"))).content).toEqual([
+        {
+          type: "file",
+          uri: "data:image/jpeg;base64,aW1hZ2Ugbm9ybWFsaXplZA==",
+          mime: "image/jpeg",
+          name: "hook.png",
+        },
       ])
     }),
   )
