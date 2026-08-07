@@ -29,12 +29,19 @@ export interface WriteResult {
 }
 
 export interface Interface {
+  /** Serialize a complete read/prepare/write mutation transaction by resolved path. */
+  readonly withLock: (
+    targets: ReadonlyArray<string>,
+  ) => <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
   readonly write: (input: WriteInput) => Effect.Effect<WriteResult, FSUtil.Error>
   /** Write text while retaining an existing UTF-8 BOM and emitting at most one BOM. */
   readonly writeTextPreservingBom: (input: TextWriteInput) => Effect.Effect<WriteResult, FSUtil.Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/FileMutation") {}
+
+/** Share transaction locks across Location graphs that address the same file. */
+const transactionLocks = KeyedMutex.makeUnsafe<string>()
 
 /**
  * Serialize file changes by absolute target. Conditional writes compare and
@@ -46,6 +53,10 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const locks = KeyedMutex.makeUnsafe<string>()
+    const withLock: Interface["withLock"] = (targets) => (effect) =>
+      [...new Set(targets.map(FSUtil.resolve))]
+        .sort()
+        .reduceRight((result, target) => transactionLocks.withLock(target)(result), effect)
     const withTargetLock =
       (target: Target) =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -84,7 +95,7 @@ const layer = Layer.effect(
       ),
     )
 
-    return Service.of({ write, writeTextPreservingBom })
+    return Service.of({ withLock, write, writeTextPreservingBom })
   }),
 )
 

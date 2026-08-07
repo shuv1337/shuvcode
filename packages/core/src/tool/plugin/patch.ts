@@ -4,12 +4,13 @@ import type { Context as PluginContext } from "@opencode-ai/plugin/effect/plugin
 import { ToolFailure } from "@opencode-ai/ai"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
-import { Effect, Schema } from "effect"
+import { Effect, Result, Schema } from "effect"
 import { PlatformError } from "effect/PlatformError"
 import path from "path"
 import { Bom } from "@opencode-ai/util/bom"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Formatter } from "../../formatter"
+import { FileMutation } from "../../file-mutation"
 import { Location } from "../../location"
 import { Patch } from "@opencode-ai/util/patch"
 import { Permission } from "../../permission"
@@ -70,6 +71,7 @@ export const Plugin = {
   id: "opencode.tool.patch",
   effect: Effect.fn("PatchTool.Plugin")(function* (ctx: PluginContext) {
     const fs = yield* FSUtil.Service
+    const mutation = yield* FileMutation.Service
     const formatter = yield* Formatter.Service
     const location = yield* Location.Service
     const permission = yield* Permission.Service
@@ -84,6 +86,15 @@ export const Plugin = {
           output: Output,
           execute: (input, context) => {
             const applied: Array<typeof Applied.Type> = []
+            const parsed = Patch.parse(input.patchText)
+            const lockTargets = Result.isSuccess(parsed)
+              ? parsed.success.flatMap((hunk) => [
+                  path.resolve(location.directory, hunk.path),
+                  ...(hunk.type === "update" && hunk.movePath
+                    ? [path.resolve(location.directory, hunk.movePath)]
+                    : []),
+                ])
+              : []
             const fail = (operation: string, error: unknown) => {
               const completed = applied.map((item) => item.resource).join(", ")
               return new ToolFailure({
@@ -315,6 +326,7 @@ export const Plugin = {
               })
               return { applied, files }
             }).pipe(
+              mutation.withLock(lockTargets),
               Effect.map((output) => ({
                 output,
                 content: toModelOutput(output),
