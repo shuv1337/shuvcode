@@ -5,10 +5,10 @@ import { ToolFailure } from "@opencode-ai/ai"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { Effect, Result, Schema } from "effect"
-import { PlatformError } from "effect/PlatformError"
 import path from "path"
 import { Bom } from "@opencode-ai/util/bom"
 import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Environment } from "../../environment"
 import { Formatter } from "../../formatter"
 import { FileMutation } from "../../file-mutation"
 import { Location } from "../../location"
@@ -45,7 +45,13 @@ export const toModelOutput = (output: Output) =>
   ].join("\n")
 
 type Prepared =
-  | (Extract<Patch.Hunk, { readonly type: "add" | "delete" }> & {
+  | (Extract<Patch.Hunk, { readonly type: "add" }> & {
+      readonly target: Target
+      readonly content: string
+      readonly before: string
+      readonly after: string
+    })
+  | (Extract<Patch.Hunk, { readonly type: "delete" }> & {
       readonly target: Target
       readonly before: string
       readonly after: string
@@ -70,7 +76,7 @@ interface Target {
 export const Plugin = {
   id: "opencode.tool.patch",
   effect: Effect.fn("PatchTool.Plugin")(function* (ctx: PluginContext) {
-    const fs = yield* FSUtil.Service
+    const environment = yield* Environment.Service
     const mutation = yield* FileMutation.Service
     const formatter = yield* Formatter.Service
     const location = yield* Location.Service
@@ -90,9 +96,7 @@ export const Plugin = {
             const lockTargets = Result.isSuccess(parsed)
               ? parsed.success.flatMap((hunk) => [
                   path.resolve(location.directory, hunk.path),
-                  ...(hunk.type === "update" && hunk.movePath
-                    ? [path.resolve(location.directory, hunk.movePath)]
-                    : []),
+                  ...(hunk.type === "update" && hunk.movePath ? [path.resolve(location.directory, hunk.movePath)] : []),
                 ])
               : []
             const fail = (operation: string, error: unknown) => {
@@ -108,7 +112,7 @@ export const Plugin = {
                 id: context.id,
               }
               if (!input.patchText) return yield* new ToolFailure({ message: "patchText is required" })
-              const hunks = yield* Effect.fromResult(Patch.parse(input.patchText)).pipe(
+              const hunks = yield* Effect.fromResult(parsed).pipe(
                 Effect.mapError((error) => new ToolFailure({ message: `patch verification failed: ${error.message}` })),
               )
               if (hunks.length === 0) {
@@ -136,18 +140,19 @@ export const Plugin = {
                     })
                   }
                   if (hunk.type === "add") {
+                    const content =
+                      hunk.contents.endsWith("\n") || hunk.contents === "" ? hunk.contents : `${hunk.contents}\n`
                     prepared.push({
                       ...hunk,
                       target,
+                      content,
                       before: "",
-                      after: Bom.split(
-                        hunk.contents.endsWith("\n") || hunk.contents === "" ? hunk.contents : `${hunk.contents}\n`,
-                      ).text,
+                      after: Bom.split(content).text,
                     })
                     return
                   }
                   if (hunk.type === "delete") {
-                    const content = yield* Bom.readFile(fs, target.absolute).pipe(
+                    const content = yield* FileMutation.readText(environment.files, target.absolute).pipe(
                       Effect.mapError(
                         (error) =>
                           new ToolFailure({
@@ -162,20 +167,7 @@ export const Plugin = {
                   const original =
                     previous ??
                     (yield* Effect.gen(function* () {
-                      const stats = yield* fs.stat(target.absolute).pipe(
-                        Effect.mapError(
-                          (error) =>
-                            new ToolFailure({
-                              message: `patch verification failed: Failed to read file to update ${target.absolute}: ${errorMessage(error)}`,
-                            }),
-                        ),
-                      )
-                      if (stats.type === "Directory") {
-                        return yield* new ToolFailure({
-                          message: `patch verification failed: Failed to read file to update ${target.absolute}: path is a directory`,
-                        })
-                      }
-                      const content = yield* Bom.readFile(fs, target.absolute).pipe(
+                      const content = yield* FileMutation.readText(environment.files, target.absolute).pipe(
                         Effect.mapError(
                           (error) =>
                             new ToolFailure({
@@ -244,13 +236,8 @@ export const Plugin = {
                 (change) =>
                   Effect.gen(function* () {
                     if (change.type === "add") {
-                      yield* fs
-                        .writeWithDirs(
-                          change.target.absolute,
-                          change.contents.endsWith("\n") || change.contents === ""
-                            ? change.contents
-                            : `${change.contents}\n`,
-                        )
+                      yield* environment.files
+                        .write(change.target.absolute, new TextEncoder().encode(change.content))
                         .pipe(Effect.mapError((error) => fail(`Failed to write ${change.target.resource}`, error)))
                       applied.push({
                         type: change.type,
@@ -260,7 +247,7 @@ export const Plugin = {
                       return
                     }
                     if (change.type === "delete") {
-                      yield* fs
+                      yield* environment.files
                         .remove(change.target.absolute)
                         .pipe(Effect.mapError((error) => fail(`Failed to delete ${change.target.resource}`, error)))
                       applied.push({
@@ -272,10 +259,10 @@ export const Plugin = {
                     }
                     if (change.moveTarget) {
                       const moveTarget = change.moveTarget
-                      yield* fs
-                        .writeWithDirs(moveTarget.absolute, change.content)
+                      yield* environment.files
+                        .write(moveTarget.absolute, new TextEncoder().encode(change.content))
                         .pipe(Effect.mapError((error) => fail(`Failed to write ${moveTarget.resource}`, error)))
-                      yield* fs
+                      yield* environment.files
                         .remove(change.target.absolute)
                         .pipe(
                           Effect.mapError((error) =>
@@ -289,8 +276,8 @@ export const Plugin = {
                       })
                       return
                     }
-                    yield* fs
-                      .writeWithDirs(change.target.absolute, change.content)
+                    yield* environment.files
+                      .write(change.target.absolute, new TextEncoder().encode(change.content))
                       .pipe(Effect.mapError((error) => fail(`Failed to write ${change.target.resource}`, error)))
                     applied.push({
                       type: change.type,
@@ -305,13 +292,13 @@ export const Plugin = {
                 [...new Set(applied.filter((item) => item.type !== "delete").map((item) => item.target))],
                 (target) =>
                   Effect.gen(function* () {
-                    const current = yield* Bom.readFile(fs, target).pipe(
+                    const current = yield* FileMutation.readText(environment.files, target).pipe(
                       Effect.mapError((error) => fail(`Failed to read ${target}`, error)),
                     )
                     formatted.set(
                       target,
                       (yield* formatter.file(target))
-                        ? yield* Bom.syncFile(fs, target, current.bom).pipe(
+                        ? yield* FileMutation.syncTextBom(environment.files, target, current.bom).pipe(
                             Effect.mapError((error) => fail(`Failed to sync ${target}`, error)),
                           )
                         : current.text,
@@ -357,10 +344,10 @@ export const Plugin = {
 }
 
 function errorMessage(error: unknown) {
-  if (error instanceof PlatformError) {
-    if (error.reason._tag === "NotFound") return "file does not exist"
-    return error.reason.description ?? error.reason.message
-  }
+  if (error instanceof Environment.NotFound) return "file does not exist"
+  if (error instanceof Environment.WrongKind)
+    return error.actual === "directory" ? "path is a directory" : `path is ${error.actual}`
+  if (error instanceof Environment.Failed) return errorMessage(error.cause)
   return error instanceof Error ? error.message : String(error)
 }
 
