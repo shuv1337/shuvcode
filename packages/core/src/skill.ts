@@ -2,7 +2,7 @@ export * as Skill from "./skill"
 
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import path from "path"
-import { Context, Effect, Layer, Schema, Stream, Types } from "effect"
+import { Context, Effect, Layer, Schema, Scope, Stream, Types } from "effect"
 import { FileSystem } from "@opencode-ai/schema/filesystem"
 import { Skill } from "@opencode-ai/schema/skill"
 import { Agent } from "./agent"
@@ -13,6 +13,7 @@ import { Permission } from "./permission"
 import { AbsolutePath } from "./schema"
 import { SkillDiscovery } from "./skill/discovery"
 import { State } from "./state"
+import { Watcher } from "./filesystem/watcher"
 
 export const DirectorySource = Skill.DirectorySource
 export type DirectorySource = Skill.DirectorySource
@@ -81,6 +82,51 @@ const layer = Layer.effect(
     const discovery = yield* SkillDiscovery.Service
     const fs = yield* FSUtil.Service
     const bus = yield* Bus.Service
+    const watcher = yield* Watcher.Service
+    const scope = yield* Scope.Scope
+    const cache = new Map<string, { skills: Info[]; paths: readonly string[] }>()
+    const watched = new Set<string>()
+
+    const invalidate = Effect.fn("Skill.invalidateFromWatcher")(function* (file: string) {
+      const invalidated = Array.from(cache.entries()).filter(([, loaded]) =>
+        loaded.paths.some((item) => FSUtil.overlaps(item, file)),
+      )
+      if (invalidated.length === 0) return
+      for (const [key] of invalidated) cache.delete(key)
+      yield* Effect.logInfo("skill cache invalidated", {
+        file,
+        sources: invalidated.map(([key]) => key),
+        skills: invalidated.flatMap(([, loaded]) => loaded.skills.map((skill) => skill.id)),
+      })
+      yield* bus.publish(Skill.Event.Updated, {}).pipe(Effect.asVoid)
+    })
+
+    const watch = Effect.fn("Skill.watch")(function* (directory: string) {
+      const target = path.resolve(directory)
+      if (watched.has(target)) return
+      watched.add(target)
+      const updates = yield* watcher.subscribe({ path: target, type: "directory" })
+      yield* updates.pipe(
+        Stream.runForEach((update) => invalidate(update.path)),
+        Effect.forkIn(scope, { startImmediately: true }),
+      )
+    })
+
+    const watchDirectory = Effect.fn("Skill.watchDirectory")(function* (directory: string) {
+      const target = path.resolve(directory)
+      const resolved = yield* fs.realPath(directory).pipe(Effect.catch(() => Effect.succeed(undefined)))
+      if (resolved) {
+        yield* watch(resolved)
+        if (resolved !== target) {
+          yield* watch(path.dirname(target))
+        }
+        return resolved === target ? [target] : [target, resolved]
+      }
+      if (yield* fs.isDir(path.dirname(target))) {
+        yield* watch(path.dirname(target))
+      }
+      return [target]
+    })
 
     const state = State.create<Data, Draft>({
       name: "skill",
@@ -92,7 +138,8 @@ const layer = Layer.effect(
         },
         list: () => draft.sources as Source[],
       }),
-      finalize: () => bus.publish(Skill.Event.Updated, {}).pipe(Effect.asVoid),
+      finalize: () =>
+        Effect.sync(() => cache.clear()).pipe(Effect.andThen(bus.publish(Skill.Event.Updated, {})), Effect.asVoid),
     })
 
     const load = Effect.fn("Skill.load")(function* (source: Source) {
@@ -104,14 +151,22 @@ const layer = Layer.effect(
           directories: [],
           skills: [source.skill.id],
         })
-        return { skills: [source.skill], directories: [] }
+        return { skills: [source.skill], paths: [] }
       }
       const directories = source.type === "directory" ? [source.path] : yield* discovery.pull(source.url)
+      const roots = (yield* Effect.forEach(directories, watchDirectory)).flat()
+      const paths = [...roots]
       for (const directory of directories) {
         const files = yield* fs
           .scan("{*.md,**/SKILL.md}", { cwd: directory, absolute: true, include: "file", symlink: true, dot: true })
           .pipe(Effect.catch(() => Effect.succeed([] as string[])))
         for (const filepath of files.toSorted()) {
+          const resolved = yield* fs.realPath(filepath).pipe(Effect.catch(() => Effect.succeed(filepath)))
+          if (!roots.some((root) => FSUtil.contains(root, resolved))) {
+            const external = path.dirname(resolved)
+            paths.push(external)
+            yield* watch(external)
+          }
           const content = yield* fs.readFileStringSafe(filepath).pipe(Effect.catch(() => Effect.succeed(undefined)))
           if (!content) continue
           const markdown = ConfigMarkdown.parseOption(content)
@@ -139,22 +194,7 @@ const layer = Layer.effect(
         directories,
         skills: skills.map((skill) => skill.id),
       })
-      return { skills, directories }
-    })
-
-    const cache = new Map<string, { skills: Info[]; directories: readonly string[] }>()
-    const invalidate = Effect.fn("Skill.invalidateFromWatcher")(function* (file: string) {
-      const invalidated = Array.from(cache.entries()).filter(([, loaded]) =>
-        loaded.directories.some((directory) => FSUtil.contains(directory, file)),
-      )
-      if (invalidated.length === 0) return
-      for (const [key] of invalidated) cache.delete(key)
-      yield* Effect.logInfo("skill cache invalidated", {
-        file,
-        sources: invalidated.map(([key]) => key),
-        skills: invalidated.flatMap(([, loaded]) => loaded.skills.map((skill) => skill.id)),
-      })
-      yield* bus.publish(Skill.Event.Updated, {}).pipe(Effect.asVoid)
+      return { skills, paths }
     })
 
     yield* bus.subscribe(FileSystem.Event.Changed).pipe(
@@ -187,5 +227,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [SkillDiscovery.node, FSUtil.node, Bus.node],
+  deps: [SkillDiscovery.node, FSUtil.node, Bus.node, Watcher.node],
 })
