@@ -502,6 +502,36 @@ export type SessionInputPromoted = {
   data: { sessionID: string; inputID: string }
 }
 
+export type SessionInputCancelled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.input.cancelled"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string }
+}
+
+export type SessionInputSteered = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.input.steered"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string }
+}
+
+export type SessionInputQueued = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.input.queued"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; inputID: string }
+}
+
 export type SessionExecutionStarted = {
   id: string
   created: number
@@ -1970,6 +2000,9 @@ export type SessionEventDurable =
   | SessionForked
   | SessionInputPromoted
   | SessionInputAdmitted
+  | SessionInputCancelled
+  | SessionInputSteered
+  | SessionInputQueued
   | SessionExecutionStarted
   | SessionExecutionSucceeded
   | SessionExecutionFailed
@@ -2024,6 +2057,9 @@ export type V2Event =
   | SessionForked
   | SessionInputPromoted
   | SessionInputAdmitted
+  | SessionInputCancelled
+  | SessionInputSteered
+  | SessionInputQueued
   | SessionExecutionStarted
   | SessionExecutionSucceeded
   | SessionExecutionFailed
@@ -3688,6 +3724,27 @@ export type SessionContextOutput = { data: Array<SessionMessageInfo> }["data"]
 export type SessionPendingListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionPendingListOutput = { data: Array<SessionPendingInfo> }["data"]
+
+export type SessionPendingCancelInput = {
+  readonly sessionID: { readonly sessionID: string; readonly inputID: string }["sessionID"]
+  readonly inputID: { readonly sessionID: string; readonly inputID: string }["inputID"]
+}
+
+export type SessionPendingCancelOutput = void
+
+export type SessionPendingSteerInput = {
+  readonly sessionID: { readonly sessionID: string; readonly inputID: string }["sessionID"]
+  readonly inputID: { readonly sessionID: string; readonly inputID: string }["inputID"]
+}
+
+export type SessionPendingSteerOutput = void
+
+export type SessionPendingQueueInput = {
+  readonly sessionID: { readonly sessionID: string; readonly inputID: string }["sessionID"]
+  readonly inputID: { readonly sessionID: string; readonly inputID: string }["inputID"]
+}
+
+export type SessionPendingQueueOutput = void
 
 export type SessionInstructionsEntryListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 

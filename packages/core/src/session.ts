@@ -133,6 +133,14 @@ export class CompactionConflictError extends Schema.TaggedErrorClass<CompactionC
 export class BusyError extends Schema.TaggedErrorClass<BusyError>()("Session.BusyError", {
   sessionID: SessionSchema.ID,
 }) {}
+export class PendingInputConflictError extends Schema.TaggedErrorClass<PendingInputConflictError>()(
+  "Session.PendingInputConflictError",
+  {
+    sessionID: SessionSchema.ID,
+    inputID: SessionMessage.ID,
+  },
+) {}
+type PendingInputRef = { readonly sessionID: SessionSchema.ID; readonly inputID: SessionMessage.ID }
 export class SkillNotFoundError extends Schema.TaggedErrorClass<SkillNotFoundError>()("Session.SkillNotFoundError", {
   skill: Skill.ID,
 }) {}
@@ -181,6 +189,9 @@ export interface Interface {
    * unhandled compaction barriers.
    */
   readonly pending: (sessionID: SessionSchema.ID) => Effect.Effect<SessionPending.Info[], NotFoundError>
+  readonly cancelPending: (input: PendingInputRef) => Effect.Effect<void, NotFoundError | PendingInputConflictError>
+  readonly steerPending: (input: PendingInputRef) => Effect.Effect<void, NotFoundError | PendingInputConflictError>
+  readonly queuePending: (input: PendingInputRef) => Effect.Effect<void, NotFoundError | PendingInputConflictError>
   /**
    * Durable, ordered session log read. Replays durable session bus after
    * the exclusive `after` cursor, emits a `Synced` marker at the captured
@@ -316,6 +327,31 @@ const layer = Layer.effect(
               messageID: SessionMessage.ID.make(row.id),
             }),
         ),
+      )
+
+    const pendingConflict = Effect.fn("Session.pendingConflict")(function* (input: PendingInputRef) {
+      yield* result.get(input.sessionID)
+      return yield* new PendingInputConflictError(input)
+    })
+    const mutatePending = (
+      input: PendingInputRef,
+      mutation: (
+        bus: Bus.Interface,
+        input: { readonly id: SessionMessage.ID; readonly sessionID: SessionSchema.ID },
+      ) => Effect.Effect<unknown>,
+      wake = false,
+    ) =>
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          yield* mutation(bus, { sessionID: input.sessionID, id: input.inputID }).pipe(
+            Effect.catchDefect((defect) =>
+              defect instanceof SessionPending.LifecycleConflict
+                ? pendingConflict(input)
+                : Effect.die(defect),
+            ),
+          )
+          if (wake) yield* execution.wake(input.sessionID)
+        }),
       )
 
     const result = Service.of({
@@ -507,6 +543,9 @@ const layer = Layer.effect(
         yield* result.get(sessionID)
         return yield* SessionPending.list(db, sessionID)
       }),
+      cancelPending: Effect.fn("Session.cancelPending")((input) => mutatePending(input, SessionPending.cancel)),
+      steerPending: Effect.fn("Session.steerPending")((input) => mutatePending(input, SessionPending.steer, true)),
+      queuePending: Effect.fn("Session.queuePending")((input) => mutatePending(input, SessionPending.queue)),
       log: (input) =>
         Stream.unwrap(
           result

@@ -58,6 +58,12 @@ import type {
   SessionContextOutput,
   SessionPendingListInput,
   SessionPendingListOutput,
+  SessionPendingCancelInput,
+  SessionPendingCancelOutput,
+  SessionPendingSteerInput,
+  SessionPendingSteerOutput,
+  SessionPendingQueueInput,
+  SessionPendingQueueOutput,
   SessionInstructionsEntryListInput,
   SessionInstructionsEntryListOutput,
   SessionInstructionsEntryPutInput,
@@ -766,6 +772,39 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ).then((value) => value.data),
+        cancel: (input: SessionPendingCancelInput, requestOptions?: RequestOptions) =>
+          request<SessionPendingCancelOutput>(
+            {
+              method: "DELETE",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/pending/${encodeURIComponent(input.inputID)}`,
+              successStatus: 204,
+              declaredStatuses: [409, 404, 401, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        steer: (input: SessionPendingSteerInput, requestOptions?: RequestOptions) =>
+          request<SessionPendingSteerOutput>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/pending/${encodeURIComponent(input.inputID)}/steer`,
+              successStatus: 204,
+              declaredStatuses: [409, 404, 401, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        queue: (input: SessionPendingQueueInput, requestOptions?: RequestOptions) =>
+          request<SessionPendingQueueOutput>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/pending/${encodeURIComponent(input.inputID)}/queue`,
+              successStatus: 204,
+              declaredStatuses: [409, 404, 401, 400],
+              empty: true,
+            },
+            requestOptions,
+          ),
       },
       instructions: {
         entry: {

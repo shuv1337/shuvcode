@@ -53,12 +53,14 @@ import { useLocation } from "../../context/location"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { abbreviateHome } from "../../runtime"
 import { PluginSlot } from "../../plugin/render"
+import type { SessionPending } from "@opencode-ai/schema/session-pending"
 
 export type PromptProps = {
   sessionID?: string
   visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
+  onEmptySubmit?: () => boolean | Promise<boolean>
   ref?: (ref: PromptRef | undefined) => void
   hint?: JSX.Element
   right?: JSX.Element
@@ -358,6 +360,20 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
+        title: "Queue prompt",
+        name: "prompt.queue",
+        category: "Prompt",
+        palette: undefined,
+        run: async (_input: string | undefined, event?: KeyEvent) => {
+          event?.preventDefault()
+          event?.stopPropagation()
+          if (!input.focused) return
+          const handled = await submit("queue")
+          if (!handled) return
+          dialog.clear()
+        },
+      },
+      {
         title: "Remove editor context",
         name: "prompt.editor_context.clear",
         category: "Prompt",
@@ -513,6 +529,11 @@ export function Prompt(props: PromptProps) {
   Keymap.createLayer(() => ({
     mode: "global",
     commands: promptCommands(),
+  }))
+
+  Keymap.createLayer(() => ({
+    priority: 1,
+    bindings: ["prompt.queue"],
   }))
 
   Keymap.createLayer(() => ({
@@ -900,7 +921,7 @@ export function Prompt(props: PromptProps) {
   })
 
   let submitting = false
-  async function submit() {
+  async function submit(delivery: SessionPending.Delivery = "steer") {
     // Prevent overlapping invocations (e.g. a double-pressed Enter, or the
     // input's native onSubmit racing another dispatch). Without this guard,
     // a second call slips past the empty-input check before the first call
@@ -910,13 +931,13 @@ export function Prompt(props: PromptProps) {
     if (submitting) return false
     submitting = true
     try {
-      return await submitInner()
+      return await submitInner(delivery)
     } finally {
       submitting = false
     }
   }
 
-  async function submitInner() {
+  async function submitInner(delivery: SessionPending.Delivery) {
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
     // plainText directly and sync before any downstream reads.
@@ -927,14 +948,25 @@ export function Prompt(props: PromptProps) {
     if (props.disabled) return false
     if (move.creating()) return false
     if (auto()?.visible) return false
-    if (!store.prompt.text) return false
     const trimmed = store.prompt.text.trim()
+    if (!trimmed) return delivery === "steer" ? (await props.onEmptySubmit?.()) === true : false
+    if (
+      delivery === "queue" &&
+      (store.mode === "shell" || trimmed === "exit" || trimmed === "quit" || trimmed === ":q")
+    ) {
+      toast.show({ message: "This prompt cannot be queued", variant: "warning" })
+      return false
+    }
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
       void exit()
       return true
     }
     const slash = argumentSlash(store.prompt.text, keymapCommands())
     if (slash) {
+      if (delivery === "queue") {
+        toast.show({ message: "This prompt cannot be queued", variant: "warning" })
+        return false
+      }
       clearPrompt()
       await slash.command.run(slash.input)
       return true
@@ -958,6 +990,16 @@ export function Prompt(props: PromptProps) {
     const isCommand =
       slashHead !== undefined &&
       (data.location.command.list(currentLocation.ref) ?? []).some((command) => command.name === slashHead.name)
+    if (delivery === "queue" && isSkill) {
+      toast.show({ message: "Skills cannot be queued", variant: "warning" })
+      return false
+    }
+    const editorSelection = editorContext()
+    const pendingEditorSelection = editorSelection && editor.labelState() === "pending" ? editorSelection : undefined
+    if (delivery === "queue" && pendingEditorSelection) {
+      toast.show({ message: "Editor context cannot be queued", variant: "warning" })
+      return false
+    }
     const agent = local.agent.current()
     if (!agent) return false
     const selection = local.model.selection()
@@ -1016,8 +1058,6 @@ export function Prompt(props: PromptProps) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
-    const editorSelection = editorContext()
-    const pendingEditorSelection = editorSelection && editor.labelState() === "pending" ? editorSelection : undefined
 
     if (store.mode === "shell") {
       move.startSubmit()
@@ -1040,6 +1080,7 @@ export function Prompt(props: PromptProps) {
           model,
           files: store.prompt.files,
           agents: store.prompt.agents,
+          delivery,
         })
         .catch((error) => {
           cancelCommit()
@@ -1049,7 +1090,7 @@ export function Prompt(props: PromptProps) {
       move.startSubmit()
       void client.api.session.skill({
         sessionID,
-        skill: slashHead!.name,
+        skill: slashHead.name,
       })
     } else {
       move.startSubmit()
@@ -1105,6 +1146,7 @@ export function Prompt(props: PromptProps) {
           text: inputText,
           files: store.prompt.files,
           agents: store.prompt.agents,
+          delivery,
         })
         .then(
           () => undefined,

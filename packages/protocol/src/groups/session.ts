@@ -523,6 +523,45 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         ),
     )
     .add(
+      HttpApiEndpoint.delete("session.pending.cancel", "/api/session/:sessionID/pending/:inputID", {
+        params: { sessionID: Session.ID, inputID: SessionMessage.ID },
+        success: HttpApiSchema.NoContent,
+        error: [ConflictError, SessionNotFoundError],
+      }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.pending.cancel",
+            summary: "Cancel pending input",
+            description: "Cancel an input that has not yet been promoted into session history.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.pending.steer", "/api/session/:sessionID/pending/:inputID/steer", {
+        params: { sessionID: Session.ID, inputID: SessionMessage.ID },
+        success: HttpApiSchema.NoContent,
+        error: [ConflictError, SessionNotFoundError],
+      }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.pending.steer",
+            summary: "Steer queued input",
+            description: "Change a queued input to steer delivery and wake session execution.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.pending.queue", "/api/session/:sessionID/pending/:inputID/queue", {
+        params: { sessionID: Session.ID, inputID: SessionMessage.ID },
+        success: HttpApiSchema.NoContent,
+        error: [ConflictError, SessionNotFoundError],
+      }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.pending.queue",
+            summary: "Queue pending steer",
+            description: "Change a pending steer to queued delivery.",
+          }),
+        ),
+    )
+    .add(
       HttpApiEndpoint.get("session.instructions.entry.list", "/api/session/:sessionID/instructions/entries", {
         params: { sessionID: Session.ID },
         success: Schema.Struct({ data: Schema.Array(InstructionEntry.Info) }),
