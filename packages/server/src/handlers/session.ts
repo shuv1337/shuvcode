@@ -313,6 +313,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 text: ctx.payload.text,
                 files: ctx.payload.files,
                 agents: ctx.payload.agents,
+                skills: ctx.payload.skills,
                 metadata: ctx.payload.metadata,
                 delivery: ctx.payload.delivery,
                 resume: ctx.payload.resume,
@@ -337,6 +338,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 Effect.catchTag("Session.AttachmentError", (error) =>
                   Effect.fail(new InvalidRequestError({ message: error.message, field: "files" })),
                 ),
+                Effect.catchTag("Session.SkillNotFoundError", (error) =>
+                  Effect.fail(new InvalidRequestError({ message: `Skill not found: ${error.skill}`, field: "skills" })),
+                ),
               ),
           }
         }),
@@ -355,6 +359,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 model: ctx.payload.model,
                 files: ctx.payload.files,
                 agents: ctx.payload.agents,
+                skills: ctx.payload.skills,
                 delivery: ctx.payload.delivery,
                 resume: ctx.payload.resume,
               })
@@ -393,6 +398,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 ),
                 Effect.catchTag("Session.AttachmentError", (error) =>
                   Effect.fail(new InvalidRequestError({ message: error.message, field: "files" })),
+                ),
+                Effect.catchTag("Session.SkillNotFoundError", (error) =>
+                  Effect.fail(new InvalidRequestError({ message: `Skill not found: ${error.skill}`, field: "skills" })),
                 ),
               ),
           }

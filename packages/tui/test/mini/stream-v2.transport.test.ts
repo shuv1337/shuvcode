@@ -2755,13 +2755,18 @@ describe("V2 mini transport", () => {
       variant: undefined,
       prompt: {
         messageID: "msg_cmd",
-        text: "/deploy prod",
+        text: "/deploy prod /api-design",
         parts: [
           {
             type: "file",
             url: "file:///tmp/mentioned.txt",
             filename: "mentioned.txt",
             source: { type: "file", text: { start: 8, end: 12, value: "prod" } },
+          },
+          {
+            type: "skill",
+            id: "api-design",
+            source: { start: 13, end: 24, value: "/api-design" },
           },
         ],
         command: { name: "deploy", arguments: "prod" },
@@ -2785,6 +2790,7 @@ describe("V2 mini transport", () => {
           mention: { start: 8, end: 12, text: "prod" },
         },
       ],
+      skills: [{ id: "api-design", mention: { start: 13, end: 24, text: "/api-design" } }],
       delivery: "steer",
     })
     // Selection rides the command payload; no separate client-side switch.
@@ -2854,6 +2860,75 @@ describe("V2 mini transport", () => {
     expect(ui.commits).toContainEqual(
       expect.objectContaining({ kind: "system", text: '→ Skill "tigerstyle"', messageID: "msg_skill" }),
     )
+    await transport.close()
+  })
+
+  test("sends inline skill attachments with a normal prompt", async () => {
+    const events = feed()
+    events.push(connected())
+    const client = sdk({ streams: [events] })
+    const ui = footer()
+    const transport = await createSessionTransport({
+      sdk: client,
+      sessionID: "ses_1",
+      thinking: false,
+      footer: ui.api,
+    })
+    let request: Parameters<OpenCodeClient["session"]["prompt"]>[0] | undefined
+    spyOn(client.session, "prompt").mockImplementation((input) => {
+      request = input
+      queueMicrotask(() => {
+        events.push({
+          id: "evt_prompted",
+          created: 0,
+          type: "session.input.promoted",
+          durable: durable("ses_1"),
+          data: { sessionID: "ses_1", inputID: "msg_skill_attachment" },
+        })
+        events.push({
+          id: "evt_settled",
+          created: 0,
+          type: "session.execution.succeeded",
+          durable: durable("ses_1"),
+          data: { sessionID: "ses_1" },
+        })
+      })
+      return ok({
+        id: input.id ?? "msg_skill_attachment",
+        sessionID: "ses_1",
+        type: "user" as const,
+        data: { text: input.text },
+        delivery: "steer" as const,
+        timeCreated: 2,
+      })
+    })
+
+    await transport.runPromptTurn({
+      agent: undefined,
+      model: undefined,
+      variant: undefined,
+      prompt: {
+        messageID: "msg_skill_attachment",
+        text: "Review this /api-design",
+        parts: [
+          {
+            type: "skill",
+            id: "api-design",
+            source: { start: 12, end: 23, value: "/api-design" },
+          },
+        ],
+      },
+      files: [],
+      includeFiles: false,
+    })
+
+    expect(request).toMatchObject({
+      sessionID: "ses_1",
+      id: "msg_skill_attachment",
+      text: "Review this /api-design",
+      skills: [{ id: "api-design", mention: { start: 12, end: 23, text: "/api-design" } }],
+      delivery: "steer",
+    })
     await transport.close()
   })
 

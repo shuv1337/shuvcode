@@ -26,24 +26,7 @@ export const description = [
   "The skill ID must match one of the available skills in the instructions.",
 ].join("\n")
 
-export const toModelOutput = (skill: Skill.Info, files: ReadonlyArray<string>) => {
-  const directory = path.dirname(skill.location)
-  return [
-    `<skill_content name="${skill.name}">`,
-    `# Skill: ${skill.name}`,
-    "",
-    skill.content.trim(),
-    "",
-    `Base directory for this skill: ${directory}`,
-    "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
-    "Note: file list is sampled.",
-    "",
-    "<skill_files>",
-    ...files.map((file) => `<file>${file}</file>`),
-    "</skill_files>",
-    "</skill_content>",
-  ].join("\n")
-}
+export const toModelOutput = Skill.toModelOutput
 
 const unableToLoad = (name: string, error?: unknown) =>
   new ToolFailure({ message: `Unable to load skill ${name}`, error })
@@ -87,7 +70,7 @@ export const Plugin = {
                 return {
                   name: skill.name,
                   directory,
-                  output: toModelOutput(skill, files),
+                  output: Skill.toModelOutput(skill, files),
                 }
               }).pipe(Effect.mapError((error) => unableToLoad(input.id, error)))
             }).pipe(

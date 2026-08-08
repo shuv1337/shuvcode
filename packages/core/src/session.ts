@@ -218,10 +218,11 @@ export interface Interface {
     text: string
     files?: PromptInput.Prompt["files"]
     agents?: PromptInput.Prompt["agents"]
+    skills?: PromptInput.Prompt["skills"]
     metadata?: Record<string, unknown>
     delivery?: SessionPending.Delivery
     resume?: boolean
-  }) => Effect.Effect<SessionPending.User, NotFoundError | PromptConflictError | AttachmentError>
+  }) => Effect.Effect<SessionPending.User, NotFoundError | PromptConflictError | AttachmentError | SkillNotFoundError>
   /** Generates text from current Session context without admitting input or mutating history. */
   readonly generate: (input: {
     sessionID: SessionSchema.ID
@@ -236,11 +237,17 @@ export interface Interface {
     model?: Model.Ref
     files?: PromptInput.Prompt["files"]
     agents?: PromptInput.Prompt["agents"]
+    skills?: PromptInput.Prompt["skills"]
     delivery?: SessionPending.Delivery
     resume?: boolean
   }) => Effect.Effect<
     SessionPending.User,
-    NotFoundError | PromptConflictError | AttachmentError | Command.NotFoundError | Command.EvaluationError
+    | NotFoundError
+    | PromptConflictError
+    | AttachmentError
+    | SkillNotFoundError
+    | Command.NotFoundError
+    | Command.EvaluationError
   >
   readonly shell: (input: {
     id?: Event.ID
@@ -345,7 +352,9 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           yield* mutation(bus, { sessionID: input.sessionID, id: input.inputID }).pipe(
             Effect.catchDefect((defect) =>
-              defect instanceof SessionPending.LifecycleConflict ? pendingConflict(input) : Effect.die(defect),
+              defect instanceof SessionPending.LifecycleConflict
+                ? pendingConflict(input)
+                : Effect.die(defect),
             ),
           )
           if (wake) yield* execution.wake(input.sessionID)
@@ -565,9 +574,11 @@ const layer = Layer.effect(
             // Resolved lazily so prompt admission only boots location services when an
             // image attachment actually needs the resizer.
             const image = Image.Service.pipe(Effect.provide(locations.get(session.location)))
+            const skills = Skill.Service.pipe(Effect.provide(locations.get(session.location)))
             const prompt = yield* resolvePrompt(
-              { text: input.text, files: input.files, agents: input.agents },
+              { text: input.text, files: input.files, agents: input.agents, skills: input.skills },
               image,
+              skills,
             ).pipe(Effect.provideService(FSUtil.Service, fs))
             const messageID = input.id ?? SessionMessage.ID.create()
             const admittedInput = SessionPending.Message.make({
@@ -633,6 +644,7 @@ const layer = Layer.effect(
           text: evaluated.text,
           files: input.files,
           agents: input.agents,
+          skills: input.skills,
           delivery: input.delivery,
           resume: input.resume,
         })
@@ -895,12 +907,28 @@ function synthesizeTerminalShellInfo(started: ShellSchema.Info): ShellSchema.Inf
 const resolvePrompt = Effect.fn("Session.resolvePrompt")(function* (
   input: PromptInput.Prompt,
   image: Effect.Effect<Image.Interface>,
+  skills: Effect.Effect<Skill.Interface>,
 ) {
   const fs = yield* FSUtil.Service
   const files = input.files
     ? yield* Effect.forEach(input.files, (file) => materializeAttachment(fs, file, image), { concurrency: 8 })
     : undefined
-  return Prompt.make({ text: input.text, agents: input.agents, files })
+  const requested = input.skills
+  const selected = yield* Effect.gen(function* () {
+    if (!requested?.length) return undefined
+    const available = yield* (yield* skills).list()
+    return yield* Effect.forEach(requested, (attachment) => {
+      const skill = available.find((item) => item.id === attachment.id)
+      if (!skill) return Effect.fail(new SkillNotFoundError({ skill: attachment.id }))
+      return Effect.succeed({
+        id: skill.id,
+        name: skill.name,
+        text: Skill.toModelOutput(skill, []),
+        mention: attachment.mention,
+      })
+    })
+  })
+  return Prompt.make({ text: input.text, agents: input.agents, files, skills: selected?.length ? selected : undefined })
 })
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024

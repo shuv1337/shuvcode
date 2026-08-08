@@ -35,7 +35,9 @@ export function realignPromptMentions(
     ([left], [right]) => right.length - left.length || left.localeCompare(right),
   )) {
     const candidates = mentionRanges(content, text)
-    const available = candidates.filter((candidate) => !protectedRanges.some((range) => overlaps(candidate, range)))
+    const available = candidates.filter(
+      (candidate) => !protectedRanges.some((range) => overlaps(candidate, range)),
+    )
     for (const [item, candidate] of assignMentions(items, available)) {
       aligned[item.index] = {
         text,
@@ -52,9 +54,11 @@ export function realignPromptMentions(
 export function realignPromptInputMentions(content: string, input: PromptInput.Prompt): EditablePromptInput {
   const files = input.files ?? []
   const agents = input.agents ?? []
+  const skills = input.skills ?? []
   const mentions = realignPromptMentions(content, [
     ...files.map((file) => file.mention),
     ...agents.map((agent) => agent.mention),
+    ...skills.map((skill) => skill.mention),
   ])
   const align = <T extends { mention?: PromptMention }>(items: readonly T[] | undefined, offset = 0) =>
     items?.flatMap((item, index) => {
@@ -67,6 +71,7 @@ export function realignPromptInputMentions(content: string, input: PromptInput.P
     text: content,
     files: align(input.files),
     agents: align(input.agents, files.length),
+    skills: align(input.skills, files.length + agents.length),
   }
 }
 
@@ -89,6 +94,7 @@ export function expandPromptInputPastedText(
     text: expandTrackedPastedText(input.text, ranges),
     files: input.files?.map((file) => ({ ...file, mention: shift(file.mention) })),
     agents: input.agents?.map((agent) => ({ ...agent, mention: shift(agent.mention) })),
+    skills: input.skills?.map((skill) => ({ ...skill, mention: shift(skill.mention) })),
   }
 }
 
@@ -107,10 +113,7 @@ function assignMentions(items: MentionItem[], candidates: CandidateRange[]) {
   const ordered = items.toSorted((left, right) => left.mention.start - right.mention.start || left.index - right.index)
   const memo = new Map<string, { matches: number; cost: number; pairs: Array<[MentionItem, CandidateRange]> }>()
 
-  function solve(
-    item: number,
-    candidate: number,
-  ): { matches: number; cost: number; pairs: Array<[MentionItem, CandidateRange]> } {
+  function solve(item: number, candidate: number): { matches: number; cost: number; pairs: Array<[MentionItem, CandidateRange]> } {
     if (item >= ordered.length || candidate >= candidates.length) return { matches: 0, cost: 0, pairs: [] }
     const key = `${item}:${candidate}`
     const cached = memo.get(key)

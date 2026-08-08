@@ -38,6 +38,25 @@ export { Event } from "@opencode-ai/schema/skill"
 export const available = (skills: ReadonlyArray<Info>, agent: Agent.Info) =>
   skills.filter((skill) => Permission.evaluate("skill", skill.id, agent.permissions).effect !== "deny")
 
+export const toModelOutput = (skill: Info, files: ReadonlyArray<string>) => {
+  const directory = path.dirname(skill.location)
+  return [
+    `<skill_content name="${skill.name}">`,
+    `# Skill: ${skill.name}`,
+    "",
+    skill.content.trim(),
+    "",
+    `Base directory for this skill: ${directory}`,
+    "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
+    "Note: file list is sampled.",
+    "",
+    "<skill_files>",
+    ...files.map((file) => `<file>${file}</file>`),
+    "</skill_files>",
+    "</skill_content>",
+  ].join("\n")
+}
+
 const Frontmatter = Schema.Struct({
   name: Schema.String.pipe(Schema.optional),
   description: Schema.String.pipe(Schema.optional),
