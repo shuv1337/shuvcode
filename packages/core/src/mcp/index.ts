@@ -569,10 +569,7 @@ export const layer = (options?: Options) =>
         if (entry.registration) yield* entry.registration.dispose
       })
 
-      const replaceServer = Effect.fnUntraced(function* (
-        name: ServerName,
-        serverConfig: typeof ConfigMCP.Server.Type,
-      ) {
+      const replaceServer = Effect.fnUntraced(function* (name: ServerName, serverConfig: typeof ConfigMCP.Server.Type) {
         const previous = runtime.get(name)
         if (previous) yield* disposeServer(name, previous)
         const entry: ServerEntry = {
@@ -660,9 +657,7 @@ export const layer = (options?: Options) =>
       )
       yield* bus.subscribe(Event.Updated).pipe(
         Stream.runForEach(() =>
-          reloadConfig().pipe(
-            Effect.catchCause((cause) => Effect.logError("failed to reload MCP config", { cause })),
-          ),
+          reloadConfig().pipe(Effect.catchCause((cause) => Effect.logError("failed to reload MCP config", { cause }))),
         ),
         Effect.forkScoped({ startImmediately: true }),
       )

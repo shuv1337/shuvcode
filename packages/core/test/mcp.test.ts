@@ -903,7 +903,9 @@ test("reconciles MCP config changed during startup", async () => {
         new Document({
           type: "document",
           info: new Info({
-            mcp: new ConfigMCP.Info({ servers: reads === 1 ? { initial: server } : { initial: server, added: server } }),
+            mcp: new ConfigMCP.Info({
+              servers: reads === 1 ? { initial: server } : { initial: server, added: server },
+            }),
           }),
         }),
       ]
