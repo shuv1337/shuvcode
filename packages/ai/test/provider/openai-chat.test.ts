@@ -102,6 +102,24 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("concatenates assistant text parts without adding separators", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          messages: [
+            Message.assistant([
+              { type: "text", text: "Hello" },
+              { type: "text", text: " world" },
+            ]),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([{ role: "assistant", content: "Hello world" }])
+    }),
+  )
+
   it.effect("writes reasoning to a configured custom field on every assistant message", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
@@ -578,7 +596,7 @@ describe("OpenAI Chat route", () => {
         }),
       )
 
-      expect(prepared.body.messages).toEqual([{ role: "assistant", content: null, reasoning_content: "hidden" }])
+      expect(prepared.body.messages).toEqual([{ role: "assistant", content: "", reasoning_content: "hidden" }])
     }),
   )
 
@@ -827,7 +845,7 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
-  it.effect("ignores scalar reasoning after content starts", () =>
+  it.effect("preserves scalar reasoning after content starts", () =>
     Effect.gen(function* () {
       const details = [{ type: "reasoning.text", text: "detail", format: "unknown", index: 0 }]
       const response = yield* LLMClient.generate(request).pipe(
@@ -843,11 +861,11 @@ describe("OpenAI Chat route", () => {
         ),
       )
 
-      expect(response.reasoning).toBe("detail")
-      expect(response.events.filter(LLMEvent.is.reasoningStart)).toHaveLength(1)
-      expect(response.events.filter(LLMEvent.is.reasoningEnd)).toHaveLength(1)
+      expect(response.reasoning).toBe("detailscalar")
+      expect(response.events.filter(LLMEvent.is.reasoningStart)).toHaveLength(2)
+      expect(response.events.filter(LLMEvent.is.reasoningEnd)).toHaveLength(2)
       expect(response.message.content.find((part) => part.type === "reasoning")?.providerMetadata).toEqual({
-        openai: { reasoningDetails: details },
+        openai: { reasoningField: "reasoning", reasoningDetails: details },
       })
     }),
   )
@@ -947,7 +965,7 @@ describe("OpenAI Chat route", () => {
       expect(response.events.filter(LLMEvent.is.reasoningEnd)).toHaveLength(1)
 
       const replay = yield* compileRequest(LLM.request({ model, messages: [response.message] }))
-      expect(replay.body.messages).toEqual([{ role: "assistant", content: null, reasoning_details: details }])
+      expect(replay.body.messages).toEqual([{ role: "assistant", content: "", reasoning_details: details }])
     }),
   )
 
@@ -997,7 +1015,7 @@ describe("OpenAI Chat route", () => {
       )
 
       expect(replay.body.messages).toEqual([
-        { role: "assistant", content: null, reasoning: "firstsecond", reasoning_details: [first, second] },
+        { role: "assistant", content: "", reasoning: "firstsecond", reasoning_details: [first, second] },
       ])
     }),
   )
@@ -1022,7 +1040,7 @@ describe("OpenAI Chat route", () => {
       )
 
       expect(replay.body.messages).toEqual([
-        { role: "assistant", content: null, reasoning_content: "AB", reasoning_details: [detail] },
+        { role: "assistant", content: "", reasoning_content: "AB", reasoning_details: [detail] },
       ])
     }),
   )
@@ -1044,7 +1062,7 @@ describe("OpenAI Chat route", () => {
       )
 
       expect(replay.body.messages).toEqual([
-        { role: "assistant", content: null, reasoning_content: "thinking", reasoning_details: details },
+        { role: "assistant", content: "", reasoning_content: "thinking", reasoning_details: details },
       ])
     }),
   )
@@ -1152,7 +1170,7 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
-  it.effect("fails a streamed tool call when the provider ends without a finish reason", () =>
+  it.effect("finalizes a streamed tool call when the provider ends without a finish reason", () =>
     Effect.gen(function* () {
       const body = sseEvents(
         deltaChunk({
@@ -1164,27 +1182,31 @@ describe("OpenAI Chat route", () => {
       const input = LLMRequest.update(request, {
         tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
       })
-      const events: LLMEvent[] = []
-      const streamError = yield* LLMClient.stream(input).pipe(
-        Stream.runForEach((event) => Effect.sync(() => events.push(event))),
-        Effect.flip,
-        Effect.provide(fixedResponse(body)),
-      )
-      const error = yield* LLMClient.generate(input).pipe(Effect.provide(fixedResponse(body)), Effect.flip)
+      const response = yield* LLMClient.generate(input).pipe(Effect.provide(fixedResponse(body)))
 
-      expect(events).toEqual([
+      expect(response.events).toEqual([
         { type: "step-start", index: 0 },
         { type: "tool-input-start", id: "call_1", name: "lookup", providerMetadata: undefined },
         { type: "tool-input-delta", id: "call_1", name: "lookup", text: '{"query"' },
         { type: "tool-input-delta", id: "call_1", name: "lookup", text: ':"weather"}' },
+        { type: "tool-input-end", id: "call_1", name: "lookup", providerMetadata: undefined },
+        {
+          type: "tool-call",
+          id: "call_1",
+          name: "lookup",
+          input: { query: "weather" },
+          providerExecuted: undefined,
+          providerMetadata: undefined,
+        },
+        {
+          type: "step-finish",
+          index: 0,
+          reason: { normalized: "tool-calls" },
+          usage: undefined,
+          providerMetadata: undefined,
+        },
+        { type: "finish", reason: { normalized: "tool-calls" }, usage: undefined },
       ])
-      expect(events.filter(LLMEvent.is.toolCall)).toEqual([])
-      expect(streamError.reason).toMatchObject({
-        _tag: "InvalidProviderOutput",
-        classification: "incomplete-stream",
-      })
-      expect(streamError.message).toContain("The provider response ended unexpectedly.")
-      expect(error.message).toContain("The provider response ended unexpectedly.")
     }),
   )
 

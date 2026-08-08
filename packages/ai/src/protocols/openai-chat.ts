@@ -371,12 +371,13 @@ const lowerAssistantMessage = Effect.fn("OpenAIChat.lowerAssistantMessage")(func
     return text
   })()
   const cached = message.content.findLast((part) => "cache" in part && part.cache !== undefined)
+  const cacheControl = options.cacheControl?.(cached && "cache" in cached ? cached.cache : undefined)
   const result = {
     role: "assistant" as const,
-    content: content.length === 0 ? null : ProviderShared.joinText(content),
-    tool_calls: toolCalls.length === 0 ? undefined : toolCalls,
-    reasoning_details: details,
-    cache_control: options.cacheControl?.(cached && "cache" in cached ? cached.cache : undefined),
+    content: content.length > 0 ? content.map((part) => part.text).join("") : toolCalls.length > 0 ? null : "",
+    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    ...(details !== undefined ? { reasoning_details: details } : {}),
+    ...(cacheControl !== undefined ? { cache_control: cacheControl } : {}),
   }
   if (field === undefined || reasoningText === undefined) return result
   return { ...result, [field]: reasoningText }
@@ -716,14 +717,13 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
       return [{ ...state, usage }, events] as const
     }
 
-    const reasoningField = state.reasoningField ?? (!state.lifecycle.text.has("text-0") ? reasoning?.field : undefined)
+    const reasoningField = state.reasoningField ?? reasoning?.field
     const detailDelta = Array.isArray(delta?.reasoning_details) ? delta.reasoning_details : undefined
     if (detailDelta !== undefined) appendReasoningDetails(state.reasoningDetails, detailDelta)
     const reasoningDetailsObserved = state.reasoningDetailsObserved || detailDelta !== undefined
     const deltaMetadata = reasoningMetadata(reasoningField)
     const text = detailDelta?.length ? (detailText(detailDelta) ?? reasoning?.text) : reasoning?.text
-    if (!state.lifecycle.text.has("text-0") && text !== undefined)
-      lifecycle = Lifecycle.reasoningDelta(lifecycle, events, "reasoning-0", text, deltaMetadata)
+    if (text !== undefined) lifecycle = Lifecycle.reasoningDelta(lifecycle, events, "reasoning-0", text, deltaMetadata)
     else if (
       reasoningDetailsObserved &&
       !lifecycle.reasoning.has("reasoning-0") &&
@@ -812,14 +812,18 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
 
 const finishEvents = (state: ParserState): ReadonlyArray<LLMEvent> => {
   const events: LLMEvent[] = []
-  const hasToolCalls = state.toolCallEvents.length > 0
+  const toolCallEvents =
+    state.finishReason === undefined && Object.keys(state.tools).length > 0
+      ? Effect.runSync(ToolStream.finishAll(ADAPTER, state.tools)).events
+      : state.toolCallEvents
+  const hasToolCalls = toolCallEvents.length > 0
   const reason = state.finishReason
     ? {
         ...state.finishReason,
         normalized:
           state.finishReason.normalized === "stop" && hasToolCalls ? "tool-calls" : state.finishReason.normalized,
       }
-    : undefined
+    : { normalized: hasToolCalls ? ("tool-calls" as const) : ("unknown" as const) }
   const metadata = reasoningMetadata(
     state.reasoningField,
     state.reasoningDetailsObserved ? state.reasoningDetails : undefined,
@@ -829,9 +833,9 @@ const finishEvents = (state: ParserState): ReadonlyArray<LLMEvent> => {
       ? Lifecycle.reasoningStart(state.lifecycle, events, "reasoning-0", reasoningMetadata(state.reasoningField))
       : state.lifecycle
   const ended = Lifecycle.reasoningEnd(started, events, "reasoning-0", metadata)
-  const lifecycle = state.toolCallEvents.length ? Lifecycle.stepStart(ended, events) : ended
-  events.push(...state.toolCallEvents)
-  if (reason) Lifecycle.finish(lifecycle, events, { reason, usage: state.usage })
+  const lifecycle = toolCallEvents.length ? Lifecycle.stepStart(ended, events) : ended
+  events.push(...toolCallEvents)
+  Lifecycle.finish(lifecycle, events, { reason, usage: state.usage })
   return events
 }
 
