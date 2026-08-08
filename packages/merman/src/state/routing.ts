@@ -590,14 +590,103 @@ function createStateTransitionRenderPlan(route: StateTransitionRoutePlan): State
   return builder
 }
 
+interface StateTransitionLabelRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+function labelRect(label: StateTransitionRenderLabel, width: number): StateTransitionLabelRect {
+  return { left: label.x, top: label.y, width, height: label.lines.length }
+}
+
+function rectsOverlap(left: StateTransitionLabelRect, right: StateTransitionLabelRect): boolean {
+  return (
+    left.left < right.left + right.width &&
+    left.left + left.width > right.left &&
+    left.top < right.top + right.height &&
+    left.top + left.height > right.top
+  )
+}
+
+function placeStateTransitionLabels(
+  plans: readonly StateTransitionRenderPlan[],
+  diagram: StateVisibleDiagram,
+  bounds: ReadonlyMap<string, BoxBounds>,
+): StateTransitionRenderPlan[] {
+  const routeCells = new Set(plans.flatMap((plan) => plan.cells.map((cell) => `${cell.x}:${cell.y}`)))
+  const placedLabels: StateTransitionLabelRect[] = []
+  const stateRects = diagram.states.flatMap((state) => {
+    const bound = bounds.get(state.id)
+    return bound && !isHiddenCompositeMarker(state)
+      ? [{ left: bound.left, top: bound.top, width: bound.width, height: bound.height }]
+      : []
+  })
+
+  return plans.map((plan) => {
+    if (!plan.label) return plan
+    const width = Math.max(...plan.label.lines.map(diagramTextWidth))
+    if (plan.label.lines.length === 1) {
+      placedLabels.push(labelRect(plan.label, width))
+      return plan
+    }
+    const statePadding = 1
+    const isClear = (x: number, y: number): boolean => {
+      if (x < 0 || y < 0) return false
+      const rect = labelRect({ ...plan.label!, x, y }, width)
+      if (
+        stateRects.some((state) =>
+          rectsOverlap(rect, {
+            left: state.left - statePadding,
+            top: state.top - statePadding,
+            width: state.width + statePadding * 2,
+            height: state.height + statePadding * 2,
+          }),
+        )
+      )
+        return false
+      if (placedLabels.some((label) => rectsOverlap(rect, label))) return false
+      for (let row = rect.top; row < rect.top + rect.height; row++) {
+        for (let column = rect.left; column < rect.left + rect.width; column++) {
+          if (routeCells.has(`${column}:${row}`)) return false
+        }
+      }
+      return true
+    }
+
+    let x = plan.label.x
+    let y = plan.label.y
+    if (!isClear(x, y)) {
+      search: for (let distance = 1; distance < 500; distance++) {
+        for (let dx = -distance; dx <= distance; dx++) {
+          const dy = distance - Math.abs(dx)
+          for (const candidateY of dy === 0 ? [y] : [y - dy, y + dy]) {
+            const candidateX = x + dx
+            if (!isClear(candidateX, candidateY)) continue
+            x = candidateX
+            y = candidateY
+            break search
+          }
+        }
+      }
+    }
+
+    placedLabels.push(labelRect({ ...plan.label, x, y }, width))
+    return { ...plan, label: { ...plan.label, x, y } }
+  })
+}
+
 export function createStateTransitionRenderPlans(
   diagram: StateVisibleDiagram,
   bounds: ReadonlyMap<string, BoxBounds>,
   feedbackLaneY: number,
   feedbackTopY?: number,
 ): StateTransitionRenderPlan[] {
-  return createStateTransitionRoutePlans(diagram, bounds, feedbackLaneY, feedbackTopY).map(
-    createStateTransitionRenderPlan,
+  return placeStateTransitionLabels(
+    createStateTransitionRoutePlans(diagram, bounds, feedbackLaneY, feedbackTopY).map(createStateTransitionRenderPlan),
+    diagram,
+    bounds,
   )
 }
 
