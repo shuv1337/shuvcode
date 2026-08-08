@@ -511,7 +511,10 @@ function collectSubgraphNodeIds(diagram: FlowchartDiagram, subgraphId: string): 
   return nodeIds
 }
 
-function rankGraphComponents(ids: readonly string[], outgoing: ReadonlyMap<string, ReadonlySet<string>>): Map<string, number> {
+function rankGraphComponents(
+  ids: readonly string[],
+  outgoing: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, number> {
   const reachable = new Map<string, Set<string>>()
   for (const id of ids) {
     const seen = new Set<string>()
@@ -530,7 +533,8 @@ function rankGraphComponents(ids: readonly string[], outgoing: ReadonlyMap<strin
   for (const id of ids) {
     if (componentById.has(id)) continue
     const component = ids.filter(
-      (candidate) => !componentById.has(candidate) && reachable.get(id)!.has(candidate) && reachable.get(candidate)!.has(id),
+      (candidate) =>
+        !componentById.has(candidate) && reachable.get(id)!.has(candidate) && reachable.get(candidate)!.has(id),
     )
     const componentIndex = components.length
     components.push(component)
@@ -685,9 +689,7 @@ function separateTopLevelItems(
   for (const rank of rankKeys) {
     const rankItems = itemsByRank
       .get(rank)!
-      .toSorted((a, b) =>
-        horizontal ? a.bounds.top - b.bounds.top : a.bounds.left - b.bounds.left,
-      )
+      .toSorted((a, b) => (horizontal ? a.bounds.top - b.bounds.top : a.bounds.left - b.bounds.left))
     let crossCursor: number | undefined
     for (const item of rankItems) {
       const start = horizontal ? item.bounds.top : item.bounds.left

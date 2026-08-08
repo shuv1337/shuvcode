@@ -515,8 +515,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       if (
         !info ||
         !currentModelLoad(generation, sdk) ||
-        (selected &&
-          (state.model?.providerID !== selected.providerID || state.model.modelID !== selected.modelID))
+        (selected && (state.model?.providerID !== selected.providerID || state.model.modelID !== selected.modelID))
       )
         return
       applyModelInfo(
@@ -674,8 +673,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         if (state.model || !currentClient(attempt)) return
         state.defaultModel = model
         state.variants = variantsFor(state.providers, model)
-        if (changed)
-          state.activeVariant = resolveVariant(ctx.variant, state.activeVariant, saved, state.variants)
+        if (changed) state.activeVariant = resolveVariant(ctx.variant, state.activeVariant, saved, state.variants)
         if (state.activeVariant) state.model = model
         footer.event({ type: "variants", variants: state.variants, current: state.activeVariant })
         footer.event({

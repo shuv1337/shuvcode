@@ -371,7 +371,9 @@ function renderEffectShape(
         .map((field) => {
           const schema = effectInputSchema(endpoint, field)
           if (schema === undefined) {
-            throw new GenerationError({ reason: `Missing Effect input schema: ${endpoint.group}.${endpoint.endpoint.identifier}.${field.name}` })
+            throw new GenerationError({
+              reason: `Missing Effect input schema: ${endpoint.group}.${endpoint.endpoint.identifier}.${field.name}`,
+            })
           }
           return `readonly ${JSON.stringify(field.name)}${field.optional ? "?" : ""}: ${effectType(schema, references, imports)}`
         })
@@ -453,11 +455,7 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
   return { names, asts, brands }
 }
 
-function effectType(
-  schema: Schema.Top,
-  references: ReturnType<typeof effectTypeReferences>,
-  imports: Set<string>,
-) {
+function effectType(schema: Schema.Top, references: ReturnType<typeof effectTypeReferences>, imports: Set<string>) {
   const projected = Schema.toType(schema)
   const direct = references.asts.get(schema.ast) ?? references.asts.get(projected.ast)
   if (direct !== undefined) {

@@ -239,8 +239,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       },
       latestTool(assistant: SessionMessageAssistant | undefined, id?: string) {
         return assistant?.content.findLast(
-          (item): item is SessionMessageAssistantTool =>
-            item.type === "tool" && (id === undefined || item.id === id),
+          (item): item is SessionMessageAssistantTool => item.type === "tool" && (id === undefined || item.id === id),
         )
       },
       latestText(assistant: SessionMessageAssistant | undefined) {

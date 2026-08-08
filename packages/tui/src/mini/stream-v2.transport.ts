@@ -1018,10 +1018,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
         write([compactionSummary(messageID, "", "final")])
         return
       }
-      write([
-        compactionSummary(messageID, "", "final"),
-        compactionError(messageID, event.data.error.message),
-      ])
+      write([compactionSummary(messageID, "", "final"), compactionError(messageID, event.data.error.message)])
       return
     }
     if (event.type === "session.shell.started") {
@@ -1729,7 +1726,13 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
         return
       }
       if (command) {
-        await runTurnWait(next, messageID, client, () => admitPrompt(next, client, next.prompt.delivery ?? "steer"), admitted)
+        await runTurnWait(
+          next,
+          messageID,
+          client,
+          () => admitPrompt(next, client, next.prompt.delivery ?? "steer"),
+          admitted,
+        )
         return
       }
 
@@ -1741,7 +1744,13 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       if (selected)
         await client.session.switchModel({ sessionID: input.sessionID, model: selected }, { signal: next.signal })
 
-      await runTurnWait(next, messageID, client, () => admitPrompt(next, client, next.prompt.delivery ?? "steer"), admitted)
+      await runTurnWait(
+        next,
+        messageID,
+        client,
+        () => admitPrompt(next, client, next.prompt.delivery ?? "steer"),
+        admitted,
+      )
     },
     async interruptActiveTurn() {
       // A running shell holds no drain, so session.interrupt cannot reach it;

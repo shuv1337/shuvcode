@@ -709,9 +709,7 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
       Boolean(delta?.content) ||
       reasoning !== undefined ||
       (Array.isArray(delta?.reasoning_details) && delta.reasoning_details.length > 0) ||
-      toolDeltas.some(
-        (tool) => Boolean(tool.id) || Boolean(tool.function?.name) || Boolean(tool.function?.arguments),
-      )
+      toolDeltas.some((tool) => Boolean(tool.id) || Boolean(tool.function?.name) || Boolean(tool.function?.arguments))
     if (state.finishReason !== undefined) {
       if (hasLateContent)
         return yield* ProviderShared.eventError(ADAPTER, "OpenAI Chat received content after the finish reason")
@@ -751,8 +749,7 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
       const fallback = toolDeltas.length > 1 ? position : (latestToolIndex ?? position)
       const fallbackTool = tools[fallback] ?? pendingTools[fallback]
       const index =
-        tool.index ?? matched ??
-        (tool.id && fallbackTool?.id && fallbackTool.id !== tool.id ? nextToolIndex : fallback)
+        tool.index ?? matched ?? (tool.id && fallbackTool?.id && fallbackTool.id !== tool.id ? nextToolIndex : fallback)
       const current = tools[index]
       const pending = pendingTools[index]
       const id = current?.id ?? pending?.id ?? (tool.id || undefined)

@@ -21,7 +21,9 @@ import { SimulatedProvider } from "./simulated-provider"
  *
  */
 
-export const simulationReplacements = Effect.fn("Simulation.replacements")(function* (app: { readonly version: string }) {
+export const simulationReplacements = Effect.fn("Simulation.replacements")(function* (app: {
+  readonly version: string
+}) {
   // ModelsDev dies when its catalog fetch fails, so simulation answers it with
   // an empty catalog; providers come from seeded config instead.
   const models = SimulationNetwork.json("GET", "https://models.dev/api.json", {})

@@ -190,10 +190,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   .find((item) => ServerConnection.key(item) === (route.server ?? server.key))
                 return conn ? { route, sdk: global.ensureServerCtx(conn).sdk } : undefined
               },
-              ({ route, sdk }) =>
-                sdk.api.session
-                  .get({ sessionID: route.sessionId })
-                  .catch(() => {}),
+              ({ route, sdk }) => sdk.api.session.get({ sessionID: route.sessionId }).catch(() => {}),
             )
 
             const matchRoute = (route: LayoutRoute) => {

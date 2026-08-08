@@ -7,8 +7,7 @@ type Rgb = readonly [number, number, number]
 const rgb = (value: Rgb) => RGBA.fromInts(...value)
 
 describe("OpenCode diagram palette", () => {
-  test.each(
-    [
+  test.each([
     {
       name: "dark theme",
       text: [230, 232, 240],
@@ -23,14 +22,13 @@ describe("OpenCode diagram palette", () => {
       secondary: [76, 80, 91],
       muted: [93, 98, 110],
     },
-    ] satisfies ReadonlyArray<{
-      name: string
-      text: Rgb
-      subdued: Rgb
-      secondary: Rgb
-      muted: Rgb
-    }>,
-  )("derives a controlled neutral ladder for a $name", ({ text, subdued, secondary, muted }) => {
+  ] satisfies ReadonlyArray<{
+    name: string
+    text: Rgb
+    subdued: Rgb
+    secondary: Rgb
+    muted: Rgb
+  }>)("derives a controlled neutral ladder for a $name", ({ text, subdued, secondary, muted }) => {
     const primary = rgb(text)
     const info = RGBA.fromInts(40, 120, 220)
     const background = RGBA.fromInts(10, 20, 30)

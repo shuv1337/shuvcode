@@ -201,9 +201,7 @@ export function createSessionRows(sessionID: Accessor<string>) {
 
   const queuedStart = (rows: SessionRow[]) => {
     const index = rows.findIndex(
-      (row) =>
-        row.type === "compaction-queued" ||
-        (row.type === "message" && isPending(row.messageID)),
+      (row) => row.type === "compaction-queued" || (row.type === "message" && isPending(row.messageID)),
     )
     return index === -1 ? rows.length : index
   }
@@ -288,11 +286,7 @@ export function createSessionRows(sessionID: Accessor<string>) {
   return rows
 }
 
-export function reduceSessionRows(
-  messages: SessionMessageInfo[],
-  inputs = new Set<string>(),
-  turnTokens = false,
-) {
+export function reduceSessionRows(messages: SessionMessageInfo[], inputs = new Set<string>(), turnTokens = false) {
   const isInput = (message: SessionMessageInfo) => inputs.has(message.id)
   const pendingCompactions = messages.filter((message) => message.type === "compaction" && message.status === "running")
   const pending = new Set([...pendingCompactions.map((message) => message.id), ...inputs])
@@ -306,8 +300,7 @@ export function reduceSessionRows(
   ].reduce<SessionRow[]>((rows, message) => {
     if (message.type !== "assistant") {
       if (message.type === "synthetic" && !message.description?.trim()) return rows
-      if (message.type === "compaction" && message.status === "completed" && usage)
-        usage.previousTurnCache = undefined
+      if (message.type === "compaction" && message.status === "completed" && usage) usage.previousTurnCache = undefined
       if (!pending.has(message.id)) completePrevious(rows)
       rows.push({ type: "message", messageID: message.id })
       return rows
@@ -391,7 +384,7 @@ function rowBoundaryMessageID(row: SessionRow, messages: Map<string, SessionMess
           ? row.messageID
           : row.type === "turn-usage"
             ? row.messageIDs[0]
-          : undefined
+            : undefined
   if (!messageID) return undefined
   const message = messages.get(messageID)
   if (message?.type === "assistant") return message.id

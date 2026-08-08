@@ -1,11 +1,7 @@
 import { Binary } from "@opencode-ai/core/util/binary"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { OpenCodeEvent, SessionApi, SessionInfo, SessionMessageInfo } from "@opencode-ai/client/promise"
-import type {
-  Message,
-  Part,
-  Todo,
-} from "@/types"
+import type { Message, Part, Todo } from "@/types"
 import type { FileDiffInfo, PermissionRequest, QuestionRequest, SessionStatus } from "@opencode-ai/client/promise"
 import { batch } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -38,14 +34,16 @@ function projectMessageSource(message: Message): SessionMessageInfo[] {
       { id: message.id, type: "user", text: "", time: message.time },
     ]
   }
-  return [{
-    id: message.id,
-    type: "assistant",
-    agent: message.agent ?? message.mode,
-    model: { id: message.modelID, providerID: message.providerID, variant: message.variant },
-    content: [],
-    time: message.time,
-  }]
+  return [
+    {
+      id: message.id,
+      type: "assistant",
+      agent: message.agent ?? message.mode,
+      model: { id: message.modelID, providerID: message.providerID, variant: message.variant },
+      content: [],
+      time: message.time,
+    },
+  ]
 }
 
 function needsOlderTurnRoot(source: readonly SessionMessageInfo[]) {
@@ -243,11 +241,7 @@ export function createServerSession(
   const indexProjectedMessage = (message: Message) => {
     const current = data.session_message[message.sessionID] ?? []
     if (current.some((item) => item.id === message.id)) return
-    setData(
-      "session_message",
-      message.sessionID,
-      reconcile([...current, ...projectMessageSource(message)]),
-    )
+    setData("session_message", message.sessionID, reconcile([...current, ...projectMessageSource(message)]))
   }
 
   const remember = (session: SessionInfo) => {

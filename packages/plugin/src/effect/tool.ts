@@ -5,10 +5,9 @@ import type { SessionMessage } from "@opencode-ai/schema/session-message"
 import type { Hooks, Transform } from "./registration.js"
 
 export interface ToolDraft {
-  add<
-    Input extends Tool.ValueSchema<any>,
-    Output extends Tool.ValueSchema<any> | undefined,
-  >(tool: Tool.Info<Input, Output>): void
+  add<Input extends Tool.ValueSchema<any>, Output extends Tool.ValueSchema<any> | undefined>(
+    tool: Tool.Info<Input, Output>,
+  ): void
 }
 
 export interface ToolHooks {

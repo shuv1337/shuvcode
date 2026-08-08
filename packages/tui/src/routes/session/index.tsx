@@ -887,13 +887,13 @@ export function Session() {
           if (options === null) return
 
           const content =
-              options.format === "markdown"
-                ? formatSessionTranscript(sessionData, messages(), options.thinking)
-                : JSON.stringify(
-                    await client.api.session.export({ sessionID: sessionData.id, sanitize: options.sanitize }),
-                    null,
-                    2,
-                  ) + EOL
+            options.format === "markdown"
+              ? formatSessionTranscript(sessionData, messages(), options.thinking)
+              : JSON.stringify(
+                  await client.api.session.export({ sessionID: sessionData.id, sanitize: options.sanitize }),
+                  null,
+                  2,
+                ) + EOL
 
           if (options.action === "copy") {
             await clipboard.write?.(content)
@@ -1191,11 +1191,7 @@ function SessionRowView(props: SessionRowViewProps) {
         </Match>
         <Match when={props.row.type === "turn-usage" ? props.row : undefined}>
           {(row) => (
-            <TurnTokenUsage
-              messageIDs={row().messageIDs}
-              previousCache={row().previousCache}
-              message={props.message}
-            />
+            <TurnTokenUsage messageIDs={row().messageIDs} previousCache={row().previousCache} message={props.message} />
           )}
         </Match>
       </Switch>
@@ -1302,21 +1298,10 @@ function TurnTokenToolCalls(props: { tools: SessionMessageAssistantTool[] }) {
         <For each={props.tools}>
           {(tool) => (
             <box flexDirection="row">
-              <text
-                width={nameWidth()}
-                flexShrink={0}
-                fg={theme.text.subdued}
-                attributes={TextAttributes.BOLD}
-              >
+              <text width={nameWidth()} flexShrink={0} fg={theme.text.subdued} attributes={TextAttributes.BOLD}>
                 {tool.name}
               </text>
-              <text
-                fg={theme.text.subdued}
-                attributes={TextAttributes.DIM}
-                wrapMode="word"
-                flexGrow={1}
-                minWidth={0}
-              >
+              <text fg={theme.text.subdued} attributes={TextAttributes.DIM} wrapMode="word" flexGrow={1} minWidth={0}>
                 {turnTokenToolSummary(tool)}
               </text>
             </box>
@@ -1333,9 +1318,7 @@ function turnTokenToolSummary(tool: SessionMessageAssistantTool) {
   const primaryKey = ["command", "id", "pattern", "url", "query", "path", "description", "code"].find(
     (key) => key in data,
   )
-  const input = Object.entries(data).filter(([, value]) =>
-    ["string", "number", "boolean"].includes(typeof value),
-  )
+  const input = Object.entries(data).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
   const primary = input.find(([key]) => key === primaryKey)?.[1]
   const details = input.filter(([key]) => key !== primaryKey).map(([key, value]) => `${key}: ${String(value)}`)
   return [primary === undefined ? "" : String(primary), ...details].filter(Boolean).join("  ")
@@ -1737,8 +1720,7 @@ function CompactionMessage(props: { message: Extract<SessionMessageInfo, { type:
   const text = () =>
     props.message.status === "failed" ? (cancelled() ? "" : props.message.error.message) : props.message.summary
   const content = createMemo(() => text().trim())
-  const color = () =>
-    status() === "failed" && !cancelled() ? theme.text.feedback.error.default : theme.text.subdued
+  const color = () => (status() === "failed" && !cancelled() ? theme.text.feedback.error.default : theme.text.subdued)
   return (
     <box>
       <box flexDirection="row" alignItems="center">
@@ -2319,10 +2301,7 @@ function GenericTool(props: ToolProps) {
             {(value) => (
               <box gap={1}>
                 <text>
-                  <span style={{ bg: theme.raise(theme.background.default), fg: theme.text.subdued }}>
-                    {" "}
-                    Output{" "}
-                  </span>
+                  <span style={{ bg: theme.raise(theme.background.default), fg: theme.text.subdued }}> Output </span>
                 </text>
                 <box paddingLeft={1}>
                   <text fg={theme.text.default} wrapMode="word">
@@ -2574,9 +2553,7 @@ function BlockToolContent(props: BlockToolProps & { borderColor: RGBA }) {
               <Show
                 when={props.spinner}
                 fallback={
-                  <text fg={permission() ? theme.text.feedback.warning.default : theme.text.subdued}>
-                    {title()}
-                  </text>
+                  <text fg={permission() ? theme.text.feedback.warning.default : theme.text.subdued}>{title()}</text>
                 }
               >
                 <Spinner color={permission() ? theme.text.feedback.warning.default : theme.text.subdued}>

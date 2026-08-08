@@ -171,8 +171,8 @@ test("keeps the review tree and terminal sized when both panels are open", async
   expect(bottomGap).toBeLessThanOrEqual(16)
   const lazyDiff = page.waitForRequest((request) => {
     const url = new URL(request.url())
-      return (
-        url.pathname === "/api/vcs/diff" &&
+    return (
+      url.pathname === "/api/vcs/diff" &&
       url.searchParams.get("location[directory]")?.replaceAll("\\", "/").endsWith("/src/branch/d00027") === true
     )
   })

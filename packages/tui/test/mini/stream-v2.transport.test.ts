@@ -742,14 +742,17 @@ describe("V2 mini transport", () => {
     const prompt = spyOn(client.session, "prompt").mockImplementation(
       (request) => ok(promptAdmission(request)) as never,
     )
-    await transport.admitPromptTurn({
-      agent: "review",
-      model: { providerID: "test", modelID: "next" },
-      variant: "high",
-      prompt: { messageID: "msg_next", text: "another", parts: [] },
-      files: [],
-      includeFiles: false,
-    }, "queue")
+    await transport.admitPromptTurn(
+      {
+        agent: "review",
+        model: { providerID: "test", modelID: "next" },
+        variant: "high",
+        prompt: { messageID: "msg_next", text: "another", parts: [] },
+        files: [],
+        includeFiles: false,
+      },
+      "queue",
+    )
     expect(client.session.switchAgent).toHaveBeenCalledWith({ sessionID: "ses_1", agent: "review" }, expect.anything())
     expect(client.session.switchModel).toHaveBeenCalledWith(
       { sessionID: "ses_1", model: { providerID: "test", id: "next", variant: "high" } },
@@ -851,14 +854,17 @@ describe("V2 mini transport", () => {
       durable: durable("ses_1", 2),
       data: { sessionID: "ses_1", inputID: "msg_prompt" },
     })
-    await transport.admitPromptTurn({
-      agent: undefined,
-      model: undefined,
-      variant: undefined,
-      prompt: { messageID: "msg_queued", text: "follow up", parts: [] },
-      files: [],
-      includeFiles: false,
-    }, "queue")
+    await transport.admitPromptTurn(
+      {
+        agent: undefined,
+        model: undefined,
+        variant: undefined,
+        prompt: { messageID: "msg_queued", text: "follow up", parts: [] },
+        files: [],
+        includeFiles: false,
+      },
+      "queue",
+    )
     events.push({
       id: "evt_queued_promoted",
       created: 3,

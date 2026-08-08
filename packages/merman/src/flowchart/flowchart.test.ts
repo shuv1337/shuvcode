@@ -1100,7 +1100,9 @@ flowchart LR
     "separates oversized parallel subgraph labels across %s diagrams",
     (direction) => {
       const horizontal = direction === "LR" || direction === "RL"
-      const label = horizontal ? "one<br/>two<br/>three<br/>four<br/>five" : "A very very wide downstream subgraph title"
+      const label = horizontal
+        ? "one<br/>two<br/>three<br/>four<br/>five"
+        : "A very very wide downstream subgraph title"
       const layout = layoutFlowchartDiagram(`flowchart ${direction}
   subgraph source [Source]
     A[A]

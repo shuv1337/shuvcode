@@ -2040,9 +2040,9 @@ test("keeps shell state scoped to location", async () => {
       data.shell.list({ directory: other, workspaceID: workspace }).some((shell) => shell.id === "sh_live_other"),
     )
     expect(data.shell.list().map((shell) => shell.id)).toEqual(["sh_default"])
-    expect(data.shell.listBySession("ses_shared").find((shell) => shell.id === "sh_live_other")?.location.directory).toBe(
-      other,
-    )
+    expect(
+      data.shell.listBySession("ses_shared").find((shell) => shell.id === "sh_live_other")?.location.directory,
+    ).toBe(other)
   } finally {
     app.renderer.destroy()
   }
@@ -2930,8 +2930,7 @@ async function mountData(parents: Record<string, string>, costs: Record<string, 
       })
     }
     const match = url.pathname.match(/^\/api\/session\/([^/]+)$/)
-    if (match && match[1] !== "active")
-      return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
+    if (match && match[1] !== "active") return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
   })
   let data!: ReturnType<typeof useData>
   let ready!: () => void
