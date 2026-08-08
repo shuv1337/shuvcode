@@ -1631,21 +1631,13 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
   const interrupted = createMemo(() => props.message.error?.message === "Step interrupted")
   return (
     <>
-      <Show when={props.message.error && !interrupted()}>
-        <box
-          border={["left"]}
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          backgroundColor={theme.background.default}
-          customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.text.feedback.error.default}
-        >
-          <text fg={theme.text.subdued}>{errorMessage(props.message.error)}</text>
+      <Show when={props.message.error && !interrupted() && !props.message.retry}>
+        <box paddingLeft={3}>
+          <text fg={theme.text.feedback.error.default}>Error: {errorMessage(props.message.error)}</text>
         </box>
       </Show>
       <AssistantRetry retry={props.message.retry} />
-      <box paddingLeft={3} marginTop={props.message.error && !interrupted() ? 1 : 0}>
+      <box paddingLeft={3} marginTop={props.message.retry || (props.message.error && !interrupted()) ? 1 : 0}>
         <text>
           <span style={{ fg: props.message.error ? theme.text.subdued : local.agent.color(props.message.agent) }}>
             {Locale.titlecase(props.message.agent)}
@@ -2045,9 +2037,9 @@ function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
   return (
     <Show when={props.retry}>
       {(retry) => (
-        <box paddingLeft={3} marginTop={1}>
-          <text fg={theme.text.subdued}>
-            Retry attempt {retry().attempt} scheduled: {retry().error.message} [{retry().error.type}]
+        <box paddingLeft={3}>
+          <text fg={theme.text.feedback.warning.default}>
+            ⚠ Retry attempt {retry().attempt} scheduled: {retry().error.message}
           </text>
         </box>
       )}
