@@ -126,6 +126,7 @@ export const Definitions = {
   session_tab_select_7: keybind("<leader>7,ctrl+7", "Switch to tab 7"),
   session_tab_select_8: keybind("<leader>8,ctrl+8", "Switch to tab 8"),
   session_tab_select_9: keybind("<leader>9,ctrl+9", "Switch to tab 9"),
+  session_tab_select_10: keybind("<leader>0,ctrl+0", "Switch to tab 10"),
 
   stash_delete: keybind("ctrl+d", "Delete stash entry"),
   model_provider_list: keybind("ctrl+a", "Open provider list from model dialog"),
@@ -329,6 +330,7 @@ export const CommandMap = {
   session_tab_select_7: "session.tab.select.7",
   session_tab_select_8: "session.tab.select.8",
   session_tab_select_9: "session.tab.select.9",
+  session_tab_select_10: "session.tab.select.10",
   stash_delete: "stash.delete",
   model_provider_list: "model.dialog.provider",
   model_favorite_toggle: "model.dialog.favorite",
