@@ -1,5 +1,4 @@
 import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import { shouldUseResponsesApi } from "@opencode-ai/ai/providers/github-copilot"
 import { Effect, Option, Schema, Semaphore, Stream } from "effect"
 import { Catalog } from "../../catalog"
 import { Credential } from "../../credential"
@@ -47,30 +46,33 @@ const oauth = (app: App.Info) =>
       id: methodID,
       type: "oauth",
       label: "Login with GitHub Copilot",
-      prompts: [
+      form: [
         {
-          type: "select",
+          type: "string",
           key: "deploymentType",
-          message: "Select GitHub deployment type",
+          title: "Select GitHub deployment type",
+          required: true,
           options: [
-            { label: "GitHub.com", value: "github.com", hint: "Public" },
-            { label: "GitHub Enterprise", value: "enterprise", hint: "Data residency or self-hosted" },
+            { label: "GitHub.com", value: "github.com", description: "Public" },
+            { label: "GitHub Enterprise", value: "enterprise", description: "Data residency or self-hosted" },
           ],
         },
         {
-          type: "text",
+          type: "string",
           key: "enterpriseUrl",
-          message: "Enter your GitHub Enterprise URL or domain",
+          title: "Enter your GitHub Enterprise URL or domain",
           placeholder: "company.ghe.com or https://company.ghe.com",
-          when: { key: "deploymentType", op: "eq", value: "enterprise" },
+          required: true,
+          when: [{ key: "deploymentType", op: "eq", value: "enterprise" }],
         },
       ],
     },
-    authorize: (inputs) =>
+    authorize: (answer) =>
       Effect.gen(function* () {
-        const enterprise = inputs.deploymentType === "enterprise"
-        if (enterprise && !inputs.enterpriseUrl) return yield* Effect.fail(new Error("Enterprise URL is required"))
-        const domain = enterprise ? normalizeDomain(inputs.enterpriseUrl ?? "") : "github.com"
+        const enterprise = answer.deploymentType === "enterprise"
+        const enterpriseUrl = typeof answer.enterpriseUrl === "string" ? answer.enterpriseUrl : undefined
+        if (enterprise && !enterpriseUrl) return yield* Effect.fail(new Error("Enterprise URL is required"))
+        const domain = enterprise ? normalizeDomain(enterpriseUrl ?? "") : "github.com"
         const urls = oauthURLs(domain)
         const device = yield* request(urls.device, {
           method: "POST",
@@ -188,6 +190,7 @@ export const GithubCopilotPlugin = define({
     })
 
     yield* ctx.integration.transform((draft) => {
+      draft.method.remove("github-copilot", { type: "key" })
       draft.method.update(oauth(ctx.app))
     })
     yield* ctx.catalog.transform((evt) => {
@@ -226,24 +229,24 @@ export const GithubCopilotPlugin = define({
       "sdk",
       Effect.fn(function* (evt) {
         if (evt.model.providerID !== Provider.ID.githubCopilot) return
-        if (evt.package !== "@ai-sdk/github-copilot" && evt.package !== "@ai-sdk/anthropic") return
+        if (evt.package !== "@ai-sdk/github-copilot") return
         evt.options.fetch = copilotFetch(
           typeof evt.options.apiKey === "string" ? evt.options.apiKey : undefined,
           evt.options.fetch,
-          evt.package === "@ai-sdk/anthropic",
           ctx.app,
         )
-        if (evt.package === "@ai-sdk/anthropic") {
-          evt.options.headers = {
-            ...evt.options.headers,
-            "anthropic-beta": "interleaved-thinking-2025-05-14",
-          }
-          const mod = yield* Effect.promise(() => import("@ai-sdk/anthropic"))
-          evt.sdk = mod.createAnthropic(evt.options)
-          return
-        }
         const mod = yield* Effect.promise(() => import("../../github-copilot/copilot-provider"))
         evt.sdk = mod.createOpenaiCompatible(evt.options)
+      }),
+    )
+    yield* ctx.session.hook("http.request", (evt) =>
+      Effect.gen(function* () {
+        if (evt.model.providerID !== Provider.ID.githubCopilot) return
+        const token = evt.request.headers.get("x-api-key")
+        if (!token) return
+        const text = yield* Effect.promise(() => evt.request.clone().text())
+        const body = Option.getOrUndefined(decodeBody(text))
+        applyHeaders(evt.request.headers, token, ctx.app, requestMetadata(evt.request.url, body), true)
       }),
     )
     yield* ctx.aisdk.hook(
@@ -263,7 +266,9 @@ export const GithubCopilotPlugin = define({
           return
         }
         const id = evt.model.modelID ?? evt.model.id
-        evt.language = shouldUseResponsesApi(id) ? evt.sdk.responses(id) : evt.sdk.chat(id)
+        const match = /^gpt-(\d+)/.exec(id)
+        evt.language =
+          match && Number(match[1]) >= 5 && !id.startsWith("gpt-5-mini") ? evt.sdk.responses(id) : evt.sdk.chat(id)
       }),
     )
   }),
@@ -312,33 +317,38 @@ function request(url: string, init: RequestInit) {
 
 type Fetch = (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>
 
-export function copilotFetch(
-  token: string | undefined,
-  upstream: Fetch | undefined,
-  anthropic: boolean,
-  app: App.Info,
-): Fetch {
+export function copilotFetch(token: string | undefined, upstream: Fetch | undefined, app: App.Info): Fetch {
   const send = upstream ?? fetch
   return async (input, init) => {
     const requestHeaders = new Headers(init?.headers)
-    if (token) {
-      requestHeaders.delete("authorization")
-      requestHeaders.delete("x-api-key")
-      requestHeaders.set("Authorization", `Bearer ${token}`)
-    }
-    requestHeaders.set("User-Agent", App.useragent(app))
-    requestHeaders.set("Openai-Intent", "conversation-edits")
-    requestHeaders.set("X-GitHub-Api-Version", apiVersion)
-    if (anthropic) requestHeaders.set("anthropic-beta", "interleaved-thinking-2025-05-14")
-
     const url = input instanceof URL ? input.href : typeof input === "string" ? input : input.url
     const body = typeof init?.body === "string" ? Option.getOrUndefined(decodeBody(init.body)) : undefined
-    const metadata = requestMetadata(url, body)
-    requestHeaders.set("x-initiator", metadata.agent ? "agent" : "user")
-    if (metadata.vision) requestHeaders.set("Copilot-Vision-Request", "true")
+    applyHeaders(requestHeaders, token, app, requestMetadata(url, body), false)
     return send(input, { ...init, headers: requestHeaders })
   }
 }
+
+function applyHeaders(
+  headers: Headers,
+  token: string | undefined,
+  app: App.Info,
+  metadata: RequestMetadata,
+  anthropic: boolean,
+) {
+  if (token) {
+    headers.delete("authorization")
+    headers.delete("x-api-key")
+    headers.set("Authorization", `Bearer ${token}`)
+  }
+  headers.set("User-Agent", App.useragent(app))
+  headers.set("Openai-Intent", "conversation-edits")
+  headers.set("X-GitHub-Api-Version", apiVersion)
+  headers.set("x-initiator", metadata.agent ? "agent" : "user")
+  if (metadata.vision) headers.set("Copilot-Vision-Request", "true")
+  if (anthropic) headers.set("anthropic-beta", "interleaved-thinking-2025-05-14")
+}
+
+type RequestMetadata = ReturnType<typeof requestMetadata>
 
 function requestMetadata(url: string, body: unknown) {
   if (!record(body)) return { agent: false, vision: false }

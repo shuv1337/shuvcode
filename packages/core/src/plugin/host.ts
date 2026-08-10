@@ -190,6 +190,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: import("../p
           integration.connection.key({
             integrationID: Integration.ID.make(input.integrationID),
             key: input.key,
+            answer: input.answer,
             label: input.label,
           }),
       },
@@ -199,7 +200,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: import("../p
             integration.oauth.connect({
               integrationID: Integration.ID.make(input.integrationID),
               methodID: Integration.MethodID.make(input.methodID),
-              inputs: input.inputs,
+              answer: input.answer,
               label: input.label,
             }),
           ),
@@ -260,7 +261,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: import("../p
             update: (id, update) => draft.update(Integration.ID.make(id), update),
             remove: (id) => draft.remove(Integration.ID.make(id)),
             method: {
-              list: (id) => mutable(draft.method.list(Integration.ID.make(id))),
+              list: (id) => draft.method.list(Integration.ID.make(id)),
               update: (input) => draft.method.update(methodImplementation(input)),
               remove: (id, method) =>
                 draft.method.remove(Integration.ID.make(id), Schema.decodeUnknownSync(Integration.Method)(method)),
@@ -363,8 +364,8 @@ function methodImplementation(input: IntegrationMethodRegistration): Integration
     return {
       integrationID: Integration.ID.make(input.integrationID),
       method: { ...input.method, id: Integration.MethodID.make(input.method.id) },
-      authorize: (inputs) =>
-        input.authorize(inputs).pipe(
+      authorize: (answer) =>
+        input.authorize(answer).pipe(
           Effect.map((authorization) => {
             if (authorization.mode === "auto") {
               return {
@@ -385,18 +386,18 @@ function methodImplementation(input: IntegrationMethodRegistration): Integration
   if (input.method.type === "env") {
     return {
       integrationID: Integration.ID.make(input.integrationID),
-      method: { type: "env", names: input.method.names },
+      method: input.method,
     }
   }
   if (input.method.type === "command") {
     return {
       integrationID: Integration.ID.make(input.integrationID),
-      method: Schema.decodeUnknownSync(Integration.CommandMethod)(input.method),
+      method: { ...input.method, id: Integration.MethodID.make(input.method.id) },
     }
   }
   return {
     integrationID: Integration.ID.make(input.integrationID),
-    method: { type: "key", label: input.method.label },
+    method: input.method,
   }
 }
 
