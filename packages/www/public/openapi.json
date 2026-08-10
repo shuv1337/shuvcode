@@ -5183,6 +5183,16 @@
                   "key": {
                     "type": "string"
                   },
+                  "answer": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Form.Answer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "label": {
                     "anyOf": [
                       {
@@ -5318,11 +5328,15 @@
                   "methodID": {
                     "type": "string"
                   },
-                  "inputs": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
+                  "answer": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Form.Answer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "label": {
                     "anyOf": [
@@ -5335,7 +5349,7 @@
                     ]
                   }
                 },
-                "required": ["methodID", "inputs"],
+                "required": ["methodID"],
                 "additionalProperties": false
               }
             }
@@ -18189,7 +18203,7 @@
         "required": ["_tag", "providerID", "message"],
         "additionalProperties": false
       },
-      "Integration.When": {
+      "Form.When": {
         "type": "object",
         "properties": {
           "key": {
@@ -18200,73 +18214,497 @@
             "enum": ["eq", "neq"]
           },
           "value": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["NaN"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity"]
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["-Infinity"]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "boolean"
+              }
+            ]
           }
         },
         "required": ["key", "op", "value"],
         "additionalProperties": false
       },
-      "Integration.TextPrompt": {
+      "Form.Option": {
         "type": "object",
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["text"]
+          "value": {
+            "type": "string"
           },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["value", "label"],
+        "additionalProperties": false
+      },
+      "Form.StringField": {
+        "type": "object",
+        "properties": {
           "key": {
             "type": "string"
           },
-          "message": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.When"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["string"]
+          },
+          "format": {
+            "type": "string",
+            "enum": ["email", "uri", "date", "date-time"]
+          },
+          "minLength": {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 0
+              }
+            ]
+          },
+          "maxLength": {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 0
+              }
+            ]
+          },
+          "pattern": {
             "type": "string"
           },
           "placeholder": {
             "type": "string"
           },
-          "when": {
-            "$ref": "#/components/schemas/Integration.When"
-          }
-        },
-        "required": ["type", "key", "message"],
-        "additionalProperties": false
-      },
-      "Integration.SelectPrompt": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["select"]
-          },
-          "key": {
-            "type": "string"
-          },
-          "message": {
+          "default": {
             "type": "string"
           },
           "options": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "label": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
-                },
-                "hint": {
-                  "type": "string"
-                }
-              },
-              "required": ["label", "value"],
-              "additionalProperties": false
+              "$ref": "#/components/schemas/Form.Option"
             }
           },
-          "when": {
-            "$ref": "#/components/schemas/Integration.When"
+          "custom": {
+            "type": "boolean"
           }
         },
-        "required": ["type", "key", "message", "options"],
+        "required": ["key", "type"],
         "additionalProperties": false
+      },
+      "Form.NumberField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.When"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["number"]
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "maximum": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "default": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["key", "type"],
+        "additionalProperties": false
+      },
+      "Form.IntegerField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.When"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["integer"]
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "maximum": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "default": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["key", "type"],
+        "additionalProperties": false
+      },
+      "Form.BooleanField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.When"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["boolean"]
+          },
+          "default": {
+            "type": "boolean"
+          }
+        },
+        "required": ["key", "type"],
+        "additionalProperties": false
+      },
+      "Form.MultiselectField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.When"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["multiselect"]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form.Option"
+            }
+          },
+          "minItems": {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 0
+              }
+            ]
+          },
+          "maxItems": {
+            "type": "integer",
+            "allOf": [
+              {
+                "minimum": 0
+              }
+            ]
+          },
+          "custom": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["key", "type", "options"],
+        "additionalProperties": false
+      },
+      "Form.ExternalField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["external"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["key", "type", "url"],
+        "additionalProperties": false
+      },
+      "Form.Field": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Form.StringField"
+          },
+          {
+            "$ref": "#/components/schemas/Form.NumberField"
+          },
+          {
+            "$ref": "#/components/schemas/Form.IntegerField"
+          },
+          {
+            "$ref": "#/components/schemas/Form.BooleanField"
+          },
+          {
+            "$ref": "#/components/schemas/Form.MultiselectField"
+          },
+          {
+            "$ref": "#/components/schemas/Form.ExternalField"
+          }
+        ]
+      },
+      "Form.Fields": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "$ref": "#/components/schemas/Form.Field"
+          }
+        ],
+        "minItems": 1,
+        "items": {
+          "$ref": "#/components/schemas/Form.Field"
+        }
       },
       "Integration.OAuthMethod": {
         "type": "object",
@@ -18281,18 +18719,8 @@
           "label": {
             "type": "string"
           },
-          "prompts": {
-            "type": "array",
-            "items": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Integration.TextPrompt"
-                },
-                {
-                  "$ref": "#/components/schemas/Integration.SelectPrompt"
-                }
-              ]
-            }
+          "form": {
+            "$ref": "#/components/schemas/Form.Fields"
           }
         },
         "required": ["id", "type", "label"],
@@ -18330,6 +18758,9 @@
           },
           "label": {
             "type": "string"
+          },
+          "form": {
+            "$ref": "#/components/schemas/Form.Fields"
           }
         },
         "required": ["type"],
@@ -18433,6 +18864,55 @@
         },
         "required": ["id", "name", "methods", "connections"],
         "additionalProperties": false
+      },
+      "Form.Value": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["NaN"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity"]
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["-Infinity"]
+                  }
+                ]
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "Form.Answer": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/Form.Value"
+        }
       },
       "Integration.Attempt": {
         "type": "object",
@@ -19637,509 +20117,6 @@
       "Form.Metadata": {
         "type": "object"
       },
-      "Form.When": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "op": {
-            "type": "string",
-            "enum": ["eq", "neq"]
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "anyOf": [
-                  {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string",
-                        "enum": ["NaN"]
-                      },
-                      {
-                        "type": "string",
-                        "enum": ["Infinity"]
-                      },
-                      {
-                        "type": "string",
-                        "enum": ["-Infinity"]
-                      }
-                    ]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity", "-Infinity", "NaN"]
-                  }
-                ]
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
-        },
-        "required": ["key", "op", "value"],
-        "additionalProperties": false
-      },
-      "Form.Option": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          }
-        },
-        "required": ["value", "label"],
-        "additionalProperties": false
-      },
-      "Form.StringField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "when": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.When"
-            }
-          },
-          "type": {
-            "type": "string",
-            "enum": ["string"]
-          },
-          "format": {
-            "type": "string",
-            "enum": ["email", "uri", "date", "date-time"]
-          },
-          "minLength": {
-            "type": "integer",
-            "allOf": [
-              {
-                "minimum": 0
-              }
-            ]
-          },
-          "maxLength": {
-            "type": "integer",
-            "allOf": [
-              {
-                "minimum": 0
-              }
-            ]
-          },
-          "pattern": {
-            "type": "string"
-          },
-          "placeholder": {
-            "type": "string"
-          },
-          "default": {
-            "type": "string"
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.Option"
-            }
-          },
-          "custom": {
-            "type": "boolean"
-          }
-        },
-        "required": ["key", "type"],
-        "additionalProperties": false
-      },
-      "Form.NumberField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "when": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.When"
-            }
-          },
-          "type": {
-            "type": "string",
-            "enum": ["number"]
-          },
-          "minimum": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          },
-          "maximum": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          },
-          "default": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          }
-        },
-        "required": ["key", "type"],
-        "additionalProperties": false
-      },
-      "Form.IntegerField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "when": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.When"
-            }
-          },
-          "type": {
-            "type": "string",
-            "enum": ["integer"]
-          },
-          "minimum": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          },
-          "maximum": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          },
-          "default": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          }
-        },
-        "required": ["key", "type"],
-        "additionalProperties": false
-      },
-      "Form.BooleanField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "when": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.When"
-            }
-          },
-          "type": {
-            "type": "string",
-            "enum": ["boolean"]
-          },
-          "default": {
-            "type": "boolean"
-          }
-        },
-        "required": ["key", "type"],
-        "additionalProperties": false
-      },
-      "Form.MultiselectField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "required": {
-            "type": "boolean"
-          },
-          "when": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.When"
-            }
-          },
-          "type": {
-            "type": "string",
-            "enum": ["multiselect"]
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Form.Option"
-            }
-          },
-          "minItems": {
-            "type": "integer",
-            "allOf": [
-              {
-                "minimum": 0
-              }
-            ]
-          },
-          "maxItems": {
-            "type": "integer",
-            "allOf": [
-              {
-                "minimum": 0
-              }
-            ]
-          },
-          "custom": {
-            "type": "boolean"
-          },
-          "default": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": ["key", "type", "options"],
-        "additionalProperties": false
-      },
-      "Form.ExternalField": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["external"]
-          },
-          "url": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          }
-        },
-        "required": ["key", "type", "url"],
-        "additionalProperties": false
-      },
-      "Form.Field": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/Form.StringField"
-          },
-          {
-            "$ref": "#/components/schemas/Form.NumberField"
-          },
-          {
-            "$ref": "#/components/schemas/Form.IntegerField"
-          },
-          {
-            "$ref": "#/components/schemas/Form.BooleanField"
-          },
-          {
-            "$ref": "#/components/schemas/Form.MultiselectField"
-          },
-          {
-            "$ref": "#/components/schemas/Form.ExternalField"
-          }
-        ]
-      },
-      "Form.Fields": {
-        "type": "array",
-        "prefixItems": [
-          {
-            "$ref": "#/components/schemas/Form.Field"
-          }
-        ],
-        "minItems": 1,
-        "items": {
-          "$ref": "#/components/schemas/Form.Field"
-        }
-      },
       "Form.Info": {
         "type": "object",
         "properties": {
@@ -20214,55 +20191,6 @@
         },
         "required": ["_tag", "id", "message"],
         "additionalProperties": false
-      },
-      "Form.Value": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["NaN"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["Infinity"]
-                  },
-                  {
-                    "type": "string",
-                    "enum": ["-Infinity"]
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              }
-            ]
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        ]
-      },
-      "Form.Answer": {
-        "type": "object",
-        "additionalProperties": {
-          "$ref": "#/components/schemas/Form.Value"
-        }
       },
       "Form.State": {
         "anyOf": [
@@ -22458,7 +22386,7 @@
           }
         ]
       },
-      "Form.Fields1": {
+      "Form.Fields3": {
         "type": "array",
         "prefixItems": [
           {
@@ -22491,7 +22419,7 @@
             "$ref": "#/components/schemas/Form.Metadata1"
           },
           "fields": {
-            "$ref": "#/components/schemas/Form.Fields1"
+            "$ref": "#/components/schemas/Form.Fields3"
           }
         },
         "required": ["id", "sessionID", "title", "fields"],
