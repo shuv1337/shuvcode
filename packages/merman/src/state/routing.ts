@@ -208,10 +208,10 @@ function verticalCorridorCrossesUnrelatedState(
     const bound = bounds.get(state.id)
     return Boolean(
       bound &&
-      from.centerX >= bound.left &&
-      from.centerX < bound.left + bound.width &&
-      top < bound.top + bound.height &&
-      bottom >= bound.top,
+        from.centerX >= bound.left &&
+        from.centerX < bound.left + bound.width &&
+        top < bound.top + bound.height &&
+        bottom >= bound.top,
     )
   })
 }
@@ -263,10 +263,10 @@ function bottomApproachX(
       const bound = bounds.get(state.id)
       return Boolean(
         bound &&
-        x >= bound.left &&
-        x < bound.left + bound.width &&
-        top < bound.top + bound.height &&
-        bottom >= bound.top,
+          x >= bound.left &&
+          x < bound.left + bound.width &&
+          top < bound.top + bound.height &&
+          bottom >= bound.top,
       )
     })
 
