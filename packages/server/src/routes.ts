@@ -7,7 +7,6 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Bus } from "@opencode-ai/core/bus"
 import { EventLogger } from "@opencode-ai/core/event-logger"
 import { FileSystemSearch } from "@opencode-ai/core/filesystem/search"
-import { Observability } from "@opencode-ai/util/observability"
 import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
 import { Command } from "@opencode-ai/core/command"
@@ -131,13 +130,6 @@ function makeRoutes<AuthError, AuthServices>(
         }),
       )
     : AppNodeBuilder.build(applicationServices, replacements)
-  const observability = Observability.layer({
-    ...options.observability,
-    client: options.app?.name,
-    version: options.app?.version,
-    channel: options.app?.channel,
-  })
-
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
@@ -161,6 +153,5 @@ function makeRoutes<AuthError, AuthServices>(
       )
       return Layer.merge(api, V1Migration.layer.pipe(Layer.provide(services)))
     }),
-    Layer.provide(observability),
   )
 }
