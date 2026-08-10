@@ -42,6 +42,27 @@ const model = (packageName: string | undefined, options: ModelOptions = {}) =>
     limit: options.limit ?? { context: 100, output: 20 },
   })
 
+function withEnv<A, E, R>(variables: Record<string, string | undefined>, effect: () => Effect.Effect<A, E, R>) {
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]))
+      Object.entries(variables).forEach(([key, value]) => {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      })
+      return previous
+    }),
+    effect,
+    (previous) =>
+      Effect.sync(() => {
+        Object.entries(previous).forEach(([key, value]) => {
+          if (value === undefined) delete process.env[key]
+          else process.env[key] = value
+        })
+      }),
+  )
+}
+
 describe("ModelResolver", () => {
   it.effect("constructs native Azure requests with deployment IDs and projected resource URLs", () =>
     Effect.gen(function* () {
@@ -228,6 +249,42 @@ describe("ModelResolver", () => {
       expect(resolved.route.endpoint.baseURL).toBe("https://compatible.example/v1")
       expect(resolved.route.defaults.http?.body).toEqual({})
     }),
+  )
+
+  it.effect("resolves provider URLs from environment without mutating the catalog model", () =>
+    withEnv({ ACME_HOST: "api.acme.test" }, () =>
+      Effect.gen(function* () {
+        const catalog = model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+          settings: { baseURL: "https://${ACME_HOST}/v1" },
+        })
+        const resolved = yield* ModelResolver.fromCatalogModel(catalog)
+
+        expect(resolved.route.endpoint.baseURL).toBe("https://api.acme.test/v1")
+        expect(catalog.settings?.baseURL).toBe("https://${ACME_HOST}/v1")
+      }),
+    ),
+  )
+
+  it.effect("rejects unresolved provider URL variables before route construction", () =>
+    withEnv({ REQUIRED_HOST: undefined }, () =>
+      Effect.gen(function* () {
+        const failure = yield* ModelResolver.fromCatalogModel(
+          model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+            settings: { baseURL: "https://${REQUIRED_HOST}/${REQUIRED_PATH}/v1" },
+          }),
+        ).pipe(Effect.flip)
+
+        expect(failure).toMatchObject({
+          _tag: "SessionRunnerModel.UnresolvedProviderVariablesError",
+          providerID: "test-provider",
+          modelID: "test-model",
+          variables: ["REQUIRED_HOST", "REQUIRED_PATH"],
+        })
+        expect(failure.message).toBe(
+          "Cannot initialize test-provider/test-model: REQUIRED_HOST, REQUIRED_PATH are required to resolve the provider endpoint",
+        )
+      }),
+    ),
   )
 
   it.effect("overlays selected OpenAI variant settings and bodies", () =>

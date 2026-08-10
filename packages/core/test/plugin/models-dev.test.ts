@@ -242,7 +242,7 @@ describe("ModelsDevPlugin", () => {
     }).pipe(Effect.provide(models(path.join(import.meta.dir, "fixtures", "models-dev.json")))),
   )
 
-  it.effect("resolves declared environment variables in provider and model URLs", () =>
+  it.effect("preserves provider and model URL templates in the catalog", () =>
     withEnv(
       {
         ACME_HOST: "api.acme.test",
@@ -298,10 +298,10 @@ describe("ModelsDevPlugin", () => {
           )
 
           expect((yield* catalog.provider.get(providerID))?.settings?.baseURL).toBe(
-            "https://api.acme.test/${UNDECLARED_HOST}/v1",
+            "https://${ACME_HOST}/${UNDECLARED_HOST}/v1",
           )
           expect((yield* catalog.model.get(providerID, modelID))?.settings?.baseURL).toBe(
-            "https://api.acme.test/${ACME_MODEL_PATH}/v1",
+            "https://${ACME_HOST}/${ACME_MODEL_PATH}/v1",
           )
         }),
     ),

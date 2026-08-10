@@ -46,7 +46,24 @@ export class UnsupportedPackageError extends Schema.TaggedErrorClass<Unsupported
   }
 }
 
-export type Error = VariantUnavailableError | UnsupportedPackageError | Integration.AuthorizationError
+export class UnresolvedProviderVariablesError extends Schema.TaggedErrorClass<UnresolvedProviderVariablesError>()(
+  "SessionRunnerModel.UnresolvedProviderVariablesError",
+  {
+    providerID: Provider.ID,
+    modelID: ID,
+    variables: Schema.Array(Schema.String),
+  },
+) {
+  override get message() {
+    return `Cannot initialize ${this.providerID}/${this.modelID}: ${this.variables.join(", ")} ${this.variables.length === 1 ? "is" : "are"} required to resolve the provider endpoint`
+  }
+}
+
+export type Error =
+  | VariantUnavailableError
+  | UnsupportedPackageError
+  | UnresolvedProviderVariablesError
+  | Integration.AuthorizationError
 
 export interface Resolved {
   /** Route-level model for provider requests; its id is the provider API model id, which may differ from the catalog id. */
@@ -141,12 +158,17 @@ export const fromCatalogModel = (
   model: Info,
   credential?: Credential.Value,
   dependencies?: Dependencies,
-): Effect.Effect<LanguageModel, UnsupportedPackageError> => {
-  const resolved = produce(model, (draft) => {
-    if (draft.settings?.apiKey === "") delete draft.settings.apiKey
-    if (credential?.type === "key" && credential.metadata !== undefined)
-      draft.body = Provider.mergeOverlay(draft.body, credential.metadata)
-  })
+): Effect.Effect<LanguageModel, UnsupportedPackageError | UnresolvedProviderVariablesError> => {
+  const prepared = prepareRuntimeModel(model, credential)
+  if (prepared.unresolved.length > 0)
+    return Effect.fail(
+      new UnresolvedProviderVariablesError({
+        providerID: model.providerID,
+        modelID: model.id,
+        variables: prepared.unresolved,
+      }),
+    )
+  const resolved = prepared.model
   const packageName = Provider.packageName(resolved.package)
   const key = apiKey(resolved, credential)
   const configuration = credential?.type === "key" ? credential.configuration : undefined
@@ -224,6 +246,26 @@ export const fromCatalogModel = (
       catch: () => unsupported(resolved),
     })
   })
+}
+
+function prepareRuntimeModel(model: Info, credential: Credential.Value | undefined) {
+  const prepared = produce(model, (draft) => {
+    if (draft.settings?.apiKey === "") delete draft.settings.apiKey
+    if (credential?.type === "key" && credential.metadata !== undefined)
+      draft.body = Provider.mergeOverlay(draft.body, credential.metadata)
+    if (typeof draft.settings?.baseURL !== "string") return
+    draft.settings.baseURL = draft.settings.baseURL.replace(/\$\{([^}]+)\}/g, (placeholder, name: string) => {
+      return process.env[name] ?? placeholder
+    })
+  })
+  const baseURL = prepared.settings?.baseURL
+  const unresolved =
+    typeof baseURL === "string"
+      ? Array.from(baseURL.matchAll(/\$\{([^}]+)\}/g), (match) => match[1]).filter(
+          (name, index, names) => names.indexOf(name) === index,
+        )
+      : []
+  return { model: prepared, unresolved }
 }
 
 const nativeCredentialSettings = (specifier: string, credential: Credential.Value | undefined) => {
