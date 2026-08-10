@@ -120,10 +120,7 @@ test("migrates before the first update and does not remigrate afterward", async 
 
 test("preserves legacy cursor settings", async () => {
   const directory = await Bun.$`mktemp -d`.text().then((value) => value.trim())
-  await Bun.write(
-    path.join(directory, "tui.json"),
-    JSON.stringify({ cursor: { style: "underline", blinking: false } }),
-  )
+  await Bun.write(path.join(directory, "tui.json"), JSON.stringify({ cursor: { style: "underline", blinking: false } }))
 
   try {
     const config = await run(

@@ -19,7 +19,6 @@ export const dict = {
   "desktop.updater.installFailed.title": "Pembaruan gagal",
   "desktop.updater.installFailed.message": "Gagal menginstal pembaruan",
 
-
   "desktop.error.dev.rootNotFound":
     "Elemen root tidak ditemukan. Apakah Anda lupa menambahkannya ke index.html? Atau mungkin atribut id salah eja?",
 }

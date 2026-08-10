@@ -460,7 +460,14 @@ function newLayout() {
 }
 
 function webSearchProviderLabel(provider: unknown, i18n: ReturnType<typeof useI18n>) {
-  const name = provider === "parallel" ? "Parallel" : provider === "exa" ? "Exa" : provider === "firecrawl" ? "Firecrawl" : undefined
+  const name =
+    provider === "parallel"
+      ? "Parallel"
+      : provider === "exa"
+        ? "Exa"
+        : provider === "firecrawl"
+          ? "Firecrawl"
+          : undefined
   if (name) return i18n.t("ui.tool.websearch.provider", { provider: name })
   return i18n.t("ui.tool.websearch")
 }

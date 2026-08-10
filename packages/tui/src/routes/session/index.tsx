@@ -1059,9 +1059,7 @@ export function Session() {
               <BackgroundToolHint messages={messages()} />
               <Show when={session()?.revert?.messageID}>
                 <RevertMessage
-                  count={
-                    messagesFromRevert().filter((message) => message.type === "user").length
-                  }
+                  count={messagesFromRevert().filter((message) => message.type === "user").length}
                   files={session()!.revert!.files ?? []}
                 />
               </Show>

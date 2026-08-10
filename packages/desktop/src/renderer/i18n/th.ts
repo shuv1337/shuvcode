@@ -19,6 +19,5 @@ export const dict = {
   "desktop.updater.installFailed.title": "การอัปเดตล้มเหลว",
   "desktop.updater.installFailed.message": "ไม่สามารถติดตั้งการอัปเดตได้",
 
-
   "desktop.error.dev.rootNotFound": "ไม่พบองค์ประกอบรูท คุณลืมเพิ่มใน index.html หรือบางทีแอตทริบิวต์ id อาจสะกดผิด?",
 }

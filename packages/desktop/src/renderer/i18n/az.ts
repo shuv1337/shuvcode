@@ -19,7 +19,6 @@ export const dict = {
   "desktop.updater.installFailed.title": "Yeniləmə uğursuz oldu",
   "desktop.updater.installFailed.message": "Yeniləmə quraşdırıla bilmədi",
 
-
   "desktop.error.dev.rootNotFound":
     "Kök element tapılmadı. index.html-ə əlavə etməyi unutmusunuz? Yoxsa id atributu səhv yazılıb?",
 }

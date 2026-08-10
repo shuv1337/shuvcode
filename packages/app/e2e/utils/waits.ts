@@ -11,10 +11,7 @@ export async function expectSessionTitle(page: Page, title: string) {
   await expectAppVisible(page.getByRole("heading", { name: title }))
 }
 
-export async function expectSessionReady(
-  page: Page,
-  input: { server: string; sessionID: string; title: string },
-) {
+export async function expectSessionReady(page: Page, input: { server: string; sessionID: string; title: string }) {
   await expect(page).toHaveURL(`/server/${base64Encode(input.server)}/session/${input.sessionID}`)
   await expectSessionTitle(page, input.title)
 }

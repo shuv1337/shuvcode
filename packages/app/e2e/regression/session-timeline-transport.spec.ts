@@ -48,9 +48,10 @@ test("delivers server heartbeat without mutating the timeline", async ({ page })
   const partID = "prt_transport_heartbeat_sentinel"
   const sentinel = await timeline.transport.send(partUpdated(textPart(partID, "heartbeat sentinel")))
   await timeline.waitForPart(partID)
-  await expect(
-    page.locator(`[data-timeline-part-id="${partID}"] [data-component="markdown"]`),
-  ).toHaveAttribute("data-markdown-ready", "")
+  await expect(page.locator(`[data-timeline-part-id="${partID}"] [data-component="markdown"]`)).toHaveAttribute(
+    "data-markdown-ready",
+    "",
+  )
   const before = await timelineRows(page)
   const heartbeat = await timeline.transport.heartbeat()
 

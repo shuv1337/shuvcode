@@ -19,7 +19,6 @@ export const dict = {
   "desktop.updater.installFailed.title": "Güncelleme başarısız oldu",
   "desktop.updater.installFailed.message": "Güncelleme yüklenemedi",
 
-
   "desktop.error.dev.rootNotFound":
     "Kök eleman bulunamadı. index.html dosyanıza eklemeyi unuttunuz mu? Ya da id özelliği yanlış mı yazıldı?",
 }
