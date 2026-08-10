@@ -1,5 +1,5 @@
 import { RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core"
-import { For, Show, createComputed, createEffect, createMemo, createSignal, untrack } from "solid-js"
+import { For, Show, createComputed, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useConfig } from "../config"
 import { useSessionTabs } from "../context/session-tabs"
@@ -16,16 +16,19 @@ import {
   type SessionTab,
   type SessionTabUnread,
 } from "../context/session-tabs-model"
-import { createAnimatable, spring } from "../ui/animation"
+import { createAnimatable, spring, tween } from "../ui/animation"
 import { Locale } from "../util/locale"
 import { stringWidth } from "../util/string-width"
 import { TabPulse, unreadGlowIntensity } from "./tab-pulse"
 import { tint } from "../theme/color"
 import { SESSION_SIDEBAR_WIDTH } from "../ui/layout"
 import { projectName } from "../util/project"
+import { marqueeText } from "../util/marquee"
 
 // A long title fades out over its last cells instead of cutting hard.
 const FADE_WIDTH = 4
+const MARQUEE_DELAY = 600
+const MARQUEE_INTERVAL = 100
 
 type ContextController = ReturnType<typeof useSessionTabs>
 export type SessionTabsStatus = Omit<ReturnType<ContextController["status"]>, "unread"> & {
@@ -45,6 +48,41 @@ export type SessionTabsController = Pick<ContextController, "tabs" | "current" |
 const NEW_SESSION_TAB: SessionTab = { sessionID: "new", title: NEW_SESSION_TAB_TITLE }
 const glowTextColor = (base: RGBA, glow: RGBA, index: number, width: number) =>
   tint(base, glow, 0.12 * unreadGlowIntensity(index, width))
+
+function fadeTitleColor(color: RGBA, background: RGBA, index: number, length: number, leading: number) {
+  const fade = (position: number) => (position <= 0 ? 0 : 0.2 + 0.72 * ((position - 1) / Math.max(1, FADE_WIDTH - 1)))
+  const start = index < FADE_WIDTH ? FADE_WIDTH - index : 0
+  const end = index - (length - FADE_WIDTH) + 1
+  const opacity = Math.max(fade(start) * leading, fade(end))
+  return opacity === 0 ? color : tint(color, background, opacity)
+}
+
+function createMarquee(hovered: () => string | undefined, animations: () => boolean) {
+  const [offset, setOffset] = createSignal(0)
+  const leading = createAnimatable({ opacity: 0 }, { enabled: animations, transition: tween({ duration: 0.25 }) })
+
+  createEffect(() => {
+    if (!hovered()) {
+      setOffset(0)
+      leading.jump({ opacity: 0 })
+      return
+    }
+    setOffset(0)
+    leading.jump({ opacity: 0 })
+    let interval: ReturnType<typeof setInterval> | undefined
+    const delay = setTimeout(() => {
+      setOffset(1)
+      leading.animate({ opacity: 1 })
+      interval = setInterval(() => setOffset((value) => value + 1), MARQUEE_INTERVAL)
+    }, MARQUEE_DELAY)
+    onCleanup(() => {
+      clearTimeout(delay)
+      if (interval) clearInterval(interval)
+    })
+  })
+
+  return { offset, leading: () => leading.value().opacity }
+}
 
 export function SessionTabs(
   props: { controller?: SessionTabsController; animations?: boolean; orientation?: "horizontal" | "vertical" } = {},
@@ -69,6 +107,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
   const separatorUpperPulseColor = createMemo(() => tint(theme.background.default, theme.text.default, 0.04))
   const separatorLowerPulseColor = createMemo(() => tint(theme.background.default, theme.text.default, 0.05))
   const [hovered, setHovered] = createSignal<string>()
+  const marquee = createMarquee(hovered, animations)
   const [dragging, setDragging] = createSignal<string>()
   const [preview, setPreview] = createSignal<{ sessionID: string; index: number }>()
   const newTab = () => tabs.newTab?.() ?? false
@@ -144,7 +183,12 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
               const numberWidth = () => 2
               const titleWidth = () => Math.max(1, width() - numberWidth() - 2 - (hovered() === tab.sessionID ? 1 : 0))
               const title = () => tab.title ?? "Untitled session"
-              const visibleTitle = createMemo(() => Locale.takeWidth(title(), titleWidth()))
+              const scrolling = () => hovered() === tab.sessionID && marquee.offset() > 0
+              const visibleTitle = createMemo(() =>
+                scrolling()
+                  ? marqueeText(title(), titleWidth(), marquee.offset())
+                  : Locale.takeWidth(title(), titleWidth()),
+              )
               const visibleTitleParts = createMemo(() => Locale.graphemes(visibleTitle()))
               const titleFades = createMemo(() => stringWidth(title()) >= titleWidth() && titleWidth() > FADE_WIDTH)
               const detail = createMemo(() => {
@@ -206,9 +250,15 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                 const color = glows()
                   ? glowTextColor(foreground(), glowColor(), 1 + numberWidth() + index, width())
                   : foreground()
-                if (!titleFades() || index < visibleTitleParts().length - FADE_WIDTH) return color
-                const position = index - (visibleTitleParts().length - FADE_WIDTH)
-                return tint(color, pulseBackground(), 0.2 + 0.72 * (position / Math.max(1, FADE_WIDTH - 1)))
+                return titleFades()
+                  ? fadeTitleColor(
+                      color,
+                      pulseBackground(),
+                      index,
+                      visibleTitleParts().length,
+                      scrolling() ? marquee.leading() : 0,
+                    )
+                  : color
               }
               const release = () => {
                 setDragging(undefined)
@@ -225,7 +275,10 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                   backgroundColor={background()}
                   onMouseOver={() => setHovered(tab.sessionID)}
                   onMouseOut={() => setHovered(undefined)}
-                  onMouseDown={() => setDragging(tab.sessionID)}
+                  onMouseDown={() => {
+                    setHovered(tab.sessionID)
+                    setDragging(tab.sessionID)
+                  }}
                   onMouseUp={release}
                   onMouseDrag={(event) => {
                     if (!rail || tab === NEW_SESSION_TAB) return
@@ -382,6 +435,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
   const config = useConfig().data
   const animations = () => props.animations ?? config.animations ?? true
   const [hovered, setHovered] = createSignal<string>()
+  const marquee = createMarquee(hovered, animations)
   const [dragging, setDragging] = createSignal<string>()
   // A drag reorders a local preview and persists one move on release instead of writing
   // per slot crossing; the preview holds after release until the store reflects the move,
@@ -561,7 +615,12 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           // Hovering reveals the close mark, so the title's right bound shifts left of it.
           const availableTitleWidth = () =>
             Math.max(1, width() - 1 - numberWidth() - (hovered() === tab.sessionID ? 2 : 0))
-          const visibleTitle = createMemo(() => Locale.takeWidth(title(), availableTitleWidth()))
+          const scrolling = () => hovered() === tab.sessionID && marquee.offset() > 0
+          const visibleTitle = createMemo(() =>
+            scrolling()
+              ? marqueeText(title(), availableTitleWidth(), marquee.offset())
+              : Locale.takeWidth(title(), availableTitleWidth()),
+          )
           const visibleTitleParts = createMemo(() => Locale.graphemes(visibleTitle()))
           const titleFades = createMemo(
             () => stringWidth(title()) >= availableTitleWidth() && availableTitleWidth() > FADE_WIDTH,
@@ -575,9 +634,15 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           const characterColor = (index: number) => {
             const base = foreground()
             const color = glows() ? glowTextColor(base, glowColor(), 1 + numberWidth() + index, width()) : base
-            if (!titleFades() || index < visibleTitleParts().length - FADE_WIDTH) return color
-            const position = index - (visibleTitleParts().length - FADE_WIDTH)
-            return tint(color, background(), 0.2 + 0.72 * (position / Math.max(1, FADE_WIDTH - 1)))
+            return titleFades()
+              ? fadeTitleColor(
+                  color,
+                  background(),
+                  index,
+                  visibleTitleParts().length,
+                  scrolling() ? marquee.leading() : 0,
+                )
+              : color
           }
           // The running sweep's level under the number cell, reported by the pulse renderable.
           const [sweepLevel, setSweepLevel] = createSignal(0)
@@ -611,7 +676,10 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
               backgroundColor={background()}
               onMouseOver={() => setHovered(tab.sessionID)}
               onMouseOut={() => setHovered(undefined)}
-              onMouseDown={() => setDragging(tab.sessionID)}
+              onMouseDown={() => {
+                setHovered(tab.sessionID)
+                setDragging(tab.sessionID)
+              }}
               onMouseUp={release}
               onMouseDrag={(event) => {
                 if (tab === NEW_SESSION_TAB) return
