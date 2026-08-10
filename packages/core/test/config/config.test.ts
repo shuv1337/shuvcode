@@ -307,7 +307,7 @@ describe("Config", () => {
     }),
   )
 
-  it.live("loads authenticated wellknown config at highest priority", () =>
+  it.live("tolerates unavailable authenticated wellknown config and reloads it later", () =>
     Effect.acquireUseRelease(
       Effect.promise(() => tmpdir()),
       (tmp) =>
@@ -322,6 +322,7 @@ describe("Config", () => {
           })
 
           const integrationID = Integration.ID.make("https://example.com")
+          let available = false
           let key = "secret"
           const credentialNode = makeGlobalNode({
             service: Credential.Service,
@@ -362,7 +363,10 @@ describe("Config", () => {
                 refresh: () => Effect.succeed(false),
                 add: () => Effect.die("unused Wellknown.add"),
                 remove: () => Effect.die("unused Wellknown.remove"),
-                resolve: (_entry, variables) => Effect.succeed([{ shell: variables.TOKEN }]),
+                resolve: (_entry, variables) =>
+                  available
+                    ? Effect.succeed([{ shell: variables.TOKEN }])
+                    : Effect.fail(new Error("expired credential")),
               }),
             ),
             deps: [],
@@ -371,11 +375,16 @@ describe("Config", () => {
           return yield* Effect.gen(function* () {
             const config = yield* Config.Service
             const bus = yield* Bus.Service
-            expect(Config.latest(yield* config.entries(), "shell")).toBe("secret")
+            const initial = yield* config.entries()
+            expect(Config.latest(initial, "shell")).toBe("project")
+            expect(
+              initial.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
+            ).toEqual(["global", "project"])
             const updated = yield* bus
               .subscribe(ConfigSchema.Event.Updated)
               .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
             yield* Effect.yieldNow
+            available = true
             key = "next"
             yield* bus.publish(Integration.Event.ConnectionUpdated, { integrationID })
             expect(yield* Fiber.join(updated)).toHaveLength(1)

@@ -8,6 +8,7 @@ import { Context, Effect, Layer, Option, PubSub, Ref, Schema, Semaphore, Stream 
 import { Permission } from "@opencode-ai/schema/permission"
 import { Config as ConfigSchema } from "@opencode-ai/schema/config"
 import { Integration } from "@opencode-ai/schema/integration"
+import { BootPhase } from "./boot-phase"
 import { Credential } from "./credential"
 import { Bus } from "./bus"
 import { Watcher } from "./filesystem/watcher"
@@ -258,7 +259,13 @@ export const layer = (options?: Options) => Layer.effect(
           )
           if (!credential || credential.value.type !== "key") return []
           const variables = { [auth.env]: credential.value.key }
-          const configs = yield* wellknown.resolve(entry, variables).pipe(Effect.orDie)
+          const configs = yield* wellknown.resolve(entry, variables).pipe(
+            Effect.catch(() =>
+              Effect.logWarning("failed to load wellknown config", { source: entry.origin }).pipe(
+                Effect.as([] as const),
+              ),
+            ),
+          )
           return yield* Effect.forEach(configs, (config) =>
             ConfigVariable.substitute({
               type: "virtual",
@@ -369,12 +376,12 @@ export const layer = (options?: Options) => Layer.effect(
         ...explicit,
         ...direct,
         ...supplementary.slice(1).flat(),
-        ...(yield* loadWellknown().pipe(Effect.orDie)),
+        ...(yield* BootPhase.track("wellknown", loadWellknown().pipe(Effect.orDie))),
         ...content,
       ]
     })
 
-    const initial = yield* discover()
+    const initial = yield* BootPhase.track("config", discover())
     let configs = initial
     const updates = yield* PubSub.unbounded<Watcher.Update>()
     // Vendored trees inside config roots (a plugin's node_modules, a nested
@@ -461,7 +468,7 @@ export const layer = (options?: Options) => Layer.effect(
       Effect.forever,
       Effect.forkScoped({ startImmediately: true }),
     )
-    yield* reconcile(initial)
+    yield* BootPhase.track("watch", reconcile(initial))
 
     return Service.of({
       entries: Effect.fn("Config.entries")(function* () {

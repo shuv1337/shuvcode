@@ -57,11 +57,17 @@ export const Event = {
   Updated: Bus.ephemeral({ type: "wellknown.updated", schema: {} }),
 }
 
+// Wellknown fetches sit on the cold location build path, which is on the HTTP
+// response path; an unresponsive origin must degrade into a tolerated error
+// instead of stalling every request for that location.
+const fetchTimeout = "10 seconds"
+
 export const inspect = Effect.fn("WellKnown.inspect")(function* (origin: string) {
   const url = `${origin.replace(/\/+$/, "")}/.well-known/opencode`
   const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
   return yield* http.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson)).pipe(
     Effect.flatMap(HttpClientResponse.schemaBodyJson(Manifest)),
+    Effect.timeout(fetchTimeout),
     Effect.mapError((cause) => new Error(`Failed to load wellknown manifest from ${url}`, { cause })),
   )
 })
@@ -89,6 +95,7 @@ const resolveEntry = Effect.fnUntraced(function* (entry: Entry, variables: Reado
     .execute(HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson, HttpClientRequest.setHeaders(headers)))
     .pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(Config)),
+      Effect.timeout(fetchTimeout),
       Effect.mapError((cause) => new Error(`Failed to load wellknown remote config from ${url}`, { cause })),
     )
   if (Schema.is(Config)(remote.config)) return [...configs, remote.config]

@@ -3,7 +3,7 @@ import path from "path"
 import { describe, expect } from "bun:test"
 import { Config } from "@opencode-ai/schema/config"
 import { Money } from "@opencode-ai/schema/money"
-import { DateTime, Deferred, Effect, Equal, Fiber, Hash, RcMap, Schema, Stream } from "effect"
+import { DateTime, Deferred, Effect, Equal, Fiber, Hash, Logger, RcMap, Schema, Stream } from "effect"
 import { Plugin as EffectPlugin } from "@opencode-ai/plugin/effect"
 import { Agent } from "@opencode-ai/core/agent"
 import { Catalog } from "@opencode-ai/core/catalog"
@@ -110,6 +110,39 @@ describe("LocationServiceMap", () => {
       ),
     ),
   )
+
+  it.live("attributes boot phases in the booted log", () => {
+    const booted: Record<string, unknown>[] = []
+    const logger = Logger.map(Logger.formatStructured, (entry) => {
+      if (!Array.isArray(entry.message) || entry.message[0] !== "location services booted") return
+      const details = entry.message[1]
+      if (typeof details === "object" && details !== null) booted.push(details as Record<string, unknown>)
+    })
+    return Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const locations = yield* LocationServiceMap.Service
+          yield* locations
+            .contextEffect(Location.Ref.make({ directory: AbsolutePath.make(dir.path) }))
+            .pipe(Effect.scoped)
+
+          expect(booted).toHaveLength(1)
+          const entry = booted[0]!
+          expect(typeof entry.durationMs).toBe("number")
+          const phaseMs = entry.phaseMs as Record<string, number>
+          expect(Object.keys(phaseMs).toSorted()).toEqual(["config", "project", "watch", "wellknown"])
+          for (const duration of Object.values(phaseMs)) {
+            expect(duration).toBeGreaterThanOrEqual(0)
+            expect(duration).toBeLessThanOrEqual(entry.durationMs as number)
+          }
+        }),
+      ),
+      Effect.provide(Logger.layer([logger])),
+    )
+  })
 
   itWithSdk.live("reruns activation for SDK plugins registered during startup", () =>
     Effect.acquireRelease(
