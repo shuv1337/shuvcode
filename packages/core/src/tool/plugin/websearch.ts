@@ -3,6 +3,7 @@ export * as WebSearchTool from "./websearch"
 import type { Context as PluginContext } from "@opencode-ai/plugin/effect/plugin"
 import { ToolFailure } from "@opencode-ai/ai"
 import { Effect, Schema, Semaphore } from "effect"
+import { HttpClientError } from "effect/unstable/http"
 import { Form } from "../../form"
 import { KV } from "../../kv"
 import { Permission } from "../../permission"
@@ -52,7 +53,13 @@ export const Plugin = {
                 source: { type: "tool", messageID: context.messageID, id: context.id },
               })
               const search = (): Effect.Effect<Effect.Success<ReturnType<typeof ctx.websearch.query>>, unknown> =>
-                ctx.websearch.query(input).pipe(
+                websearch.default().pipe(
+                  Effect.flatMap((provider) => {
+                    if (!provider) return ctx.websearch.query(input)
+                    return context
+                      .progress({ provider: provider.id })
+                      .pipe(Effect.andThen(ctx.websearch.query({ ...input, providerID: provider.id })))
+                  }),
                   Effect.catch((error) => {
                     if (!Schema.is(WebSearch.ProviderRequiredError)(error)) return Effect.fail(error)
                     return providerSelectionLock
@@ -152,9 +159,33 @@ export const Plugin = {
                 : NO_RESULTS
               return { output, content, metadata: { provider: output.provider } }
             }).pipe(
-              Effect.mapError(
-                (error) => new ToolFailure({ message: `Unable to search the web for ${input.query}`, error }),
-              ),
+              Effect.mapError((error) => {
+                const fallback = `Unable to search the web for ${input.query}`
+                if (!Schema.is(WebSearch.RequestError)(error)) return new ToolFailure({ message: fallback, error })
+                const status = HttpClientError.isHttpClientError(error.cause) ? error.cause.response?.status : undefined
+                switch (status) {
+                  case 429:
+                    return new ToolFailure({
+                      message: "Web search rate limited (HTTP 429)",
+                      error,
+                      metadata: { provider: error.providerID },
+                    })
+                  case 401:
+                    return new ToolFailure({
+                      message: "Web search authentication failed (HTTP 401)",
+                      error,
+                      metadata: { provider: error.providerID },
+                    })
+                  case undefined:
+                    return new ToolFailure({ message: fallback, error, metadata: { provider: error.providerID } })
+                  default:
+                    return new ToolFailure({
+                      message: `Web search request failed (HTTP ${status})`,
+                      error,
+                      metadata: { provider: error.providerID },
+                    })
+                }
+              }),
             ),
         }),
       )
