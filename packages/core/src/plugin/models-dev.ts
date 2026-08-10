@@ -59,25 +59,27 @@ function environmentNames(provider: ModelsDev.Snapshot) {
 }
 
 function snapshots(data: readonly ModelsDev.Snapshot[]) {
-  return structuredClone(data)
-    // These deprecated aliases are replaced by the canonical Azure and Google Vertex providers.
-    .filter(
-      (provider) => provider.info.id !== "azure-cognitive-services" && provider.info.id !== "google-vertex-anthropic",
-    )
-    .map((provider) => {
-      const environment = new Set(provider.environment)
-      return {
-        ...provider,
-        info: {
-          ...provider.info,
-          ...(provider.info.settings ? { settings: resolveEnvironment(provider.info.settings, environment) } : {}),
-        },
-        models: provider.models.map((model) => ({
-          ...model,
-          ...(model.settings ? { settings: resolveEnvironment(model.settings, environment) } : {}),
-        })),
-      }
-    })
+  return (
+    structuredClone(data)
+      // These deprecated aliases are replaced by the canonical Azure and Google Vertex providers.
+      .filter(
+        (provider) => provider.info.id !== "azure-cognitive-services" && provider.info.id !== "google-vertex-anthropic",
+      )
+      .map((provider) => {
+        const environment = new Set(provider.environment)
+        return {
+          ...provider,
+          info: {
+            ...provider.info,
+            ...(provider.info.settings ? { settings: resolveEnvironment(provider.info.settings, environment) } : {}),
+          },
+          models: provider.models.map((model) => ({
+            ...model,
+            ...(model.settings ? { settings: resolveEnvironment(model.settings, environment) } : {}),
+          })),
+        }
+      })
+  )
 }
 
 function resolveEnvironment(settings: Readonly<Record<string, unknown>>, environment: Set<string>) {
