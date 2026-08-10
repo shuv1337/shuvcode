@@ -100,9 +100,9 @@ export const tracingLayer = Effect.fnUntraced(function* (options: Options | unde
     ),
   }))
   return Layer.effectContext(
-    Effect.acquireRelease(Scope.make(), (scope, exit) =>
-      Scope.close(scope, exit).pipe(Effect.ignoreCause),
-    ).pipe(Effect.flatMap((scope) => Layer.buildWithScope(tracing, scope))),
+    Effect.acquireRelease(Scope.make(), (scope, exit) => Scope.close(scope, exit).pipe(Effect.ignoreCause)).pipe(
+      Effect.flatMap((scope) => Layer.buildWithScope(tracing, scope)),
+    ),
   )
 })
 
