@@ -102,11 +102,13 @@ import { useSessionTabs } from "../../context/session-tabs"
 import { createSingleFlight } from "../../util/single-flight"
 import type { SessionPending } from "@opencode-ai/schema/session-pending"
 import { generateThinkingSyntax } from "./thinking-syntax"
+import { createDelayedPresence } from "../../util/delayed-presence"
 
 addDefaultParsers(parsers.parsers)
 
 // Exclude temporary bottom space when measuring the real transcript height.
 const NAVIGATION_SLACK_ID = "session-navigation-slack"
+const BACKGROUND_TOOL_HINT_DELAY = 1_000
 
 // Tail-first transcript mounting: rows mounted with the session, then backfill cadence.
 // The tail comfortably overfills a tall viewport; backfill drains a 200-message transcript
@@ -1326,18 +1328,20 @@ function turnTokenToolSummary(tool: SessionMessageAssistantTool) {
 function BackgroundToolHint(props: { messages: SessionMessageInfo[] }) {
   const theme = useTheme()
   const shortcut = Keymap.useShortcut("session.background")
-  const visible = createMemo(() => {
+  const running = createMemo(() => {
+    if (!shortcut()) return
     const current = props.messages.findLast(
       (message): message is SessionMessageAssistant => message.type === "assistant" && !message.time.completed,
     )
-    return (
-      current?.content.some((part) => {
-        if (part.type !== "tool" || part.state.status !== "running") return false
-        const display = toolDisplay(part.name)
-        return display === "shell" || display === "subagent"
-      }) ?? false
-    )
+    const part = current?.content.find((part): part is SessionMessageAssistantTool => {
+      if (part.type !== "tool" || part.state.status !== "running") return false
+      const name = canonicalToolName(part.name)
+      return name === "shell" || name === "subagent"
+    })
+    if (!current || !part) return
+    return `${current.id}:${part.id}`
   })
+  const visible = createDelayedPresence(running, BACKGROUND_TOOL_HINT_DELAY)
   return (
     <Show when={visible() && shortcut()}>
       {(value) => (
