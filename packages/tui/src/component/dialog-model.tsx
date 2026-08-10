@@ -7,14 +7,18 @@ import { DialogVariant } from "./dialog-variant"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./use-connected"
 import { useData } from "../context/data"
+import { useTheme } from "../context/theme"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
   const data = useData()
   const dialog = useDialog()
+  const theme = useTheme()
   const [query, setQuery] = createSignal("")
 
   const connected = useConnected()
+  // An unfetched list is `undefined`; rendering it as empty claims no models exist.
+  const loading = createMemo(() => data.location.model.list() === undefined)
   const providers = createMemo(() => new Map((data.location.provider.list() ?? []).map((item) => [item.id, item])))
   const models = createMemo(() => data.location.model.list() ?? [])
 
@@ -130,6 +134,11 @@ export function DialogModel(props: { providerID?: string }) {
   return (
     <DialogSelect<ReturnType<typeof options>[number]["value"]>
       options={options()}
+      emptyView={
+        <box paddingLeft={4} paddingRight={4}>
+          <text fg={theme.text.subdued}>{loading() ? "Loading models…" : "No models available"}</text>
+        </box>
+      }
       actions={[
         {
           command: "model.dialog.provider",

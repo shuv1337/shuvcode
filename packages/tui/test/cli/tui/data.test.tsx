@@ -788,6 +788,68 @@ test("reconnects the event stream and resyncs active data", async () => {
   }
 })
 
+test("loads the catalog before the event stream connects", async () => {
+  const events = createEventStream()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const calls = createFetch((url) => {
+    // Hold the handshake open so a catalog that waits on it cannot load.
+    if (url.pathname === "/api/event") return gate.then(() => events.v2())
+    if (url.pathname !== "/api/model") return
+    return json({
+      location: { directory, project: { id: "proj_test", directory } },
+      data: [
+        {
+          id: "model-gated",
+          providerID: "provider",
+          name: "Gated",
+          api: { type: "native" },
+          capabilities: { tools: false, input: [], output: [] },
+          cost: [],
+          limit: { context: 1, output: 1 },
+          request: { headers: {}, body: {} },
+          status: "active",
+          time: { released: 0 },
+          variants: [],
+        },
+      ],
+    })
+  }, events)
+
+  let data!: ReturnType<typeof useData>
+  let client!: ReturnType<typeof useClient>
+
+  function Probe() {
+    data = useData()
+    client = useClient()
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <ClientProvider api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </ClientProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await wait(() => data.location.model.list()?.[0]?.id === "model-gated")
+    expect(client.connection.status()).not.toBe("connected")
+    release()
+    await wait(() => client.connection.status() === "connected", 4000)
+    expect(data.location.model.list()?.[0]?.id).toBe("model-gated")
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
 test("completes exploration when a queued prompt is promoted", async () => {
   const events = createEventStream()
   const sessionID = "session-promotion"

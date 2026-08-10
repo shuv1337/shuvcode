@@ -54,9 +54,10 @@ function update(version: string): OpenCodeEvent {
 async function mount(
   reconnect?: (signal: AbortSignal) => Promise<{ api: OpenCodeClient }>,
   log?: LogSink,
+  override?: Parameters<typeof createFetch>[0],
 ) {
   const events = createEventStream()
-  const calls = createFetch(undefined, events)
+  const calls = createFetch(override, events)
   const seen: OpenCodeEvent[] = []
   const workspaces: Array<string | undefined> = []
   let client!: ReturnType<typeof useClient>
@@ -211,6 +212,38 @@ describe("useEvent", () => {
         ["connected", 1],
       ])
       expect(history.every((event) => Number.isFinite(event.created))).toBe(true)
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("retries an unestablished handshake before re-resolving the server", async () => {
+    const attempts: number[] = []
+    let opened = 0
+    const { app, client } = await mount(
+      async () => {
+        attempts.push(attempts.length + 1)
+        throw new Error("no server")
+      },
+      undefined,
+      (url, request) => {
+        if (url.pathname !== "/api/event") return
+        opened += 1
+        // Leave the opening handshake unanswered so `connectTimeout` aborts it.
+        if (opened > 1) return
+        return new Promise<Response>((_, reject) => {
+          request.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true })
+        })
+      },
+    )
+
+    try {
+      await wait(() => client.connection.status() === "connected", 8000)
+      // The endpoint was resolved moments earlier, so a handshake that never
+      // established must retry it directly rather than pay for a service ensure
+      // before any data can load.
+      expect(attempts).toEqual([])
+      expect(opened).toBe(2)
     } finally {
       app.renderer.destroy()
     }

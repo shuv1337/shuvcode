@@ -28,9 +28,15 @@ export function LocationProvider(props: ParentProps) {
 
   function set(location?: LocationRef) {
     setRef(location)
-    if (client.connection.status() === "connected") sync(location)
+    // Catalog reads are plain HTTP and do not depend on the event stream, so fetch
+    // immediately. Waiting for the handshake left the model and provider lists empty
+    // for as long as it took to connect, which reads as "no models exist".
+    sync(location)
   }
 
+  // Resync after a reconnect, which may have missed updates. DataProvider drops the
+  // cached completion whenever the stream is down, so this is a no-op when the fetch
+  // above already succeeded and nothing was missed.
   onCleanup(client.event.on("server.connected", () => sync(ref())))
 
   return (

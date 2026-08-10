@@ -132,9 +132,11 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
       stream = controller
       void (async () => {
         let attempt = 0
+        let established = false
         while (!abort.signal.aborted && !controller.signal.aborted) {
           const result = await connect(controller.signal, attempt)
           if (abort.signal.aborted || controller.signal.aborted) return
+          if (result.connectedAt !== undefined) established = true
           if (result.connectedAt !== undefined && Date.now() - result.connectedAt >= 1_000) attempt = 0
           attempt += 1
           const message = errorMessage(result.error)
@@ -144,6 +146,13 @@ export const { use: useClient, provider: ClientProvider } = createSimpleContext(
             error: message,
           })
           setConnection({ status: "reconnecting", attempt, error: message })
+          // An opening handshake that never completed usually means this process lost
+          // the race against its own startup work, not that the server moved, so retry
+          // the endpoint already resolved. Re-resolving here instead costs a full
+          // service ensure before any data can load. A stream that was established and
+          // then dropped skips this and re-resolves below, since a restarted server may
+          // now be on a different port.
+          if (!established && attempt === 1) continue
           // Re-resolve the transport before retrying: the server may have
           // moved (service restarted on a new port) or need starting. Static
           // transports (--server, standalone) resolve to the same address.
