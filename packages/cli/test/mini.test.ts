@@ -133,7 +133,7 @@ describe("mini command", () => {
   })
 
   test("keeps option-like prompt text after the argument separator", async () => {
-    const result = await cli(["run", "--server", "http://127.0.0.1:1", "--", "--foo"])
+    const result = await cli(["run", "--server", "http://127.0.0.1:1", "--", "--help"])
 
     expect(result.exitCode).toBe(1)
     expect(result.stderr).not.toContain("You must provide a message")

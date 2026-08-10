@@ -1,10 +1,11 @@
-import { Effect, FileSystem, Scope } from "effect"
+import { Effect } from "effect"
+import type { FileSystem, Scope } from "effect"
 import { Command } from "effect/unstable/cli"
 import { Spec } from "./spec"
-import { Global } from "@opencode-ai/util/global"
-import { Updater } from "../services/updater"
-import { Config } from "../config"
-import { Npm } from "@opencode-ai/util/npm"
+import type { Global } from "@opencode-ai/util/global"
+import type { Updater } from "../services/updater"
+import type { Config } from "../config"
+import type { Npm } from "@opencode-ai/util/npm"
 
 export type Input<Value> =
   Value extends Spec.Node<infer _Name, infer Command, infer _Commands>
