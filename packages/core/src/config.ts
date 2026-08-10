@@ -151,13 +151,15 @@ export const layer = (options?: Options) =>
             )
             if (!credential || credential.value.type !== "key") return []
             const variables = { [auth.env]: credential.value.key }
-            const configs = yield* wellknown.resolve(entry, variables).pipe(
-              Effect.catch(() =>
-                Effect.logWarning("failed to load wellknown config", { source: entry.origin }).pipe(
-                  Effect.as([] as const),
+            const configs = yield* wellknown
+              .resolve(entry, variables)
+              .pipe(
+                Effect.catch(() =>
+                  Effect.logWarning("failed to load wellknown config", { source: entry.origin }).pipe(
+                    Effect.as([] as const),
+                  ),
                 ),
-              ),
-            )
+              )
             return yield* Effect.forEach(configs, (config) =>
               ConfigVariable.substitute({
                 type: "virtual",
