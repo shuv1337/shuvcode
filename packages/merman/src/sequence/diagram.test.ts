@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { RGBA } from "@opentui/core"
 import { diagramTextWidth } from "../core/text.js"
 import { expectDiagram } from "../test/diagram.js"
 import { renderSequenceDiagram } from "./diagram.js"
 import { drawSequenceDiagramGrid } from "./drawing.js"
 import { parseMermaidSequenceDiagram } from "./parser.js"
+import { resolveSequenceStyleColors } from "./style.js"
 
 describe("SequenceDiagram", () => {
   test("parses Mermaid sequenceDiagram participants and messages", () => {
@@ -51,16 +53,19 @@ sequenceDiagram
 `)
 
     expectDiagram(output).toEqualDiagram(`
-      ╭─────────╮       ╭────────╮
-      │ Browser │       │ Server │
-      ╰────┬────╯       ╰────┬───╯
-           │                 │
-           │     GET /       │
-           ├─────────────────►
-           │                 │
-           │  401 WWW-Auth   │
-           ◄─────────────────┤
-           │                 │
+      Browser           Server
+      ───┬───           ───┬──
+         │                 │
+         │ GET /           │
+         ├─────────────────►
+         │                 │
+         │ 401 WWW-Auth    │
+         ◄─────────────────┤
+         │                 │
+         │                 │
+         │                 │
+         │                 │
+         │                 │
     `)
   })
 
@@ -92,6 +97,10 @@ sequenceDiagram
           │                                   ◄─── revalidate(plan) ─────┤
           │                                   │                          │
           │                                   ├─ same target or reject ──►
+          │                                   │                          │
+          │                                   │                          │
+          │                                   │                          │
+          │                                   │                          │
           │                                   │                          │
     `)
   })
@@ -140,13 +149,13 @@ sequenceDiagram
 `)
 
     const lines = output.split("\n")
-    const browserCenter = lines[1]!.indexOf("w")
-    const serverCenter = lines[1]!.indexOf("v")
+    const browserCenter = lines[0]!.indexOf("w")
+    const serverCenter = lines[0]!.indexOf("v")
 
-    expect(lines[2]?.[browserCenter]).toBe("┬")
-    expect(lines[3]?.[browserCenter]).toBe("│")
-    expect(lines[2]?.[serverCenter]).toBe("┬")
-    expect(lines[3]?.[serverCenter]).toBe("│")
+    expect(lines[1]?.[browserCenter]).toBe("┬")
+    expect(lines[2]?.[browserCenter]).toBe("│")
+    expect(lines[1]?.[serverCenter]).toBe("┬")
+    expect(lines[2]?.[serverCenter]).toBe("│")
   })
 
   test("ramps participant frames into neutral lifelines", () => {
@@ -160,6 +169,27 @@ sequenceDiagram
       .filter((style) => style?.startsWith("lifelineRamp"))
 
     expect(new Set(rampStyles)).toEqual(new Set(["lifelineRamp1", "lifelineRamp2", "lifelineRamp3"]))
+  })
+
+  test("fades the bottom of participant lifelines", () => {
+    const grid = drawSequenceDiagramGrid(
+      parseMermaidSequenceDiagram(
+        "sequenceDiagram\n  participant Browser\n  participant Server\n  Browser->>Server: request",
+      ),
+    )
+    const fadeStyles = grid.rows
+      .flatMap((row) => row.map((cell) => cell.style))
+      .filter((style) => style?.startsWith("lifelineFade"))
+
+    expect(new Set(fadeStyles)).toEqual(
+      new Set(["lifelineFade1", "lifelineFade2", "lifelineFade3", "lifelineFade4", "lifelineFade5"]),
+    )
+
+    const lifeline = RGBA.fromInts(100, 120, 110)
+    const background = RGBA.fromInts(10, 20, 15)
+    const colors = resolveSequenceStyleColors({ lifeline, lifelineEnd: background })
+    expect(colors.lifelineFade1.equals(lifeline)).toBe(true)
+    expect(colors.lifelineFade5.equals(background)).toBe(true)
   })
 
   test("renders notes and long cross-participant messages in order", () => {
@@ -277,8 +307,8 @@ sequenceDiagram
   A->>B: hello`)
 
     expect(output).not.toContain("<br")
-    expect(output).toContain("│ First line  │")
-    expect(output).toContain("│ Second line │")
+    expect(output).toContain("First line")
+    expect(output).toContain("Second line")
   })
 
   test("parses Mermaid arrow head variants", () => {
@@ -314,28 +344,31 @@ sequenceDiagram
 `)
 
     expect(output).toMatchInlineSnapshot(`
-      "╭───╮              ╭───╮
-      │ A │              │ B │
-      ╰─┬─╯              ╰─┬─╯
-        │                  │
-        │   open solid     │
-        ├─────────────────>│
-        │                  │
-        │   open dashed    │
-        │<─────────────────┤
-        │                  │
-        │  failed solid    │
-        ├─────────────────✕│
-        │                  │
-        │  failed dashed   │
-        │✕─────────────────┤
-        │                  │
-        │   async solid    │
-        ├─────────────────)│
-        │                  │
-        │  async dashed    │
-        │(─────────────────┤
-        │                  │"
+      " A                  B
+      ─┬─                ─┬─
+       │                  │
+       │ open solid       │
+       ├─────────────────>│
+       │                  │
+       │ open dashed      │
+       │<─────────────────┤
+       │                  │
+       │ failed solid     │
+       ├─────────────────✕│
+       │                  │
+       │ failed dashed    │
+       │✕─────────────────┤
+       │                  │
+       │ async solid      │
+       ├─────────────────)│
+       │                  │
+       │ async dashed     │
+       │(─────────────────┤
+       │                  │
+       │                  │
+       │                  │
+       │                  │
+       │                  │"
     `)
   })
 
@@ -387,7 +420,7 @@ sequenceDiagram
   end
 `)
     const lines = output.split("\n")
-    const participantCenter = lines.find((line) => line.includes("│ A │"))!.indexOf("A")
+    const participantCenter = lines.find((line) => line.includes("  A"))!.indexOf("A")
     const fragmentStart = lines.find((line) => line.includes("alt: ok"))!.indexOf("╭")
 
     expect(fragmentStart).toBeLessThan(participantCenter)
@@ -557,7 +590,7 @@ sequenceDiagram
     const fragmentMessageRow = fragment.split("\n").find((line) => line.includes("this non adjacent message"))!
     expect(groupMessageRow.trimEnd().endsWith("│")).toBe(true)
     expect(fragmentMessageRow).toContain("this non adjacent message is deliberately much wider than the frame")
-    expect(fragmentMessageRow.match(/│/g)?.length).toBe(2)
+    expect(fragmentMessageRow.match(/│/g)?.length).toBe(3)
   })
 
   test("keeps long notes inside groups and nested fragment frames intact", () => {
@@ -600,7 +633,7 @@ sequenceDiagram
     const groupBorderRight = output.split("\n")[0]!.lastIndexOf("╮")
     const lines = output.split("\n")
     const externalLabelRow = lines.findIndex((line) => line.includes("External"))
-    const externalHeaderLeft = lines[externalLabelRow - 1]!.lastIndexOf("╭")
+    const externalHeaderLeft = lines[externalLabelRow + 1]!.lastIndexOf("─")
 
     expect(externalHeaderLeft).toBeGreaterThan(groupBorderRight)
   })
@@ -655,18 +688,21 @@ sequenceDiagram
 `)
 
     expect(output).toMatchInlineSnapshot(`
-      "                   ╭─ Backend ──────────────────────────────────╮
-      ╭─────────╮        │ ╭─────╮          ╭───────╮          ╭────╮ │
-      │ Browser │        │ │ API │          │ Cache │          │ DB │ │
-      ╰────┬────╯        │ ╰──┬──╯          ╰───┬───╯          ╰──┬─╯ │
-           │             │    │                 │                 │   │
-           │  GET /users/42   │                 │                 │   │
-           ├──────────────────►                 │                 │   │
-           │             │    │                 │                 │   │
-           │             │    │  get user:42    │                 │   │
-           │             │    ├─────────────────►                 │   │
-           │             │    │                 │                 │   │
-                         ╰────────────────────────────────────────────╯"
+      "                   ╭─ Backend ───────────────────────────────╮
+      Browser            │ API              Cache              DB  │
+      ───┬───            │ ─┬─              ──┬──              ─┬─ │
+         │               │  │                 │                 │  │
+         │ GET /users/42 │  │                 │                 │  │
+         ├──────────────────►                 │                 │  │
+         │               │  │                 │                 │  │
+         │               │  │ get user:42     │                 │  │
+         │               │  ├─────────────────►                 │  │
+         │               │  │                 │                 │  │
+         │               │  │                 │                 │  │
+         │               │  │                 │                 │  │
+         │               │  │                 │                 │  │
+         │               │  │                 │                 │  │
+                         ╰─────────────────────────────────────────╯"
     `)
   })
 
@@ -706,18 +742,21 @@ sequenceDiagram
 `)
 
     expect(output).toMatchInlineSnapshot(`
-      "╭─────────╮
-      │ Service │
-      ╰────┬────╯
-           │
-           ├────────────────────╮
-           │ Check Permissions  │
-           ◄────────────────────╯
-           │"
+      "Service
+      ───┬───
+         │
+         ├────────────────────╮
+         │ Check Permissions  │
+         ◄────────────────────╯
+         │
+         │
+         │
+         │
+         │"
     `)
   })
 
-  test("frames notes in their reserved rows", () => {
+  test("renders note badges in their reserved rows", () => {
     const output = renderSequenceDiagram(`
 sequenceDiagram
   Browser->>Server: one
@@ -729,11 +768,9 @@ sequenceDiagram
     const nextMessageRow = lines.findIndex((line) => line.includes("two"))
 
     expect(noteRow).toBeGreaterThan(0)
-    expect(lines[noteRow - 1]).toContain("╭")
-    expect(lines[noteRow - 1]).toContain("╮")
-    expect(lines[noteRow]).toContain("│ phase │")
-    expect(lines[noteRow + 1]).toContain("╰")
-    expect(lines[noteRow + 1]).toContain("╯")
+    expect(lines[noteRow - 1]?.trim()).toBe("│                 │")
+    expect(lines[noteRow]).toContain(" phase ")
+    expect(lines[noteRow + 1]?.trim()).toBe("│                 │")
     expect(nextMessageRow).toBe(noteRow + 2)
   })
 
