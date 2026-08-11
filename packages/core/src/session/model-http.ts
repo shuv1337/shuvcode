@@ -8,10 +8,11 @@ import { Effect, Stream } from "effect"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { PluginHooks } from "../plugin/hooks"
 
-export const middleware = (
-  hooks: PluginHooks.Interface,
-  input: { readonly sessionID: Session.ID; readonly agent: Agent.ID; readonly model: Model.Ref },
-): NonNullable<StreamOptions["http"]> =>
+export const middleware =
+  (
+    hooks: PluginHooks.Interface,
+    input: { readonly sessionID: Session.ID; readonly agent: Agent.ID; readonly model: Model.Ref },
+  ): NonNullable<StreamOptions["http"]> =>
   (request, handler) =>
     Effect.gen(function* () {
       const before = yield* hooks.trigger("session", "http.request", {
