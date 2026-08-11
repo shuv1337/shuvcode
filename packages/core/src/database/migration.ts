@@ -5,6 +5,7 @@ import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
 import schema from "./schema.gen"
+import { Global } from "@opencode-ai/util/global"
 
 type Database = EffectDrizzleSqlite.EffectSQLiteDatabase
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0]
@@ -13,7 +14,7 @@ const lock = Semaphore.makeUnsafe(1)
 export type Migration = {
   id: string
   foreignKeys?: boolean
-  up: (tx: Transaction) => Effect.Effect<void, unknown>
+  up: (tx: Transaction) => Effect.Effect<void, unknown, Global.Service>
 }
 
 export function apply(db: Database) {
