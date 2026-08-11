@@ -61,6 +61,7 @@ import { WellKnown } from "../wellknown"
 import { WriteTool } from "../tool/plugin/write"
 import { AgentPlugin } from "./agent"
 import { CommandPlugin } from "./command"
+import { PlanPlugin } from "./plan"
 import { ModelsDevPlugin } from "./models-dev"
 import { ProviderPlugins } from "./provider"
 import { WebSearchPlugins } from "./websearch"
@@ -196,6 +197,7 @@ export type InternalPlugin = Plugin<Requirements | Scope.Scope>
 const pre = [
   WellKnownPlugin.Plugin,
   AgentPlugin.Plugin,
+  PlanPlugin.Plugin,
   CommandPlugin.Plugin,
   SkillPlugin.Plugin,
   ...SystemPromptPlugin.Plugins,
