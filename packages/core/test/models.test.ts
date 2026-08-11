@@ -190,7 +190,7 @@ const buildLayer = (state: Ref.Ref<MockState>, cache: MockCache, options: Models
 const makeFailingWriteKV = (cache: MockCache) =>
   Layer.mock(KV.Service, {
     get: (key) => Effect.sync(() => cache.values.get(key)),
-    set: () => Effect.die(new Error("Failed query: insert into \"kv\"")),
+    set: () => Effect.die(new Error('Failed query: insert into "kv"')),
     remove: (key) => Effect.sync(() => cache.values.delete(key)).pipe(Effect.asVoid),
   })
 
