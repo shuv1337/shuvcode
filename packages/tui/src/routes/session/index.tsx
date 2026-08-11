@@ -5,6 +5,7 @@ import {
   createMemo,
   createSignal,
   For,
+  Index,
   Match,
   on,
   onCleanup,
@@ -12,6 +13,7 @@ import {
   Show,
   Switch,
   useContext,
+  type Accessor,
 } from "solid-js"
 import path from "node:path"
 import { EOL, tmpdir } from "node:os"
@@ -3019,6 +3021,63 @@ function executeCalls(value: unknown): ExecuteCall[] {
   })
 }
 
+export function executeCallSummary(call: ExecuteCall) {
+  const args = primitiveInputSummary(call.input ?? {}).replace(/\s+/g, " ")
+  return `↳ ${call.tool}${call.status === "error" ? " (failed)" : ""}${args ? ` ${args}` : ""}`
+}
+
+function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
+  const theme = useTheme()
+  const renderer = useRenderer()
+  const [expanded, setExpanded] = createSignal(false)
+  const [hover, setHover] = createSignal(false)
+  const input = createMemo(() => Object.entries(props.call().input ?? {}))
+  const expandable = createMemo(() => input().length > 0)
+  const title = createMemo(() => `↳ ${props.call().tool}${props.call().status === "error" ? " (failed)" : ""}`)
+
+  return (
+    <box
+      paddingLeft={3 + INLINE_TOOL_ICON_WIDTH}
+      onMouseOver={() => expandable() && setHover(true)}
+      onMouseOut={() => setHover(false)}
+      onMouseUp={() => {
+        if (!expandable() || renderer.getSelection()?.getSelectedText()) return
+        setExpanded((value) => !value)
+      }}
+    >
+      <text
+        wrapMode="none"
+        truncate
+        fg={
+          props.call().status === "error"
+            ? theme.text.feedback.error.default
+            : hover()
+              ? theme.text.default
+              : theme.text.subdued
+        }
+      >
+        {expanded() ? title() : executeCallSummary(props.call())}
+      </text>
+      <Show when={expanded()}>
+        <box paddingLeft={2}>
+          <For each={input()}>
+            {([key, value]) => (
+              <box flexDirection="row">
+                <text flexShrink={0} fg={theme.text.subdued}>
+                  {key}:{" "}
+                </text>
+                <text flexGrow={1} wrapMode="word" fg={theme.text.default}>
+                  {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
+                </text>
+              </box>
+            )}
+          </For>
+        </box>
+      </Show>
+    </box>
+  )
+}
+
 // The `execute` tool streams child tool calls through metadata, not a child session like Task.
 function Execute(props: ToolProps) {
   const ctx = use()
@@ -3029,14 +3088,6 @@ function Execute(props: ToolProps) {
   const hasRuntimeError = createMemo(() => props.metadata.error === true || props.part.state.status === "error")
   const outputPreview = createMemo(() => collapseToolOutput(output(), 4, 4 * Math.max(20, ctx.width - 6)).output)
   const showOutput = createMemo(() => output() && hasRuntimeError())
-  const content = createMemo(() => {
-    const lines = ["execute"]
-    for (const call of calls()) {
-      const args = primitiveInputSummary(call.input ?? {})
-      lines.push(`↳ ${call.tool}${args ? ` ${args}` : ""}${call.status === "error" ? " (failed)" : ""}`)
-    }
-    return lines.join("\n")
-  })
 
   return (
     <>
@@ -3048,8 +3099,9 @@ function Execute(props: ToolProps) {
         complete={true}
         part={props.part}
       >
-        {content()}
+        execute
       </InlineTool>
+      <Index each={calls()}>{(call) => <ExecuteCallView call={call} />}</Index>
       <Show when={showOutput()}>
         <box paddingLeft={3}>
           <For each={outputPreview().split("\n")}>
