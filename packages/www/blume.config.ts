@@ -22,6 +22,15 @@ export default defineConfig({
     branch: "dev",
     dir: "packages/www",
   },
+  theme: {
+    background: "#131010",
+    fonts: {
+      body: "ibm-plex-mono",
+      display: "ibm-plex-mono",
+      mono: "ibm-plex-mono",
+    },
+    mode: "dark",
+  },
   navigation: {
     tabs: [
       { label: "Docs", path: "/" },
