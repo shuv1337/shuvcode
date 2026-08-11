@@ -182,9 +182,12 @@ describe("contract hygiene", () => {
     )
     const source = sources.map((item) => item.source).join("\n")
 
-    expect(sources.filter((item) => item.file !== "provider.ts").map((item) => item.source).join("\n")).not.toContain(
-      "Schema.Any",
-    )
+    expect(
+      sources
+        .filter((item) => item.file !== "provider.ts")
+        .map((item) => item.source)
+        .join("\n"),
+    ).not.toContain("Schema.Any")
     expect(sources.find((item) => item.file === "provider.ts")?.source.match(/Schema\.Any/g)).toHaveLength(4)
     expect(source).not.toContain("Schema.mutable")
   })

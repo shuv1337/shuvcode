@@ -104,14 +104,16 @@ const paths = Effect.gen(function* () {
   }
 })
 
-export const options = Effect.fnUntraced(function* (config?: Info) {
+export const options = Effect.fnUntraced(function* (
+  input: { readonly checkVersion?: boolean; readonly config?: Info } = {},
+) {
   const { file, legacyRegistrationFiles } = yield* paths
   yield* Effect.forEach(legacyRegistrationFiles, (legacy) => migrateRegistration(legacy, file))
   return {
     file,
-    version: OPENCODE_VERSION,
+    version: input.checkVersion ? OPENCODE_VERSION : undefined,
     command:
-      (config ?? (yield* read())).manager === "systemd"
+      (input.config ?? (yield* read())).manager === "systemd"
         ? [process.env.OPENCODE_SYSTEMCTL ?? "systemctl", "--user", "start", "shuvcode.service"]
         : [...selfCommand(), "serve", "--service"],
   }

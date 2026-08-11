@@ -37,7 +37,7 @@ describe("LocationMutation", () => {
         const target = yield* (yield* LocationMutation.Service).resolve({ path: "hello.txt" })
 
         expect(target).toMatchObject({
-          canonical: yield* Effect.promise(() => fs.realpath(targetPath)),
+          absolute: targetPath,
           resource: "hello.txt",
         })
         expect(target.externalDirectory).toBeUndefined()
@@ -50,10 +50,8 @@ describe("LocationMutation", () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => fs.mkdir(path.join(directory, "src")))
         const target = yield* (yield* LocationMutation.Service).resolve({ path: path.join("src", "new.txt") })
-        const root = yield* Effect.promise(() => fs.realpath(directory))
-
         expect(target).toMatchObject({
-          canonical: path.join(root, "src", "new.txt"),
+          absolute: path.join(directory, "src", "new.txt"),
           resource: "src/new.txt",
         })
       }).pipe(provide(directory)),
@@ -64,9 +62,9 @@ describe("LocationMutation", () => {
     withTmp((directory) =>
       Effect.gen(function* () {
         const target = yield* (yield* LocationMutation.Service).resolve({ path: "../outside.txt" })
-        const root = yield* Effect.promise(() => fs.realpath(path.dirname(directory)))
+        const root = path.dirname(directory)
         expect(target).toMatchObject({
-          canonical: path.join(root, "outside.txt"),
+          absolute: path.join(root, "outside.txt"),
           resource: path.join(root, "outside.txt").replaceAll("\\", "/"),
         })
         expect(target.externalDirectory).toMatchObject({
@@ -77,7 +75,7 @@ describe("LocationMutation", () => {
     ),
   )
 
-  it.live("authorizes a prospective target below an external symlink by its in-location path", () =>
+  it.live("requires external authorization for a prospective target below an escaping symlink", () =>
     withTmp((directory) => {
       const outside = `${directory}-outside`
       return Effect.gen(function* () {
@@ -88,10 +86,13 @@ describe("LocationMutation", () => {
         })
         const target = yield* (yield* LocationMutation.Service).resolve({ path: path.join("escape", "new.txt") })
         expect(target).toMatchObject({
-          canonical: path.join(yield* Effect.promise(() => fs.realpath(outside)), "new.txt"),
-          resource: "escape/new.txt",
+          absolute: path.join(outside, "new.txt"),
+          resource: path.join(outside, "new.txt").replaceAll("\\", "/"),
         })
-        expect(target.externalDirectory).toBeUndefined()
+        expect(target.externalDirectory).toMatchObject({
+          directory: outside,
+          resource: path.join(outside, "*").replaceAll("\\", "/"),
+        })
         yield* Effect.promise(() => fs.rm(outside, { recursive: true, force: true }))
       }).pipe(provide(directory))
     }),
@@ -107,8 +108,8 @@ describe("LocationMutation", () => {
         })
 
         expect(yield* (yield* LocationMutation.Service).resolve({ path: "linked/new.txt" })).toMatchObject({
-          canonical: path.join(yield* Effect.promise(() => fs.realpath(directory)), "actual", "new.txt"),
-          resource: "linked/new.txt",
+          absolute: path.join(directory, "actual", "new.txt"),
+          resource: "actual/new.txt",
         })
       }).pipe(provide(directory)),
     ),
@@ -120,7 +121,7 @@ describe("LocationMutation", () => {
         const targetPath = path.join(directory, "new.txt")
         const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
         expect(target).toMatchObject({
-          canonical: path.join(yield* Effect.promise(() => fs.realpath(directory)), "new.txt"),
+          absolute: targetPath,
           resource: "new.txt",
         })
         expect(target.externalDirectory).toBeUndefined()
@@ -134,9 +135,9 @@ describe("LocationMutation", () => {
         Effect.gen(function* () {
           const targetPath = path.join(outside, "new.txt")
           const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
-          const root = yield* Effect.promise(() => fs.realpath(outside))
+          const root = outside
           expect(target).toMatchObject({
-            canonical: path.join(root, "new.txt"),
+            absolute: path.join(root, "new.txt"),
             resource: path.join(root, "new.txt").replaceAll("\\", "/"),
           })
           expect(target.externalDirectory).toMatchObject({
@@ -155,24 +156,23 @@ describe("LocationMutation", () => {
           const targetPath = path.join(outside, "existing.txt")
           yield* Effect.promise(() => fs.writeFile(targetPath, "existing"))
           const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
-          const root = yield* Effect.promise(() => fs.realpath(outside))
-          expect(target).toMatchObject({ canonical: path.join(root, "existing.txt") })
-          expect(target.externalDirectory?.directory).toBe(root)
+          expect(target).toMatchObject({ absolute: targetPath })
+          expect(target.externalDirectory?.directory).toBe(outside)
         }).pipe(provide(directory)),
       ),
     ),
   )
 
-  it.live("anchors prospective external descendants at their stable existing directory", () =>
+  it.live("authorizes prospective external descendants at their lexical parent", () =>
     withTmp((directory) =>
       withTmp((outside) =>
         Effect.gen(function* () {
           const targetPath = path.join(outside, "new", "nested", "file.txt")
           const target = yield* (yield* LocationMutation.Service).resolve({ path: targetPath })
-          const root = yield* Effect.promise(() => fs.realpath(outside))
+          const parent = path.dirname(targetPath)
           expect(target.externalDirectory).toMatchObject({
-            directory: root,
-            resource: path.join(root, "*").replaceAll("\\", "/"),
+            directory: parent,
+            resource: path.join(parent, "*").replaceAll("\\", "/"),
           })
         }).pipe(provide(directory)),
       ),

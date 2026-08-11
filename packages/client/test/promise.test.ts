@@ -33,7 +33,9 @@ test("exposes every standard HTTP API group", () => {
     "projectCopy",
     "vcs",
     "debug",
+    "migration",
     "websearch",
+    "config",
   ])
   expect(Object.keys(client.debug)).toEqual(["location"])
   expect(Object.keys(client.debug.location)).toEqual(["list", "evict"])
@@ -84,6 +86,34 @@ test("auth.status uses the secret-safe local readiness contract", async () => {
   expect(result.data.profiles[0]?.providerID).toBe("anthropic")
   expect(request?.method).toBe("GET")
   expect(request?.url).toBe("http://localhost:3000/api/auth/status")
+})
+
+test("config.get returns ordered config entries for a location", async () => {
+  let request: Request | undefined
+  const entries = [
+    {
+      type: "document" as const,
+      path: "/tmp/project/opencode.json",
+      info: {
+        permissions: [
+          { action: "shell", resource: "*", effect: "ask" as const },
+          { action: "shell", resource: "git status", effect: "allow" as const },
+        ],
+      },
+    },
+    { type: "file" as const, path: "/tmp/project/opencode.json" },
+  ]
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input) => {
+      request = input instanceof Request ? input : new Request(input)
+      return Response.json(entries)
+    },
+  })
+
+  expect(await client.config.get({ location: { directory: "/tmp/project" } })).toEqual(entries)
+  expect(request?.method).toBe("GET")
+  expect(request?.url).toBe("http://localhost:3000/api/config?location%5Bdirectory%5D=%2Ftmp%2Fproject")
 })
 
 test("websearch.query uses the public HTTP contract", async () => {
@@ -152,6 +182,49 @@ test("experimental wellknown integration add uses the public HTTP contract", asy
     "http://localhost:3000/api/experimental/integration/wellknown?location%5Bdirectory%5D=%2Ftmp%2Fproject",
   )
   expect(await request?.json()).toEqual({ url: "https://example.com" })
+})
+
+test("integration connections optionally submit a form answer", async () => {
+  const requests: Request[] = []
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      requests.push(request)
+      if (request.url.endsWith("/connect/key")) return new Response(null, { status: 204 })
+      return Response.json({
+        location: { directory: "/tmp/project", project: { id: "proj_test", directory: "/tmp/project" } },
+        data: {
+          attemptID: "con_test",
+          url: "https://example.com/authorize",
+          instructions: "Authorize",
+          mode: "auto",
+          time: { created: 1, expires: 2 },
+        },
+      })
+    },
+  })
+
+  await client.integration.connect.key({
+    integrationID: "cloudflare-workers-ai",
+    key: "secret",
+    answer: { accountId: "account" },
+  })
+  await client.integration.oauth.connect({
+    integrationID: "github-copilot",
+    methodID: "device",
+    answer: { deploymentType: "enterprise", enabled: true, scopes: ["read:user"] },
+  })
+  await client.integration.connect.key({ integrationID: "openai", key: "secret" })
+  await client.integration.oauth.connect({ integrationID: "openai", methodID: "device" })
+
+  expect(await requests[0].json()).toEqual({ key: "secret", answer: { accountId: "account" } })
+  expect(await requests[1].json()).toEqual({
+    methodID: "device",
+    answer: { deploymentType: "enterprise", enabled: true, scopes: ["read:user"] },
+  })
+  expect(await requests[2].json()).toEqual({ key: "secret" })
+  expect(await requests[3].json()).toEqual({ methodID: "device" })
 })
 
 test("health.stop sends exact replacement identity", async () => {
@@ -387,6 +460,28 @@ test("session.pending.list uses the public HTTP contract", async () => {
 
   expect(result).toEqual(pending)
   expect(requests).toEqual([{ method: "GET", url: "http://localhost:3000/api/session/ses_test/pending" }])
+})
+
+test("session.pending mutations use the public HTTP contract", async () => {
+  const requests: Array<{ method: string; url: string }> = []
+  const client = OpenCode.make({
+    baseUrl: "http://localhost:3000",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      requests.push({ method: request.method, url: request.url })
+      return new Response(null, { status: 204 })
+    },
+  })
+
+  await client.session.pending.cancel({ sessionID: "ses_test", inputID: "msg_cancel" })
+  await client.session.pending.steer({ sessionID: "ses_test", inputID: "msg_steer" })
+  await client.session.pending.queue({ sessionID: "ses_test", inputID: "msg_queue" })
+
+  expect(requests).toEqual([
+    { method: "DELETE", url: "http://localhost:3000/api/session/ses_test/pending/msg_cancel" },
+    { method: "POST", url: "http://localhost:3000/api/session/ses_test/pending/msg_steer/steer" },
+    { method: "POST", url: "http://localhost:3000/api/session/ses_test/pending/msg_queue/queue" },
+  ])
 })
 
 test("event.subscribe exposes the Promise event stream wire projection", async () => {

@@ -9,6 +9,7 @@ import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Node } from "@opencode-ai/util/effect/app-node"
 import { Bus } from "./bus"
 import { FileMutation } from "./file-mutation"
+import { Environment } from "./environment"
 import { Formatter } from "./formatter"
 import { FileSystem } from "./filesystem"
 import { FileSystemSearch } from "./filesystem/search"
@@ -47,12 +48,14 @@ import { SessionGenerateNode } from "./session/generate-node"
 import { McpTool } from "./tool/mcp"
 import { ReadToolFileSystem } from "./tool/read-filesystem"
 import { Tool } from "./tool"
+import { ToolOutput } from "./tool-output"
 import { Vcs } from "./vcs"
 
 export { LocationServiceMap } from "./location-service-map"
 
 const locationServiceNodes = [
   Location.node,
+  Environment.node,
   Config.node,
   Agent.node,
   Command.node,
@@ -79,6 +82,7 @@ const locationServiceNodes = [
   MCP.node,
   Permission.node,
   Tool.node,
+  ToolOutput.node,
   Image.node,
   SkillInstructions.node,
   ReferenceInstructions.node,

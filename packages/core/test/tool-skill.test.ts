@@ -111,9 +111,9 @@ describe("SkillTool", () => {
               }),
             ).toMatchObject({
               status: "completed",
-              content: [{ type: "text", text: SkillTool.toModelOutput(info, [reference]) }],
+              content: [{ type: "text", text: Skill.toModelOutput(info, [reference]) }],
             })
-            expect(SkillTool.toModelOutput(info, [reference])).toContain(`Base directory for this skill: ${directory}`)
+            expect(Skill.toModelOutput(info, [reference])).toContain(`Base directory for this skill: ${directory}`)
             expect(
               yield* executeTool(registry, {
                 sessionID,
@@ -122,8 +122,8 @@ describe("SkillTool", () => {
               }),
             ).toEqual({
               status: "completed",
-              output: { name: "Effect", directory, output: SkillTool.toModelOutput(info, [reference]) },
-              content: [{ type: "text", text: SkillTool.toModelOutput(info, [reference]) }],
+              output: { name: "Effect", directory, output: Skill.toModelOutput(info, [reference]) },
+              content: [{ type: "text", text: Skill.toModelOutput(info, [reference]) }],
               metadata: { name: "Effect", directory },
             })
             expect(assertions).toMatchObject([
@@ -174,7 +174,7 @@ describe("SkillTool", () => {
               }),
             ).toMatchObject({
               status: "completed",
-              content: [{ type: "text", text: SkillTool.toModelOutput(flat, []) }],
+              content: [{ type: "text", text: Skill.toModelOutput(flat, []) }],
             })
           }).pipe(Effect.provide(skillToolLayer))
         }),

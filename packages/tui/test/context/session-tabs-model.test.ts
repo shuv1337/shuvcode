@@ -12,9 +12,27 @@ import {
   seedSessionTabMotion,
   sessionTabComplete,
   sessionTabOverflowWidth,
+  sessionTabShortcutLabel,
 } from "../../src/context/session-tabs-model"
 
 describe("session tabs", () => {
+  test("labels direct shortcut tabs and marks unbound tabs with a dot", () => {
+    expect(Array.from({ length: 12 }, (_, index) => sessionTabShortcutLabel(index))).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "0",
+      "·",
+      "·",
+    ])
+  })
+
   test("moves a tab to a clamped index and returns the same tabs for no-ops", () => {
     const tabs = ["a", "b", "c"].map((sessionID) => ({ sessionID }))
     expect(moveSessionTab(tabs, "a", 2).map((tab) => tab.sessionID)).toEqual(["b", "c", "a"])
@@ -91,6 +109,17 @@ describe("session tabs", () => {
     expect(cycleSessionTab(tabs, "c", -1)?.sessionID).toBe("a")
     expect(cycleSessionTab(tabs, "e", 1)?.sessionID).toBe("a")
     expect(cycleSessionTab(tabs, "b", 1)?.sessionID).toBe("a")
+  })
+
+  test("cycles to the nearest matching tab from an unmatched active tab", () => {
+    const tabs = ["a", "b", "c", "d", "e"].map((sessionID) => ({ sessionID }))
+    const unread = new Set(["a", "d"])
+    const matches = (tab: { sessionID: string }) => unread.has(tab.sessionID)
+
+    expect(cycleSessionTab(tabs, "c", 1, matches)?.sessionID).toBe("d")
+    expect(cycleSessionTab(tabs, "c", -1, matches)?.sessionID).toBe("a")
+    expect(cycleSessionTab(tabs, "e", 1, matches)?.sessionID).toBe("a")
+    expect(cycleSessionTab(tabs, "a", -1, matches)?.sessionID).toBe("d")
   })
 
   test("moves backward and forward through selection history", () => {

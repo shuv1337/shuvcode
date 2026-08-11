@@ -19,9 +19,10 @@ import type {
   SessionPendingInfo,
   ShellInfo,
   SkillInfo,
+  VcsInfo,
 } from "@opencode-ai/client"
 import type { ResolvedTheme } from "@opencode-ai/theme/tui"
-import type { CliRenderer, KeyEvent, Renderable } from "@opentui/core"
+import type { CliRenderer, KeyEvent, MarkdownCodeBlockRenderer, Renderable } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import type { Store } from "solid-js/store"
 
@@ -113,6 +114,11 @@ export interface Data {
     default(): LocationRef
     sync(location?: LocationRef): Promise<void>
     invalidate(location?: LocationRef): void
+    readonly vcs: {
+      info(location?: LocationRef): VcsInfo | undefined
+      sync(location?: LocationRef): Promise<void>
+      invalidate(location?: LocationRef): void
+    }
     readonly agent: LocationCollection<AgentInfo>
     readonly command: LocationCollection<CommandInfo>
     readonly integration: LocationCollection<IntegrationInfo>
@@ -400,6 +406,9 @@ export interface Context {
   readonly data: Data
   readonly attention: Attention
   readonly theme: ResolvedTheme
+  readonly markdown: {
+    registerCodeBlockRenderer(language: string, render: MarkdownCodeBlockRenderer): () => void
+  }
   readonly keymap: Keymap
   readonly storage: Storage
   readonly ui: UI

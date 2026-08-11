@@ -29,6 +29,16 @@ function required<T>(value: T | undefined): T {
   return value
 }
 
+const http = Effect.fn(function* (providerID: Provider.ID, url: string) {
+  const event = yield* (yield* PluginHooks.Service).trigger("session", "http.request", {
+    sessionID: Session.ID.make("ses_test"),
+    agent: Agent.ID.make("build"),
+    model: Model.Ref.make({ providerID, id: Model.ID.make("gpt-5.5") }),
+    request: new Request(url, { method: "POST", body: "{}" }),
+  })
+  return { url: event.request.url, headers: Object.fromEntries(event.request.headers.entries()) }
+})
+
 describe("OpenAIPlugin", () => {
   it.effect("registers browser and headless ChatGPT OAuth methods", () =>
     Effect.gen(function* () {
@@ -100,33 +110,9 @@ describe("OpenAIPlugin", () => {
       })
       yield* addPlugin()
 
-      const request = yield* (yield* PluginHooks.Service).trigger("session", "request", {
-        sessionID: Session.ID.make("ses_test"),
-        agent: Agent.ID.make("build"),
-        model: Model.Ref.make({ providerID: Provider.ID.openai, id: Model.ID.make("gpt-5.5") }),
-        url: "https://api.openai.com/v1/responses",
-        method: "POST",
-        headers: {},
-        body: "{}",
-      })
-      const custom = yield* (yield* PluginHooks.Service).trigger("session", "request", {
-        sessionID: Session.ID.make("ses_test"),
-        agent: Agent.ID.make("build"),
-        model: Model.Ref.make({ providerID: Provider.ID.make("custom-openai"), id: Model.ID.make("gpt-5.5") }),
-        url: "https://custom.example/v1/responses",
-        method: "POST",
-        headers: {},
-        body: "{}",
-      })
-      const proxy = yield* (yield* PluginHooks.Service).trigger("session", "request", {
-        sessionID: Session.ID.make("ses_test"),
-        agent: Agent.ID.make("build"),
-        model: Model.Ref.make({ providerID: Provider.ID.openai, id: Model.ID.make("gpt-5.5") }),
-        url: "https://proxy.example/v1/responses?region=us",
-        method: "POST",
-        headers: {},
-        body: "{}",
-      })
+      const request = yield* http(Provider.ID.openai, "https://api.openai.com/v1/responses")
+      const custom = yield* http(Provider.ID.make("custom-openai"), "https://custom.example/v1/responses")
+      const proxy = yield* http(Provider.ID.openai, "https://proxy.example/v1/responses?region=us")
 
       const provider = required(yield* catalog.provider.get(Provider.ID.openai))
       expect(provider.package).toBe("@opencode-ai/ai/providers/openai")
@@ -134,29 +120,46 @@ describe("OpenAIPlugin", () => {
       expect(provider.headers).toMatchObject({ "chatgpt-account-id": "acct_123" })
       expect(request.url).toBe("https://chatgpt.com/backend-api/codex/responses")
       expect(request.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
-      expect(custom.headers).toEqual({})
+      expect(custom.headers).not.toHaveProperty("originator")
       expect(proxy.url).toBe("https://proxy.example/v1/responses?region=us")
       expect(proxy.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
       const eligible = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5")))
       expect(eligible.package).toBe("@opencode-ai/ai/providers/openai")
       expect(eligible.cost).toEqual([])
-      expect(eligible.limit).toEqual({ context: 272_000, input: 272_000, output: 128_000 })
+      expect(eligible.limit).toEqual({ context: 400_000, input: 272_000, output: 128_000 })
       expect(eligible.enabled).toBe(true)
-      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"))).enabled).toBe(
-        false,
-      )
-      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"))).enabled).toBe(
-        false,
-      )
+      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"))).enabled).toBe(false)
+      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"))).enabled).toBe(false)
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.4"))).limit).toEqual({
-        context: 272_000,
+        context: 400_000,
         input: 272_000,
         output: 64_000,
       })
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.6"))).enabled).toBe(false)
       const gpt56 = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.6-sol")))
       expect(gpt56.enabled).toBe(true)
-      expect(gpt56.limit).toEqual({ context: 272_000, input: 272_000, output: 128_000 })
+      expect(gpt56.limit).toEqual({ context: 400_000, input: 272_000, output: 128_000 })
+      const daybreak = required(
+        yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-daybreak-blue-latest")),
+      )
+      expect(daybreak).toMatchObject({
+        modelID: "gpt-daybreak-blue-latest",
+        name: "Daybreak Blue",
+        family: "gpt-sol",
+        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+        limit: { context: 272_000, input: 144_000, output: 128_000 },
+        cost: [],
+        enabled: true,
+      })
+      expect(daybreak.variants.map((variant) => String(variant.id))).toEqual([
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+      ])
+      expect(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("daybreak-blue-latest"))).toBeUndefined()
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-4.1"))).enabled).toBe(false)
     }),
   )
@@ -184,23 +187,43 @@ describe("OpenAIPlugin", () => {
       })
       yield* addPlugin()
 
-      const request = yield* (yield* PluginHooks.Service).trigger("session", "request", {
-        sessionID: Session.ID.make("ses_test"),
-        agent: Agent.ID.make("build"),
-        model: Model.Ref.make({ providerID: Provider.ID.openai, id: Model.ID.make("gpt-5.5") }),
-        url: "https://api.openai.com/v1/responses",
-        method: "POST",
-        headers: {},
-        body: "{}",
-      })
+      const request = yield* http(Provider.ID.openai, "https://api.openai.com/v1/responses")
 
       const model = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5")))
       expect(model.package).toBe("@opencode-ai/ai/providers/openai")
       expect(model.enabled).toBe(true)
       expect(model.limit).toEqual({ context: 1_050_000, input: 922_000, output: 128_000 })
-      expect(request.headers).toEqual({})
+      expect(request.headers).not.toHaveProperty("originator")
+      const daybreak = required(
+        yield* catalog.model.get(Provider.ID.openai, Model.ID.make("daybreak-blue-latest")),
+      )
+      expect(daybreak).toMatchObject({
+        modelID: "daybreak-blue-latest",
+        name: "Daybreak Blue",
+        family: "gpt-sol",
+        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+        limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+        cost: [
+          { input: 5, output: 30, cache: { read: 0.5, write: 6.25 } },
+          {
+            tier: { type: "context", size: 272_000 },
+            input: 10,
+            output: 45,
+            cache: { read: 1, write: 12.5 },
+          },
+        ],
+        enabled: true,
+      })
+      expect(daybreak.variants.map((variant) => String(variant.id))).toEqual([
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ])
+      expect(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-daybreak-blue-latest"))).toBeUndefined()
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-4.1"))).enabled).toBe(true)
     }),
   )
-
 })

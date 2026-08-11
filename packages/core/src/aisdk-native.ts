@@ -27,6 +27,21 @@ export function map(input: MapInput): Mapping | undefined {
       }
     case "@ai-sdk/amazon-bedrock/mantle":
       return mapBedrockMantle(input, baseSettings)
+    case "@ai-sdk/azure":
+      return {
+        package: `@opencode-ai/ai/providers/azure/${input.settings.useCompletionUrls === true ? "chat" : "responses"}`,
+        settings: {
+          ...baseSettings,
+          ...mapAPIKey(input.settings),
+          ...(typeof input.settings.resourceName === "string" ? { resourceName: input.settings.resourceName } : {}),
+          ...(typeof input.settings.apiVersion === "string" ? { apiVersion: input.settings.apiVersion } : {}),
+          ...(isStringRecord(input.settings.queryParams) ? { queryParams: input.settings.queryParams } : {}),
+          ...(typeof input.settings.useDeploymentBasedUrls === "boolean"
+            ? { useDeploymentBasedUrls: input.settings.useDeploymentBasedUrls }
+            : {}),
+          ...mapOpenAIOptions(input.settings),
+        },
+      }
     case "@ai-sdk/google":
       return {
         package: "@opencode-ai/ai/providers/google",
@@ -248,6 +263,7 @@ function mapOpenRouterOptions(settings: Readonly<Record<string, unknown>>) {
           "extraBody",
           "fetch",
           "headers",
+          "promptCacheKey",
           "timeout",
         ].includes(key),
     ),
@@ -264,7 +280,6 @@ function mapXAIOptions(settings: Readonly<Record<string, unknown>>) {
   const options = {
     ...(typeof settings.reasoningEffort === "string" ? { reasoningEffort: settings.reasoningEffort } : {}),
     ...(typeof settings.store === "boolean" ? { store: settings.store } : {}),
-    ...(typeof settings.promptCacheKey === "string" ? { promptCacheKey: settings.promptCacheKey } : {}),
   }
   if (Object.keys(options).length === 0) return {}
   return { providerOptions: { xai: options } }

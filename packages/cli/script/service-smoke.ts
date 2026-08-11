@@ -93,7 +93,8 @@ try {
 } finally {
   processes.forEach((process) => process.kill())
   await Promise.all(processes.map((process) => process.exited))
-  if (failure) errors.push(fs.readFile(path.join(root, "data", "opencode", "log", "opencode.log"), "utf8").catch(() => ""))
+  if (failure)
+    errors.push(fs.readFile(path.join(root, "data", "opencode", "log", "opencode.log"), "utf8").catch(() => ""))
 }
 
 const output = await Promise.all(errors)
@@ -153,9 +154,7 @@ async function pluginIDs(url: string, headers: HeadersInit) {
     throw new Error("Compiled service returned an invalid plugin list")
   }
   return body.data.flatMap((plugin) =>
-    typeof plugin === "object" && plugin !== null && "id" in plugin && typeof plugin.id === "string"
-      ? [plugin.id]
-      : [],
+    typeof plugin === "object" && plugin !== null && "id" in plugin && typeof plugin.id === "string" ? [plugin.id] : [],
   )
 }
 

@@ -60,6 +60,7 @@ export const User = Schema.Struct({
   files: Prompt.fields.files,
   agents: Prompt.fields.agents,
   output: Prompt.fields.output,
+  skills: Prompt.fields.skills,
   type: Schema.tag("user"),
 }).annotate({ identifier: "Session.Message.User" })
 

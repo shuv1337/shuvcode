@@ -4,6 +4,7 @@ import { useTheme } from "../context/theme"
 import { useDialog } from "./dialog"
 import { Show, createEffect, createSignal, onMount, type JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
+import { useConfig } from "../config"
 
 export type DialogPromptProps = {
   title: string
@@ -20,6 +21,7 @@ export function DialogPrompt(props: DialogPromptProps) {
   const dialog = useDialog()
   const theme = useTheme("elevated")
   const shortcuts = Keymap.useShortcuts()
+  const config = useConfig().data
   const [textareaTarget, setTextareaTarget] = createSignal<TextareaRenderable>()
   let textarea: TextareaRenderable
 
@@ -84,7 +86,8 @@ export function DialogPrompt(props: DialogPromptProps) {
       <box gap={1}>
         {props.description?.()}
         <textarea
-          height={3}
+          height={1}
+          wrapMode="none"
           ref={(val: TextareaRenderable) => {
             textarea = val
             setTextareaTarget(val)
@@ -95,6 +98,7 @@ export function DialogPrompt(props: DialogPromptProps) {
           textColor={props.busy ? theme.text.formfield.disabled : theme.text.formfield.default}
           focusedTextColor={props.busy ? theme.text.formfield.disabled : theme.text.formfield.default}
           cursorColor={props.busy ? theme.background.formfield.disabled : theme.text.default}
+          cursorStyle={config.cursor}
         />
         <Show when={props.busy}>
           <Spinner color={theme.text.subdued}>{props.busyText ?? "Working..."}</Spinner>

@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { optional } from "./schema.js"
 import { statics } from "./schema.js"
 import { StructuredOutput } from "./structured-output.js"
+import { Skill } from "./skill.js"
 
 export interface PromptMention extends Schema.Schema.Type<typeof PromptMention> {}
 export const PromptMention = Schema.Struct({
@@ -53,23 +54,33 @@ export const AgentAttachment = Schema.Struct({
   mention: PromptMention.pipe(optional),
 }).annotate({ identifier: "Prompt.AgentAttachment" })
 
+export interface SkillAttachment extends Schema.Schema.Type<typeof SkillAttachment> {}
+export const SkillAttachment = Schema.Struct({
+  id: Skill.ID,
+  name: Skill.Name,
+  text: Schema.String,
+  mention: PromptMention.pipe(optional),
+}).annotate({ identifier: "Prompt.SkillAttachment" })
+
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
   text: Schema.String,
   files: Schema.Array(FileAttachment).pipe(optional),
   agents: Schema.Array(AgentAttachment).pipe(optional),
   output: StructuredOutput.Request.pipe(optional),
+  skills: Schema.Array(SkillAttachment).pipe(optional),
 })
   .annotate({ identifier: "Prompt" })
   .pipe(
     statics((schema) => ({
       equivalence: Schema.toEquivalence(schema),
-      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents" | "output">) =>
+      fromUserMessage: (input: Pick<Prompt, "text" | "files" | "agents" | "output" | "skills">) =>
         schema.make({
           text: input.text,
           ...(input.files === undefined ? {} : { files: input.files }),
           ...(input.agents === undefined ? {} : { agents: input.agents }),
           ...(input.output === undefined ? {} : { output: input.output }),
+          ...(input.skills === undefined ? {} : { skills: input.skills }),
         }),
     })),
   )

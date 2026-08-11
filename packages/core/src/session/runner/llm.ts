@@ -33,11 +33,17 @@ import { toSessionError } from "../to-session-error"
 import { SessionRunnerRetry } from "./retry"
 import { SessionUsage } from "../usage"
 import { SessionStructuredOutput } from "../structured-output"
+import { ToolOutput } from "../../tool-output"
 
 /** How one model call ended: settled, awaiting a scheduled retry, or restarted by compaction. */
 type CallOutcome = Data.TaggedEnum<{
   Completed: { readonly needsContinuation: boolean; readonly step: number }
   Retry: { readonly step: number }
+  Continue: {
+    readonly cause: AIError
+    readonly error: SessionRunnerRetry.RetryableFailure["error"]
+    readonly step: number
+  }
   Restart: { readonly step: number; readonly recoveredOverflow: boolean }
 }>
 const CallOutcome = Data.taggedEnum<CallOutcome>()
@@ -110,6 +116,8 @@ const classifyToolExits = (
 const TOOLS_INTERRUPTED = { type: "aborted", message: "Tool execution interrupted" } as const
 const STEP_INTERRUPTED = { type: "aborted", message: "Step interrupted" } as const
 const RESULT_MISSING = { type: "tool.result-missing", message: "Provider did not return a tool result" } as const
+const CONTINUE_AFTER_INCOMPLETE_STREAM =
+  "The previous response was interrupted. Continue from where you left off without repeating completed content."
 
 const layer = Layer.effect(
   Service,
@@ -123,6 +131,7 @@ const layer = Layer.effect(
     const db = (yield* Database.Service).db
     const compaction = yield* SessionCompaction.Service
     const title = yield* SessionTitle.Service
+    const toolOutput = yield* ToolOutput.Service
     // Title generation is a side effect of a successful step; it must not delay continuation.
     // The in-flight set coalesces overlapping steps while title presence records success durably.
     const titlesRunning = new Set<SessionSchema.ID>()
@@ -206,6 +215,20 @@ const layer = Layer.effect(
           assistantMessageID,
         ).pipe(Effect.catchTag("SessionRunner.RetryableFailure", waitForRetry))
         if (outcome._tag === "Completed") return { needsContinuation: outcome.needsContinuation, step: outcome.step }
+        if (outcome._tag === "Continue") {
+          yield* retry(
+            new SessionRunnerRetry.RetryableFailure({
+              cause: outcome.cause,
+              error: outcome.error,
+              step: outcome.step,
+            }),
+          ).pipe(Pull.catchDone(() => Effect.fail(outcome.cause)))
+          yield* bus.publish(SessionEvent.Synthetic, {
+            sessionID,
+            text: CONTINUE_AFTER_INCOMPLETE_STREAM,
+          })
+          assistantMessageID = SessionMessage.ID.create()
+        }
         if (outcome._tag === "Restart") {
           if (outcome.recoveredOverflow) recoverOverflow = false
           assistantMessageID = SessionMessage.ID.create()
@@ -359,8 +382,9 @@ const layer = Layer.effect(
                     progress: (update) => publisher.progress(event.id, update),
                   }),
                 ).pipe(
-                  // Only execution failures are model-visible. Failure to persist either
-                  // terminal event is infrastructure failure owned by the active drain.
+                  // The fiber owns its call and truncates oversized output before
+                  // durably settling it. Persistence failure remains infrastructure failure.
+                  Effect.flatMap(toolOutput.truncate),
                   Effect.flatMap((outcome) =>
                     publisher.toolExecution(event.id, event.name, outcome).pipe(
                       Effect.catchCause((cause) => Effect.fail(new ToolPersistenceError({ cause }))),
@@ -501,6 +525,17 @@ const layer = Layer.effect(
             })
           }
 
+          const incompleteStream =
+            llmFailure?.reason._tag === "InvalidProviderOutput" &&
+            llmFailure.reason.classification === "incomplete-stream"
+          const toolsAllowContinuation = tools.declines.length === 0 && !tools.interrupted
+          if (llmError && incompleteStream && record.outputStarted && toolsAllowContinuation)
+            return CallOutcome.Continue({
+              cause: llmFailure,
+              error: llmError,
+              step: currentStep,
+            })
+
           if (stream._tag === "Failure") return yield* Effect.failCause(stream.cause)
           if (tools.declines.length > 0) return yield* Effect.interrupt
           if (tools.interrupted && tools.failure) return yield* Effect.failCause(tools.failure)
@@ -570,7 +605,7 @@ const layer = Layer.effect(
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID: message.id,
-            callID: tool.id,
+            id: tool.id,
             error: { type: "aborted", message: `Tool execution interrupted: ${tool.name}` },
             executed: tool.executed === true,
           })
@@ -616,6 +651,7 @@ export const node = makeLocationNode({
     SessionCompaction.node,
     SessionTitle.node,
     Snapshot.node,
+    ToolOutput.node,
     Database.node,
   ],
 })

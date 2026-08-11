@@ -12,6 +12,7 @@ import { ModelResolver } from "@opencode-ai/core/model-resolver"
 import { it } from "./lib/effect"
 
 interface ModelOptions {
+  readonly providerID?: Provider.ID
   readonly modelID?: string
   readonly compatibility?: Compatibility
   readonly settings?: Info["settings"]
@@ -25,7 +26,7 @@ const model = (packageName: string | undefined, options: ModelOptions = {}) =>
   Info.make({
     id: ID.make("test-model"),
     modelID: ID.make(options.modelID ?? "api-test-model"),
-    providerID: Provider.ID.make("test-provider"),
+    providerID: options.providerID ?? Provider.ID.make("test-provider"),
     name: "Test model",
     compatibility: options.compatibility,
     package: packageName,
@@ -41,7 +42,87 @@ const model = (packageName: string | undefined, options: ModelOptions = {}) =>
     limit: options.limit ?? { context: 100, output: 20 },
   })
 
+function withEnv<A, E, R>(variables: Record<string, string | undefined>, effect: () => Effect.Effect<A, E, R>) {
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]))
+      Object.entries(variables).forEach(([key, value]) => {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      })
+      return previous
+    }),
+    effect,
+    (previous) =>
+      Effect.sync(() => {
+        Object.entries(previous).forEach(([key, value]) => {
+          if (value === undefined) delete process.env[key]
+          else process.env[key] = value
+        })
+      }),
+  )
+}
+
 describe("ModelResolver", () => {
+  it.effect("constructs native Azure requests with deployment IDs and projected resource URLs", () =>
+    Effect.gen(function* () {
+      const responses = yield* ModelResolver.fromCatalogModel(
+        model(Provider.aisdk("@ai-sdk/azure"), {
+          providerID: Provider.ID.azure,
+          modelID: "responses-deployment",
+          settings: { resourceName: "modern-resource", apiVersion: "2025-01-01-preview" },
+        }),
+        Credential.Key.make({ type: "key", key: "secret" }),
+      )
+      const chat = yield* ModelResolver.fromCatalogModel(
+        model(Provider.aisdk("@ai-sdk/azure"), {
+          providerID: Provider.ID.azure,
+          modelID: "chat-deployment",
+          settings: { resourceName: "modern-resource", useCompletionUrls: true },
+        }),
+      )
+      const deployment = yield* ModelResolver.fromCatalogModel(
+        model(Provider.aisdk("@ai-sdk/azure"), {
+          providerID: Provider.ID.azure,
+          modelID: "legacy-url-deployment",
+          settings: {
+            resourceName: "modern-resource",
+            apiVersion: "2025-01-01-preview",
+            useDeploymentBasedUrls: true,
+          },
+        }),
+      )
+      const compatible = yield* ModelResolver.fromCatalogModel(
+        model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+          providerID: Provider.ID.azure,
+          modelID: "legacy-deployment",
+          settings: {
+            resourceName: "legacy-resource",
+            baseURL: "https://legacy-resource.cognitiveservices.azure.com/openai",
+          },
+        }),
+      )
+
+      expect(responses).toMatchObject({ id: "responses-deployment", provider: "azure" })
+      expect(responses.route).toMatchObject({
+        id: "azure-openai-responses",
+        endpoint: {
+          baseURL: "https://modern-resource.openai.azure.com/openai/v1",
+          query: { "api-version": "2025-01-01-preview" },
+        },
+      })
+      expect(chat).toMatchObject({ id: "chat-deployment", provider: "azure" })
+      expect(chat.route.id).toBe("azure-openai-chat")
+      expect(deployment).toMatchObject({ id: "legacy-url-deployment", provider: "azure" })
+      expect(deployment.route.endpoint).toMatchObject({
+        baseURL: "https://modern-resource.openai.azure.com/openai/deployments/legacy-url-deployment",
+        query: { "api-version": "2025-01-01-preview" },
+      })
+      expect(compatible).toMatchObject({ id: "legacy-deployment", provider: "azure" })
+      expect(compatible.route.endpoint.baseURL).toBe("https://legacy-resource.cognitiveservices.azure.com/openai")
+    }),
+  )
+
   it.effect("maps Bedrock Mantle models to native Responses and safeguards to Chat", () =>
     Effect.gen(function* () {
       const credential = Credential.Key.make({ type: "key", key: "secret" })
@@ -91,6 +172,9 @@ describe("ModelResolver", () => {
           http: { body: { custom_extension: { enabled: true } } },
         },
       })
+      const prepared = yield* compileRequest(LLM.request({ model: resolved, prompt: "Hello" }))
+      expect(prepared.body.max_output_tokens).toBeUndefined()
+      expect(JSON.stringify(prepared.body)).not.toContain("max_output_tokens")
     }),
   )
 
@@ -131,7 +215,11 @@ describe("ModelResolver", () => {
     Effect.gen(function* () {
       const resolved = yield* ModelResolver.fromCatalogModel(
         model(Provider.aisdk("@ai-sdk/openai-compatible"), {
-          compatibility: { reasoningField: "vendor_reasoning" },
+          compatibility: {
+            reasoningField: "vendor_reasoning",
+            maxTokensField: "max_completion_tokens",
+            requireFinishReason: false,
+          },
           settings: {
             apiKey: "settings-secret",
             baseURL: "https://compatible.example/v1",
@@ -141,7 +229,8 @@ describe("ModelResolver", () => {
           body: {},
         }),
       )
-      const request = LLM.request({ model: resolved, prompt: "Hello" })
+      const request = LLM.request({ model: resolved, prompt: "Hello", generation: { maxTokens: 10 } })
+      const prepared = yield* compileRequest(request)
       const headers = yield* resolved.route.auth.apply({
         request,
         method: "POST",
@@ -153,9 +242,49 @@ describe("ModelResolver", () => {
       expect(headers.authorization).toBe("Bearer settings-secret")
       expect(resolved.route.id).toBe("openai-compatible-chat")
       expect(resolved.compatibility?.reasoningField).toBe("vendor_reasoning")
+      expect(resolved.compatibility?.maxTokensField).toBe("max_completion_tokens")
+      expect(resolved.compatibility?.requireFinishReason).toBe(false)
+      expect(prepared.body).toMatchObject({ max_completion_tokens: 10 })
+      expect(prepared.body).not.toHaveProperty("max_tokens")
       expect(resolved.route.endpoint.baseURL).toBe("https://compatible.example/v1")
       expect(resolved.route.defaults.http?.body).toEqual({})
     }),
+  )
+
+  it.effect("resolves provider URLs from environment without mutating the catalog model", () =>
+    withEnv({ ACME_HOST: "api.acme.test" }, () =>
+      Effect.gen(function* () {
+        const catalog = model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+          settings: { baseURL: "https://${ACME_HOST}/v1" },
+        })
+        const resolved = yield* ModelResolver.fromCatalogModel(catalog)
+
+        expect(resolved.route.endpoint.baseURL).toBe("https://api.acme.test/v1")
+        expect(catalog.settings?.baseURL).toBe("https://${ACME_HOST}/v1")
+      }),
+    ),
+  )
+
+  it.effect("rejects unresolved provider URL variables before route construction", () =>
+    withEnv({ REQUIRED_HOST: undefined }, () =>
+      Effect.gen(function* () {
+        const failure = yield* ModelResolver.fromCatalogModel(
+          model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+            settings: { baseURL: "https://${REQUIRED_HOST}/${REQUIRED_PATH}/v1" },
+          }),
+        ).pipe(Effect.flip)
+
+        expect(failure).toMatchObject({
+          _tag: "SessionRunnerModel.UnresolvedProviderVariablesError",
+          providerID: "test-provider",
+          modelID: "test-model",
+          variables: ["REQUIRED_HOST", "REQUIRED_PATH"],
+        })
+        expect(failure.message).toBe(
+          "Cannot initialize test-provider/test-model: REQUIRED_HOST, REQUIRED_PATH are required to resolve the provider endpoint",
+        )
+      }),
+    ),
   )
 
   it.effect("overlays selected OpenAI variant settings and bodies", () =>
@@ -664,7 +793,11 @@ describe("ModelResolver", () => {
           headers: { "x-aisdk": "header" },
           body: { custom: true },
         }),
-        Credential.Key.make({ type: "key", key: "fallback-secret" }),
+        Credential.Key.make({
+          type: "key",
+          key: "fallback-secret",
+          configuration: { accountId: "account" },
+        }),
         {
           loadAISDK: (runtime) =>
             Effect.sync(() => {
@@ -673,7 +806,7 @@ describe("ModelResolver", () => {
                 modelID: "mistral-api-model",
                 providerID: "test-provider",
                 package: Provider.aisdk("@ai-sdk/mistral"),
-                settings: { project: "test", apiKey: "fallback-secret" },
+                settings: { project: "test", apiKey: "fallback-secret", accountId: "account" },
                 headers: { "x-aisdk": "header" },
                 body: { custom: true },
               })

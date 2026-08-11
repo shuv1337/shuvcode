@@ -71,6 +71,7 @@ export interface DialogSelectOption<T = any> {
   detailsColor?: RGBA
   detailsWrap?: boolean
   footer?: JSX.Element | string
+  footerColor?: RGBA
   titleWidth?: number
   truncateTitle?: boolean | "left"
   category?: string
@@ -211,7 +212,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const flatten = createMemo(() => props.flat && store.filter.length > 0)
 
   const grouped = createMemo<[string, DialogSelectOption<T>[]][]>(() => {
-    if (flatten()) return [["", filtered()]]
+    if (flatten()) return filtered().length ? [["", filtered()]] : []
     const result = pipe(
       filtered(),
       groupBy((x) => x.category ?? ""),
@@ -608,6 +609,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               }}
               focusedBackgroundColor={theme.background.formfield.focused}
               cursorColor={theme.text.formfield.focused}
+              cursorStyle={config.cursor}
               focusedTextColor={theme.text.formfield.focused}
               ref={(r) => {
                 input = r
@@ -727,6 +729,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                               footer={
                                 flatten() ? (option.searchFooter ?? option.category ?? option.footer) : option.footer
                               }
+                              footerColor={option.footerColor}
                               titleWidth={option.titleWidth}
                               truncateTitle={option.truncateTitle}
                               description={option.description !== category ? option.description : undefined}
@@ -784,6 +787,7 @@ function Option(props: {
   current?: boolean
   muted?: boolean
   footer?: JSX.Element | string
+  footerColor?: RGBA
   titleWidth?: number
   truncateTitle?: boolean | "left"
   gutter?: () => JSX.Element
@@ -832,7 +836,17 @@ function Option(props: {
       </text>
       <Show when={props.footer}>
         <box flexShrink={0}>
-          <text fg={props.active && !props.muted ? text() : theme.text.subdued}>{props.footer}</text>
+          <text
+            fg={
+              props.active && !props.muted
+                ? text()
+                : props.muted && (props.active || props.current)
+                  ? theme.text.subdued
+                  : (props.footerColor ?? theme.text.subdued)
+            }
+          >
+            {props.footer}
+          </text>
         </box>
       </Show>
     </>

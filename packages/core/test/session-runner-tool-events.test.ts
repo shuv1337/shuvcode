@@ -27,9 +27,7 @@ const capture = (
       const publish = Effect.sync(() => {
         const event = { id: Event.ID.create(), type: definition.type, data } as Event.Payload<typeof definition>
         published.push({
-          type: definition.durable
-            ? Bus.versionedType(definition.type, definition.durable.version)
-            : definition.type,
+          type: definition.durable ? Bus.versionedType(definition.type, definition.durable.version) : definition.type,
           data,
         })
         return event
@@ -133,6 +131,19 @@ test("interrupted progress metadata remains in the terminal failure snapshot", a
   })
 })
 
+test("local failure metadata completes the progress snapshot", async () => {
+  const { published, publisher } = capture()
+  await Effect.runPromise(publisher.publish(call))
+  await Effect.runPromise(publisher.progress(call.id, { phase: "running", provider: "old" }))
+  await Effect.runPromise(
+    publisher.failTool(call.id, { type: "tool.execution", message: "failed" }, { provider: "exa" }),
+  )
+
+  expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
+    metadata: { phase: "running", provider: "exa" },
+  })
+})
+
 test("failure snapshot retains canonical progress above the default byte limit", async () => {
   const { published, publisher } = capture("anthropic", { interruptProgress: true })
   await Effect.runPromise(publisher.publish(call))
@@ -231,9 +242,7 @@ test("provider-executed tool metadata is flattened using the route key", async (
 test("binary failure emits no success event", async () => {
   const { published, publisher } = capture()
   await Effect.runPromise(publisher.publish(call))
-  await Effect.runPromise(
-    publisher.failTool(call.id, { type: "tool.execution", message: "Cannot read binary file" }),
-  )
+  await Effect.runPromise(publisher.failTool(call.id, { type: "tool.execution", message: "Cannot read binary file" }))
   expect(published.some((event) => event.type === "session.tool.success.2")).toBe(false)
   expect(published.some((event) => event.type === "session.tool.failed.2")).toBe(true)
 })
@@ -252,7 +261,7 @@ test("failed success persistence leaves the tool available for durable failure s
   await Effect.runPromise(publisher.failUnsettledTools({ type: "unknown", message: "persistence failed" }))
 
   expect(published.find((event) => event.type === "session.tool.failed.2")?.data).toMatchObject({
-    callID: call.id,
+    id: call.id,
     error: { type: "unknown", message: "persistence failed" },
   })
 })
@@ -261,7 +270,7 @@ test("success event data can carry provider-executed result state", () => {
   const decoded = Schema.decodeUnknownSync(SessionEvent.Tool.Success.data)({
     sessionID,
     assistantMessageID: SessionMessage.ID.create(),
-    callID: "call-old",
+    id: "call-old",
     content: [{ type: "file", uri: `data:image/png;base64,${base64}`, mime: "image/png" }],
     executed: true,
     resultState: {

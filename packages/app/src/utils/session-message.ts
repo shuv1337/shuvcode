@@ -5,12 +5,20 @@ import type {
   SessionMessageShell,
   SessionMessageUser,
 } from "@opencode-ai/client/promise"
-import type { AssistantMessage, FilePart, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, FilePart, Message, Part, ToolPart, UserMessage } from "@/types"
 import { Option, Schema } from "effect"
 
 const emptyTokens = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
 const emptyModel: { id: string; providerID: string; variant?: string } = { id: "", providerID: "" }
 const decodeToolInput = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
+
+export function compareMessages(a: Pick<Message, "id" | "time">, b: Pick<Message, "id" | "time">) {
+  const left = messageKey(a)
+  const right = messageKey(b)
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+export const messageKey = (message: Pick<Message, "id" | "time">) => message.time.created + message.id
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -196,7 +204,7 @@ function userMessage(
 
 function userParts(sessionID: string, message: SessionMessageUser): Part[] {
   return [
-    textPart(sessionID, message.id, 0, message.text),
+    ...(message.text ? [textPart(sessionID, message.id, 0, message.text)] : []),
     ...(message.files ?? []).map(
       (file, index): FilePart => ({
         id: `${message.id}:file:${index}`,
@@ -261,6 +269,10 @@ function assistantParts(sessionID: string, message: SessionMessageAssistant): Pa
     if (content.type === "text") {
       const part = textPart(sessionID, message.id, ordinals.text++, content.text)
       return content.text.trim() ? [part] : []
+    }
+    if (content.type === "structured") {
+      const text = JSON.stringify(content.value, null, 2)
+      return [textPart(sessionID, message.id, ordinals.text++, `\`\`\`json\n${text}\n\`\`\``)]
     }
     if (content.type === "reasoning") {
       const part: Part = {

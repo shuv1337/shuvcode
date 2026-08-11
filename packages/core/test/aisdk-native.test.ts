@@ -16,6 +16,31 @@ describe("AISDKNative", () => {
     })
   })
 
+  test("maps Azure deployments and settings to native routes", () => {
+    const settings = {
+      apiKey: "secret",
+      resourceName: "resource",
+      apiVersion: "2025-01-01-preview",
+      queryParams: { feature: "enabled" },
+      useDeploymentBasedUrls: true,
+      reasoningEffort: "high",
+    }
+    expect(map("@ai-sdk/azure", settings, "deployment")).toEqual({
+      package: "@opencode-ai/ai/providers/azure/responses",
+      settings: {
+        apiKey: "secret",
+        resourceName: "resource",
+        apiVersion: "2025-01-01-preview",
+        queryParams: { feature: "enabled" },
+        useDeploymentBasedUrls: true,
+        providerOptions: { openai: { reasoningEffort: "high" } },
+      },
+    })
+    expect(map("@ai-sdk/azure", { ...settings, useCompletionUrls: true }, "custom-deployment")?.package).toBe(
+      "@opencode-ai/ai/providers/azure/chat",
+    )
+  })
+
   test("maps Bedrock provider and request options", () => {
     expect(
       map(
@@ -154,7 +179,6 @@ describe("AISDKNative", () => {
         models: ["anthropic/claude-sonnet-4.6"],
         provider: { only: ["anthropic"], require_parameters: true },
         reasoning: { effort: "high" },
-        promptCacheKey: "session_123",
         future_option: { enabled: true },
       }),
     ).toEqual({
@@ -165,7 +189,6 @@ describe("AISDKNative", () => {
             models: ["anthropic/claude-sonnet-4.6"],
             provider: { only: ["anthropic"], require_parameters: true },
             reasoning: { effort: "high" },
-            promptCacheKey: "session_123",
             future_option: { enabled: true },
           },
         },
@@ -246,7 +269,6 @@ describe("AISDKNative", () => {
         baseURL: "https://xai.example/v1",
         reasoningEffort: "custom",
         store: true,
-        promptCacheKey: "cache-key",
       }),
     ).toEqual({
       package: "@opencode-ai/ai/providers/xai",
@@ -257,7 +279,6 @@ describe("AISDKNative", () => {
           xai: {
             reasoningEffort: "custom",
             store: true,
-            promptCacheKey: "cache-key",
           },
         },
       },

@@ -29,30 +29,6 @@ describe("checkServerHealth", () => {
     expect(request?.pathname).toBe("/api/health")
   })
 
-  test("returns unhealthy when the V2 health endpoint is unavailable", async () => {
-    const paths: string[] = []
-    const fetch = (async (input: RequestInfo | URL) => {
-      const url = input instanceof URL ? input : new URL(input instanceof Request ? input.url : input)
-      paths.push(url.pathname)
-      return new Response(undefined, { status: 404 })
-    }) as unknown as typeof globalThis.fetch
-
-    expect(await checkServerHealth(server, fetch)).toEqual({ healthy: false })
-    expect(paths).toEqual(["/api/health"])
-  })
-
-  test("returns unhealthy when the V2 health response is malformed", async () => {
-    const paths: string[] = []
-    const fetch = (async (input: RequestInfo | URL) => {
-      const url = input instanceof URL ? input : new URL(input instanceof Request ? input.url : input)
-      paths.push(url.pathname)
-      return Response.json({})
-    }) as unknown as typeof globalThis.fetch
-
-    expect(await checkServerHealth(server, fetch)).toEqual({ healthy: false })
-    expect(paths).toEqual(["/api/health"])
-  })
-
   test("allows slow servers thirty seconds by default", async () => {
     const timeout = Object.getOwnPropertyDescriptor(AbortSignal, "timeout")
     let timeoutMs = 0

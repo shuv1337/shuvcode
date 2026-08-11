@@ -140,7 +140,7 @@ const layer = Layer.effect(
         sessionID: context.sessionID,
         agent: context.agent,
         messageID: context.messageID,
-        callID: context.callID,
+        id: context.id,
         input,
       }
       yield* hooks.trigger("tool", "execute.before", beforeEvent)
@@ -153,7 +153,7 @@ const layer = Layer.effect(
         sessionID: context.sessionID,
         agent: context.agent,
         messageID: context.messageID,
-        callID: context.callID,
+        id: context.id,
         input: beforeEvent.input,
       }
       if ("failure" in execution) {
@@ -163,7 +163,7 @@ const layer = Layer.effect(
           error: execution.failure,
         }
         yield* hooks.trigger("tool", "execute.after", afterEvent)
-        const metadata = yield* terminalMetadata(name, context.callID, afterEvent.error.metadata)
+        const metadata = yield* terminalMetadata(name, context.id, afterEvent.error.metadata)
         if (metadata === afterEvent.error.metadata) return yield* afterEvent.error
         return yield* new Tool.Error({ message: afterEvent.error.message, error: afterEvent.error.error })
       }
@@ -195,7 +195,7 @@ const layer = Layer.effect(
       const afterContent = terminal.replaced
         ? yield* normalizeImages(normalizeContent(terminal.result.content, execution.value.output))
         : content
-      const metadata = yield* terminalMetadata(name, context.callID, terminal.result.metadata)
+      const metadata = yield* terminalMetadata(name, context.id, terminal.result.metadata)
       return {
         ...(execution.value.output === undefined ? {} : { output: execution.value.output }),
         content: afterContent,
@@ -306,7 +306,7 @@ const layer = Layer.effect(
                   sessionID: input.sessionID,
                   agent: input.agent,
                   messageID: input.messageID,
-                  callID: Tool.CallID.make(input.call.id),
+                  id: Tool.CallID.make(input.call.id),
                   progress: input.progress ?? (() => Effect.void),
                 }
                 if (input.call.name === "execute" && codemodeTool)

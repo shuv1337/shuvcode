@@ -43,9 +43,10 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
     return { endpoint: yield* Standalone.start() } satisfies Resolved
   }
 
-  const options = yield* ServiceConfig.options()
+  const mismatch = args.mismatch ?? "ignore"
+  const options = yield* ServiceConfig.options({ checkVersion: mismatch !== "ignore" })
   return {
-    endpoint: yield* resolveManaged({ ...options, onStart: args.onStart }, args.mismatch ?? "replace"),
+    endpoint: yield* resolveManaged({ ...options, onStart: args.onStart }, mismatch),
     service: managedService(),
   } satisfies Resolved
 })
@@ -58,7 +59,8 @@ function managedService() {
 }
 
 const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mismatch: NonNullable<Args["mismatch"]>) {
-  if (mismatch === "replace") return yield* ServiceLifecycle.ensure({ onStart: options.onStart })
+  if (mismatch === "replace")
+    return yield* ServiceLifecycle.ensure({ version: options.version, onStart: options.onStart })
   if (mismatch === "ignore") return yield* ServiceLifecycle.ensure({ version: undefined, onStart: options.onStart })
 
   const compatible = yield* Service.discover(options)
@@ -66,7 +68,7 @@ const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mism
   const existing = yield* Service.discover({ ...options, version: undefined })
   if (existing !== undefined)
     return yield* Effect.fail(new Error("Background server version does not match this client"))
-  return yield* ServiceLifecycle.ensure({ onStart: options.onStart })
+  return yield* ServiceLifecycle.ensure({ version: options.version, onStart: options.onStart })
 })
 
 function connectError(endpoint: Endpoint, cause: unknown) {

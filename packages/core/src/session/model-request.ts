@@ -4,7 +4,8 @@ import { LLM, Message, SystemPart, ToolChoice, ToolDefinition, type LLMRequest }
 import type { StreamOptions } from "@opencode-ai/ai/route"
 import type { Content } from "@opencode-ai/schema/tool"
 import { SessionError } from "@opencode-ai/schema/session-error"
-import { Cause, Config, Context, Effect, JsonSchema, Layer, Result } from "effect"
+import { Cause, Config, Context, Effect, JsonSchema, Layer, Result, Stream } from "effect"
+import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { App } from "../app"
 import { Decline } from "../decline"
@@ -13,6 +14,7 @@ import { PluginHooks } from "../plugin/hooks"
 import { Tool } from "../tool"
 import { SessionContext } from "./context"
 import { SessionModelHeaders } from "./model-headers"
+import { SessionPromptCacheKey } from "./prompt-cache-key"
 import { PromptCacheDiagnostics } from "./prompt-cache-diagnostics"
 import { MAX_STEPS_PROMPT } from "./runner/max-steps"
 import PROMPT_DEFAULT from "./runner/prompt/base.txt"
@@ -47,9 +49,7 @@ interface Prepared {
    * One request-scoped execution operation. Unknown, hook-removed, and
    * step-limit-violating calls fail individually through the same seam.
    */
-  readonly executeTool: (
-    input: Parameters<Tool.Snapshot["execute"]>[0],
-  ) => Effect.Effect<Tool.Result, ExecuteError>
+  readonly executeTool: (input: Parameters<Tool.Snapshot["execute"]>[0]) => Effect.Effect<Tool.Result, ExecuteError>
   /** True when this request is the final Step; violating calls are rejected and no continuation follows. */
   readonly stepLimitReached: boolean
   readonly structuredOutput?: StructuredOutput.Request
@@ -137,8 +137,7 @@ export const boundImages = (messages: LLMRequest["messages"]) => {
           result: {
             ...part.result,
             value: part.result.value.map((item: Content) => {
-              if (item.type !== "file" || !isImage(item.mime) || imageBytes - removed <= IMAGE_BYTES_TARGET)
-                return item
+              if (item.type !== "file" || !isImage(item.mime) || imageBytes - removed <= IMAGE_BYTES_TARGET) return item
               removed += Buffer.byteLength(item.uri)
               return { type: "text" as const, text: IMAGE_REMOVED }
             }),
@@ -183,7 +182,6 @@ export const layer = Layer.effect(
       // The final Step keeps definitions available to protocols with native "none",
       // preserving their prompt cache prefix. Calls are still rejected at execution.
       const tools = input.context.tools
-      const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const system = [agent.info.system ? agent.info.system : PROMPT_DEFAULT, input.context.initial]
         .filter((part) => part.length > 0)
         .map(SystemPart.make)
@@ -230,7 +228,7 @@ export const layer = Layer.effect(
         http: {
           headers: SessionModelHeaders.make(session, app),
         },
-        providerOptions: { [providerMetadataKey]: { promptCacheKey } },
+        promptCacheKey: SessionPromptCacheKey.make(session.id),
         system: context.system,
         messages: boundImages(unsupportedParts(context.messages, resolved.capabilities)),
         tools: structuredTool
@@ -245,24 +243,36 @@ export const layer = Layer.effect(
             : undefined,
       })
       const options: StreamOptions = {
-        transform: (request) =>
-          hooks
-            .trigger("session", "request", {
+        http: (request, handler) =>
+          Effect.gen(function* () {
+            const before = yield* hooks.trigger("session", "http.request", {
               sessionID: session.id,
               agent: agent.id,
               model: resolved.ref,
-              ...request,
+              request: yield* HttpClientRequest.toWeb(request),
             })
-            .pipe(
-              Effect.tap((event) =>
-                Effect.sync(() => {
-                  request.url = event.url
-                  request.headers = event.headers
-                  request.body = event.body
-                }),
+            let sent = HttpClientRequest.fromWeb(before.request)
+            if (before.request.body)
+              sent = HttpClientRequest.bodyUint8Array(
+                sent,
+                new Uint8Array(yield* Effect.promise(() => before.request.clone().arrayBuffer())),
+                before.request.headers.get("content-type") ?? undefined,
+              )
+            const response = yield* handler(sent)
+            const after = yield* hooks.trigger("session", "http.response", {
+              sessionID: session.id,
+              agent: agent.id,
+              model: resolved.ref,
+              request: before.request,
+              response: new Response(
+                [204, 205, 304].includes(response.status)
+                  ? null
+                  : yield* Stream.toReadableStreamEffect(response.stream),
+                { status: response.status, headers: response.headers },
               ),
-              Effect.asVoid,
-            ),
+            })
+            return HttpClientResponse.fromWeb(sent, after.response)
+          }).pipe(Effect.mapError((cause) => (cause instanceof Error ? cause : new Error(String(cause))))),
       }
       if (promptCacheSnapshots) {
         const current = PromptCacheDiagnostics.snapshot(request)
@@ -282,8 +292,7 @@ export const layer = Layer.effect(
         )
       }
       const executeTool: Prepared["executeTool"] = (input) => {
-        if (stepLimitReached)
-          return new Tool.Error({ message: "Tools are disabled after the maximum agent steps" })
+        if (stepLimitReached) return new Tool.Error({ message: "Tools are disabled after the maximum agent steps" })
         const tool = hooked.get(input.call.name)
         // A registered tool absent from the hooked set was removed or renamed by a hook.
         if (!tool && registry.has(input.call.name))

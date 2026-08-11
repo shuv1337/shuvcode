@@ -5,6 +5,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { app } from "electron"
+import { selectBackgroundStateHome } from "./background-cli-state"
 
 const execFileAsync = promisify(execFile)
 const root = dirname(fileURLToPath(import.meta.url))
@@ -25,7 +26,7 @@ export async function startBackgroundCli(logger: Logger, shellStateHome?: string
   const binary = app.isPackaged ? await installCli(bundled, version, logger) : bundled
 
   const candidates = [
-    ...new Set([stateHome, shellStateHome, ...desktopStateNames.map((name) => join(app.getPath("appData"), name))]),
+    ...new Set([shellStateHome, stateHome, ...desktopStateNames.map((name) => join(app.getPath("appData"), name))]),
   ].filter((candidate) => candidate === undefined || existsSync(candidate))
   const discovered = await Promise.all(
     candidates.map(async (candidate) => ({
@@ -33,17 +34,17 @@ export async function startBackgroundCli(logger: Logger, shellStateHome?: string
       url: serviceUrl(await run(binary, ["service", "status"], logger, { stateHome: candidate })),
     })),
   )
-  const found = discovered.find((candidate) => candidate.url !== undefined)
+  const selected = selectBackgroundStateHome(discovered, shellStateHome, stateHome)
+  const found = selected.found
   logger.log("v2 CLI background instance checked", {
     detected: Boolean(found),
     ...endpoint(found?.url),
   })
 
-  const daemonStateHome = found?.stateHome ?? stateHome
-  const url = await run(binary, ["service", "start"], logger, { stateHome: daemonStateHome })
+  const url = await run(binary, ["service", "start"], logger, { stateHome: selected.stateHome })
   const password = await run(binary, ["service", "get", "password"], logger, {
     redact: true,
-    stateHome: daemonStateHome,
+    stateHome: selected.stateHome,
   })
   logger.log("v2 CLI background service ready", {
     existing: Boolean(found),

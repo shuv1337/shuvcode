@@ -30,6 +30,7 @@ import {
   batch,
   Show,
 } from "solid-js"
+import { createStore } from "solid-js/store"
 import {
   TuiLifecycleProvider,
   TuiAppProvider,
@@ -50,6 +51,7 @@ import { ClientProvider, useClient } from "./context/client"
 import { StartupLoading } from "./component/startup-loading"
 import { DevToolsBar } from "./component/devtools-bar"
 import { Reconnecting } from "./component/reconnecting"
+import { MigrationOverlay } from "./component/migration-overlay"
 import { DataProvider, useData } from "./context/data"
 import { SessionTabsProvider, useSessionTabs } from "./context/session-tabs"
 import { LocationProvider, useLocation } from "./context/location"
@@ -95,6 +97,7 @@ import { destroyRenderer } from "./util/renderer"
 import { cliErrorMessage, errorFormat } from "./util/error"
 import { AttentionProvider } from "./context/attention"
 import { StorageProvider } from "./context/storage"
+import { createTuiClipboard } from "./clipboard"
 
 registerOpencodeSpinner()
 
@@ -116,6 +119,7 @@ const sessionTabBindingCommands = [
   "session.tab.select.7",
   "session.tab.select.8",
   "session.tab.select.9",
+  "session.tab.select.10",
 ] as const
 
 const pinnedSessionBindingCommands = [
@@ -187,21 +191,6 @@ export type TuiInput = {
   log?: LogSink
 }
 
-function errorMessage(error: unknown) {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "data" in error &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    "message" in error.data &&
-    typeof error.data.message === "string"
-  ) {
-    return error.data.message
-  }
-  return error instanceof Error ? error.message : String(error)
-}
-
 export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
   const log = input.log ?? (() => {})
   const global = yield* Global.Service
@@ -215,9 +204,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     Effect.catch(() => Effect.tryPromise(() => api.location.get())),
   )
   const directory = location.directory
-  const pluginDirectories = yield* Effect.promise(() =>
-    tuiPluginDirectories(process.cwd(), global.config),
-  )
+  const pluginDirectories = yield* Effect.promise(() => tuiPluginDirectories(process.cwd(), global.config))
   const handoff = input.terminalHandoff ? yield* Effect.promise(input.terminalHandoff) : undefined
   const managed = input.server.service
   const service = managed
@@ -265,6 +252,13 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
           (renderer) => Effect.sync(() => destroyRenderer(renderer)),
         )
       })
+      const clipboard = yield* Effect.acquireRelease(
+        Effect.sync(() => createTuiClipboard(renderer)),
+        (clipboard) =>
+          Effect.tryPromise(() => clipboard.dispose()).pipe(
+            Effect.catch((error) => Effect.sync(() => log("error", "Failed to dispose TUI clipboard", { error }))),
+          ),
+      )
       win32DisableProcessedInput()
       const finalizers = new Set<() => Promise<void>>()
       yield* Effect.addFinalizer(() =>
@@ -301,7 +295,11 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                 <EpilogueProvider set={(value) => (exit.epilogue = value)}>
                   <TuiAppProvider value={input.app}>
                     <ErrorBoundary
-                      fallback={(error, reset) => <ErrorComponent error={error} reset={reset} mode={mode} />}
+                      fallback={(error, reset) => (
+                        <ClipboardProvider value={clipboard}>
+                          <ErrorComponent error={error} reset={reset} mode={mode} />
+                        </ClipboardProvider>
+                      )}
                     >
                       <TuiPathsProvider
                         value={{
@@ -350,7 +348,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                   skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
                                 }}
                               >
-                                <ClipboardProvider>
+                                <ClipboardProvider value={clipboard}>
                                   <ArgsProvider {...input.args}>
                                     <ConfigProvider
                                       config={config}
@@ -472,7 +470,6 @@ function App(props: { pair?: DialogPairCredentials }) {
   const promptRef = usePromptRef()
   const plugins = usePlugin()
   const clipboard = useClipboard()
-
   // Toast once when an MCP server enters a failed or needs-auth state so the user knows to act,
   // without having to open the status panel. Tracking the last alerted status avoids re-toasting
   // the same problem on every refresh while still re-alerting if the state changes.
@@ -519,7 +516,7 @@ function App(props: { pair?: DialogPairCredentials }) {
     if (!text || text.length === 0) return
 
     await clipboard
-      .write?.(text)
+      .write(text)
       .then(() => toast.show({ message: "Copied to clipboard", variant: "info" }))
       .catch(toast.error)
 
@@ -528,7 +525,7 @@ function App(props: { pair?: DialogPairCredentials }) {
   const terminalTitleEnabled = () => config.data.terminal?.title ?? true
   const copyOnSelectEnabled = () => config.data.terminal?.copy_on_select ?? process.platform !== "win32"
   const pasteSummaryEnabled = () => config.data.prompt?.paste !== "full"
-  const tabsVertical = () => (config.data.tabs?.vertical ?? false) && sessionTabsFitVertically(dimensions().width)
+  const tabsVertical = () => config.data.tabs.layout === "vertical" && sessionTabsFitVertically(dimensions().width)
   const tabsVisible = () =>
     sessionTabs.enabled() && (sessionTabs.tabs().length > 0 || sessionTabs.newTab()) && route.data.type !== "plugin"
 
@@ -730,7 +727,7 @@ function App(props: { pair?: DialogPairCredentials }) {
         enabled: sessionTabs.enabled,
         run: () => sessionTabs.reopen(),
       },
-      ...Array.from({ length: 9 }, (_, i) => ({
+      ...Array.from({ length: 10 }, (_, i) => ({
         name: `session.tab.select.${i + 1}`,
         title: `Switch to tab ${i + 1}`,
         category: "Session",
@@ -848,7 +845,7 @@ function App(props: { pair?: DialogPairCredentials }) {
       },
       {
         name: "provider.connect",
-        title: "Connect integration",
+        title: "Connect an integration",
         suggested: !connected(),
         slash: { name: "connect" },
         run: () => {
@@ -1170,19 +1167,6 @@ function App(props: { pair?: DialogPairCredentials }) {
     }
   })
 
-  event.on("session.error", (evt, { workspace }) => {
-    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
-    const error = evt.data.error
-    if (error && typeof error === "object" && error.name === "MessageAbortedError") return
-    const message = errorMessage(error)
-
-    toast.show({
-      variant: "error",
-      message,
-      duration: 5000,
-    })
-  })
-
   // Suppress the full-screen overlay for transient startup and event-stream retry states.
   // Initial connection gets a longer grace period; retries surface more quickly.
   const [showReconnecting, setShowReconnecting] = createSignal(false)
@@ -1266,6 +1250,7 @@ function App(props: { pair?: DialogPairCredentials }) {
       <Show when={showReconnecting()}>
         <Reconnecting />
       </Show>
+      <MigrationOverlay />
       <Toast />
     </box>
   )

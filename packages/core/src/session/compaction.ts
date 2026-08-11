@@ -2,6 +2,7 @@ export * as SessionCompaction from "./compaction"
 
 import { LLM, LLMClient, AIError, LLMEvent, Message, type LLMRequest, type LanguageModel } from "@opencode-ai/ai"
 import { SessionError } from "@opencode-ai/schema/session-error"
+import { Document, type Entry } from "@opencode-ai/schema/config"
 import { Context, Effect, Layer, Stream } from "effect"
 import { Config } from "../config"
 import { Bus } from "../bus"
@@ -10,6 +11,7 @@ import { llmClient } from "../effect/app-node-platform"
 import { SessionEvent } from "./event"
 import type { SessionMessage } from "./message"
 import { SessionModelHeaders } from "./model-headers"
+import { SessionPromptCacheKey } from "./prompt-cache-key"
 import { App } from "../app"
 import { SessionRunnerModel } from "./runner/model"
 import { SessionSchema } from "./schema"
@@ -19,7 +21,7 @@ import type { Info } from "../model"
 import { SessionUsage } from "./usage"
 
 const DEFAULT_BUFFER = 20_000
-const DEFAULT_KEEP_TOKENS = 8_000
+const DEFAULT_KEEP_TOKENS = 15_000
 const OUTPUT_TOKEN_MAX = 32_000
 const TOOL_OUTPUT_MAX_CHARS = 2_000
 const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
@@ -122,7 +124,8 @@ const serialize = (message: SessionMessage.Info) => {
         (file) =>
           `[Attached ${file.mime}: ${file.name ?? (file.source.type === "uri" ? file.source.uri : "inline attachment")}]`,
       ) ?? []
-    return [`[User]: ${message.text}`, ...files].join("\n")
+    const skills = message.skills?.map((skill) => `[Attached skill: ${skill.name}]\n${skill.text}`) ?? []
+    return [`[User]: ${message.text}`, ...skills, ...files].join("\n")
   }
   if (message.type === "assistant") {
     return message.content
@@ -149,9 +152,9 @@ const serialize = (message: SessionMessage.Info) => {
   return ""
 }
 
-const settings = (documents: readonly Config.Entry[]) => {
+const settings = (documents: readonly Entry[]) => {
   const configured = documents
-    .filter((entry): entry is Config.Document => entry.type === "document")
+    .filter((entry): entry is Document => entry.type === "document")
     .flatMap((entry) => (entry.info.compaction ? [entry.info.compaction] : []))
   return {
     auto: configured.findLast((value) => value.auto !== undefined)?.auto ?? true,
@@ -258,6 +261,7 @@ const make = (dependencies: Dependencies) => {
       .stream(
         LLM.request({
           model: plan.model,
+          promptCacheKey: SessionPromptCacheKey.make(plan.session.id),
           http: { headers: SessionModelHeaders.make(plan.session, dependencies.app) },
           messages: [Message.user(plan.prompt)],
           tools: [],

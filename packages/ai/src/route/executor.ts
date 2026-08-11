@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Layer } from "effect"
+import { Cause, Context, Effect, Layer, Option, Schema } from "effect"
 import {
   FetchHttpClient,
   Headers,
@@ -20,8 +20,17 @@ import { classifyProviderFailure } from "../provider-error"
 export interface Interface {
   readonly execute: (
     request: HttpClientRequest.HttpClientRequest,
+    middleware?: HttpMiddleware,
   ) => Effect.Effect<HttpClientResponse.HttpClientResponse, AIError>
 }
+
+export type HttpHandler = (
+  request: HttpClientRequest.HttpClientRequest,
+) => Effect.Effect<HttpClientResponse.HttpClientResponse, Error>
+export type HttpMiddleware = (
+  request: HttpClientRequest.HttpClientRequest,
+  handler: HttpHandler,
+) => Effect.Effect<HttpClientResponse.HttpClientResponse, Error>
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/AI/RequestExecutor") {}
 
@@ -176,21 +185,33 @@ const secretValues = (request: HttpClientRequest.HttpClientRequest) => {
 // Two passes: structural (redact `"name": "value"` and `name=value` patterns
 // for any field name that looks sensitive) plus literal (replace any actual
 // secret values we sent in the request, in case the response echoes one back).
-const redactBody = (body: string, request: HttpClientRequest.HttpClientRequest) =>
-  Array.from(secretValues(request)).reduce(
+const redactBody = (body: string, secrets: ReadonlySet<string>) =>
+  Array.from(secrets).reduce(
     (text, secret) => text.split(secret).join(REDACTED),
     body.replace(REDACT_JSON_FIELD, `$1"${REDACTED}"`).replace(REDACT_QUERY_FIELD, `$1${REDACTED}`),
   )
 
-const responseBody = (body: string | void, request: HttpClientRequest.HttpClientRequest) => {
+const responseBody = (body: string | void, secrets: ReadonlySet<string>) => {
   if (body === undefined) return {}
-  const redacted = redactBody(body, request)
+  const redacted = redactBody(body, secrets)
   if (redacted.length <= BODY_LIMIT) return { body: redacted }
   return { body: redacted.slice(0, BODY_LIMIT), bodyTruncated: true }
 }
 
+const decodeProviderBody = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      message: Schema.optionalKey(Schema.String),
+      error: Schema.optionalKey(Schema.Struct({ message: Schema.optionalKey(Schema.String) })),
+    }),
+  ),
+)
+
 const providerMessage = (status: number, body: { readonly body?: string }) => {
-  if (body.body && body.body.length <= 500) return `Provider request failed with HTTP ${status}: ${body.body}`
+  if (body.body && body.body.length <= 500) {
+    const decoded = Option.getOrUndefined(decodeProviderBody(body.body))
+    return `Provider request failed with HTTP ${status}: ${decoded?.error?.message ?? decoded?.message ?? body.body}`
+  }
   return `Provider request failed with HTTP ${status}`
 }
 
@@ -219,7 +240,7 @@ const statusError =
       const headers = normalizedHeaders(response.headers)
       const retryAfter = retryAfterMs(headers)
       const rateLimit = rateLimitDetails(headers, retryAfter)
-      const details = responseBody(body, request)
+      const details = responseBody(body, secretValues(request))
       return yield* new AIError({
         module: "RequestExecutor",
         method: "execute",
@@ -239,6 +260,42 @@ const statusError =
         }),
       })
     })
+
+// Classifies an HTTP failure captured outside the executor (for example by the
+// AI SDK's own fetch) onto the same reason types and redacted HttpContext that
+// executor-driven requests produce. The originating request is not available on
+// that path, so the method is assumed (language model calls are always POST),
+// request headers are empty, and only structural body redaction applies.
+export const classifyHttpFailure = (input: {
+  readonly message: string
+  readonly url: string
+  readonly status?: number | undefined
+  readonly code?: string | undefined
+  readonly responseHeaders?: Record<string, string> | undefined
+  readonly responseBody?: string | undefined
+}) => {
+  const headers = normalizedHeaders(Headers.fromInput(input.responseHeaders))
+  const retryAfter = retryAfterMs(headers)
+  const rateLimit = rateLimitDetails(headers, retryAfter)
+  const details = responseBody(input.responseBody ?? undefined, new Set<string>())
+  return classifyProviderFailure({
+    message: input.message,
+    status: input.status,
+    code: input.code,
+    retryAfterMs: retryAfter,
+    rateLimit,
+    http: new HttpContext({
+      request: new HttpRequestDetails({ method: "POST", url: redactUrl(input.url), headers: {} }),
+      response:
+        input.status === undefined
+          ? undefined
+          : new HttpResponseDetails({ status: input.status, headers: redactHeaders(Headers.fromInput(headers), []) }),
+      ...details,
+      requestId: requestId(headers),
+      rateLimit,
+    }),
+  })
+}
 
 const toHttpError = (redactedNames: ReadonlyArray<string | RegExp>) => (error: unknown) => {
   const transportError = (input: {
@@ -261,7 +318,7 @@ const toHttpError = (redactedNames: ReadonlyArray<string | RegExp>) => (error: u
     return transportError({ message: error.message, kind: "Timeout" })
   }
   if (!HttpClientError.isHttpClientError(error)) {
-    return transportError({ message: "HTTP transport failed" })
+    return transportError({ message: error instanceof Error ? error.message : "HTTP transport failed" })
   }
   const request = "request" in error ? error.request : undefined
   if (error.reason._tag === "TransportError") {
@@ -282,12 +339,20 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient> = Layer.e
   Service,
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
-    const executeOnce = (request: HttpClientRequest.HttpClientRequest) =>
+    const executeOnce = (request: HttpClientRequest.HttpClientRequest, middleware?: HttpMiddleware) =>
       Effect.gen(function* () {
         const redactedNames = yield* Headers.CurrentRedactedNames
-        return yield* http
-          .execute(request)
-          .pipe(Effect.mapError(toHttpError(redactedNames)), Effect.flatMap(statusError(request, redactedNames)))
+        if (!middleware)
+          return yield* http
+            .execute(request)
+            .pipe(Effect.mapError(toHttpError(redactedNames)), Effect.flatMap(statusError(request, redactedNames)))
+
+        const response = yield* middleware(request, (input) =>
+          http
+            .execute(input)
+            .pipe(Effect.mapError((cause) => (cause instanceof Error ? cause : new Error(String(cause))))),
+        ).pipe(Effect.mapError(toHttpError(redactedNames)))
+        return yield* statusError(response.request, redactedNames)(response)
       })
     return Service.of({
       execute: executeOnce,

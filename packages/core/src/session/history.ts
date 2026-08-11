@@ -74,16 +74,15 @@ export const load = Effect.fn("SessionHistory.load")(function* (db: DatabaseServ
 export const entriesForRunner = Effect.fn("SessionHistory.entriesForRunner")(function* (
   db: DatabaseService,
   sessionID: SessionSchema.ID,
-  instructions: Instructions.Instructions,
+  instructions: Instructions.List,
 ) {
   return yield* db
     .transaction(() =>
       Effect.gen(function* () {
         const messages = yield* messageEntries(db, sessionID)
-        const assembled = yield* InstructionState.assemble(db, sessionID, instructions)
         return {
-          initial: assembled.initial,
-          entries: [...messages, ...assembled.updates].toSorted((a, b) => a.seq - b.seq),
+          initial: yield* InstructionState.initial(db, sessionID, instructions),
+          entries: messages,
         }
       }),
     )
@@ -93,7 +92,7 @@ export const entriesForRunner = Effect.fn("SessionHistory.entriesForRunner")(fun
 export const preview = Effect.fn("SessionHistory.preview")(function* (
   db: DatabaseService,
   sessionID: SessionSchema.ID,
-  instructions: Instructions.Instructions,
+  instructions: Instructions.List,
 ) {
   const observed = yield* Instructions.read(instructions)
   return yield* db
@@ -106,10 +105,9 @@ export const preview = Effect.fn("SessionHistory.preview")(function* (
         )
         const settled = unsettled === -1 ? messages : messages.slice(0, unsettled)
         const assembled = yield* InstructionState.preview(db, sessionID, instructions, observed)
-        const entries = [...settled, ...assembled.updates].toSorted((a, b) => a.seq - b.seq)
         return {
           initial: assembled.initial,
-          messages: entries.map((entry) => entry.message),
+          messages: settled.map((entry) => entry.message),
           instructionUpdate: assembled.update,
         }
       }),

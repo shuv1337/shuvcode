@@ -56,15 +56,10 @@ export const DEFAULT_LIMITS = {
 
 export const create = (
   registrations: ReadonlyMap<string, Info>,
-  executeTool: (
-    name: string,
-    tool: Info,
-    input: unknown,
-    context: Context,
-  ) => Effect.Effect<Result, Error>,
+  executeTool: (name: string, tool: Info, input: unknown, context: Context) => Effect.Effect<Result, Error>,
   limits: CodeMode.ExecutionLimits = DEFAULT_LIMITS,
 ) => {
-  return ({
+  return {
     name: "execute",
     description,
     input: CodeMode.Input,
@@ -90,7 +85,7 @@ export const create = (
               const content =
                 typeof executed.content === "string"
                   ? [{ type: "text" as const, text: executed.content }]
-                  : executed.content ?? []
+                  : (executed.content ?? [])
               const outputFileParts = outputFiles(content)
               if (outputFileParts.length > 0)
                 yield* Ref.update(files, (items) => [...items, { index, files: outputFileParts }])
@@ -149,7 +144,7 @@ export const create = (
           metadata,
         }
       }),
-  }) satisfies Info
+  } satisfies Info
 }
 
 export const catalog = (registrations: ReadonlyMap<string, Info>) => {

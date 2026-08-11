@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   version:
-    if: github.repository == 'Latitudes-Dev/shuvcode'
+    if: github.repository == 'Latitudes-Dev/shuvcode' && github.ref_name == 'integration-v2'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0

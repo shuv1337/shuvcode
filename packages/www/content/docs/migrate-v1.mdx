@@ -4,8 +4,8 @@ description: "Move from Shuvcode V1 to the Shuvcode 2.0 beta."
 ---
 
 <Callout type="note">
-  OpenCode 1 and OpenCode 2 can be installed side by side. V1 runs as `opencode`, while V2 installs and runs separately as
-  `opencode2`.
+  Shuvcode 1 and Shuvcode 2 can be installed side by side. V1 runs as `opencode`, while V2 installs and runs separately
+  as `shuvcode`.
 </Callout>
 
 ## Breaking changes
@@ -16,31 +16,42 @@ V2 has three intentional breaking changes:
 - The [server API and clients](#server-api-and-clients) have new contracts.
 - [TUI configuration](#tui-configuration) moves from layered `tui.json(c)` files to one global `cli.json` file (auto migrated).
 
-All other functionality is intended to remain compatible with V1.
+Supported V1 functionality outside those areas is intended to remain compatible with V1. Some fields accepted by the V1
+schema never had a V2 equivalent and are intentionally ignored; these are listed under
+[Accepted but unsupported fields](#accepted-but-unsupported-fields).
 
-Existing server config files, agent definitions, command definitions, skills, and other files in `.opencode/` should
-continue to work without changes. If one of these stops working in V2, treat it as a beta compatibility bug rather than
-an expected migration requirement.
+Existing supported server config fields, agent definitions, command definitions, skills, and other files in `.opencode/`
+should continue to work without changes. If supported behavior described in this guide stops working in V2, treat it as a
+beta compatibility bug rather than an expected migration requirement.
 
 <Callout type="tip">
-  Run `/report` if existing V1 functionality does not work in V2. The report skill collects diagnostics and helps you file
-  a compatibility issue.
+  Run `/report` if supported V1 functionality does not work in V2. The report skill collects diagnostics and helps you
+  file a compatibility issue.
 </Callout>
 
 <Callout type="warning">
-  Shuvcode 2.0 is in beta. Beta data may be wiped, features may break unintentionally, and the server and plugin APIs may
-  continue to change.
+  Shuvcode 2.0 is in beta. Beta data may be wiped, features may break unintentionally, and the server and plugin APIs
+  may continue to change. Back up the database before the first V2 startup.
 </Callout>
 
-During the beta, OpenCode V1 and V2 use different executable names. You can keep using `opencode` for V1 while trying V2
-with `shuvcode`.
+## Session database migration
+
+Shuvcode migrates session data automatically during startup. A fork V2 database that still uses the `session` table is
+recognized only when it has the complete fork schema and migration marker. Shuvcode then renames that table to
+`session_v2` in one transaction, rebuilds its indexes under the new names, preserves dependent message and instruction
+foreign keys, and records the upstream squash migration so destructive squash SQL is not replayed.
+
+The V1 session importer runs separately when legacy sessions are present. On an empty V2 store it clears obsolete event
+history before rebuilding projections. When `session_v2` already contains sessions, it retains existing V2 events and
+replaces only the projections for each legacy session being migrated. Session, message, and event rows that already
+belong to V2 are not globally discarded.
 
 ## Install the beta
 
 Install the beta from the `next` distribution tag:
 
 ```bash
-npm install -g @opencode-ai/cli@next
+npm install -g shuvcode@next
 ```
 
 Start it in your project with:
@@ -63,8 +74,9 @@ V2 reads existing global and project configuration from the same locations as V1
 <project>/.opencode/opencode.json(c)
 ```
 
-V2 reads these same locations. It detects V1-shaped configuration and translates it in memory without rewriting the
-source file. Existing V1 configuration is intended to keep working, so you do not need to convert it to try or adopt V2.
+V2 reads these same locations. It normalizes supported V1 and native V2 fields in memory without rewriting the source
+file. Existing supported V1 configuration is intended to keep working, so you do not need to convert it to try or adopt
+V2.
 
 ### Ask Shuvcode to migrate
 
@@ -79,7 +91,13 @@ Preserve its behavior and all unrelated settings.
 ```
 
 Shuvcode can inspect the complete file, apply the relevant changes below, and avoid rewriting settings that do not need to
-change. Do not mix V1 and V2 field names manually in one file.
+change. Conversion does not need to happen all at once: supported V1 and native V2 fields may coexist at the top level.
+When both forms set the same canonical value, a valid native V2 value takes precedence regardless of JSON key order.
+
+Nested mixing is intentionally bounded. Shuvcode recognizes mixed V1 and V2 members within `mcp`, `compaction`, and
+`experimental`, but it does not recursively infer formats inside individual agents, providers, commands, or models. Keep
+each of those nested entries entirely in one format. Supported V1 syntax remains quiet by itself; malformed values,
+unsupported legacy fields, and conflicting V1/V2 values produce warnings while unrelated valid settings continue to load.
 
 ### Sharing
 
@@ -253,8 +271,8 @@ V2 groups the retained-context token budget under `keep` and gives the reserve a
 }
 ```
 
-`auto` and `prune` keep their names. V2 has no native `tail_turns` field; recent context is retained by token budget instead.
-See [Compaction](/compaction).
+`auto` keeps its name. V2 has no native `tail_turns` or `prune` field; both legacy fields are ignored with a warning. Recent
+context is retained by token budget instead. See [Compaction](/compaction).
 
 ### Skills
 
@@ -357,6 +375,17 @@ Rename the singular `provider` map to `providers`. V2 separates the runtime pack
 V1 `npm` becomes `package`, and AI SDK packages receive the `aisdk:` prefix. `api` becomes `settings.baseURL`. Provider
 `options` are separated into `settings`, `headers`, and `body` according to their request role. See [Providers](/providers).
 
+V2 consolidated two legacy provider namespaces:
+
+| V1 provider ID             | Canonical V2 provider ID |
+| -------------------------- | ------------------------ |
+| `azure-cognitive-services` | `azure`                  |
+| `google-vertex-anthropic`  | `google-vertex`          |
+
+Migration of unambiguous V1 provider, agent, command, and provider-filter fields uses these canonical IDs. The shared
+top-level `model` field keeps its exact provider ID because the same syntax is valid in native V2 config; update that field
+to the canonical ID when migrating a legacy built-in provider.
+
 ### Models and variants
 
 Models remain nested under their provider, but several model fields become more explicit:
@@ -393,22 +422,40 @@ Models remain nested under their provider, but several model fields become more 
 
 See [Models](/models) for the complete native model shape.
 
-### Fields without native equivalents
+### Supported fields without direct native equivalents
 
 Most fields that keep the same shape, including `shell`, `model`, `default_agent`, `autoupdate`, `watcher`, `formatter`,
 `lsp`, `instructions`, `enterprise`, and `tool_output`, require no migration.
 
-These V1 fields do not have one-to-one native V2 config fields:
+The V1 provider filters do not have one-to-one native V2 config fields, but their behavior remains supported:
+
+- `enabled_providers` becomes an internal deny-by-default provider policy followed by allows for the listed providers.
+- `disabled_providers` becomes internal deny policies for the listed providers.
+- `small_model` becomes the `model` selection for the built-in `title` agent. Native V2 configuration should use
+  `agents.title.model` instead.
+
+You may keep these fields in V1 syntax. Shuvcode normalizes them without warning.
+
+### Accepted but unsupported fields
+
+The V1 schema also accepted fields that have no supported V2 behavior. V2 ignores these values and emits a warning so
+they are not mistaken for active configuration:
 
 - `logLevel`: use `OPENCODE_LOG_LEVEL` when starting Shuvcode.
 - `server`: use the V2 service and explicit server options; the server API is an intentional breaking change.
 - `layout`: remove it; V1 already treated it as deprecated and always used stretch layout.
-- `enabled_providers` and `disabled_providers`: there is no native provider allowlist or denylist field yet.
-- `small_model`: V2 selects models for internal maintenance agents without a separate top-level field.
-- `compaction.tail_turns`: V2 uses `compaction.keep.tokens` instead.
+- Top-level `subagent_depth`: use `experimental.subagent_depth` instead.
+- `compaction.tail_turns` and `compaction.prune`: V2 uses `compaction.keep.tokens` and checkpoint-based compaction instead.
+- Agent `name` inside V1 JSON configuration.
+- An enabled-only V1 MCP entry without a `type`.
+- V1 experimental fields `disable_paste_summary`, `batch_tool`, `openTelemetry`, `primary_tools`, and
+  `continue_loop_on_deny`.
+- V1 provider fields `id`, `whitelist`, and `blacklist`.
+- V1 provider-model fields `release_date`, `attachment`, `reasoning`, `temperature`, `experimental`, a non-`deprecated`
+  `status`, and boolean `interleaved`.
 
-If your V1 configuration relies on a field without a native equivalent, keep using the supported V1 format rather than
-forcing a manual conversion. Run `/report` if V2 does not preserve the behavior you rely on.
+Ignoring these fields is intentional and is not a compatibility regression. If V2 does not preserve behavior identified
+as supported elsewhere in this guide, run `/report`.
 
 ### Agent files
 
@@ -558,11 +605,12 @@ Moving a file between these directories does not migrate its implementation.
 
 <Callout type="warning">V1 plugins will not work in V2.</Callout>
 
-The config entry can be translated automatically, but plugin implementation code must be ported to the new API. The V2
-plugin API is still being finalized during beta, and detailed plugin migration guidance will be published when it is
-ready.
+The config entry can be translated automatically, but plugin implementation code must be ported to the new API. In
+particular, the request hook is now named `http.request`, and V2 also exposes `http.response`; the old `request` hook is
+not registered. The V2 plugin API is still being finalized during beta, and detailed plugin migration guidance will be
+published when it is ready.
 
-Once the V2 plugin API is finalized, OpenCode should be able to migrate the majority of V1 plugins while keeping related
+Once the V2 plugin API is finalized, Shuvcode should be able to migrate the majority of V1 plugins while keeping related
 local modules and dependencies together. See the current beta [Plugins guide](/build/plugins).
 
 ## Server API and clients

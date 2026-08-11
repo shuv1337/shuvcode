@@ -106,6 +106,49 @@ test("does not preload session summaries into the data context", async () => {
   }
 })
 
+test("syncs VCS info and applies branch updates", async () => {
+  const events = createEventStream()
+  const calls = createFetch((url) => {
+    if (url.pathname !== "/api/vcs") return undefined
+    return json({
+      location: { directory, project: { id: "proj_test", directory: worktree, canonical: worktree } },
+      data: { branch: { current: "main", default: "main" } },
+    })
+  }, events)
+  let data!: ReturnType<typeof useData>
+
+  function Probe() {
+    data = useData()
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <ClientProvider api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </ClientProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await wait(() => data.location.vcs.info()?.branch.current === "main")
+    emitEvent(events, {
+      id: "evt_vcs_branch",
+      created: Date.now(),
+      type: "vcs.branch.updated",
+      data: { branch: "feature" },
+    })
+    await wait(() => data.location.vcs.info()?.branch.current === "feature")
+    expect(data.location.vcs.info()?.branch).toEqual({ current: "feature", default: "main" })
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
 test("proactively syncs project metadata newest first", async () => {
   const events = createEventStream()
   const calls = createFetch((url) => {
@@ -899,7 +942,7 @@ test("completes exploration when a queued prompt is promoted", async () => {
       data: {
         sessionID,
         assistantMessageID: "message-assistant",
-        callID: "call-read",
+        id: "call-read",
         name: "read",
       },
     })
@@ -928,6 +971,106 @@ test("completes exploration when a queued prompt is promoted", async () => {
     })
     await wait(() => rows.find((row) => row.type === "group")?.completed === true)
     expect(rows.at(-1)).toEqual({ type: "message", messageID: "message-user" })
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("updates and removes queued inputs from durable lifecycle events", async () => {
+  const events = createEventStream()
+  const sessionID = "session-queue-management"
+  const calls = createFetch((url) => {
+    if (url.pathname === `/api/session/${sessionID}/message`) return json({ data: [], cursor: {} })
+  }, events)
+  let data!: ReturnType<typeof useData>
+  let rows!: ReturnType<typeof createSessionRows>
+  let client!: ReturnType<typeof useClient>
+
+  function Probe() {
+    client = useClient()
+    data = useData()
+    rows = createSessionRows(() => sessionID)
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <ClientProvider api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </ClientProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await wait(() => client.connection.status() === "connected")
+    emitEvent(events, {
+      id: "evt_queue_admitted",
+      created: 1,
+      type: "session.input.admitted",
+      durable: durable(sessionID),
+      data: {
+        sessionID,
+        inputID: "message-queued",
+        input: { type: "user", data: { text: "Steer me" }, delivery: "queue" },
+      },
+    })
+    await wait(() => data.session.pending.list(sessionID).length === 1)
+    expect(rows).not.toContainEqual({ type: "message", messageID: "message-queued" })
+
+    emitEvent(events, {
+      id: "evt_queue_steered",
+      created: 2,
+      type: "session.input.steered",
+      durable: durable(sessionID, 1),
+      data: { sessionID, inputID: "message-queued" },
+    })
+    await wait(() =>
+      data.session.pending
+        .list(sessionID)
+        .some((item) => item.id === "message-queued" && item.type !== "compaction" && item.delivery === "steer"),
+    )
+    expect(rows).toContainEqual({ type: "message", messageID: "message-queued" })
+
+    emitEvent(events, {
+      id: "evt_queue_restored",
+      created: 3,
+      type: "session.input.queued",
+      durable: durable(sessionID, 2),
+      data: { sessionID, inputID: "message-queued" },
+    })
+    await wait(() =>
+      data.session.pending
+        .list(sessionID)
+        .some((item) => item.id === "message-queued" && item.type !== "compaction" && item.delivery === "queue"),
+    )
+    expect(rows).not.toContainEqual({ type: "message", messageID: "message-queued" })
+
+    emitEvent(events, {
+      id: "evt_cancel_admitted",
+      created: 4,
+      type: "session.input.admitted",
+      durable: durable(sessionID, 3),
+      data: {
+        sessionID,
+        inputID: "message-cancelled",
+        input: { type: "user", data: { text: "Delete me" }, delivery: "queue" },
+      },
+    })
+    await wait(() => data.session.pending.list(sessionID).length === 2)
+    emitEvent(events, {
+      id: "evt_queue_cancelled",
+      created: 5,
+      type: "session.input.cancelled",
+      durable: durable(sessionID, 4),
+      data: { sessionID, inputID: "message-cancelled" },
+    })
+    await wait(() => !data.session.input.has(sessionID, "message-cancelled"))
+    expect(data.session.pending.list(sessionID).map((item) => item.id)).toEqual(["message-queued"])
+    expect(data.session.message.get(sessionID, "message-cancelled")).toBeUndefined()
   } finally {
     app.renderer.destroy()
   }
@@ -970,7 +1113,7 @@ test("classifies live tool rows independently of their call ID", async () => {
       data: {
         sessionID,
         assistantMessageID: "message-assistant",
-        callID: "reasoning:0",
+        id: "reasoning:0",
         name: "bash",
       },
     })
@@ -1959,9 +2102,9 @@ test("keeps shell state scoped to location", async () => {
       data.shell.list({ directory: other, workspaceID: workspace }).some((shell) => shell.id === "sh_live_other"),
     )
     expect(data.shell.list().map((shell) => shell.id)).toEqual(["sh_default"])
-    expect(data.shell.listBySession("ses_shared").find((shell) => shell.id === "sh_live_other")?.location.directory).toBe(
-      other,
-    )
+    expect(
+      data.shell.listBySession("ses_shared").find((shell) => shell.id === "sh_live_other")?.location.directory,
+    ).toBe(other)
   } finally {
     app.renderer.destroy()
   }
@@ -2081,6 +2224,64 @@ test("reconciles active session permissions when the event stream reconnects", a
     events.disconnect()
 
     await wait(() => calls === 2 && data.session.permission.list("ses_active")?.[0]?.id === "per_new")
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("dismisses a permission that expired before its reply", async () => {
+  const events = createEventStream()
+  const request = { id: "per_stale", sessionID: "ses_active", action: "read", resources: ["old.txt"] }
+  let replies = 0
+  const calls = createFetch((url, init) => {
+    if (url.pathname === "/api/session/ses_active/permission/per_stale/reply" && init.method === "POST") {
+      replies++
+      return json(
+        {
+          _tag: "PermissionNotFoundError",
+          requestID: request.id,
+          message: `Permission request not found: ${request.id}`,
+        },
+        { status: 404 },
+      )
+    }
+  }, events)
+  let data!: ReturnType<typeof useData>
+
+  function Probe() {
+    data = useData()
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts>
+      <ClientProvider api={createApi(calls.fetch)}>
+        <ProjectProvider>
+          <DataProvider>
+            <Probe />
+          </DataProvider>
+        </ProjectProvider>
+      </ClientProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    emitEvent(events, {
+      id: "evt_permission_asked_stale",
+      created: 0,
+      type: "permission.asked",
+      data: request,
+    })
+    await wait(() => data.session.permission.list(request.sessionID)?.length === 1)
+
+    await data.session.permission.reply({
+      sessionID: request.sessionID,
+      requestID: request.id,
+      reply: "once",
+    })
+
+    expect(replies).toBe(1)
+    expect(data.session.permission.list(request.sessionID)).toEqual([])
   } finally {
     app.renderer.destroy()
   }
@@ -2504,7 +2705,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         name: "bash",
       },
     })
@@ -2516,7 +2717,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         input: {},
         executed: false,
         state: { call: true },
@@ -2529,7 +2730,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         metadata: { sessionID: "session-child", status: "running" },
       },
     })
@@ -2552,7 +2753,7 @@ test("settles pending tools when a live failure arrives", async () => {
       data: {
         sessionID: "session-1",
         assistantMessageID: "msg_explicit_assistant_9",
-        callID: "call-1",
+        id: "call-1",
         error: { type: "unknown", message: "aborted" },
         executed: false,
         resultState: { result: true },
@@ -2791,8 +2992,7 @@ async function mountData(parents: Record<string, string>, costs: Record<string, 
       })
     }
     const match = url.pathname.match(/^\/api\/session\/([^/]+)$/)
-    if (match && match[1] !== "active")
-      return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
+    if (match && match[1] !== "active") return json({ data: sessionInfo(match[1], parents[match[1]], costs[match[1]]) })
   })
   let data!: ReturnType<typeof useData>
   let ready!: () => void

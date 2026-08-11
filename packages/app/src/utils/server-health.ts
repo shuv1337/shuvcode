@@ -103,6 +103,7 @@ export async function checkServerHealth(
       .catch((error) => ({ error }))
     if ("data" in current && current.data) return current.data
     if (signal?.aborted) return { healthy: false }
+
     return next(count, current.error)
   }
   return attempt(0).finally(() => timeout?.clear?.())

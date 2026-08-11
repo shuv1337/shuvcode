@@ -23,6 +23,10 @@ export class ModelUnavailableError extends Schema.TaggedErrorClass<ModelUnavaila
   { providerID: Provider.ID, modelID: ID },
 ) {
   override get message() {
+    if (this.providerID === "azure-cognitive-services")
+      return `Model unavailable: ${this.providerID}/${this.modelID}. This provider has been deprecated; use azure/${this.modelID} instead.`
+    if (this.providerID === "google-vertex-anthropic")
+      return `Model unavailable: ${this.providerID}/${this.modelID}. This provider has been deprecated; use google-vertex/${this.modelID} instead.`
     return `Model unavailable: ${this.providerID}/${this.modelID}`
   }
 }
@@ -30,6 +34,8 @@ export const VariantUnavailableError = ModelResolver.VariantUnavailableError
 export type VariantUnavailableError = ModelResolver.VariantUnavailableError
 export const UnsupportedPackageError = ModelResolver.UnsupportedPackageError
 export type UnsupportedPackageError = ModelResolver.UnsupportedPackageError
+export const UnresolvedProviderVariablesError = ModelResolver.UnresolvedProviderVariablesError
+export type UnresolvedProviderVariablesError = ModelResolver.UnresolvedProviderVariablesError
 
 export type Error = ModelNotSelectedError | ModelUnavailableError | ModelResolver.Error
 export type Resolved = ModelResolver.Resolved

@@ -159,6 +159,8 @@ const table = sqliteTable("session", {
 
 ## V2 Session Core
 
+- The live V2 session table is `session_v2`; `session` is legacy input only. Fork-tip databases are bridged by `DatabaseMigration.apply` before upstream migrations run, and the bridge must preserve session/message/event rows.
+- Plugin HTTP hooks are `http.request` and `http.response`; do not restore the retired `request` hook name.
 - Keep durable events minimal: record irreducible new facts and do not repeat state derivable by folding the ordered aggregate history. Enrich projections and read models with previous or derived state when consumers need self-contained views.
 - Keep durable prompt admission separate from model execution. `SessionV2.prompt(...)` admits one durable `session_pending` row before scheduling advisory `SessionExecution.wake(sessionID)` unless `resume: false` requests admit-only behavior. The serialized runner promotes admitted inputs into visible user messages at safe boundaries, consuming the pending row in the same event transaction; `session_pending` stores only unconsumed work.
 - Reusing a Session ID adopts the existing Session. Reusing a prompt message ID reconciles an exact retry only when Session, prompt, and delivery mode match; conflicting reuse fails. Retry of an already-promoted input reconciles against the projected message and the durable admitted event rather than a retained row.

@@ -9,7 +9,7 @@ type SystemdAction = "start" | "stop" | "restart"
 
 export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input: EnsureInput = {}) {
   const config = yield* ServiceConfig.read()
-  const options = withVersion(yield* ServiceConfig.options(config), input)
+  const options = withVersion(yield* ServiceConfig.options({ config }), input)
   if (config.manager !== "systemd") return yield* Service.ensure(options)
 
   if (!(yield* systemdActive())) {
@@ -38,14 +38,14 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
 
 export const stop = Effect.fn("cli.service-lifecycle.stop")(function* () {
   const config = yield* ServiceConfig.read()
-  const options = yield* ServiceConfig.options(config)
+  const options = yield* ServiceConfig.options({ config })
   if (config.manager === "systemd") yield* systemd("stop")
   yield* Service.stop(options)
 })
 
 export const restart = Effect.fn("cli.service-lifecycle.restart")(function* (input: EnsureInput = {}) {
   const config = yield* ServiceConfig.read()
-  const options = withVersion(yield* ServiceConfig.options(config), input)
+  const options = withVersion(yield* ServiceConfig.options({ config }), input)
   yield* Service.stop(options)
   if (config.manager === "systemd") yield* systemd("restart")
   const endpoint = yield* Service.ensure(options)
@@ -55,7 +55,7 @@ export const restart = Effect.fn("cli.service-lifecycle.restart")(function* (inp
 
 export const status = Effect.fn("cli.service-lifecycle.status")(function* () {
   const config = yield* ServiceConfig.read()
-  const options = yield* ServiceConfig.options(config)
+  const options = yield* ServiceConfig.options({ config })
   if (config.manager === "systemd" && !(yield* systemdActive())) return undefined
   const endpoint = yield* Service.discover({ ...options, version: undefined })
   if (config.manager === "systemd" && endpoint !== undefined && !(yield* systemdOwns(options.file))) return undefined

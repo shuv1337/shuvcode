@@ -35,6 +35,15 @@ export const Plugin = Schema.Union([
   }),
 ])
 
+export const Cursor = Schema.Struct({
+  style: Schema.optional(Schema.Literals(["block", "underline", "line", "default"])).annotate({
+    description: "Cursor shape. Use 'default' to preserve the terminal setting",
+  }),
+  blinking: Schema.optional(Schema.Boolean).annotate({
+    description: "Whether the cursor blinks. Has no effect when style is 'default'",
+  }),
+}).annotate({ description: "Terminal cursor settings" })
+
 export const Info = Schema.Struct({
   theme: Schema.optional(
     Schema.Struct({
@@ -105,6 +114,9 @@ export const Info = Schema.Struct({
       paste: Schema.optional(Schema.Literals(["compact", "full"])).annotate({
         description: "Display large pastes as compact placeholders or full text",
       }),
+      image_preview: Schema.optional(Schema.Boolean).annotate({
+        description: "Show image attachment previews above the prompt input",
+      }),
     }),
   ).annotate({ description: "Prompt input behavior" }),
   session: Schema.optional(
@@ -119,6 +131,9 @@ export const Info = Schema.Struct({
       grouping: Schema.optional(Schema.Literals(["auto", "none"])).annotate({
         description: "Group related transcript items automatically or render each item separately",
       }),
+      image_preview: Schema.optional(Schema.Boolean).annotate({
+        description: "Show user attachment and tool-result images in the session transcript",
+      }),
       markdown: Schema.optional(Schema.Literals(["source", "rendered"])).annotate({
         description: "Show Markdown syntax markers or conceal them in rendered transcript content",
       }),
@@ -132,8 +147,8 @@ export const Info = Schema.Struct({
       scope: Schema.optional(Schema.Literals(["global", "cwd"])).annotate({
         description: "Share tabs globally or keep a separate set for each working directory",
       }),
-      vertical: Schema.optional(Schema.Boolean).annotate({
-        description: "Show tabs in a left sidebar instead of a horizontal strip",
+      layout: Schema.optional(Schema.Literals(["horizontal", "vertical"])).annotate({
+        description: "Show tabs in a horizontal strip or vertical sidebar",
       }),
     }),
   ).annotate({ description: "Tab strip settings" }),
@@ -176,10 +191,11 @@ export const Info = Schema.Struct({
   ).annotate({ description: "Debugging settings" }),
   animations: Schema.optional(Schema.Boolean).annotate({ description: "Enable interface animations" }),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable terminal mouse capture" }),
+  cursor: Schema.optional(Cursor),
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
-export type Resolved = Omit<Info, "attention" | "keybinds" | "leader" | "mouse"> & {
+export type Resolved = Omit<Info, "attention" | "cursor" | "keybinds" | "leader" | "mouse" | "tabs"> & {
   attention: {
     enabled: boolean
     notifications: boolean
@@ -191,6 +207,15 @@ export type Resolved = Omit<Info, "attention" | "keybinds" | "leader" | "mouse">
   keybinds: TuiKeybind.BindingLookupView
   leader: { timeout: number }
   mouse: boolean
+  cursor?: {
+    style: "block" | "underline" | "line" | "default"
+    blinking: boolean
+  }
+  tabs: {
+    enabled: boolean
+    scope: "global" | "cwd"
+    layout: "horizontal" | "vertical"
+  }
 }
 
 export function resolve(input: Info, options: { terminalSuspend: boolean }): Resolved {
@@ -221,6 +246,18 @@ export function resolve(input: Info, options: { terminalSuspend: boolean }): Res
     }),
     leader: { timeout: input.leader?.timeout ?? 2000 },
     mouse: input.mouse ?? true,
+    cursor: input.cursor
+      ? {
+          style: input.cursor.style ?? "block",
+          blinking: input.cursor.blinking ?? true,
+        }
+      : undefined,
+    tabs: {
+      ...input.tabs,
+      enabled: input.tabs?.enabled ?? true,
+      scope: input.tabs?.scope ?? "cwd",
+      layout: input.tabs?.layout ?? "horizontal",
+    },
   }
 }
 

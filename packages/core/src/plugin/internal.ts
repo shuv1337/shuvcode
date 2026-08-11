@@ -7,6 +7,7 @@ import { Agent } from "../agent"
 import { Catalog } from "../catalog"
 import { Command } from "../command"
 import { Config } from "../config"
+import { Credential } from "../credential"
 import { ConfigAgentPlugin } from "../config/plugin/agent"
 import { ConfigCommandPlugin } from "../config/plugin/command"
 import { ConfigProviderPlugin } from "../config/plugin/provider"
@@ -15,6 +16,7 @@ import { ConfigReferencePlugin } from "../config/plugin/reference"
 import { ConfigSkillPlugin } from "../config/plugin/skill"
 import { ConfigWebSearchPlugin } from "../config/plugin/websearch"
 import { Bus } from "../bus"
+import { Environment } from "../environment"
 import { FileMutation } from "../file-mutation"
 import { Formatter } from "../formatter"
 import { Form } from "../form"
@@ -67,7 +69,9 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const catalog = yield* Catalog.Service
   const command = yield* Command.Service
   const config = yield* Config.Service
+  const credential = yield* Credential.Service
   const bus = yield* Bus.Service
+  const environment = yield* Environment.Service
   const mutation = yield* FileMutation.Service
   const formatter = yield* Formatter.Service
   const filesystem = yield* FileSystem.Service
@@ -98,7 +102,9 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(Catalog.Service, catalog),
     Context.make(Command.Service, command),
     Context.make(Config.Service, config),
+    Context.make(Credential.Service, credential),
     Context.make(Bus.Service, bus),
+    Context.make(Environment.Service, environment),
     Context.make(FileMutation.Service, mutation),
     Context.make(Formatter.Service, formatter),
     Context.make(FileSystem.Service, filesystem),
