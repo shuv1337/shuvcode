@@ -60,6 +60,11 @@ import { Keymap, type KeymapCommand } from "../../context/keymap"
 import { abbreviateHome } from "../../runtime"
 import { PluginSlot } from "../../plugin/render"
 import type { SessionPending } from "@opencode-ai/schema/session-pending"
+import {
+  deduplicatePromptImages,
+  preserveMentionlessPromptAttachments,
+  promptAttachmentLabel,
+} from "../../prompt/attachment"
 import { DialogImagePreview } from "../dialog-image-preview"
 
 export type PromptProps = {
@@ -331,7 +336,7 @@ export function Prompt(props: PromptProps) {
   }
 
   const imageAttachments = createMemo(() =>
-    (store.prompt.files ?? []).filter((file) => typeof file.uri === "string" && file.uri.startsWith("data:image/")),
+    (deduplicatePromptImages(store.prompt.files) ?? []).filter((file) => file.uri.startsWith("data:image/")),
   )
   const imagePreviewHeight = createMemo(() => Math.max(4, Math.min(8, Math.floor(dimensions().height / 4))))
   const imagePreviewWidth = createMemo(() => imagePreviewHeight() * 2)
@@ -736,6 +741,7 @@ export function Prompt(props: PromptProps) {
     setStore(
       produce((draft) => {
         const newMap = new Map<number, PromptPartRef>()
+        const fileExtmarks = new Map<number, NonNullable<PromptInfo["files"]>[number]>()
         const files: NonNullable<PromptInfo["files"]> = []
         const agents: NonNullable<PromptInfo["agents"]> = []
         const skills: NonNullable<PromptInfo["skills"]> = []
@@ -749,9 +755,8 @@ export function Prompt(props: PromptProps) {
             if (!part?.mention) continue
             part.mention.start = extmark.start
             part.mention.end = extmark.end
-            const index = files.length
             files.push(part)
-            newMap.set(extmark.id, { type: "file", index })
+            fileExtmarks.set(extmark.id, part)
             continue
           }
           if (ref.type === "agent") {
@@ -783,8 +788,19 @@ export function Prompt(props: PromptProps) {
           newMap.set(extmark.id, { type: "pasted", index })
         }
 
+        const nextFiles = preserveMentionlessPromptAttachments(draft.prompt.files, files)
+        const fileIndices = new Map(nextFiles.map((file, index) => [file, index]))
+        for (const [extmark, file] of fileExtmarks) {
+          const index = fileIndices.get(file)
+          if (index !== undefined) newMap.set(extmark, { type: "file", index })
+        }
+
         draft.extmarkToPart = newMap
-        draft.prompt.files = files
+        if (
+          nextFiles.length !== draft.prompt.files?.length ||
+          nextFiles.some((file, index) => file !== draft.prompt.files?.[index])
+        )
+          draft.prompt.files = nextFiles
         draft.prompt.agents = agents
         draft.prompt.skills = skills
         draft.prompt.pasted = pasted
@@ -1138,7 +1154,6 @@ export function Prompt(props: PromptProps) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
-
     if (store.mode === "shell") {
       move.startSubmit()
       void client.api.session.shell({
@@ -1376,13 +1391,7 @@ export function Prompt(props: PromptProps) {
   function pasteAttachment(file: { filename?: string; uri: string }) {
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
-    const pdf = file.uri.startsWith("data:application/pdf;")
-    const count = pdf
-      ? (store.prompt.files?.filter(
-          (attachment) => typeof attachment.uri === "string" && attachment.uri.startsWith("data:application/pdf;"),
-        ).length ?? 0)
-      : imageAttachments().length
-    const virtualText = pdf ? `[PDF ${count + 1}]` : `[Image ${count + 1}]`
+    const virtualText = promptAttachmentLabel(store.prompt.files, { uri: file.uri, name: file.filename })
     const extmarkEnd = extmarkStart + virtualText.length
     const textToInsert = virtualText + " "
 
