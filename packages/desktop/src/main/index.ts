@@ -181,7 +181,7 @@ const main = Effect.gen(function* () {
     return
   }
 
-  const shellEnv = preferAppEnv(app.getPath("userData"))
+  preferAppEnv()
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
     const urls = argv.filter((arg: string) => arg.startsWith("opencode://"))
@@ -310,7 +310,7 @@ const main = Effect.gen(function* () {
     useEnvProxy()
 
     logger.log("starting v2 background service")
-    const sidecar = yield* Effect.promise(() => startBackgroundCli(logger, shellEnv?.XDG_STATE_HOME))
+    const sidecar = yield* Effect.promise(() => startBackgroundCli(logger))
     yield* Deferred.succeed(serverReady, {
       url: sidecar.url,
       username: sidecar.username,
