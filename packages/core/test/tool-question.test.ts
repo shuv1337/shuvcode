@@ -89,6 +89,30 @@ const it = testEffect(
 )
 
 describe("QuestionTool", () => {
+  it.effect("emits one item schema for the nonempty questions array", () =>
+    Effect.gen(function* () {
+      captured = undefined
+      const registry = yield* Tool.Service
+      const definition = (yield* toolDefinitions(registry)).find((tool) => tool.name === QuestionTool.name)
+
+      expect(definition?.inputSchema).toHaveProperty("properties.questions.type", "array")
+      expect(definition?.inputSchema).toHaveProperty("properties.questions.minItems", 1)
+      expect(definition?.inputSchema).toHaveProperty("properties.questions.items")
+      expect(definition?.inputSchema).not.toHaveProperty("properties.questions.prefixItems")
+      expect(
+        yield* executeTool(registry, {
+          sessionID,
+          ...toolIdentity,
+          call: { type: "tool-call", id: "call-question-empty", name: QuestionTool.name, input: { questions: [] } },
+        }),
+      ).toMatchObject({
+        status: "error",
+        error: { type: "tool.execution", message: expect.stringContaining("Invalid tool input") },
+      })
+      expect(capturedInput()).toBeUndefined()
+    }),
+  )
+
   it.effect("omits a catalog-denied question and enforces its leaf permission", () =>
     Effect.gen(function* () {
       captured = undefined
