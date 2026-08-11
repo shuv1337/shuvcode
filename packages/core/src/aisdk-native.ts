@@ -88,9 +88,13 @@ function mapBedrockSettings(
       : typeof settings.bearerToken === "string"
         ? settings.bearerToken
         : undefined
-  const credentials = mapBedrockCredentials(settings)
+  const region = bedrockRegion(settings)
+  const credentials = mapBedrockCredentials(settings, region)
   return {
     ...baseSettings,
+    ...(typeof baseSettings.baseURL === "string" && region !== undefined
+      ? { baseURL: baseSettings.baseURL.replaceAll("${AWS_REGION}", region) }
+      : {}),
     ...(typeof settings.baseURL !== "string" && typeof settings.endpoint === "string"
       ? { baseURL: settings.endpoint }
       : {}),
@@ -155,14 +159,8 @@ function mapBedrockRequest(input: MapInput): Pick<Mapping, "headers" | "body"> {
   }
 }
 
-function mapBedrockCredentials(settings: Readonly<Record<string, unknown>>) {
+function mapBedrockCredentials(settings: Readonly<Record<string, unknown>>, region: string | undefined) {
   const credentials = isRecord(settings.credentials) ? settings.credentials : settings
-  const region =
-    typeof settings.region === "string"
-      ? settings.region
-      : typeof credentials.region === "string"
-        ? credentials.region
-        : undefined
   if (
     region === undefined ||
     typeof credentials.accessKeyId !== "string" ||
@@ -175,6 +173,15 @@ function mapBedrockCredentials(settings: Readonly<Record<string, unknown>>) {
     secretAccessKey: credentials.secretAccessKey,
     ...(typeof credentials.sessionToken === "string" ? { sessionToken: credentials.sessionToken } : {}),
   }
+}
+
+function bedrockRegion(settings: Readonly<Record<string, unknown>>) {
+  const credentials = isRecord(settings.credentials) ? settings.credentials : settings
+  return typeof settings.region === "string"
+    ? settings.region
+    : typeof credentials.region === "string"
+      ? credentials.region
+      : undefined
 }
 
 function mapOpenAIOptions(settings: Readonly<Record<string, unknown>>) {
