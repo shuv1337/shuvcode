@@ -8,6 +8,7 @@ import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import type { BunPlugin } from "bun"
 import pkg from "../package.json"
 import { modelsData } from "./generate"
+import { buildAppArchive } from "./app-assets"
 
 const dir = path.resolve(import.meta.dirname, "..")
 const binary = "opencode2"
@@ -54,6 +55,20 @@ const targets = singleFlag
   : allTargets
 
 if (!skipInstall) await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
+const appArchive = await buildAppArchive(Script.channel)
+const appAssetsPlugin: BunPlugin = {
+  name: "opencode-app-assets",
+  setup(build) {
+    build.onResolve({ filter: /^virtual:opencode-app-assets$/ }, () => ({
+      path: "opencode-app-assets",
+      namespace: "opencode",
+    }))
+    build.onLoad({ filter: /^opencode-app-assets$/, namespace: "opencode" }, () => ({
+      loader: "js",
+      contents: `export default ${JSON.stringify(appArchive)}`,
+    }))
+  },
+}
 
 for (const item of targets) {
   const parcelWatcherPackage = `@parcel/watcher-${item.os}-${item.arch}${item.os === "linux" ? `-${item.abi ?? "glibc"}` : ""}`
@@ -80,7 +95,7 @@ for (const item of targets) {
   const result = await Bun.build({
     entrypoints: ["./src/index.ts"],
     tsconfig: "./tsconfig.json",
-    plugins: [solidPlugin, parcelWatcherPlugin],
+    plugins: [appAssetsPlugin, solidPlugin, parcelWatcherPlugin],
     external: ["node-gyp"],
     format: "esm",
     minify: true,

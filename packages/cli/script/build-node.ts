@@ -12,6 +12,7 @@ import { modelsData } from "./generate"
 import { collectNodeAssets, copyNodeAssets, hashNodeAssets, seaAssetMap } from "./node-assets"
 import { mainConfig } from "../vite.node.config"
 import { nodeExecArgv, nodeTarget, type NodeTarget } from "../src/node/target"
+import { buildAppArchive } from "./app-assets"
 
 const NODE_VERSION = "26.4.0"
 const dir = path.resolve(import.meta.dirname, "..")
@@ -55,13 +56,21 @@ const builder =
   !bundleOnly || targets.some((target) => target.platform === process.platform && target.arch === process.arch)
     ? await resolveHostNode()
     : undefined
+const appArchive = await buildAppArchive(Script.channel)
 
 for (const target of targets) {
   console.log(`building cli-node-${targetName(target)}`)
   const assets = await collectNodeAssets(target)
   await rm("dist-node", { recursive: true, force: true })
   const assetHash = await hashNodeAssets(assets)
-  const input = { version: Script.version, channel: Script.channel, models: modelsData, assetHash, target }
+  const input = {
+    version: Script.version,
+    channel: Script.channel,
+    models: modelsData,
+    assetHash,
+    target,
+    appArchive,
+  }
   await copyNodeAssets(assets)
   await build(mainConfig(input))
 

@@ -882,7 +882,7 @@ function App(props: { pair?: DialogPairCredentials }) {
       {
         name: "server.pair",
         title: "Pair device",
-        slash: { name: "pair" },
+        slash: { name: "pair", aliases: ["web"] },
         run: () => {
           dialog.replace(() => <DialogPair credentials={props.pair} />)
         },
