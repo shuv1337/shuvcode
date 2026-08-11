@@ -75,7 +75,7 @@ jobs:
   build-cli:
     needs: version
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.repository == 'anomalyco/opencode'
+    if: github.repository == 'anomalyco/opencode' && github.ref_name != 'beta'
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
@@ -132,7 +132,7 @@ jobs:
 
   build-node-cli:
     needs: version
-    if: github.repository == 'anomalyco/opencode'
+    if: github.repository == 'anomalyco/opencode' && github.ref_name != 'beta'
     strategy:
       fail-fast: false
       matrix:
@@ -515,11 +515,13 @@ jobs:
           path: packages/opencode/dist
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.ref_name != 'beta'
         with:
           name: opencode-preview-cli
           path: packages/cli/dist
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.ref_name != 'beta'
         with:
           pattern: opencode-node-cli-*
           path: packages/cli/dist/node
