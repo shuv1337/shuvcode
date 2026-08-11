@@ -215,11 +215,9 @@ describe("SessionExecution lifecycle", () => {
       const failures: SessionEvent.Execution.Failed[] = []
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
-      const context = yield* buildExecution(
-        scope,
-        ({ sessionID: id }) => Effect.sync(() => void drained.push(id)),
-        { maxAttempts: 2 },
-      )
+      const context = yield* buildExecution(scope, ({ sessionID: id }) => Effect.sync(() => void drained.push(id)), {
+        maxAttempts: 2,
+      })
       const restart = Context.get(context, SessionRestart.Service)
       yield* bus.project(SessionEvent.Execution.Failed, (event) => Effect.sync(() => void failures.push(event)))
 
