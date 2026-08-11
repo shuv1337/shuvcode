@@ -4,9 +4,7 @@ import { brotliDecompressSync } from "node:zlib"
 import { OPENCODE_LOCAL } from "./version"
 
 export type AssetMap = Readonly<Record<string, string | Uint8Array>>
-type EncodedAssetMap = Readonly<
-  Record<string, { readonly content: string; readonly encoding: "utf8" | "base64" }>
->
+type EncodedAssetMap = Readonly<Record<string, { readonly content: string; readonly encoding: "utf8" | "base64" }>>
 
 export const load = Effect.fn("cli.app-assets.load")(function* () {
   const embedded = yield* Effect.tryPromise(() => import("virtual:opencode-app-assets")).pipe(Effect.option)
@@ -25,19 +23,17 @@ const sourceAssets = Effect.fnUntraced(function* () {
   const root = path.resolve(import.meta.dirname, "../../app/dist")
   const files = yield* fs.readDirectory(root, { recursive: true })
   return Object.fromEntries(
-    (
-      yield* Effect.forEach(
-        files.filter((file) => !file.endsWith(".map")),
-        Effect.fnUntraced(function* (file) {
-          const target = path.join(root, file)
-          if ((yield* fs.stat(target)).type === "Directory") return
-          const body = Buffer.from(yield* fs.readFile(target))
-          const encoding = isText(file) ? "utf8" : "base64"
-          return [file, { encoding, content: body.toString(encoding) }] as const
-        }),
-        { concurrency: "unbounded" },
-      )
-    ).filter((asset) => asset !== undefined),
+    (yield* Effect.forEach(
+      files.filter((file) => !file.endsWith(".map")),
+      Effect.fnUntraced(function* (file) {
+        const target = path.join(root, file)
+        if ((yield* fs.stat(target)).type === "Directory") return
+        const body = Buffer.from(yield* fs.readFile(target))
+        const encoding = isText(file) ? "utf8" : "base64"
+        return [file, { encoding, content: body.toString(encoding) }] as const
+      }),
+      { concurrency: "unbounded" },
+    )).filter((asset) => asset !== undefined),
   )
 })
 

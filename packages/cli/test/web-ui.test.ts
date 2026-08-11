@@ -55,7 +55,9 @@ describe("web UI", () => {
           expect(yield* Effect.promise(() => script.text())).toBe("console.log('embedded')")
 
           const font = yield* Effect.promise(() => fetch(`${origin}/font.woff2`))
-          expect(new Uint8Array(yield* Effect.promise(() => font.arrayBuffer()))).toEqual(new Uint8Array([0, 1, 2, 255]))
+          expect(new Uint8Array(yield* Effect.promise(() => font.arrayBuffer()))).toEqual(
+            new Uint8Array([0, 1, 2, 255]),
+          )
 
           const fallback = yield* Effect.promise(() => fetch(`${origin}/workspace/example`))
           expect(yield* Effect.promise(() => fallback.text())).toContain("embedded")

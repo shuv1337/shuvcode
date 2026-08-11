@@ -5,13 +5,7 @@ import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
 import { Cause, Context, Deferred, Effect, Exit, Layer, Option, Ref, Schema, Scope } from "effect"
-import {
-  HttpMiddleware,
-  HttpRouter,
-  HttpServer,
-  HttpServerRequest,
-  HttpServerResponse,
-} from "effect/unstable/http"
+import { HttpMiddleware, HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 import { ServerAuth } from "./auth"
