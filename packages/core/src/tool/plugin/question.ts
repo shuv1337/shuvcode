@@ -21,9 +21,7 @@ Usage notes:
 - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label`
 
 export const Input = Schema.Struct({
-  questions: Schema.Array(Question.Prompt)
-    .check(Schema.isNonEmpty())
-    .annotate({ description: "Questions to ask" }),
+  questions: Schema.Array(Question.Prompt).check(Schema.isNonEmpty()).annotate({ description: "Questions to ask" }),
 })
 
 export const Output = Schema.Struct({
