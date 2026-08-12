@@ -294,3 +294,63 @@ test("session startup prompt is submitted exactly once", async () => {
     await server.stop()
   }
 })
+
+test("configured app bindings execute settings and permission commands", async () => {
+  const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
+  setup.renderer.start()
+  const ready = Promise.withResolvers<void>()
+  const events = createEventStream()
+  const calls = createFetch(undefined, events)
+  const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
+
+  try {
+    const { run } = await import("../src/app")
+    const task = Effect.runPromise(
+      run({
+        app: { name: "test", version: "test", channel: "test" },
+        server: { endpoint: { url: server.url.toString() } },
+        config: {
+          get: async () => ({
+            animations: false,
+            keybinds: { "opencode.settings": "f6", "permission.mode": "f7" },
+          }),
+          update: async () => ({}),
+        },
+        packages: { resolve: async () => undefined },
+        args: {},
+        terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: ready.resolve }),
+        log: () => {},
+      }).pipe(Effect.provide(AppNodeBuilder.build(Global.node)), Effect.provide(FileSystem.layerNoop({}))),
+    )
+    await ready.promise
+    await setup.waitForFrame((frame) => frame.includes("commands"))
+
+    setup.mockInput.pressKey("F6")
+    const settings = await setup.waitForFrame((frame) => frame.includes("Settings"))
+    expect(settings).toContain("Color mode")
+    expect(settings).toContain("Animations")
+
+    setup.mockInput.pressEscape()
+    await setup.waitForFrame((frame) => !frame.includes("Settings"))
+    setup.mockInput.pressKey("F7")
+    await setup.renderOnce()
+    setup.mockInput.pressKey("p", { ctrl: true })
+    await setup.waitForFrame((frame) => frame.includes("Commands"))
+    setup.mockInput.pressKey("END")
+    const commands = await setup.waitForFrame(
+      (frame) => {
+        if (frame.includes("Disable auto-approve permissions")) return true
+        setup.mockInput.pressArrow("up")
+        return false
+      },
+      { maxPasses: 100 },
+    )
+    expect(commands).not.toContain("Enable auto-approve permissions")
+
+    setup.renderer.destroy()
+    await task
+  } finally {
+    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
+    await server.stop()
+  }
+})

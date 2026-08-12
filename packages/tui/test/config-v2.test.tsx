@@ -4,15 +4,17 @@ import { expect, test } from "bun:test"
 import { Schema } from "effect"
 import { resolve, ConfigProvider, Info, useConfig, type Interface } from "../src/config"
 import { settings } from "../src/component/dialog-config"
+import { TuiKeybind } from "../src/config/keybind"
+import { CommandMap, Definitions } from "../src/config/v1/keybind"
+
+const decodeInfo = Schema.decodeUnknownSync(Info)
 
 test("validates mini replay settings", () => {
-  const decode = Schema.decodeUnknownSync(Info)
-
-  expect(decode({ mini: { replay: false, replay_limit: 50 } })).toEqual({
+  expect(decodeInfo({ mini: { replay: false, replay_limit: 50 } })).toEqual({
     mini: { replay: false, replay_limit: 50 },
   })
-  expect(() => decode({ mini: { replay_limit: 0 } })).toThrow()
-  expect(() => decode({ mini: { replay_limit: 1.5 } })).toThrow()
+  expect(() => decodeInfo({ mini: { replay_limit: 0 } })).toThrow()
+  expect(() => decodeInfo({ mini: { replay_limit: 1.5 } })).toThrow()
 })
 
 test("validates the session tabs setting", () => {
@@ -58,6 +60,105 @@ test("shows resolved tab defaults in settings", () => {
 
 test("shows the new session location default in settings", () => {
   expect(settings.find((setting) => setting.path.join(".") === "session.new_location")?.default).toBe("launch")
+})
+
+test("uses command IDs as keybind keys", () => {
+  const config = resolve({ keybinds: { "session.list": "ctrl+l" } }, { terminalSuspend: true })
+
+  expect(config.keybinds.get("session.list")).toMatchObject([{ key: "ctrl+l" }])
+  expect(TuiKeybind.unknownKeys({ session_list: "ctrl+l" })).toEqual(["session_list"])
+  expect(
+    Object.keys(TuiKeybind.Definitions)
+      .filter((key) => key !== "leader")
+      .every((key) => key.includes(".")),
+  ).toBe(true)
+})
+
+test("preserves migrated v1 keybind defaults", () => {
+  const pairs = [
+    ["app.exit", "app_exit"],
+    ["prompt.paste", "input_paste"],
+    ["session.delete", "session_delete"],
+    ["session.list", "session_list"],
+    ["agent.list", "agent_list"],
+  ] as const
+
+  pairs.forEach(([command, name]) => {
+    expect(CommandMap[name]).toBe(command)
+    expect(TuiKeybind.Definitions[command].default).toEqual(Definitions[name].default)
+  })
+})
+
+test("accepts every v2-only named command ID", () => {
+  const commands = [
+    "server.pair",
+    "session.toggle.exploration_grouping",
+    "composer.subagent.up",
+    "composer.subagent.down",
+    "composer.subagent.select",
+    "composer.subagent.interrupt",
+    "composer.shell.up",
+    "composer.shell.down",
+    "composer.shell.kill",
+    "diff.down",
+    "diff.up",
+    "diff.page.down",
+    "diff.page.up",
+    "diff.mark_reviewed",
+    "opencode.settings",
+    "service.restart",
+    "permission.mode",
+    "session.cd",
+    "app.scrap",
+  ]
+  const config = resolve(
+    decodeInfo({ keybinds: Object.fromEntries(commands.map((command) => [command, "ctrl+alt+z"])) }),
+    { terminalSuspend: true },
+  )
+
+  commands.forEach((command) => expect(config.keybinds.get(command)).toMatchObject([{ key: "ctrl+alt+z" }]))
+})
+
+test("centralizes named command defaults and resolves explicit none", () => {
+  const defaults = {
+    "composer.subagent.up": "up",
+    "composer.subagent.down": "down",
+    "composer.subagent.select": "return",
+    "composer.subagent.interrupt": "ctrl+d",
+    "composer.shell.up": "up",
+    "composer.shell.down": "down",
+    "composer.shell.kill": "ctrl+d",
+    "diff.down": "j,down",
+    "diff.up": "k,up",
+    "diff.page.down": "pagedown,ctrl+f",
+    "diff.page.up": "pageup,ctrl+b",
+    "diff.mark_reviewed": "m",
+  }
+  const config = resolve({}, { terminalSuspend: true })
+  Object.entries(defaults).forEach(([command, key]) => expect(config.keybinds.get(command)).toMatchObject([{ key }]))
+
+  const disabled = resolve(
+    decodeInfo({ keybinds: Object.fromEntries(Object.keys(defaults).map((command) => [command, "none"])) }),
+    { terminalSuspend: true },
+  )
+  Object.keys(defaults).forEach((command) => expect(disabled.keybinds.get(command)).toEqual([]))
+})
+
+test("rejects orphaned keybind definitions", () => {
+  expect(decodeInfo({ keybinds: { "app.heap_snapshot": "ctrl+h" } })).toEqual({ keybinds: {} })
+})
+
+test("uses ctrl+z for input undo when terminal suspend is unavailable", () => {
+  const config = resolve({}, { terminalSuspend: false })
+  expect(config.keybinds.has("terminal.suspend")).toBe(false)
+  expect(config.keybinds.get("input.undo")).toMatchObject([{ key: "ctrl+z,ctrl+-,super+z" }])
+
+  const overridden = resolve(
+    { keybinds: { "terminal.suspend": "ctrl+s", "input.undo": "ctrl+u" } },
+    { terminalSuspend: false },
+  )
+  expect(overridden.keybinds.has("terminal.suspend")).toBe(false)
+  expect(overridden.keybinds.get("input.undo")).toMatchObject([{ key: "ctrl+u" }])
 })
 
 test("provides config and its host interface", async () => {
