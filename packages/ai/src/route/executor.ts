@@ -372,9 +372,7 @@ export const stream = (
       const redactedNames = yield* Headers.CurrentRedactedNames
       const response = yield* executor.execute(request, middleware)
       return response.stream.pipe(
-        Stream.mapError((error) =>
-          httpError({ error, request: response.request, operation: "read", redactedNames }),
-        ),
+        Stream.mapError((error) => httpError({ error, request: response.request, operation: "read", redactedNames })),
       )
     }),
   )

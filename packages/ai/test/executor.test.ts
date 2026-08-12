@@ -114,9 +114,7 @@ describe("RequestExecutor", () => {
           new Response(
             new ReadableStream({
               pull(controller) {
-                controller.error(
-                  new TypeError("fetch failed", { cause: systemError("ECONNRESET", "socket closed") }),
-                )
+                controller.error(new TypeError("fetch failed", { cause: systemError("ECONNRESET", "socket closed") }))
               },
             }),
           ),
