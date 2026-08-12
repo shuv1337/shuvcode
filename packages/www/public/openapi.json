@@ -13083,6 +13083,9 @@
           },
           "text": {
             "type": "string"
+          },
+          "description": {
+            "type": "string"
           }
         },
         "required": ["id", "time", "type", "text"],
