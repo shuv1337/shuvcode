@@ -65,6 +65,7 @@ export type SessionMessageSystem = {
   time: { created: number }
   type: "system"
   text: string
+  description?: string
 }
 
 export type SessionMessageSkill = {
@@ -2611,6 +2612,7 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly type: "system"
           readonly text: string
+          readonly description?: string
         }
       | {
           readonly id: string
@@ -2877,6 +2879,7 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly type: "system"
           readonly text: string
+          readonly description?: string
         }
       | {
           readonly id: string
@@ -3143,6 +3146,7 @@ export type SessionImportInput = {
           readonly time: { readonly created: number }
           readonly type: "system"
           readonly text: string
+          readonly description?: string
         }
       | {
           readonly id: string
