@@ -392,11 +392,13 @@ const execution = Layer.effect(
       force: boolean,
       continuation?: SessionRunner.Continuation,
     ): Effect.Effect<void, SessionRunner.RunError> {
-      return sessionRunner.drain({ sessionID, force, continuation }).pipe(
-        Effect.flatMap((result) =>
-          result.type === "complete" ? Effect.void : drain(sessionID, false, result.continuation),
-        ),
-      )
+      return sessionRunner
+        .drain({ sessionID, force, continuation })
+        .pipe(
+          Effect.flatMap((result) =>
+            result.type === "complete" ? Effect.void : drain(sessionID, false, result.continuation),
+          ),
+        )
     }
     const coordinator = yield* SessionRunCoordinator.make<Session.ID, SessionRunner.RunError>({
       drain: (sessionID, force) => drain(sessionID, force),

@@ -216,7 +216,12 @@ test("passes the row foreground color to gutters", async () => {
     expect(selected).not.toEqual(idle)
 
     select.app.mockInput.pressArrow("down")
-    await select.app.waitFor(() => colors.get("alpha")!.toInts().every((value, index) => value === idle[index]))
+    await select.app.waitFor(() =>
+      colors
+        .get("alpha")!
+        .toInts()
+        .every((value, index) => value === idle[index]),
+    )
     expect(colors.get("beta")!.toInts()).toEqual(selected)
   } finally {
     select.app.renderer.destroy()

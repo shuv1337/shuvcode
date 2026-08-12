@@ -346,9 +346,7 @@ function attempts(database: Database.Service["Service"], sessionID: Session.ID) 
 /** Builds the local execution layer plus the restart actions against the test harness services. */
 function buildExecution(
   scope: Scope.Closeable,
-  drain: (
-    input: Parameters<SessionRunner.Interface["drain"]>[0],
-  ) => Effect.Effect<void, SessionRunner.RunError>,
+  drain: (input: Parameters<SessionRunner.Interface["drain"]>[0]) => Effect.Effect<void, SessionRunner.RunError>,
   options?: SessionRestart.Options,
 ) {
   return Effect.gen(function* () {
