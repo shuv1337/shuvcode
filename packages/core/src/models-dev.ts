@@ -2,15 +2,15 @@ import { Cause, Context, Duration, Effect, Layer, Option, Schedule, Schema, Sema
 import { HttpClient, HttpClientRequest } from "effect/unstable/http"
 import { ModelsDev } from "@opencode-ai/schema/models-dev"
 import { Money } from "@opencode-ai/schema/money"
-import { App } from "./app"
+import { App } from "./app.js"
 import { Hash } from "@opencode-ai/util/hash"
 import { FSUtil } from "@opencode-ai/util/fs-util"
-import { Bus } from "./bus"
+import { Bus } from "./bus.js"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { httpClient } from "@opencode-ai/util/effect/app-node-platform"
-import { Model } from "./model"
-import { Provider } from "./provider"
-import { KV } from "./kv"
+import { Model } from "./model.js"
+import { Provider } from "./provider.js"
+import { KV } from "./kv.js"
 
 export const CatalogModelStatus = Schema.Literals(["alpha", "beta", "deprecated"])
 export type CatalogModelStatus = typeof CatalogModelStatus.Type
@@ -682,4 +682,4 @@ export function configured(options?: Options) {
 
 export const node = configured()
 
-export * as ModelsDev from "./models-dev"
+export * as ModelsDev from "./models-dev.js"
