@@ -41,7 +41,9 @@ export function Header({
     <header className="catalog-header">
       <div className="catalog-brand">
         <strong>Terminal Catalog</strong>
-        <span>{resultCount} {noun}</span>
+        <span>
+          {resultCount} {noun}
+        </span>
       </div>
       <nav className="catalog-tabs" aria-label="Catalog views">
         {modes.map(([value, title]) => (

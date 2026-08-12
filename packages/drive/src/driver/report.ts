@@ -1,15 +1,12 @@
 import * as Schema from "effect/Schema"
 import { EndpointCompatibility } from "../simulation/connector.js"
 
-const absolutePathCheck = Schema.makeFilter<string>(
-  (path) => isAbsolutePath(path),
-  { expected: "an absolute POSIX or Windows path without NUL bytes" },
-)
+const absolutePathCheck = Schema.makeFilter<string>((path) => isAbsolutePath(path), {
+  expected: "an absolute POSIX or Windows path without NUL bytes",
+})
 
 /** A fully rooted POSIX or Windows filesystem path. */
-export const AbsolutePath = Schema.String.check(absolutePathCheck).pipe(
-  Schema.brand("OpenCodeDrive.AbsolutePath"),
-)
+export const AbsolutePath = Schema.String.check(absolutePathCheck).pipe(Schema.brand("OpenCodeDrive.AbsolutePath"))
 export type AbsolutePath = typeof AbsolutePath.Type
 
 /** The compact evidence returned after a Drive run settles. */
@@ -29,7 +26,5 @@ function isAbsolutePath(path: string): boolean {
   if (path.startsWith("/")) return true
   if (/^[A-Za-z]:[\\/]/.test(path)) return true
   if (/^\\\\[^\\/]+[\\/][^\\/]+(?:[\\/]|$)/.test(path)) return true
-  return /^\\\\[?.]\\(?:[A-Za-z]:\\|UNC\\[^\\]+\\[^\\]+(?:\\|$))/.test(
-    path,
-  )
+  return /^\\\\[?.]\\(?:[A-Za-z]:\\|UNC\\[^\\]+\\[^\\]+(?:\\|$))/.test(path)
 }

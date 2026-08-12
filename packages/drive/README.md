@@ -32,9 +32,7 @@ export in an isolated Bun process:
 // drive.ts
 import { OpenCodeDriver } from "opencode-drive"
 
-export default OpenCodeDriver.use(({ ui }) =>
-  ui.screenshot("home"),
-)
+export default OpenCodeDriver.use(({ ui }) => ui.screenshot("home"))
 ```
 
 ```sh
@@ -75,17 +73,20 @@ artifact and recording paths, retention, and the negotiated or legacy
 compatibility of every simulation endpoint:
 
 ```ts
-const result = yield* OpenCodeDriver.useReport(options, program)
-yield* Effect.log(result.report)
+const result = yield * OpenCodeDriver.useReport(options, program)
+yield * Effect.log(result.report)
 ```
 
 Drive prefers `simulation.handshake` and explicitly records legacy fallback.
 Require negotiation when protocol skew must fail before the program runs:
 
 ```ts
-OpenCodeDriver.use({
-  opencode: { compatibility: "required" },
-}, program)
+OpenCodeDriver.use(
+  {
+    opencode: { compatibility: "required" },
+  },
+  program,
+)
 ```
 
 Additional TUIs share the same server and LLM controller:
@@ -110,8 +111,8 @@ processes are `tui` and `tuis`. This keeps SDK calls distinct from terminal UI
 control:
 
 ```ts
-const health = yield* opencode.health.get()
-const frame = yield* tui.ui.capture()
+const health = yield * opencode.health.get()
+const frame = yield * tui.ui.capture()
 ```
 
 Enable recording per TUI. Settlement finishes each timeline and exports its
@@ -121,15 +122,11 @@ video automatically:
 import { Effect } from "effect"
 import { OpenCodeDriver } from "opencode-drive"
 
-export default OpenCodeDriver.use(
-  { tui: { recording: true } },
-  (oc) =>
-    Effect.gen(function* () {
-      yield* oc.ui.screenshot("recorded-home")
-      yield* Effect.log(
-        `recording will be exported to ${oc.tui.recording?.path}`,
-      )
-    }),
+export default OpenCodeDriver.use({ tui: { recording: true } }, (oc) =>
+  Effect.gen(function* () {
+    yield* oc.ui.screenshot("recorded-home")
+    yield* Effect.log(`recording will be exported to ${oc.tui.recording?.path}`)
+  }),
 )
 ```
 
@@ -446,9 +443,9 @@ processes and compiled script artifacts are cleaned up when the script ends.
 Pass `{ recording: true }` to record an individual TUI:
 
 ```ts
-const alice = yield* tuis.launch("alice", { recording: true })
-yield* alice.ui.submit("Hello")
-yield* alice.close()
+const alice = yield * tuis.launch("alice", { recording: true })
+yield * alice.ui.submit("Hello")
+yield * alice.close()
 ```
 
 Recordings are exported when the script settles. Call
@@ -459,8 +456,8 @@ consume `llm.queue`, `llm.send`, or `llm.serve` responses. Manual-launch
 scripts can customize them before starting the server:
 
 ```ts
-yield* llm.title(() => Effect.succeed("Custom title"))
-yield* server.launch()
+yield * llm.title(() => Effect.succeed("Custom title"))
+yield * server.launch()
 ```
 
 Use `yield* llm.send(...)` to wait for and complete the next request or `yield*
@@ -471,9 +468,7 @@ the handler passed to `llm.serve` returns an Effect `Stream`:
 import { Stream } from "effect"
 import { Llm } from "opencode-drive"
 
-yield* llm.serve((_request, index) =>
-  Stream.make(Llm.text(`Response ${index + 1}`)),
-)
+yield * llm.serve((_request, index) => Stream.make(Llm.text(`Response ${index + 1}`)))
 ```
 
 The backend connection, default `finish("stop")`, and cleanup are automatic.
@@ -521,14 +516,16 @@ component-owned state, and a transient element handle that `ui.click()` can
 resolve safely:
 
 ```ts
-const allow = yield* ui.getNode({
-  role: "option",
-  label: "Allow once",
-  selected: true,
-  disabled: false,
-})
+const allow =
+  yield *
+  ui.getNode({
+    role: "option",
+    label: "Allow once",
+    selected: true,
+    disabled: false,
+  })
 
-yield* ui.click(allow)
+yield * ui.click(allow)
 ```
 
 `ui.snapshot` and atomic semantic clicks are negotiated as optional
@@ -550,14 +547,12 @@ leave `error.frame` undefined.
 import { Effect } from "effect"
 import { Errors } from "opencode-drive"
 
-yield* ui.getElement({ editor: true }).pipe(
-  Effect.catchTag("UiElementAmbiguousError", (error) =>
-    Effect.logWarning(`Matched ${error.count} editors`),
-  ),
-)
+yield *
+  ui
+    .getElement({ editor: true })
+    .pipe(Effect.catchTag("UiElementAmbiguousError", (error) => Effect.logWarning(`Matched ${error.count} editors`)))
 
-const isFileSystemError = (error: unknown) =>
-  error instanceof Errors.FileSystemError
+const isFileSystemError = (error: unknown) => error instanceof Errors.FileSystemError
 ```
 
 ## Release validation

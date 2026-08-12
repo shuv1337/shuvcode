@@ -7,10 +7,7 @@ it.effect("does not let an interrupted caller poison terminal work", () =>
     const gate = yield* Deferred.make<void>()
     const runs = yield* Ref.make(0)
     const shared = yield* SharedEffect.make(
-      Ref.update(runs, (count) => count + 1).pipe(
-        Effect.andThen(Deferred.await(gate)),
-        Effect.as("settled"),
-      ),
+      Ref.update(runs, (count) => count + 1).pipe(Effect.andThen(Deferred.await(gate)), Effect.as("settled")),
     )
     const first = yield* Effect.forkChild(shared)
     yield* Effect.yieldNow

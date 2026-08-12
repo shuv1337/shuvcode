@@ -7,9 +7,6 @@ export default defineScript({
     Effect.gen(function* () {
       yield* tui.close()
       const closed = Exit.isFailure(yield* Effect.exit(ui.state()))
-      if (!closed)
-        yield* Effect.fail(
-          new Error("primary TUI remained connected after tui.close()"),
-        )
+      if (!closed) yield* Effect.fail(new Error("primary TUI remained connected after tui.close()"))
     }),
 })

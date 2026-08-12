@@ -5,16 +5,19 @@ const runs = 8
 const measured: Array<{ prepare: number; total: number }> = []
 
 for (let index = 0; index < runs; index++) {
-  const child = Bun.spawn([
-    process.execPath,
-    "./scripts/capture-opencode-drive.ts",
-    "--opencode",
-    opencode,
-    "--revision",
-    revision,
-    "--flow",
-    flow,
-  ], { cwd: import.meta.dir + "/..", stdout: "pipe", stderr: "pipe" })
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "./scripts/capture-opencode-drive.ts",
+      "--opencode",
+      opencode,
+      "--revision",
+      revision,
+      "--flow",
+      flow,
+    ],
+    { cwd: import.meta.dir + "/..", stdout: "pipe", stderr: "pipe" },
+  )
   const [stdout, stderr, exit] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
@@ -44,7 +47,5 @@ function metric(output: string, name: string) {
 function median(values: ReadonlyArray<number>) {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? Math.round((sorted[middle - 1]! + sorted[middle]!) / 2)
-    : sorted[middle]!
+  return sorted.length % 2 === 0 ? Math.round((sorted[middle - 1]! + sorted[middle]!) / 2) : sorted[middle]!
 }

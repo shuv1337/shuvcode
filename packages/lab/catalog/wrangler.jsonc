@@ -7,12 +7,12 @@
   "preview_urls": false,
   "assets": {
     "directory": "./dist",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
   },
   "routes": [
     {
       "pattern": "dev.opencode.ai/lab/catalog*",
-      "zone_name": "opencode.ai"
-    }
-  ]
+      "zone_name": "opencode.ai",
+    },
+  ],
 }

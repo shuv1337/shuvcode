@@ -30,24 +30,14 @@ export interface FlowState<
 
 type AnyFlowState<FlowId extends string> = FlowState<FlowId, string>
 
-export interface FlowRunContext<
-  FlowId extends string,
-  States extends NonEmpty<AnyFlowState<FlowId>>,
-> {
+export interface FlowRunContext<FlowId extends string, States extends NonEmpty<AnyFlowState<FlowId>>> {
   readonly driver: Driver
   readonly checkpoint: (state: States[number]) => Effect.Effect<void, unknown>
 }
 
-interface FlowProgram<
-  FlowId extends string,
-  States extends NonEmpty<AnyFlowState<FlowId>>,
-  Error,
-  Requirements,
-> {
+interface FlowProgram<FlowId extends string, States extends NonEmpty<AnyFlowState<FlowId>>, Error, Requirements> {
   readonly states: States
-  readonly run: (
-    context: FlowRunContext<FlowId, States>,
-  ) => Effect.Effect<void, Error, Requirements>
+  readonly run: (context: FlowRunContext<FlowId, States>) => Effect.Effect<void, Error, Requirements>
 }
 
 export interface ExecutableFlow<
@@ -62,9 +52,7 @@ export interface ExecutableFlow<
   readonly group: { readonly id: GroupId; readonly label: string }
   readonly description: string
   readonly states: States
-  readonly run: (
-    context: FlowRunContext<FlowId, States>,
-  ) => Effect.Effect<void, Error, Requirements>
+  readonly run: (context: FlowRunContext<FlowId, States>) => Effect.Effect<void, Error, Requirements>
 }
 
 export interface ExecutableScenarioState {
@@ -88,27 +76,14 @@ export interface ExecutableScenario {
   }) => Effect.Effect<void, unknown>
 }
 
-interface FlowAuthor<
-  FlowId extends string,
-  ScreenLabel extends string,
-  UiElement extends string,
-> {
-  readonly state: <
-    const StateId extends string,
-    const Metadata extends FlowStateMetadata<ScreenLabel, UiElement>,
-  >(
+interface FlowAuthor<FlowId extends string, ScreenLabel extends string, UiElement extends string> {
+  readonly state: <const StateId extends string, const Metadata extends FlowStateMetadata<ScreenLabel, UiElement>>(
     id: StateId,
     metadata: Metadata,
   ) => FlowState<FlowId, StateId, Metadata>
-  readonly program: <
-    const States extends NonEmpty<AnyFlowState<FlowId>>,
-    Error,
-    Requirements,
-  >(
+  readonly program: <const States extends NonEmpty<AnyFlowState<FlowId>>, Error, Requirements>(
     states: States,
-    run: (
-      context: FlowRunContext<FlowId, States>,
-    ) => Effect.Effect<void, Error, Requirements>,
+    run: (context: FlowRunContext<FlowId, States>) => Effect.Effect<void, Error, Requirements>,
   ) => FlowProgram<FlowId, States, Error, Requirements>
 }
 
@@ -129,19 +104,11 @@ export function defineExecutableFlow<
     readonly description: string
   },
   build: (
-    author: FlowAuthor<
-      FlowId,
-      TaxonomyItemId<ScreenLabels>,
-      TaxonomyItemId<UiElements>
-    >,
+    author: FlowAuthor<FlowId, TaxonomyItemId<ScreenLabels>, TaxonomyItemId<UiElements>>,
   ) => FlowProgram<FlowId, States, Error, Requirements>,
 ): ExecutableFlow<FlowId, States, Error, Requirements, GroupId> {
   void taxonomies
-  const author: FlowAuthor<
-    FlowId,
-    TaxonomyItemId<ScreenLabels>,
-    TaxonomyItemId<UiElements>
-  > = {
+  const author: FlowAuthor<FlowId, TaxonomyItemId<ScreenLabels>, TaxonomyItemId<UiElements>> = {
     state: (id, metadata) => ({
       [FlowStateTypeId]: (flow) => flow,
       id,
@@ -184,9 +151,7 @@ export function executeFlow<
   options: {
     readonly driver: Driver
     readonly through?: States[number]
-    readonly capture: (
-      state: States[number],
-    ) => Effect.Effect<void, CaptureError>
+    readonly capture: (state: States[number]) => Effect.Effect<void, CaptureError>
   },
 ): Effect.Effect<
   void,
@@ -199,19 +164,17 @@ export function executeFlow<
       let index = 0
       yield* flow.run({
         driver: options.driver,
-        checkpoint: (state) => Effect.gen(function* () {
-          const expected = flow.states[index]
-          if (state !== expected) {
-            return yield* Effect.fail(
-              new FlowCheckpointOrderError(
-                expected?.address ?? "the end of the flow",
-                state.address,
-              ),
-            )
-          }
-          index++
-          yield* options.capture(state)
-        }),
+        checkpoint: (state) =>
+          Effect.gen(function* () {
+            const expected = flow.states[index]
+            if (state !== expected) {
+              return yield* Effect.fail(
+                new FlowCheckpointOrderError(expected?.address ?? "the end of the flow", state.address),
+              )
+            }
+            index++
+            yield* options.capture(state)
+          }),
       })
       const missing = flow.states[index]
       if (missing) return yield* Effect.fail(new FlowStateNotReachedError(missing.address))
@@ -221,28 +184,25 @@ export function executeFlow<
   return Effect.gen(function* () {
     const reached = yield* Deferred.make<void>()
     let index = 0
-    const program = flow.run({
-      driver: options.driver,
-      checkpoint: (state) => Effect.gen(function* () {
-        const expected = flow.states[index]
-        if (state !== expected) {
-          return yield* Effect.fail(
-            new FlowCheckpointOrderError(
-              expected?.address ?? "the end of the flow",
-              state.address,
-            ),
-          )
-        }
-        index++
-        if (state !== target) return
-        return yield* options.capture(state).pipe(
-          Effect.andThen(Deferred.succeed(reached, undefined)),
-          Effect.andThen(Effect.never),
-        )
-      }),
-    }).pipe(
-      Effect.andThen(Effect.fail(new FlowStateNotReachedError(target.address))),
-    )
+    const program = flow
+      .run({
+        driver: options.driver,
+        checkpoint: (state) =>
+          Effect.gen(function* () {
+            const expected = flow.states[index]
+            if (state !== expected) {
+              return yield* Effect.fail(
+                new FlowCheckpointOrderError(expected?.address ?? "the end of the flow", state.address),
+              )
+            }
+            index++
+            if (state !== target) return
+            return yield* options
+              .capture(state)
+              .pipe(Effect.andThen(Deferred.succeed(reached, undefined)), Effect.andThen(Effect.never))
+          }),
+      })
+      .pipe(Effect.andThen(Effect.fail(new FlowStateNotReachedError(target.address))))
     yield* Effect.raceFirst(Deferred.await(reached), program)
   })
 }
@@ -271,9 +231,7 @@ export function executableScenario<
     clientIsolation: options.clientIsolation ?? "shared",
     states: flow.states,
     run: ({ driver, through, capture }) => {
-      const target = through === undefined
-        ? undefined
-        : flow.states.find((state) => state.id === through)
+      const target = through === undefined ? undefined : flow.states.find((state) => state.id === through)
       if (through !== undefined && target === undefined) {
         return Effect.fail(new Error(`Unknown state ${JSON.stringify(`${flow.id}/${through}`)}`))
       }

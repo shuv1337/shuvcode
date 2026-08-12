@@ -5,20 +5,10 @@ import type * as OpenCodeTui from "../driver/client.js"
 import type { Llm } from "../driver/llm.js"
 import type * as OpenCodeServer from "../driver/server.js"
 import type * as OpenCodeSdk from "../driver/opencode.js"
-import type {
-  OpenCodeConfig,
-  OpenCodeTuiConfig,
-  Project,
-  ProjectFileSystem,
-  Setup,
-} from "../project.js"
+import type { OpenCodeConfig, OpenCodeTuiConfig, Project, ProjectFileSystem, Setup } from "../project.js"
 export type * from "../project.js"
-export type ScriptServerLaunchError = Effect.Error<
-  ReturnType<OpenCodeServer.Server["launch"]>
->
-export type ScriptServerKillError = Effect.Error<
-  ReturnType<OpenCodeServer.Server["kill"]>
->
+export type ScriptServerLaunchError = Effect.Error<ReturnType<OpenCodeServer.Server["launch"]>>
+export type ScriptServerKillError = Effect.Error<ReturnType<OpenCodeServer.Server["kill"]>>
 
 export interface ScriptServer {
   /** Launches the one shared OpenCode server for this script. */
@@ -48,9 +38,7 @@ export interface ManualScriptContext extends Omit<ScriptContext, "opencode" | "t
 }
 
 export type ScriptRun = (context: ScriptContext) => Effect.Effect<void, unknown>
-export type ManualScriptRun = (
-  context: ManualScriptContext,
-) => Effect.Effect<void, unknown>
+export type ManualScriptRun = (context: ManualScriptContext) => Effect.Effect<void, unknown>
 
 export interface AutomaticScriptDefinition {
   /** Declares the isolated project OpenCode runs against. */
@@ -88,9 +76,7 @@ export interface ManualScriptDefinition {
   readonly run: ManualScriptRun
 }
 
-export type ScriptDefinitionInput =
-  | AutomaticScriptDefinition
-  | ManualScriptDefinition
+export type ScriptDefinitionInput = AutomaticScriptDefinition | ManualScriptDefinition
 
 export type ScriptDefinition = ScriptDefinitionInput & {
   readonly kind: "opencode-drive/script"

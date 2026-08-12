@@ -8,16 +8,12 @@ export default defineScript({
     Effect.gen(function* () {
       const shells = yield* tools.control("shell")
       const options = yield* Effect.tryPromise(async () => {
-        const config: unknown = await Bun.file(
-          `${artifacts}/files/.opencode/opencode.jsonc`,
-        ).json()
+        const config: unknown = await Bun.file(`${artifacts}/files/.opencode/opencode.jsonc`).json()
         if (typeof config !== "object" || config === null || !("plugins" in config))
           throw new Error("script config has no plugins")
         const plugins = config.plugins
         if (!Array.isArray(plugins)) throw new Error("script plugins are not an array")
-        const plugin = plugins.find(
-          (value) => typeof value === "object" && value !== null && "options" in value,
-        )
+        const plugin = plugins.find((value) => typeof value === "object" && value !== null && "options" in value)
         if (typeof plugin !== "object" || plugin === null || !("options" in plugin))
           throw new Error("Drive tool plugin is missing")
         const value = plugin.options
@@ -50,8 +46,6 @@ export default defineScript({
       yield* shell.progress("script progress\n")
       yield* shell.succeed({ output: "script success\n", exit: 0 })
       const events = yield* Fiber.join(response)
-      yield* Effect.promise(() =>
-        Bun.write(`${artifacts}/tool-control-events.jsonl`, events),
-      )
+      yield* Effect.promise(() => Bun.write(`${artifacts}/tool-control-events.jsonl`, events))
     }),
 })

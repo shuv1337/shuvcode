@@ -10,9 +10,7 @@ type Defined<Definition> = Definition & {
 }
 
 export function defineScript(script: ManualScriptDefinition): Defined<ManualScriptDefinition>
-export function defineScript(
-  script: AutomaticScriptDefinition,
-): Defined<AutomaticScriptDefinition>
+export function defineScript(script: AutomaticScriptDefinition): Defined<AutomaticScriptDefinition>
 export function defineScript(script: ScriptDefinitionInput): ScriptDefinition {
   return { ...script, kind: "opencode-drive/script" }
 }

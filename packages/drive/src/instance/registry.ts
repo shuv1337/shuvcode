@@ -31,11 +31,7 @@ export type Manifest = InstanceManifest | InitializedManifest
 export function registryDirectory() {
   return (
     process.env.DRIVE_REGISTRY_DIR ??
-    join(
-      process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"),
-      "opencode-drive",
-      "instances",
-    )
+    join(process.env.XDG_STATE_HOME ?? join(homedir(), ".local", "state"), "opencode-drive", "instances")
   )
 }
 
@@ -60,26 +56,18 @@ export async function initializeManifest(
   await withLock(name, false, async () => {
     let existing = await read(manifestPath(name))
     if (existing?.status === "initialized") {
-      if (
-        options.temporary &&
-        options.adoptPid !== undefined &&
-        existing.pid === options.adoptPid
-      ) {
+      if (options.temporary && options.adoptPid !== undefined && existing.pid === options.adoptPid) {
         initialized = { ...existing, pid: process.pid }
         await write(initialized)
         return
       }
       if (!keepInitialized(existing)) {
-        await Promise.all([
-          rm(manifestPath(name), { force: true }),
-          rm(controlPath(name), { force: true }),
-        ])
+        await Promise.all([rm(manifestPath(name), { force: true }), rm(controlPath(name), { force: true })])
         existing = undefined
       } else {
         let available = existing
         if (existing.pid !== undefined && existing.pid !== process.pid) {
-          if (isProcessAlive(existing.pid))
-            throw new Error(`drive instance "${name}" is already starting`)
+          if (isProcessAlive(existing.pid)) throw new Error(`drive instance "${name}" is already starting`)
           const { pid: _, ...released } = existing
           available = released
         }
@@ -92,8 +80,7 @@ export async function initializeManifest(
         return
       }
     }
-    if (existing && isProcessAlive(existing.pid))
-      throw new Error(`drive instance "${name}" is already running`)
+    if (existing && isProcessAlive(existing.pid)) throw new Error(`drive instance "${name}" is already running`)
     initialized = {
       version: 1,
       name,
@@ -103,10 +90,7 @@ export async function initializeManifest(
       status: "initialized",
       ...(options.temporary ? { temporary: true, pid: process.pid } : {}),
     }
-    await Promise.all([
-      rm(manifestPath(name), { force: true }),
-      rm(controlPath(name), { force: true }),
-    ])
+    await Promise.all([rm(manifestPath(name), { force: true }), rm(controlPath(name), { force: true })])
     await write(initialized)
   })
   if (!initialized) throw new Error(`failed to initialize drive instance "${name}"`)
@@ -116,16 +100,11 @@ export async function initializeManifest(
 export async function register(manifest: InstanceManifest) {
   if (manifest.visible) {
     const visible = (await listInstances()).find((instance) => instance.visible)
-    if (visible)
-      throw new Error(`visible drive instance "${visible.name}" is already running`)
+    if (visible) throw new Error(`visible drive instance "${visible.name}" is already running`)
   }
   await withLock(manifest.name, false, async () => {
     const existing = await read(manifestPath(manifest.name))
-    if (
-      existing?.status === "initialized" &&
-      existing.pid !== undefined &&
-      existing.pid !== manifest.pid
-    )
+    if (existing?.status === "initialized" && existing.pid !== undefined && existing.pid !== manifest.pid)
       throw new Error(`drive instance "${manifest.name}" changed ownership`)
     if (existing && existing.status !== "initialized" && isProcessAlive(existing.pid))
       throw new Error(`drive instance "${manifest.name}" is already running`)
@@ -156,26 +135,20 @@ async function markStatus(name: string, pid: number, status: InstanceManifest["s
 
 export async function resolveInstance(name?: string, options: { readonly ready?: boolean } = {}) {
   const instances = await listInstances()
-  const manifest = name
-    ? instances.find((item) => item.name === name)
-    : instances.find((item) => item.visible)
+  const manifest = name ? instances.find((item) => item.name === name) : instances.find((item) => item.visible)
   if (!manifest) {
     if (!name && instances.length > 0)
       throw new Error(
         `no visible drive instance is running; pass --name (${instances.map((item) => item.name).join(", ")})`,
       )
-    throw new Error(
-      name ? `drive instance "${name}" was not found` : "no drive instances are running",
-    )
+    throw new Error(name ? `drive instance "${name}" was not found` : "no drive instances are running")
   }
   if (options.ready !== false && manifest.status !== "ready")
     throw new Error(`drive instance "${manifest.name}" is still starting`)
   return manifest
 }
 
-export async function resolveVisibleInstance(
-  options: { readonly ready?: boolean } = {},
-) {
+export async function resolveVisibleInstance(options: { readonly ready?: boolean } = {}) {
   const manifest = (await listInstances()).find((instance) => instance.visible)
   if (manifest && options.ready !== false && manifest.status !== "ready")
     throw new Error(`drive instance "${manifest.name}" is still starting`)
@@ -183,9 +156,7 @@ export async function resolveVisibleInstance(
 }
 
 export async function listInstances() {
-  return (await listManifests()).filter(
-    (manifest): manifest is InstanceManifest => manifest.status !== "initialized",
-  )
+  return (await listManifests()).filter((manifest): manifest is InstanceManifest => manifest.status !== "initialized")
 }
 
 export async function listManifests() {
@@ -228,10 +199,7 @@ export async function unregister(name: string, pid: number) {
   await withLock(name, true, async () => {
     const manifest = await read(manifestPath(name))
     if (!manifest || manifest.status === "initialized" || manifest.pid !== pid) return
-    await Promise.all([
-      rm(manifestPath(name), { force: true }),
-      rm(controlPath(name), { force: true }),
-    ])
+    await Promise.all([rm(manifestPath(name), { force: true }), rm(controlPath(name), { force: true })])
   })
 }
 
@@ -240,17 +208,11 @@ async function prune(name: string, pid?: number) {
     const manifest = await read(manifestPath(name))
     if (manifest?.status === "initialized") {
       if (keepInitialized(manifest)) return
-      await Promise.all([
-        rm(manifestPath(name), { force: true }),
-        rm(controlPath(name), { force: true }),
-      ])
+      await Promise.all([rm(manifestPath(name), { force: true }), rm(controlPath(name), { force: true })])
       return
     }
     if (manifest && (manifest.pid !== pid || isProcessAlive(manifest.pid))) return
-    await Promise.all([
-      rm(manifestPath(name), { force: true }),
-      rm(controlPath(name), { force: true }),
-    ])
+    await Promise.all([rm(manifestPath(name), { force: true }), rm(controlPath(name), { force: true })])
   })
 }
 
@@ -328,18 +290,12 @@ function isManifest(value: unknown): value is Manifest {
   if (manifest.status === "initialized") return typeof manifest.artifacts === "string"
   const instance = value as Partial<InstanceManifest>
   const endpoints = instance.endpoints
-  return (
-    typeof instance.pid === "number" &&
-    typeof endpoints?.ui === "string" &&
-    typeof endpoints.backend === "string"
-  )
+  return typeof instance.pid === "number" && typeof endpoints?.ui === "string" && typeof endpoints.backend === "string"
 }
 
 export function validateName(name: string) {
   if (!isValidName(name))
-    throw new Error(
-      "instance names must contain 1-64 letters, numbers, dots, underscores, or dashes",
-    )
+    throw new Error("instance names must contain 1-64 letters, numbers, dots, underscores, or dashes")
   return name
 }
 

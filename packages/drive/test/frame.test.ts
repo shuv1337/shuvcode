@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  BlockGlyphs,
-  CellHeight,
-  CellWidth,
-  TextStyle,
-  drawBlockGlyph,
-} from "../src/frame/index.js"
+import { BlockGlyphs, CellHeight, CellWidth, TextStyle, drawBlockGlyph } from "../src/frame/index.js"
 
 describe("frame geometry", () => {
   it("draws exactly the geometric block and bar primitives", () => {
@@ -23,8 +17,7 @@ describe("frame geometry", () => {
   it("stretches solid blocks across cells but keeps bars centered", () => {
     const rects: Array<readonly [number, number, number, number]> = []
     const context = {
-      fillRect: (x: number, y: number, width: number, height: number) =>
-        void rects.push([x, y, width, height]),
+      fillRect: (x: number, y: number, width: number, height: number) => void rects.push([x, y, width, height]),
     }
     expect(drawBlockGlyph(context, "█", 0, 0, 2)).toBe(true)
     expect(drawBlockGlyph(context, "┃", 0, 0, 2)).toBe(true)
@@ -38,8 +31,7 @@ describe("frame geometry", () => {
   it("draws light box borders as connected pixel geometry", () => {
     const rects: Array<readonly [number, number, number, number]> = []
     const context = {
-      fillRect: (x: number, y: number, width: number, height: number) =>
-        void rects.push([x, y, width, height]),
+      fillRect: (x: number, y: number, width: number, height: number) => void rects.push([x, y, width, height]),
     }
     expect(drawBlockGlyph(context, "│", 0, 0)).toBe(true)
     expect(drawBlockGlyph(context, "─", CellWidth, 0)).toBe(true)
@@ -49,16 +41,11 @@ describe("frame geometry", () => {
     expect(
       rects.every(
         ([x, y, width, height]) =>
-          Number.isInteger(x) &&
-          Number.isInteger(y) &&
-          Number.isInteger(width) &&
-          Number.isInteger(height),
+          Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(width) && Number.isInteger(height),
       ),
     ).toBe(true)
     const pixels = rects.flatMap(([x, y, width, height]) =>
-      Array.from({ length: width * height }, (_, index) =>
-        `${x + (index % width)},${y + Math.floor(index / width)}`,
-      ),
+      Array.from({ length: width * height }, (_, index) => `${x + (index % width)},${y + Math.floor(index / width)}`),
     )
     expect(new Set(pixels).size).toBe(pixels.length)
   })
@@ -66,8 +53,7 @@ describe("frame geometry", () => {
   it("draws diagonal quadrant blocks edge-to-edge", () => {
     const rects: Array<readonly [number, number, number, number]> = []
     const context = {
-      fillRect: (x: number, y: number, width: number, height: number) =>
-        void rects.push([x, y, width, height]),
+      fillRect: (x: number, y: number, width: number, height: number) => void rects.push([x, y, width, height]),
     }
     expect(drawBlockGlyph(context, "▚", 0, 0)).toBe(true)
     expect(drawBlockGlyph(context, "▞", CellWidth, 0)).toBe(true)

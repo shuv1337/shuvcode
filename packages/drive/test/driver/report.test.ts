@@ -1,11 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
-import {
-  AbsolutePath,
-  decodeAbsolutePath,
-  decodeRunReport,
-} from "../../src/driver/report.js"
+import { AbsolutePath, decodeAbsolutePath, decodeRunReport } from "../../src/driver/report.js"
 
 const negotiated = {
   _tag: "Negotiated" as const,
@@ -20,12 +16,8 @@ describe("driver report", () => {
   it.effect("brands POSIX and Windows absolute paths", () =>
     Effect.gen(function* () {
       expect(yield* decodeAbsolutePath("/tmp/drive")).toBe("/tmp/drive")
-      expect(yield* decodeAbsolutePath("C:\\drive\\output.mp4")).toBe(
-        "C:\\drive\\output.mp4",
-      )
-      expect(yield* decodeAbsolutePath("\\\\server\\share\\output.mp4")).toBe(
-        "\\\\server\\share\\output.mp4",
-      )
+      expect(yield* decodeAbsolutePath("C:\\drive\\output.mp4")).toBe("C:\\drive\\output.mp4")
+      expect(yield* decodeAbsolutePath("\\\\server\\share\\output.mp4")).toBe("\\\\server\\share\\output.mp4")
     }),
   )
 

@@ -6,16 +6,10 @@ const promiseDiagnostic = (line: number) =>
 
 describe("Effect script check hints", () => {
   test.each([
+    ['defineScript({ run: async ({ ui }) => { await ui.submit("Hello") } })', "run: ({ ui }) =>"],
+    ["defineScript({ setup: () => Promise.resolve() })", "setup: ({ fs }) => fs.writeFile"],
     [
-      'defineScript({ run: async ({ ui }) => { await ui.submit("Hello") } })',
-      "run: ({ ui }) =>",
-    ],
-    [
-      'defineScript({ setup: () => Promise.resolve() })',
-      "setup: ({ fs }) => fs.writeFile",
-    ],
-    [
-      'defineScript({ run: ({ ui }) => ui.waitFor(() => Promise.resolve(false)) })',
+      "defineScript({ run: ({ ui }) => ui.waitFor(() => Promise.resolve(false)) })",
       "ui.waitFor((state) => Effect.succeed",
     ],
   ])("describes the failing Promise callback", (callback, expected) => {

@@ -16,12 +16,7 @@ export async function stop(name?: string) {
     const current: unknown = await Bun.file(manifestPath(manifest.name))
       .json()
       .catch(() => undefined)
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      !("pid" in current) ||
-      current.pid !== manifest.pid
-    ) {
+    if (typeof current !== "object" || current === null || !("pid" in current) || current.pid !== manifest.pid) {
       for (const screenshot of result.screenshots) console.log(screenshot)
       if (result.recording) {
         logSuccess(`Video successfully created: ${result.recording}`)

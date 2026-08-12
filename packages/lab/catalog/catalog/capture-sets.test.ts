@@ -1,21 +1,26 @@
 import { describe, expect, test } from "bun:test"
 import { resolve } from "node:path"
-import {
-  captureMatrixManifest,
-  captureSetId,
-  captureSetLabel,
-  parseCaptureOptions,
-} from "../scripts/capture-sets"
+import { captureMatrixManifest, captureSetId, captureSetLabel, parseCaptureOptions } from "../scripts/capture-sets"
 
 describe("capture revision sets", () => {
   test("parses repeated revisions and themes", () => {
-    expect(parseCaptureOptions([
-      "--opencode", "./opencode",
-      "--revision", "v2~1",
-      "--revision", "v2",
-      "--theme", "opencode",
-      "--theme", "rosepine",
-    ], "/default")).toEqual({
+    expect(
+      parseCaptureOptions(
+        [
+          "--opencode",
+          "./opencode",
+          "--revision",
+          "v2~1",
+          "--revision",
+          "v2",
+          "--theme",
+          "opencode",
+          "--theme",
+          "rosepine",
+        ],
+        "/default",
+      ),
+    ).toEqual({
       opencode: resolve("opencode"),
       revisions: ["v2~1", "v2"],
       themes: ["opencode", "rosepine"],
@@ -56,12 +61,17 @@ describe("capture revision sets", () => {
       committedAt: "2026-08-12T12:00:00Z",
       theme: "opencode",
     }
-    const manifest = captureMatrixManifest([variant], [{
-      id: "home",
-      title: "Home",
-      category: "system",
-      frames: [{ variantId: "opencode", src: "captures/opencode/home.frame.json", cols: 2, rows: 2 }],
-    }])
+    const manifest = captureMatrixManifest(
+      [variant],
+      [
+        {
+          id: "home",
+          title: "Home",
+          category: "system",
+          frames: [{ variantId: "opencode", src: "captures/opencode/home.frame.json", cols: 2, rows: 2 }],
+        },
+      ],
+    )
 
     expect(manifest.variants).toEqual([variant])
     expect(manifest.captures[0]?.frames).toEqual([

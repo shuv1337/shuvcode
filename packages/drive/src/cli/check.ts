@@ -8,7 +8,10 @@ export async function check(file: string) {
     try {
       await checkScript(artifacts, file)
     } catch (error) {
-      const source = await Bun.file(file).slice(0, 256 * 1024).text().catch(() => "")
+      const source = await Bun.file(file)
+        .slice(0, 256 * 1024)
+        .text()
+        .catch(() => "")
       const hint = effectScriptHint(source, message(error))
       if (hint !== undefined) throw new Error(`${message(error)}\n\n${hint}`, { cause: error })
       throw error
@@ -63,9 +66,7 @@ function diagnosticSource(source: string, diagnostics: string) {
   const numbers = [...diagnostics.matchAll(/(?::(\d+):\d+|\((\d+),\d+\))/g)]
     .map((match) => Number(match[1] ?? match[2]))
     .filter((line) => Number.isInteger(line) && line > 0)
-  return numbers.length === 0
-    ? source
-    : numbers.map((line) => lines[line - 1] ?? "").join("\n")
+  return numbers.length === 0 ? source : numbers.map((line) => lines[line - 1] ?? "").join("\n")
 }
 
 function message(error: unknown) {

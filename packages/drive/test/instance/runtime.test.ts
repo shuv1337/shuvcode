@@ -6,18 +6,13 @@ import { ConfigProvider, Effect, Exit, Fiber } from "effect"
 import { initializeInstance } from "../../src/instance/instance.js"
 import * as OpenCodeInstance from "../../src/instance/runtime.js"
 
-const fakeOpenCode = [
-  process.execPath,
-  resolve("test", "fixtures", "fake-opencode.ts"),
-]
+const fakeOpenCode = [process.execPath, resolve("test", "fixtures", "fake-opencode.ts")]
 
 it.live("stops a TUI while its readiness check is pending", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const artifacts = yield* Effect.promise(() => initializeInstance())
-      yield* Effect.addFinalizer(() =>
-        Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-      )
+      yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
       const instance = yield* OpenCodeInstance.make({
         artifacts,
         name: "pending-client-test",
@@ -26,10 +21,7 @@ it.live("stops a TUI while its readiness check is pending", () =>
       })
 
       yield* instance.launchServer
-      const launch = yield* instance.launchTui("pending").pipe(
-        Effect.exit,
-        Effect.forkChild,
-      )
+      const launch = yield* instance.launchTui("pending").pipe(Effect.exit, Effect.forkChild)
       yield* Effect.sleep(100)
 
       const started = Date.now()
@@ -44,9 +36,7 @@ it.live("reads the database target from Effect config", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const artifacts = yield* Effect.promise(() => initializeInstance())
-      yield* Effect.addFinalizer(() =>
-        Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-      )
+      yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
       const instance = yield* OpenCodeInstance.make({
         artifacts,
         name: "database-config-test",

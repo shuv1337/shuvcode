@@ -1641,7 +1641,6 @@ kbd {
   .viewer-button kbd {
     display: none;
   }
-
 }
 
 @media (max-width: 460px) {

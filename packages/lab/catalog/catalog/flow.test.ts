@@ -62,17 +62,15 @@ describe("executable catalog flows", () => {
     const captured: Array<string> = []
     const flow = fixture(trace)
 
-    await Effect.runPromise(executeFlow(flow, {
-      driver,
-      capture: (state) => Effect.sync(() => captured.push(state.address)),
-    }))
+    await Effect.runPromise(
+      executeFlow(flow, {
+        driver,
+        capture: (state) => Effect.sync(() => captured.push(state.address)),
+      }),
+    )
 
     expect(trace).toEqual(["first", "second", "third"])
-    expect(captured).toEqual([
-      "test-flow/first",
-      "test-flow/second",
-      "test-flow/third",
-    ])
+    expect(captured).toEqual(["test-flow/first", "test-flow/second", "test-flow/third"])
   })
 
   test("captures one selected state and interrupts the remaining program", async () => {
@@ -80,11 +78,13 @@ describe("executable catalog flows", () => {
     const captured: Array<string> = []
     const flow = fixture(trace)
 
-    await Effect.runPromise(executeFlow(flow, {
-      driver,
-      through: flow.states[1],
-      capture: (state) => Effect.sync(() => captured.push(state.address)),
-    }))
+    await Effect.runPromise(
+      executeFlow(flow, {
+        driver,
+        through: flow.states[1],
+        capture: (state) => Effect.sync(() => captured.push(state.address)),
+      }),
+    )
 
     expect(trace).toEqual(["first", "second"])
     expect(captured).toEqual(["test-flow/second"])
@@ -106,10 +106,12 @@ describe("executable catalog flows", () => {
       },
     )
 
-    const error = await Effect.runPromise(executeFlow(incomplete, {
-      driver,
-      capture: () => Effect.void,
-    }).pipe(Effect.flip))
+    const error = await Effect.runPromise(
+      executeFlow(incomplete, {
+        driver,
+        capture: () => Effect.void,
+      }).pipe(Effect.flip),
+    )
 
     expect(error).toBeInstanceOf(FlowStateNotReachedError)
     expect(error).toMatchObject({ address: "incomplete-flow/missing" })

@@ -5,34 +5,30 @@
     {
       "action": "*",
       "resource": "*",
-      "effect": "allow"
-    }
+      "effect": "allow",
+    },
   ],
   "providers": {
     "simulation": {
       "name": "Simulation",
       "package": "@opencode-ai/ai/providers/openai/chat",
       "settings": {
-        "apiKey": "sim-key"
+        "apiKey": "sim-key",
       },
       "models": {
         "gpt-sim-model": {
           "name": "Simulated Model",
           "capabilities": {
             "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
+            "input": ["text"],
+            "output": ["text"],
           },
           "limit": {
             "context": 128000,
-            "output": 16000
-          }
-        }
-      }
-    }
-  }
+            "output": 16000,
+          },
+        },
+      },
+    },
+  },
 }

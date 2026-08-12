@@ -101,34 +101,29 @@ describe("replayRecording", () => {
   test("captures terminal state at sample boundaries instead of every event", async () => {
     let snapshots = 0
     let dirty = false
-    const frames = await replay(
-      await recording(Array.from({ length: 101 }, (_, atMs) => [atMs, "x"])),
-      {
-        fps: 10,
-        terminalFactory: async (cols, rows) => ({
-          write: () => {
-            dirty = true
-          },
-          resize: () => {
-            dirty = true
-          },
-          finish: () => false,
-          snapshot: () => {
-            snapshots++
-            return {
-              cols,
-              rows,
-              cursor: { row: 0, col: 0, visible: false },
-              lines: Array.from({ length: rows }, (_, row) => ({
-                spans: row === 0 && dirty
-                  ? [{ text: "ready", width: 5, fg: 0xffffff, bg: 0x080808, attributes: 0 }]
-                  : [],
-              })),
-            }
-          },
-        }),
-      },
-    )
+    const frames = await replay(await recording(Array.from({ length: 101 }, (_, atMs) => [atMs, "x"])), {
+      fps: 10,
+      terminalFactory: async (cols, rows) => ({
+        write: () => {
+          dirty = true
+        },
+        resize: () => {
+          dirty = true
+        },
+        finish: () => false,
+        snapshot: () => {
+          snapshots++
+          return {
+            cols,
+            rows,
+            cursor: { row: 0, col: 0, visible: false },
+            lines: Array.from({ length: rows }, (_, row) => ({
+              spans: row === 0 && dirty ? [{ text: "ready", width: 5, fg: 0xffffff, bg: 0x080808, attributes: 0 }] : [],
+            })),
+          }
+        },
+      }),
+    })
 
     expect(frames.map((frame) => frame.atMs)).toEqual([0, 100])
     expect(snapshots).toBe(2)

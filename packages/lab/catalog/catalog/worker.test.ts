@@ -10,8 +10,6 @@ describe("catalog worker", () => {
 
   test("strips the catalog prefix from assets", () => {
     expect(assetPath("/lab/catalog/catalog.json")).toBe("/catalog.json")
-    expect(assetPath("/lab/catalog/captures/opencode/home.frame.json")).toBe(
-      "/captures/opencode/home.frame.json",
-    )
+    expect(assetPath("/lab/catalog/captures/opencode/home.frame.json")).toBe("/captures/opencode/home.frame.json")
   })
 })

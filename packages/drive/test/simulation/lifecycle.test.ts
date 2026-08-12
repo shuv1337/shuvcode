@@ -1,10 +1,6 @@
 import { describe, expect, it, test } from "@effect/vitest"
 import { Effect, Exit, Fiber, Scope } from "effect"
-import {
-  SimulationProtocol,
-  defaultBackendPort,
-  defaultPort,
-} from "../../src/client/index.js"
+import { SimulationProtocol, defaultBackendPort, defaultPort } from "../../src/client/index.js"
 import * as SimulationConnector from "../../src/simulation/connector.js"
 import { type ReceivedRequest, sendError, sendResult, startTransportPeer } from "./transport-peer.js"
 
@@ -30,12 +26,7 @@ describe("OpenCode simulation transport lifecycle", () => {
   test("exports default ports and the protocol namespaces", () => {
     expect(defaultPort).toBe(40900)
     expect(defaultBackendPort).toBe(40950)
-    expect(Object.keys(SimulationProtocol).sort()).toEqual([
-      "Backend",
-      "Frontend",
-      "Handshake",
-      "JsonRpc",
-    ])
+    expect(Object.keys(SimulationProtocol).sort()).toEqual(["Backend", "Frontend", "Handshake", "JsonRpc"])
   })
 
   it.live("correlates concurrent UI responses by ID and ignores unknown IDs", () =>
@@ -105,9 +96,7 @@ describe("OpenCode simulation transport lifecycle", () => {
 
   it.live("backend closed resolves when its peer closes", () =>
     Effect.gen(function* () {
-      const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(socket, request, { attached: true }),
-      )
+      const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, { attached: true }))
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const connection = yield* SimulationConnector.backend(peer.url)
 

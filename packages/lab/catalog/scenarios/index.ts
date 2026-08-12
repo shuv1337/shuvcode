@@ -27,7 +27,7 @@ export const executableScenarios = [
 
 export const executableFlows = executableScenarios.map((scenario) => scenario.flow)
 
-type RegisteredFlow = typeof executableFlows[number]
+type RegisteredFlow = (typeof executableFlows)[number]
 type RegisteredState = RegisteredFlow["states"][number]
 type StateStep<State extends RegisteredState> = {
   readonly capture: State["id"]
@@ -40,9 +40,7 @@ type FlowSteps<Flow extends RegisteredFlow> = Flow["states"] extends readonly [
   : never
 
 export const executableScreens = Object.fromEntries(
-  executableFlows.flatMap((flow) =>
-    flow.states.map((state) => [state.id, state.metadata.screen] as const),
-  ),
+  executableFlows.flatMap((flow) => flow.states.map((state) => [state.id, state.metadata.screen] as const)),
 ) as {
   readonly [State in RegisteredState as State["id"]]: State["metadata"]["screen"]
 }
@@ -51,12 +49,15 @@ export function executableFlowDefinitions<const GroupId extends RegisteredFlow["
   return Object.fromEntries(
     executableFlows
       .filter((flow) => flow.group.id === groupId)
-      .map((flow) => [flow.id, {
-        title: flow.title,
-        description: flow.description,
-        replayable: true as const,
-        steps: flow.states.map((state) => ({ capture: state.id, ...state.metadata.step })),
-      }]),
+      .map((flow) => [
+        flow.id,
+        {
+          title: flow.title,
+          description: flow.description,
+          replayable: true as const,
+          steps: flow.states.map((state) => ({ capture: state.id, ...state.metadata.step })),
+        },
+      ]),
   ) as unknown as {
     readonly [Flow in RegisteredFlow as Flow["group"]["id"] extends GroupId ? Flow["id"] : never]: {
       readonly title: Flow["title"]

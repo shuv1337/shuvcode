@@ -1,11 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useReducer, useRef, useState } from "react"
-import type {
-  BrowseMode,
-  Catalog,
-  Facet,
-  FacetSelections,
-  Taxonomy,
-} from "./catalog"
+import type { BrowseMode, Catalog, Facet, FacetSelections, Taxonomy } from "./catalog"
 import { buildFacetIndex, emptyFacetSelections, facetValues, filterFlows, filterScreens, frameFor } from "./catalog"
 import { CommandPalette } from "./components/CommandPalette"
 import { ContactSheet } from "./components/ContactSheet"
@@ -114,7 +108,12 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         gridFocusTick: state.gridFocusTick + 1,
       }
     case "clear-facets":
-      return { ...state, facets: emptyFacetSelections, selectedScreenId: undefined, gridFocusTick: state.gridFocusTick + 1 }
+      return {
+        ...state,
+        facets: emptyFacetSelections,
+        selectedScreenId: undefined,
+        gridFocusTick: state.gridFocusTick + 1,
+      }
     case "reset-view":
       return {
         ...state,
@@ -165,9 +164,7 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         gridFocusTick: state.viewerOpen ? state.gridFocusTick : state.gridFocusTick + 1,
       }
     case "toggle-palette":
-      return state.paletteOpen
-        ? uiReducer(state, { type: "close-palette" })
-        : { ...state, paletteOpen: true }
+      return state.paletteOpen ? uiReducer(state, { type: "close-palette" }) : { ...state, paletteOpen: true }
     case "restore-location":
       return {
         ...state,
@@ -218,8 +215,8 @@ export function App({ catalog }: AppProps) {
     if (index >= 0) return index
     const opencode = catalog.variants.findIndex((variant) => variant.id === "opencode")
     if (opencode >= 0) return opencode
-    const coverage = catalog.variants.map((variant) =>
-      catalog.screens.filter((screen) => frameFor(screen, variant.id) !== undefined).length,
+    const coverage = catalog.variants.map(
+      (variant) => catalog.screens.filter((screen) => frameFor(screen, variant.id) !== undefined).length,
     )
     return coverage.indexOf(Math.max(...coverage))
   })
@@ -251,12 +248,13 @@ export function App({ catalog }: AppProps) {
   const flows = useMemo(() => filterFlows(catalog.flows, ui.query), [catalog.flows, ui.query])
   const activeFlow = flows.find((flow) => flow.id === ui.activeFlowId) ?? flows[0]
   const viewerScreens = useMemo(
-    () => ui.mode === "flows" && activeFlow
-      ? activeFlow.steps.flatMap((step) => {
-          const screen = availableScreens.find((candidate) => candidate.id === step.screenId)
-          return screen ? [screen] : []
-        })
-      : screens,
+    () =>
+      ui.mode === "flows" && activeFlow
+        ? activeFlow.steps.flatMap((step) => {
+            const screen = availableScreens.find((candidate) => candidate.id === step.screenId)
+            return screen ? [screen] : []
+          })
+        : screens,
     [activeFlow, availableScreens, screens, ui.mode],
   )
   const selectedId = viewerScreens.some((screen) => screen.id === ui.selectedScreenId)
@@ -322,8 +320,7 @@ export function App({ catalog }: AppProps) {
       searchRef.current?.focus()
       return
     }
-    const hasFilters =
-      taxonomyValues.length > 0 || Object.values(ui.facets).some((values) => values.length > 0)
+    const hasFilters = taxonomyValues.length > 0 || Object.values(ui.facets).some((values) => values.length > 0)
     if (event.key === "Escape" && (ui.query !== "" || hasFilters)) {
       event.preventDefault()
       dispatch({ type: "reset-view" })
@@ -337,17 +334,21 @@ export function App({ catalog }: AppProps) {
   }, [])
 
   useEffect(() => {
-    window.history.replaceState(null, "", catalogBrowseUrl({
-      variantId: activeVariant.id,
-      mode: ui.mode,
-      query: ui.query,
-      screenLabels: ui.screenLabels,
-      uiElements: ui.uiElements,
-      surfaces: ui.facets.surface,
-      patterns: ui.facets.pattern,
-      features: ui.facets.feature,
-      states: ui.facets.state,
-    }))
+    window.history.replaceState(
+      null,
+      "",
+      catalogBrowseUrl({
+        variantId: activeVariant.id,
+        mode: ui.mode,
+        query: ui.query,
+        screenLabels: ui.screenLabels,
+        uiElements: ui.uiElements,
+        surfaces: ui.facets.surface,
+        patterns: ui.facets.pattern,
+        features: ui.facets.feature,
+        states: ui.facets.state,
+      }),
+    )
   }, [activeVariant.id, ui.facets, ui.mode, ui.query, ui.screenLabels, ui.uiElements])
 
   useEffect(() => {
@@ -375,12 +376,8 @@ export function App({ catalog }: AppProps) {
   useEffect(() => {
     const restore = () => {
       const location = readCatalogLocation(new URL(window.location.href))
-      const screenId = catalog.screens.some((screen) => screen.id === location.screenId)
-        ? location.screenId
-        : undefined
-      const flowId = catalog.flows.some((flow) => flow.id === location.flowId)
-        ? location.flowId
-        : undefined
+      const screenId = catalog.screens.some((screen) => screen.id === location.screenId) ? location.screenId : undefined
+      const flowId = catalog.flows.some((flow) => flow.id === location.flowId) ? location.flowId : undefined
       const nextVariant = catalog.variants.findIndex((variant) => variant.id === location.variantId)
       if (nextVariant >= 0) setVariantIndex(nextVariant)
       const mode = flowId
@@ -424,7 +421,14 @@ export function App({ catalog }: AppProps) {
           onQuery={(query) => dispatch({ type: "search", query })}
           onClearSearch={() => dispatch({ type: "clear-search" })}
           onOpenPalette={() => dispatch({ type: "open-palette" })}
-          onVariantSelect={(id) => setVariantIndex(Math.max(0, catalog.variants.findIndex((variant) => variant.id === id)))}
+          onVariantSelect={(id) =>
+            setVariantIndex(
+              Math.max(
+                0,
+                catalog.variants.findIndex((variant) => variant.id === id),
+              ),
+            )
+          }
         />
         {ui.mode !== "flows" ? (
           <>
@@ -480,9 +484,9 @@ export function App({ catalog }: AppProps) {
       {ui.viewerOpen && selectedScreen ? (
         <Viewer
           screen={selectedScreen}
-          identifier={ui.mode === "flows" && activeFlow?.replayable
-            ? `${activeFlow.id}/${selectedScreen.id}`
-            : selectedScreen.id}
+          identifier={
+            ui.mode === "flows" && activeFlow?.replayable ? `${activeFlow.id}/${selectedScreen.id}` : selectedScreen.id
+          }
           deepLink={deepLinkFor(selectedScreen.id, ui.mode === "flows" ? activeFlow?.id : undefined)}
           variant={activeVariant}
           variants={catalog.variants}
@@ -497,7 +501,14 @@ export function App({ catalog }: AppProps) {
           }}
           onNavigate={navigateViewer}
           onVariant={navigateVariant}
-          onVariantSelect={(id) => setVariantIndex(Math.max(0, catalog.variants.findIndex((variant) => variant.id === id)))}
+          onVariantSelect={(id) =>
+            setVariantIndex(
+              Math.max(
+                0,
+                catalog.variants.findIndex((variant) => variant.id === id),
+              ),
+            )
+          }
           onFacet={(filter) => dispatch({ type: "toggle-facet", ...filter })}
           onTaxonomy={(taxonomy, value) => dispatch({ type: "toggle-taxonomy", taxonomy, value })}
         />

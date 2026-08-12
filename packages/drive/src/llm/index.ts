@@ -1,16 +1,10 @@
 import * as Schema from "effect/Schema"
 
-const NonNegativeMilliseconds = Schema.Finite.check(
-  Schema.isGreaterThanOrEqualTo(0),
-)
+const NonNegativeMilliseconds = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))
 
-const PositiveInteger = Schema.Int.check(
-  Schema.isGreaterThanOrEqualTo(1),
-)
+const PositiveInteger = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
 
-const NonNegativeInteger = Schema.Int.check(
-  Schema.isGreaterThanOrEqualTo(0),
-)
+const NonNegativeInteger = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
 export const StreamOptions = Schema.Struct({
   delay: Schema.optionalKey(NonNegativeMilliseconds),
@@ -55,12 +49,7 @@ export const Raw = Schema.Struct({
 })
 export interface Raw extends Schema.Schema.Type<typeof Raw> {}
 
-export const FinishReason = Schema.Literals([
-  "stop",
-  "tool-calls",
-  "length",
-  "content-filter",
-])
+export const FinishReason = Schema.Literals(["stop", "tool-calls", "length", "content-filter"])
 export type FinishReason = Schema.Schema.Type<typeof FinishReason>
 
 export const Finish = Schema.Struct({
@@ -74,15 +63,7 @@ export const Disconnect = Schema.Struct({
 })
 export interface Disconnect extends Schema.Schema.Type<typeof Disconnect> {}
 
-export const Output = Schema.Union([
-  Text,
-  Reasoning,
-  Pause,
-  ToolCall,
-  Raw,
-  Finish,
-  Disconnect,
-])
+export const Output = Schema.Union([Text, Reasoning, Pause, ToolCall, Raw, Finish, Disconnect])
 export type Output = Schema.Schema.Type<typeof Output>
 
 export const text = (text: string, options?: StreamOptions): Text =>
@@ -99,13 +80,9 @@ export const reasoning = (text: string, options?: StreamOptions): Reasoning =>
     ...(options === undefined ? {} : { options }),
   })
 
-export const pause = (milliseconds: number): Pause =>
-  Pause.make({ type: "pause", milliseconds })
+export const pause = (milliseconds: number): Pause => Pause.make({ type: "pause", milliseconds })
 
-export const toolCall = (
-  call: ToolCallInput,
-  options?: StreamOptions,
-): ToolCall =>
+export const toolCall = (call: ToolCallInput, options?: StreamOptions): ToolCall =>
   ToolCall.make({
     ...call,
     type: "toolCall",

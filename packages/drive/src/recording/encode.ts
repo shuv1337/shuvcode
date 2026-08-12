@@ -18,11 +18,7 @@ export interface EncodeOptions {
   readonly signal?: AbortSignal
 }
 
-export async function encodeFrames(
-  frames: ReadonlyArray<ImageFrame>,
-  output: string,
-  options: EncodeOptions = {},
-) {
+export async function encodeFrames(frames: ReadonlyArray<ImageFrame>, output: string, options: EncodeOptions = {}) {
   const final = frames.at(-1)
   if (!final) throw new Error("recording has no frames")
   const fps = resolveFps(options.fps)

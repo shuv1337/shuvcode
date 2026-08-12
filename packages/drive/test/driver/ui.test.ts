@@ -51,7 +51,11 @@ const frame = {
   cols: 2,
   rows: 1,
   cursor: [0, 0] as const,
-  lines: [{ spans: [{ text: "ok", fg: [255, 255, 255, 255] as const, bg: [0, 0, 0, 255] as const, attributes: 0, width: 2 }] }],
+  lines: [
+    {
+      spans: [{ text: "ok", fg: [255, 255, 255, 255] as const, bg: [0, 0, 0, 255] as const, attributes: 0, width: 2 }],
+    },
+  ],
 }
 
 describe("OpenCodeUi", () => {
@@ -62,9 +66,7 @@ describe("OpenCodeUi", () => {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const connection = yield* SimulationConnector.ui(peer.url)
       expect(yield* OpenCodeUi.make(connection).capture()).toEqual(frame)
-      expect(peer.received.map(({ request }) => request)).toEqual([
-        { jsonrpc: "2.0", id: 1, method: "ui.capture" },
-      ])
+      expect(peer.received.map(({ request }) => request)).toEqual([{ jsonrpc: "2.0", id: 1, method: "ui.capture" }])
     })
   })
 
@@ -145,13 +147,7 @@ describe("OpenCodeUi", () => {
     const peer = startTransportPeer(({ request, socket }) => {
       if (request.method === "ui.snapshot") {
         snapshotCalls++
-        sendResult(
-          socket,
-          request,
-          snapshotCalls === 2
-            ? { format: "opencode-ui-snapshot-v1", nodes: [] }
-            : snapshot,
-        )
+        sendResult(socket, request, snapshotCalls === 2 ? { format: "opencode-ui-snapshot-v1", nodes: [] } : snapshot)
         return
       }
       sendResult(socket, request, state)
@@ -163,12 +159,15 @@ describe("OpenCodeUi", () => {
       const ui = OpenCodeUi.make(connection)
 
       expect(yield* ui.snapshot()).toEqual(snapshot)
-      const option = yield* ui.getNode({
-        instance: "permission-1",
-        role: "option",
-        selected: true,
-        disabled: false,
-      }, { interval: 1 })
+      const option = yield* ui.getNode(
+        {
+          instance: "permission-1",
+          role: "option",
+          selected: true,
+          disabled: false,
+        },
+        { interval: 1 },
+      )
       expect(option).toEqual(snapshot.nodes[1])
       expect(yield* ui.click(option)).toEqual(state)
       expect(peer.received.map(({ request }) => request)).toEqual([
@@ -207,9 +206,7 @@ describe("OpenCodeUi", () => {
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const connection = yield* SimulationConnector.ui(peer.url)
-      const error = yield* OpenCodeUi.make(connection)
-        .click(snapshot.nodes[1]!)
-        .pipe(Effect.flip)
+      const error = yield* OpenCodeUi.make(connection).click(snapshot.nodes[1]!).pipe(Effect.flip)
 
       expect(error).toMatchObject({
         _tag: "SimulationRequestError",
@@ -238,21 +235,24 @@ describe("OpenCodeUi", () => {
   })
 
   it.live("reports unavailable semantic snapshots without breaking older endpoints", () => {
-    const peer = startTransportPeer(({ request, socket }) => {
-      if (request.method === "simulation.handshake") {
-        const params = request.params as {
-          readonly requiredCapabilities: ReadonlyArray<string>
+    const peer = startTransportPeer(
+      ({ request, socket }) => {
+        if (request.method === "simulation.handshake") {
+          const params = request.params as {
+            readonly requiredCapabilities: ReadonlyArray<string>
+          }
+          sendResult(socket, request, {
+            protocolVersion: 1,
+            role: "ui",
+            server: { name: "opencode", version: "older" },
+            capabilities: params.requiredCapabilities,
+          })
+          return
         }
-        sendResult(socket, request, {
-          protocolVersion: 1,
-          role: "ui",
-          server: { name: "opencode", version: "older" },
-          capabilities: params.requiredCapabilities,
-        })
-        return
-      }
-      sendResult(socket, request, state)
-    }, { handshake: false })
+        sendResult(socket, request, state)
+      },
+      { handshake: false },
+    )
 
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
@@ -271,10 +271,7 @@ describe("OpenCodeUi", () => {
         capability: "ui.click.semantic",
         message: "semantic ui.click is not available on this OpenCode endpoint",
       })
-      expect(peer.received.map(({ request }) => request.method)).toEqual([
-        "simulation.handshake",
-        "ui.state",
-      ])
+      expect(peer.received.map(({ request }) => request.method)).toEqual(["simulation.handshake", "ui.state"])
     })
   })
 
@@ -297,9 +294,7 @@ describe("OpenCodeUi", () => {
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const connection = yield* SimulationConnector.ui(peer.url)
-      const error = yield* OpenCodeUi.make(connection)
-        .getNode({ role: "option" })
-        .pipe(Effect.flip)
+      const error = yield* OpenCodeUi.make(connection).getNode({ role: "option" }).pipe(Effect.flip)
       expect(error).toBeInstanceOf(OpenCodeUi.UiNodeAmbiguousError)
       expect(error).toMatchObject({
         count: 2,
@@ -329,18 +324,13 @@ describe("OpenCodeUi", () => {
   })
 
   it.live("rejects non-boolean Effect predicate values", () => {
-    const peer = startTransportPeer(({ request, socket }) =>
-      sendResult(socket, request, state),
-    )
+    const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, state))
 
     return Effect.gen(function* () {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const connection = yield* SimulationConnector.ui(peer.url)
-      const predicate = (() => Effect.succeed("not boolean")) as unknown as
-        OpenCodeUi.EffectPredicate<never>
-      const error = yield* OpenCodeUi.make(connection)
-        .waitFor(predicate)
-        .pipe(Effect.flip)
+      const predicate = (() => Effect.succeed("not boolean")) as unknown as OpenCodeUi.EffectPredicate<never>
+      const error = yield* OpenCodeUi.make(connection).waitFor(predicate).pipe(Effect.flip)
 
       expect(error).toBeInstanceOf(OpenCodeUi.UiPredicateError)
       expect(error).toMatchObject({

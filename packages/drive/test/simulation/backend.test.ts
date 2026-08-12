@@ -222,11 +222,7 @@ describe("OpenCode backend simulation transport", () => {
       const connection = yield* SimulationConnector.backend(peer.url, {
         attach: false,
       })
-      const events = yield* connection.toolEvents.pipe(
-        Stream.take(2),
-        Stream.runCollect,
-        Effect.forkScoped,
-      )
+      const events = yield* connection.toolEvents.pipe(Stream.take(2), Stream.runCollect, Effect.forkScoped)
       const tools = [
         {
           name: "lookup",

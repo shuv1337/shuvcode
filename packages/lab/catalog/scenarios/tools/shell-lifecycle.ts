@@ -78,14 +78,13 @@ export const shellLifecycleFlow = defineExecutableFlow(
       step: { title: "Command fails" },
     })
 
-    return program(
-      [thinkingStreaming, inputStreaming, outputStreaming, succeeded, failed],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
+    return program([thinkingStreaming, inputStreaming, outputStreaming, succeeded, failed], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
         yield* driver.llm.queue(
-          Llm.reasoning(
-            "I will inspect the foreground shell lifecycle before running the command.",
-            { delay: 70, chunkSize: 7 },
-          ),
+          Llm.reasoning("I will inspect the foreground shell lifecycle before running the command.", {
+            delay: 70,
+            chunkSize: 7,
+          }),
           Llm.toolCall(
             {
               index: 0,

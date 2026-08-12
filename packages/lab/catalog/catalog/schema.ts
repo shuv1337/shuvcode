@@ -138,17 +138,11 @@ export const CatalogIssue = Schema.Struct({
 
 export interface CatalogIssue extends Schema.Schema.Type<typeof CatalogIssue> {}
 
-export class CatalogBuildError extends Schema.TaggedErrorClass<CatalogBuildError>()(
-  "CatalogBuildError",
-  {
-    issues: Schema.NonEmptyArray(CatalogIssue),
-  },
-) {}
+export class CatalogBuildError extends Schema.TaggedErrorClass<CatalogBuildError>()("CatalogBuildError", {
+  issues: Schema.NonEmptyArray(CatalogIssue),
+}) {}
 
-export class CatalogBoundaryError extends Schema.TaggedErrorClass<CatalogBoundaryError>()(
-  "CatalogBoundaryError",
-  {
-    boundary: Schema.NonEmptyString,
-    cause: Schema.Defect(),
-  },
-) {}
+export class CatalogBoundaryError extends Schema.TaggedErrorClass<CatalogBoundaryError>()("CatalogBoundaryError", {
+  boundary: Schema.NonEmptyString,
+  cause: Schema.Defect(),
+}) {}

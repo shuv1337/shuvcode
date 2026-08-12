@@ -4,10 +4,7 @@ import type { Options } from "opencode-drive/driver"
 
 export const catalogViewport = { cols: 118, rows: 34 } as const
 
-export function catalogScenarioRuntime(options: {
-  readonly opencode: string
-  readonly theme?: string
-}): Options {
+export function catalogScenarioRuntime(options: { readonly opencode: string; readonly theme?: string }): Options {
   return {
     project: {
       files: {
@@ -42,9 +39,7 @@ export function catalogScenarioRuntime(options: {
           return { output: "catalog shell success\n", exit: 0 }
         }),
       )
-      tools.handle("websearch", () =>
-        Effect.fail(new Tool.Failure({ message: "catalog web search provider failure" })),
-      )
+      tools.handle("websearch", () => Effect.fail(new Tool.Failure({ message: "catalog web search provider failure" })))
     },
     setup:
       options.theme === undefined

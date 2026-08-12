@@ -37,12 +37,7 @@ function capture(core: TerminalCore): CapturedFrame {
         attributes: cell.flags,
       }
       const previous = spans.at(-1)
-      if (
-        previous &&
-        previous.fg === next.fg &&
-        previous.bg === next.bg &&
-        previous.attributes === next.attributes
-      ) {
+      if (previous && previous.fg === next.fg && previous.bg === next.bg && previous.attributes === next.attributes) {
         previous.text += next.text
         previous.width += width
       } else {

@@ -29,8 +29,7 @@ export async function commitScriptProject(root: string) {
 }
 
 async function assertGitPlaceholder(root: string) {
-  if (await hasGitMetadata(root))
-    throw new Error("project.git cannot replace existing Git metadata")
+  if (await hasGitMetadata(root)) throw new Error("project.git cannot replace existing Git metadata")
 }
 
 export async function hasGitMetadata(root: string) {
@@ -63,8 +62,7 @@ async function git(cwd: string, args: ReadonlyArray<string>) {
 export function stripGitEnvironment(env: Readonly<Record<string, string | undefined>>) {
   return Object.fromEntries(
     Object.entries(env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && !entry[0].startsWith("GIT_"),
+      (entry): entry is [string, string] => entry[1] !== undefined && !entry[0].startsWith("GIT_"),
     ),
   )
 }

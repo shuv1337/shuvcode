@@ -91,12 +91,7 @@ describe("Llm", () => {
     expect(() => Llm.text("hello", { chunkSize: 1.5 })).toThrow()
     expect(() => Llm.toolCall({ index: -1, id: "call_3", name: "read", input: {} })).toThrow()
     expect(() => Llm.toolCall({ index: 1.5, id: "call_3", name: "read", input: {} })).toThrow()
-    expect(() =>
-      Llm.toolCall(
-        { index: 0, id: "call_3", name: "read", input: {} },
-        { chunkSize: 0 },
-      ),
-    ).toThrow()
+    expect(() => Llm.toolCall({ index: 0, id: "call_3", name: "read", input: {} }, { chunkSize: 0 })).toThrow()
     expect(() =>
       Llm.toolCall({
         index: Number.NaN,

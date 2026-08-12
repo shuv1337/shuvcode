@@ -7,10 +7,7 @@ interface FileSystemOptions {
   readonly git?: boolean
 }
 
-export function createScriptFileSystem(
-  directory: string,
-  options: FileSystemOptions = {},
-): ProjectFileSystem {
+export function createScriptFileSystem(directory: string, options: FileSystemOptions = {}): ProjectFileSystem {
   const root = resolve(directory)
   return {
     writeFile: (path, contents) =>
@@ -20,11 +17,12 @@ export function createScriptFileSystem(
           await mkdir(dirname(destination), { recursive: true })
           await writeFile(destination, contents)
         },
-        catch: (cause) => new FileSystemError({
-          path,
-          cause,
-          message: cause instanceof Error ? cause.message : String(cause),
-        }),
+        catch: (cause) =>
+          new FileSystemError({
+            path,
+            cause,
+            message: cause instanceof Error ? cause.message : String(cause),
+          }),
       }),
   }
 }
@@ -44,15 +42,13 @@ export async function writeScriptFiles(
   const destinations = new Set<string>()
   for (const entry of entries) {
     const destination = entry.destination.toLowerCase()
-    if (destinations.has(destination))
-      throw new Error("project.files paths must resolve to unique files")
+    if (destinations.has(destination)) throw new Error("project.files paths must resolve to unique files")
     destinations.add(destination)
   }
   for (const destination of destinations) {
     let parent = dirname(destination)
     while (parent !== dirname(parent)) {
-      if (destinations.has(parent))
-        throw new Error("project.files paths must not contain file and directory conflicts")
+      if (destinations.has(parent)) throw new Error("project.files paths must not contain file and directory conflicts")
       parent = dirname(parent)
     }
   }
@@ -92,15 +88,10 @@ async function rejectSymlinks(root: string, destination: string) {
       throw error
     })
     if (stats === undefined) return
-    if (stats.isSymbolicLink())
-      throw new Error("fs.writeFile path must not contain symbolic links")
+    if (stats.isSymbolicLink()) throw new Error("fs.writeFile path must not contain symbolic links")
   }
 }
 
 function isMissing(error: unknown): error is NodeJS.ErrnoException {
-  return (
-    error instanceof Error &&
-    "code" in error &&
-    error.code === "ENOENT"
-  )
+  return error instanceof Error && "code" in error && error.code === "ENOENT"
 }

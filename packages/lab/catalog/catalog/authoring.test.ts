@@ -8,26 +8,30 @@ import type { DriveManifest } from "./schema"
 const manifest: DriveManifest = {
   format: "opencode-terminal-frame-captures-v1",
   generatedBy: "scripts/capture-opencode-drive.ts",
-  variants: [{
-    id: "baseline",
-    label: "Baseline",
-    source: "/tmp/opencode",
-    revision: "abc123",
-    ref: "v2",
-    committedAt: "2026-07-17T10:17:51Z",
-    theme: "opencode",
-  }],
+  variants: [
+    {
+      id: "baseline",
+      label: "Baseline",
+      source: "/tmp/opencode",
+      revision: "abc123",
+      ref: "v2",
+      committedAt: "2026-07-17T10:17:51Z",
+      theme: "opencode",
+    },
+  ],
   captures: [
     {
       id: "home",
       title: "Home",
       category: "system",
-      frames: [{
-        variantId: "baseline",
-        src: "captures/baseline/home.frame.json",
-        cols: 118,
-        rows: 34,
-      }],
+      frames: [
+        {
+          variantId: "baseline",
+          src: "captures/baseline/home.frame.json",
+          cols: 118,
+          rows: 34,
+        },
+      ],
     },
   ],
 }
@@ -136,17 +140,21 @@ describe("catalog authoring", () => {
     const error = await Effect.runPromise(
       compileCatalog(definition, {
         ...manifest,
-        captures: [{
-          id: "home",
-          title: "Home",
-          category: "system",
-          frames: [{
-            variantId: "unknown",
-            src: "captures/unknown/home.frame.json",
-            cols: 118,
-            rows: 34,
-          }],
-        }],
+        captures: [
+          {
+            id: "home",
+            title: "Home",
+            category: "system",
+            frames: [
+              {
+                variantId: "unknown",
+                src: "captures/unknown/home.frame.json",
+                cols: 118,
+                rows: 34,
+              },
+            ],
+          },
+        ],
       }).pipe(Effect.flip),
     )
 

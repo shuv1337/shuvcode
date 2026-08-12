@@ -51,16 +51,14 @@ export type TaxonomyDefinition = Readonly<
 >
 
 type ValueOf<T> = T[keyof T]
-export type TaxonomyItemId<T extends TaxonomyDefinition> = ValueOf<T> extends infer Group
-  ? Group extends { readonly items: infer Items extends Readonly<Record<string, string>> }
-    ? Extract<keyof Items, string>
+export type TaxonomyItemId<T extends TaxonomyDefinition> =
+  ValueOf<T> extends infer Group
+    ? Group extends { readonly items: infer Items extends Readonly<Record<string, string>> }
+      ? Extract<keyof Items, string>
+      : never
     : never
-  : never
 
-export interface Taxonomies<
-  ScreenLabels extends TaxonomyDefinition,
-  UiElements extends TaxonomyDefinition,
-> {
+export interface Taxonomies<ScreenLabels extends TaxonomyDefinition, UiElements extends TaxonomyDefinition> {
   readonly screenLabels: ScreenLabels
   readonly uiElements: UiElements
 }

@@ -128,53 +128,54 @@ export const patchSuccessFlow = defineExecutableFlow(
         permissionFullscreen,
         success,
       ],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
-        yield* driver.llm.queue(
-          Llm.toolCall(
-            {
-              index: 0,
-              id: "call_patch_success",
-              name: "patch",
-              input: {
-                patchText: [
-                  "*** Begin Patch",
-                  "*** Update File: fixture.txt",
-                  "@@",
-                  "-before",
-                  "+after",
-                  "*** End Patch",
-                ].join("\n"),
+      ({ driver, checkpoint }) =>
+        Effect.gen(function* () {
+          yield* driver.llm.queue(
+            Llm.toolCall(
+              {
+                index: 0,
+                id: "call_patch_success",
+                name: "patch",
+                input: {
+                  patchText: [
+                    "*** Begin Patch",
+                    "*** Update File: fixture.txt",
+                    "@@",
+                    "-before",
+                    "+after",
+                    "*** End Patch",
+                  ].join("\n"),
+                },
               },
-            },
-            { delay: 90, chunkSize: 8 },
-          ),
-          Llm.finish("tool-calls"),
-        )
-        yield* driver.ui.submit("Change fixture.txt from before to after.")
-        yield* Effect.sleep(450)
-        yield* checkpoint(inputStreaming)
-        yield* driver.ui.waitFor("Permission required", { timeout: 15_000 })
-        yield* checkpoint(permissionPrompt)
-        yield* driver.ui.arrow("right")
-        yield* checkpoint(alwaysSelected)
-        yield* driver.ui.enter()
-        yield* driver.ui.waitFor("Always allow")
-        yield* checkpoint(alwaysConfirmation)
-        yield* driver.ui.press("escape")
-        yield* driver.ui.waitFor("Permission required")
-        yield* driver.ui.arrow("right")
-        yield* driver.ui.arrow("right")
-        yield* checkpoint(rejectSelected)
-        yield* driver.ui.press("f", { ctrl: true })
-        yield* Effect.sleep(150)
-        yield* checkpoint(permissionFullscreen)
-        yield* driver.ui.press("f", { ctrl: true })
-        yield* Effect.sleep(150)
-        yield* driver.llm.queue(Llm.text("The fixture was updated."))
-        yield* driver.ui.getNode("session.permission.action.once").pipe(Effect.flatMap(driver.ui.click))
-        yield* driver.ui.waitFor("The fixture was updated.", { timeout: 15_000 })
-        yield* checkpoint(success)
-      }),
+              { delay: 90, chunkSize: 8 },
+            ),
+            Llm.finish("tool-calls"),
+          )
+          yield* driver.ui.submit("Change fixture.txt from before to after.")
+          yield* Effect.sleep(450)
+          yield* checkpoint(inputStreaming)
+          yield* driver.ui.waitFor("Permission required", { timeout: 15_000 })
+          yield* checkpoint(permissionPrompt)
+          yield* driver.ui.arrow("right")
+          yield* checkpoint(alwaysSelected)
+          yield* driver.ui.enter()
+          yield* driver.ui.waitFor("Always allow")
+          yield* checkpoint(alwaysConfirmation)
+          yield* driver.ui.press("escape")
+          yield* driver.ui.waitFor("Permission required")
+          yield* driver.ui.arrow("right")
+          yield* driver.ui.arrow("right")
+          yield* checkpoint(rejectSelected)
+          yield* driver.ui.press("f", { ctrl: true })
+          yield* Effect.sleep(150)
+          yield* checkpoint(permissionFullscreen)
+          yield* driver.ui.press("f", { ctrl: true })
+          yield* Effect.sleep(150)
+          yield* driver.llm.queue(Llm.text("The fixture was updated."))
+          yield* driver.ui.getNode("session.permission.action.once").pipe(Effect.flatMap(driver.ui.click))
+          yield* driver.ui.waitFor("The fixture was updated.", { timeout: 15_000 })
+          yield* checkpoint(success)
+        }),
     )
   },
 )

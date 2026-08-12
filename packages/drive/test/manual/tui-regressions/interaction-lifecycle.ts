@@ -12,17 +12,13 @@ export default defineScript({
       yield* ui.submit(prompt)
       const submittedIn = performance.now() - started
 
-      if (!(yield* ui.matches(prompt)))
-        return yield* Effect.fail(new Error("submitted message was not visible"))
+      if (!(yield* ui.matches(prompt))) return yield* Effect.fail(new Error("submitted message was not visible"))
       if (yield* ui.matches(response))
         return yield* Effect.fail(new Error("model response arrived before the submit assertion"))
 
       yield* ui.waitFor(response, { timeout: 5_000 })
 
-      yield* llm.queue(
-        Llm.text("interrupt-me-now"),
-        Llm.pause(30_000),
-      )
+      yield* llm.queue(Llm.text("interrupt-me-now"), Llm.pause(30_000))
       yield* ui.submit("start-a-response-that-will-be-interrupted")
       yield* ui.waitFor("interrupt-me-now", { timeout: 5_000 })
       yield* ui.press("escape")

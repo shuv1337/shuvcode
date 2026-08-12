@@ -7,10 +7,7 @@ import { instanceError } from "./error.js"
  * Prepares an OpenCode development checkout for launch: verifies the CLI
  * entrypoint and reuses its installed `@opentui/solid` preload.
  */
-export const prepareDev = Effect.fn("OpenCodeInstance.prepareDev")(function* (
-  artifacts: string,
-  directory: string,
-) {
+export const prepareDev = Effect.fn("OpenCodeInstance.prepareDev")(function* (artifacts: string, directory: string) {
   const root = resolve(directory)
   const entrypoint = join(root, "packages", "cli", "src", "index.ts")
   const solid = join(root, "packages", "tui", "node_modules", "@opentui", "solid")
@@ -30,10 +27,7 @@ export const prepareDev = Effect.fn("OpenCodeInstance.prepareDev")(function* (
     },
     catch: (cause) => instanceError("prepare development checkout", cause),
   })
-  const preloads = [
-    "--conditions=browser",
-    `--preload=${join(solid, "scripts", "preload.js")}`,
-  ]
+  const preloads = ["--conditions=browser", `--preload=${join(solid, "scripts", "preload.js")}`]
   const base = [process.execPath, ...preloads, entrypoint]
   return {
     command: [...base, ...(standalone ? ["--standalone"] : [])],

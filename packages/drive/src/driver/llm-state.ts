@@ -4,12 +4,7 @@ import * as Effect from "effect/Effect"
 import type { Backend } from "../client/protocol.js"
 import type * as Llm from "../llm/index.js"
 import type { BackendConnection } from "../simulation/connector.js"
-import {
-  controllerError,
-  LlmControllerError,
-  LlmModeError,
-  LlmSettlementError,
-} from "./llm-errors.js"
+import { controllerError, LlmControllerError, LlmModeError, LlmSettlementError } from "./llm-errors.js"
 import type { Response } from "./llm-responder.js"
 
 /**
@@ -23,10 +18,7 @@ import type { Response } from "./llm-responder.js"
 /** Opaque token for one in-flight job, resolved by the shell. */
 export type Completion = Deferred.Deferred<void, LlmControllerError>
 
-export type ServeHandler = (
-  request: Backend.ProviderInvocation,
-  index: number,
-) => Response
+export type ServeHandler = (request: Backend.ProviderInvocation, index: number) => Response
 
 export type TitleHandler = (
   request: Backend.ProviderInvocation,
@@ -89,15 +81,10 @@ export const initial: State = {
 export type RejectionError = LlmModeError | LlmControllerError
 
 const rejectWhileSettling = (state: State, operation: string) =>
-  state.settling || state.settled
-    ? controllerError(operation, "LLM controller is settling")
-    : undefined
+  state.settling || state.settled ? controllerError(operation, "LLM controller is settling") : undefined
 
 /** Why a queue/send call must be rejected, or undefined to proceed. */
-export const rejectEnqueue = (
-  state: State,
-  operation: "queue" | "send",
-): RejectionError | undefined => {
+export const rejectEnqueue = (state: State, operation: "queue" | "send"): RejectionError | undefined => {
   if (state.failure !== undefined) return state.failure
   if (Mode.$is("Serve")(state.mode))
     return new LlmModeError({
@@ -136,9 +123,7 @@ export const enqueue = (state: State, response: QueuedResponse): State => ({
   mode: Mode.Queue(),
   responses: [...state.responses, response],
   sendCompletions:
-    response.completed === undefined
-      ? state.sendCompletions
-      : [...state.sendCompletions, response.completed],
+    response.completed === undefined ? state.sendCompletions : [...state.sendCompletions, response.completed],
 })
 
 export const serve = (state: State, handler: ServeHandler): State => ({
@@ -160,22 +145,15 @@ export const pushRequest = (state: State, request: AttachedRequest): State => ({
 /** Withdraws an interrupted send before it was matched to a request. */
 export const abandonSend = (state: State, completed: Completion): State => ({
   ...state,
-  responses: state.responses.filter(
-    (response) => response.completed !== completed,
-  ),
-  sendCompletions: state.sendCompletions.filter(
-    (candidate) => candidate !== completed,
-  ),
+  responses: state.responses.filter((response) => response.completed !== completed),
+  sendCompletions: state.sendCompletions.filter((candidate) => candidate !== completed),
 })
 
 /** Records the first failure; later failures preserve the original. */
 export const recordFailure = (
   state: State,
   error: LlmControllerError,
-): readonly [
-  State,
-  { readonly failure: LlmControllerError; readonly isFirst: boolean },
-] => {
+): readonly [State, { readonly failure: LlmControllerError; readonly isFirst: boolean }] => {
   const failure = state.failure ?? error
   const isFirst = state.failure === undefined
   return [isFirst ? { ...state, failure } : state, { failure, isFirst }]
@@ -218,26 +196,16 @@ export const nextNormal = (state: State): NormalStart | undefined => {
 }
 
 /** Commits a selected job: consumes its inputs and tracks its completion. */
-export const startNormal = (
-  state: State,
-  start: NormalStart,
-  completion: Completion,
-): State => ({
+export const startNormal = (state: State, start: NormalStart, completion: Completion): State => ({
   ...state,
   requests: state.requests.slice(1),
-  responses: NormalSource.$is("Queued")(start.source)
-    ? state.responses.slice(1)
-    : state.responses,
+  responses: NormalSource.$is("Queued")(start.source) ? state.responses.slice(1) : state.responses,
   activeNormal: [...state.activeNormal, completion],
   requestIndex: state.requestIndex + 1,
 })
 
 /** Untracks a finished normal job and its optional send completion. */
-export const finishNormal = (
-  state: State,
-  completion: Completion,
-  sendCompletion: Completion | undefined,
-): State => ({
+export const finishNormal = (state: State, completion: Completion, sendCompletion: Completion | undefined): State => ({
   ...state,
   activeNormal: state.activeNormal.filter((active) => active !== completion),
   sendCompletions:
@@ -257,10 +225,7 @@ export interface TitleStart {
 }
 
 /** Tracks a title job; titles run outside normal request sequencing. */
-export const startTitle = (
-  state: State,
-  completion: Completion,
-): readonly [State, TitleStart] => [
+export const startTitle = (state: State, completion: Completion): readonly [State, TitleStart] => [
   {
     ...state,
     activeTitles: [...state.activeTitles, completion],
@@ -291,13 +256,8 @@ export const Settlement = Data.taggedEnum<Settlement>()
 
 /** Decides whether settlement is complete, failed, or must keep waiting. */
 export const inspectSettlement = (state: State): Settlement => {
-  if (state.failure !== undefined)
-    return Settlement.Fail({ error: state.failure })
-  if (
-    Mode.$is("Queue")(state.mode) &&
-    state.requests.length > 0 &&
-    state.responses.length === 0
-  )
+  if (state.failure !== undefined) return Settlement.Fail({ error: state.failure })
+  if (Mode.$is("Queue")(state.mode) && state.requests.length > 0 && state.responses.length === 0)
     return Settlement.Fail({
       error: new LlmSettlementError({
         unusedResponses: 0,
@@ -305,11 +265,7 @@ export const inspectSettlement = (state: State): Settlement => {
         message: `received ${state.requests.length} unexpected LLM request(s)`,
       }),
     })
-  if (
-    state.responses.length > 0 ||
-    state.activeNormal.length > 0 ||
-    state.activeTitles.length > 0
-  )
+  if (state.responses.length > 0 || state.activeNormal.length > 0 || state.activeTitles.length > 0)
     return Settlement.Wait()
   return Settlement.Done()
 }
@@ -325,8 +281,7 @@ export const settlementTimeoutError = (state: State): LlmSettlementError =>
         : "timed out waiting for active LLM responses",
   })
 
-export const beginSettling = (state: State): State =>
-  state.settling ? state : { ...state, settling: true }
+export const beginSettling = (state: State): State => (state.settling ? state : { ...state, settling: true })
 
 export const markSettled = (state: State): State => ({
   ...state,

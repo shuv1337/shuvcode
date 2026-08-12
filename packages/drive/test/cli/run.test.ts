@@ -6,9 +6,7 @@ import { join, resolve } from "node:path"
 const roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  )
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
 describe("opencode-drive run", () => {
@@ -43,10 +41,7 @@ describe("opencode-drive run", () => {
     )
 
     const child = spawn(["run", program])
-    const [status, stdout] = await Promise.all([
-      child.exited,
-      new Response(child.stdout).text(),
-    ])
+    const [status, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()])
     expect(status).toBe(1)
     expect(stdout).toContain("not assignable")
     expect(await Bun.file(marker).exists()).toBe(false)
@@ -68,9 +63,7 @@ describe("opencode-drive run", () => {
       new Response(child.stderr).text(),
     ])
     expect(status).toBe(1)
-    expect(`${stdout}\n${stderr}`).toContain(
-      "program must default-export a fully provided Effect",
-    )
+    expect(`${stdout}\n${stderr}`).toContain("program must default-export a fully provided Effect")
     expect(await Bun.file(join(root, "node_modules")).exists()).toBe(false)
   }, 30_000)
 
@@ -79,10 +72,7 @@ describe("opencode-drive run", () => {
     [["run", "program.ts", "--", "argument"], "arguments after --"],
   ] as const)("rejects unsupported invocation %#", async (args, message) => {
     const child = spawn(args)
-    const [status, stderr] = await Promise.all([
-      child.exited,
-      new Response(child.stderr).text(),
-    ])
+    const [status, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()])
     expect(status).toBe(1)
     expect(stderr).toContain(message)
   })

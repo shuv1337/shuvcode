@@ -28,28 +28,16 @@ import {
 } from "../instance/registry.js"
 import type { StartOptions } from "./types.js"
 
-export const start = Effect.fn("DriveCli.start")((options: StartOptions) =>
-  Effect.scoped(startScoped(options)),
-)
+export const start = Effect.fn("DriveCli.start")((options: StartOptions) => Effect.scoped(startScoped(options)))
 
 const startScoped = Effect.fn("DriveCli.startScoped")(function* (options: StartOptions) {
-  const initializerPid = Number.parseInt(
-    options.daemon ? process.env.OPENCODE_DRIVE_INITIALIZER_PID ?? "" : "",
-    10,
-  )
+  const initializerPid = Number.parseInt(options.daemon ? (process.env.OPENCODE_DRIVE_INITIALIZER_PID ?? "") : "", 10)
   if (options.daemon) delete process.env.OPENCODE_DRIVE_INITIALIZER_PID
   const initialized = yield* fromPromise(() =>
-    initializeManifest(
-      options.name,
-      process.cwd(),
-      () => initializeInstance(options.name),
-      {
-        temporary: true,
-        ...(Number.isInteger(initializerPid) && initializerPid > 0
-          ? { adoptPid: initializerPid }
-          : {}),
-      },
-    ),
+    initializeManifest(options.name, process.cwd(), () => initializeInstance(options.name), {
+      temporary: true,
+      ...(Number.isInteger(initializerPid) && initializerPid > 0 ? { adoptPid: initializerPid } : {}),
+    }),
   )
   configureLogFile(initialized.artifacts)
   logSuccess(`starting ${options.name}`)
@@ -148,12 +136,7 @@ async function runLifecycle(
   let driveReady = false
   let recording: Promise<string | undefined> | undefined
   const finishCurrentRecording = (onProgress?: (percent: number) => void) => {
-    if (
-      !options.record ||
-      options.visible ||
-      !driveReady ||
-      options.script !== undefined
-    )
+    if (!options.record || options.visible || !driveReady || options.script !== undefined)
       return Promise.resolve(undefined)
     recording ??= finishRecording(instance, onProgress)
     return recording
@@ -161,10 +144,7 @@ async function runLifecycle(
   const interrupt = () => {
     stopping = true
     current?.abort.abort(signal.reason)
-    if (!options.script)
-      void stopInstance().catch((error) =>
-        logError(`failed to stop interrupted instance: ${error}`),
-      )
+    if (!options.script) void stopInstance().catch((error) => logError(`failed to stop interrupted instance: ${error}`))
   }
   signal.addEventListener("abort", interrupt, { once: true })
   const stopInstance = async (onProgress?: (percent: number) => void) => {
@@ -224,8 +204,7 @@ async function runLifecycle(
       },
       stop: stopInstance,
       responses: async (input) => {
-        if (options.script)
-          throw new Error("responses are unavailable when --script owns the simulation backend")
+        if (options.script) throw new Error("responses are unavailable when --script owns the simulation backend")
         return responses.update(input)
       },
     })
@@ -247,9 +226,7 @@ async function runLifecycle(
     if (options.visible) {
       while (true) {
         const active: NonNullable<typeof current> = current
-        let result:
-          | { readonly script: true }
-          | { readonly script: false; readonly status: number }
+        let result: { readonly script: true } | { readonly script: false; readonly status: number }
         try {
           result = options.script
             ? await Promise.race([
@@ -327,9 +304,7 @@ async function runLifecycle(
     })
     if (options.script && !options.visible) report(completed ? "completed" : undefined)
     if (options.script && recordingPath) logSuccess(`recording ${recordingPath}`)
-    if (options.script)
-      for (const output of recordings)
-        logSuccess(`recording ${output}`)
+    if (options.script) for (const output of recordings) logSuccess(`recording ${output}`)
     if (shouldCleanArtifacts(options.script, completed, failure, cleanupFailure))
       await rm(instance.artifacts, { recursive: true, force: true }).catch((error) => {
         cleanupFailure ??= error
@@ -359,10 +334,7 @@ function shouldCleanArtifacts(
   )
 }
 
-async function finishRecording(
-  instance: OpenCodeInstance.Instance,
-  onProgress?: (percent: number) => void,
-) {
+async function finishRecording(instance: OpenCodeInstance.Instance, onProgress?: (percent: number) => void) {
   const expected = await runEffect(instance.recording)
   if (!expected) throw new Error("recording was not enabled for this instance")
   let timeline: string
@@ -375,13 +347,10 @@ async function finishRecording(
         SimulationConnector.ui(instance.endpoints.ui, {
           connectTimeout: 60_000,
         }).pipe(
-          Effect.flatMap((connection) =>
-            connection.rpc["ui.recording.finish"](),
-          ),
+          Effect.flatMap((connection) => connection.rpc["ui.recording.finish"]()),
           Effect.timeoutOrElse({
             duration: 60_000,
-            orElse: () =>
-              Effect.fail(new Error("ui.recording.finish timed out")),
+            orElse: () => Effect.fail(new Error("ui.recording.finish timed out")),
           }),
         ),
       ),
@@ -390,38 +359,38 @@ async function finishRecording(
   return finalizeRecording(timeline, expected, { onProgress })
 }
 
-const startDetached = Effect.fn("DriveCli.startDetached")(function* (
-  options: StartOptions,
-  artifacts: string,
-) {
+const startDetached = Effect.fn("DriveCli.startDetached")(function* (options: StartOptions, artifacts: string) {
   const ownerLog = join(registryDirectory(), `${options.name}.log`)
   yield* fromPromise(() => mkdir(registryDirectory(), { recursive: true }))
   yield* fromPromise(() => rm(ownerLog, { force: true }))
   logSuccess(`launching detached owner for ${options.name}`)
-  const child = yield* DriveProcess.spawn([
-    process.execPath,
-    process.argv[1]!,
-    "start",
-    "--daemon",
-    "--name",
-    options.name,
-    ...(options.script ? ["--script", options.script] : []),
-    ...(options.dev ? ["--dev", options.dev] : []),
-    ...(options.record ? ["--record"] : []),
-    ...(options.command.length ? ["--", ...options.command] : []),
-  ], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      OPENCODE_DRIVE_LOG: configureLogFile(artifacts),
-      OPENCODE_DRIVE_OWNER_LOG: ownerLog,
-      OPENCODE_DRIVE_INITIALIZER_PID: String(process.pid),
+  const child = yield* DriveProcess.spawn(
+    [
+      process.execPath,
+      process.argv[1]!,
+      "start",
+      "--daemon",
+      "--name",
+      options.name,
+      ...(options.script ? ["--script", options.script] : []),
+      ...(options.dev ? ["--dev", options.dev] : []),
+      ...(options.record ? ["--record"] : []),
+      ...(options.command.length ? ["--", ...options.command] : []),
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        OPENCODE_DRIVE_LOG: configureLogFile(artifacts),
+        OPENCODE_DRIVE_OWNER_LOG: ownerLog,
+        OPENCODE_DRIVE_INITIALIZER_PID: String(process.pid),
+      },
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
     },
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    detached: true,
-  })
+  )
   logSuccess(`waiting for ${options.name} to become ready`)
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
@@ -468,15 +437,7 @@ function run(
     if (driveScript) {
       log("running script")
       const exit = await Effect.runPromiseExit(
-        Effect.scoped(
-          runScript(
-            driveScript,
-            instance,
-            onScreenshot,
-            onRecording,
-            ready,
-          ),
-        ),
+        Effect.scoped(runScript(driveScript, instance, onScreenshot, onRecording, ready)),
         { signal: abort.signal },
       )
       if (Exit.isFailure(exit)) {
@@ -515,11 +476,9 @@ function run(
   }
 }
 
-const runEffect = <A, E>(effect: Effect.Effect<A, E>) =>
-  Effect.runPromise(effect)
+const runEffect = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
-const fromPromise = <A>(task: () => Promise<A>) =>
-  Effect.tryPromise({ try: task, catch: (error) => error })
+const fromPromise = <A>(task: () => Promise<A>) => Effect.tryPromise({ try: task, catch: (error) => error })
 
 function report(status?: string) {
   if (status) logSuccess(status)

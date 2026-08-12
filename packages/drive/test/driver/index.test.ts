@@ -4,10 +4,7 @@ import { expect, it } from "@effect/vitest"
 import { Cause, Effect, Exit } from "effect"
 import { Llm, OpenCodeDriver } from "../../src/index.js"
 
-const fakeOpenCode = [
-  process.execPath,
-  resolve("test", "fixtures", "fake-opencode.ts"),
-]
+const fakeOpenCode = [process.execPath, resolve("test", "fixtures", "fake-opencode.ts")]
 
 it.live("runs and settles a complete scoped driver", () =>
   Effect.gen(function* () {
@@ -29,11 +26,11 @@ it.live("runs and settles a complete scoped driver", () =>
         setup: ({ config, tuiConfig }) =>
           Effect.sync(() => {
             config.nested = {
-              ...config.nested as Record<string, boolean | string>,
+              ...(config.nested as Record<string, boolean | string>),
               winner: "setup",
             }
             tuiConfig.theme = {
-              ...tuiConfig.theme as Record<string, boolean>,
+              ...(tuiConfig.theme as Record<string, boolean>),
               setup: true,
             }
           }),
@@ -50,9 +47,7 @@ it.live("runs and settles a complete scoped driver", () =>
             version: "test",
           })
           expect(yield* driver.opencode.server.get()).toEqual({ urls: [] })
-          yield* driver.llm.queue(
-            Llm.text("library response", { delay: 0, chunkSize: 100 }),
-          )
+          yield* driver.llm.queue(Llm.text("library response", { delay: 0, chunkSize: 100 }))
           yield* driver.ui.submit("hello from library")
           yield* driver.ui.waitFor("hello from library")
           const secondary = yield* driver.tuis.launch({
@@ -71,25 +66,19 @@ it.live("runs and settles a complete scoped driver", () =>
       Effect.tryPromise({
         try: async () => {
           await rm(result.artifacts, { recursive: true, force: true })
-          if (result.recording !== undefined)
-            await rm(result.recording, { force: true })
+          if (result.recording !== undefined) await rm(result.recording, { force: true })
         },
         catch: () => undefined,
       }).pipe(Effect.ignore),
     )
 
     expect(result.recording).toBeDefined()
+    expect(yield* Effect.promise(() => readFile(`${result.artifacts}/seeded-at-launch.txt`, "utf8"))).toBe(
+      "export const seeded = true\n",
+    )
     expect(
       yield* Effect.promise(() =>
-        readFile(`${result.artifacts}/seeded-at-launch.txt`, "utf8"),
-      ),
-    ).toBe("export const seeded = true\n")
-    expect(
-      yield* Effect.promise(() =>
-        readFile(
-          `${result.artifacts}/files/.opencode/opencode.jsonc`,
-          "utf8",
-        ).then(JSON.parse),
+        readFile(`${result.artifacts}/files/.opencode/opencode.jsonc`, "utf8").then(JSON.parse),
       ),
     ).toMatchObject({
       autoupdate: false,
@@ -97,32 +86,24 @@ it.live("runs and settles a complete scoped driver", () =>
       items: ["declared"],
     })
     expect(
-      yield* Effect.promise(() =>
-        readFile(
-          `${result.artifacts}/files/.opencode/tui.jsonc`,
-          "utf8",
-        ).then(JSON.parse),
-      ),
+      yield* Effect.promise(() => readFile(`${result.artifacts}/files/.opencode/tui.jsonc`, "utf8").then(JSON.parse)),
     ).toEqual({ theme: { declared: true, setup: true } })
-    expect(
-      yield* Effect.promise(() =>
-        readFile(`${result.artifacts}/backend-events.jsonl`, "utf8"),
-      ),
-    ).toContain("library response")
+    expect(yield* Effect.promise(() => readFile(`${result.artifacts}/backend-events.jsonl`, "utf8"))).toContain(
+      "library response",
+    )
     expect(
       result.recording === undefined
         ? false
         : yield* Effect.promise(() =>
-            stat(result.recording).then(() => true, () => false),
+            stat(result.recording).then(
+              () => true,
+              () => false,
+            ),
           ),
     ).toBe(true)
 
     for (const file of ["service.pid", "child.pid"]) {
-      const pid = Number(
-        yield* Effect.promise(() =>
-          readFile(`${result.artifacts}/${file}`, "utf8"),
-        ),
-      )
+      const pid = Number(yield* Effect.promise(() => readFile(`${result.artifacts}/${file}`, "utf8")))
       expect(isRunning(pid)).toBe(false)
     }
   }),
@@ -170,9 +151,7 @@ it.live("supports explicit terminal settlement with make", () =>
           opencode: { command: fakeOpenCode },
         })
         artifacts = driver.artifacts
-        yield* driver.llm.queue(
-          Llm.text("explicit settlement", { delay: 0, chunkSize: 100 }),
-        )
+        yield* driver.llm.queue(Llm.text("explicit settlement", { delay: 0, chunkSize: 100 }))
         const settlement = yield* driver.settle()
         expect(settlement).toMatchObject({
           artifacts: driver.artifacts,
@@ -191,7 +170,12 @@ it.live("supports explicit terminal settlement with make", () =>
       }),
     )
     expect(
-      yield* Effect.promise(() => stat(artifacts).then(() => true, () => false)),
+      yield* Effect.promise(() =>
+        stat(artifacts).then(
+          () => true,
+          () => false,
+        ),
+      ),
     ).toBe(false)
   }),
 )
@@ -227,9 +211,7 @@ it.live("injects declared tool handlers for library drivers", () =>
       },
       (driver) => Effect.succeed(driver.artifacts),
     )
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
     const config = yield* Effect.promise(() =>
       readFile(`${artifacts}/files/.opencode/opencode.jsonc`, "utf8").then(JSON.parse),
     )
@@ -256,9 +238,7 @@ it.live("exposes runtime controls for tools declared by name", () =>
           return driver.artifacts
         }),
     )
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
     const config = yield* Effect.promise(() =>
       readFile(`${artifacts}/files/.opencode/opencode.jsonc`, "utf8").then(JSON.parse),
     )
@@ -318,12 +298,11 @@ it.live("controls arbitrary provider-backed tools through the runtime lifecycle"
           return driver.artifacts
         }),
     )
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
-    const events = (yield* Effect.promise(() =>
-      readFile(`${artifacts}/tool-events.jsonl`, "utf8"),
-    )).trim().split("\n").map((line) => JSON.parse(line))
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
+    const events = (yield* Effect.promise(() => readFile(`${artifacts}/tool-events.jsonl`, "utf8")))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
     expect(events).toEqual([
       expect.objectContaining({ method: "tool.attach" }),
       expect.objectContaining({ method: "tool.attach" }),
@@ -364,12 +343,7 @@ it.live("surfaces a permanent tool reconnect failure", () =>
         {
           keepArtifacts: true,
           opencode: {
-            command: [
-              ...fakeOpenCode,
-              "dynamic-tool",
-              "reconnect-tool",
-              "reject-tool-reconnect",
-            ],
+            command: [...fakeOpenCode, "dynamic-tool", "reconnect-tool", "reject-tool-reconnect"],
           },
         },
         (driver) =>
@@ -395,17 +369,10 @@ it.live("surfaces a permanent tool reconnect failure", () =>
       ),
     )
     yield* Effect.addFinalizer(() =>
-      artifacts === ""
-        ? Effect.void
-        : Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
+      artifacts === "" ? Effect.void : Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
     )
-    if (Exit.isSuccess(result))
-      return yield* Effect.dieMessage("driver unexpectedly succeeded")
-    expect(
-      result.cause.reasons
-        .filter(Cause.isFailReason)
-        .map((reason) => reason.error),
-    ).toContainEqual(
+    if (Exit.isSuccess(result)) return yield* Effect.dieMessage("driver unexpectedly succeeded")
+    expect(result.cause.reasons.filter(Cause.isFailReason).map((reason) => reason.error)).toContainEqual(
       expect.objectContaining({
         _tag: "OpenCodeDriverError",
         operation: "tools.connect",
@@ -467,11 +434,7 @@ it.live("settles and exports recordings when the user program fails", () =>
     expect(Exit.isFailure(result)).toBe(true)
     expect(yield* exists(recording)).toBe(true)
     for (const file of ["service.pid", "child.pid"]) {
-      const pid = Number(
-        yield* Effect.promise(() =>
-          readFile(`${artifacts}/${file}`, "utf8"),
-        ),
-      )
+      const pid = Number(yield* Effect.promise(() => readFile(`${artifacts}/${file}`, "utf8")))
       expect(isRunning(pid)).toBe(false)
     }
   }),
@@ -494,9 +457,7 @@ it.live("preserves user and settlement failures", () =>
               const directory = `${driver.artifacts}/drive`
               for (const file of await readdir(directory)) {
                 if (!file.endsWith(".json")) continue
-                const manifest: unknown = JSON.parse(
-                  await readFile(`${directory}/${file}`, "utf8"),
-                )
+                const manifest: unknown = JSON.parse(await readFile(`${directory}/${file}`, "utf8"))
                 if (
                   typeof manifest === "object" &&
                   manifest !== null &&
@@ -514,14 +475,9 @@ it.live("preserves user and settlement failures", () =>
       ),
     )
 
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
-    if (Exit.isSuccess(result))
-      return yield* Effect.dieMessage("driver unexpectedly succeeded")
-    const failures = result.cause.reasons
-      .filter(Cause.isFailReason)
-      .map((reason) => reason.error)
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
+    if (Exit.isSuccess(result)) return yield* Effect.dieMessage("driver unexpectedly succeeded")
+    const failures = result.cause.reasons.filter(Cause.isFailReason).map((reason) => reason.error)
     expect(failures).toContain("user program failed")
     expect(failures).toContainEqual(
       expect.objectContaining({
@@ -554,11 +510,7 @@ it.live("interrupts use when the backend disconnects", () =>
                 },
               ],
             })
-            const pid = Number(
-              yield* Effect.promise(() =>
-                readFile(`${artifacts}/service.pid`, "utf8"),
-              ),
-            )
+            const pid = Number(yield* Effect.promise(() => readFile(`${artifacts}/service.pid`, "utf8")))
             process.kill(pid, "SIGKILL")
             return yield* Effect.never
           }),
@@ -570,11 +522,8 @@ it.live("interrupts use when the backend disconnects", () =>
       ),
     )
 
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
-    if (Exit.isSuccess(result))
-      return yield* Effect.dieMessage("driver unexpectedly succeeded")
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
+    if (Exit.isSuccess(result)) return yield* Effect.dieMessage("driver unexpectedly succeeded")
     expect(Cause.squash(result.cause)).toMatchObject({
       _tag: "LlmControllerError",
       operation: "backend",
@@ -595,10 +544,7 @@ it.live("closes TUIs and exports recordings after LLM settlement fails", () =>
         })
         artifacts = driver.artifacts
         recording = driver.tui.recording?.path ?? ""
-        yield* driver.llm.queue(
-          Llm.finish(),
-          Llm.text("too late", { delay: 0 }),
-        )
+        yield* driver.llm.queue(Llm.finish(), Llm.text("too late", { delay: 0 }))
         yield* driver.ui.submit("trigger invalid response")
         const failure = yield* driver.settle().pipe(Effect.flip)
         expect(failure).toMatchObject({
@@ -606,9 +552,7 @@ it.live("closes TUIs and exports recordings after LLM settlement fails", () =>
           operation: "respond",
         })
         expect(yield* exists(recording)).toBe(true)
-        expect(
-          (yield* driver.tuis.launch().pipe(Effect.flip)).operation,
-        ).toBe("tui.launch")
+        expect((yield* driver.tuis.launch().pipe(Effect.flip)).operation).toBe("tui.launch")
       }),
     )
 
@@ -619,11 +563,7 @@ it.live("closes TUIs and exports recordings after LLM settlement fails", () =>
       }),
     )
     for (const file of ["service.pid", "child.pid"]) {
-      const pid = Number(
-        yield* Effect.promise(() =>
-          readFile(`${artifacts}/${file}`, "utf8"),
-        ),
-      )
+      const pid = Number(yield* Effect.promise(() => readFile(`${artifacts}/${file}`, "utf8")))
       expect(isRunning(pid)).toBe(false)
     }
   }),
@@ -640,41 +580,34 @@ it.live("force kills unresponsive processes and preserves their logs", () =>
         },
       },
       (driver) =>
-        driver.llm.queue(
-          Llm.text("shutdown response", { delay: 0, chunkSize: 100 }),
-        ).pipe(Effect.as(driver.artifacts)),
+        driver.llm.queue(Llm.text("shutdown response", { delay: 0, chunkSize: 100 })).pipe(Effect.as(driver.artifacts)),
     )
     const elapsed = Date.now() - started
 
-    yield* Effect.addFinalizer(() =>
-      Effect.promise(() => rm(artifacts, { recursive: true, force: true })),
-    )
+    yield* Effect.addFinalizer(() => Effect.promise(() => rm(artifacts, { recursive: true, force: true })))
 
-    expect(
-      yield* Effect.promise(() =>
-        readFile(`${artifacts}/logs/service.stdout.log`, "utf8"),
-      ),
-    ).toContain("fake opencode service stdout")
-    expect(
-      yield* Effect.promise(() =>
-        readFile(`${artifacts}/logs/tui-0.stderr.log`, "utf8"),
-      ),
-    ).toContain("fake opencode client stderr")
+    expect(yield* Effect.promise(() => readFile(`${artifacts}/logs/service.stdout.log`, "utf8"))).toContain(
+      "fake opencode service stdout",
+    )
+    expect(yield* Effect.promise(() => readFile(`${artifacts}/logs/tui-0.stderr.log`, "utf8"))).toContain(
+      "fake opencode client stderr",
+    )
     expect(elapsed).toBeGreaterThanOrEqual(900)
     expect(elapsed).toBeLessThan(10_000)
     for (const file of ["service.pid", "child.pid"]) {
-      const pid = Number(
-        yield* Effect.promise(() =>
-          readFile(`${artifacts}/${file}`, "utf8"),
-        ),
-      )
+      const pid = Number(yield* Effect.promise(() => readFile(`${artifacts}/${file}`, "utf8")))
       expect(isRunning(pid)).toBe(false)
     }
   }),
 )
 
 const exists = (path: string) =>
-  Effect.promise(() => stat(path).then(() => true, () => false))
+  Effect.promise(() =>
+    stat(path).then(
+      () => true,
+      () => false,
+    ),
+  )
 
 function isRunning(pid: number) {
   try {

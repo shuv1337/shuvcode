@@ -5,23 +5,18 @@ import { resolveInstance, resolveVisibleInstance } from "../instance/registry.js
 import { configureLogFile } from "../log.js"
 
 export async function send(options: SendOptions) {
-  if (options.commands.length === 0)
-    throw new Error("send requires at least one --command.ui.* flag")
+  if (options.commands.length === 0) throw new Error("send requires at least one --command.ui.* flag")
   const result = await executeCommands(await resolveSendEndpoint(options.name), options.commands)
   if (
     options.commands.length === 1 &&
-    ["ui.screenshot", "ui.matches", "ui.recording.finish"].includes(
-      options.commands[0]?.operation ?? "",
-    )
+    ["ui.screenshot", "ui.matches", "ui.recording.finish"].includes(options.commands[0]?.operation ?? "")
   ) {
     console.log(result.results[0]?.result)
     return
   }
   if (
     options.commands.length === 1 &&
-    ["ui.state", "ui.snapshot", "ui.capture"].includes(
-      options.commands[0]?.operation ?? "",
-    )
+    ["ui.state", "ui.snapshot", "ui.capture"].includes(options.commands[0]?.operation ?? "")
   ) {
     console.log(JSON.stringify(result.results[0]?.result, undefined, 2))
     return

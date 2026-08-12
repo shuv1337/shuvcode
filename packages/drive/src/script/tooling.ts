@@ -122,15 +122,12 @@ async function typecheck(root: string, source: string, contract: Contract) {
     )}\n`,
   )
   const capture = contract === "script"
-  const child = Bun.spawn(
-    [process.execPath, join(compilerRoot, "bin", "tsgo.js"), "-p", tsconfig],
-    {
-      cwd: root,
-      stdin: "ignore",
-      stdout: capture ? "pipe" : "inherit",
-      stderr: capture ? "pipe" : "inherit",
-    },
-  )
+  const child = Bun.spawn([process.execPath, join(compilerRoot, "bin", "tsgo.js"), "-p", tsconfig], {
+    cwd: root,
+    stdin: "ignore",
+    stdout: capture ? "pipe" : "inherit",
+    stderr: capture ? "pipe" : "inherit",
+  })
   const [status, stdout, stderr] = await Promise.all([
     child.exited,
     capture ? new Response(child.stdout).text() : "",

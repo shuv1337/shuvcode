@@ -18,9 +18,7 @@ export default defineScript({
 
       yield* Effect.sleep(3_000)
       const frame = yield* tui.ui.capture()
-      yield* Effect.tryPromise(() =>
-        Bun.write(`${artifacts}/after-restart.frame.json`, JSON.stringify(frame, null, 2)),
-      )
+      yield* Effect.tryPromise(() => Bun.write(`${artifacts}/after-restart.frame.json`, JSON.stringify(frame, null, 2)))
 
       yield* tui.ui.waitFor("before-restart-prompt", { timeout: 5_000 })
       yield* llm.queue(Llm.text("after-restart-response"))

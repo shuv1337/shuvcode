@@ -24,19 +24,13 @@ describe("LlmController", () => {
               params: { ...request, id },
             }),
           )
-        sendResult(
-          socket,
-          frame,
-          frame.method === "llm.attach" ? { attached: true } : { ok: true },
-        )
+        sendResult(socket, frame, frame.method === "llm.attach" ? { attached: true } : { ok: true })
       })
     const first = peer("generation-1")
     const second = peer("generation-2")
 
     return Effect.gen(function* () {
-      yield* Effect.addFinalizer(() =>
-        Effect.promise(() => Promise.all([first.stop(), second.stop()])),
-      )
+      yield* Effect.addFinalizer(() => Effect.promise(() => Promise.all([first.stop(), second.stop()])))
       const llm = yield* LlmController.make()
       const firstBackend = yield* SimulationConnector.backend(first.url)
       const firstAttachment = yield* llm.attach(firstBackend)
@@ -48,16 +42,8 @@ describe("LlmController", () => {
       yield* llm.send(Llm.text("second", { delay: 0 }))
       yield* llm.settle()
 
-      expect(
-        first.received.some(({ request: frame }) =>
-          JSON.stringify(frame).includes("first"),
-        ),
-      ).toBe(true)
-      expect(
-        second.received.some(({ request: frame }) =>
-          JSON.stringify(frame).includes("second"),
-        ),
-      ).toBe(true)
+      expect(first.received.some(({ request: frame }) => JSON.stringify(frame).includes("first"))).toBe(true)
+      expect(second.received.some(({ request: frame }) => JSON.stringify(frame).includes("second"))).toBe(true)
     })
   })
 
@@ -135,9 +121,7 @@ describe("LlmController", () => {
       )
       yield* llm.settle()
 
-      const chunks = peer.received
-        .map(({ request: frame }) => frame)
-        .filter((frame) => frame.method === "llm.chunk")
+      const chunks = peer.received.map(({ request: frame }) => frame).filter((frame) => frame.method === "llm.chunk")
       expect(chunks).toEqual([
         expect.objectContaining({
           params: {
@@ -191,15 +175,10 @@ describe("LlmController", () => {
               params: request,
             }),
           )
-        sendResult(
-          socket,
-          frame,
-          frame.method === "llm.attach" ? { attached: true } : { ok: true },
-        )
+        sendResult(socket, frame, frame.method === "llm.attach" ? { attached: true } : { ok: true })
       },
       {
-        capabilities: (offered) =>
-          offered.filter((capability) => capability !== "llm.tool-input-delta"),
+        capabilities: (offered) => offered.filter((capability) => capability !== "llm.tool-input-delta"),
       },
     )
 
@@ -221,9 +200,7 @@ describe("LlmController", () => {
       )
       yield* llm.settle()
 
-      const chunk = peer.received.find(
-        ({ request: frame }) => frame.method === "llm.chunk",
-      )?.request
+      const chunk = peer.received.find(({ request: frame }) => frame.method === "llm.chunk")?.request
       expect(chunk).toMatchObject({
         params: {
           id: "exchange-1",
@@ -284,8 +261,7 @@ describe("LlmController", () => {
       yield* llm.title(() => Effect.succeed("A concise title"))
       yield* llm.serve(() => LlmController.response(Llm.text("served", { delay: 0, chunkSize: 100 })))
       const attached = peer.received[0]
-      if (attached === undefined)
-        return yield* Effect.dieMessage("llm.attach was not received")
+      if (attached === undefined) return yield* Effect.dieMessage("llm.attach was not received")
       const socket = attached.socket
       for (const params of [titleRequest, request])
         socket.send(
@@ -362,8 +338,7 @@ describe("LlmController", () => {
       }
       if (frame.method === "llm.chunk" && ++chunks === 2)
         return sendError(socket, frame, "Simulated provider invocation not found or already finished: exchange-1")
-      if (frame.method === "llm.pending")
-        return sendResult(socket, frame, { invocations: [] })
+      if (frame.method === "llm.pending") return sendResult(socket, frame, { invocations: [] })
       sendResult(socket, frame, { ok: true })
     })
 
@@ -399,8 +374,7 @@ describe("LlmController", () => {
         return sendResult(socket, frame, { attached: true })
       }
       if (frame.method === "llm.chunk") return sendError(socket, frame, "chunk rejected")
-      if (frame.method === "llm.pending")
-        return sendResult(socket, frame, { invocations: [request] })
+      if (frame.method === "llm.pending") return sendResult(socket, frame, { invocations: [request] })
       sendResult(socket, frame, { ok: true })
     })
 
@@ -484,17 +458,11 @@ describe("LlmController", () => {
       const backend = yield* SimulationConnector.backend(peer.url)
       const llm = yield* LlmController.make(backend)
       yield* Effect.yieldNow
-      yield* llm.serve(() =>
-        LlmController.response(
-          Llm.text("late serve", { delay: 0, chunkSize: 100 }),
-        ),
-      )
+      yield* llm.serve(() => LlmController.response(Llm.text("late serve", { delay: 0, chunkSize: 100 })))
       yield* llm.settle()
       expect(
         peer.received.some(
-          ({ request }) =>
-            request.method === "llm.chunk" &&
-            JSON.stringify(request.params).includes("late serve"),
+          ({ request }) => request.method === "llm.chunk" && JSON.stringify(request.params).includes("late serve"),
         ),
       ).toBe(true)
     })
@@ -539,9 +507,7 @@ describe("LlmController", () => {
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const backend = yield* SimulationConnector.backend(peer.url)
       const llm = yield* LlmController.make(backend)
-      const sending = yield* Effect.forkChild(
-        llm.send(Llm.text("pending")).pipe(Effect.flip),
-      )
+      const sending = yield* Effect.forkChild(llm.send(Llm.text("pending")).pipe(Effect.flip))
       yield* Effect.yieldNow
       yield* llm.shutdown()
       const failure = yield* Fiber.join(sending)

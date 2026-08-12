@@ -2,10 +2,7 @@ import { Effect } from "effect"
 import { defineScript, Llm } from "opencode-drive"
 
 export default defineScript({
-  setup: ({ fs }) => fs.writeFile(
-    "src/message.ts",
-    'export const message = "Hello from OpenCode Drive"\n',
-  ),
+  setup: ({ fs }) => fs.writeFile("src/message.ts", 'export const message = "Hello from OpenCode Drive"\n'),
 
   run: ({ llm, ui }) =>
     Effect.gen(function* () {
@@ -20,19 +17,15 @@ export default defineScript({
           chunkSize: 10,
         }),
         Llm.pause(100),
-        Llm.text(
-          'src/message.ts exports `message` with the value "Hello from OpenCode Drive".',
-          {
-            delay: 10,
-            chunkSize: 12,
-          },
-        ),
+        Llm.text('src/message.ts exports `message` with the value "Hello from OpenCode Drive".', {
+          delay: 10,
+          chunkSize: 12,
+        }),
       )
       yield* llm.send(Llm.text("Message export"))
 
       yield* ui.waitFor("Hello from OpenCode Drive")
-      if (!(yield* ui.matches("OpenCode Drive")))
-        throw new Error("the expected response was not visible")
+      if (!(yield* ui.matches("OpenCode Drive"))) throw new Error("the expected response was not visible")
 
       yield* ui.screenshot("simple-response")
     }),

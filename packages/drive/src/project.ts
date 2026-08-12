@@ -17,21 +17,15 @@ export interface OpenCodeConfig extends JsonObject {}
 /** OpenCode's semantic TUI configuration, written to tui.jsonc. */
 export interface OpenCodeTuiConfig extends JsonObject {}
 
-export class FileSystemError extends Schema.TaggedErrorClass<FileSystemError>()(
-  "FileSystemError",
-  {
-    path: Schema.String,
-    cause: Schema.Defect(),
-    message: Schema.String,
-  },
-) {}
+export class FileSystemError extends Schema.TaggedErrorClass<FileSystemError>()("FileSystemError", {
+  path: Schema.String,
+  cause: Schema.Defect(),
+  message: Schema.String,
+}) {}
 
 export interface ProjectFileSystem {
   /** Writes inside the isolated project and creates parent directories. */
-  writeFile(
-    path: string,
-    contents: string | Uint8Array,
-  ): Effect.Effect<void, FileSystemError>
+  writeFile(path: string, contents: string | Uint8Array): Effect.Effect<void, FileSystemError>
 }
 
 export interface SetupContext {
@@ -49,6 +43,4 @@ export interface Project {
   readonly git?: boolean
 }
 
-export type Setup = (
-  context: SetupContext,
-) => Effect.Effect<void, unknown>
+export type Setup = (context: SetupContext) => Effect.Effect<void, unknown>

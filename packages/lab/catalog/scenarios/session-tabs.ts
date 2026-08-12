@@ -39,13 +39,15 @@ export const sessionTabsFlow = defineExecutableFlow(
       step: { title: "Review idle tabs" },
     })
 
-    return program([running, idle], ({ driver, checkpoint }) => Effect.gen(function* () {
-      yield* driver.llm.queue(Llm.text("Working on a tab audit."), Llm.pause(2_000), Llm.text("Tab audit complete."))
-      yield* driver.ui.submit("Audit the current tab state.")
-      yield* driver.ui.waitFor("Working on a tab audit.", { timeout: 15_000 })
-      yield* checkpoint(running)
-      yield* driver.ui.waitFor("Tab audit complete.", { timeout: 15_000 })
-      yield* checkpoint(idle)
-    }))
+    return program([running, idle], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
+        yield* driver.llm.queue(Llm.text("Working on a tab audit."), Llm.pause(2_000), Llm.text("Tab audit complete."))
+        yield* driver.ui.submit("Audit the current tab state.")
+        yield* driver.ui.waitFor("Working on a tab audit.", { timeout: 15_000 })
+        yield* checkpoint(running)
+        yield* driver.ui.waitFor("Tab audit complete.", { timeout: 15_000 })
+        yield* checkpoint(idle)
+      }),
+    )
   },
 )

@@ -30,20 +30,14 @@ export const waitForWebSocket = Effect.fn("OpenCodeInstance.waitForWebSocket")(
       process.exitCode.pipe(
         Effect.flatMap((status) =>
           Effect.fail(
-            instanceError(
-              "wait for endpoint",
-              `OpenCode exited with status ${status} before ${url} became ready`,
-            ),
+            instanceError("wait for endpoint", `OpenCode exited with status ${status} before ${url} became ready`),
           ),
         ),
       ),
     ).pipe(
       Effect.timeoutOrElse({
         duration: timeout,
-        orElse: () =>
-          Effect.fail(
-            instanceError("wait for endpoint", `timed out waiting for drive endpoint ${url}`),
-          ),
+        orElse: () => Effect.fail(instanceError("wait for endpoint", `timed out waiting for drive endpoint ${url}`)),
       }),
     ),
 )

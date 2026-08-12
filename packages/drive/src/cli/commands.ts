@@ -91,13 +91,8 @@ export class CommandBatchError extends Error {
 
 const callTimeout = 30_000
 
-export async function executeCommands(
-  endpoint: string,
-  commands: ReadonlyArray<DriveCommand>,
-) {
-  const exit = await Effect.runPromiseExit(
-    Effect.scoped(executeBatch(endpoint, commands)),
-  )
+export async function executeCommands(endpoint: string, commands: ReadonlyArray<DriveCommand>) {
+  const exit = await Effect.runPromiseExit(Effect.scoped(executeBatch(endpoint, commands)))
   if (Exit.isSuccess(exit)) return exit.value
   const reason = Cause.squash(exit.cause)
   throw reason instanceof CommandBatchError ? reason : new CommandBatchError([], reason)
@@ -111,14 +106,10 @@ const executeBatch = Effect.fn("DriveCli.executeBatch")(function* (
     connectTimeout: callTimeout,
   }).pipe(
     Effect.mapError(
-      (cause) =>
-        new SimulationError(
-          cause instanceof Error ? cause.message : `cannot connect to ${endpoint}`,
-        ),
+      (cause) => new SimulationError(cause instanceof Error ? cause.message : `cannot connect to ${endpoint}`),
     ),
   )
-  const results: Array<{ readonly command: string; readonly result: unknown }> =
-    []
+  const results: Array<{ readonly command: string; readonly result: unknown }> = []
   for (const command of commands) {
     const result = yield* execute(connection, command).pipe(
       Effect.mapError((error) => new CommandBatchError(results, error)),
@@ -133,39 +124,21 @@ const execute = (
   command: DriveCommand,
 ): Effect.Effect<unknown, SimulationError> =>
   Effect.suspend(() => {
-    recordLog(
-      "INFO",
-      `ui command ${command.operation} params=${command.value ?? "undefined"}`,
-    )
+    recordLog("INFO", `ui command ${command.operation} params=${command.value ?? "undefined"}`)
     return dispatch(connection, decodeCommand(command))
   }).pipe(
     Effect.timeoutOrElse({
       duration: callTimeout,
-      orElse: () =>
-        Effect.fail(
-          new SimulationError(
-            `timed out after ${callTimeout}ms`,
-            command.operation,
-          ),
-        ),
+      orElse: () => Effect.fail(new SimulationError(`timed out after ${callTimeout}ms`, command.operation)),
     }),
     Effect.mapError((cause) =>
       cause instanceof SimulationError
         ? cause
-        : new SimulationError(
-            cause instanceof Error ? cause.message : String(cause),
-            command.operation,
-          ),
+        : new SimulationError(cause instanceof Error ? cause.message : String(cause), command.operation),
     ),
-    Effect.tap(() =>
-      Effect.sync(() =>
-        recordLog("INFO", `ui command ${command.operation} completed`),
-      ),
-    ),
+    Effect.tap(() => Effect.sync(() => recordLog("INFO", `ui command ${command.operation} completed`))),
     Effect.tapError((error) =>
-      Effect.sync(() =>
-        recordLog("ERROR", `ui command ${command.operation} failed: ${error.message}`),
-      ),
+      Effect.sync(() => recordLog("ERROR", `ui command ${command.operation} failed: ${error.message}`)),
     ),
   )
 
@@ -176,9 +149,7 @@ function decodeCommand(command: DriveCommand): Frontend.Request {
     {
       jsonrpc: "2.0",
       method: command.operation,
-      ...(command.value === undefined
-        ? {}
-        : { params: JSON.parse(command.value) }),
+      ...(command.value === undefined ? {} : { params: JSON.parse(command.value) }),
     },
     { onExcessProperty: "error" },
   )
@@ -192,22 +163,14 @@ function dispatch(
     request.method === "ui.snapshot" &&
     !SimulationConnector.supportsCapability(connection.compatibility, "ui.snapshot")
   )
-    return Effect.fail(
-      new SimulationError(
-        "ui.snapshot is not available on this OpenCode endpoint",
-        request.method,
-      ),
-    )
+    return Effect.fail(new SimulationError("ui.snapshot is not available on this OpenCode endpoint", request.method))
   if (
     request.method === "ui.click" &&
     request.params.semantic !== undefined &&
     !SimulationConnector.supportsCapability(connection.compatibility, "ui.click.semantic")
   )
     return Effect.fail(
-      new SimulationError(
-        "semantic ui.click is not available on this OpenCode endpoint",
-        request.method,
-      ),
+      new SimulationError("semantic ui.click is not available on this OpenCode endpoint", request.method),
     )
   switch (request.method) {
     case "ui.type":

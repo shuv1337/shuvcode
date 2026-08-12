@@ -1,15 +1,7 @@
 import { rm } from "node:fs/promises"
 import * as Effect from "effect/Effect"
-import {
-  initializeInstance,
-  prepareInstanceProject,
-} from "../instance/instance.js"
-import type {
-  OpenCodeConfig,
-  OpenCodeTuiConfig,
-  Project as ProjectDefinition,
-  Setup,
-} from "../project.js"
+import { initializeInstance, prepareInstanceProject } from "../instance/instance.js"
+import type { OpenCodeConfig, OpenCodeTuiConfig, Project as ProjectDefinition, Setup } from "../project.js"
 import { error } from "./error.js"
 
 export interface Options {
@@ -25,9 +17,7 @@ export interface Project {
   readonly artifacts: string
 }
 
-export const make = Effect.fn("OpenCodeProject.make")(function* (
-  options: Options = {},
-) {
+export const make = Effect.fn("OpenCodeProject.make")(function* (options: Options = {}) {
   const artifacts = yield* Effect.acquireRelease(
     Effect.tryPromise({
       try: () => initializeInstance(),
@@ -47,9 +37,7 @@ export const make = Effect.fn("OpenCodeProject.make")(function* (
     config: options.config,
     tui: options.tui,
     setup: options.setup,
-  }).pipe(
-    Effect.mapError((cause) => error("project.prepare", cause)),
-  )
+  }).pipe(Effect.mapError((cause) => error("project.prepare", cause)))
   return { artifacts }
 })
 

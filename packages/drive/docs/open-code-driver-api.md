@@ -70,9 +70,7 @@ const program = OpenCodeDriver.use(
   },
   ({ ui, llm }) =>
     Effect.gen(function* () {
-      yield* llm.queue(
-        Llm.text("The value is 1."),
-      )
+      yield* llm.queue(Llm.text("The value is 1."))
 
       yield* ui.submit("Read src/example.ts")
       yield* ui.waitFor("The value is 1.")
@@ -101,9 +99,9 @@ its UI is also available directly as `ui`, and `tuis` launches more frontend
 processes:
 
 ```ts
-const health = yield* driver.opencode.health.get()
-const frame = yield* driver.tui.ui.capture()
-const secondary = yield* driver.tuis.launch()
+const health = yield * driver.opencode.health.get()
+const frame = yield * driver.tui.ui.capture()
+const secondary = yield * driver.tuis.launch()
 ```
 
 ## The driver has one primary TUI and optional additional TUIs
@@ -169,27 +167,25 @@ relaunching the same TUI: `tuis.launch(name, options)`.
 Scripts that only need the primary TUI should normally destructure the driver:
 
 ```ts
-const driver = yield* OpenCodeDriver.make()
+const driver = yield * OpenCodeDriver.make()
 const { ui, llm } = driver
 
-yield* llm.queue(
-  Llm.text("Hello from the simulated model."),
-)
+yield * llm.queue(Llm.text("Hello from the simulated model."))
 
-yield* ui.submit("Hello")
-yield* ui.waitFor("Hello from the simulated model.")
-yield* driver.settle()
+yield * ui.submit("Hello")
+yield * ui.waitFor("Hello from the simulated model.")
+yield * driver.settle()
 ```
 
 Keep the aggregate value only when driver-wide capabilities such as `tuis` are needed:
 
 ```ts
-const oc = yield* OpenCodeDriver.make()
-const secondary = yield* oc.tuis.launch()
+const oc = yield * OpenCodeDriver.make()
+const secondary = yield * oc.tuis.launch()
 
-yield* oc.ui.screenshot("primary")
-yield* secondary.ui.screenshot("secondary")
-yield* oc.settle()
+yield * oc.ui.screenshot("primary")
+yield * secondary.ui.screenshot("secondary")
+yield * oc.settle()
 ```
 
 ## Runtime tool control uses statically declared adapters
@@ -199,33 +195,31 @@ then control each invocation through the live `tools` capability. Undeclared
 tools keep their real OpenCode implementations.
 
 ```ts
-const program = OpenCodeDriver.use(
-  { tools: ["shell"] },
-  ({ tools, llm, ui }) =>
-    Effect.gen(function* () {
-      const shells = yield* tools.control("shell")
-      yield* llm.queue(
-        Llm.toolCall({
-          index: 0,
-          id: "call_build",
-          name: "shell",
-          input: { command: "bun run build" },
-        }),
-        Llm.toolCall({
-          index: 1,
-          id: "call_test",
-          name: "shell",
-          input: { command: "bun run test" },
-        }),
-        Llm.finish("tool-calls"),
-      )
-      yield* ui.submit("Build and test")
+const program = OpenCodeDriver.use({ tools: ["shell"] }, ({ tools, llm, ui }) =>
+  Effect.gen(function* () {
+    const shells = yield* tools.control("shell")
+    yield* llm.queue(
+      Llm.toolCall({
+        index: 0,
+        id: "call_build",
+        name: "shell",
+        input: { command: "bun run build" },
+      }),
+      Llm.toolCall({
+        index: 1,
+        id: "call_test",
+        name: "shell",
+        input: { command: "bun run test" },
+      }),
+      Llm.finish("tool-calls"),
+    )
+    yield* ui.submit("Build and test")
 
-      const build = yield* shells.take("call_build")
-      const test = yield* shells.take("call_test")
-      yield* test.succeed({ output: "Tests passed\n", exit: 0 })
-      yield* build.succeed({ output: "Build passed\n", exit: 0 })
-    }),
+    const build = yield* shells.take("call_build")
+    const test = yield* shells.take("call_test")
+    yield* test.succeed({ output: "Tests passed\n", exit: 0 })
+    yield* build.succeed({ output: "Build passed\n", exit: 0 })
+  }),
 )
 ```
 
@@ -251,30 +245,33 @@ permission, namespace, and CodeMode options. Static `shell`, `webfetch`, and
 `websearch` adapters remain installed separately.
 
 ```ts
-yield* tools.attach({
-  tools: [
-    {
-      name: "lookup",
-      description: "Look up a value",
-      inputSchema: {
-        type: "object",
-        properties: { query: { type: "string" } },
-        required: ["query"],
+yield *
+  tools.attach({
+    tools: [
+      {
+        name: "lookup",
+        description: "Look up a value",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        options: { codemode: false },
       },
-      options: { codemode: false },
-    },
-  ],
-})
+    ],
+  })
 
-const invocation = yield* tools.take("call_lookup")
-yield* invocation.progress({
-  structured: { phase: "searching" },
-  content: [{ type: "text", text: "Searching" }],
-})
-yield* invocation.finish({
-  structured: { answer: 42 },
-  content: [{ type: "text", text: "42" }],
-})
+const invocation = yield * tools.take("call_lookup")
+yield *
+  invocation.progress({
+    structured: { phase: "searching" },
+    content: [{ type: "text", text: "Searching" }],
+  })
+yield *
+  invocation.finish({
+    structured: { answer: 42 },
+    content: [{ type: "text", text: "42" }],
+  })
 ```
 
 `take(callID)` matches `context.callID`, the model call ID supplied to
@@ -295,15 +292,16 @@ tool lifecycle capabilities are unavailable.
 `Llm` is a pure data module. `llm` is the live capability that queues, sends, and serves responses.
 
 ```ts
-yield* llm.queue(
-  Llm.reasoning("Inspecting the file"),
-  Llm.pause(20),
-  Llm.text("The value is 1.", {
-    delay: 2,
-    chunkSize: 15,
-  }),
-  Llm.finish("stop"),
-)
+yield *
+  llm.queue(
+    Llm.reasoning("Inspecting the file"),
+    Llm.pause(20),
+    Llm.text("The value is 1.", {
+      delay: 2,
+      chunkSize: 15,
+    }),
+    Llm.finish("stop"),
+  )
 ```
 
 Each constructor returns an ordinary serializable value. Raw values with the same schema remain accepted.
@@ -354,25 +352,14 @@ export const Finish = Schema.Struct({
 })
 export interface Finish extends Schema.Schema.Type<typeof Finish> {}
 
-export const Output = Schema.Union([
-  Text,
-  Reasoning,
-  Pause,
-  Finish,
-  ToolCall,
-  Raw,
-  Disconnect,
-])
+export const Output = Schema.Union([Text, Reasoning, Pause, Finish, ToolCall, Raw, Disconnect])
 export type Output = Schema.Schema.Type<typeof Output>
 ```
 
 Pure constructors delegate to those individual schemas:
 
 ```ts
-export const text = (
-  text: string,
-  options?: StreamOptions,
-): Text =>
+export const text = (text: string, options?: StreamOptions): Text =>
   Text.make({
     type: "text",
     text,
@@ -387,25 +374,24 @@ No `.cases` interface appears in userland.
 Multiple outputs in one call are ordered events within one response:
 
 ```ts
-yield* llm.queue(
-  Llm.toolCall({
-    index: 0,
-    id: "call_permission_capture",
-    name: "patch",
-    input: {
-      patchText,
-    },
-  }),
-  Llm.finish("tool-calls"),
-)
+yield *
+  llm.queue(
+    Llm.toolCall({
+      index: 0,
+      id: "call_permission_capture",
+      name: "patch",
+      input: {
+        patchText,
+      },
+    }),
+    Llm.finish("tool-calls"),
+  )
 ```
 
 A second call queues a response for the next model request:
 
 ```ts
-yield* llm.queue(
-  Llm.text("The fixture was updated."),
-)
+yield * llm.queue(Llm.text("The fixture was updated."))
 ```
 
 Responses without an explicit terminal output finish with `"stop"`. Title requests remain separate and do not consume this queue.
@@ -440,9 +426,7 @@ itself is also an Effect:
 import { Stream } from "effect"
 import { Llm } from "opencode-drive"
 
-yield* llm.serve((_request, index) =>
-  Stream.make(Llm.text(`Response ${index + 1}`)),
-)
+yield * llm.serve((_request, index) => Stream.make(Llm.text(`Response ${index + 1}`)))
 ```
 
 Predicates passed to `ui.waitFor` may return a boolean or an Effect.
@@ -457,23 +441,25 @@ control while unsupported semantic operations fail locally with
 `UiCapabilityError`.
 
 ```ts
-const option = yield* ui.getNode({
-  role: "option",
-  label: "Allow once",
-  selected: true,
-})
-yield* ui.click(option)
+const option =
+  yield *
+  ui.getNode({
+    role: "option",
+    label: "Allow once",
+    selected: true,
+  })
+yield * ui.click(option)
 ```
 
 ### Additional TUI
 
 ```ts
-yield* server.launch()
-const alice = yield* tuis.launch("alice")
-const bob = yield* tuis.launch("bob")
+yield * server.launch()
+const alice = yield * tuis.launch("alice")
+const bob = yield * tuis.launch("bob")
 
-yield* alice.ui.submit("Hello from Alice")
-yield* bob.ui.screenshot("bob-view")
+yield * alice.ui.submit("Hello from Alice")
+yield * bob.ui.screenshot("bob-view")
 ```
 
 ### TUI configuration

@@ -2,24 +2,15 @@ export function isTitleRequest(body: unknown) {
   if (!isRecord(body) || !Array.isArray(body.messages)) return false
   const first = body.messages.find(isMessageObject)
   const firstContent = messageContent(first)
-  if (
-    first?.role === "user" &&
-    firstContent?.startsWith("Generate a title for this conversation:")
-  )
-    return true
-  const system = body.messages.find(
-    (message) => isMessageObject(message) && message.role === "system",
-  )
+  if (first?.role === "user" && firstContent?.startsWith("Generate a title for this conversation:")) return true
+  const system = body.messages.find((message) => isMessageObject(message) && message.role === "system")
   return messageContent(system)?.startsWith("You are a title generator.") ?? false
 }
 
 export function* chunkText(text: string, chunkSize: number) {
   const characters = Array.from(text)
   for (let index = 0; index < characters.length; ) {
-    const size = Math.max(
-      1,
-      chunkSize + Math.floor(Math.random() * 11) - 5,
-    )
+    const size = Math.max(1, chunkSize + Math.floor(Math.random() * 11) - 5)
     const end = Math.min(characters.length, index + size)
     yield characters.slice(index, end).join("")
     index = end

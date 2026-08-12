@@ -8,27 +8,18 @@ export default defineScript({
     Effect.gen(function* () {
       yield* server.launch()
 
-      yield* llm.serve((_request, index) =>
-        Stream.make(Llm.text(`Response for request ${index + 1}`)),
-      )
+      yield* llm.serve((_request, index) => Stream.make(Llm.text(`Response for request ${index + 1}`)))
 
       const [alice, bob] = yield* Effect.all(
-        [
-          tuis.launch("alice", { recording: true }),
-          tuis.launch("bob", { recording: true }),
-        ],
+        [tuis.launch("alice", { recording: true }), tuis.launch("bob", { recording: true })],
         { concurrency: "unbounded" },
       )
 
+      yield* Effect.all([alice.ui.submit("Reply to Alice"), bob.ui.submit("Reply to Bob")], {
+        concurrency: "unbounded",
+      })
       yield* Effect.all(
-        [alice.ui.submit("Reply to Alice"), bob.ui.submit("Reply to Bob")],
-        { concurrency: "unbounded" },
-      )
-      yield* Effect.all(
-        [
-          alice.ui.screenshot("multiple-clients-alice-submitted"),
-          bob.ui.screenshot("multiple-clients-bob-submitted"),
-        ],
+        [alice.ui.screenshot("multiple-clients-alice-submitted"), bob.ui.screenshot("multiple-clients-bob-submitted")],
         { concurrency: "unbounded" },
       )
       yield* Effect.all(
@@ -40,10 +31,7 @@ export default defineScript({
       )
 
       yield* Effect.all(
-        [
-          alice.ui.screenshot("multiple-clients-alice-complete"),
-          bob.ui.screenshot("multiple-clients-bob-complete"),
-        ],
+        [alice.ui.screenshot("multiple-clients-alice-complete"), bob.ui.screenshot("multiple-clients-bob-complete")],
         { concurrency: "unbounded" },
       )
 

@@ -181,8 +181,7 @@ function buildResults({
   onFlow,
 }: BuildResultsInput): ReadonlyArray<CommandResult> {
   const needle = query.trim().toLowerCase()
-  const matches = (...values: ReadonlyArray<string>) =>
-    needle === "" || values.join(" ").toLowerCase().includes(needle)
+  const matches = (...values: ReadonlyArray<string>) => needle === "" || values.join(" ").toLowerCase().includes(needle)
   const results: Array<CommandResult> = []
 
   for (const group of catalog.screenTaxonomy) {

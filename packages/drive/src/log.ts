@@ -59,10 +59,7 @@ export function recordLog(level: "INFO" | "ERROR", message: string) {
 
 function append(level: "INFO" | "ERROR", message: string) {
   if (!currentLogFile) return
-  appendBestEffort(
-    currentLogFile,
-    `[${new Date().toISOString()}] ${level} ${message}\n`,
-  )
+  appendBestEffort(currentLogFile, `[${new Date().toISOString()}] ${level} ${message}\n`)
 }
 
 function appendBestEffort(path: string, contents: string) {

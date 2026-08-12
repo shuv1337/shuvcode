@@ -4,10 +4,7 @@ import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
 import * as Llm from "../llm/index.js"
 import { chunkText } from "../llm/internal.js"
-import {
-  supportsCapability,
-  type BackendConnection,
-} from "../simulation/connector.js"
+import { supportsCapability, type BackendConnection } from "../simulation/connector.js"
 import { controllerError, LlmControllerError } from "./llm-errors.js"
 
 /**
@@ -33,10 +30,7 @@ export interface Responder {
   ) => Effect.Effect<void, LlmControllerError>
 }
 
-class InvocationTerminated extends Schema.TaggedErrorClass<InvocationTerminated>()(
-  "InvocationTerminated",
-  {},
-) {}
+class InvocationTerminated extends Schema.TaggedErrorClass<InvocationTerminated>()("InvocationTerminated", {}) {}
 
 const decodeOutput = Schema.decodeUnknownEffect(Llm.Output)
 
@@ -60,9 +54,7 @@ export const make = ({ requestTimeout }: Options): Responder => {
     }).pipe(
       Effect.catch((error) => classifyWriteFailure(backend, requestId, error)),
       Effect.mapError((cause) =>
-        cause instanceof InvocationTerminated
-          ? cause
-          : controllerError(operation, cause, requestId),
+        cause instanceof InvocationTerminated ? cause : controllerError(operation, cause, requestId),
       ),
     )
 
@@ -72,16 +64,10 @@ export const make = ({ requestTimeout }: Options): Responder => {
     error: E,
   ): Effect.Effect<never, E | InvocationTerminated> =>
     Effect.gen(function* () {
-      if (
-        !supportsCapability(backend.compatibility, "llm.pending")
-      )
-        return yield* Effect.fail(error)
-      const pending = yield* Effect.exit(
-        backend.rpc["llm.pending"]().pipe(Effect.timeout(requestTimeout)),
-      )
+      if (!supportsCapability(backend.compatibility, "llm.pending")) return yield* Effect.fail(error)
+      const pending = yield* Effect.exit(backend.rpc["llm.pending"]().pipe(Effect.timeout(requestTimeout)))
       if (Exit.isFailure(pending)) return yield* Effect.fail(error)
-      if (pending.value.invocations.some((invocation) => invocation.id === requestId))
-        return yield* Effect.fail(error)
+      if (pending.value.invocations.some((invocation) => invocation.id === requestId)) return yield* Effect.fail(error)
       return yield* Effect.fail(new InvocationTerminated())
     })
 
@@ -98,12 +84,7 @@ export const make = ({ requestTimeout }: Options): Responder => {
     for (let index = 0; index < chunks.length; index++) {
       const chunk = chunks[index]
       if (chunk === undefined) continue
-      yield* call(
-        backend,
-        "llm.chunk",
-        id,
-        backend.rpc["llm.chunk"]({ id, items: [{ type, text: chunk }] }),
-      )
+      yield* call(backend, "llm.chunk", id, backend.rpc["llm.chunk"]({ id, items: [{ type, text: chunk }] }))
       if (index < chunks.length - 1 && delay > 0) yield* Effect.sleep(delay)
     }
   })
@@ -116,10 +97,7 @@ export const make = ({ requestTimeout }: Options): Responder => {
     const delay = toolCall.options?.delay ?? 2
     const chunkSize = toolCall.options?.chunkSize ?? 15
     const chunks = [...chunkText(JSON.stringify(toolCall.input), chunkSize)]
-    const providerNeutral = supportsCapability(
-      backend.compatibility,
-      "llm.tool-input-delta",
-    )
+    const providerNeutral = supportsCapability(backend.compatibility, "llm.tool-input-delta")
     if (providerNeutral)
       yield* call(
         backend,
@@ -209,35 +187,17 @@ export const make = ({ requestTimeout }: Options): Responder => {
             ).pipe(Effect.asVoid)
           case "disconnect":
             terminal = true
-            return call(
-              backend,
-              "llm.disconnect",
-              requestId,
-              backend.rpc["llm.disconnect"]({ id: requestId }),
-            ).pipe(Effect.asVoid)
+            return call(backend, "llm.disconnect", requestId, backend.rpc["llm.disconnect"]({ id: requestId })).pipe(
+              Effect.asVoid,
+            )
           case "text":
-            return streamDelta(
-              backend,
-              requestId,
-              "textDelta",
-              item.text,
-              item.options,
-            )
+            return streamDelta(backend, requestId, "textDelta", item.text, item.options)
           case "reasoning":
-            return streamDelta(
-              backend,
-              requestId,
-              "reasoningDelta",
-              item.text,
-              item.options,
-            )
+            return streamDelta(backend, requestId, "reasoningDelta", item.text, item.options)
           case "pause":
-            return item.milliseconds === 0
-              ? Effect.void
-              : Effect.sleep(item.milliseconds)
+            return item.milliseconds === 0 ? Effect.void : Effect.sleep(item.milliseconds)
           case "toolCall": {
-            if (item.options !== undefined)
-              return streamToolCall(backend, requestId, item)
+            if (item.options !== undefined) return streamToolCall(backend, requestId, item)
             const { options: _, ...toolCall } = item
             return call(
               backend,
@@ -266,12 +226,9 @@ export const make = ({ requestTimeout }: Options): Responder => {
       Effect.mapError((cause) => controllerError("respond", cause, requestId)),
     )
     if (!terminal)
-      yield* call(
-        backend,
-        "llm.finish",
-        requestId,
-        backend.rpc["llm.finish"]({ id: requestId, reason: "stop" }),
-      ).pipe(Effect.catchTag("InvocationTerminated", () => Effect.void))
+      yield* call(backend, "llm.finish", requestId, backend.rpc["llm.finish"]({ id: requestId, reason: "stop" })).pipe(
+        Effect.catchTag("InvocationTerminated", () => Effect.void),
+      )
   })
 
   return { respond }

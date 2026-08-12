@@ -52,12 +52,9 @@ export const assistantLifecycleFlow = defineExecutableFlow(
       step: { title: "Response is interrupted" },
     })
 
-    return program(
-      [succeeded, failed, interrupted],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
-        yield* driver.llm.queue(
-          Llm.text("This assistant response completes successfully."),
-        )
+    return program([succeeded, failed, interrupted], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
+        yield* driver.llm.queue(Llm.text("This assistant response completes successfully."))
         yield* driver.ui.submit("Show a successful streaming assistant response.")
         yield* driver.ui.waitFor("completes successfully.", { timeout: 15_000 })
         yield* checkpoint(succeeded)

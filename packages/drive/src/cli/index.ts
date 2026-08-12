@@ -20,9 +20,7 @@ import { logError } from "../log.js"
 import type { DriveCommand, SendOptions, StartOptions } from "./types.js"
 
 const extracted = extract()
-const initName = Flag.string("name").pipe(
-  Flag.withDescription("Instance name"),
-)
+const initName = Flag.string("name").pipe(Flag.withDescription("Instance name"))
 const startName = Flag.string("name").pipe(
   Flag.optional,
   Flag.withDescription("Instance name (optional with --visible)"),
@@ -31,14 +29,9 @@ const name = Flag.string("name").pipe(
   Flag.optional,
   Flag.withDescription("Instance name (defaults to the visible instance)"),
 )
-const pruneName = Flag.string("name").pipe(
-  Flag.optional,
-  Flag.withDescription("Instance name"),
-)
+const pruneName = Flag.string("name").pipe(Flag.optional, Flag.withDescription("Instance name"))
 
-const initCommand = Command.make("init", { name: initName }, (config) =>
-  execute(() => init(config.name)),
-).pipe(
+const initCommand = Command.make("init", { name: initName }, (config) => execute(() => init(config.name))).pipe(
   Command.withDescription("Initialize an instance without launching OpenCode"),
   Command.withExamples([
     {
@@ -48,10 +41,8 @@ const initCommand = Command.make("init", { name: initName }, (config) =>
   ]),
 )
 
-const checkCommand = Command.make(
-  "check",
-  { file: Argument.string("script") },
-  (config) => execute(() => check(config.file)),
+const checkCommand = Command.make("check", { file: Argument.string("script") }, (config) =>
+  execute(() => check(config.file)),
 ).pipe(
   Command.withDescription("Type-check an OpenCode Drive script"),
   Command.withExamples([
@@ -62,10 +53,8 @@ const checkCommand = Command.make(
   ]),
 )
 
-const scriptInitCommand = Command.make(
-  "init",
-  { file: Argument.string("file") },
-  (config) => execute(() => initScript(config.file)),
+const scriptInitCommand = Command.make("init", { file: Argument.string("file") }, (config) =>
+  execute(() => initScript(config.file)),
 ).pipe(
   Command.withDescription("Create an Effect-native OpenCode Drive script"),
   Command.withExamples([
@@ -81,16 +70,13 @@ const scriptCommand = Command.make("script").pipe(
   Command.withSubcommands([scriptInitCommand]),
 )
 
-const runCommand = Command.make(
-  "run",
-  { module: Argument.string("module") },
-  (config) =>
-    executeEffect(
-      Effect.try({
-        try: () => toRunModule(config.module, extracted.commands, extracted.app),
-        catch: (error) => error,
-      }).pipe(Effect.flatMap(runProgram), Effect.asVoid),
-    ),
+const runCommand = Command.make("run", { module: Argument.string("module") }, (config) =>
+  executeEffect(
+    Effect.try({
+      try: () => toRunModule(config.module, extracted.commands, extracted.app),
+      catch: (error) => error,
+    }).pipe(Effect.flatMap(runProgram), Effect.asVoid),
+  ),
 ).pipe(
   Command.withDescription("Type-check and run a fully provided Effect program"),
   Command.withExamples([
@@ -105,10 +91,7 @@ const startCommand = Command.make(
   "start",
   {
     name: startName,
-    daemon: Flag.boolean("daemon").pipe(
-      Flag.withHidden,
-      Flag.withDescription("Run as detached instance owner"),
-    ),
+    daemon: Flag.boolean("daemon").pipe(Flag.withHidden, Flag.withDescription("Run as detached instance owner")),
     script: Flag.string("script").pipe(
       Flag.optional,
       Flag.withDescription("JavaScript or TypeScript automation module"),
@@ -117,10 +100,7 @@ const startCommand = Command.make(
     record: Flag.boolean("record").pipe(
       Flag.withDescription("Record the complete headless session and export it on stop"),
     ),
-    dev: Flag.string("dev").pipe(
-      Flag.optional,
-      Flag.withDescription("Path to an OpenCode development checkout"),
-    ),
+    dev: Flag.string("dev").pipe(Flag.optional, Flag.withDescription("Path to an OpenCode development checkout")),
   },
   (config) =>
     executeEffect(
@@ -148,9 +128,7 @@ const startCommand = Command.make(
 )
 
 const sendCommand = Command.make("send", { name }, (config) =>
-  execute(() =>
-    send(toSendOptions(Option.getOrUndefined(config.name), extracted.commands, extracted.app)),
-  ),
+  execute(() => send(toSendOptions(Option.getOrUndefined(config.name), extracted.commands, extracted.app))),
 ).pipe(
   Command.withDescription("Send UI commands to OpenCode on the default port"),
   Command.withExamples([
@@ -185,13 +163,8 @@ const pruneCommand = Command.make(
       Flag.withDescription("Delete all matching artifact directories, including active ones"),
     ),
   },
-  (config) =>
-    execute(() =>
-      prune({ name: Option.getOrUndefined(config.name), force: config.force }),
-    ),
-).pipe(
-  Command.withDescription("Delete artifact directories for inactive OpenCode instances"),
-)
+  (config) => execute(() => prune({ name: Option.getOrUndefined(config.name), force: config.force })),
+).pipe(Command.withDescription("Delete artifact directories for inactive OpenCode instances"))
 
 const root = Command.make("opencode-drive").pipe(
   Command.withDescription("Drive real and simulated OpenCode instances"),
@@ -227,11 +200,9 @@ function toStartOptions(
   commands: ReadonlyArray<DriveCommand>,
   app: ReadonlyArray<string>,
 ): StartOptions {
-  if (commands.length > 0)
-    throw new Error("start does not accept command flags; use send or --script")
+  if (commands.length > 0) throw new Error("start does not accept command flags; use send or --script")
   const name = Option.getOrUndefined(config.name)
-  if (name === undefined && !config.visible)
-    throw new Error("start requires --name unless --visible is passed")
+  if (name === undefined && !config.visible) throw new Error("start requires --name unless --visible is passed")
   const options = {
     kind: "start" as const,
     name: name ?? `visible-${process.pid}`,
@@ -242,20 +213,13 @@ function toStartOptions(
     dev: Option.getOrUndefined(config.dev),
     command: app,
   }
-  if (options.dev !== undefined && app.length > 0)
-    throw new Error("--dev cannot be combined with a command after --")
+  if (options.dev !== undefined && app.length > 0) throw new Error("--dev cannot be combined with a command after --")
   return options
 }
 
-function toRunModule(
-  module: string,
-  commands: ReadonlyArray<DriveCommand>,
-  app: ReadonlyArray<string>,
-) {
-  if (commands.length > 0)
-    throw new Error("run does not accept command flags")
-  if (app.length > 0)
-    throw new Error("run does not accept arguments after --")
+function toRunModule(module: string, commands: ReadonlyArray<DriveCommand>, app: ReadonlyArray<string>) {
+  if (commands.length > 0) throw new Error("run does not accept command flags")
+  if (app.length > 0) throw new Error("run does not accept arguments after --")
   return module
 }
 

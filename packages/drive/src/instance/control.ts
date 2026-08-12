@@ -1,9 +1,6 @@
 import { rm } from "node:fs/promises"
 import { connect, createServer } from "node:net"
-import type {
-  ResponseConfiguration,
-  ResponseUpdate,
-} from "../cli/response-generator.js"
+import type { ResponseConfiguration, ResponseUpdate } from "../cli/response-generator.js"
 
 export interface StopResult {
   readonly recording?: string
@@ -15,9 +12,7 @@ export async function listenControl(
   handlers: {
     readonly restart: () => Promise<string | undefined>
     readonly stop: (onProgress: (percent: number) => void) => Promise<StopResult>
-    readonly responses: (
-      input: ResponseUpdate,
-    ) => Promise<ResponseConfiguration>
+    readonly responses: (input: ResponseUpdate) => Promise<ResponseConfiguration>
   },
 ) {
   const server = createServer((socket) => {
@@ -34,14 +29,8 @@ export async function listenControl(
       socket.removeAllListeners("data")
       const progress = (percent: number) => socket.write(`progress ${percent}\n`)
       void handle(buffer.slice(0, buffer.indexOf("\n")), progress).then(
-        (result) =>
-          socket.end(
-            `success${result === undefined ? "" : ` ${JSON.stringify(result)}`}\n`,
-          ),
-        (error) =>
-          socket.end(
-            `error: ${error instanceof Error ? error.message : String(error)}\n`,
-          ),
+        (result) => socket.end(`success${result === undefined ? "" : ` ${JSON.stringify(result)}`}\n`),
+        (error) => socket.end(`error: ${error instanceof Error ? error.message : String(error)}\n`),
       )
     })
   })
@@ -49,8 +38,7 @@ export async function listenControl(
     if (input === "restart") return handlers.restart()
     if (input === "stop") return handlers.stop(onProgress)
     if (input === "responses") return handlers.responses({})
-    if (input.startsWith("responses "))
-      return handlers.responses(parseResponseUpdate(input.slice("responses ".length)))
+    if (input.startsWith("responses ")) return handlers.responses(parseResponseUpdate(input.slice("responses ".length)))
     throw new Error("unknown control command")
   }
   await listen(server, path)
@@ -60,23 +48,16 @@ export async function listenControl(
   }
 }
 
-export async function request(
-  path: string,
-  command: "restart",
-) {
+export async function request(path: string, command: "restart") {
   const response = await send(path, command)
   if (response === "success") return undefined
   if (!response.startsWith("success ")) throw responseError(response)
   const value: unknown = JSON.parse(response.slice("success ".length))
-  if (typeof value !== "string")
-    throw new Error("instance returned an invalid recording path")
+  if (typeof value !== "string") throw new Error("instance returned an invalid recording path")
   return value
 }
 
-export async function requestStop(
-  path: string,
-  onProgress?: (percent: number) => void,
-) {
+export async function requestStop(path: string, onProgress?: (percent: number) => void) {
   const response = await send(path, "stop", onProgress)
   if (!response.startsWith("success ")) throw responseError(response)
   const value: unknown = JSON.parse(response.slice("success ".length))
@@ -87,14 +68,11 @@ export async function requestStop(
 export async function requestResponses(path: string, input: ResponseUpdate) {
   const response = await send(
     path,
-    Object.keys(input).length === 0
-      ? "responses"
-      : `responses ${JSON.stringify(input)}`,
+    Object.keys(input).length === 0 ? "responses" : `responses ${JSON.stringify(input)}`,
   )
   if (!response.startsWith("success ")) throw responseError(response)
   const value: unknown = JSON.parse(response.slice("success ".length))
-  if (!isResponseConfiguration(value))
-    throw new Error("instance returned an invalid response configuration")
+  if (!isResponseConfiguration(value)) throw new Error("instance returned an invalid response configuration")
   return value
 }
 
@@ -152,9 +130,7 @@ function stringArray(value: unknown) {
   return value
 }
 
-function isResponseConfiguration(
-  value: unknown,
-): value is ResponseConfiguration {
+function isResponseConfiguration(value: unknown): value is ResponseConfiguration {
   if (typeof value !== "object" || value === null) return false
   if (!("types" in value) || !stringArrayValue(value.types)) return false
   return "tools" in value && stringArrayValue(value.tools)
@@ -162,8 +138,7 @@ function isResponseConfiguration(
 
 function isStopResult(value: unknown): value is StopResult {
   if (typeof value !== "object" || value === null) return false
-  if (!("screenshots" in value) || !stringArrayValue(value.screenshots))
-    return false
+  if (!("screenshots" in value) || !stringArrayValue(value.screenshots)) return false
   return !("recording" in value) || typeof value.recording === "string"
 }
 

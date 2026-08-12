@@ -23,8 +23,7 @@ export const runProgram = Effect.fn("Cli.runProgram")((file: string) =>
           stdout: "inherit",
           stderr: "inherit",
         })
-        if (result.status !== 0)
-          return yield* Effect.fail(new Error(`program exited with status ${result.status}`))
+        if (result.status !== 0) return yield* Effect.fail(new Error(`program exited with status ${result.status}`))
         return undefined
       }),
     (artifacts) => Effect.promise(() => rm(artifacts, { recursive: true, force: true })),

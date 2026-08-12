@@ -59,13 +59,15 @@ export function FilterBar({
             key={facet}
             label={label(facet)}
             searchLabel={`Search ${label(facet).toLowerCase()} filters`}
-            groups={[{
-              id: facet,
-              label: label(facet),
-              items: facetOptions[facet]
-                .filter((value) => (facetCounts.get(`${facet}:${value}`) ?? 0) > 0 || facets[facet].includes(value))
-                .map((value) => ({ id: `${facet}:${value}`, label: label(value) })),
-            }]}
+            groups={[
+              {
+                id: facet,
+                label: label(facet),
+                items: facetOptions[facet]
+                  .filter((value) => (facetCounts.get(`${facet}:${value}`) ?? 0) > 0 || facets[facet].includes(value))
+                  .map((value) => ({ id: `${facet}:${value}`, label: label(value) })),
+              },
+            ]}
             selected={facets[facet].map((value) => `${facet}:${value}`)}
             counts={facetCounts}
             onToggle={(encoded) => onFacet(facet, encoded.slice(facet.length + 1))}
@@ -95,7 +97,9 @@ export function FilterBar({
           </button>
         ) : undefined}
       </div>
-      <span className="filter-bar-results">{resultCount} {resultCount === 1 ? "result" : "results"}</span>
+      <span className="filter-bar-results">
+        {resultCount} {resultCount === 1 ? "result" : "results"}
+      </span>
     </div>
   )
 }

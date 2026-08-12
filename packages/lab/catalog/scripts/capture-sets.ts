@@ -81,7 +81,10 @@ export function captureSource(path: string): string {
 }
 
 function slug(value: string): string {
-  const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+  const result = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
   if (result === "") throw new Error(`Theme ${JSON.stringify(value)} cannot form a set ID`)
   return result
 }

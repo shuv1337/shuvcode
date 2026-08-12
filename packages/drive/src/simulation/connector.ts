@@ -62,12 +62,8 @@ export const EndpointCompatibility = Schema.TaggedUnion({
 })
 export type EndpointCompatibility = typeof EndpointCompatibility.Type
 
-export function supportsCapability(
-  compatibility: EndpointCompatibility,
-  capability: Handshake.Capability,
-) {
-  return compatibility._tag === "Negotiated" &&
-    compatibility.capabilities.includes(capability)
+export function supportsCapability(compatibility: EndpointCompatibility, capability: Handshake.Capability) {
+  return compatibility._tag === "Negotiated" && compatibility.capabilities.includes(capability)
 }
 
 export type CompatibilityPolicy = "required" | "preferred"
@@ -79,14 +75,8 @@ export interface Options {
   readonly compatibility?: CompatibilityPolicy
 }
 
-export type UiClient = RpcClient.FromGroup<
-  typeof UiRpcs,
-  RpcClientError.RpcClientError
->
-export type BackendClient = RpcClient.FromGroup<
-  typeof BackendRpcs,
-  RpcClientError.RpcClientError
->
+export type UiClient = RpcClient.FromGroup<typeof UiRpcs, RpcClientError.RpcClientError>
+export type BackendClient = RpcClient.FromGroup<typeof BackendRpcs, RpcClientError.RpcClientError>
 
 export interface UiConnection {
   readonly endpoint: string
@@ -103,51 +93,37 @@ export interface BackendConnection {
   readonly endpoint: string
   readonly rpc: BackendClient
   readonly compatibility: EndpointCompatibility
-  readonly requests: Stream.Stream<
-    BackendProtocol.ProviderInvocation,
-    Schema.SchemaError
-  >
+  readonly requests: Stream.Stream<BackendProtocol.ProviderInvocation, Schema.SchemaError>
   readonly toolEvents: Stream.Stream<ToolEvent, Schema.SchemaError>
   readonly flushToolEvents: () => Effect.Effect<void, SimulationEventStreamError>
   readonly closed: Effect.Effect<void>
   readonly attach: () => Effect.Effect<
     { readonly attached: true },
-    | SimulationConnectionError
-    | RpcClientError.RpcClientError
-    | SimulationRequestError
+    SimulationConnectionError | RpcClientError.RpcClientError | SimulationRequestError
   >
   readonly attachTools: (
     tools: ReadonlyArray<BackendProtocol.ToolRegistration>,
   ) => Effect.Effect<
     { readonly attached: true },
-    | SimulationCompatibilityError
-    | SimulationConnectionError
-    | RpcClientError.RpcClientError
-    | SimulationRequestError
+    SimulationCompatibilityError | SimulationConnectionError | RpcClientError.RpcClientError | SimulationRequestError
   >
   readonly updateTool: (
     params: BackendProtocol.ToolUpdateParams,
   ) => Effect.Effect<
     { readonly ok: true },
-    | SimulationConnectionError
-    | RpcClientError.RpcClientError
-    | SimulationRequestError
+    SimulationConnectionError | RpcClientError.RpcClientError | SimulationRequestError
   >
   readonly finishTool: (
     params: BackendProtocol.ToolFinishParams,
   ) => Effect.Effect<
     { readonly ok: true },
-    | SimulationConnectionError
-    | RpcClientError.RpcClientError
-    | SimulationRequestError
+    SimulationConnectionError | RpcClientError.RpcClientError | SimulationRequestError
   >
   readonly failTool: (
     params: BackendProtocol.ToolFailParams,
   ) => Effect.Effect<
     { readonly ok: true },
-    | SimulationConnectionError
-    | RpcClientError.RpcClientError
-    | SimulationRequestError
+    SimulationConnectionError | RpcClientError.RpcClientError | SimulationRequestError
   >
 }
 
@@ -161,20 +137,14 @@ const toolCapabilities = [
 ] as const satisfies ReadonlyArray<Handshake.Capability>
 const toolCapabilitySet: ReadonlySet<Handshake.Capability> = new Set(toolCapabilities)
 
-export const ui = Effect.fn("SimulationConnector.ui")(function* (
-  endpoint: string,
-  options?: Options,
-) {
+export const ui = Effect.fn("SimulationConnector.ui")(function* (endpoint: string, options?: Options) {
   const protocol = yield* OpenCodeRpcProtocol.make(endpoint, {
     connectTimeout: options?.connectTimeout,
     firstWireId: 0,
   })
-  const rpc = yield* RpcClient.make(UiRpcs).pipe(
-    Effect.provideService(RpcClient.Protocol, protocol),
-  )
+  const rpc = yield* RpcClient.make(UiRpcs).pipe(Effect.provideService(RpcClient.Protocol, protocol))
   const required = FrontendProtocol.Capabilities.filter(
-    (capability) =>
-      capability !== "ui.snapshot" && capability !== "ui.click.semantic",
+    (capability) => capability !== "ui.snapshot" && capability !== "ui.click.semantic",
   )
   const compatibility = yield* negotiate(
     endpoint,
@@ -192,21 +162,14 @@ export const ui = Effect.fn("SimulationConnector.ui")(function* (
   return { endpoint, rpc, compatibility } satisfies UiConnection
 })
 
-export const backend = Effect.fn("SimulationConnector.backend")(function* (
-  endpoint: string,
-  options?: Options,
-) {
-  const requests = yield* Queue.unbounded<
-    BackendProtocol.ProviderInvocation,
-    Schema.SchemaError
-  >()
+export const backend = Effect.fn("SimulationConnector.backend")(function* (endpoint: string, options?: Options) {
+  const requests = yield* Queue.unbounded<BackendProtocol.ProviderInvocation, Schema.SchemaError>()
   const toolEvents = yield* Queue.unbounded<ToolEvent, Schema.SchemaError>()
   const closed = yield* Deferred.make<void>()
-  const close = Effect.all([
-    Deferred.succeed(closed, undefined),
-    Queue.shutdown(requests),
-    Queue.shutdown(toolEvents),
-  ], { discard: true })
+  const close = Effect.all(
+    [Deferred.succeed(closed, undefined), Queue.shutdown(requests), Queue.shutdown(toolEvents)],
+    { discard: true },
+  )
   yield* Effect.addFinalizer(() => close)
   const protocol = yield* OpenCodeRpcProtocol.make(endpoint, {
     connectTimeout: options?.connectTimeout,
@@ -215,44 +178,30 @@ export const backend = Effect.fn("SimulationConnector.backend")(function* (
     onNotification: ({ method, params }) => {
       switch (method) {
         case "llm.request":
-          return Effect.matchEffect(
-            Schema.decodeUnknownEffect(BackendProtocol.ProviderInvocation)(params),
-            {
-              onFailure: (error) => Queue.fail(requests, error).pipe(Effect.asVoid),
-              onSuccess: (request) => Queue.offer(requests, request).pipe(Effect.asVoid),
-            },
-          )
+          return Effect.matchEffect(Schema.decodeUnknownEffect(BackendProtocol.ProviderInvocation)(params), {
+            onFailure: (error) => Queue.fail(requests, error).pipe(Effect.asVoid),
+            onSuccess: (request) => Queue.offer(requests, request).pipe(Effect.asVoid),
+          })
         case "tool.invocation":
-          return Effect.matchEffect(
-            Schema.decodeUnknownEffect(BackendProtocol.ToolInvocation)(params),
-            {
-              onFailure: (error) => Queue.fail(toolEvents, error).pipe(Effect.asVoid),
-              onSuccess: (invocation) =>
-                Queue.offer(toolEvents, { type: "invocation", invocation }).pipe(Effect.asVoid),
-            },
-          )
+          return Effect.matchEffect(Schema.decodeUnknownEffect(BackendProtocol.ToolInvocation)(params), {
+            onFailure: (error) => Queue.fail(toolEvents, error).pipe(Effect.asVoid),
+            onSuccess: (invocation) => Queue.offer(toolEvents, { type: "invocation", invocation }).pipe(Effect.asVoid),
+          })
         case "tool.cancel":
-          return Effect.matchEffect(
-            Schema.decodeUnknownEffect(BackendProtocol.ToolCancellation)(params),
-            {
-              onFailure: (error) => Queue.fail(toolEvents, error).pipe(Effect.asVoid),
-              onSuccess: (cancellation) =>
-                Queue.offer(toolEvents, { type: "cancellation", cancellation }).pipe(Effect.asVoid),
-            },
-          )
+          return Effect.matchEffect(Schema.decodeUnknownEffect(BackendProtocol.ToolCancellation)(params), {
+            onFailure: (error) => Queue.fail(toolEvents, error).pipe(Effect.asVoid),
+            onSuccess: (cancellation) =>
+              Queue.offer(toolEvents, { type: "cancellation", cancellation }).pipe(Effect.asVoid),
+          })
         default:
           return Effect.void
       }
     },
   })
-  const rpc = yield* RpcClient.make(BackendRpcs).pipe(
-    Effect.provideService(RpcClient.Protocol, protocol),
-  )
+  const rpc = yield* RpcClient.make(BackendRpcs).pipe(Effect.provideService(RpcClient.Protocol, protocol))
   const required = BackendProtocol.Capabilities.filter(
     (capability) =>
-      capability !== "llm.pending" &&
-      capability !== "llm.tool-input-delta" &&
-      !toolCapabilitySet.has(capability),
+      capability !== "llm.pending" && capability !== "llm.tool-input-delta" && !toolCapabilitySet.has(capability),
   )
   const compatibility = yield* negotiate(
     endpoint,
@@ -298,9 +247,7 @@ export const backend = Effect.fn("SimulationConnector.backend")(function* (
       }),
     )
   const attachTools: BackendConnection["attachTools"] = (tools) => {
-    const missing = toolCapabilities.filter(
-      (capability) => !supportsCapability(compatibility, capability),
-    )
+    const missing = toolCapabilities.filter((capability) => !supportsCapability(compatibility, capability))
     if (missing.length > 0)
       return Effect.fail(
         new SimulationCompatibilityError({
@@ -311,12 +258,9 @@ export const backend = Effect.fn("SimulationConnector.backend")(function* (
       )
     return withTimeout("tool.attach", rpc["tool.attach"]({ tools }))
   }
-  const updateTool: BackendConnection["updateTool"] = (params) =>
-    withTimeout("tool.update", rpc["tool.update"](params))
-  const finishTool: BackendConnection["finishTool"] = (params) =>
-    withTimeout("tool.finish", rpc["tool.finish"](params))
-  const failTool: BackendConnection["failTool"] = (params) =>
-    withTimeout("tool.fail", rpc["tool.fail"](params))
+  const updateTool: BackendConnection["updateTool"] = (params) => withTimeout("tool.update", rpc["tool.update"](params))
+  const finishTool: BackendConnection["finishTool"] = (params) => withTimeout("tool.finish", rpc["tool.finish"](params))
+  const failTool: BackendConnection["failTool"] = (params) => withTimeout("tool.fail", rpc["tool.fail"](params))
   const flushToolEvents = Effect.fn("SimulationConnector.flushToolEvents")(function* () {
     const completed = yield* Deferred.make<void>()
     const offered = yield* Queue.offer(toolEvents, { type: "barrier", completed })
@@ -351,9 +295,7 @@ export interface Interface {
   readonly backend: typeof backend
 }
 
-export class Service extends Context.Service<Service, Interface>()(
-  "opencode-drive/SimulationConnector",
-) {}
+export class Service extends Context.Service<Service, Interface>()("opencode-drive/SimulationConnector") {}
 
 export const layer = Layer.succeed(Service, Service.of({ ui, backend }))
 
@@ -373,17 +315,16 @@ const negotiate = Effect.fn("SimulationConnector.negotiate")(function* (
     })
   const result = yield* Effect.exit(handshake)
   if (result._tag === "Success") {
-    const missing = required.filter(
-      (capability) => !result.value.capabilities.includes(capability),
-    )
+    const missing = required.filter((capability) => !result.value.capabilities.includes(capability))
     if (result.value.role !== role || missing.length > 0)
       return yield* Effect.fail(
         new SimulationCompatibilityError({
           endpoint,
           role,
-          message: result.value.role !== role
-            ? `Expected ${role} simulation endpoint, received ${result.value.role}`
-            : `Simulation endpoint is missing required capabilities: ${missing.join(", ")}`,
+          message:
+            result.value.role !== role
+              ? `Expected ${role} simulation endpoint, received ${result.value.role}`
+              : `Simulation endpoint is missing required capabilities: ${missing.join(", ")}`,
         }),
       )
     return EndpointCompatibility.cases.Negotiated.make({
@@ -396,18 +337,13 @@ const negotiate = Effect.fn("SimulationConnector.negotiate")(function* (
   }
   const cause = result.cause
   const message = Cause.pretty(cause)
-  if (policy === "preferred" && isHandshakeUnavailable(cause))
-    return legacy(message)
-  return yield* Effect.fail(
-    new SimulationCompatibilityError({ endpoint, role, message }),
-  )
+  if (policy === "preferred" && isHandshakeUnavailable(cause)) return legacy(message)
+  return yield* Effect.fail(new SimulationCompatibilityError({ endpoint, role, message }))
 })
 
 function isHandshakeUnavailable(cause: Cause.Cause<unknown>) {
   const failure = Cause.findErrorOption(cause)
-  return Option.isSome(failure) &&
-    failure.value instanceof SimulationRequestError &&
-    failure.value.code === -32601
+  return Option.isSome(failure) && failure.value instanceof SimulationRequestError && failure.value.code === -32601
 }
 
 export * as SimulationConnector from "./connector.js"

@@ -42,9 +42,7 @@ export default defineScript({
 
       if (yield* tui.ui.matches("Form not found")) {
         const frame = yield* tui.ui.capture()
-        yield* Effect.tryPromise(() =>
-          Bun.write(`${artifacts}/stale-form.frame.json`, JSON.stringify(frame, null, 2)),
-        )
+        yield* Effect.tryPromise(() => Bun.write(`${artifacts}/stale-form.frame.json`, JSON.stringify(frame, null, 2)))
         return yield* Effect.fail(new Error("pending form became stale after server restart"))
       }
       yield* tui.ui.waitFor("restart-form-answer-accepted", { timeout: 15_000 })

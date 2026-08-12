@@ -50,13 +50,15 @@ describe("catalog lifecycle scenarios", () => {
   })
 
   test("declares the one dynamic response-mode scenario", () => {
-    expect(executableScenarios.filter((scenario) => scenario.llmMode === "serve").map((scenario) => scenario.id))
-      .toEqual(["subagent-lifecycle"])
+    expect(
+      executableScenarios.filter((scenario) => scenario.llmMode === "serve").map((scenario) => scenario.id),
+    ).toEqual(["subagent-lifecycle"])
   })
 
   test("isolates scenarios that cannot safely reset their TUI client", () => {
-    expect(executableScenarios.filter((scenario) => scenario.clientIsolation === "isolated").map((scenario) => scenario.id))
-      .toEqual(["assistant-lifecycle", "question-lifecycle", "read-file-lifecycle", "session-tabs-lifecycle"])
+    expect(
+      executableScenarios.filter((scenario) => scenario.clientIsolation === "isolated").map((scenario) => scenario.id),
+    ).toEqual(["assistant-lifecycle", "question-lifecycle", "read-file-lifecycle", "session-tabs-lifecycle"])
   })
 
   test("builds the shared capture and reproduce driver runtime", () => {

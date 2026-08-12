@@ -1,19 +1,8 @@
 import { Effect } from "effect"
-import {
-  Catalog,
-  CatalogBuildError,
-  type CatalogIssue,
-  type DriveManifest,
-} from "./schema"
-import type {
-  CatalogDefinition,
-  FlowStepDefinition,
-  NonEmpty,
-  OneOrMany,
-  TaxonomyDefinition,
-} from "./dsl"
+import { Catalog, CatalogBuildError, type CatalogIssue, type DriveManifest } from "./schema"
+import type { CatalogDefinition, FlowStepDefinition, NonEmpty, OneOrMany, TaxonomyDefinition } from "./dsl"
 
-export const compileCatalog = Effect.fn("Catalog.compile")(function*(
+export const compileCatalog = Effect.fn("Catalog.compile")(function* (
   definition: CatalogDefinition,
   manifest: DriveManifest,
 ) {
@@ -38,14 +27,7 @@ export const compileCatalog = Effect.fn("Catalog.compile")(function*(
       title: authored.title,
       category: authored.category,
       summary: "",
-      tags: [
-        ...authored.screenLabels,
-        ...authored.uiElements,
-        ...surfaces,
-        ...patterns,
-        ...features,
-        ...states,
-      ],
+      tags: [...authored.screenLabels, ...authored.uiElements, ...surfaces, ...patterns, ...features, ...states],
       screenLabels: authored.screenLabels,
       uiElements: authored.uiElements,
       surfaces,
@@ -197,11 +179,7 @@ function collectIssues(definition: CatalogDefinition, manifest: DriveManifest): 
   return issues
 }
 
-function taxonomyIds(
-  taxonomy: TaxonomyDefinition,
-  path: string,
-  issues: Array<CatalogIssue>,
-): ReadonlySet<string> {
+function taxonomyIds(taxonomy: TaxonomyDefinition, path: string, issues: Array<CatalogIssue>): ReadonlySet<string> {
   const ids = Object.values(taxonomy).flatMap((group) => Object.keys(group.items))
   duplicateIssues(ids, path, issues)
   return new Set(ids)

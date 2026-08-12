@@ -15,11 +15,9 @@ const pkgjsons = await Array.fromAsync(
   new Bun.Glob("**/package.json").scan({
     absolute: true,
   }),
-).then((arr) => arr.filter((x) =>
-  !x.includes("node_modules") &&
-  !x.includes("dist") &&
-  !x.endsWith("/packages/drive/package.json")
-))
+).then((arr) =>
+  arr.filter((x) => !x.includes("node_modules") && !x.includes("dist") && !x.endsWith("/packages/drive/package.json")),
+)
 
 async function prepareReleaseFiles() {
   for (const file of pkgjsons) {

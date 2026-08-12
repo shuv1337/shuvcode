@@ -12,9 +12,7 @@ export async function prune(options: { readonly name?: string; readonly force?: 
   })
   const manifests = await listManifests()
   const active = new Set(manifests.map((manifest) => resolve(manifest.artifacts)))
-  const manifestNames = new Map(
-    manifests.map((manifest) => [resolve(manifest.artifacts), manifest.name]),
-  )
+  const manifestNames = new Map(manifests.map((manifest) => [resolve(manifest.artifacts), manifest.name]))
   const artifacts = entries
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("run-"))
     .map((entry) => join(directory, entry.name))

@@ -49,27 +49,35 @@ export function CaptureContextMenu({ identifier, deepLink, issueLink, children }
       }}
     >
       {children}
-      {position ? createPortal(
-        <div
-          ref={menuRef}
-          className="capture-context-menu"
-          role="menu"
-          tabIndex={-1}
-          style={{
-            left: Math.max(8, Math.min(position.x, window.innerWidth - 176)),
-            top: Math.max(8, Math.min(position.y, window.innerHeight - 84)),
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setPosition(undefined)
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <button type="button" role="menuitem" onClick={() => copy(identifier)}>Copy ID</button>
-          <button type="button" role="menuitem" onClick={() => copy(deepLink)}>Copy deep link</button>
-          <a role="menuitem" href={issueLink} target="_blank" rel="noreferrer">Report issue</a>
-        </div>,
-        targetRef.current?.closest("dialog") ?? document.body,
-      ) : undefined}
+      {position
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="capture-context-menu"
+              role="menu"
+              tabIndex={-1}
+              style={{
+                left: Math.max(8, Math.min(position.x, window.innerWidth - 176)),
+                top: Math.max(8, Math.min(position.y, window.innerHeight - 84)),
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setPosition(undefined)
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button type="button" role="menuitem" onClick={() => copy(identifier)}>
+                Copy ID
+              </button>
+              <button type="button" role="menuitem" onClick={() => copy(deepLink)}>
+                Copy deep link
+              </button>
+              <a role="menuitem" href={issueLink} target="_blank" rel="noreferrer">
+                Report issue
+              </a>
+            </div>,
+            targetRef.current?.closest("dialog") ?? document.body,
+          )
+        : undefined}
     </span>
   )
 }

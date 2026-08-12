@@ -79,14 +79,11 @@ const notifyWhenDone = (ctx, options, sessionID, shellID) =>
           headers: { authorization: `Bearer ${options.token}` },
           signal,
         }).then((response) => {
-          if (!response.ok)
-            throw new Error(`Drive background shell acknowledgement returned HTTP ${response.status}`)
+          if (!response.ok) throw new Error(`Drive background shell acknowledgement returned HTTP ${response.status}`)
         }),
       catch: failure,
     }).pipe(Effect.retry({ times: 3, schedule: Schedule.spaced("100 millis") }))
-  }).pipe(
-    Effect.catch((cause) => Effect.logError("Drive background shell notification failed", cause)),
-  )
+  }).pipe(Effect.catch((cause) => Effect.logError("Drive background shell notification failed", cause)))
 
 const execute = (ctx, scope, options, name, input, context) =>
   Effect.gen(function* () {
@@ -135,13 +132,11 @@ const execute = (ctx, scope, options, name, input, context) =>
               const event = yield* parse(line)
               if (event.type === "progress") yield* context.progress(progress(event.result))
               if (event.type === "success") result = event.result
-              if (event.type === "failure")
-                return yield* new ToolFailure({ message: event.message })
+              if (event.type === "failure") return yield* new ToolFailure({ message: event.message })
             }
             if (chunk.done) break
           }
-          if (!result)
-            return yield* new ToolFailure({ message: "Drive tool handler ended without a result" })
+          if (!result) return yield* new ToolFailure({ message: "Drive tool handler ended without a result" })
           if (name === "shell" && result.status === "running" && result.shellID)
             yield* notifyWhenDone(ctx, options, context.sessionID, result.shellID).pipe(
               Effect.forkIn(scope, { startImmediately: true }),

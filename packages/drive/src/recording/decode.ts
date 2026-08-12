@@ -43,8 +43,15 @@ function parseRecord(text: string, line: number, first: boolean, previousAt: num
     if (value.type !== "header" || value.version !== 1 || value.encoding !== "base64") {
       fail(line, "unsupported or missing header")
     }
-    if (!positiveInteger(value.cols) || !positiveInteger(value.rows)) fail(line, "cols and rows must be positive integers")
-    return { type: "header", version: 1, cols: value.cols, rows: value.rows, encoding: "base64" } satisfies TimelineHeader
+    if (!positiveInteger(value.cols) || !positiveInteger(value.rows))
+      fail(line, "cols and rows must be positive integers")
+    return {
+      type: "header",
+      version: 1,
+      cols: value.cols,
+      rows: value.rows,
+      encoding: "base64",
+    } satisfies TimelineHeader
   }
 
   if (!nonnegativeInteger(value.at_ms)) fail(line, "at_ms must be a nonnegative integer")
@@ -56,7 +63,8 @@ function parseRecord(text: string, line: number, first: boolean, previousAt: num
   }
   if (value.type === "resize") {
     if (!hasExactKeys(value, ["at_ms", "cols", "rows", "type"])) fail(line, "invalid resize fields")
-    if (!positiveInteger(value.cols) || !positiveInteger(value.rows)) fail(line, "cols and rows must be positive integers")
+    if (!positiveInteger(value.cols) || !positiveInteger(value.rows))
+      fail(line, "cols and rows must be positive integers")
     return { type: "resize", at_ms: value.at_ms, cols: value.cols, rows: value.rows } satisfies TimelineResize
   }
   return fail(line, "invalid event type")

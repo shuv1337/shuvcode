@@ -52,9 +52,8 @@ export const subagentLifecycleFlow = defineExecutableFlow(
       step: { title: "Open the subagent session" },
     })
 
-    return program(
-      [running, completed, session],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
+    return program([running, completed, session], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
         let phase = 0
         yield* driver.llm.serve((request) => {
           if (JSON.stringify(request.body).includes("title generator")) {
@@ -76,10 +75,7 @@ export const subagentLifecycleFlow = defineExecutableFlow(
           }
           if (phase === 1) {
             phase++
-            return Stream.make(
-              Llm.pause(1_500),
-              Llm.text("The child inspected src/ledger.ts and calculated total 42."),
-            )
+            return Stream.make(Llm.pause(1_500), Llm.text("The child inspected src/ledger.ts and calculated total 42."))
           }
           phase++
           return Stream.make(Llm.text("Subagent completed the ledger lifecycle."))

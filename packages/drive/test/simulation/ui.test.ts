@@ -52,9 +52,7 @@ describe("OpenCode UI simulation transport", () => {
       expect(yield* rpc["ui.recording.finish"]()).toBe("/tmp/recording.jsonl")
       expect(yield* rpc["ui.type"]({ text: "hello" })).toEqual(state)
       expect(yield* rpc["ui.press"]({ key: "x" })).toEqual(state)
-      expect(
-        yield* rpc["ui.press"]({ key: "x", modifiers: { ctrl: true, shift: false } }),
-      ).toEqual(state)
+      expect(yield* rpc["ui.press"]({ key: "x", modifiers: { ctrl: true, shift: false } })).toEqual(state)
       expect(yield* rpc["ui.press"]({ key: "escape" })).toEqual(state)
       expect(yield* rpc["ui.enter"]()).toEqual(state)
       expect(yield* rpc["ui.arrow"]({ direction: "left" })).toEqual(state)

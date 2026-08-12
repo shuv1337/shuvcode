@@ -27,9 +27,15 @@ export function CaptureActionsMenu({ identifier, deepLink, issueLink }: CaptureA
     <details className="capture-actions" ref={detailsRef}>
       <summary aria-label="Capture actions">•••</summary>
       <div className="capture-actions-menu" role="menu">
-        <button type="button" role="menuitem" onClick={() => copy(identifier)}>Copy ID</button>
-        <button type="button" role="menuitem" onClick={() => copy(deepLink)}>Copy link</button>
-        <a role="menuitem" href={issueLink} target="_blank" rel="noreferrer">Report feedback</a>
+        <button type="button" role="menuitem" onClick={() => copy(identifier)}>
+          Copy ID
+        </button>
+        <button type="button" role="menuitem" onClick={() => copy(deepLink)}>
+          Copy link
+        </button>
+        <a role="menuitem" href={issueLink} target="_blank" rel="noreferrer">
+          Report feedback
+        </a>
       </div>
     </details>
   )

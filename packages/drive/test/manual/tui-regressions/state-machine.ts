@@ -32,8 +32,7 @@ export function run<State>(options: {
 
     for (let step = 0; step < options.steps; step++) {
       const enabled = options.transitions.filter((transition) => transition.enabled(state))
-      if (enabled.length === 0)
-        return yield* Effect.fail(new Error(`state machine has no transition at step ${step}`))
+      if (enabled.length === 0) return yield* Effect.fail(new Error(`state machine has no transition at step ${step}`))
       const transition = yield* Random.choice(enabled)
       trace.push({ step, transition: transition.name })
       let invariant: string | undefined

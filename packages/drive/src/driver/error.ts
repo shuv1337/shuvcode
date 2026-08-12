@@ -1,12 +1,9 @@
 import * as Schema from "effect/Schema"
 
-export class OpenCodeDriverError extends Schema.TaggedErrorClass<OpenCodeDriverError>()(
-  "OpenCodeDriverError",
-  {
-    operation: Schema.String,
-    message: Schema.String,
-  },
-) {}
+export class OpenCodeDriverError extends Schema.TaggedErrorClass<OpenCodeDriverError>()("OpenCodeDriverError", {
+  operation: Schema.String,
+  message: Schema.String,
+}) {}
 
 export const error = (operation: string, cause: unknown) =>
   cause instanceof OpenCodeDriverError

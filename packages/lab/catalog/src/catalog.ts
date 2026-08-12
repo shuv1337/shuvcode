@@ -23,7 +23,17 @@ export function frameFor(screen: Screen, variantId: string): Frame | undefined {
   return screen.frames.find((frame) => frame.variantId === variantId)
 }
 
-const rendererFamilies = ["notification", "shell", "patch", "read", "web", "search", "question", "subagent", "assistant"]
+const rendererFamilies = [
+  "notification",
+  "shell",
+  "patch",
+  "read",
+  "web",
+  "search",
+  "question",
+  "subagent",
+  "assistant",
+]
 
 export function screenFamily(screen: Screen): string {
   return rendererFamilies.find((family) => screen.features.includes(family)) ?? screen.category
@@ -104,13 +114,7 @@ export function filterScreens(
     }
 
     if (needle === "") return true
-    return [
-      screen.title,
-      screen.category,
-      ...screen.tags,
-      ...screen.screenLabels,
-      ...screen.uiElements,
-    ]
+    return [screen.title, screen.category, ...screen.tags, ...screen.screenLabels, ...screen.uiElements]
       .join(" ")
       .toLowerCase()
       .includes(needle)

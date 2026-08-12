@@ -61,28 +61,16 @@ test.sequential("CLI drives an externally owned OpenCode endpoint on the default
     expect(screenshot.status).toBe(0)
     expect(screenshot.stdout.trim()).toBe("/tmp/home.png")
 
-    const ctrlTab = await send(root, [
-      "--command.ui.press",
-      '{"key":"tab","modifiers":{"ctrl":true}}',
-    ])
+    const ctrlTab = await send(root, ["--command.ui.press", '{"key":"tab","modifiers":{"ctrl":true}}'])
     expect(ctrlTab.status).toBe(0)
 
-    const right = await send(root, [
-      "--command.ui.press",
-      '{"key":"right"}',
-    ])
+    const right = await send(root, ["--command.ui.press", '{"key":"right"}'])
     expect(right.status).toBe(0)
 
-    const altDown = await send(root, [
-      "--command.ui.press",
-      '{"key":"down","modifiers":{"meta":true}}',
-    ])
+    const altDown = await send(root, ["--command.ui.press", '{"key":"down","modifiers":{"meta":true}}'])
     expect(altDown.status).toBe(0)
 
-    const invalidAlt = await send(root, [
-      "--command.ui.press",
-      '{"key":"down","modifiers":{"alt":true}}',
-    ])
+    const invalidAlt = await send(root, ["--command.ui.press", '{"key":"down","modifiers":{"alt":true}}'])
     expect(invalidAlt.status).toBe(1)
     expect(invalidAlt.stderr).toContain("alt")
     expect(invalidAlt.stderr).toContain("Unexpected key with value true")

@@ -16,18 +16,16 @@ if (!selected) {
 }
 
 await Effect.runPromise(
-  OpenCodeDriver.use(
-    catalogScenarioRuntime({ opencode: options.opencode, theme: options.theme }),
-    (driver) => selected.run(driver, () => Effect.gen(function* () {
-      const frame = yield* driver.ui.capture()
-      yield* Effect.promise(() => mkdir(dirname(options.output), { recursive: true }))
-      yield* Effect.promise(() =>
-        Bun.write(
-          options.output,
-          `${JSON.stringify({ format: "opencode-terminal-frame-v1", ...frame })}\n`,
-        ),
-      )
-    })),
+  OpenCodeDriver.use(catalogScenarioRuntime({ opencode: options.opencode, theme: options.theme }), (driver) =>
+    selected.run(driver, () =>
+      Effect.gen(function* () {
+        const frame = yield* driver.ui.capture()
+        yield* Effect.promise(() => mkdir(dirname(options.output), { recursive: true }))
+        yield* Effect.promise(() =>
+          Bun.write(options.output, `${JSON.stringify({ format: "opencode-terminal-frame-v1", ...frame })}\n`),
+        )
+      }),
+    ),
   ),
 )
 

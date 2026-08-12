@@ -97,9 +97,8 @@ export const questionLifecycleFlow = defineExecutableFlow(
       step: { title: "Question is denied" },
     })
 
-    return program(
-      [inputStreaming, awaiting, review, succeeded, denied],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
+    return program([inputStreaming, awaiting, review, succeeded, denied], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
         yield* driver.llm.queue(
           Llm.toolCall(
             { index: 0, id: "call_catalog_question", name: "question", input: { questions } },

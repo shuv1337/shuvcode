@@ -13,10 +13,13 @@ interface RegisteredTool {
   readonly execute: (
     input: unknown,
     context: { readonly sessionID: string; readonly id: string },
-  ) => Effect.Effect<{
-    readonly structured: unknown
-    readonly content: ReadonlyArray<{ readonly type: string; readonly text: string }>
-  }, unknown>
+  ) => Effect.Effect<
+    {
+      readonly structured: unknown
+      readonly content: ReadonlyArray<{ readonly type: string; readonly text: string }>
+    },
+    unknown
+  >
 }
 
 it.effect("streams progress before shell success and failure", () =>
@@ -26,8 +29,7 @@ it.effect("streams progress before shell success and failure", () =>
         tools.handle("shell", ({ id, input, index, progress }) =>
           Effect.gen(function* () {
             yield* progress(`running ${id}/${index}: ${input.command}\n`)
-            if (input.command === "fail")
-              return yield* new Failure({ message: "controlled failure" })
+            if (input.command === "fail") return yield* new Failure({ message: "controlled failure" })
             return { output: "controlled success\n", exit: 7 }
           }),
         )
@@ -56,7 +58,10 @@ it.effect("streams progress before shell success and failure", () =>
               context: { callID: `call_${command}` },
             }),
           })
-          return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+          return (await response.text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
         })
 
       expect(yield* invoke("succeed")).toEqual([
@@ -89,9 +94,11 @@ it.effect("controls parallel calls independently by tool call ID", () =>
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const shells = yield* controller.controls.control("shell")
       const invoke = (id: string, command: string) =>
         Effect.promise(async () => {
@@ -103,7 +110,10 @@ it.effect("controls parallel calls independently by tool call ID", () =>
             },
             body: JSON.stringify({ input: { command }, context: { callID: id } }),
           })
-          return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+          return (await response.text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
         })
 
       const buildResponse = yield* invoke("call_build", "bun run build").pipe(Effect.forkScoped)
@@ -160,9 +170,11 @@ it.effect("retains call ID ownership while rejecting concurrent duplicates", () 
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const shells = yield* controller.controls.control("shell")
       const invoke = (command: string) =>
         Effect.promise(async () => {
@@ -177,21 +189,20 @@ it.effect("retains call ID ownership while rejecting concurrent duplicates", () 
               context: { callID: "call_same" },
             }),
           })
-          return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+          return (await response.text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
         })
 
       const firstResponse = yield* invoke("first").pipe(Effect.forkScoped)
       const first = yield* shells.take("call_same")
-      expect(yield* invoke("second")).toEqual([
-        { type: "failure", message: "duplicate shell tool call ID: call_same" },
-      ])
+      expect(yield* invoke("second")).toEqual([{ type: "failure", message: "duplicate shell tool call ID: call_same" }])
       expect(yield* shells.take("call_same").pipe(Effect.flip)).toMatchObject({
         reason: "already-claimed",
         callID: "call_same",
       })
-      expect(yield* invoke("third")).toEqual([
-        { type: "failure", message: "duplicate shell tool call ID: call_same" },
-      ])
+      expect(yield* invoke("third")).toEqual([{ type: "failure", message: "duplicate shell tool call ID: call_same" }])
 
       yield* first.succeed({ output: "first complete\n", exit: 0 })
       yield* Fiber.join(firstResponse)
@@ -210,9 +221,11 @@ it.effect("gives an exact call ID waiter precedence over a generic waiter", () =
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const shells = yield* controller.controls.control("shell")
       const generic = yield* shells.take().pipe(Effect.forkScoped)
       const exact = yield* shells.take("call_b").pipe(Effect.forkScoped)
@@ -226,7 +239,10 @@ it.effect("gives an exact call ID waiter precedence over a generic waiter", () =
             },
             body: JSON.stringify({ input: { command: id }, context: { callID: id } }),
           })
-          return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+          return (await response.text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
         })
       const responseB = yield* invoke("call_b").pipe(Effect.forkScoped)
       const responseA = yield* invoke("call_a").pipe(Effect.forkScoped)
@@ -249,9 +265,11 @@ it.effect("accepts exactly one concurrent terminal operation", () =>
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const shells = yield* controller.controls.control("shell")
       const response = yield* Effect.promise(async () => {
         const request = fetch(`${injected.options.endpoint}/execute/shell`, {
@@ -266,23 +284,21 @@ it.effect("accepts exactly one concurrent terminal operation", () =>
       })
       const call = yield* shells.take("call_race")
       const start = yield* Deferred.make<void>()
-      const attempts = yield* Effect.all([
-        Deferred.await(start).pipe(
-          Effect.andThen(call.succeed({ output: "won\n" })),
-          Effect.exit,
-        ),
-        Deferred.await(start).pipe(
-          Effect.andThen(call.fail("lost")),
-          Effect.exit,
-        ),
-      ], { concurrency: "unbounded" }).pipe(
-        Effect.forkChild,
-      )
+      const attempts = yield* Effect.all(
+        [
+          Deferred.await(start).pipe(Effect.andThen(call.succeed({ output: "won\n" })), Effect.exit),
+          Deferred.await(start).pipe(Effect.andThen(call.fail("lost")), Effect.exit),
+        ],
+        { concurrency: "unbounded" },
+      ).pipe(Effect.forkChild)
       yield* Deferred.succeed(start, undefined)
       const exits = yield* Fiber.join(attempts)
       expect(exits.filter(Exit.isSuccess)).toHaveLength(1)
       expect(exits.filter(Exit.isFailure)).toHaveLength(1)
-      const events = (yield* Effect.promise(() => response.request)).trim().split("\n").map((line) => JSON.parse(line))
+      const events = (yield* Effect.promise(() => response.request))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
       expect(events).toHaveLength(1)
       expect(["success", "failure"]).toContain(events[0]?.type)
     }),
@@ -295,9 +311,11 @@ it.effect("releases an interrupted waiter and reports transport interruption", (
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const shells = yield* controller.controls.control("shell")
       const abandoned = yield* shells.take("call_wait").pipe(Effect.forkScoped)
       yield* Fiber.interrupt(abandoned)
@@ -372,9 +390,11 @@ it.effect("interrupts claimed calls when the controller scope closes", () =>
     const controller = yield* ToolController.make(["shell"]).pipe(Scope.provide(scope))
     const config: OpenCodeConfig = {}
     controller.configure(config)
-    const injected = (config.plugins as Array<{
-      options: { endpoint: string; token: string }
-    }>)[0]!
+    const injected = (
+      config.plugins as Array<{
+        options: { endpoint: string; token: string }
+      }>
+    )[0]!
     const shells = yield* controller.controls.control("shell")
     const response = fetch(`${injected.options.endpoint}/execute/shell`, {
       method: "POST",
@@ -420,9 +440,11 @@ it.effect("routes typed webfetch, websearch, and write handlers independently", 
       })
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string; tools: string[] }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string; tools: string[] }
+        }>
+      )[0]!
       expect(injected.options.tools).toEqual(["webfetch", "websearch", "write"])
 
       const invoke = (name: string, input: unknown) =>
@@ -438,7 +460,10 @@ it.effect("routes typed webfetch, websearch, and write handlers independently", 
               context: { callID: `call_${name}` },
             }),
           })
-          return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+          return (await response.text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
         })
 
       expect(yield* invoke("webfetch", { url: "https://example.com" })).toEqual([
@@ -474,16 +499,16 @@ it.effect("settles background shells immediately and retains their completion", 
             yield* progress("still running\n")
             yield* Effect.promise(() => release.promise)
             return { output: `${input.command} complete\n`, exit: 0 }
-          }).pipe(
-            Effect.onInterrupt(() => Effect.sync(() => (interrupted = true))),
-          ),
+          }).pipe(Effect.onInterrupt(() => Effect.sync(() => (interrupted = true)))),
         )
       })
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const headers = {
         authorization: `Bearer ${injected.options.token}`,
         "content-type": "application/json",
@@ -497,7 +522,10 @@ it.effect("settles background shells immediately and retains their completion", 
             context: { callID: "call_background" },
           }),
         })
-        return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+        return (await response.text())
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line))
       })
       expect(started).toEqual([
         {
@@ -511,8 +539,9 @@ it.effect("settles background shells immediately and retains their completion", 
       ])
       expect(interrupted).toBe(false)
 
-      const completion = fetch(`${injected.options.endpoint}/background/call_background`, { headers })
-        .then((response) => response.json())
+      const completion = fetch(`${injected.options.endpoint}/background/call_background`, { headers }).then(
+        (response) => response.json(),
+      )
       release.resolve()
       expect(yield* Effect.promise(() => completion)).toEqual({
         shellID: "call_background",
@@ -530,9 +559,11 @@ it.effect("controls a background shell after its launch response", () =>
       const controller = yield* ToolController.make(["shell"])
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const headers = {
         authorization: `Bearer ${injected.options.token}`,
         "content-type": "application/json",
@@ -547,7 +578,10 @@ it.effect("controls a background shell after its launch response", () =>
             context: { callID: "call_controlled_background" },
           }),
         })
-        return (await response.text()).trim().split("\n").map((line) => JSON.parse(line))
+        return (await response.text())
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line))
       })
       expect(started).toEqual([
         {
@@ -562,10 +596,9 @@ it.effect("controls a background shell after its launch response", () =>
 
       const shell = yield* shells.take("call_controlled_background")
       yield* shell.progress("compiling\n")
-      const completion = fetch(
-        `${injected.options.endpoint}/background/call_controlled_background`,
-        { headers },
-      ).then((response) => response.json())
+      const completion = fetch(`${injected.options.endpoint}/background/call_controlled_background`, { headers }).then(
+        (response) => response.json(),
+      )
       yield* shell.succeed({ output: "compile complete\n", exit: 0 })
       expect(yield* Effect.promise(() => completion)).toEqual({
         shellID: "call_controlled_background",
@@ -590,9 +623,11 @@ it.effect("reports background failures with retained progress output", () =>
       })
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const headers = {
         authorization: `Bearer ${injected.options.token}`,
         "content-type": "application/json",
@@ -633,9 +668,11 @@ it.effect("bounds retained background output", () =>
       })
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const headers = {
         authorization: `Bearer ${injected.options.token}`,
         "content-type": "application/json",
@@ -744,9 +781,11 @@ it.effect("cancels retained background shells when the controller stops", () =>
     }).pipe(Scope.provide(scope))
     const config: OpenCodeConfig = {}
     controller.configure(config)
-    const injected = (config.plugins as Array<{
-      options: { endpoint: string; token: string }
-    }>)[0]!
+    const injected = (
+      config.plugins as Array<{
+        options: { endpoint: string; token: string }
+      }>
+    )[0]!
     yield* Effect.promise(() =>
       fetch(`${injected.options.endpoint}/execute/shell`, {
         method: "POST",
@@ -780,9 +819,11 @@ it.effect("waits for foreground handler finalizers when the controller stops", (
           Effect.onInterrupt(() =>
             Effect.sync(() => finalizing.resolve()).pipe(
               Effect.andThen(Effect.promise(() => release.promise)),
-              Effect.andThen(Effect.sync(() => {
-                finalized = true
-              })),
+              Effect.andThen(
+                Effect.sync(() => {
+                  finalized = true
+                }),
+              ),
             ),
           ),
         ),
@@ -790,9 +831,11 @@ it.effect("waits for foreground handler finalizers when the controller stops", (
     }).pipe(Scope.provide(scope))
     const config: OpenCodeConfig = {}
     controller.configure(config)
-    const injected = (config.plugins as Array<{
-      options: { endpoint: string; token: string }
-    }>)[0]!
+    const injected = (
+      config.plugins as Array<{
+        options: { endpoint: string; token: string }
+      }>
+    )[0]!
     const response = fetch(`${injected.options.endpoint}/execute/shell`, {
       method: "POST",
       headers: {
@@ -803,7 +846,9 @@ it.effect("waits for foreground handler finalizers when the controller stops", (
         input: { command: "wait" },
         context: { callID: "call_foreground_shutdown" },
       }),
-    }).then((response) => response.text()).catch(() => undefined)
+    })
+      .then((response) => response.text())
+      .catch(() => undefined)
     yield* Effect.promise(() => started.promise)
     let closed = false
     const close = Effect.runPromise(Scope.close(scope, Exit.void)).then(() => {
@@ -835,9 +880,11 @@ it.effect("interrupts a handler when its transport disconnects", () =>
       })
       const config: OpenCodeConfig = {}
       controller.configure(config)
-      const injected = (config.plugins as Array<{
-        options: { endpoint: string; token: string }
-      }>)[0]!
+      const injected = (
+        config.plugins as Array<{
+          options: { endpoint: string; token: string }
+        }>
+      )[0]!
       const request = new AbortController()
       const response = fetch(`${injected.options.endpoint}/execute/shell`, {
         method: "POST",
@@ -894,10 +941,9 @@ it.effect("interrupts a handler with its plugin execution", () =>
       })
       if (shell === undefined) return yield* Effect.die(new Error("shell tool was not registered"))
 
-      const execution = yield* shell.execute(
-        { command: "wait" },
-        { sessionID: "ses_interrupt", id: "call_interrupt" },
-      ).pipe(Effect.forkScoped)
+      const execution = yield* shell
+        .execute({ command: "wait" }, { sessionID: "ses_interrupt", id: "call_interrupt" })
+        .pipe(Effect.forkScoped)
       yield* Effect.promise(() => started.promise)
       yield* Fiber.interrupt(execution)
       yield* Effect.promise(() => interrupted.promise)

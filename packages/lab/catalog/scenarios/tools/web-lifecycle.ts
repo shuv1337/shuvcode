@@ -65,9 +65,8 @@ export const webLifecycleFlow = defineExecutableFlow(
       step: { title: "WebSearch reports provider failure" },
     })
 
-    return program(
-      [webfetchStreaming, webfetchSuccess, websearchRunning, websearchFailure],
-      ({ driver, checkpoint }) => Effect.gen(function* () {
+    return program([webfetchStreaming, webfetchSuccess, websearchRunning, websearchFailure], ({ driver, checkpoint }) =>
+      Effect.gen(function* () {
         yield* driver.llm.queue(
           Llm.toolCall(
             {

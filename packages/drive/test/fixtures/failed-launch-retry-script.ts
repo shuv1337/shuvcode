@@ -14,32 +14,23 @@ export default defineScript({
       yield* waitUntilStopped(secondPid)
 
       if (first.operation !== "opencode.connect" || second.operation !== "opencode.connect")
-        return yield* Effect.fail(
-          new Error(`unexpected launch failures: ${first.operation}, ${second.operation}`),
-        )
+        return yield* Effect.fail(new Error(`unexpected launch failures: ${first.operation}, ${second.operation}`))
       if (firstPid === secondPid)
         return yield* Effect.fail(new Error("failed launch did not start a fresh server process"))
 
       yield* Effect.tryPromise(() =>
-        Bun.write(
-          `${artifacts}/failed-launch-retry.json`,
-          JSON.stringify({ firstPid, secondPid }),
-        ),
+        Bun.write(`${artifacts}/failed-launch-retry.json`, JSON.stringify({ firstPid, secondPid })),
       )
     }),
 })
 
 const servicePid = (artifacts: string) =>
-  Effect.tryPromise(() =>
-    Bun.file(`${artifacts}/service.pid`).text().then(Number),
-  )
+  Effect.tryPromise(() => Bun.file(`${artifacts}/service.pid`).text().then(Number))
 
 const waitUntilStopped = (pid: number) =>
   Effect.gen(function* () {
-    for (let attempt = 0; attempt < 100 && running(pid); attempt++)
-      yield* Effect.sleep(10)
-    if (running(pid))
-      return yield* Effect.fail(new Error(`server process ${pid} is still running`))
+    for (let attempt = 0; attempt < 100 && running(pid); attempt++) yield* Effect.sleep(10)
+    if (running(pid)) return yield* Effect.fail(new Error(`server process ${pid} is still running`))
   })
 
 function running(pid: number) {

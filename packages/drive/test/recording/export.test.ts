@@ -30,11 +30,9 @@ test("exports the final frame as a PNG and creates its parent", async () => {
 
 test("rejects invalid encoding frame rates", async () => {
   await expect(
-    encodeFrames(
-      [{ atMs: 0, key: "frame", render: () => Buffer.alloc(0) }],
-      join(tmpdir(), "invalid-frame-rate.mp4"),
-      { fps: 0 },
-    ),
+    encodeFrames([{ atMs: 0, key: "frame", render: () => Buffer.alloc(0) }], join(tmpdir(), "invalid-frame-rate.mp4"), {
+      fps: 0,
+    }),
   ).rejects.toThrow("fps must be a positive finite number")
 })
 

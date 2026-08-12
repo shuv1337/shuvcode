@@ -45,12 +45,8 @@ describe("OpenCode Effect RPC compatibility protocol", () => {
       expect(yield* client["ui.screenshot"](undefined)).toBe("/tmp/screen.png")
       expect(yield* client["ui.screenshot"]({ name: "home" })).toBe("/tmp/home.png")
       expect(yield* client["ui.press"]({ key: "right" })).toEqual(state)
-      expect(
-        yield* client["ui.press"]({ key: "down", modifiers: { meta: true } }),
-      ).toEqual(state)
-      expect(
-        yield* client["ui.press"]({ key: "tab", modifiers: { ctrl: true } }),
-      ).toEqual(state)
+      expect(yield* client["ui.press"]({ key: "down", modifiers: { meta: true } })).toEqual(state)
+      expect(yield* client["ui.press"]({ key: "tab", modifiers: { ctrl: true } })).toEqual(state)
 
       const error = yield* client["ui.matches"]({ text: "fail" }).pipe(Effect.flip)
       expect(error).toBeInstanceOf(SimulationRequestError)

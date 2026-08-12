@@ -24,8 +24,7 @@ export async function initScript(path: string) {
   const file = resolve(path)
   await mkdir(dirname(file), { recursive: true })
   const handle = await open(file, "wx").catch((error: unknown) => {
-    if (isAlreadyExists(error))
-      throw new Error(`script already exists: ${file}`, { cause: error })
+    if (isAlreadyExists(error)) throw new Error(`script already exists: ${file}`, { cause: error })
     throw error
   })
   try {

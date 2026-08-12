@@ -10,10 +10,7 @@ import type { createResponseSettings } from "./response-generator.js"
 
 const connectTimeout = 30_000
 
-export async function connectMockBackend(
-  endpoint: string,
-  responses: ReturnType<typeof createResponseSettings>,
-) {
+export async function connectMockBackend(endpoint: string, responses: ReturnType<typeof createResponseSettings>) {
   const scope = await Effect.runPromise(Scope.make())
   const connect = Effect.gen(function* () {
     const backend = yield* SimulationConnector.backend(endpoint, {
@@ -69,8 +66,7 @@ const respond = Effect.fn("DriveCli.mockRespond")(function* (
 
 export function splitText(text: string) {
   const words = text.match(/\S+\s*/g) ?? [text]
-  return Array.from(
-    { length: Math.ceil(words.length / 3) },
-    (_, index) => words.slice(index * 3, index * 3 + 3).join(""),
+  return Array.from({ length: Math.ceil(words.length / 3) }, (_, index) =>
+    words.slice(index * 3, index * 3 + 3).join(""),
   )
 }

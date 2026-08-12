@@ -34,11 +34,9 @@ const fontFiles = fontOverride
       "CommitMono-700-Italic.otf",
     ].map((file) => fileURLToPath(new URL(`../../assets/fonts/commit-mono/${file}`, import.meta.url)))
 
-if (fontFiles.length === 0)
-  throw new Error("OPENCODE_DRIVE_FONT must contain at least one font file")
+if (fontFiles.length === 0) throw new Error("OPENCODE_DRIVE_FONT must contain at least one font file")
 for (const file of fontFiles) {
-  if (!GlobalFonts.registerFromPath(file, FontFamily))
-    throw new Error(`Failed to register capture font: ${file}`)
+  if (!GlobalFonts.registerFromPath(file, FontFamily)) throw new Error(`Failed to register capture font: ${file}`)
 }
 for (const [file, family] of [
   ["NotoSansSymbols.ttf", SymbolFontFamily],
@@ -46,8 +44,7 @@ for (const [file, family] of [
   ["NotoSansMath-Regular.ttf", MathFontFamily],
 ] as const) {
   const path = fileURLToPath(new URL(`../../assets/fonts/noto/${file}`, import.meta.url))
-  if (!GlobalFonts.registerFromPath(path, family))
-    throw new Error(`Failed to register capture symbol font: ${path}`)
+  if (!GlobalFonts.registerFromPath(path, family)) throw new Error(`Failed to register capture symbol font: ${path}`)
 }
 
 function color(rgb: number, alpha = 1) {
@@ -105,12 +102,7 @@ export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = 
         const cells = Math.min(Math.max(1, Bun.stringWidth(char)), remaining)
         const x = column * CellWidth
         if (!drawBlockGlyph(context, char, x, y, cells))
-          context.fillText(
-            char,
-            x + (cells * CellWidth) / 2,
-            y + baseline,
-            cells * CellWidth,
-          )
+          context.fillText(char, x + (cells * CellWidth) / 2, y + baseline, cells * CellWidth)
         if (span.attributes & TextStyle.underline) {
           context.fillRect(x, y + UnderlineOffset, cells * CellWidth, 1)
         }
@@ -142,9 +134,7 @@ export function renderFrame(frame: CapturedFrame, options: RenderFrameOptions = 
 export async function joinFrames(left: Buffer, right: Buffer): Promise<Buffer> {
   const [leftImage, rightImage] = await Promise.all([loadImage(left), loadImage(right)])
   if (leftImage.height !== rightImage.height)
-    throw new Error(
-      `comparison recordings must have the same height: ${leftImage.height} !== ${rightImage.height}`,
-    )
+    throw new Error(`comparison recordings must have the same height: ${leftImage.height} !== ${rightImage.height}`)
   const canvas = createCanvas(leftImage.width + rightImage.width, leftImage.height)
   const context = canvas.getContext("2d")
   context.drawImage(leftImage, 0, 0)

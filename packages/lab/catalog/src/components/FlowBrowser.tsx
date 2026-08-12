@@ -70,9 +70,13 @@ export function FlowBrowser({ catalog, flows, activeFlow, variantId, onFlow, onO
             <p>{activeFlow.group}</p>
             <h1>{activeFlow.title}</h1>
           </div>
-          <span>{activeFlow.steps.length} {activeFlow.steps.length === 1 ? "step" : "steps"}</span>
+          <span>
+            {activeFlow.steps.length} {activeFlow.steps.length === 1 ? "step" : "steps"}
+          </span>
           <p>{activeFlow.description}</p>
-          {!activeFlow.replayable ? <small className="flow-browse-only">Browse only · IDs identify captures, not recipes</small> : undefined}
+          {!activeFlow.replayable ? (
+            <small className="flow-browse-only">Browse only · IDs identify captures, not recipes</small>
+          ) : undefined}
         </header>
         <ol className="flow-rail" role="list">
           {activeFlow.steps.map((step, index) => {
@@ -98,26 +102,26 @@ export function FlowBrowser({ catalog, flows, activeFlow, variantId, onFlow, onO
                   aria-label={`Open ${step.title}`}
                   onClick={() => onOpen(screen.id)}
                 >
-                    <CaptureContextMenu
-                      identifier={identifier}
-                      deepLink={deepLink}
-                      issueLink={feedbackIssueUrl({ title: screen.title, identifier, deepLink, variant: variantId })}
-                    >
-                      <span className="flow-frame">
-                        <TerminalFrame frame={frame} label={screen.title} lazy />
-                      </span>
-                    </CaptureContextMenu>
+                  <CaptureContextMenu
+                    identifier={identifier}
+                    deepLink={deepLink}
+                    issueLink={feedbackIssueUrl({ title: screen.title, identifier, deepLink, variant: variantId })}
+                  >
+                    <span className="flow-frame">
+                      <TerminalFrame frame={frame} label={screen.title} lazy />
+                    </span>
+                  </CaptureContextMenu>
                 </button>
                 <footer className="flow-step-meta">
                   <span className="flow-step-number">{String(index + 1).padStart(2, "0")}</span>
                   <span className="flow-step-text">
-                  <span className="flow-step-title">
-                    <strong>{step.title}</strong>
-                    <CaptureActionsMenu
-                      identifier={identifier}
-                      deepLink={deepLink}
-                      issueLink={feedbackIssueUrl({ title: screen.title, identifier, deepLink, variant: variantId })}
-                    />
+                    <span className="flow-step-title">
+                      <strong>{step.title}</strong>
+                      <CaptureActionsMenu
+                        identifier={identifier}
+                        deepLink={deepLink}
+                        issueLink={feedbackIssueUrl({ title: screen.title, identifier, deepLink, variant: variantId })}
+                      />
                     </span>
                     {step.trigger ? <small>{step.trigger}</small> : undefined}
                   </span>

@@ -35,17 +35,14 @@ export async function exportRecording(
     rows = Math.max(rows, sample.frame.rows)
   }
   const extension = extname(outputPath).toLowerCase()
-  const header = (atMs: number) =>
-    typeof options.header === "function" ? options.header(atMs) : options.header
+  const header = (atMs: number) => (typeof options.header === "function" ? options.header(atMs) : options.header)
   const progress = progressReporter(options.onProgress)
   await mkdir(dirname(outputPath), { recursive: true })
 
   if (extension === ".png") {
-    await writeFile(
-      outputPath,
-      renderFrame(final.frame, { cols, rows, header: header(final.atMs) }),
-      { signal: options.signal },
-    )
+    await writeFile(outputPath, renderFrame(final.frame, { cols, rows, header: header(final.atMs) }), {
+      signal: options.signal,
+    })
     progress(100)
   } else if (extension === ".mp4") {
     const frameKeys = new WeakMap<object, string>()

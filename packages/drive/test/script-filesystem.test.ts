@@ -26,17 +26,19 @@ describe("script filesystem", () => {
     const fs = createScriptFileSystem(root)
     await symlink(outside, join(root, "linked"))
 
-    const outsideError = await Effect.runPromise(
-      fs.writeFile("../outside.ts", "no").pipe(Effect.flip),
-    )
+    const outsideError = await Effect.runPromise(fs.writeFile("../outside.ts", "no").pipe(Effect.flip))
     expect(outsideError).toBeInstanceOf(Errors.FileSystemError)
     expect(outsideError).toMatchObject({
       _tag: "FileSystemError",
       path: "../outside.ts",
       message: expect.stringContaining("stay inside"),
     })
-    await expect(Effect.runPromise(fs.writeFile(join(outside, "absolute.ts"), "no"))).rejects.toThrow("must be relative")
-    await expect(Effect.runPromise(fs.writeFile("linked/outside.ts", "no"))).rejects.toThrow("must not contain symbolic links")
+    await expect(Effect.runPromise(fs.writeFile(join(outside, "absolute.ts"), "no"))).rejects.toThrow(
+      "must be relative",
+    )
+    await expect(Effect.runPromise(fs.writeFile("linked/outside.ts", "no"))).rejects.toThrow(
+      "must not contain symbolic links",
+    )
   })
 
   test("reserves Git metadata for declared Git projects", async () => {

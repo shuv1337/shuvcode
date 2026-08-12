@@ -20,11 +20,7 @@ it.live("does not let an interrupted waiter poison process completion", () =>
 )
 
 it.live("collects finite command output and status", () =>
-  Process.run([
-    globalThis.process.execPath,
-    "-e",
-    'console.log("stdout"); console.error("stderr")',
-  ]).pipe(
+  Process.run([globalThis.process.execPath, "-e", 'console.log("stdout"); console.error("stderr")']).pipe(
     Effect.provide(NodeServices.layer),
     Effect.tap((output) =>
       Effect.sync(() => {

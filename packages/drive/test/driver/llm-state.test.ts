@@ -5,14 +5,12 @@ import * as Stream from "effect/Stream"
 import { LlmControllerError } from "../../src/driver/llm-errors.js"
 import * as LlmState from "../../src/driver/llm-state.js"
 
-const completion = () =>
-  Effect.runSync(Deferred.make<void, LlmControllerError>())
+const completion = () => Effect.runSync(Deferred.make<void, LlmControllerError>())
 
-const request = (id: string): LlmState.AttachedRequest =>
-  ({
-    request: { id, url: "https://example.test", body: {} },
-    backend: {} as LlmState.AttachedRequest["backend"],
-  })
+const request = (id: string): LlmState.AttachedRequest => ({
+  request: { id, url: "https://example.test", body: {} },
+  backend: {} as LlmState.AttachedRequest["backend"],
+})
 
 const handler: LlmState.ServeHandler = () => Stream.empty
 
@@ -52,18 +50,12 @@ describe("LlmState", () => {
   })
 
   it("serve mode runs requests without queued responses", () => {
-    const state = LlmState.pushRequest(
-      LlmState.serve(LlmState.initial, handler),
-      request("r1"),
-    )
+    const state = LlmState.pushRequest(LlmState.serve(LlmState.initial, handler), request("r1"))
     expect(LlmState.nextNormal(state)?.source._tag).toBe("Served")
   })
 
   it("startNormal consumes the request and response and bumps the index", () => {
-    const state = LlmState.enqueue(
-      LlmState.pushRequest(LlmState.initial, request("r1")),
-      { output: [] },
-    )
+    const state = LlmState.enqueue(LlmState.pushRequest(LlmState.initial, request("r1")), { output: [] })
     const start = LlmState.nextNormal(state)!
     const next = LlmState.startNormal(state, start, completion())
     expect(next.requests).toHaveLength(0)
@@ -79,15 +71,8 @@ describe("LlmState", () => {
     const waiting = LlmState.enqueue(LlmState.initial, { output: [] })
     expect(LlmState.inspectSettlement(waiting)._tag).toBe("Wait")
 
-    const unexpected = LlmState.pushRequest(
-      LlmState.enqueue(LlmState.initial, { output: [] }),
-      request("r1"),
-    )
-    const drained = LlmState.startNormal(
-      unexpected,
-      LlmState.nextNormal(unexpected)!,
-      completion(),
-    )
+    const unexpected = LlmState.pushRequest(LlmState.enqueue(LlmState.initial, { output: [] }), request("r1"))
+    const drained = LlmState.startNormal(unexpected, LlmState.nextNormal(unexpected)!, completion())
     const late = LlmState.pushRequest(drained, request("r2"))
     const settlement = LlmState.inspectSettlement({
       ...late,
@@ -100,8 +85,7 @@ describe("LlmState", () => {
   })
 
   it("records only the first failure and keeps it", () => {
-    const error = (message: string) =>
-      new LlmControllerError({ operation: "test", message })
+    const error = (message: string) => new LlmControllerError({ operation: "test", message })
     const first = LlmState.recordFailure(LlmState.initial, error("first"))
     expect(first[1].isFirst).toBe(true)
     const second = LlmState.recordFailure(first[0], error("second"))

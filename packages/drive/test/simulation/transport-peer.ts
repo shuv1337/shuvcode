@@ -15,9 +15,7 @@ export function startTransportPeer(
   onRequest: (received: ReceivedRequest) => void,
   options?: {
     readonly handshake?: boolean
-    readonly capabilities?: (
-      offered: ReadonlyArray<string>,
-    ) => ReadonlyArray<string>
+    readonly capabilities?: (offered: ReadonlyArray<string>) => ReadonlyArray<string>
   },
 ) {
   const received: ReceivedRequest[] = []
@@ -32,10 +30,7 @@ export function startTransportPeer(
       message(socket, message) {
         const raw = String(message)
         const value = { raw, request: JSON.parse(raw) as WireRequest, socket }
-        if (
-          value.request.method === "simulation.handshake" &&
-          options?.handshake !== false
-        ) {
+        if (value.request.method === "simulation.handshake" && options?.handshake !== false) {
           const params = value.request.params as {
             readonly expectedRole: "ui" | "backend"
             readonly requiredCapabilities: ReadonlyArray<string>
@@ -45,10 +40,7 @@ export function startTransportPeer(
             protocolVersion: 1,
             role: params.expectedRole,
             server: { name: "opencode", version: "test" },
-            capabilities: options?.capabilities?.([
-              ...params.requiredCapabilities,
-              ...params.optionalCapabilities,
-            ]) ?? [
+            capabilities: options?.capabilities?.([...params.requiredCapabilities, ...params.optionalCapabilities]) ?? [
               ...params.requiredCapabilities,
               ...params.optionalCapabilities,
             ],
@@ -68,11 +60,7 @@ export function startTransportPeer(
   }
 }
 
-export function sendResult(
-  socket: Bun.ServerWebSocket<undefined>,
-  request: WireRequest,
-  result: unknown,
-) {
+export function sendResult(socket: Bun.ServerWebSocket<undefined>, request: WireRequest, result: unknown) {
   socket.send(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }))
 }
 

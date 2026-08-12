@@ -32,9 +32,9 @@ export const WebFetchInput = Schema.Struct({
   format: Schema.Literals(["text", "markdown", "html"])
     .annotate({ description: "The format to return the content in. Defaults to markdown." })
     .pipe(Schema.withDecodingDefault(Effect.succeed("markdown" as const))),
-  timeout: Schema.optional(
-    Schema.Number.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(120)),
-  ).annotate({ description: "Optional timeout in seconds (maximum: 120)" }),
+  timeout: Schema.optional(Schema.Number.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(120))).annotate({
+    description: "Optional timeout in seconds (maximum: 120)",
+  }),
 })
 export interface WebFetchInput extends Schema.Schema.Type<typeof WebFetchInput> {}
 
@@ -72,31 +72,27 @@ export const WriteResult = Schema.Struct({
 })
 export interface WriteResult extends Schema.Schema.Type<typeof WriteResult> {}
 
-export class Failure extends Schema.TaggedErrorClass<Failure>()(
-  "OpenCodeDrive.ToolFailure",
-  { message: Schema.String },
-) {}
+export class Failure extends Schema.TaggedErrorClass<Failure>()("OpenCodeDrive.ToolFailure", {
+  message: Schema.String,
+}) {}
 
 export const Name = Schema.Literals(["shell", "webfetch", "websearch", "write"])
 export type Name = typeof Name.Type
 export const Names = Schema.Array(Name)
 
-export class ControlError extends Schema.TaggedErrorClass<ControlError>()(
-  "OpenCodeDrive.ToolControlError",
-  {
-    operation: Schema.Literals(["control", "take", "progress", "succeed", "fail"]),
-    reason: Schema.Literals([
-      "not-controlled",
-      "controller-closed",
-      "already-claimed",
-      "already-settled",
-      "transport-interrupted",
-    ]),
-    name: Name,
-    callID: Schema.optional(Schema.String),
-    message: Schema.String,
-  },
-) {}
+export class ControlError extends Schema.TaggedErrorClass<ControlError>()("OpenCodeDrive.ToolControlError", {
+  operation: Schema.Literals(["control", "take", "progress", "succeed", "fail"]),
+  reason: Schema.Literals([
+    "not-controlled",
+    "controller-closed",
+    "already-claimed",
+    "already-settled",
+    "transport-interrupted",
+  ]),
+  name: Name,
+  callID: Schema.optional(Schema.String),
+  message: Schema.String,
+}) {}
 
 export interface Context<Input, Result> {
   readonly id: string
@@ -106,9 +102,7 @@ export interface Context<Input, Result> {
   readonly progress: (output: string | Result) => Effect.Effect<void>
 }
 
-export type Handler<Input, Result> = (
-  context: Context<Input, Result>,
-) => Effect.Effect<Result, Failure>
+export type Handler<Input, Result> = (context: Context<Input, Result>) => Effect.Effect<Result, Failure>
 
 export type ShellHandler = Handler<ShellInput, ShellResult>
 export type WebFetchHandler = Handler<WebFetchInput, WebFetchResult>
@@ -122,10 +116,7 @@ export interface ToolTypes {
   readonly write: { readonly input: WriteInput; readonly result: WriteResult }
 }
 
-export type HandlerFor<Tool extends Name> = Handler<
-  ToolTypes[Tool]["input"],
-  ToolTypes[Tool]["result"]
->
+export type HandlerFor<Tool extends Name> = Handler<ToolTypes[Tool]["input"], ToolTypes[Tool]["result"]>
 
 export type Registration = {
   readonly [Tool in Name]: readonly [name: Tool, handler: HandlerFor<Tool>]
@@ -156,10 +147,7 @@ export interface ControlledCalls<Input, Result> {
   take(id: string): Effect.Effect<ControlledCall<Input, Result>, ControlError>
 }
 
-export type ControlledCallsFor<Tool extends Name> = ControlledCalls<
-  ToolTypes[Tool]["input"],
-  ToolTypes[Tool]["result"]
->
+export type ControlledCallsFor<Tool extends Name> = ControlledCalls<ToolTypes[Tool]["input"], ToolTypes[Tool]["result"]>
 
 export interface StaticControls {
   control<Tool extends Name>(name: Tool): Effect.Effect<ControlledCallsFor<Tool>, ControlError>
@@ -176,22 +164,19 @@ export interface Progress extends Schema.Schema.Type<typeof Progress> {}
 export type Output = Backend.ToolOutput
 export type Cancellation = Backend.ToolCancellation
 
-export class LifecycleError extends Schema.TaggedErrorClass<LifecycleError>()(
-  "OpenCodeDrive.ToolLifecycleError",
-  {
-    operation: Schema.Literals(["attach", "take", "progress", "finish", "fail"]),
-    reason: Schema.Literals([
-      "controller-closed",
-      "already-claimed",
-      "already-settled",
-      "cancelled",
-      "rejected",
-      "transport-interrupted",
-    ]),
-    callID: Schema.optional(Schema.String),
-    message: Schema.String,
-  },
-) {}
+export class LifecycleError extends Schema.TaggedErrorClass<LifecycleError>()("OpenCodeDrive.ToolLifecycleError", {
+  operation: Schema.Literals(["attach", "take", "progress", "finish", "fail"]),
+  reason: Schema.Literals([
+    "controller-closed",
+    "already-claimed",
+    "already-settled",
+    "cancelled",
+    "rejected",
+    "transport-interrupted",
+  ]),
+  callID: Schema.optional(Schema.String),
+  message: Schema.String,
+}) {}
 
 export interface Invocation {
   /** Producer invocation ID, stable across controller reconnects. */

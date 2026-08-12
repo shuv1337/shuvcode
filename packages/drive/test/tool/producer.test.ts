@@ -139,11 +139,7 @@ it.live("fails settlement after a completed invocation ID is reused", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(
-          socket,
-          request,
-          request.method === "tool.attach" ? { attached: true } : { ok: true },
-        ),
+        sendResult(socket, request, request.method === "tool.attach" ? { attached: true } : { ok: true }),
       )
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const backend = yield* SimulationConnector.backend(peer.url, {
@@ -204,9 +200,7 @@ it.live("observes cancellation and rejects terminal work after it wins", () =>
 it.live("bounds retained unclaimed cancellations", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(socket, request, { attached: true }),
-      )
+      const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, { attached: true }))
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const backend = yield* SimulationConnector.backend(peer.url, {
         attach: false,
@@ -269,14 +263,8 @@ it.live("settles concurrent invocations in controlled reverse order", () =>
       const start = yield* Deferred.make<void>()
       const attempts = yield* Effect.all(
         [
-          Deferred.await(start).pipe(
-            Effect.andThen(second.finish({ structured: 2, content: [] })),
-            Effect.exit,
-          ),
-          Deferred.await(start).pipe(
-            Effect.andThen(second.fail("second failed")),
-            Effect.exit,
-          ),
+          Deferred.await(start).pipe(Effect.andThen(second.finish({ structured: 2, content: [] })), Effect.exit),
+          Deferred.await(start).pipe(Effect.andThen(second.fail("second failed")), Effect.exit),
         ],
         { concurrency: "unbounded" },
       ).pipe(Effect.forkScoped)
@@ -286,8 +274,8 @@ it.live("settles concurrent invocations in controlled reverse order", () =>
       expect(exits.filter(Exit.isFailure)).toHaveLength(1)
       yield* first.fail("first failed")
 
-      const terminals = peer.received.filter(({ request }) =>
-        request.method === "tool.finish" || request.method === "tool.fail",
+      const terminals = peer.received.filter(
+        ({ request }) => request.method === "tool.finish" || request.method === "tool.fail",
       )
       expect(terminals).toHaveLength(2)
       expect(terminals[0]?.request.params).toMatchObject({ id: "tool_2" })
@@ -353,9 +341,7 @@ it.live("reattaches the desired set and deduplicates replay after reconnect", ()
 it.live("replays a replacement intent started while disconnected", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(socket, request, { attached: true }),
-      )
+      const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, { attached: true }))
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const controller = yield* ToolProducer.make(new Set())
       const firstScope = yield* Scope.make()
@@ -372,9 +358,7 @@ it.live("replays a replacement intent started while disconnected", () =>
         name: "search",
         description: "Search for a value",
       }
-      const replacing = yield* controller.controls
-        .attach({ tools: [replacement] })
-        .pipe(Effect.forkScoped)
+      const replacing = yield* controller.controls.attach({ tools: [replacement] }).pipe(Effect.forkScoped)
       yield* Effect.yieldNow
       const secondScope = yield* Scope.make()
       const second = yield* SimulationConnector.backend(peer.url, {
@@ -384,14 +368,8 @@ it.live("replays a replacement intent started while disconnected", () =>
       yield* Fiber.join(replacing)
 
       expect(
-        peer.received
-          .filter(({ request }) => request.method === "tool.attach")
-          .map(({ request }) => request.params),
-      ).toEqual([
-        { tools: [registration] },
-        { tools: [replacement] },
-        { tools: [replacement] },
-      ])
+        peer.received.filter(({ request }) => request.method === "tool.attach").map(({ request }) => request.params),
+      ).toEqual([{ tools: [registration] }, { tools: [replacement] }, { tools: [replacement] }])
       yield* secondAttachment.detach()
       yield* Scope.close(secondScope, Exit.void)
     }),
@@ -442,9 +420,7 @@ it.live("preserves a replacement intent when its acknowledgement is lost", () =>
       const firstAttachment = yield* controller.connect(first)
       yield* controller.controls.attach({ tools: [registration] })
 
-      const replacing = yield* controller.controls
-        .attach({ tools: [replacement] })
-        .pipe(Effect.forkScoped)
+      const replacing = yield* controller.controls.attach({ tools: [replacement] }).pipe(Effect.forkScoped)
       yield* Deferred.await(firstReplacement)
       yield* first.closed
       yield* firstAttachment.detach()
@@ -459,9 +435,7 @@ it.live("preserves a replacement intent when its acknowledgement is lost", () =>
       yield* call.fail("finished")
 
       expect(
-        peer.received
-          .filter(({ request }) => request.method === "tool.attach")
-          .map(({ request }) => request.params),
+        peer.received.filter(({ request }) => request.method === "tool.attach").map(({ request }) => request.params),
       ).toEqual([
         { tools: [registration] },
         { tools: [replacement] },
@@ -500,9 +474,10 @@ it.live("restores the acknowledged set after a rejected replacement", () =>
       }).pipe(Scope.provide(firstScope))
       const firstAttachment = yield* controller.connect(first)
       yield* controller.controls.attach({ tools: [registration] })
-      expect(
-        yield* controller.controls.attach({ tools: [replacement] }).pipe(Effect.flip),
-      ).toMatchObject({ operation: "attach", reason: "rejected" })
+      expect(yield* controller.controls.attach({ tools: [replacement] }).pipe(Effect.flip)).toMatchObject({
+        operation: "attach",
+        reason: "rejected",
+      })
       yield* firstAttachment.detach()
       yield* Scope.close(firstScope, Exit.void)
       const secondScope = yield* Scope.make()
@@ -512,14 +487,8 @@ it.live("restores the acknowledged set after a rejected replacement", () =>
       const secondAttachment = yield* controller.connect(second)
 
       expect(
-        peer.received
-          .filter(({ request }) => request.method === "tool.attach")
-          .map(({ request }) => request.params),
-      ).toEqual([
-        { tools: [registration] },
-        { tools: [replacement] },
-        { tools: [registration] },
-      ])
+        peer.received.filter(({ request }) => request.method === "tool.attach").map(({ request }) => request.params),
+      ).toEqual([{ tools: [registration] }, { tools: [replacement] }, { tools: [registration] }])
       yield* secondAttachment.detach()
       yield* Scope.close(secondScope, Exit.void)
     }),
@@ -586,9 +555,7 @@ it.live("rejects a disconnected replacement without poisoning relaunch", () =>
 it.live("rejects malformed lifecycle acknowledgements without retrying", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(socket, request, { attached: "invalid" }),
-      )
+      const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, { attached: "invalid" }))
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const backend = yield* SimulationConnector.backend(peer.url, {
         attach: false,
@@ -596,9 +563,10 @@ it.live("rejects malformed lifecycle acknowledgements without retrying", () =>
       const controller = yield* ToolProducer.make(new Set())
       const attachment = yield* controller.connect(backend)
 
-      expect(
-        yield* controller.controls.attach({ tools: [registration] }).pipe(Effect.flip),
-      ).toMatchObject({ operation: "attach", reason: "rejected" })
+      expect(yield* controller.controls.attach({ tools: [registration] }).pipe(Effect.flip)).toMatchObject({
+        operation: "attach",
+        reason: "rejected",
+      })
       expect(peer.received.filter(({ request }) => request.method === "tool.attach")).toHaveLength(1)
       yield* attachment.detach()
       const recovered = yield* SimulationConnector.backend(peer.url, {
@@ -693,9 +661,7 @@ it.live("rejects a disconnected replacement after an invalid protocol response",
       yield* firstAttachment.detach()
       yield* Scope.close(firstScope, Exit.void)
 
-      const replacing = yield* controller.controls
-        .attach({ tools: [replacement] })
-        .pipe(Effect.forkScoped)
+      const replacing = yield* controller.controls.attach({ tools: [replacement] }).pipe(Effect.forkScoped)
       const rejectedScope = yield* Scope.make()
       const rejected = yield* SimulationConnector.backend(peer.url, {
         attach: false,
@@ -926,15 +892,8 @@ it.live("reconnects when the backend disconnects during settlement", () =>
 
       yield* Fiber.join(settling)
       expect(
-        peer.received
-          .filter(({ request }) => request.method === "tool.attach")
-          .map(({ request }) => request.params),
-      ).toEqual([
-        { tools: [registration] },
-        { tools: [] },
-        { tools: [] },
-        { tools: [] },
-      ])
+        peer.received.filter(({ request }) => request.method === "tool.attach").map(({ request }) => request.params),
+      ).toEqual([{ tools: [registration] }, { tools: [] }, { tools: [] }, { tools: [] }])
       yield* recoveredAttachment.detach()
       yield* Scope.close(recoveredScope, Exit.void)
     }),
@@ -946,9 +905,7 @@ it.live("retries the final event barrier after a disconnect", () =>
     Effect.gen(function* () {
       let flushes = 0
       const finalBarrierStarted = yield* Deferred.make<void>()
-      const peer = startTransportPeer(({ request, socket }) =>
-        sendResult(socket, request, { attached: true }),
-      )
+      const peer = startTransportPeer(({ request, socket }) => sendResult(socket, request, { attached: true }))
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
       const controller = yield* ToolProducer.make(new Set())
       const firstScope = yield* Scope.make()
@@ -960,9 +917,7 @@ it.live("retries the final event barrier after a disconnect", () =>
         flushToolEvents: () => {
           flushes++
           return flushes === 2
-            ? Deferred.succeed(finalBarrierStarted, undefined).pipe(
-                Effect.andThen(Effect.never),
-              )
+            ? Deferred.succeed(finalBarrierStarted, undefined).pipe(Effect.andThen(Effect.never))
             : first.flushToolEvents()
         },
       }
@@ -983,14 +938,8 @@ it.live("retries the final event barrier after a disconnect", () =>
       const recoveredAttachment = yield* controller.connect(recovered)
       yield* Fiber.join(settling)
       expect(
-        peer.received
-          .filter(({ request }) => request.method === "tool.attach")
-          .map(({ request }) => request.params),
-      ).toEqual([
-        { tools: [registration] },
-        { tools: [] },
-        { tools: [] },
-      ])
+        peer.received.filter(({ request }) => request.method === "tool.attach").map(({ request }) => request.params),
+      ).toEqual([{ tools: [registration] }, { tools: [] }, { tools: [] }])
       yield* recoveredAttachment.detach()
       yield* Scope.close(recoveredScope, Exit.void)
     }),
@@ -1138,15 +1087,15 @@ it.live("drains a reconnect that finishes during settlement commit", () =>
         ...first,
         flushToolEvents: () => {
           flushes++
-          return first.flushToolEvents().pipe(
-            Effect.andThen(
-              flushes === 1
-                ? Deferred.succeed(firstDrained, undefined).pipe(
-                    Effect.andThen(Deferred.await(releaseDrain)),
-                  )
-                : Effect.void,
-            ),
-          )
+          return first
+            .flushToolEvents()
+            .pipe(
+              Effect.andThen(
+                flushes === 1
+                  ? Deferred.succeed(firstDrained, undefined).pipe(Effect.andThen(Deferred.await(releaseDrain)))
+                  : Effect.void,
+              ),
+            )
         },
       }
       const firstAttachment = yield* controller.connect(blocked)
@@ -1275,9 +1224,10 @@ it.effect("rejects a malformed take call ID", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const controller = yield* ToolProducer.make(new Set())
-      expect(
-        yield* controller.controls.take(null as unknown as string).pipe(Effect.flip),
-      ).toMatchObject({ operation: "take", reason: "rejected" })
+      expect(yield* controller.controls.take(null as unknown as string).pipe(Effect.flip)).toMatchObject({
+        operation: "take",
+        reason: "rejected",
+      })
     }),
   ),
 )
@@ -1311,9 +1261,7 @@ it.live("retries in-flight progress after reconnect without advancing its sequen
       notify(peer.received[0].socket, "tool.invocation", invocation)
       const call = yield* controller.controls.take("call_lookup")
 
-      const progress = yield* call
-        .progress({ structured: { phase: "searching" } })
-        .pipe(Effect.forkScoped)
+      const progress = yield* call.progress({ structured: { phase: "searching" } }).pipe(Effect.forkScoped)
       yield* Deferred.await(firstUpdate)
       yield* first.closed
       yield* firstAttachment.detach()
@@ -1369,9 +1317,7 @@ it.live("does not retry progress interrupted by its caller", () =>
       notify(peer.received[0].socket, "tool.invocation", invocation)
       const call = yield* controller.controls.take("call_lookup")
 
-      const progress = yield* call
-        .progress({ structured: { phase: "searching" } })
-        .pipe(Effect.forkScoped)
+      const progress = yield* call.progress({ structured: { phase: "searching" } }).pipe(Effect.forkScoped)
       yield* Deferred.await(updateReceived)
       yield* Fiber.interrupt(progress)
       yield* call.fail("finished")

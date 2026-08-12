@@ -48,9 +48,11 @@ describe("SimulationConnector", () => {
         profile: "opencode-simulation-jsonrpc-v0",
       })
 
-      const error = yield* connector.ui(peer.url, {
-        compatibility: "required",
-      }).pipe(Effect.flip)
+      const error = yield* connector
+        .ui(peer.url, {
+          compatibility: "required",
+        })
+        .pipe(Effect.flip)
       expect(error).toMatchObject({
         _tag: "SimulationCompatibilityError",
         endpoint: peer.url,
@@ -114,16 +116,9 @@ describe("SimulationConnector", () => {
     Effect.gen(function* () {
       const peer = startTransportPeer(
         ({ request, socket }) =>
-          sendResult(
-            socket,
-            request,
-            request.method === "llm.attach"
-              ? { attached: true }
-              : { ok: true },
-          ),
+          sendResult(socket, request, request.method === "llm.attach" ? { attached: true } : { ok: true }),
         {
-          capabilities: (offered) =>
-            offered.filter((capability) => !capability.startsWith("tool.")),
+          capabilities: (offered) => offered.filter((capability) => !capability.startsWith("tool.")),
         },
       )
       yield* Effect.addFinalizer(() => Effect.promise(() => peer.stop()))
@@ -133,16 +128,12 @@ describe("SimulationConnector", () => {
         _tag: "Negotiated",
         role: "backend",
       })
-      expect(
-        yield* connection.attachTools([]).pipe(Effect.flip),
-      ).toMatchObject({
+      expect(yield* connection.attachTools([]).pipe(Effect.flip)).toMatchObject({
         _tag: "SimulationCompatibilityError",
         role: "backend",
         message: expect.stringContaining("tool.attach"),
       })
-      expect(peer.received.map(({ request }) => request.method)).toEqual([
-        "llm.attach",
-      ])
+      expect(peer.received.map(({ request }) => request.method)).toEqual(["llm.attach"])
     }).pipe(Effect.provide(SimulationConnector.layer)),
   )
 })

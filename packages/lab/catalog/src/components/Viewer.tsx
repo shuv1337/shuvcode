@@ -93,9 +93,18 @@ export function Viewer({
           Close <kbd>Esc</kbd>
         </button>
         <span className="viewer-position">
-          <button type="button" className="viewer-button" onClick={() => onNavigate(-1)} aria-label="Previous flow step">←</button>
+          <button
+            type="button"
+            className="viewer-button"
+            onClick={() => onNavigate(-1)}
+            aria-label="Previous flow step"
+          >
+            ←
+          </button>
           {String(position).padStart(2, "0")} / {String(total).padStart(2, "0")}
-          <button type="button" className="viewer-button" onClick={() => onNavigate(1)} aria-label="Next flow step">→</button>
+          <button type="button" className="viewer-button" onClick={() => onNavigate(1)} aria-label="Next flow step">
+            →
+          </button>
         </span>
         <div className="viewer-actions">
           <CaptureActionsMenu identifier={identifier} deepLink={deepLink} issueLink={issueLink} />

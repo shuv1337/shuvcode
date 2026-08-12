@@ -4,16 +4,11 @@ import { defineScript, Llm } from "opencode-drive"
 export default defineScript({
   tui: { viewport: { cols: 120, rows: 36 } },
 
-  setup: ({ fs }) => fs.writeFile(
-    "src/viewport.ts",
-    `export const viewportSequence = ["120x36", "80x24", "50x18"]\n`,
-  ),
+  setup: ({ fs }) => fs.writeFile("src/viewport.ts", `export const viewportSequence = ["120x36", "80x24", "50x18"]\n`),
 
   run: ({ ui, llm }) =>
     Effect.gen(function* () {
-      yield* ui.submit(
-        "Show a compact status report for the viewport resize demo.",
-      )
+      yield* ui.submit("Show a compact status report for the viewport resize demo.")
       yield* llm.send(
         Llm.text(
           "Viewport demo: starting wide at 120 columns by 36 rows. The file src/viewport.ts lists the planned sequence. This first response should have plenty of horizontal room before the terminal narrows.",

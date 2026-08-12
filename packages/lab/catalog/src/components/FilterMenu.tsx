@@ -11,15 +11,7 @@ interface FilterMenuProps {
   readonly onClear: () => void
 }
 
-export function FilterMenu({
-  label,
-  searchLabel,
-  groups,
-  selected,
-  counts,
-  onToggle,
-  onClear,
-}: FilterMenuProps) {
+export function FilterMenu({ label, searchLabel, groups, selected, counts, onToggle, onClear }: FilterMenuProps) {
   const [query, setQuery] = useState("")
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const searchable = groups.reduce((total, group) => total + group.items.length, 0) > 7
@@ -87,11 +79,7 @@ export function FilterMenu({
                 {groups.length > 1 ? <h2>{group.label}</h2> : undefined}
                 {group.items.map((item) => (
                   <label key={item.id} className="filter-option">
-                    <input
-                      type="checkbox"
-                      checked={selectedValues.has(item.id)}
-                      onChange={() => onToggle(item.id)}
-                    />
+                    <input type="checkbox" checked={selectedValues.has(item.id)} onChange={() => onToggle(item.id)} />
                     <span>{item.label}</span>
                     {counts ? <small>{counts.get(item.id) ?? 0}</small> : undefined}
                   </label>

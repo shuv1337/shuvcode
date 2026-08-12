@@ -2,11 +2,7 @@ import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import * as Queue from "effect/Queue"
 import * as Schema from "effect/Schema"
-import {
-  RpcClient,
-  RpcClientError,
-  type RpcMessage,
-} from "effect/unstable/rpc"
+import { RpcClient, RpcClientError, type RpcMessage } from "effect/unstable/rpc"
 import { JsonRpc, SimulationRequestError } from "@opencode-ai/protocol/simulation"
 
 interface PendingRequest {
@@ -29,20 +25,13 @@ export interface Options {
   readonly connectTimeout?: number
   readonly firstWireId?: number
   readonly onClose?: () => Effect.Effect<void>
-  readonly onNotification?: (
-    notification: Notification,
-  ) => Effect.Effect<void>
+  readonly onNotification?: (notification: Notification) => Effect.Effect<void>
 }
 
 const decodeResponse = Schema.decodeUnknownOption(JsonRpc.Response)
-const encodeRequestError = Schema.encodeSync(
-  Schema.toCodecJson(SimulationRequestError),
-)
+const encodeRequestError = Schema.encodeSync(Schema.toCodecJson(SimulationRequestError))
 
-export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
-  endpoint: string,
-  options?: Options,
-) {
+export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (endpoint: string, options?: Options) {
   const connectTimeout = options?.connectTimeout ?? 30_000
   let closing = false
   const socket = yield* Effect.acquireRelease(
@@ -69,10 +58,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
     Effect.gen(function* () {
       const events = yield* Queue.unbounded<TransportEvent>()
       const pending = new Map<number, PendingRequest>()
-      const wireIds = new Map<
-        number,
-        Map<string | number, number>
-      >()
+      const wireIds = new Map<number, Map<string | number, number>>()
       let nextWireId = options?.firstWireId ?? 1
       let currentError: RpcClientError.RpcClientError | undefined
 
@@ -113,25 +99,23 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
         if (isRecord(value) && typeof value.method === "string") {
           if (value.jsonrpc !== "2.0" || "id" in value)
             return failAll("received an invalid JSON-RPC notification", value)
-          return options?.onNotification?.({
-            method: value.method,
-            params: "params" in value ? value.params : undefined,
-          }) ?? Effect.void
+          return (
+            options?.onNotification?.({
+              method: value.method,
+              params: "params" in value ? value.params : undefined,
+            }) ?? Effect.void
+          )
         }
 
-        if (!isRecord(value))
-          return failAll("received an invalid JSON-RPC response", value)
+        if (!isRecord(value)) return failAll("received an invalid JSON-RPC response", value)
         const hasResult = Object.hasOwn(value, "result")
         const hasError = Object.hasOwn(value, "error")
-        if (hasResult === hasError)
-          return failAll("JSON-RPC response must contain result or error", value)
+        if (hasResult === hasError) return failAll("JSON-RPC response must contain result or error", value)
 
         const decoded = decodeResponse(value)
-        if (Option.isNone(decoded))
-          return failAll("received an invalid JSON-RPC response", value)
+        if (Option.isNone(decoded)) return failAll("received an invalid JSON-RPC response", value)
         const response = decoded.value
-        if (typeof response.id !== "number")
-          return failAll("received an invalid JSON-RPC response ID", response.id)
+        if (typeof response.id !== "number") return failAll("received an invalid JSON-RPC response ID", response.id)
         const request = removePending(response.id)
         if (request === undefined) return Effect.void
 
@@ -140,9 +124,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
             method: request.method,
             code: response.error.code,
             message: response.error.message,
-            ...(response.error.data === undefined
-              ? {}
-              : { data: response.error.data }),
+            ...(response.error.data === undefined ? {} : { data: response.error.data }),
           })
           return write(request.clientId, {
             _tag: "Exit",
@@ -171,19 +153,12 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
               failAll("connection closed", new Error("connection closed")),
             )
           case "Error":
-            return Effect.andThen(
-              options?.onClose?.() ?? Effect.void,
-              failAll("connection error", event.cause),
-            )
+            return Effect.andThen(options?.onClose?.() ?? Effect.void, failAll("connection error", event.cause))
         }
         return Effect.void
       }
 
-      yield* Queue.take(events).pipe(
-        Effect.flatMap(handleEvent),
-        Effect.forever,
-        Effect.forkScoped,
-      )
+      yield* Queue.take(events).pipe(Effect.flatMap(handleEvent), Effect.forever, Effect.forkScoped)
 
       const onMessage = (event: MessageEvent) =>
         Queue.offerUnsafe(events, {
@@ -191,8 +166,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
           data: String(event.data),
         })
       const onClose = () => Queue.offerUnsafe(events, { _tag: "Close" })
-      const onError = (cause: Event) =>
-        Queue.offerUnsafe(events, { _tag: "Error", cause })
+      const onError = (cause: Event) => Queue.offerUnsafe(events, { _tag: "Error", cause })
       socket.addEventListener("message", onMessage)
       socket.addEventListener("close", onClose)
       socket.addEventListener("error", onError)
@@ -204,10 +178,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
         }).pipe(Effect.andThen(Queue.shutdown(events))),
       )
 
-      const send = (
-        clientId: number,
-        message: RpcMessage.FromClientEncoded,
-      ) =>
+      const send = (clientId: number, message: RpcMessage.FromClientEncoded) =>
         Effect.suspend(() => {
           if (currentError !== undefined) return Effect.fail(currentError)
           if (message._tag === "Interrupt") {
@@ -218,12 +189,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
           }
           if (message._tag !== "Request") return Effect.void
           if (socket.readyState !== WebSocket.OPEN)
-            return Effect.fail(
-              protocolError(
-                "connection is not open",
-                new Error("connection is not open"),
-              ),
-            )
+            return Effect.fail(protocolError("connection is not open", new Error("connection is not open")))
 
           let clientWireIds = wireIds.get(clientId)
           if (clientWireIds === undefined) {
@@ -231,17 +197,10 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
             wireIds.set(clientId, clientWireIds)
           }
           if (clientWireIds.has(message.id))
-            return Effect.fail(
-              protocolError(
-                "duplicate RPC request ID",
-                new Error(String(message.id)),
-              ),
-            )
+            return Effect.fail(protocolError("duplicate RPC request ID", new Error(String(message.id))))
 
           const wireId = nextWireId++
-          const payload = message.tag === "ui.press"
-            ? encodePressPayload(message.payload)
-            : message.payload
+          const payload = message.tag === "ui.press" ? encodePressPayload(message.payload) : message.payload
           pending.set(wireId, {
             clientId,
             method: message.tag,
@@ -255,9 +214,7 @@ export const make = Effect.fn("OpenCodeRpcProtocol.make")(function* (
                   jsonrpc: "2.0",
                   id: wireId,
                   method: message.tag,
-                  ...(payload === undefined || payload === null
-                    ? {}
-                    : { params: payload }),
+                  ...(payload === undefined || payload === null ? {} : { params: payload }),
                 }),
               )
             },
@@ -292,36 +249,35 @@ function encodePressPayload(payload: unknown) {
   const modifier = modifierMask(modifiers)
   const named = key.toLowerCase()
   const arrowName = named.startsWith("arrow_") ? named.slice(6) : named
-  const arrow = arrowName === "up"
-    ? arrows.up
-    : arrowName === "down"
-      ? arrows.down
-      : arrowName === "right"
-        ? arrows.right
-        : arrowName === "left"
-          ? arrows.left
-          : undefined
+  const arrow =
+    arrowName === "up"
+      ? arrows.up
+      : arrowName === "down"
+        ? arrows.down
+        : arrowName === "right"
+          ? arrows.right
+          : arrowName === "left"
+            ? arrows.left
+            : undefined
   if (arrow !== undefined) {
-    if (modifier & 24)
-      return { key: kittySequence(arrow.kitty, modifier) }
+    if (modifier & 24) return { key: kittySequence(arrow.kitty, modifier) }
     return {
-      key: modifier === 0
-        ? `\u001b[${arrow.final}`
-        : `\u001b[1;${modifier + 1}${arrow.final}`,
+      key: modifier === 0 ? `\u001b[${arrow.final}` : `\u001b[1;${modifier + 1}${arrow.final}`,
     }
   }
-  if (named === "tab" && modifier !== 0)
-    return { key: kittySequence(9, modifier) }
+  if (named === "tab" && modifier !== 0) return { key: kittySequence(9, modifier) }
   return payload
 }
 
 function modifierMask(value: unknown) {
   if (typeof value !== "object" || value === null) return 0
-  return (Reflect.get(value, "shift") === true ? 1 : 0) |
+  return (
+    (Reflect.get(value, "shift") === true ? 1 : 0) |
     (Reflect.get(value, "meta") === true ? 2 : 0) |
     (Reflect.get(value, "ctrl") === true ? 4 : 0) |
     (Reflect.get(value, "super") === true ? 8 : 0) |
     (Reflect.get(value, "hyper") === true ? 16 : 0)
+  )
 }
 
 function kittySequence(codepoint: number, modifier: number) {
@@ -338,9 +294,7 @@ function open(endpoint: string) {
       return Effect.void
     }
     let settled = false
-    const complete = (
-      effect: Effect.Effect<WebSocket, RpcClientError.RpcClientError>,
-    ) => {
+    const complete = (effect: Effect.Effect<WebSocket, RpcClientError.RpcClientError>) => {
       if (settled) return
       settled = true
       cleanup()
@@ -353,12 +307,7 @@ function open(endpoint: string) {
     }
     const onClose = () => {
       complete(
-        Effect.fail(
-          protocolError(
-            `cannot connect to ${endpoint}`,
-            new Error("connection closed before opening"),
-          ),
-        ),
+        Effect.fail(protocolError(`cannot connect to ${endpoint}`, new Error("connection closed before opening"))),
       )
     }
     const cleanup = () => {

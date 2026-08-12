@@ -6,37 +6,22 @@ export default defineScript({
   run: ({ server, tools, tuis, artifacts }) =>
     Effect.gen(function* () {
       yield* server.launch()
-      const firstServer = Number(
-        yield* Effect.tryPromise(() =>
-          Bun.file(`${artifacts}/service.pid`).text(),
-        ),
-      )
+      const firstServer = Number(yield* Effect.tryPromise(() => Bun.file(`${artifacts}/service.pid`).text()))
       const [alice] = yield* Effect.all(
-        [
-          tuis.launch("alice", { recording: true }),
-          tuis.launch("bob", { recording: true }),
-        ],
+        [tuis.launch("alice", { recording: true }), tuis.launch("bob", { recording: true })],
         { concurrency: "unbounded" },
       )
 
       yield* server.kill()
-      for (let attempt = 0; attempt < 100 && running(firstServer); attempt++)
-        yield* Effect.sleep(10)
-      if (running(firstServer))
-        return yield* Effect.fail(new Error("the first server is still running"))
+      for (let attempt = 0; attempt < 100 && running(firstServer); attempt++) yield* Effect.sleep(10)
+      if (running(firstServer)) return yield* Effect.fail(new Error("the first server is still running"))
 
       yield* server.launch()
-      const secondServer = Number(
-        yield* Effect.tryPromise(() =>
-          Bun.file(`${artifacts}/service.pid`).text(),
-        ),
-      )
-      if (secondServer === firstServer)
-        return yield* Effect.fail(new Error("the server was not relaunched"))
+      const secondServer = Number(yield* Effect.tryPromise(() => Bun.file(`${artifacts}/service.pid`).text()))
+      if (secondServer === firstServer) return yield* Effect.fail(new Error("the server was not relaunched"))
 
       const recording = alice.recording
-      if (recording === undefined)
-        return yield* Effect.fail(new Error("alice recording was not configured"))
+      if (recording === undefined) return yield* Effect.fail(new Error("alice recording was not configured"))
       const aliceRecording = yield* recording.finish()
       yield* alice.close()
       const relaunchedAlice = yield* tuis.launch("alice")

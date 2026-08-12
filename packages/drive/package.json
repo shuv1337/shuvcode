@@ -10,7 +10,7 @@
     "url": "git+https://github.com/anomalyco/opencode.git",
     "directory": "packages/drive"
   },
-    "homepage": "https://github.com/anomalyco/opencode/tree/v2/packages/drive#readme",
+  "homepage": "https://github.com/anomalyco/opencode/tree/v2/packages/drive#readme",
   "bugs": "https://github.com/anomalyco/opencode/issues",
   "type": "module",
   "packageManager": "bun@1.3.14",

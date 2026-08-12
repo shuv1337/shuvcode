@@ -181,7 +181,7 @@ export namespace Frontend {
     "ui.capture",
     "ui.recording.finish",
   ] as const satisfies ReadonlyArray<Handshake.Capability>
-  export type Capability = typeof Capabilities[number]
+  export type Capability = (typeof Capabilities)[number]
 
   export const KeyModifiers = Schema.Struct({
     ctrl: Schema.optional(Schema.Boolean),

@@ -62,10 +62,7 @@ export const BlockGlyphs: Record<string, GlyphRect> = {
   "╹": { x: CellWidth / 2 - 1, y: 0, width: 2, height: CellHeight / 2, stretch: false },
 }
 
-const lightBoxGlyphs: Record<
-  string,
-  readonly [up: boolean, right: boolean, down: boolean, left: boolean]
-> = {
+const lightBoxGlyphs: Record<string, readonly [up: boolean, right: boolean, down: boolean, left: boolean]> = {
   "─": [false, true, false, true],
   "│": [true, false, true, false],
   "┌": [false, true, true, false],
@@ -109,9 +106,7 @@ export const drawBlockGlyph = (
 ): boolean => {
   const glyph = BlockGlyphs[char]
   if (glyph !== undefined) {
-    const width = glyph.stretch
-      ? glyph.width + (cells - 1) * CellWidth
-      : glyph.width
+    const width = glyph.stretch ? glyph.width + (cells - 1) * CellWidth : glyph.width
     context.fillRect(x + glyph.x, y + glyph.y, width, glyph.height)
     return true
   }
@@ -137,8 +132,7 @@ export const drawBlockGlyph = (
   }
   const quadrants = diagonalBlockGlyphs[char]
   if (quadrants === undefined) return false
-  for (const quadrant of quadrants)
-    context.fillRect(x + quadrant.x, y + quadrant.y, quadrant.width, quadrant.height)
+  for (const quadrant of quadrants) context.fillRect(x + quadrant.x, y + quadrant.y, quadrant.width, quadrant.height)
   return true
 }
 

@@ -95,7 +95,9 @@ export function ContactSheet({
       {screens.length === 0 ? (
         <div className="empty-state">
           <p>No captures match this combination of filters.</p>
-          <button type="button" onClick={onClearFilters}>Clear all filters</button>
+          <button type="button" onClick={onClearFilters}>
+            Clear all filters
+          </button>
         </div>
       ) : (
         Array.from(Map.groupBy(screens, screenFamily), ([category, categoryScreens]) => (
@@ -116,10 +118,7 @@ export function ContactSheet({
                   variant: variantId,
                 })
                 return (
-                  <article
-                    key={screen.id}
-                    className={`capture-card${screen.id === selectedId ? " selected" : ""}`}
-                  >
+                  <article key={screen.id} className={`capture-card${screen.id === selectedId ? " selected" : ""}`}>
                     <button
                       type="button"
                       data-screen={screen.id}
@@ -141,7 +140,9 @@ export function ContactSheet({
                       <span className="capture-title-wrap">
                         <span className="capture-title">{screen.title}</span>
                         {screen.states.some((state) => state !== "default") ? (
-                          <span className="capture-state">{screen.states.filter((state) => state !== "default").join(" · ")}</span>
+                          <span className="capture-state">
+                            {screen.states.filter((state) => state !== "default").join(" · ")}
+                          </span>
                         ) : undefined}
                       </span>
                       <CaptureActionsMenu identifier={screen.id} deepLink={deepLink} issueLink={issueLink} />

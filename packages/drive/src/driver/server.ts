@@ -36,20 +36,14 @@ export interface Server {
   readonly tuis: OpenCodeTui.Control
   readonly launch: () => Effect.Effect<
     OpenCodeSdk.OpenCode,
-    | OpenCodeDriverError
-    | LlmController.LlmControllerError
-    | SimulationConnector.SimulationCompatibilityError
+    OpenCodeDriverError | LlmController.LlmControllerError | SimulationConnector.SimulationCompatibilityError
   >
   readonly kill: () => Effect.Effect<void, OpenCodeDriverError>
   readonly failure: Effect.Effect<never, OpenCodeDriverError | LlmController.LlmControllerError>
-  readonly compatibility: Effect.Effect<
-    ReadonlyArray<SimulationConnector.EndpointCompatibility>
-  >
+  readonly compatibility: Effect.Effect<ReadonlyArray<SimulationConnector.EndpointCompatibility>>
 }
 
-export const make = Effect.fn("OpenCodeServer.make")(function* (
-  options: Options,
-) {
+export const make = Effect.fn("OpenCodeServer.make")(function* (options: Options) {
   const connector = yield* SimulationConnector.Service
   const target = options.target ?? {}
   const instance = options.instance
@@ -59,32 +53,24 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     ...instance.tools,
     ...toolProducer.controls,
   }
-  const tuis = yield* OpenCodeTui.makeTuis(
-    instance,
-    target.visible ?? false,
-    connector,
-    target.compatibility,
-  )
+  const tuis = yield* OpenCodeTui.makeTuis(instance, target.visible ?? false, connector, target.compatibility)
   const parentScope = yield* Scope.Scope
   const generation = yield* Ref.make<
-    {
-      readonly scope: Scope.Scope
-      readonly attachment: LlmController.Attachment
-      readonly process: import("../instance/process.js").Running
-    } | undefined
+    | {
+        readonly scope: Scope.Scope
+        readonly attachment: LlmController.Attachment
+        readonly process: import("../instance/process.js").Running
+      }
+    | undefined
   >(undefined)
   const unexpectedExit = yield* Deferred.make<never, OpenCodeDriverError>()
   const toolConnectionFailure = yield* Deferred.make<never, OpenCodeDriverError>()
   const lifecycle = yield* Semaphore.make(1)
-  let compatibility: ReadonlyArray<
-    SimulationConnector.EndpointCompatibility
-  > = []
+  let compatibility: ReadonlyArray<SimulationConnector.EndpointCompatibility> = []
 
   const launchGeneration = Effect.fn("OpenCodeServer.launch")(function* () {
     if ((yield* Ref.get(generation)) !== undefined)
-      return yield* Effect.fail(
-        error("server.launch", "the script server has already been launched"),
-      )
+      return yield* Effect.fail(error("server.launch", "the script server has already been launched"))
     const scope = yield* Scope.fork(parentScope)
     const launched = yield* instance.launchServer.pipe(
       Effect.mapError((cause) => error("server.launch", cause)),
@@ -98,42 +84,38 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         Effect.andThen(instance.killServer.pipe(Effect.ignore)),
       ),
     )
-    const backend = yield* connector.backend(launched.endpoint, {
-      compatibility: target.compatibility,
-    }).pipe(
-      Scope.provide(scope),
-      Effect.mapError((cause) => error("server.connect", cause)),
-      Effect.onError(() => rollbackLaunch),
-    )
+    const backend = yield* connector
+      .backend(launched.endpoint, {
+        compatibility: target.compatibility,
+      })
+      .pipe(
+        Scope.provide(scope),
+        Effect.mapError((cause) => error("server.connect", cause)),
+        Effect.onError(() => rollbackLaunch),
+      )
     const connectTools = Effect.fn("OpenCodeServer.connectTools")(function* () {
       const connectionScope = yield* Scope.fork(scope)
       const connection = yield* toolProducer
         .connectFrom(
-          connector.backend(launched.endpoint, {
-            attach: false,
-            compatibility: target.compatibility,
-          }).pipe(Scope.provide(connectionScope)),
+          connector
+            .backend(launched.endpoint, {
+              attach: false,
+              compatibility: target.compatibility,
+            })
+            .pipe(Scope.provide(connectionScope)),
         )
         .pipe(Effect.onError(() => Scope.close(connectionScope, Exit.void)))
       return { ...connection, scope: connectionScope }
     })
     const failToolConnection = (cause: unknown) =>
       toolProducer.shutdown.pipe(
-        Effect.andThen(
-          Deferred.fail(
-            toolConnectionFailure,
-            error("tools.connect", cause),
-          ),
-        ),
+        Effect.andThen(Deferred.fail(toolConnectionFailure, error("tools.connect", cause))),
         Effect.asVoid,
       )
     function reconnectTools(): Effect.Effect<void> {
       return connectTools().pipe(
         Effect.flatMap(superviseTools),
-        Effect.catchIf(
-          isRetryableToolConnectionError,
-          () => Effect.sleep(25).pipe(Effect.andThen(reconnectTools())),
-        ),
+        Effect.catchIf(isRetryableToolConnectionError, () => Effect.sleep(25).pipe(Effect.andThen(reconnectTools()))),
         Effect.catchIf(isClosedToolConnectionError, () => Effect.void),
         Effect.catch(failToolConnection),
         Effect.catchCauseIf(
@@ -142,15 +124,9 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         ),
       )
     }
-    function superviseTools(
-      connection: Effect.Success<ReturnType<typeof connectTools>>,
-    ): Effect.Effect<void> {
+    function superviseTools(connection: Effect.Success<ReturnType<typeof connectTools>>): Effect.Effect<void> {
       return connection.backend.closed.pipe(
-        Effect.ensuring(
-          connection.attachment.detach().pipe(
-            Effect.andThen(Scope.close(connection.scope, Exit.void)),
-          ),
-        ),
+        Effect.ensuring(connection.attachment.detach().pipe(Effect.andThen(Scope.close(connection.scope, Exit.void)))),
         Effect.andThen(Effect.sleep(25)),
         Effect.andThen(reconnectTools()),
       )
@@ -159,16 +135,10 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       Effect.mapError((cause) => error("tools.connect", cause)),
       Effect.onError(() => rollbackLaunch),
     )
-    yield* superviseTools(toolConnection).pipe(
-      Effect.forkIn(scope),
-    )
-    const attachment = yield* llm.attach(backend).pipe(
-      Effect.onError(() => rollbackLaunch),
-    )
+    yield* superviseTools(toolConnection).pipe(Effect.forkIn(scope))
+    const attachment = yield* llm.attach(backend).pipe(Effect.onError(() => rollbackLaunch))
     llmAttachment = attachment
-    const opencode = yield* OpenCodeSdk.make(instance.artifacts).pipe(
-      Effect.onError(() => rollbackLaunch),
-    )
+    const opencode = yield* OpenCodeSdk.make(instance.artifacts).pipe(Effect.onError(() => rollbackLaunch))
     const process = yield* instance.primary.pipe(
       Effect.mapError((cause) => error("server.launch", cause)),
       Effect.onError(() => rollbackLaunch),
@@ -199,18 +169,13 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
 
   const killGeneration = Effect.fn("OpenCodeServer.kill")(function* () {
     const active = yield* Ref.get(generation)
-    if (active === undefined)
-      return yield* Effect.fail(
-        error("server.kill", "the script server is not running"),
-      )
+    if (active === undefined) return yield* Effect.fail(error("server.kill", "the script server is not running"))
     yield* Ref.set(generation, undefined)
     yield* active.attachment.detach()
     yield* toolProducer.endGeneration
     yield* Scope.close(active.scope, Exit.void)
     const stopped = yield* Effect.exit(
-      instance.killServer.pipe(
-        Effect.mapError((cause) => error("server.kill", cause)),
-      ),
+      instance.killServer.pipe(Effect.mapError((cause) => error("server.kill", cause))),
     )
     if (Exit.isFailure(stopped)) return yield* Effect.failCause(stopped.cause)
     return undefined
@@ -226,9 +191,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     launch,
     kill,
     failure: Effect.raceFirst(
-      toolProducer.failure.pipe(
-        Effect.mapError((cause) => error("tools", cause)),
-      ),
+      toolProducer.failure.pipe(Effect.mapError((cause) => error("tools", cause))),
       Effect.raceFirst(
         Deferred.await(toolConnectionFailure),
         Effect.raceFirst(llm.failure, Deferred.await(unexpectedExit)),
@@ -241,8 +204,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
 function isRetryableToolConnectionError(cause: unknown) {
   return (
     cause instanceof SimulationConnector.SimulationConnectionError ||
-    (cause instanceof RpcClientError.RpcClientError &&
-      isTransientRpcClientError(cause)) ||
+    (cause instanceof RpcClientError.RpcClientError && isTransientRpcClientError(cause)) ||
     (cause instanceof LifecycleError && cause.reason === "transport-interrupted")
   )
 }

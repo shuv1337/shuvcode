@@ -2,15 +2,11 @@ import { Effect, Stream } from "effect"
 import { defineScript, Llm } from "opencode-drive"
 
 export default defineScript({
-  setup: ({ fs }) => fs.writeFile(
-    "src/greeting.ts",
-    [
-      "export function greeting(name: string) {",
-      '  return `Welcome, ${name}!`',
-      "}",
-      "",
-    ].join("\n"),
-  ),
+  setup: ({ fs }) =>
+    fs.writeFile(
+      "src/greeting.ts",
+      ["export function greeting(name: string) {", "  return `Welcome, ${name}!`", "}", ""].join("\n"),
+    ),
 
   run: ({ llm, ui }) =>
     Effect.gen(function* () {
@@ -20,9 +16,7 @@ export default defineScript({
       yield* llm.serve(() => {
         if (turn++ === 0)
           return Stream.make(
-            Llm.reasoning(
-              "I should read the implementation before explaining it.",
-            ),
+            Llm.reasoning("I should read the implementation before explaining it."),
             Llm.toolCall({
               index: 0,
               id: "call_read_greeting",

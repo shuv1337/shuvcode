@@ -8,13 +8,10 @@ export default defineScript({
   launch: "manual",
   setup: ({ fs }) =>
     Effect.gen(function* () {
-      setupGitError = yield* Effect.matchEffect(
-        fs.writeFile(".GIT/config", "setup must not replace Git metadata\n"),
-        {
-          onFailure: (error) => Effect.succeed(String(error)),
-          onSuccess: () => Effect.succeed(undefined),
-        },
-      )
+      setupGitError = yield* Effect.matchEffect(fs.writeFile(".GIT/config", "setup must not replace Git metadata\n"), {
+        onFailure: (error) => Effect.succeed(String(error)),
+        onSuccess: () => Effect.succeed(undefined),
+      })
     }),
   run: ({ artifacts, fs }) =>
     Effect.gen(function* () {

@@ -10,14 +10,11 @@ import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 
-export class ProcessError extends Schema.TaggedErrorClass<ProcessError>()(
-  "ProcessError",
-  {
-    operation: Schema.String,
-    command: Schema.Array(Schema.String),
-    message: Schema.String,
-  },
-) {}
+export class ProcessError extends Schema.TaggedErrorClass<ProcessError>()("ProcessError", {
+  operation: Schema.String,
+  command: Schema.Array(Schema.String),
+  message: Schema.String,
+}) {}
 
 export interface SpawnOptions {
   readonly cwd?: string
@@ -45,20 +42,14 @@ export interface Output {
 
 type RunOutputMode = "capture" | "inherit" | "ignore"
 
-export interface RunOptions extends Omit<
-  SpawnOptions,
-  "stdout" | "stderr" | "detached"
-> {
+export interface RunOptions extends Omit<SpawnOptions, "stdout" | "stderr" | "detached"> {
   readonly stdout?: RunOutputMode
   readonly stderr?: RunOutputMode
   readonly stdoutLimit?: number
   readonly stderrLimit?: number
 }
 
-export const spawn = Effect.fn("Process.spawn")(function* (
-  command: ReadonlyArray<string>,
-  options: SpawnOptions = {},
-) {
+export const spawn = Effect.fn("Process.spawn")(function* (command: ReadonlyArray<string>, options: SpawnOptions = {}) {
   const executable = command[0]
   if (executable === undefined)
     return yield* Effect.fail(processError("spawn", command, "cannot spawn an empty command"))
@@ -67,22 +58,24 @@ export const spawn = Effect.fn("Process.spawn")(function* (
   const processScope = yield* Scope_.fork(parentScope)
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
   const fileSystem = yield* FileSystem.FileSystem
-  const handle = yield* spawner.spawn(
-    ChildProcess.make(executable, command.slice(1), {
-      cwd: options.cwd,
-      env: options.env,
-      extendEnv: options.extendEnv ?? false,
-      stdin: options.stdin ?? "ignore",
-      stdout: outputMode(options.stdout),
-      stderr: outputMode(options.stderr),
-      detached: options.detached,
-      killSignal: "SIGKILL",
-    }),
-  ).pipe(
-    Scope_.provide(processScope),
-    Effect.mapError((cause) => processError("spawn", command, cause)),
-    Effect.onError(() => Scope_.close(processScope, Exit.void)),
-  )
+  const handle = yield* spawner
+    .spawn(
+      ChildProcess.make(executable, command.slice(1), {
+        cwd: options.cwd,
+        env: options.env,
+        extendEnv: options.extendEnv ?? false,
+        stdin: options.stdin ?? "ignore",
+        stdout: outputMode(options.stdout),
+        stderr: outputMode(options.stderr),
+        detached: options.detached,
+        killSignal: "SIGKILL",
+      }),
+    )
+    .pipe(
+      Scope_.provide(processScope),
+      Effect.mapError((cause) => processError("spawn", command, cause)),
+      Effect.onError(() => Scope_.close(processScope, Exit.void)),
+    )
 
   const drains: Array<Fiber.Fiber<void, ProcessError>> = []
   if (typeof options.stdout === "object")
@@ -114,9 +107,7 @@ export const spawn = Effect.fn("Process.spawn")(function* (
 
   const terminate = Effect.uninterruptible(
     Effect.gen(function* () {
-      const running = yield* handle.isRunning.pipe(
-        Effect.mapError((cause) => processError("status", command, cause)),
-      )
+      const running = yield* handle.isRunning.pipe(Effect.mapError((cause) => processError("status", command, cause)))
       if (!running) {
         yield* Scope_.close(processScope, Exit.void)
         return undefined
@@ -126,25 +117,18 @@ export const spawn = Effect.fn("Process.spawn")(function* (
         Effect.mapError((cause) => processError("terminate", command, cause)),
       )
       if (Option.isNone(graceful))
-        yield* handle.kill({ killSignal: "SIGKILL" }).pipe(
-          Effect.mapError((cause) => processError("kill", command, cause)),
-        )
+        yield* handle
+          .kill({ killSignal: "SIGKILL" })
+          .pipe(Effect.mapError((cause) => processError("kill", command, cause)))
       yield* exitCode
       yield* Scope_.close(processScope, Exit.void)
       return undefined
     }),
   )
   yield* Effect.addFinalizer(() =>
-    Ref.get(detached).pipe(
-      Effect.flatMap((isDetached) =>
-        isDetached ? Effect.void : terminate.pipe(Effect.ignore),
-      ),
-    ),
+    Ref.get(detached).pipe(Effect.flatMap((isDetached) => (isDetached ? Effect.void : terminate.pipe(Effect.ignore)))),
   )
-  yield* Effect.exit(exitCode).pipe(
-    Effect.andThen(Scope_.close(processScope, Exit.void)),
-    Effect.forkIn(parentScope),
-  )
+  yield* Effect.exit(exitCode).pipe(Effect.andThen(Scope_.close(processScope, Exit.void)), Effect.forkIn(parentScope))
 
   const detach = handle.unref.pipe(
     Effect.asVoid,
@@ -156,48 +140,36 @@ export const spawn = Effect.fn("Process.spawn")(function* (
   return {
     pid: Number(handle.pid),
     exitCode,
-    isRunning: handle.isRunning.pipe(
-      Effect.mapError((cause) => processError("status", command, cause)),
-    ),
+    isRunning: handle.isRunning.pipe(Effect.mapError((cause) => processError("status", command, cause))),
     terminate,
     detach,
   } satisfies Running
 })
 
-export const run = Effect.fn("Process.run")(function* (
-  command: ReadonlyArray<string>,
-  options: RunOptions = {},
-) {
+export const run = Effect.fn("Process.run")(function* (command: ReadonlyArray<string>, options: RunOptions = {}) {
   const executable = command[0]
-  if (executable === undefined)
-    return yield* Effect.fail(processError("run", command, "cannot run an empty command"))
+  if (executable === undefined) return yield* Effect.fail(processError("run", command, "cannot run an empty command"))
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
   return yield* Effect.scoped(
     Effect.gen(function* () {
-      const handle = yield* spawner.spawn(
-        ChildProcess.make(executable, command.slice(1), {
-          cwd: options.cwd,
-          env: options.env,
-          extendEnv: options.extendEnv ?? false,
-          stdin: options.stdin ?? "ignore",
-          stdout: captureMode(options.stdout),
-          stderr: captureMode(options.stderr),
-          killSignal: "SIGKILL",
-        }),
-      ).pipe(Effect.mapError((cause) => processError("spawn", command, cause)))
-      const stdout = yield* collectOutput(
-        handle.stdout,
-        options.stdout,
-        options.stdoutLimit,
-      ).pipe(
+      const handle = yield* spawner
+        .spawn(
+          ChildProcess.make(executable, command.slice(1), {
+            cwd: options.cwd,
+            env: options.env,
+            extendEnv: options.extendEnv ?? false,
+            stdin: options.stdin ?? "ignore",
+            stdout: captureMode(options.stdout),
+            stderr: captureMode(options.stderr),
+            killSignal: "SIGKILL",
+          }),
+        )
+        .pipe(Effect.mapError((cause) => processError("spawn", command, cause)))
+      const stdout = yield* collectOutput(handle.stdout, options.stdout, options.stdoutLimit).pipe(
         Effect.mapError((cause) => processError("stdout", command, cause)),
         Effect.forkChild,
       )
-      const stderr = yield* collectOutput(
-        handle.stderr,
-        options.stderr,
-        options.stderrLimit,
-      ).pipe(
+      const stderr = yield* collectOutput(handle.stderr, options.stderr, options.stderrLimit).pipe(
         Effect.mapError((cause) => processError("stderr", command, cause)),
         Effect.forkChild,
       )
@@ -215,7 +187,7 @@ export const run = Effect.fn("Process.run")(function* (
 })
 
 function outputMode(output: SpawnOptions["stdout"] | SpawnOptions["stderr"]) {
-  return typeof output === "object" ? "pipe" : output ?? "ignore"
+  return typeof output === "object" ? "pipe" : (output ?? "ignore")
 }
 
 function captureMode(output: RunOutputMode | undefined) {
@@ -228,11 +200,7 @@ function collectOutput(
   limit: number | undefined,
 ) {
   if (mode === "inherit" || mode === "ignore") return Effect.succeed("")
-  if (limit === undefined)
-    return stream.pipe(
-      Stream.decodeText(),
-      Stream.mkString,
-    )
+  if (limit === undefined) return stream.pipe(Stream.decodeText(), Stream.mkString)
   return Effect.gen(function* () {
     let output = ""
     yield* stream.pipe(
@@ -247,11 +215,7 @@ function collectOutput(
   })
 }
 
-function processError(
-  operation: string,
-  command: ReadonlyArray<string>,
-  cause: unknown,
-) {
+function processError(operation: string, command: ReadonlyArray<string>, cause: unknown) {
   return new ProcessError({
     operation,
     command: [...command],
@@ -259,9 +223,6 @@ function processError(
   })
 }
 
-export type Requirements =
-  | Scope.Scope
-  | ChildProcessSpawner.ChildProcessSpawner
-  | FileSystem.FileSystem
+export type Requirements = Scope.Scope | ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
 
 export * as Process from "./process.js"
