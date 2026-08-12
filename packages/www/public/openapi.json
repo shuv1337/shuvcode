@@ -12146,7 +12146,7 @@
             "type": "integer",
             "allOf": [
               {
-                "exclusiveMinimum": 0
+                "minimum": 0
               }
             ]
           }

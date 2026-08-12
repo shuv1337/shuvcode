@@ -16,7 +16,6 @@ export interface BootOptions {
   readonly overrides?: LayerNode.Replacements
 }
 
-
 /**
  * Builds a web-standard fetch handler — `(request: Request) => Promise<Response>` — serving the
  * same HttpApi routes as the Node server process without binding a port, owning a listener, or
