@@ -21361,6 +21361,72 @@
         "required": ["id", "created", "type", "data"],
         "additionalProperties": false
       },
+      "project.directory.resolved": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^evt_"
+              }
+            ]
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["project.directory.resolved"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer",
+                "allOf": [
+                  {
+                    "minimum": 0
+                  }
+                ]
+              },
+              "version": {
+                "type": "number",
+                "enum": [1]
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "projectID": {
+                "type": "string"
+              },
+              "directory": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              }
+            },
+            "required": ["projectID", "directory", "previous"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "created", "type", "durable", "data"],
+        "additionalProperties": false
+      },
       "command.updated": {
         "type": "object",
         "properties": {
@@ -23493,6 +23559,9 @@
           },
           {
             "$ref": "#/components/schemas/project.directories.updated"
+          },
+          {
+            "$ref": "#/components/schemas/project.directory.resolved"
           },
           {
             "$ref": "#/components/schemas/command.updated"
