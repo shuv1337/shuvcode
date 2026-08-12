@@ -28,6 +28,7 @@ import { parseSlashHead } from "../../prompt/parse"
 import { stringWidth } from "../../util/string-width"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { emptyPrompt, usePromptHistory, type PromptInfo, type PromptPartRef } from "../../prompt/history"
+import { saveDraft, takeDraft } from "./draft-stash"
 import { Skill } from "@opencode-ai/schema/skill"
 import { computePromptTraits } from "../../prompt/traits"
 import { expandPastedTextPlaceholders, expandTrackedPastedText } from "../../prompt/part"
@@ -131,8 +132,6 @@ function formatEditorContext(selection: EditorSelection) {
 
   return `<system-reminder>${ranges.join("\n")} This may or may not be relevant to the current task.</system-reminder>\n`
 }
-
-let stashed: { prompt: PromptInfo; cursor: number } | undefined
 
 function argumentSlash(input: string, commands: readonly KeymapCommand[]) {
   const head = parseSlashHead(input, /\s/)
@@ -657,9 +656,14 @@ export function Prompt(props: PromptProps) {
     },
   }
 
+  // Captured once: the session route is keyed by sessionID, so this Prompt
+  // instance belongs to exactly one tab. Reading props.sessionID lazily would
+  // observe the *next* route during onCleanup and stash under the wrong tab.
+  const stashSessionID = props.sessionID
+  const stashKey = () => (config.experimental?.tab_drafts === true ? (stashSessionID ?? "home") : undefined)
+
   onMount(() => {
-    const saved = stashed
-    stashed = undefined
+    const saved = takeDraft(stashKey())
     if (store.prompt.text) return
     if (saved && saved.prompt.text) {
       input.setText(saved.prompt.text)
@@ -672,7 +676,7 @@ export function Prompt(props: PromptProps) {
   onCleanup(() => {
     disposed = true
     if (store.prompt.text) {
-      stashed = { prompt: unwrap(store.prompt), cursor: input.cursorOffset }
+      saveDraft(stashKey(), { prompt: unwrap(store.prompt), cursor: input.cursorOffset })
     }
     setInputTarget(undefined)
     props.ref?.(undefined)
