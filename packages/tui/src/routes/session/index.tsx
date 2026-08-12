@@ -1701,6 +1701,15 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
 function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
   const ctx = use()
   const theme = useTheme()
+  if (props.message.type === "location-switched")
+    return (
+      <box paddingLeft={3}>
+        <text>
+          <span style={{ fg: theme.text.subdued }}>↳ Moved to </span>
+          <span style={{ fg: theme.text.feedback.info.default }}>{props.message.location.directory}</span>
+        </text>
+      </box>
+    )
   const text = () => {
     if (props.message.type === "agent-switched") {
       const agent = Locale.titlecase(props.message.agent)
@@ -1710,7 +1719,6 @@ function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
     }
     if (props.message.type === "model-switched")
       return switchLabel(props.message.model, ctx.models(), props.message.previous)
-    if (props.message.type === "location-switched") return `Switched location to ${props.message.location.directory}`
     return ""
   }
   return (
