@@ -2826,10 +2826,15 @@ function Shell(props: ToolProps) {
   })
   const maxLines = 10
   const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
+  const prompt = createMemo(() => (workdir() && workdir() !== "." ? `${workdir()}$` : "$"))
   const input = createMemo(() => {
-    if (!command()) return ""
-    const prompt = workdir() && workdir() !== "." ? `${workdir()}$ ` : isRunning() ? "" : "$ "
-    return `${prompt}${command()}`
+    const cmd = command()
+    if (!cmd) return ""
+    // While running, the workdir prompt shares the spinner's text column; when
+    // settled, the prompt renders as its own column so wrapped command lines
+    // keep a stable hanging indent instead of jumping to the card inset.
+    if (isRunning() && prompt() !== "$") return `${prompt()} ${cmd}`
+    return cmd
   })
   const content = createMemo(() => [input(), output()].filter(Boolean).join("\n\n"))
   const collapsed = createMemo(() => collapseToolOutput(content(), maxLines, maxChars()))
@@ -2837,6 +2842,8 @@ function Shell(props: ToolProps) {
     if (expanded() || !collapsed().overflow) return content()
     return collapsed().output
   })
+  const limitedInput = createMemo(() => limited().slice(0, input().length))
+  const limitedOutput = createMemo(() => limited().slice(Math.min(limited().length, input().length + 2)))
   const expandable = createMemo(() => Boolean(shellID()) || collapsed().overflow)
   const toggle = () => {
     const next = !expanded()
@@ -2860,16 +2867,16 @@ function Shell(props: ToolProps) {
           <Show
             when={isRunning()}
             fallback={
-              <text>
-                <span style={{ fg: theme.text.default }}>{limited().slice(0, input().length)}</span>
-                <span style={{ fg: theme.text.subdued }}>{limited().slice(input().length)}</span>
-              </text>
+              <box flexDirection="row" gap={1}>
+                <text fg={theme.text.default}>{prompt()}</text>
+                <text fg={theme.text.default}>{limitedInput()}</text>
+              </box>
             }
           >
-            <Spinner color={color()}>
-              <span style={{ fg: theme.text.default }}>{limited().slice(0, input().length)}</span>
-              <span style={{ fg: theme.text.subdued }}>{limited().slice(input().length)}</span>
-            </Spinner>
+            <Spinner color={color()}>{limitedInput()}</Spinner>
+          </Show>
+          <Show when={limitedOutput()}>
+            <text fg={theme.text.subdued}>{limitedOutput()}</text>
           </Show>
         </Show>
         <Show when={background()}>
