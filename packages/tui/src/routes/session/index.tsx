@@ -1676,8 +1676,7 @@ function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
     }
     if (props.message.type === "model-switched")
       return switchLabel(props.message.model, ctx.models(), props.message.previous)
-    if (props.message.type === "location-switched")
-      return `Switched location to ${props.message.location.directory}`
+    if (props.message.type === "location-switched") return `Switched location to ${props.message.location.directory}`
     return ""
   }
   return (
