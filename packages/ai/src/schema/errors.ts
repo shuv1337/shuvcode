@@ -92,10 +92,18 @@ export class ProviderInternalReason extends Schema.Class<ProviderInternalReason>
   http: Schema.optional(HttpContext),
 }) {}
 
+export const TransportType = Schema.Literals(["http", "websocket"])
+export type TransportType = typeof TransportType.Type
+
+export const TransportOperation = Schema.Literals(["request", "read", "write"])
+export type TransportOperation = typeof TransportOperation.Type
+
 export class TransportReason extends Schema.Class<TransportReason>("AI.Error.Transport")({
   _tag: Schema.tag("Transport"),
   message: Schema.String,
-  kind: Schema.optional(Schema.String),
+  transport: TransportType,
+  operation: TransportOperation,
+  code: Schema.optional(Schema.String),
   url: Schema.optional(Schema.String),
   http: Schema.optional(HttpContext),
 }) {}

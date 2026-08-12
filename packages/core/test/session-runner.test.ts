@@ -515,7 +515,11 @@ const providerUnavailable = () =>
   new AIError({
     module: "test",
     method: "stream",
-    reason: new TransportReason({ message: "Provider unavailable" }),
+    reason: new TransportReason({
+      message: "Provider unavailable",
+      transport: "http",
+      operation: "request",
+    }),
   })
 
 const incompleteStream = () =>

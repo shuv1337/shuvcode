@@ -32,7 +32,7 @@ describe("SessionExecution lifecycle", () => {
           new AIError({
             module: "test",
             method: "stream",
-            reason: new TransportReason({ message: "Disconnected" }),
+            reason: new TransportReason({ message: "Disconnected", transport: "http", operation: "request" }),
           }),
         ),
       ),

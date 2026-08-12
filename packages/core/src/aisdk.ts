@@ -763,7 +763,9 @@ function apiCallErrorReason(error: APICallError) {
   if (error.statusCode !== undefined || !error.isRetryable) return reason
   return new TransportReason({
     message: reason.message,
-    kind: error.name,
+    transport: "http",
+    operation: "request",
+    code: error.name,
     url: error.url,
     http: "http" in reason ? reason.http : undefined,
   })
