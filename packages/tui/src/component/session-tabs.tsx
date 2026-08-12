@@ -356,8 +356,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
               const numberWidth = () => 2
               const restingTitleWidth = () => Math.max(1, width() - numberWidth() - 2)
               const hoveredTitleWidth = () => Math.max(1, restingTitleWidth() - 1)
-              const titleWidth = () =>
-                hovered() === tab.sessionID ? hoveredTitleWidth() : restingTitleWidth()
+              const titleWidth = () => (hovered() === tab.sessionID ? hoveredTitleWidth() : restingTitleWidth())
               const title = () => tab.title ?? "Untitled session"
               const scrolling = () => marquee.active() === tab.sessionID
               const visibleTitle = createMemo(() =>
@@ -366,9 +365,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                   : Locale.takeWidth(title(), titleWidth()),
               )
               const visibleTitleParts = createMemo(() => Locale.graphemes(visibleTitle()))
-              const titleFades = createMemo(
-                () => marqueeOverflows(title(), titleWidth()) && titleWidth() > FADE_WIDTH,
-              )
+              const titleFades = createMemo(() => marqueeOverflows(title(), titleWidth()) && titleWidth() > FADE_WIDTH)
               const detail = createMemo(() => {
                 const value = session()
                 return Locale.takeWidth(projectName(project(), value?.location.directory) ?? "", titleWidth())
@@ -895,8 +892,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           // Hovering reveals the close mark, so the title's right bound shifts left of it.
           const restingTitleWidth = () => Math.max(1, width() - 1 - numberWidth())
           const hoveredTitleWidth = () => Math.max(1, restingTitleWidth() - 2)
-          const availableTitleWidth = () =>
-            hovered() === tab.sessionID ? hoveredTitleWidth() : restingTitleWidth()
+          const availableTitleWidth = () => (hovered() === tab.sessionID ? hoveredTitleWidth() : restingTitleWidth())
           const scrolling = () => marquee.active() === tab.sessionID
           const visibleTitle = createMemo(() =>
             scrolling()
