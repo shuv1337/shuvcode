@@ -1,4 +1,3 @@
-import { drizzle } from "drizzle-orm/durable-sqlite"
 import { Context, Effect, Exit, Fiber, Layer, Scope, Semaphore, Stream } from "effect"
 import { identity } from "effect/Function"
 import { Reactivity } from "effect/unstable/reactivity"
@@ -238,17 +237,9 @@ const nativeLayer = (config: Config) =>
 
 const clientLayer = (config: Config) => Layer.effect(SqlClient.SqlClient, make(config))
 
-const drizzleLayer = Layer.effect(
-  Sqlite.Drizzle,
-  Effect.gen(function* () {
-    const native = (yield* Sqlite.Native) as DurableObjectStorage
-    return drizzle(native) as unknown as Sqlite.DrizzleClient
-  }),
-)
-
 export const sqliteLayer = (config: Config) => {
   const native = nativeLayer(config)
-  return Layer.merge(native, Layer.merge(clientLayer(config), drizzleLayer).pipe(Layer.provide(native))).pipe(
+  return Layer.merge(native, clientLayer(config).pipe(Layer.provide(native))).pipe(
     Layer.provide(Reactivity.layer),
   )
 }

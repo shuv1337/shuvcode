@@ -4,8 +4,8 @@ import path from "node:path"
 import { afterAll, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { Failed, makeFiles } from "@opencode-ai/core/environment"
-import { environmentConformance } from "@opencode-ai/core/testing/environment-conformance"
+import { Failed, makeFiles } from "@opencode-ai/core/environment/index"
+import { environmentConformance } from "../../core/test/lib/environment-conformance.js"
 import { createModalSandbox } from "../src/workspace/modal"
 
 const enabled =

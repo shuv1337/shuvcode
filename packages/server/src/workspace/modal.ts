@@ -2,7 +2,7 @@ import { Effect, Sink, Stream } from "effect"
 import { systemError } from "effect/PlatformError"
 import type { Command, KillOptions } from "effect/unstable/process/ChildProcess"
 import { ExitCode, make, makeHandle, ProcessId } from "effect/unstable/process/ChildProcessSpawner"
-import type { Driver } from "@opencode-ai/core/environment"
+import type { Driver } from "@opencode-ai/core/environment/index"
 import type { App, Image, ModalClient, ModalClientParams, Sandbox, SandboxCreateParams } from "modal"
 
 const INNER_WRAPPER = `

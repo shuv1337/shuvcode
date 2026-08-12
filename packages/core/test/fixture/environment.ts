@@ -1,5 +1,5 @@
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { Environment } from "@opencode-ai/core/environment"
+import { Environment } from "@opencode-ai/core/environment/index"
 import { Location } from "@opencode-ai/core/location"
 import { Effect, Layer } from "effect"
 

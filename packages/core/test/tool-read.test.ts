@@ -21,7 +21,7 @@ import { ReadTool } from "@opencode-ai/core/tool/plugin/read"
 import { ReadToolFileSystem } from "@opencode-ai/core/tool/read-filesystem"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { SessionInstructions } from "@opencode-ai/core/session/instructions"
-import { Environment } from "@opencode-ai/core/environment"
+import { Environment } from "@opencode-ai/core/environment/index"
 import { testEffect } from "./lib/effect"
 import { toolIdentity, executeTool, registerToolPlugin, toolDefinitions } from "./lib/tool"
 

@@ -1,7 +1,7 @@
 import { beforeEach, expect } from "bun:test"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Database } from "@opencode-ai/core/database/database"
-import { makeMemoryDriver } from "@opencode-ai/core/environment"
+import { makeMemoryDriver } from "@opencode-ai/core/environment/index"
 import { Workspace } from "@opencode-ai/core/workspace"
 import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
 import { WorkspaceTable } from "@opencode-ai/core/workspace/sql"
