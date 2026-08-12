@@ -6,7 +6,7 @@ import type { EventLog } from "@opencode-ai/schema/event-log"
 import { and, asc, eq, gt, lte, sql } from "drizzle-orm"
 import { Database } from "./database/database.js"
 import { EventSequenceTable, EventTable } from "./event/sql.js"
-import { Location } from "./location.js"
+import type { Location } from "@opencode-ai/schema/location"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { isDeepStrictEqual } from "node:util"
@@ -183,6 +183,9 @@ export function configured(options?: Options) {
     layer: Layer.effect(
       Service,
       Effect.gen(function* () {
+        // Deferred import: a static one would close the module cycle
+        // bus → location → project → bus and hit the node bindings in TDZ.
+        const { Location } = yield* Effect.promise(() => import("./location.js"))
         const pubsub = {
           live: yield* PubSub.unbounded<Event.Payload>(),
           durable: new Map<string, Set<PubSub.PubSub<void>>>(),

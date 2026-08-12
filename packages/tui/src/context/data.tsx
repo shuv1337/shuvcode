@@ -39,6 +39,7 @@ import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
 import { nonEmptyToolContent } from "../util/tool-display"
 import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
+import { ProjectDirectories } from "@opencode-ai/schema/project-directories"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
@@ -454,6 +455,18 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
                 time: { created: event.created },
               })
             })
+          }
+          break
+        }
+        case "project.directory.resolved": {
+          for (const [sessionID, info] of Object.entries(store.session.info)) {
+            const adopted = ProjectDirectories.adopt(
+              { projectID: info.projectID, directory: info.location.directory },
+              event.data,
+            )
+            if (!adopted) continue
+            setStore("session", "info", sessionID, "projectID", adopted.projectID)
+            setStore("session", "info", sessionID, "subpath", adopted.subpath)
           }
           break
         }

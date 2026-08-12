@@ -1,7 +1,8 @@
 export * as SessionProjector from "./projector.js"
 
-import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql } from "drizzle-orm"
 import { DateTime, Effect, Layer, Schema, Stream } from "effect"
+import path from "path"
 import { Database } from "../database/database.js"
 import { Bus } from "../bus.js"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
@@ -15,7 +16,10 @@ import { Workspace } from "../workspace.js"
 import { InstructionState } from "./instruction-state.js"
 import { SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
 import { Slug } from "../util/slug.js"
+import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Money } from "@opencode-ai/schema/money"
+import { Event } from "@opencode-ai/schema/project-directories"
+import { Project } from "@opencode-ai/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 
@@ -433,6 +437,47 @@ const layer = Layer.effectDiscard(
           .run()
           .pipe(Effect.orDie)
         yield* InstructionState.reset(db, event.data.sessionID)
+      }),
+    )
+    // Sessions whose ownership came from the directory's previous resolution
+    // follow its new identity. Location, transcript, instructions, and recency
+    // are untouched: the session did not move, its directory got identified.
+    yield* bus.project(Event.Resolved, (event) =>
+      Effect.gen(function* () {
+        const stale = [event.data.previous, Project.ID.global].filter((id) => id !== event.data.projectID)
+        if (stale.length === 0) return
+        const rows = yield* db
+          .select({ id: SessionTable.id, directory: SessionTable.directory })
+          .from(SessionTable)
+          .where(
+            and(
+              inArray(SessionTable.project_id, stale),
+              // Lexicographic range narrows the scan to prefix neighbors without
+              // LIKE escaping; FSUtil.contains below decides containment exactly.
+              gte(SessionTable.directory, event.data.directory),
+              lte(SessionTable.directory, AbsolutePath.make(event.data.directory + "\uffff")),
+            ),
+          )
+          .all()
+          .pipe(Effect.orDie)
+        yield* Effect.forEach(
+          rows,
+          (row) => {
+            if (!FSUtil.contains(event.data.directory, row.directory)) return Effect.void
+            return db
+              .update(SessionTable)
+              .set({
+                project_id: event.data.projectID,
+                path: RelativePath.make(path.relative(event.data.directory, row.directory).replaceAll("\\", "/")),
+                // Self-assignment suppresses the column's $onUpdate: adoption is not activity.
+                time_updated: sql`${SessionTable.time_updated}`,
+              })
+              .where(eq(SessionTable.id, row.id))
+              .run()
+              .pipe(Effect.orDie)
+          },
+          { discard: true },
+        )
       }),
     )
     yield* bus.project(SessionEvent.Deleted, (event) =>
