@@ -24,6 +24,7 @@ await rm(outdir, { recursive: true, force: true })
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
+const skipWebUi = process.argv.includes("--skip-web-ui")
 const solidPlugin = createSolidTransformPlugin()
 
 const allTargets: {
@@ -55,7 +56,7 @@ const targets = singleFlag
   : allTargets
 
 if (!skipInstall) await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
-const appArchive = await buildAppArchive(Script.channel)
+const appArchive = await buildAppArchive(Script.channel, { skipBuild: skipWebUi })
 const appAssetsPlugin: BunPlugin = {
   name: "opencode-app-assets",
   setup(build) {
