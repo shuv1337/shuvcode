@@ -33,13 +33,8 @@ export interface BootOptions {
  * serves unauthenticated, so an embedder without a password must front the handler with its own
  * access control.
  */
-export const make = Effect.fn("ServerFetch.make")(function* (
-  options: ServerOptions = {},
-  boot: BootOptions = {},
-) {
-  const context = yield* Layer.build(
-    createRoutes(options, () => []).pipe(Layer.provide(HttpServer.layerServices)),
-  )
+export const make = Effect.fn("ServerFetch.make")(function* (options: ServerOptions = {}, boot: BootOptions = {}) {
+  const context = yield* Layer.build(createRoutes(options, () => []).pipe(Layer.provide(HttpServer.layerServices)))
   // Forked so the returned handler is never delayed; resumed drains are already
   // logged and durably recorded by the execution layer.
   if (boot.resumeSuspendedSessions)
@@ -51,4 +46,3 @@ export const make = Effect.fn("ServerFetch.make")(function* (
       HttpEffect.toWebHandlerWith(context),
     )
 })
-
