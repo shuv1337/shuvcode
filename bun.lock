@@ -375,7 +375,6 @@
         "@modelcontextprotocol/sdk": "1.29.0",
         "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/codemode": "workspace:*",
-        "@opencode-ai/effect-drizzle-sqlite": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
         "@opencode-ai/util": "workspace:*",
@@ -475,20 +474,6 @@
         "@parcel/watcher-linux-x64-musl": "2.5.1",
         "@parcel/watcher-win32-arm64": "2.5.1",
         "@parcel/watcher-win32-x64": "2.5.1",
-      },
-    },
-    "packages/effect-drizzle-sqlite": {
-      "name": "@opencode-ai/effect-drizzle-sqlite",
-      "version": "1.18.15",
-      "dependencies": {
-        "drizzle-orm": "catalog:",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/sql-sqlite-bun": "catalog:",
-        "@tsconfig/bun": "catalog:",
-        "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
       },
     },
     "packages/enterprise": {
@@ -2087,8 +2072,6 @@
     "@opencode-ai/core": ["@opencode-ai/core@workspace:packages/core"],
 
     "@opencode-ai/desktop": ["@opencode-ai/desktop@workspace:packages/desktop"],
-
-    "@opencode-ai/effect-drizzle-sqlite": ["@opencode-ai/effect-drizzle-sqlite@workspace:packages/effect-drizzle-sqlite"],
 
     "@opencode-ai/enterprise": ["@opencode-ai/enterprise@workspace:packages/enterprise"],
 
