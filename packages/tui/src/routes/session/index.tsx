@@ -1289,9 +1289,8 @@ function TurnTokenUsage(props: {
             <span>{expanded() ? "- " : "+ "}</span>
             <span style={{ attributes: TextAttributes.BOLD }}>Tokens</span>
             <span>
-              : {summary().count} {summary().count === 1 ? "step" : "steps"} ·{" "}
-              {summary().newTokens.toLocaleString()} new · {summary().cached.toLocaleString()} cached ·{" "}
-              {summary().total.toLocaleString()} total
+              : {summary().count} {summary().count === 1 ? "step" : "steps"} · {summary().newTokens.toLocaleString()}{" "}
+              new · {summary().cached.toLocaleString()} cached · {summary().total.toLocaleString()} total
             </span>
             <Show when={summary().reuseDrops > 0}>
               <span style={{ fg: theme.text.feedback.warning.default }}>
