@@ -1,7 +1,14 @@
 import { Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import { JsonSchema, MessageRole, ProviderMetadata } from "./ids.js"
-import { CacheHint, CachePolicy, GenerationOptions, HttpOptions, LanguageModelSchema, ProviderOptions } from "./options.js"
+import {
+  CacheHint,
+  CachePolicy,
+  GenerationOptions,
+  HttpOptions,
+  LanguageModelSchema,
+  ProviderOptions,
+} from "./options.js"
 import { isRecord } from "../utils/record.js"
 
 const systemPartSchema = Schema.Struct({

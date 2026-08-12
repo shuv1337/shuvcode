@@ -36,4 +36,7 @@ export type {
   LanguageModelFactory as ProviderLanguageModelFactory,
   LanguageModelOptions as ProviderLanguageModelOptions,
 } from "./provider.js"
-export type { Definition as ProviderPackageDefinition, Settings as ProviderPackageSettings } from "./provider-package.js"
+export type {
+  Definition as ProviderPackageDefinition,
+  Settings as ProviderPackageSettings,
+} from "./provider-package.js"

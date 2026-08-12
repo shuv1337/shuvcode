@@ -1,6 +1,10 @@
 import { Effect, JsonSchema, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
-import type { ToolCallPart, ToolDefinition as ToolDefinitionClass, ToolOutput as ToolOutputType } from "./schema/index.js"
+import type {
+  ToolCallPart,
+  ToolDefinition as ToolDefinitionClass,
+  ToolOutput as ToolOutputType,
+} from "./schema/index.js"
 import { ToolDefinition, ToolFailure, ToolOutput } from "./schema/index.js"
 
 /**

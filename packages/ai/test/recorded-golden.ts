@@ -2,7 +2,12 @@ import type { HttpRecorder } from "@opencode-ai/http-recorder"
 import { describe } from "bun:test"
 import { Effect } from "effect"
 import type { LanguageModel } from "../src/index.js"
-import { goldenScenarioTags, goldenScenarioTitle, runGoldenScenario, type GoldenScenarioID } from "./recorded-scenarios.js"
+import {
+  goldenScenarioTags,
+  goldenScenarioTitle,
+  runGoldenScenario,
+  type GoldenScenarioID,
+} from "./recorded-scenarios.js"
 import { recordedTests } from "./recorded-test.js"
 import { kebab } from "./recorded-utils.js"
 
