@@ -39,9 +39,7 @@ describe("typeFollowing", () => {
 describe("no execution plane", () => {
   it.effect("fails spawn with a typed location error", () =>
     Effect.gen(function* () {
-      const error = yield* EnvironmentUnavailable.spawner
-        .spawn(ChildProcess.make("echo", ["hello"]))
-        .pipe(Effect.flip)
+      const error = yield* EnvironmentUnavailable.spawner.spawn(ChildProcess.make("echo", ["hello"])).pipe(Effect.flip)
 
       expect(error._tag).toBe("PlatformError")
       expect(error.message).toContain("location has no execution plane")
