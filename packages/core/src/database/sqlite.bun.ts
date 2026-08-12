@@ -99,7 +99,5 @@ const clientLayer = (config: Config) => Layer.effect(SqlClient.SqlClient, make(c
 
 export const sqliteLayer = (config: Config) => {
   const native = nativeLayer(config)
-  return Layer.merge(native, clientLayer(config).pipe(Layer.provide(native))).pipe(
-    Layer.provide(Reactivity.layer),
-  )
+  return Layer.merge(native, clientLayer(config).pipe(Layer.provide(native))).pipe(Layer.provide(Reactivity.layer))
 }

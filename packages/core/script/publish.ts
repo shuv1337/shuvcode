@@ -27,11 +27,10 @@ try {
   await $`bun run typecheck`
   await $`bun run build`
   pkg.exports = Object.fromEntries(
-    Object.entries(pkg.exports)
-      .map(([key, value]) => {
-        if (typeof value !== "string") return [key, value]
-        return [key, { import: output(value), types: output(value, true) }]
-      }),
+    Object.entries(pkg.exports).map(([key, value]) => {
+      if (typeof value !== "string") return [key, value]
+      return [key, { import: output(value), types: output(value, true) }]
+    }),
   )
   pkg.imports = Object.fromEntries(
     Object.entries(pkg.imports).map(([key, conditions]) => [
