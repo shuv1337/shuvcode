@@ -537,9 +537,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Mo
 
 const CatalogJson = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown))
 const decodeCatalog = (text: string) =>
-  Schema.decodeUnknownEffect(CatalogJson)(text).pipe(
-    Effect.map((catalog) => catalog as Record<string, SourceProvider>),
-  )
+  Schema.decodeUnknownEffect(CatalogJson)(text).pipe(Effect.map((catalog) => catalog as Record<string, SourceProvider>))
 const Cache = Schema.Struct({
   updatedAt: Schema.Number,
   body: CatalogJson,
