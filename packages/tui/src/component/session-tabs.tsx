@@ -1,5 +1,16 @@
 import { RGBA, ScrollBoxRenderable, TextAttributes, type MouseEvent } from "@opentui/core"
-import { For, Match, Show, Switch, createComputed, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js"
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createComputed,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useConfig } from "../config"
 import { useSessionTabs } from "../context/session-tabs"
@@ -273,10 +284,7 @@ export function SessionTabs(
   return (
     <Switch>
       <Match when={props.orientation === "vertical"}>
-        <VerticalSessionTabs
-          controller={props.controller}
-          animations={props.animations}
-        />
+        <VerticalSessionTabs controller={props.controller} animations={props.animations} />
       </Match>
       <Match when={true}>
         <HorizontalSessionTabs controller={props.controller} animations={props.animations} />
@@ -417,11 +425,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                 const base =
                   hovered() === tab.sessionID && !selected()
                     ? foreground()
-                    : tint(
-                        idleNumber(),
-                        tint(theme.text.default, pulseBackground(), 0.25),
-                        Number(selected()),
-                      )
+                    : tint(idleNumber(), tint(theme.text.default, pulseBackground(), 0.25), Number(selected()))
                 const color = status().attention
                   ? theme.text.feedback.warning.default
                   : status().unread === "error"
@@ -430,11 +434,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                 const runningColor = runs() ? activeNumber() : color
                 return sweepLevel() === 0
                   ? tint(runningColor, theme.text.default, numberIgnition.value().level)
-                  : tint(
-                      runningColor,
-                      theme.text.default,
-                      Math.max(numberIgnition.value().level, 0.35 * sweepLevel()),
-                    )
+                  : tint(runningColor, theme.text.default, Math.max(numberIgnition.value().level, 0.35 * sweepLevel()))
               }
               const foreground = () => {
                 if (hovered() === tab.sessionID) return theme.text.default
@@ -999,11 +999,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
                 : tint(idleNumber(), tint(theme.text.default, background(), 0.25), selection())
             const color = feedback ?? (runs() ? activeNumber() : tint(base, accent(), activity()))
             // The number brightens faintly as the running sweep passes beneath it.
-            return tint(
-              color,
-              theme.text.default,
-              Math.max(numberIgnition.value().level, 0.15 * sweepLevel()),
-            )
+            return tint(color, theme.text.default, Math.max(numberIgnition.value().level, 0.15 * sweepLevel()))
           }
           const bold = () => (selected() || dragged() ? TextAttributes.BOLD : undefined)
           const closeColor = () => tint(theme.text.subdued, theme.text.default, 0.6)

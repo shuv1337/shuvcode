@@ -39,7 +39,7 @@ export function StoryFooter(props: {
             {(control, index) => (
               <>
                 <Show when={index() > 0}>
-                  <span>  </span>
+                  <span> </span>
                 </Show>
                 {control.shortcut} <span style={{ fg: theme.text.subdued }}>{control.label}</span>
               </>
