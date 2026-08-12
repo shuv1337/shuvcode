@@ -100,7 +100,7 @@ const layer = Layer.effect(
       const execution = yield* execute(tool, beforeEvent.input, context).pipe(
         Effect.map((value) => ({ value })),
         Effect.catchTag("Tool.Error", (failure) => Effect.succeed({ failure })),
-        )
+      )
       const base = {
         tool: name,
         sessionID: context.sessionID,

@@ -202,7 +202,8 @@ export function createMermaidCodeBlockRenderer(
     // OpenTUI's default block ID is the stable identity available for this fence across streaming updates.
     const key = context.defaultRender()?.id
     const options = typeof input === "function" ? input() : input
-    const configuredMaxWidth = options.layoutMaxWidth === undefined ? 120 : Math.max(1, Math.trunc(options.layoutMaxWidth))
+    const configuredMaxWidth =
+      options.layoutMaxWidth === undefined ? 120 : Math.max(1, Math.trunc(options.layoutMaxWidth))
     const layoutMaxWidth = Math.min(configuredMaxWidth, Math.max(1, Math.trunc(ctx.width)))
 
     try {
