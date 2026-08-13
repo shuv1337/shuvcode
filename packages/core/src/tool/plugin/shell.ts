@@ -171,7 +171,8 @@ export const Plugin = {
                         .map((item) => item.externalDirectory)
                         .filter((item) => item !== undefined)
                         .filter(
-                          (item, index, items) => items.findIndex((other) => other.resource === item.resource) === index,
+                          (item, index, items) =>
+                            items.findIndex((other) => other.resource === item.resource) === index,
                         )
                       if (external.length > 0)
                         yield* permission.assert({
