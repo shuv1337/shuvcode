@@ -279,8 +279,6 @@ export const SettingsGeneralV2: Component<{
   const updater = useUpdaterAction()
   const permissionScope = createPermissionScopeController(() => props.sessionID)
   const shell = createShellSettingsController()
-  const appearance = createAppearanceSettingsController()
-  const sounds = createSoundSettingsController()
   const desktop = createMemo(() => platform.platform === "desktop")
 
   const [pinchZoom, { mutate: setPinchZoom }] = createResource(
@@ -298,6 +296,7 @@ export const SettingsGeneralV2: Component<{
 
   const GeneralSection = () => (
     <div class="settings-v2-section">
+      <h3 class="settings-v2-section-title">{language.t("settings.general.section.general")}</h3>
       <SettingsListV2>
         <LanguageSetting />
 
@@ -510,17 +509,18 @@ export const SettingsGeneralV2: Component<{
   return (
     <>
       <div class="settings-v2-tab-header">
-        <h2 class="settings-v2-tab-title">{language.t("settings.tab.general")}</h2>
+        <div class="settings-v2-tab-header-row">
+          <div class="flex flex-col gap-1">
+            <h2 class="settings-v2-tab-title">{language.t("settings.tab.preferences")}</h2>
+            <span class="text-11-regular text-v2-text-text-muted">
+              {language.t("settings.preferences.description")}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div class="settings-v2-tab-body">
         <GeneralSection />
-
-        <AppearanceSection controller={appearance} />
-
-        <NotificationsSection />
-
-        <SoundsSection controller={sounds} />
 
         <Show when={desktop()}>
           <UpdatesSection />
