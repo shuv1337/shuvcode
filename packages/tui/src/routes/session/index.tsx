@@ -274,6 +274,7 @@ export function Session() {
   const [navigationSlack, setNavigationSlack] = createSignal(0)
   const [synced, setSynced] = createSignal(false)
   const sessionTabs = useSessionTabs()
+  const [awayFromBottom, setAwayFromBottom] = createSignal(false)
 
   const clearMessageNavigation = () => {
     setNavigationSlack(0)
@@ -319,7 +320,7 @@ export function Session() {
         return
       }
       editor.reconnect(info.location.directory)
-      if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
+      if (route.sessionID === sessionID && scroll) restoreScrollPosition(sessionID)
       setSynced(true)
     })().catch((error) => {
       if (route.sessionID !== sessionID) return
@@ -335,6 +336,13 @@ export function Session() {
   let seeded = false
   let sent = false
   let scroll: ScrollBoxRenderable
+  onCleanup(() => {
+    if (!scroll || scroll.isDestroyed) return
+    sessionTabs.setScrollPosition(
+      route.sessionID,
+      config.experimental?.tab_scroll === true && isAwayFromBottom() ? scroll.scrollTop : undefined,
+    )
+  })
   const [prompt, setPrompt] = createSignal<PromptRef>()
   const bind = (r: PromptRef | undefined) => {
     setPrompt(r)
@@ -385,6 +393,31 @@ export function Session() {
     if (hidden() === 0) return continuation()
     setHiddenRows(0)
     afterLayout(continuation)
+  }
+
+  function isAwayFromBottom() {
+    return scroll.scrollTop < Math.max(0, scroll.scrollHeight - scroll.viewport.height) - 1
+  }
+  function updateAwayFromBottom() {
+    if (config.experimental?.tab_scroll !== true) return
+    setTimeout(() => {
+      if (!scroll || scroll.isDestroyed) return
+      const away = isAwayFromBottom()
+      setAwayFromBottom(away)
+      if (!away) sessionTabs.setScrollPosition(route.sessionID, undefined)
+    })
+  }
+  function restoreScrollPosition(sessionID: string) {
+    const position = config.experimental?.tab_scroll === true ? sessionTabs.scrollPosition(sessionID) : undefined
+    if (position === undefined) {
+      scroll.scrollTo(scroll.scrollHeight)
+      setAwayFromBottom(false)
+      return
+    }
+    ensureAllRows(() => {
+      scroll.scrollTo(position)
+      updateAwayFromBottom()
+    })
   }
 
   createEffect(() => {
@@ -495,6 +528,8 @@ export function Session() {
 
   function toBottom() {
     clearMessageNavigation()
+    setAwayFromBottom(false)
+    sessionTabs.setScrollPosition(route.sessionID, undefined)
     setTimeout(() => {
       if (!scroll || scroll.isDestroyed) return
       scroll.scrollTo(scroll.scrollHeight)
@@ -510,6 +545,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 2)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -521,6 +557,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(scroll.height / 2)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -532,6 +569,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-1)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -543,6 +581,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(1)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -554,6 +593,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(-scroll.height / 4)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -565,6 +605,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollBy(scroll.height / 4)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -579,6 +620,7 @@ export function Session() {
       run: () => {
         clearMessageNavigation()
         scroll.scrollTo(0)
+        updateAwayFromBottom()
         dialog.clear()
       },
     },
@@ -588,8 +630,7 @@ export function Session() {
       group: "Session",
       palette: undefined,
       run: () => {
-        clearMessageNavigation()
-        scroll.scrollTo(scroll.scrollHeight)
+        toBottom()
         dialog.clear()
       },
     },
@@ -1006,8 +1047,6 @@ export function Session() {
     bindings: [...baseAndUnfocusedCommands, ...baseCommands()].map((command) => command.id),
   }))
 
-  // snap to bottom when session changes
-  createEffect(on(() => route.sessionID, toBottom))
   createEffect(
     on(
       () => route.sessionID,
@@ -1043,47 +1082,56 @@ export function Session() {
           paddingBottom={1}
           paddingLeft={dimensions().width < 44 ? 1 : 2}
           paddingRight={dimensions().width < 44 ? 1 : 2}
-          gap={1}
         >
           <Show when={session()}>
-            <scrollbox
-              ref={(r) => (scroll = r)}
-              viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
-              }}
-              verticalScrollbarOptions={{
-                paddingLeft: 1,
-                visible: showScrollbar(),
-                trackOptions: {
-                  backgroundColor: theme.raise(theme.background.surface.offset),
-                  foregroundColor: theme.border.default,
-                },
-              }}
-              stickyScroll={!navigationMessage()}
-              stickyStart="bottom"
-              flexGrow={1}
-              scrollAcceleration={scrollAcceleration()}
-            >
-              <For each={visibleRows()}>
-                {(row, index) => (
-                  <SessionRowView
-                    row={row}
-                    message={(messageID) => data.session.message.get(route.sessionID, messageID)}
-                    boundaryID={boundaries()[index() + hidden()]}
+            <box flexGrow={1} minHeight={0} position="relative">
+              <scrollbox
+                ref={(r) => (scroll = r)}
+                viewportOptions={{
+                  paddingRight: showScrollbar() ? 1 : 0,
+                }}
+                verticalScrollbarOptions={{
+                  paddingLeft: 1,
+                  visible: showScrollbar(),
+                  trackOptions: {
+                    backgroundColor: theme.raise(theme.background.surface.offset),
+                    foregroundColor: theme.border.default,
+                  },
+                }}
+                stickyScroll={!navigationMessage()}
+                stickyStart="bottom"
+                flexGrow={1}
+                scrollAcceleration={scrollAcceleration()}
+                onMouseScroll={updateAwayFromBottom}
+              >
+                <For each={visibleRows()}>
+                  {(row, index) => (
+                    <SessionRowView
+                      row={row}
+                      message={(messageID) => data.session.message.get(route.sessionID, messageID)}
+                      boundaryID={boundaries()[index() + hidden()]}
+                    />
+                  )}
+                </For>
+                <BackgroundToolHint messages={messages()} />
+                <Show when={session()?.revert?.messageID}>
+                  <RevertMessage
+                    count={messagesFromRevert().filter((message) => message.type === "user").length}
+                    files={session()!.revert!.files ?? []}
                   />
-                )}
-              </For>
-              <BackgroundToolHint messages={messages()} />
-              <Show when={session()?.revert?.messageID}>
-                <RevertMessage
-                  count={messagesFromRevert().filter((message) => message.type === "user").length}
-                  files={session()!.revert!.files ?? []}
-                />
+                </Show>
+                <Show when={navigationSlack()}>
+                  {(height) => <box id={NAVIGATION_SLACK_ID} height={height()} flexShrink={0} />}
+                </Show>
+              </scrollbox>
+            </box>
+            <box height={1} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+              <Show when={config.experimental?.tab_scroll === true && awayFromBottom()}>
+                <text fg={theme.text.subdued} onMouseUp={toBottom}>
+                  Latest ↓
+                </text>
               </Show>
-              <Show when={navigationSlack()}>
-                {(height) => <box id={NAVIGATION_SLACK_ID} height={height()} flexShrink={0} />}
-              </Show>
-            </scrollbox>
+            </box>
             <box flexShrink={0}>
               <Show when={!composer.open && !disabled() && queuedPrompts().length > 0}>
                 <QueuedPromptDock prompts={queuedPrompts()} onOpen={openQueuedPrompts} />
