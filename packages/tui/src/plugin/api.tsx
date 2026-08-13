@@ -1,6 +1,14 @@
 import { PluginContextProvider } from "@opencode-ai/plugin/tui"
 import type { JSX } from "solid-js"
-import type { Context, Dialog, Page, Slot, SlotMap, Toast } from "@opencode-ai/plugin/tui/context"
+import type {
+  Context,
+  Dialog,
+  Page,
+  PromptAutocompleteProvider,
+  Slot,
+  SlotMap,
+  Toast,
+} from "@opencode-ai/plugin/tui/context"
 import { infoStringToFiletype, type MarkdownCodeBlockRenderer } from "@opentui/core"
 import { useRenderer } from "@opentui/solid"
 import { useClient } from "../context/client"
@@ -27,11 +35,12 @@ export type Dispose = () => Promise<void>
 // route/slot registration lands there, but ordering and lifecycle stay owned
 // by the provider.
 export type Registry = {
-  has(kind: "routes" | "slots" | "markdown", name: string): boolean
+  has(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): boolean
   set(kind: "routes", name: string, page: Page): void
   set(kind: "slots", name: string, slot: Slot): void
   set(kind: "markdown", name: string, render: MarkdownCodeBlockRenderer): void
-  remove(kind: "routes" | "slots" | "markdown", name: string): void
+  set(kind: "autocomplete", name: string, provider: PromptAutocompleteProvider): void
+  remove(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): void
   active(): boolean
 }
 
@@ -83,7 +92,7 @@ export function createPluginContext(input: {
   }
   // Unregistering after deactivation is a no-op: deactivate already resets
   // the registration's routes and slots wholesale.
-  const registration = (kind: "routes" | "slots" | "markdown", name: string) => {
+  const registration = (kind: "routes" | "slots" | "markdown" | "autocomplete", name: string) => {
     let registered = true
     const unregister = () => {
       if (!registered) return
@@ -182,6 +191,20 @@ export function createPluginContext(input: {
           if (!target || !host.sessionTabs.tabs().some((tab) => tab.sessionID === target)) return false
           host.sessionTabs.close(target)
           return true
+        },
+      },
+      prompt: {
+        autocomplete: {
+          register(provider) {
+            if (provider.trigger.length !== 1 || /\s/.test(provider.trigger)) {
+              throw new Error("Prompt autocomplete trigger must be one non-whitespace character")
+            }
+            if (input.registry.has("autocomplete", provider.trigger)) {
+              throw new Error(`Prompt autocomplete trigger already registered: ${provider.trigger}`)
+            }
+            input.registry.set("autocomplete", provider.trigger, provider)
+            return registration("autocomplete", provider.trigger)
+          },
         },
       },
       slot(name, render) {

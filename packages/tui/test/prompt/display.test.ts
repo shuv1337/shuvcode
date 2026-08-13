@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { displayCharAt, displaySlice, mentionTriggerIndex, slashTriggerIndex } from "../../src/prompt/display"
+import { displayCharAt, displaySlice, mentionTriggerIndex, promptTriggerIndex, slashTriggerIndex } from "../../src/prompt/display"
 
 describe("prompt display", () => {
   test("uses display-width offsets for mentions", () => {
@@ -39,5 +39,12 @@ describe("prompt display", () => {
     expect(slashTriggerIndex("Review /tmp/file.ts")).toBeUndefined()
     expect(slashTriggerIndex("https://opencode.ai/docs")).toBeUndefined()
     expect(slashTriggerIndex("src/prompt/index.ts")).toBeUndefined()
+  })
+
+  test("finds plugin triggers at token boundaries", () => {
+    expect(promptTriggerIndex("$effect", "$")).toBe(0)
+    expect(promptTriggerIndex("use $effect", "$")).toBe(4)
+    expect(promptTriggerIndex("cost$effect", "$")).toBeUndefined()
+    expect(promptTriggerIndex("use $effect now", "$")).toBeUndefined()
   })
 })

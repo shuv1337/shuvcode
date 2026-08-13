@@ -14,7 +14,7 @@ import {
 import path from "path"
 import { stat } from "fs/promises"
 import { fileURLToPath, pathToFileURL } from "url"
-import type { Page, Slot, SlotName } from "@opencode-ai/plugin/tui/context"
+import type { Page, PromptAutocompleteProvider, Slot, SlotName } from "@opencode-ai/plugin/tui/context"
 import { createStore, produce, reconcile as reconcileStore } from "solid-js/store"
 import { isDeepEqual } from "remeda"
 import "#runtime-plugin-support"
@@ -50,6 +50,7 @@ type Value = {
     name: Name,
   ) => ReadonlyArray<{ readonly id: string; readonly render: Slot<Name> }>
   readonly markdown: () => MarkdownOptions["renderNode"]
+  readonly autocomplete: () => ReadonlyArray<{ readonly id: string; readonly provider: PromptAutocompleteProvider }>
   readonly activate: (id: string) => Promise<boolean>
   readonly deactivate: (id: string) => Promise<boolean>
 }
@@ -64,6 +65,7 @@ type Registration = {
   routes: Record<string, Page>
   slots: Record<string, Slot>
   markdown: Record<string, MarkdownCodeBlockRenderer>
+  autocomplete: Record<string, PromptAutocompleteProvider>
   cleanups: Dispose[]
 }
 
@@ -109,6 +111,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
       setStore("registrations", id, "routes", reconcileStore({}))
       setStore("registrations", id, "slots", reconcileStore({}))
       setStore("registrations", id, "markdown", reconcileStore({}))
+      setStore("registrations", id, "autocomplete", reconcileStore({}))
       setStore("registrations", id, "cleanups", [])
     })
     const owned: Dispose[] = []
@@ -119,7 +122,11 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
       owned,
       registry: {
         has: (kind, name) => Boolean(store.registrations[id]?.[kind][name]),
-        set: (kind: "routes" | "slots" | "markdown", name: string, value: Page | Slot | MarkdownCodeBlockRenderer) =>
+        set: (
+          kind: "routes" | "slots" | "markdown" | "autocomplete",
+          name: string,
+          value: Page | Slot | MarkdownCodeBlockRenderer | PromptAutocompleteProvider,
+        ) =>
           setStore("registrations", id, kind, name, () => value),
         remove: (kind, name) =>
           setStore(
@@ -136,6 +143,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
       setStore("registrations", id, "routes", reconcileStore({}))
       setStore("registrations", id, "slots", reconcileStore({}))
       setStore("registrations", id, "markdown", reconcileStore({}))
+      setStore("registrations", id, "autocomplete", reconcileStore({}))
       throw error
     })
     if (cleanup) owned.push(async () => cleanup())
@@ -165,6 +173,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
           setStore("registrations", id, "routes", reconcileStore({}))
           setStore("registrations", id, "slots", reconcileStore({}))
           setStore("registrations", id, "markdown", reconcileStore({}))
+          setStore("registrations", id, "autocomplete", reconcileStore({}))
         }
         setStore("states", (items) =>
           items.map((state) =>
@@ -450,6 +459,12 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
             return [item]
           }),
         markdown,
+        autocomplete: () =>
+          Object.entries(store.registrations).flatMap(([id, registration]) =>
+            registration.active
+              ? Object.values(registration.autocomplete).map((provider) => ({ id, provider }))
+              : [],
+          ),
         // Manual dialog toggles join the same chain as reconciles so a
         // toggle mid-reload cannot mix registrations across generations.
         activate: (id) => enqueue(() => activate(id)),
@@ -514,6 +529,7 @@ function toRegistration(item: Desired): Registration {
     routes: {},
     slots: {},
     markdown: {},
+    autocomplete: {},
     cleanups: [],
   }
 }

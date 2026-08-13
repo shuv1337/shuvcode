@@ -19,16 +19,17 @@ import { Locale } from "../../util/locale"
 import type { PromptInfo, PromptPartRef } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
 import { Keymap } from "../../context/keymap"
-import { displayCharAt, mentionTriggerIndex, slashTriggerIndex } from "../../prompt/display"
+import { displayCharAt, mentionTriggerIndex, promptTriggerIndex, slashTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/client"
 import { Skill } from "@opencode-ai/schema/skill"
 import { stringWidth } from "../../util/string-width"
 import { parseFileLineRange, stripFileLineRange } from "../../prompt/parse"
 import { moveSelection, revealSelectionOffset } from "../../ui/select-controller"
+import { usePlugin } from "../../plugin/context"
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
-  visible: false | "@" | "/"
+  visible: false | string
 }
 
 export type AutocompleteOption = {
@@ -68,6 +69,7 @@ export function Autocomplete(props: {
   const config = useConfig().data
   const paths = useTuiPaths()
   const location = useLocation()
+  const plugins = usePlugin()
   const [store, setStore] = createStore({
     index: 0,
     selected: 0,
@@ -146,6 +148,7 @@ export function Autocomplete(props: {
       | { type: "file"; value: NonNullable<PromptInfo["files"]>[number]; path?: string }
       | { type: "agent"; value: NonNullable<PromptInfo["agents"]>[number] }
       | { type: "skill"; value: NonNullable<PromptInfo["skills"]>[number] },
+    trigger?: string,
   ) {
     if (part.type === "skill" && props.hasSkill(part.value.id)) return
     const input = props.input()
@@ -153,7 +156,7 @@ export function Autocomplete(props: {
 
     const charAfterCursor = displayCharAt(props.value, currentCursorOffset)
     const needsSpace = charAfterCursor !== " "
-    const prefix = part.type === "skill" ? "/" : "@"
+    const prefix = trigger ?? (part.type === "skill" ? "/" : "@")
     const append = prefix + text + (needsSpace ? " " : "")
 
     input.cursorOffset = store.index
@@ -474,12 +477,41 @@ export function Autocomplete(props: {
     }))
   })
 
+  const pluginOptions = createMemo((): AutocompleteOption[] => {
+    if (!store.visible || store.visible === "@" || store.visible === "/") return []
+    return plugins
+      .autocomplete()
+      .filter((item) => item.provider.trigger === store.visible)
+      .flatMap((item) =>
+        item.provider.options({ query: search(), sessionID: props.sessionID, location: location.current }).map((option) => ({
+          display: option.display ?? store.visible + option.value,
+          value: option.value,
+          description: option.description,
+          onSelect: option.skill
+            ? () =>
+                insertPart(
+                  option.value,
+                  {
+                    type: "skill",
+                    value: { id: Skill.ID.make(option.skill!), mention: { start: 0, end: 0, text: "" } },
+                  },
+                  item.provider.trigger,
+                )
+            : undefined,
+        })),
+      )
+  })
+
   const options = createMemo(() => {
     const fileSearch = files()
     const referenceMatchValue = referenceMatch()
     const agentsValue = agents()
     const referenceAliasesValue = referenceAliases()
     const commandsValue = commands()
+    const pluginOptionsValue = pluginOptions()
+    const pluginMode = Boolean(
+      store.visible && plugins.autocomplete().some((item) => item.provider.trigger === store.visible),
+    )
     const searchValue = search()
 
     if (store.visible === "@" && referenceMatchValue) {
@@ -489,14 +521,15 @@ export function Autocomplete(props: {
     // Files come from fff already fuzzy ranked and filtered
     // it shouldn't be additionally sorted by fuzzysort as it will loose the results
     const fileOptions: AutocompleteOption[] = store.visible === "@" ? fileSearch.options : []
-    const nonFileOptions: AutocompleteOption[] =
-      store.visible === "@"
+    const nonFileOptions: AutocompleteOption[] = pluginMode
+      ? pluginOptionsValue
+      : store.visible === "@"
         ? [...referenceAliasesValue, ...agentsValue, ...mcpResources()]
         : store.index === 0
           ? [...commandsValue]
           : commandsValue.filter((item) => item.kind === "skill")
 
-    if (!searchValue) {
+    if (!searchValue || pluginOptionsValue.length) {
       return [...nonFileOptions, ...fileOptions]
     }
 
@@ -632,7 +665,7 @@ export function Autocomplete(props: {
     ],
   }))
 
-  function show(mode: "@" | "/") {
+  function show(mode: string) {
     setStore({
       visible: mode,
       index: props.input().cursorOffset,
@@ -698,6 +731,15 @@ export function Autocomplete(props: {
         if (idx !== undefined) {
           show("@")
           setStore("index", idx)
+          return
+        }
+
+        for (const item of plugins.autocomplete()) {
+          const index = promptTriggerIndex(value, item.provider.trigger, offset)
+          if (index === undefined) continue
+          show(item.provider.trigger)
+          setStore("index", index)
+          return
         }
       },
     })
@@ -714,6 +756,7 @@ export function Autocomplete(props: {
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const emptyMessage = createMemo(() => {
     if (store.visible === "/") return "No matching commands"
+    if (store.visible !== "@") return "No matching suggestions"
     if (files.loading) return "Searching…"
     if (files().failed) return "Could not search files. Keep typing to try again."
     return "No matching files, agents, or references"

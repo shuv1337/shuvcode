@@ -49,6 +49,18 @@ export function mentionTriggerIndex(value: string, offset = promptOffsetWidth(va
   }
 }
 
+export function promptTriggerIndex(value: string, trigger: string, offset = promptOffsetWidth(value)) {
+  const text = displaySlice(value, 0, offset)
+  const index = text.lastIndexOf(trigger)
+  if (index === -1) return
+
+  const before = index === 0 ? undefined : text[index - 1]
+  const query = text.slice(index)
+  if ((before === undefined || /\s/.test(before)) && !/\s/.test(query)) {
+    return promptOffsetWidth(text.slice(0, index))
+  }
+}
+
 export function slashTriggerIndex(value: string, offset = promptOffsetWidth(value)) {
   const text = displaySlice(value, 0, offset)
   for (let index = text.lastIndexOf("/"); index >= 0; index = text.lastIndexOf("/", index - 1)) {

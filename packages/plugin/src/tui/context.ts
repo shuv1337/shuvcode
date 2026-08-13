@@ -394,7 +394,32 @@ export interface UI {
     /** Closes an open tab, or the active tab when omitted, and returns false when no tab matched. */
     close(sessionID?: string): boolean
   }
+  readonly prompt: {
+    readonly autocomplete: {
+      register(provider: PromptAutocompleteProvider): () => void
+    }
+  }
   readonly slot: <Name extends SlotName>(name: Name, render: Slot<Name>) => () => void
+}
+
+export interface PromptAutocompleteOption {
+  /** Text inserted into the prompt, excluding the trigger. */
+  readonly value: string
+  /** Optional display text. Defaults to trigger + value. */
+  readonly display?: string
+  readonly description?: string
+  /** Attach an indexed skill to the prompt when this option is selected. */
+  readonly skill?: string
+}
+
+export interface PromptAutocompleteProvider {
+  /** One non-whitespace character that opens this provider. */
+  readonly trigger: string
+  readonly options: (input: {
+    readonly query: string
+    readonly sessionID?: string
+    readonly location?: LocationRef
+  }) => readonly PromptAutocompleteOption[]
 }
 
 export interface Context {
