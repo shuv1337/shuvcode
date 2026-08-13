@@ -74,7 +74,7 @@ export function StatusPopover() {
             <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
           }
         >
-          <Body shown={shown} />
+          <Body shown={shown()} />
         </Suspense>
       </Show>
     </Popover>
@@ -114,7 +114,7 @@ function DirectoryStatusPopover() {
     onOpenChange: setShown,
     body: () => (
       <StatusPopoverBody shown={shown()}>
-        <Body shown={shown} />
+        <Body shown={shown()} />
       </StatusPopoverBody>
     ),
   }))

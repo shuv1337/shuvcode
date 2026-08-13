@@ -1,7 +1,7 @@
 import type { Config, Path, Project, ProviderAuthResponse } from "@/types"
 import { showToast } from "@/utils/toast"
 import { getFilename } from "@opencode-ai/core/util/path"
-import { type Accessor, batch, createMemo, getOwner, onCleanup, onMount, untrack } from "solid-js"
+import { batch, createMemo, getOwner, onCleanup, onMount, untrack } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import type { InitError } from "../pages/error"
@@ -699,13 +699,13 @@ export const { use: useServerSync, provider: ServerSyncProvider } = createSimple
   name: "ServerSync",
   // Returns an accessor so the resolved server can change reactively without
   // re-instantiating the subtree (mirrors useServerSDK).
-  init: (props: { server?: Accessor<ServerConnection.Any | undefined> }) => {
+  init: (props: { server?: ServerConnection.Any }) => {
     const global = useGlobal()
     const language = useLanguage()
     const server = useServer()
 
     return createMemo<ServerSync>(() => {
-      const conn = props.server?.() ?? server.current
+      const conn = props.server ?? server.current
       if (!conn) throw new Error(language.t("error.serverSDK.noServerAvailable"))
       return global.ensureServerCtx(conn).sync
     })

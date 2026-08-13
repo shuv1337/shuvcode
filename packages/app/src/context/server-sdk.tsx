@@ -3,7 +3,7 @@ import type { Event } from "@/types"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { type Accessor, batch, createMemo, onCleanup, onMount } from "solid-js"
+import { batch, createMemo, onCleanup, onMount } from "solid-js"
 import { createApiForServer, type ServerApi } from "@/utils/server"
 import { useLanguage } from "./language"
 import { usePlatform } from "./platform"
@@ -270,13 +270,13 @@ export const { use: useServerSDK, provider: ServerSDKProvider } = createSimpleCo
   name: "ServerSDK",
   // Returns an accessor so the resolved server can change reactively (e.g. a
   // /new-session draft retargeting its server) without re-instantiating the subtree.
-  init: (props: { server?: Accessor<ServerConnection.Any | undefined> }) => {
+  init: (props: { server?: ServerConnection.Any }) => {
     const global = useGlobal()
     const language = useLanguage()
     const server = useServer()
 
     return createMemo<ServerSDK>(() => {
-      const conn = props.server?.() ?? server.current
+      const conn = props.server ?? server.current
       if (!conn) throw new Error(language.t("error.serverSDK.noServerAvailable"))
       return global.ensureServerCtx(conn).sdk
     })
