@@ -661,8 +661,7 @@ export default function Page() {
   )
   const vcsQuery = createQuery(() => {
     const mode = vcsMode()
-    const enabled =
-      serverSDK().connection.status() === "connected" && wantsReview() && sync().project?.vcs === "git"
+    const enabled = serverSDK().connection.status() === "connected" && wantsReview() && sync().project?.vcs === "git"
 
     return {
       queryKey: [...vcsKey(), mode] as const,

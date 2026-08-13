@@ -285,16 +285,14 @@ function MessageTimelineView(
       return { label: language.t("ui.patch.action.moved"), data: message.location.directory }
     if (message.type === "skill") return { label: language.t("ui.tool.skill"), data: message.name }
     if (message.type === "system") return { label: message.description ?? message.text }
-    if (message.type === "compaction")
-      return { label: language.t("ui.messagePart.compaction"), data: message.status }
+    if (message.type === "compaction") return { label: language.t("ui.messagePart.compaction"), data: message.status }
     if (message.type !== "synthetic") return
     if (message.description === "Continuing after restart") return { label: message.description }
     const source = typeof message.metadata?.source === "string" ? message.metadata.source : undefined
     const state = typeof message.metadata?.state === "string" ? message.metadata.state : undefined
     if (source === "subagent" || source === "shell") {
       const agent = typeof message.metadata?.agent === "string" ? message.metadata.agent : undefined
-      const actor =
-        source === "shell" ? language.t("ui.tool.shell") : (agent ?? language.t("ui.tool.agent.default"))
+      const actor = source === "shell" ? language.t("ui.tool.shell") : (agent ?? language.t("ui.tool.agent.default"))
       const label = language.t(
         state === "error"
           ? "session.timeline.notice.failed"

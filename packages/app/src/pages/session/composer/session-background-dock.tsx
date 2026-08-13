@@ -72,9 +72,7 @@ export function SessionBackgroundDock(props: {
           {(task) => (
             <div class="flex min-w-0 items-baseline gap-2 text-13-regular">
               <span class="shrink-0 text-13-medium text-text-strong">
-                {language.t(
-                  task.type === "shell" ? "ui.tool.shell" : "ui.tool.agent.default",
-                )}
+                {language.t(task.type === "shell" ? "ui.tool.shell" : "ui.tool.agent.default")}
               </span>
               <span class="truncate text-text-weak">{task.label}</span>
             </div>

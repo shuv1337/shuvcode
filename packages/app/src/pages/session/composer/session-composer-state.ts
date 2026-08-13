@@ -135,7 +135,13 @@ export function createSessionComposerController(options?: { closeMs?: number | (
         const sessionID = part.state.metadata.sessionID
         if (typeof sessionID !== "string" || completed.has(sessionID)) return []
         const description = part.state.input.description
-        return [{ id: sessionID, type: "subagent" as const, label: typeof description === "string" ? description : sessionID }]
+        return [
+          {
+            id: sessionID,
+            type: "subagent" as const,
+            label: typeof description === "string" ? description : sessionID,
+          },
+        ]
       })
     })
     const active = Object.values(serverSync().session.data.info).flatMap((info) => {

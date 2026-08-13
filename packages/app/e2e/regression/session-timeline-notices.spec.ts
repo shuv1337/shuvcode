@@ -68,9 +68,7 @@ test("moves blocking work to the background with Ctrl+B", async ({ page }) => {
   await expect(page.locator('[data-component="task-tool-card"]')).toBeVisible()
   await expect(page.getByText("Called `subagent`", { exact: false })).toHaveCount(0)
   await expect(page.locator('[data-component="background-tool-control"]')).toHaveCount(0)
-  await expect(page.locator('[data-action="session-background-toggle"]')).toContainText(
-    "Move 1 subagent to background",
-  )
+  await expect(page.locator('[data-action="session-background-toggle"]')).toContainText("Move 1 subagent to background")
 
   const request = page.waitForRequest(
     (request) =>
@@ -88,9 +86,7 @@ test("navigates from a running subagent card and hides background controls in th
     sessionStatus: { [sessionID]: { type: "busy" }, [childID]: { type: "busy" } },
   })
 
-  await expect(page.locator('[data-action="session-background-toggle"]')).toContainText(
-    "Move 1 subagent to background",
-  )
+  await expect(page.locator('[data-action="session-background-toggle"]')).toContainText("Move 1 subagent to background")
   await page.locator('[data-component="task-tool-card"]').click()
   await expect(page).toHaveURL(new RegExp(`/session/${childID}$`))
   await expect(page.locator('[data-component="session-background-dock"]')).toHaveCount(0)

@@ -383,16 +383,14 @@ function ProviderConnection(props: {
       })
     },
   })
-  const provider = createMemo(
-    () => ({
-      id: props.provider,
-      name:
-        providers.all().get(props.provider)?.name ??
-        serverSync().data.provider.all.get(props.provider)?.name ??
-        controller.integration()?.name ??
-        props.provider,
-    }),
-  )
+  const provider = createMemo(() => ({
+    id: props.provider,
+    name:
+      providers.all().get(props.provider)?.name ??
+      serverSync().data.provider.all.get(props.provider)?.name ??
+      controller.integration()?.name ??
+      props.provider,
+  }))
   const methodLabel = (value?: { type?: string; label?: string }) => {
     if (!value) return ""
     if (value.type === "key") return language.t("provider.connect.method.apiKey")

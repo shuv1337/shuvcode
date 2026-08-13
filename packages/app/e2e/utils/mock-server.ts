@@ -383,10 +383,7 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
     const sessionForm = path.match(/^\/api\/session\/([^/]+)\/form$/)?.[1]
     if (sessionForm && route.request().method() === "GET") {
       const forms = typeof config.forms === "function" ? config.forms() : (config.forms ?? [])
-      return json(
-        route,
-        { data: forms.filter((form) => (form as { sessionID?: string }).sessionID === sessionForm) },
-      )
+      return json(route, { data: forms.filter((form) => (form as { sessionID?: string }).sessionID === sessionForm) })
     }
     if (/^\/api\/session\/[^/]+\/form\/[^/]+\/(reply|cancel)$/.test(path) && route.request().method() === "POST") {
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })

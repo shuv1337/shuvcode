@@ -974,9 +974,7 @@ export function createServerSession(
     }
     if (event.type === "session.inbox.delivery.changed")
       setData("pending", sessionID, (items) =>
-        items?.map((item) =>
-          item.id === event.data.inboxID ? { ...item, delivery: event.data.delivery } : item,
-        ),
+        items?.map((item) => (item.id === event.data.inboxID ? { ...item, delivery: event.data.delivery } : item)),
       )
     if (event.type === "session.inbox.cancelled" || event.type === "session.inbox.delivered") {
       setData("pending", sessionID, (items) => items?.filter((item) => item.id !== event.data.inboxID))
@@ -1386,10 +1384,7 @@ export function createServerSession(
       },
     },
     sync,
-    async hydrateTransient(
-      sessionID: string,
-      load: () => Promise<{ pending: SessionInboxInfo[]; forms: FormInfo[] }>,
-    ) {
+    async hydrateTransient(sessionID: string, load: () => Promise<{ pending: SessionInboxInfo[]; forms: FormInfo[] }>) {
       while (true) {
         const pendingAt = pendingRevision.get(sessionID) ?? 0
         const formAt = formRevision.get(sessionID) ?? 0

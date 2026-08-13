@@ -630,8 +630,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         eventType === "project.directories.updated"
       )
         bootstrap.refetch()
-      if (eventType === "global.disposed")
-        Object.keys(children.children).filter(children.active).forEach(queue.push)
+      if (eventType === "global.disposed") Object.keys(children.children).filter(children.active).forEach(queue.push)
       return
     }
 
