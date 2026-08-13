@@ -25,6 +25,7 @@ export function DirectoryDataProvider(
   const params = useParams()
   const sync = useSync()
   const serverSync = useServerSync()
+  const language = useLanguage()
   const directory = () => props.directory
   const slug = createMemo(() => base64Encode(directory()))
   const href = (sessionID: string) => {
@@ -44,8 +45,8 @@ export function DirectoryDataProvider(
   createResource(
     () => params.id,
     (id) =>
-      sync()
-        .session.sync(id)
+      serverSync()
+        .session.hydrate(id)
         .catch(() => {}),
   )
 

@@ -38,11 +38,10 @@ export function applyGlobalEvent(input: {
   setGlobalProject: (next: Project[] | ((draft: Project[]) => Project[])) => void
   refresh: () => void
 }) {
-  if (input.event.type === "global.disposed" || input.event.type === "server.connected") {
+  if (input.event.type === "global.disposed") {
     input.refresh()
     return
   }
-
   if (input.event.type !== "project.updated") return
   const properties = input.event.properties as Project
   const result = Binary.search(input.project, properties.id, (s) => s.id)

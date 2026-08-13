@@ -45,7 +45,7 @@ export const SettingsProvidersV2: Component<{
   const connect = (provider?: string) => {
     providerConnect.select(provider)
     void dialog.show(() => (
-      <SettingsServerScope>
+      <SettingsServerScope directory={props.directory}>
         <DialogConnectProvider directory={props.directory} controller={providerConnect} />
       </SettingsServerScope>
     ))
@@ -240,7 +240,7 @@ export const SettingsProvidersV2: Component<{
                   icon="plus"
                   onClick={() => {
                     dialog.show(() => (
-                      <SettingsServerScope>
+                      <SettingsServerScope directory={props.directory}>
                         <DialogCustomProvider onBack={dialog.close} />
                       </SettingsServerScope>
                     ))

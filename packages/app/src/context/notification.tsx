@@ -398,15 +398,20 @@ function createServerNotificationState(input: {
 
   const unsub = serverSDK().event.listen((e) => {
     const event = e.details
-    if (event.type !== "session.idle" && event.type !== "session.execution.failed") return
+    if (
+      event.type !== "session.execution.succeeded" &&
+      event.type !== "session.execution.interrupted" &&
+      event.type !== "session.execution.failed"
+    )
+      return
 
     const directory = e.name
     const time = Date.now()
-    if (event.type === "session.idle") {
-      handleSessionIdle(directory, event, time)
+    if (event.type === "session.execution.failed") {
+      handleSessionError(directory, event, time)
       return
     }
-    handleSessionError(directory, event, time)
+    handleSessionIdle(directory, event, time)
   })
   onCleanup(() => {
     meta.disposed = true

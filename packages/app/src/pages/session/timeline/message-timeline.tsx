@@ -54,6 +54,7 @@ import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows"
 import { filterVirtualIndexes } from "./virtual-items"
 import { createTimelineController, type TimelineController, type TimelineSessionSource } from "./controller"
+import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 
 const emptyTools: ToolPart[] = []
 const emptyAssistantMessages: AssistantMessage[] = []
@@ -240,10 +241,12 @@ function MessageTimelineView(
 ) {
   let touchGesture: number | undefined
   const language = useLanguage()
+  const shouldAnchorBottom = createMemo(() => props.shouldAnchorBottom)
+  const hasScrollGesture = createMemo(() => props.hasScrollGesture)
   const ownerSessionKey = props.data.sessionKey()
   const cached = timelineCache.get(ownerSessionKey)
   const initialMeasurements = cached?.measurements
-  const coldBottomMount = !initialMeasurements?.length && props.shouldAnchorBottom
+  const coldBottomMount = !initialMeasurements?.length && shouldAnchorBottom()
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>()
   const sessionID = props.data.sessionID
@@ -262,10 +265,48 @@ function MessageTimelineView(
   const assistantMessagesByParent = projection.assistantMessagesByParent
   const lastAssistantGroupKey = projection.lastAssistantGroupKey
   const messageByID = projection.messageByID
+  const sessionMessageByID = projection.sessionMessageByID
   const messageLastRowIndex = projection.messageLastRowIndex
   const messageRowIndex = projection.messageRowIndex
   const timelineRowByKey = projection.rowByKey
   const timelineRows = projection.rows
+  const noticeContent = (message: SessionMessageInfo) => {
+    if (message.type === "agent-switched")
+      return {
+        label: language.t("ui.tool.agent.default"),
+        data: message.previous ? `${message.previous} → ${message.agent}` : message.agent,
+      }
+    if (message.type === "model-switched")
+      return {
+        label: language.t("command.category.model"),
+        data: `${message.model.providerID}/${message.model.id}`,
+      }
+    if (message.type === "location-switched")
+      return { label: language.t("ui.patch.action.moved"), data: message.location.directory }
+    if (message.type === "skill") return { label: language.t("ui.tool.skill"), data: message.name }
+    if (message.type === "system") return { label: message.description ?? message.text }
+    if (message.type === "compaction")
+      return { label: language.t("ui.messagePart.compaction"), data: message.status }
+    if (message.type !== "synthetic") return
+    if (message.description === "Continuing after restart") return { label: message.description }
+    const source = typeof message.metadata?.source === "string" ? message.metadata.source : undefined
+    const state = typeof message.metadata?.state === "string" ? message.metadata.state : undefined
+    if (source === "subagent" || source === "shell") {
+      const agent = typeof message.metadata?.agent === "string" ? message.metadata.agent : undefined
+      const actor =
+        source === "shell" ? language.t("ui.tool.shell") : (agent ?? language.t("ui.tool.agent.default"))
+      const label = language.t(
+        state === "error"
+          ? "session.timeline.notice.failed"
+          : state === "cancelled"
+            ? "session.timeline.notice.cancelled"
+            : "session.timeline.notice.finished",
+        { actor },
+      )
+      return { label, data: message.description }
+    }
+    return { label: message.description ?? message.text }
+  }
 
   let prependAnchor: { key: string; offset: number } | undefined
   let prependAnchorFrame: number | undefined
@@ -338,7 +379,7 @@ function MessageTimelineView(
     },
     getScrollElement: () => listRoot() ?? null,
     observeElementOffset: observeElementOffsetReconnectAware,
-    initialOffset: () => (props.shouldAnchorBottom ? Number.MAX_SAFE_INTEGER : 0),
+    initialOffset: () => (shouldAnchorBottom() ? Number.MAX_SAFE_INTEGER : 0),
     initialMeasurementsCache: initialMeasurements,
     estimateSize: () => timelineFallbackItemSize,
     scrollToFn: (offset, options, instance) => {
@@ -376,11 +417,11 @@ function MessageTimelineView(
   const resizeItem = virtualizer.resizeItem
   let resizeAnchorScheduled = false
   const anchorResizedBottom = () => {
-    if (resizeAnchorScheduled || props.hasScrollGesture) return
+    if (resizeAnchorScheduled || hasScrollGesture()) return
     resizeAnchorScheduled = true
     queueMicrotask(() => {
       resizeAnchorScheduled = false
-      if (!props.shouldAnchorBottom || props.hasScrollGesture) return
+      if (!shouldAnchorBottom() || hasScrollGesture()) return
       virtualizer.scrollToEnd()
     })
   }
@@ -405,10 +446,10 @@ function MessageTimelineView(
       })
     }
     resizeItem(index, size)
-    if (root && props.shouldAnchorBottom) anchorResizedBottom()
+    if (root && shouldAnchorBottom()) anchorResizedBottom()
   }
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
-    if (props.shouldAnchorBottom) return false
+    if (shouldAnchorBottom()) return false
     const first = virtualizer.range?.startIndex
     return first !== undefined && item.index < first
   }
@@ -429,18 +470,18 @@ function MessageTimelineView(
   let overscanFrame: number | undefined
   onMount(() => {
     overscanFrame = requestAnimationFrame(() => {
-      if (props.shouldAnchorBottom) virtualizer.scrollToEnd()
+      if (shouldAnchorBottom()) virtualizer.scrollToEnd()
       overscanFrame = requestAnimationFrame(() => {
         overscanFrame = undefined
         if (renderOverscan() < 20) setRenderOverscan(20)
-        if (props.shouldAnchorBottom) virtualizer.scrollToEnd()
+        if (shouldAnchorBottom()) virtualizer.scrollToEnd()
       })
     })
   })
 
   const maybeAnchorBottom = () => {
     if (timelineRows().length === 0) return
-    if (!props.shouldAnchorBottom || props.hasScrollGesture) return
+    if (!shouldAnchorBottom() || hasScrollGesture()) return
     if (resizePinFrame !== undefined) cancelAnimationFrame(resizePinFrame)
     clearPrependAnchor()
     if (prependAnchorFrame !== undefined) cancelAnimationFrame(prependAnchorFrame)
@@ -810,6 +851,25 @@ function MessageTimelineView(
                       comments={messageComments()}
                     />
                   </div>
+                </div>
+              )}
+            </Show>
+          </TimelineRowFrame>
+        )
+      }
+      case "Notice": {
+        const noticeRow = row as Accessor<TimelineRowByTag<"Notice">>
+        const content = createMemo(() => {
+          const message = sessionMessageByID().get(noticeRow().messageID)
+          return message ? noticeContent(message) : undefined
+        })
+        return (
+          <TimelineRowFrame row={noticeRow()}>
+            <Show when={content()}>
+              {(content) => (
+                <div data-slot="session-timeline-notice" class="w-full px-4 pt-3 pb-1 md:px-5 text-13-regular">
+                  <span class="text-13-medium text-text-strong">{content().label}</span>
+                  <Show when={content().data}>{(data) => <span class="text-text-weak"> · {data()}</span>}</Show>
                 </div>
               )}
             </Show>

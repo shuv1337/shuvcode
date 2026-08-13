@@ -60,7 +60,7 @@ export function createHomeSessionsController(home: HomeController) {
   }))
   const sessionLoad = useQuery(() => ({
     queryKey: homeSessions().indexKey,
-    enabled: !!home.server.focusedContext(),
+    enabled: home.server.focusedContext()?.sdk.connection.status() === "connected",
     queryFn: async ({ signal }) => {
       const ctx = home.server.focusedContext()
       if (!ctx) return { sessions: [], eventSequence: 0 }

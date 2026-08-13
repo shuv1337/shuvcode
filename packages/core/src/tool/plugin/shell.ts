@@ -115,7 +115,7 @@ export const Plugin = {
             sessionID,
             text: `<shell id="${id}" state="${state}" command="${command}">\n${text}\n</shell>`,
             description: command,
-            metadata: { source: "shell", state },
+            metadata: { source: "shell", jobID: id, state },
           })
         }),
         Effect.forkIn(scope, { startImmediately: true }),
@@ -300,6 +300,7 @@ export const Plugin = {
                   output,
                   content,
                   metadata: {
+                    status: output.status,
                     truncated: output.truncated,
                     ...("exit" in output && output.exit !== undefined ? { exit: output.exit } : {}),
                     ...("shellID" in output && output.shellID !== undefined ? { shellID: output.shellID } : {}),

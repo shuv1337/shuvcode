@@ -651,11 +651,18 @@ export default function Page() {
   })
   const vcsKey = createMemo(
     () =>
-      ["session-vcs", sdk().directory, sync().data.vcs?.branch ?? "", sync().data.vcs?.default_branch ?? ""] as const,
+      [
+        serverSDK().scope,
+        "session-vcs",
+        sdk().directory,
+        sync().data.vcs?.branch ?? "",
+        sync().data.vcs?.default_branch ?? "",
+      ] as const,
   )
   const vcsQuery = createQuery(() => {
     const mode = vcsMode()
-    const enabled = wantsReview() && sync().project?.vcs === "git"
+    const enabled =
+      serverSDK().connection.status() === "connected" && wantsReview() && sync().project?.vcs === "git"
 
     return {
       queryKey: [...vcsKey(), mode] as const,
@@ -667,14 +674,17 @@ export default function Page() {
             sdk()
               .api.vcs.diff({ location: { directory: sdk().directory }, mode: mode === "git" ? "working" : mode })
               .then((result) => result.data)
-              .catch((error) => {
-                console.debug("[session-review] failed to load vcs diff", { mode, error })
-                return []
-              })
         : skipToken,
     }
   })
-  const refreshVcs = debounce(() => void queryClient.invalidateQueries({ queryKey: vcsKey() }), 100)
+  const refreshVcs = debounce(() => {
+    void queryClient.invalidateQueries({ queryKey: vcsKey() })
+  }, 100)
+  onCleanup(
+    sdk().event.listen((event) => {
+      if (event.details.type === "filesystem.changed") refreshVcs()
+    }),
+  )
   createEffect(
     on(
       () => desktopReviewOpen() || mobileChanges(),
@@ -718,7 +728,7 @@ export default function Page() {
     const request = (scope: string, context?: number) =>
       queryClient
         .fetchQuery({
-          queryKey: [serverSDK().scope, ...vcsKey(), mode, "directory", scope, context, version] as const,
+          queryKey: [...vcsKey(), mode, "directory", scope, context, version] as const,
           staleTime: Number.POSITIVE_INFINITY,
           retry: 2,
           queryFn: () =>
@@ -1108,6 +1118,10 @@ export default function Page() {
   useComposerCommands()
   useSessionCommands({
     session: controller,
+    background: {
+      blocking: () => composer.background.blocking().length > 0,
+      move: composer.background.move,
+    },
     navigateMessageByOffset,
     setActiveMessage,
     focusInput,
@@ -1469,6 +1483,8 @@ export default function Page() {
     working: () => true,
     overflowAnchor: "none",
   })
+  const shouldAnchorBottom = () =>
+    !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
   createEffect(
     on(
       () => controller.identity.params.id,
@@ -2077,9 +2093,7 @@ export default function Page() {
                   onUserScroll={markUserScroll}
                   onHistoryScroll={onHistoryScroll}
                   onAutoScrollInteraction={autoScroll.handleInteraction}
-                  shouldAnchorBottom={
-                    !location.hash && !store.messageId && !ui.pendingMessage && !autoScroll.userScrolled()
-                  }
+                  shouldAnchorBottom={shouldAnchorBottom()}
                   centered={centered()}
                   setContentRef={(el) => {
                     content = el

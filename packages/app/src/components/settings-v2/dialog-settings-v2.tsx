@@ -139,7 +139,7 @@ export const DialogSettings: Component<{
         <TabsV2.Content value="projects" class="settings-v2-panel">
           <SettingsProjectsV2 />
         </TabsV2.Content>
-        <SettingsServerScope>
+        <SettingsServerScope directory={directory()}>
           <TabsV2.Content value="providers" class="settings-v2-panel">
             <SettingsProvidersV2 directory={directory()} onBack={showProviders} />
           </TabsV2.Content>
