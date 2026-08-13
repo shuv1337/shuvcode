@@ -624,11 +624,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
         refresh: () => void bootstrap.refetch(),
         setGlobalProject: setProjects,
       })
-      if (
-        eventType === "config.updated" ||
-        eventType === "agent.updated" ||
-        eventType === "worktree.updated"
-      )
+      if (eventType === "config.updated" || eventType === "agent.updated" || eventType === "worktree.updated")
         bootstrap.refetch()
       if (eventType === "global.disposed") Object.keys(children.children).filter(children.active).forEach(queue.push)
       return

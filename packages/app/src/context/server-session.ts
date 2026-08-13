@@ -943,10 +943,7 @@ export function createServerSession(
     if (event.type === "worktree.resolved") {
       Object.values(data.info).forEach((info) => {
         if (!info) return
-        const adopted = Worktree.adopt(
-          { projectID: info.projectID, directory: info.location.directory },
-          event.data,
-        )
+        const adopted = Worktree.adopt({ projectID: info.projectID, directory: info.location.directory }, event.data)
         if (adopted) remember({ ...info, ...adopted })
       })
       return
