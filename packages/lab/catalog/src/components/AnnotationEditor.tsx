@@ -51,8 +51,14 @@ export function AnnotationEditor(props: AnnotationEditorProps) {
         onPointerDown={(event) => {
           if (event.target !== event.currentTarget) return
           const bounds = event.currentTarget.getBoundingClientRect()
-          const column = Math.min(props.cols - 1, Math.max(0, Math.floor(((event.clientX - bounds.left) / bounds.width) * props.cols)))
-          const row = Math.min(props.rows - 1, Math.max(0, Math.floor(((event.clientY - bounds.top) / bounds.height) * props.rows)))
+          const column = Math.min(
+            props.cols - 1,
+            Math.max(0, Math.floor(((event.clientX - bounds.left) / bounds.width) * props.cols)),
+          )
+          const row = Math.min(
+            props.rows - 1,
+            Math.max(0, Math.floor(((event.clientY - bounds.top) / bounds.height) * props.rows)),
+          )
           setDraft({ row, column, note: "" })
         }}
       >
@@ -83,7 +89,9 @@ export function AnnotationEditor(props: AnnotationEditorProps) {
           >
             <header>
               <span>{draft.id ? "Edit annotation" : "New annotation"}</span>
-              <small>R{draft.row + 1} · C{draft.column + 1}</small>
+              <small>
+                R{draft.row + 1} · C{draft.column + 1}
+              </small>
             </header>
             <textarea
               ref={textareaRef}
@@ -117,8 +125,12 @@ export function AnnotationEditor(props: AnnotationEditorProps) {
                 >
                   Delete
                 </button>
-              ) : <span />}
-              <button type="button" onClick={() => setDraft(undefined)}>Cancel</button>
+              ) : (
+                <span />
+              )}
+              <button type="button" onClick={() => setDraft(undefined)}>
+                Cancel
+              </button>
               <button type="button" className="annotation-composer-save" disabled={!draft.note.trim()} onClick={save}>
                 {draft.id ? "Save" : "Add"}
               </button>
@@ -130,16 +142,22 @@ export function AnnotationEditor(props: AnnotationEditorProps) {
         <header>
           <div>
             <strong>Annotations</strong>
-            <span>{props.annotations.length === 0 ? "Click anywhere on the terminal" : `${props.annotations.length} placed`}</span>
+            <span>
+              {props.annotations.length === 0 ? "Click anywhere on the terminal" : `${props.annotations.length} placed`}
+            </span>
           </div>
-          <button type="button" onClick={props.onDone}>Done</button>
+          <button type="button" onClick={props.onDone}>
+            Done
+          </button>
         </header>
         <div className="annotation-list">
           {props.annotations.map((annotation, index) => (
             <button key={annotation.id} type="button" className="annotation-list-row" onClick={() => edit(annotation)}>
               <span className="annotation-list-pin">{index + 1}</span>
               <span>
-                <small>Row {annotation.row + 1} · Column {annotation.column + 1}</small>
+                <small>
+                  Row {annotation.row + 1} · Column {annotation.column + 1}
+                </small>
                 <strong>{annotation.note}</strong>
               </span>
             </button>
@@ -155,7 +173,11 @@ export function AnnotationEditor(props: AnnotationEditorProps) {
           >
             Open GitHub issue
           </a>
-          <span>{complete.length === 0 ? "Add a note to continue" : `${complete.length} note${complete.length === 1 ? "" : "s"} will be included`}</span>
+          <span>
+            {complete.length === 0
+              ? "Add a note to continue"
+              : `${complete.length} note${complete.length === 1 ? "" : "s"} will be included`}
+          </span>
         </footer>
       </aside>
     </>

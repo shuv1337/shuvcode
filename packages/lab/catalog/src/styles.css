@@ -1334,7 +1334,9 @@ kbd {
   transform: translate(-50%, 1.2rem);
   border-radius: 0.85rem;
   background: #1a1a1a;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 55%), 0 0 0 1px rgb(255 255 255 / 9%);
+  box-shadow:
+    0 12px 40px rgb(0 0 0 / 55%),
+    0 0 0 1px rgb(255 255 255 / 9%);
   cursor: default;
   animation: annotation-composer-in 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }

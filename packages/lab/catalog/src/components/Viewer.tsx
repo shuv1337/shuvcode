@@ -6,7 +6,13 @@ import { CaptureSetSwitcher } from "./CaptureSetSwitcher"
 import { CaptureContextMenu } from "./CaptureContextMenu"
 import { feedbackIssueUrl } from "../feedback"
 import { CaptureActionsMenu } from "./CaptureActionsMenu"
-import { annotationUrl, readAnnotationDraft, readAnnotations, type Annotation, type AnnotationDocument } from "../annotations"
+import {
+  annotationUrl,
+  readAnnotationDraft,
+  readAnnotations,
+  type Annotation,
+  type AnnotationDocument,
+} from "../annotations"
 import { AnnotationEditor } from "./AnnotationEditor"
 
 interface ViewerProps {
@@ -56,7 +62,8 @@ export function Viewer({
   const [annotating, setAnnotating] = useState(() => window.location.hash.startsWith("#annotations="))
   const [annotations, setAnnotations] = useState<ReadonlyArray<Annotation>>(() => {
     const linked = readAnnotations(new URL(window.location.href), identifier, variant.id)
-    if (linked.length > 0) return linked.filter((annotation) => annotation.row < frame.rows && annotation.column < frame.cols)
+    if (linked.length > 0)
+      return linked.filter((annotation) => annotation.row < frame.rows && annotation.column < frame.cols)
     try {
       const stored = localStorage.getItem(storageKey)
       if (!stored) return []
@@ -186,7 +193,9 @@ export function Viewer({
                       setAnnotations([...annotations, annotation])
                     }}
                     onChange={(id, note) =>
-                      setAnnotations(annotations.map((annotation) => annotation.id === id ? { ...annotation, note } : annotation))
+                      setAnnotations(
+                        annotations.map((annotation) => (annotation.id === id ? { ...annotation, note } : annotation)),
+                      )
                     }
                     onDelete={(id) => setAnnotations(annotations.filter((annotation) => annotation.id !== id))}
                     onDone={() => {

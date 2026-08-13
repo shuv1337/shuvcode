@@ -361,11 +361,7 @@ export function App({ catalog }: AppProps) {
       }),
     )
     if (window.location.hash.startsWith("#annotations=")) url.hash = window.location.hash
-    window.history.replaceState(
-      null,
-      "",
-      url,
-    )
+    window.history.replaceState(null, "", url)
   }, [activeVariant.id, activeFlow?.id, selectedScreen, ui.mode, ui.viewerOpen])
 
   useEffect(() => {
