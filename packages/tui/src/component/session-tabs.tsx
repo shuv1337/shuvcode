@@ -420,7 +420,9 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
               })
               const visibleDetail = createMemo(() => Locale.takeWidth(detail(), titleWidth()))
               const visibleDetailParts = createMemo(() => Locale.graphemes(visibleDetail()))
-              const detailFades = createMemo(() => marqueeOverflows(detail(), titleWidth()) && titleWidth() > FADE_WIDTH)
+              const detailFades = createMemo(
+                () => marqueeOverflows(detail(), titleWidth()) && titleWidth() > FADE_WIDTH,
+              )
               const background = createMemo(() => {
                 if (selected()) return theme.background.action.primary.selected
                 if (hovered() === tab.sessionID || dragging() === tab.sessionID)
