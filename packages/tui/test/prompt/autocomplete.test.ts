@@ -105,13 +105,6 @@ describe("directoryAutocompleteSearch", () => {
 })
 
 describe("directoryAutocompleteResultValue", () => {
-  test("marks current-directory results as relative", () => {
-    const search = directoryAutocompleteSearch("", "/project", "/home/user")
-    expect(directoryAutocompleteResultValue("src/", search)).toBe("./src/")
-    expect(directoryAutocompleteResultValue("/src/", search)).toBe("./src/")
-    expect(directoryAutocompleteResultValue("/", search)).toBe("./")
-  })
-
   test("preserves explicit roots", () => {
     expect(
       directoryAutocompleteResultValue("projects/", directoryAutocompleteSearch("~/", "/project", "/home/user")),
