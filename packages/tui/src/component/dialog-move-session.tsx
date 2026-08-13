@@ -31,6 +31,7 @@ type DialogMoveSessionProps = {
   onSelect: (selection: MoveSessionSelection) => void
   onCurrentChange?: (selection: MoveSessionSelection) => void
   initialDirectories?: ReadonlyArray<ProjectDirectory>
+  fixture?: boolean
   initialRemoving?: string
 }
 
@@ -75,7 +76,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
   })
 
   const [directories, { refetch }] = createResource(
-    () => (props.initialRemoving ? undefined : props.projectID),
+    () => (props.fixture || props.initialRemoving ? undefined : props.projectID),
     async (projectID, info): Promise<ReadonlyArray<ProjectDirectory> | undefined> => {
       try {
         const requestLocation = { directory: location()?.directory || paths.cwd }
@@ -110,11 +111,9 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     if (showError()) return
     const directory = currentDirectory()
     if (!directory) return
-    return (
-      directoryData()
-        ?.filter((root) => contains(root.directory, directory))
-        .toSorted((a, b) => b.directory.length - a.directory.length)[0] ?? { directory }
-    )
+    return directoryData()
+      ?.filter((root) => contains(root.directory, directory))
+      .toSorted((a, b) => b.directory.length - a.directory.length)[0]
   })
 
   const options = createMemo<DialogSelectOption<MoveSessionSelection | undefined>[]>(() => {
@@ -123,7 +122,6 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     const current = currentRoot()?.directory
     if (directories.loading && !data && !current) return []
     const roots = [...(data ?? [])]
-    if (current && !roots.some((item) => item.directory === current)) roots.unshift({ directory: current })
     roots.sort((a, b) => {
       if (a.directory === current) return -1
       if (b.directory === current) return 1
@@ -139,15 +137,13 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
         (session) => session.projectID === props.projectID && session.subpath && ![".", "/"].includes(session.subpath),
       )
       .map((session) => session.location.directory)
+      .filter((directory) => currentRoot() || directory !== currentDirectory())
       .filter((directory) => !roots.some((root) => root.directory === directory))
       .filter((directory, index, directories) => directories.indexOf(directory) === index)
       .map((location) => ({
         location,
         root: roots
-          .filter((root) => {
-            const relative = path.relative(root.directory, location)
-            return relative && relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative)
-          })
+          .filter((root) => contains(root.directory, location))
           .toSorted((a, b) => b.directory.length - a.directory.length)[0],
       }))
       .filter((item): item is { location: string; root: ProjectDirectory } => item.root !== undefined)
@@ -325,6 +321,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
           </box>
         }
         renderFilter={!showError()}
+        flat={true}
         options={options()}
         emptyView={
           showError() ? (
@@ -357,7 +354,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
         }}
         onMove={() => setToDelete(undefined)}
         actions={
-          showError()
+          showError() || props.fixture
             ? []
             : [
                 {

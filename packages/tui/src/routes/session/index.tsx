@@ -108,6 +108,7 @@ import { createSingleFlight } from "../../util/single-flight"
 import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
 import { generateThinkingSyntax } from "./thinking-syntax"
 import { createDelayedPresence } from "../../util/delayed-presence"
+import { SessionLocationMissing } from "./location-missing"
 
 addDefaultParsers(parsers.parsers)
 
@@ -1144,6 +1145,19 @@ export function Session() {
                       return form ? <FormPrompt form={form} /> : null
                     }}
                   </Show>
+                </Match>
+                <Match
+                  when={
+                    session() &&
+                    currentLocation.error?.location.directory === session()!.location.directory &&
+                    currentLocation.error?.location.workspaceID === session()!.location.workspaceID
+                  }
+                >
+                  <SessionLocationMissing
+                    directory={session()!.location.directory}
+                    projectID={session()!.projectID}
+                    sessionID={route.sessionID}
+                  />
                 </Match>
                 <Match when={!disabled()}>
                   <Prompt
