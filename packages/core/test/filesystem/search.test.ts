@@ -68,7 +68,9 @@ describe("FileSystemSearch", () => {
         Location.node,
         Layer.succeed(
           Location.Service,
-          Location.Service.of(location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "opencode-search-atomic")) })),
+          Location.Service.of(
+            location({ directory: AbsolutePath.make(path.join(os.tmpdir(), "opencode-search-atomic")) }),
+          ),
         ),
       ],
       [

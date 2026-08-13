@@ -48,9 +48,9 @@ export const ripgrepLayer = Layer.effect(
           Effect.sync(() => {
             next.files.push(entry.path)
             const parts = entry.path.split("/")
-            parts.slice(0, -1).forEach((_, offset) =>
-              next.directories.add(parts.slice(0, offset + 1).join("/") + path.sep),
-            )
+            parts
+              .slice(0, -1)
+              .forEach((_, offset) => next.directories.add(parts.slice(0, offset + 1).join("/") + path.sep))
           }),
       })
       index = next
