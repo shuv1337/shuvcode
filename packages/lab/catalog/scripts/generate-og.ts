@@ -149,7 +149,17 @@ function drawFramePeek(context: SKRSContext2D, frame: Canvas) {
   context.beginPath()
   context.roundRect(Pad, top, width, visible + radius, radius)
   context.clip()
-  context.drawImage(frame, 0, 0, frame.width, Math.min(frame.height, (visible + radius) / scale), Pad, top, width, Math.min(frame.height * scale, visible + radius))
+  context.drawImage(
+    frame,
+    0,
+    0,
+    frame.width,
+    Math.min(frame.height, (visible + radius) / scale),
+    Pad,
+    top,
+    width,
+    Math.min(frame.height * scale, visible + radius),
+  )
   context.restore()
 
   context.strokeStyle = "#2c2c2c"
