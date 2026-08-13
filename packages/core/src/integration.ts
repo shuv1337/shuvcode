@@ -111,9 +111,23 @@ export class CodeRequiredError extends Schema.TaggedErrorClass<CodeRequiredError
   attemptID: AttemptID,
 }) {}
 
+/** Reads a defect's readable text. Opaque values add noise rather than signal, so they yield nothing. */
+export function causeMessage(cause: unknown) {
+  if (cause instanceof Error) return cause.message
+  if (typeof cause === "string") return cause
+  return ""
+}
+
 export class AuthorizationError extends Schema.TaggedErrorClass<AuthorizationError>()("Integration.Authorization", {
   cause: Schema.Defect(),
-}) {}
+}) {
+  // Without this the message is empty, so a failed token refresh renders as a blank error
+  // and the provider's reason (invalid_grant, revoked consent) never reaches the user.
+  override get message() {
+    const detail = causeMessage(this.cause)
+    return detail ? `Authorization failed: ${detail}` : "Authorization failed"
+  }
+}
 
 export type Error = CodeRequiredError | AuthorizationError
 

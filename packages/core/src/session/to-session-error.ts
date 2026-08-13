@@ -49,6 +49,8 @@ export function toSessionError(cause: unknown): SessionError.Error {
   if (cause instanceof StepFailedError) return cause.error
   if (cause instanceof AgentNotFoundError) return { type: "unknown", message: cause.message }
   if (cause instanceof UserInterruptedError) return { type: "aborted", message: cause.message }
+  if (cause instanceof SessionRunnerModel.ProviderAuthorizationError)
+    return { type: "provider.auth", message: cause.message }
   if (
     cause instanceof SessionRunnerModel.ModelNotSelectedError ||
     cause instanceof SessionRunnerModel.ModelUnavailableError ||

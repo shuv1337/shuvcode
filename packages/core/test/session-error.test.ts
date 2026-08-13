@@ -18,6 +18,7 @@ import {
   HttpRequestDetails,
   HttpResponseDetails,
 } from "@opencode-ai/ai"
+import { Integration } from "@opencode-ai/core/integration"
 import { Permission } from "@opencode-ai/core/permission"
 import { ID } from "@opencode-ai/core/model"
 import { ModelResolver } from "@opencode-ai/core/model-resolver"
@@ -105,6 +106,16 @@ describe("toSessionError", () => {
       message:
         "Cannot initialize cloudflare-workers-ai/model: CLOUDFLARE_ACCOUNT_ID is required to resolve the provider endpoint",
     })
+  })
+
+  test("carries the underlying reason for a failed credential authorization", () => {
+    expect(toSessionError(new Integration.AuthorizationError({ cause: new Error("invalid_grant") }))).toEqual({
+      type: "provider.auth",
+      message: "Authorization failed: invalid_grant",
+    })
+    expect(toSessionError(new Integration.AuthorizationError({ cause: undefined })).message).toBe(
+      "Authorization failed",
+    )
   })
 
   test("retries only rate limits, provider-internal failures, and transport failures", () => {

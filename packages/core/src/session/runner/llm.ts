@@ -24,6 +24,7 @@ import { SessionSchema } from "../schema"
 import { SessionStore } from "../store"
 import { SessionTitle } from "../title"
 import { Service } from "./index"
+import { SessionRunnerModel } from "./model"
 import { createLLMEventPublisher, type StepRecord } from "./publish-llm-event"
 import { Snapshot } from "../../snapshot"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
@@ -257,7 +258,12 @@ const layer = Layer.effect(
       const promoted = promotable ? yield* SessionPending.promote(db, bus, selected.session.id, promotable) : 0
       // Promoted input opens a fresh step allowance.
       const currentStep = promoted > 0 ? 1 : step
-      const loaded = yield* context.load(selected)
+      // Model resolution refreshes provider credentials, so an expired subscription fails
+      // here, before the provider stream mints Step.Started. Record the step so the failure
+      // lands on the transcript instead of only reaching session.execution.failed.
+      const loaded = yield* context
+        .load(selected)
+        .pipe(Effect.tapError((error) => recordUnstartedStep(selected, assistantMessageID, error)))
       const { session, agent } = loaded
       const resolved = loaded.model
       const model = resolved.model
@@ -559,6 +565,34 @@ const layer = Layer.effect(
         }),
       )
     }, Effect.scoped)
+
+    /**
+     * Gives a failure that escaped before the provider stream started a durable home on the
+     * assistant message. Step.Failed folds onto an existing message, so Step.Started must be
+     * published first. A Session with no selected model has no Model.Ref to record, so that
+     * failure stays session-level.
+     */
+    const recordUnstartedStep = Effect.fnUntraced(function* (
+      selection: SessionContext.Selection,
+      assistantMessageID: SessionMessage.ID,
+      cause: SessionRunnerModel.Error,
+    ) {
+      // A Session on the default model has no stored ref, so prefer the selection the
+      // resolver was working on when it failed.
+      const model = cause instanceof SessionRunnerModel.ProviderAuthorizationError ? cause.ref : selection.session.model
+      if (!model) return
+      yield* bus.publish(SessionEvent.Step.Started, {
+        sessionID: selection.session.id,
+        assistantMessageID,
+        agent: selection.agent.id,
+        model,
+      })
+      yield* bus.publish(SessionEvent.Step.Failed, {
+        sessionID: selection.session.id,
+        assistantMessageID,
+        error: toSessionError(cause),
+      })
+    })
 
     /** Executes a previously admitted manual compaction request, if one is pending. */
     const runPendingCompaction = Effect.fn("SessionRunner.runPendingCompaction")(function* (

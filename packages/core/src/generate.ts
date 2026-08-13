@@ -74,10 +74,10 @@ export const layer = Layer.effect(
     const text: Interface["text"] = (input) =>
       runText(input).pipe(
         Effect.catchTag(
-          "Integration.Authorization",
-          () =>
+          "ModelResolver.ProviderAuthorizationError",
+          (error) =>
             new UnavailableError({
-              message: "Generation credentials are unavailable",
+              message: `Generation credentials are unavailable: ${error.message}`,
             }),
         ),
       )

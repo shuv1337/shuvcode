@@ -18,6 +18,11 @@ function notify(
   })
 }
 
+function settledOnTranscript(context: Plugin.Context, sessionID: string, error: { type: string; message: string }) {
+  const latest = context.data.session.message.list(sessionID).findLast((item) => item.type === "assistant")
+  return latest?.error?.type === error.type && latest.error.message === error.message
+}
+
 export default Plugin.define({
   id: "opencode.notifications",
   setup(context) {
@@ -68,6 +73,14 @@ export default Plugin.define({
       context.data.on("session.execution.interrupted", (event) => ended(event.data.sessionID)),
       context.data.on("session.execution.failed", (event) => {
         const sessionID = event.data.sessionID
+        // A failure that never reached a step settles onto no assistant message, so the
+        // transcript shows the prompt simply stopping. Say why in the foreground too.
+        if (!settledOnTranscript(context, sessionID, event.data.error))
+          context.ui.toast.show({
+            variant: "error",
+            title: "Session failed",
+            message: event.data.error.message || event.data.error.type,
+          })
         if (errored.has(sessionID)) {
           ended(sessionID)
           return

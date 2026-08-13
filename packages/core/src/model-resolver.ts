@@ -60,11 +60,39 @@ export class UnresolvedProviderVariablesError extends Schema.TaggedErrorClass<Un
   }
 }
 
+/**
+ * A credential that could not be authorized for a known model. Resolution refreshes OAuth
+ * tokens, so an expired subscription fails here rather than on the wire. Carrying the
+ * selection lets the Session record the failed step against the model the user chose.
+ */
+export class ProviderAuthorizationError extends Schema.TaggedErrorClass<ProviderAuthorizationError>()(
+  "ModelResolver.ProviderAuthorizationError",
+  {
+    providerID: Provider.ID,
+    modelID: ID,
+    variant: VariantID.pipe(Schema.optional),
+    cause: Schema.Defect(),
+  },
+) {
+  override get message() {
+    const detail = Integration.causeMessage(this.cause)
+    return `Cannot authorize ${this.providerID}/${this.modelID}${detail ? `: ${detail}` : ""}`
+  }
+
+  get ref() {
+    return Ref.make({
+      id: this.modelID,
+      providerID: this.providerID,
+      ...(this.variant === undefined ? {} : { variant: this.variant }),
+    })
+  }
+}
+
 export type Error =
   | VariantUnavailableError
   | UnsupportedPackageError
   | UnresolvedProviderVariablesError
-  | Integration.AuthorizationError
+  | ProviderAuthorizationError
 
 export interface Resolved {
   /** Route-level model for provider requests; its id is the provider API model id, which may differ from the catalog id. */
@@ -335,15 +363,23 @@ export const layer = Layer.effect(
       const connection = yield* integrations.connection.active(
         provider?.integrationID ?? Integration.ID.make(selected.providerID),
       )
-      const model = yield* resolveModel(
-        selected,
-        variant,
-        connection ? yield* integrations.connection.resolve(connection) : undefined,
-        {
-          loadPackage: (specifier) => Provider.loadPackage(specifier, npm),
-          loadAISDK: (model) => aisdk.model(model),
-        },
-      )
+      const credential = connection
+        ? yield* integrations.connection.resolve(connection).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ProviderAuthorizationError({
+                  providerID: selected.providerID,
+                  modelID: selected.id,
+                  variant,
+                  cause: cause.cause,
+                }),
+            ),
+          )
+        : undefined
+      const model = yield* resolveModel(selected, variant, credential, {
+        loadPackage: (specifier) => Provider.loadPackage(specifier, npm),
+        loadAISDK: (model) => aisdk.model(model),
+      })
       return {
         model,
         ref: Ref.make({

@@ -7,6 +7,8 @@ type Session = { id: string; title: string; parentID?: string }
 
 async function setup() {
   const notifications: AttentionNotifyOptions[] = []
+  const toasts: { variant: string; title?: string; message: string }[] = []
+  const messages: Record<string, { type: string; error?: { type: string; message: string } }[]> = {}
   const handlers = new Map<OpenCodeEvent["type"], ((event: OpenCodeEvent) => void)[]>()
   const session = (id: string, title: string, parentID?: string): Session => ({
     id,
@@ -46,12 +48,24 @@ async function setup() {
       session: {
         get: (sessionID: string) => sessions[sessionID],
         status: () => "running" as const,
+        message: {
+          list: (sessionID: string) => messages[sessionID] ?? [],
+        },
+      },
+    },
+    ui: {
+      toast: {
+        show: (options: { variant: string; title?: string; message: string }) => toasts.push(options),
       },
     },
   } as unknown as Context)
 
   return {
     notifications,
+    toasts,
+    settleOnTranscript(sessionID: string, error: { type: string; message: string }) {
+      messages[sessionID] = [{ type: "assistant", error }]
+    },
     emit(event: OpenCodeEvent) {
       for (const handler of handlers.get(event.type) ?? []) handler(event)
     },
@@ -292,5 +306,24 @@ describe("internal notifications TUI plugin", () => {
         sound: { name: "error", when: "always" },
       },
     ])
+  })
+
+  test("toasts a failure the transcript cannot show", async () => {
+    const harness = await setup()
+
+    harness.emit(executionStarted("event-1"))
+    harness.emit(executionFailed("event-2"))
+
+    expect(harness.toasts).toEqual([{ variant: "error", title: "Session failed", message: "boom" }])
+  })
+
+  test("stays quiet when the failure already settled onto an assistant message", async () => {
+    const harness = await setup()
+    harness.settleOnTranscript("session", { type: "unknown", message: "boom" })
+
+    harness.emit(executionStarted("event-1"))
+    harness.emit(executionFailed("event-2"))
+
+    expect(harness.toasts).toEqual([])
   })
 })

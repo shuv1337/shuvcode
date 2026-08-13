@@ -42,6 +42,7 @@ import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator
 import { SessionRunner } from "@opencode-ai/core/session/runner"
 import * as SessionRunnerLLM from "@opencode-ai/core/session/runner/llm"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { ModelResolver } from "@opencode-ai/core/model-resolver"
 import { PromptCacheDiagnostics } from "@opencode-ai/core/session/prompt-cache-diagnostics"
 import { SessionUsage } from "@opencode-ai/core/session/usage"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
@@ -273,7 +274,7 @@ const echo = Layer.effectDiscard(
   ),
 )
 const echoNode = makeLocationNode({ name: "test/session-runner-tools", layer: echo, deps: [Tool.node] })
-let modelResolveHook = Effect.void
+let modelResolveHook: Effect.Effect<void, ModelResolver.Error> = Effect.void
 let currentModel = model
 const models = Layer.mock(SessionRunnerModel.Service)({
   resolve: (session) =>
@@ -1606,6 +1607,41 @@ describe("SessionRunnerLLM", () => {
 
       expect(requests.map((request) => request.system.map((part) => part.text))).toEqual([
         [defaultSystem, withCodeModeGuidance("Initial context", "Build skills")],
+      ])
+    }),
+  )
+
+  it.effect("records a failed step when the provider credential cannot be authorized", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      modelResolveHook = Effect.fail(
+        new ModelResolver.ProviderAuthorizationError({
+          providerID: Provider.ID.make("fake"),
+          modelID: ID.make("fake-model"),
+          cause: new Error("invalid_grant"),
+        }),
+      )
+      yield* admit(session, "First")
+
+      expect(yield* Effect.exit(session.resume(sessionID))).toMatchObject({ _tag: "Failure" })
+
+      // The failure never reached the provider, so without a recorded step the prompt would
+      // settle with nothing in the transcript explaining why.
+      expect(yield* session.messages({ sessionID })).toMatchObject([
+        {
+          type: "assistant",
+          model: { providerID: "fake", id: "fake-model" },
+          finish: "error",
+          error: { type: "provider.auth", message: "Cannot authorize fake/fake-model: invalid_grant" },
+        },
+        { type: "user", text: "First" },
+      ])
+      expect(yield* recordedEventTypes(sessionID)).toEqual([
+        "session.input.admitted.1",
+        "session.instructions.updated.2",
+        "session.input.promoted.1",
+        "session.step.started.1",
+        "session.step.failed.1",
       ])
     }),
   )
@@ -5129,10 +5165,7 @@ describe("SessionRunnerLLM", () => {
         required: ["summary"],
       })
       const context = yield* session.context(sessionID)
-      expect(context).toMatchObject([
-        { type: "user", output: { schema: { type: "object" } } },
-        { type: "assistant" },
-      ])
+      expect(context).toMatchObject([{ type: "user", output: { schema: { type: "object" } } }, { type: "assistant" }])
       expect(requireAssistant(context).content).toContainEqual({ type: "structured", value: { summary: "Ready" } })
       expect(yield* recordedEventTypes(sessionID)).toContain("session.structured.completed.1")
     }),
