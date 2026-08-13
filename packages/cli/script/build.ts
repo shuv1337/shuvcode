@@ -47,15 +47,16 @@ const allTargets: {
   { os: "win32", arch: "x64", avx2: false },
 ]
 
-const targets = requestedTarget !== undefined
-  ? allTargets.filter((item) => targetName(item) === requestedTarget)
-  : singleFlag
-    ? allTargets.filter((item) => {
-        if (item.os !== process.platform || item.arch !== process.arch) return false
-        if (item.avx2 === false) return baselineFlag
-        return item.abi === undefined
-      })
-    : allTargets
+const targets =
+  requestedTarget !== undefined
+    ? allTargets.filter((item) => targetName(item) === requestedTarget)
+    : singleFlag
+      ? allTargets.filter((item) => {
+          if (item.os !== process.platform || item.arch !== process.arch) return false
+          if (item.avx2 === false) return baselineFlag
+          return item.abi === undefined
+        })
+      : allTargets
 if (!targets.length) throw new Error(`Unknown build target: ${requestedTarget}`)
 
 if (!skipInstall) await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
