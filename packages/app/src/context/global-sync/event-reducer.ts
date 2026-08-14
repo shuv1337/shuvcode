@@ -5,7 +5,6 @@ import type { Message, Part, Project, Todo } from "@/types"
 import type {
   FileDiffInfo,
   PermissionRequest,
-  QuestionRequest,
   SessionInfo,
   SessionStatus,
 } from "@opencode-ai/client/promise"
@@ -27,9 +26,6 @@ const SESSION_CONTENT_EVENTS = new Set([
   "message.part.delta",
   "permission.asked",
   "permission.replied",
-  "question.asked",
-  "question.replied",
-  "question.rejected",
 ])
 
 export function applyGlobalEvent(input: {
@@ -86,7 +82,6 @@ export function cleanupDroppedSessionCaches(
     ...Object.keys(store.session_diff),
     ...Object.keys(store.todo),
     ...Object.keys(store.permission),
-    ...Object.keys(store.question),
     ...Object.keys(store.session_status),
     ...Object.values(store.part)
       .map((parts) => parts?.find((part) => !!part?.sessionID)?.sessionID)
@@ -431,43 +426,6 @@ export function applyDirectoryEvent(input: {
       if (!result.found) break
       input.setStore(
         "permission",
-        props.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 1)
-        }),
-      )
-      break
-    }
-    case "question.asked": {
-      const question = event.properties as QuestionRequest
-      const questions = input.store.question[question.sessionID]
-      if (!questions) {
-        input.setStore("question", question.sessionID, [question])
-        break
-      }
-      const result = Binary.search(questions, question.id, (q) => q.id)
-      if (result.found) {
-        input.setStore("question", question.sessionID, result.index, reconcile(question))
-        break
-      }
-      input.setStore(
-        "question",
-        question.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, question)
-        }),
-      )
-      break
-    }
-    case "question.replied":
-    case "question.rejected": {
-      const props = event.properties as { sessionID: string; requestID: string }
-      const questions = input.store.question[props.sessionID]
-      if (!questions) break
-      const result = Binary.search(questions, props.requestID, (q) => q.id)
-      if (!result.found) break
-      input.setStore(
-        "question",
         props.sessionID,
         produce((draft) => {
           draft.splice(result.index, 1)

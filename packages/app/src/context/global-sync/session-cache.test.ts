@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part, Todo } from "@/types"
-import type { FormInfo, PermissionRequest, QuestionRequest, SessionStatus } from "@opencode-ai/client/promise"
+import type { FormInfo, PermissionRequest, SessionStatus } from "@opencode-ai/client/promise"
 import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import { dropSessionCaches, pickSessionCacheEvictions } from "./session-cache"
 
@@ -33,7 +33,6 @@ describe("app session cache", () => {
       session_message: Record<string, never[] | undefined>
       part: Record<string, Part[] | undefined>
       permission: Record<string, PermissionRequest[] | undefined>
-      question: Record<string, QuestionRequest[] | undefined>
       form: Record<string, FormInfo[] | undefined>
       part_text_accum_delta: Record<string, string | undefined>
     } = {
@@ -44,7 +43,6 @@ describe("app session cache", () => {
       session_message: {},
       part: { msg_1: [part("prt_1", "ses_1", "msg_1")] },
       permission: { ses_1: [] as PermissionRequest[] },
-      question: { ses_1: [] as QuestionRequest[] },
       form: { ses_1: [] as FormInfo[] },
       part_text_accum_delta: { prt_1: "streamed text" },
     }
@@ -58,7 +56,6 @@ describe("app session cache", () => {
     expect(store.session_diff.ses_1).toBeUndefined()
     expect(store.session_status.ses_1).toBeUndefined()
     expect(store.permission.ses_1).toBeUndefined()
-    expect(store.question.ses_1).toBeUndefined()
     expect(store.form.ses_1).toBeUndefined()
   })
 
@@ -72,7 +69,6 @@ describe("app session cache", () => {
       session_message: Record<string, never[] | undefined>
       part: Record<string, Part[] | undefined>
       permission: Record<string, PermissionRequest[] | undefined>
-      question: Record<string, QuestionRequest[] | undefined>
       form: Record<string, FormInfo[] | undefined>
       part_text_accum_delta: Record<string, string | undefined>
     } = {
@@ -83,7 +79,6 @@ describe("app session cache", () => {
       session_message: {},
       part: { [m.id]: [part("prt_1", "ses_1", m.id)] },
       permission: {},
-      question: {},
       form: {},
       part_text_accum_delta: {},
     }
