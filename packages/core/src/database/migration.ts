@@ -76,12 +76,15 @@ const bridgeForkTip = Effect.fn("DatabaseMigration.bridgeForkTip")(function* (
   })
   yield* db.transaction((tx) =>
     Effect.gen(function* () {
-      yield* tx.run(sql`ALTER TABLE ${sql.identifier("session")} RENAME TO ${sql.identifier("session_v2")}`)
+      // Drop indexes before rename. Partial indexes that qualify the old table
+      // name (e.g. WHERE "session"."time_suspended" IS NOT NULL) break SQLite's
+      // ALTER TABLE ... RENAME and leave the database unmigratable.
       yield* Effect.forEach(
         ["session_project_idx", "session_workspace_idx", "session_parent_idx", "session_time_suspended_idx"],
         (index) => tx.run(sql`DROP INDEX IF EXISTS ${sql.identifier(index)}`),
         { discard: true },
       )
+      yield* tx.run(sql`ALTER TABLE ${sql.identifier("session")} RENAME TO ${sql.identifier("session_v2")}`)
       yield* tx.run(sql`CREATE INDEX session_v2_project_idx ON session_v2 (project_id)`)
       yield* tx.run(sql`CREATE INDEX session_v2_workspace_idx ON session_v2 (workspace_id)`)
       yield* tx.run(sql`CREATE INDEX session_v2_parent_idx ON session_v2 (parent_id)`)

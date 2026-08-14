@@ -80,8 +80,10 @@ describe("DatabaseMigration", () => {
             yield* tx.run(sql`CREATE INDEX session_project_idx ON session (project_id)`)
             yield* tx.run(sql`CREATE INDEX session_workspace_idx ON session (workspace_id)`)
             yield* tx.run(sql`CREATE INDEX session_parent_idx ON session (parent_id)`)
+            // Match drizzle's qualified partial-index form. Renaming the table while this
+            // index exists fails unless indexes are dropped first (alpha-10 production bug).
             yield* tx.run(
-              sql`CREATE INDEX session_time_suspended_idx ON session (time_suspended) WHERE time_suspended IS NOT NULL`,
+              sql`CREATE INDEX session_time_suspended_idx ON session (time_suspended) WHERE "session"."time_suspended" is not null`,
             )
             yield* tx.run(sql`
               INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
