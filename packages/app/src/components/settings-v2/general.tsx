@@ -7,7 +7,7 @@ import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "../updater-action"
-import { useSettings } from "@/context/settings"
+import { type WorkspaceDefaultDestination, useSettings } from "@/context/settings"
 import { ExternalLink } from "../external-link"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
@@ -81,6 +81,34 @@ const PermissionScopeSetting: Component<{ controller: PermissionScopeController 
           onChange={props.controller.set}
         />
       </div>
+    </SettingsRowV2>
+  )
+}
+
+const WorkspaceDestinationSetting: Component = () => {
+  const language = useLanguage()
+  const settings = useSettings()
+  const options = createMemo((): { value: WorkspaceDefaultDestination; label: string }[] => [
+    { value: "last-used", label: language.t("settings.workspaces.default.lastUsed") },
+    { value: "local", label: language.t("settings.workspaces.default.local") },
+    { value: "new", label: language.t("settings.workspaces.default.new") },
+  ])
+
+  return (
+    <SettingsRowV2
+      title={language.t("settings.workspaces.default.title")}
+      description={language.t("settings.workspaces.default.description")}
+    >
+      <SelectV2
+        appearance="inline"
+        options={options()}
+        current={options().find((option) => option.value === settings.workspaces.defaultDestination())}
+        value={(option) => option.value}
+        label={(option) => option.label}
+        placement="bottom-end"
+        gutter={6}
+        onSelect={(option) => option && settings.workspaces.setDefaultDestination(option.value)}
+      />
     </SettingsRowV2>
   )
 }
@@ -300,6 +328,7 @@ export const SettingsGeneralV2: Component<{
       <SettingsListV2>
         <LanguageSetting />
 
+        <WorkspaceDestinationSetting />
         <PermissionScopeSetting controller={permissionScope} />
 
         <ShellSetting controller={shell} />
@@ -362,18 +391,6 @@ export const SettingsGeneralV2: Component<{
       <h3 class="settings-v2-section-title">{language.t("settings.general.section.advanced")}</h3>
 
       <SettingsListV2>
-        <SettingsRowV2
-          title={language.t("settings.general.row.showFileTree.title")}
-          description={language.t("settings.general.row.showFileTree.description")}
-        >
-          <div data-action="settings-show-file-tree">
-            <Switch
-              checked={settings.general.showFileTree()}
-              onChange={(checked) => settings.general.setShowFileTree(checked)}
-            />
-          </div>
-        </SettingsRowV2>
-
         <SettingsRowV2
           title={language.t("settings.general.row.showSearch.title")}
           description={language.t("settings.general.row.showSearch.description")}

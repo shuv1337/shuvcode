@@ -257,7 +257,13 @@ export function createServerSession(
   const indexProjectedMessage = (message: Message) => {
     const current = data.session_message[message.sessionID] ?? []
     if (current.some((item) => item.id === message.id)) return
-    setData("session_message", message.sessionID, reconcile([...current, ...projectMessageSource(message)]))
+    const projected = projectMessageSource(message)
+    const projectedIDs = new Set(projected.map((item) => item.id))
+    setData(
+      "session_message",
+      message.sessionID,
+      reconcile([...current.filter((item) => !projectedIDs.has(item.id)), ...projected]),
+    )
   }
 
   const remember = (session: SessionInfo) => {
@@ -1443,6 +1449,7 @@ export function createServerSession(
         if (items) items.set(input.message.id, { ...input, parts, confirmedParts: [] })
         if (!items)
           optimistic.set(input.sessionID, new Map([[input.message.id, { ...input, parts, confirmedParts: [] }]]))
+        indexProjectedMessage(input.message)
         setData("message", input.sessionID, (messages = []) => merge(messages, [input.message]).sort(compareMessages))
         setData(
           "part_text_accum_delta",
@@ -1476,6 +1483,10 @@ export function createServerSession(
           )
           return
         }
+        const projectedIDs = new Set(projectMessageSource(item.message).map((message) => message.id))
+        setData("session_message", input.sessionID, (messages) =>
+          messages?.filter((message) => !projectedIDs.has(message.id)),
+        )
         setData("message", input.sessionID, (messages) => messages?.filter((message) => message.id !== input.messageID))
         setData(produce((draft) => deleteMessageParts(draft, input.messageID)))
       },

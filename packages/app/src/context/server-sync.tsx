@@ -58,6 +58,17 @@ import { createCatalogSync } from "./server-sync/catalog"
 import { createConnectionSync } from "./server-sync/connection"
 import { usePlatform } from "./platform"
 
+export function shouldRefreshWorkspaceSessions(event: ServerEvent) {
+  const type = event.current?.type ?? event.type
+  return (
+    type === "session.created" ||
+    type === "session.deleted" ||
+    type === "session.moved" ||
+    type === "session.renamed" ||
+    type === "session.forked"
+  )
+}
+
 type GlobalStore = {
   ready: boolean
   error?: InitError
@@ -185,7 +196,7 @@ export function reconcileActiveSessionStatuses(
 function makeQueryOptionsApi(scope: ServerScope, serverAPI: ServerApi) {
   return {
     globalConfig: () => loadGlobalConfigQuery(scope),
-    projects: () => loadProjectsQuery(scope, serverAPI.project),
+    projects: () => loadProjectsQuery(scope, serverAPI.project, serverAPI.worktree),
     providers: (directory: PathKey | null) => loadProvidersQuery(scope, directory, serverAPI),
     integrations: (directory: PathKey | null) => loadIntegrationsQuery(scope, directory, serverAPI.integration),
     path: (directory: PathKey | null) => loadPathQuery(scope, directory, serverAPI.location),
@@ -553,12 +564,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   }
   const toDirectoryEvent = (event: ServerEvent) => {
     if (event.current?.type === "session.created") return
-    if (
-      event.current?.type !== "session.renamed" &&
-      event.current?.type !== "session.moved" &&
-      event.current?.type !== "session.usage.updated"
-    )
-      return event
+    if (event.current?.type !== "session.renamed" && event.current?.type !== "session.usage.updated") return event
     const info = session.get(event.current.data.sessionID)
     if (info) return { type: "session.updated", properties: { info } }
     return event
@@ -576,6 +582,16 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     markSessionListChanged(event, directory, previousDirectory)
     if (event.current) session.applyV2(event.current)
     session.apply(event)
+    if (event.current?.type === "session.moved") {
+      const info = session.get(event.current.data.sessionID)
+      if (info) indexSession(info)
+    }
+    if (shouldRefreshWorkspaceSessions(event)) {
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === serverSDK.scope && query.queryKey[2] === "settings-workspace-sessions",
+      })
+    }
     if (event.current?.type === "session.created")
       void session
         .resolve(event.current.data.sessionID, { force: true })
@@ -630,10 +646,6 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       return
     }
 
-    if (event.current?.type === "session.moved") {
-      const info = session.get(event.current.data.sessionID)
-      if (info) indexSession(info)
-    }
     if (event.current?.type === "session.forked")
       void session
         .resolve(event.current.data.sessionID, { force: true })

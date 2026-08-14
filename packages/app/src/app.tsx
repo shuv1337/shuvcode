@@ -1,6 +1,7 @@
 import "@/index.css"
 import * as Sentry from "@sentry/solid"
 import { I18nProvider } from "@opencode-ai/ui/context"
+import type { UiI18n } from "@opencode-ai/ui/context/i18n"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
 import { FileComponentProvider } from "@opencode-ai/ui/context/file"
 import { File } from "@opencode-ai/session-ui/file"
@@ -159,7 +160,13 @@ function UiI18nBridge(props: ParentProps) {
   const language = useLanguage()
   return (
     <I18nProvider
-      value={{ locale: language.intl, layoutLocale: language.layoutLocale, t: language.t, plural: language.plural }}
+      value={{
+        locale: language.intl,
+        layoutLocale: language.layoutLocale,
+        t: language.t as UiI18n["t"],
+        plural: language.plural,
+        pluralForm: language.pluralForm,
+      }}
     >
       {props.children}
     </I18nProvider>

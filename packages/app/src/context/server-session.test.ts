@@ -541,6 +541,23 @@ describe("server session", () => {
     expect(ctx.store.lineage.peek("child")).toEqual(result)
   })
 
+  test("applies moved session locations without evicting cached state", () => {
+    const current = { ...session("child"), location: { directory: "/repo/worktree" } }
+    const ctx = setup({ child: current })
+    ctx.store.remember(current)
+
+    ctx.store.applyV2({
+      id: "evt_moved",
+      created: 2,
+      type: "session.moved",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      location: current.location,
+      data: { sessionID: "child", location: { directory: "/repo" }, projectID: "project", subpath: "packages/app" },
+    } satisfies Extract<OpenCodeEvent, { type: "session.moved" }>)
+
+    expect(ctx.store.get("child")).toMatchObject({ location: { directory: "/repo" }, subpath: "packages/app" })
+  })
+
   test("loads session content through the server client", async () => {
     const ctx = setup({ root: session("root") })
 
@@ -1182,6 +1199,16 @@ describe("server session", () => {
 
     expect(store.data.part[message.id]).toBeUndefined()
     expect(store.data.part_text_accum_delta[part.id]).toBeUndefined()
+  })
+
+  test("removes projected messages when rolling back optimistic content", () => {
+    const message = userMessage("message")
+    const store = setup({ child: session("child") }).store
+    store.optimistic.add({ sessionID: "child", message, parts: [] })
+
+    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+
+    expect(store.data.session_message.child).toEqual([])
   })
 
   test("does not remove content confirmed by a message event", () => {

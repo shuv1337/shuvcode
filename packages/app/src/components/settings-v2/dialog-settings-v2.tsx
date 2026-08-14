@@ -11,6 +11,7 @@ import { SettingsNotificationsV2 } from "./notifications"
 import { SettingsProvidersV2 } from "./providers"
 import { SettingsModelsV2 } from "./models"
 import { SettingsServersV2 } from "./servers"
+import { SettingsWorkspacesV2 } from "./workspaces"
 import { SettingsProjectsV2 } from "./projects"
 import { SettingsExtensionsV2 } from "./extensions"
 import { SettingsServerScope } from "../settings-server-picker"
@@ -95,6 +96,10 @@ export const DialogSettings: Component<{
                   <Icon name="folder" />
                   {language.t("settings.tab.projects")}
                 </TabsV2.Trigger>
+                <TabsV2.Trigger value="workspaces">
+                  <Icon name="workspace-isolated" />
+                  {language.t("settings.tab.workspaces")}
+                </TabsV2.Trigger>
               </div>
 
               {/* Group 3: Capabilities & Extensions */}
@@ -140,6 +145,9 @@ export const DialogSettings: Component<{
           <SettingsProjectsV2 />
         </TabsV2.Content>
         <SettingsServerScope directory={directory()}>
+          <TabsV2.Content value="workspaces" class="settings-v2-panel">
+            <SettingsWorkspacesV2 activeDirectory={directory()} />
+          </TabsV2.Content>
           <TabsV2.Content value="providers" class="settings-v2-panel">
             <SettingsProvidersV2 directory={directory()} onBack={showProviders} />
           </TabsV2.Content>

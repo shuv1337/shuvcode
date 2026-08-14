@@ -36,6 +36,7 @@ export type PromptInputV2Mode = "normal" | "shell"
 
 export type PromptInputV2Props = {
   controller: PromptInputV2Interaction
+  accentSubmit?: boolean
   disabled?: boolean
   readOnly?: boolean
   borderUnderlay?: boolean
@@ -263,6 +264,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             mode={state.mode}
             stopping={view.submit.stopping()}
             disabled={!props.controller.canSubmit()}
+            accent={props.accentSubmit}
             sendLabel={i18n.t("ui.promptInput.send")}
             stopLabel={i18n.t("ui.promptInput.stop")}
             onSubmit={props.controller.submit}
@@ -678,6 +680,7 @@ export function PromptInputV2SubmitButton(props: {
   mode: PromptInputV2Mode
   stopping: boolean
   disabled: boolean
+  accent?: boolean
   sendLabel: string
   stopLabel: string
   onSubmit: () => void
@@ -696,10 +699,16 @@ export function PromptInputV2SubmitButton(props: {
         tabIndex={props.mode === "normal" ? undefined : -1}
         icon={props.stopping ? "stop" : props.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
         variant="primary"
-        class="size-7 rounded-md p-[6px] text-v2-icon-icon-muted shadow-[var(--v2-elevation-button-contrast)] disabled:opacity-50"
+        class="size-7 rounded-md p-[6px] shadow-[var(--v2-elevation-button-contrast)] disabled:opacity-50"
+        classList={{
+          "text-v2-text-text-contrast": !!props.accent && !props.stopping && !props.disabled,
+          "text-v2-icon-icon-muted": !props.accent || props.stopping || props.disabled,
+        }}
         style={{
           "background-image":
-            "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-contrast) 0%,var(--v2-background-bg-contrast) 100%)",
+            props.accent && !props.stopping && !props.disabled
+              ? "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-accent) 0%,var(--v2-background-bg-accent) 100%)"
+              : "linear-gradient(180deg,var(--v2-alpha-light-20) 0%,var(--v2-alpha-light-0) 100%),linear-gradient(90deg,var(--v2-background-bg-contrast) 0%,var(--v2-background-bg-contrast) 100%)",
         }}
         aria-label={props.stopping ? props.stopLabel : props.sendLabel}
         onClick={(event) => {

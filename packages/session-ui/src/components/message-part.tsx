@@ -550,7 +550,7 @@ export function getToolInfo(
         icon: "code-lines",
         title: i18n.t("ui.tool.patch"),
         subtitle: input.files?.length
-          ? `${input.files.length} ${i18n.t(input.files.length > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
+          ? `${input.files.length} ${i18n.plural("ui.common.file", input.files.length)}`
           : undefined,
       }
     case "todowrite":
@@ -2344,7 +2344,7 @@ ToolRegistry.register({
     const subtitle = createMemo(() => {
       const count = files().length
       if (count === 0) return ""
-      return `${count} ${i18n.t(count > 1 ? "ui.common.file.other" : "ui.common.file.one")}`
+      return `${count} ${i18n.plural("ui.common.file", count)}`
     })
 
     return (
@@ -2585,7 +2585,7 @@ ToolRegistry.register({
       const count = questions().length
       if (count === 0) return ""
       if (completed()) return i18n.t("ui.question.subtitle.answered", { count })
-      return `${count} ${i18n.t(count > 1 ? "ui.common.question.other" : "ui.common.question.one")}`
+      return `${count} ${i18n.plural("ui.common.question", count)}`
     })
 
     return (

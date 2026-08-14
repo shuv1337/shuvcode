@@ -35,6 +35,7 @@ import { loadMcpQuery, loadMcpResourcesQuery } from "../server-sync"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { ScopedKey, type ServerScope } from "@/utils/server-scope"
 import type { ServerApi } from "@/utils/server"
+import { sameDirectory } from "@/utils/workspace"
 
 type GlobalStore = {
   ready: boolean
@@ -106,6 +107,7 @@ type ProjectApi = {
   readonly list: () => Promise<ProjectListOutput>
   readonly current: (input?: ProjectCurrentInput) => Promise<ProjectCurrentOutput>
 }
+type WorktreeApi = Pick<ServerApi["worktree"], "list">
 type LocationApi = { readonly get: (input?: LocationGetInput) => Promise<LocationGetOutput> }
 
 type McpApi = ServerApi["mcp"]
@@ -113,15 +115,35 @@ type PermissionApi = ServerApi["permission"]
 type QuestionApi = ServerApi["question"]
 type VcsApi = ServerApi["vcs"]
 
-export const loadProjectsQuery = (scope: ServerScope, api: ProjectApi) =>
+export const loadProjectsQuery = (scope: ServerScope, projects: ProjectApi, worktrees: WorktreeApi) =>
   queryOptions({
     queryKey: [scope, "project"],
     queryFn: () =>
       retry(() =>
-        api.list().then((projects) => {
-          return projects
-            .filter((p) => !!p?.id)
-            .map(normalizeProjectInfo)
+        projects.list().then(async (items) => {
+          return (
+            await Promise.all(
+              items
+                .filter((project) => !!project?.id)
+                .map(async (project) => {
+                  const directories = await worktrees
+                    .list({ projectID: project.id })
+                    .catch(() => [
+                      { directory: project.canonical },
+                      ...(project.sandboxes ?? [])
+                        .filter((directory) => !sameDirectory(project.canonical, directory))
+                        .map((directory) => ({ directory })),
+                    ])
+                  return normalizeProjectInfo({
+                    ...project,
+                    sandboxes: directories
+                      .map((item) => item.directory)
+                      .filter((directory) => !sameDirectory(project.canonical, directory)),
+                    worktrees: directories,
+                  })
+                }),
+            )
+          )
             .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
@@ -130,7 +152,11 @@ export const loadProjectsQuery = (scope: ServerScope, api: ProjectApi) =>
   })
 
 export async function bootstrapGlobal(input: {
-  serverAPI: CatalogApi & { readonly location: LocationApi; readonly project: ProjectApi }
+  serverAPI: CatalogApi & {
+    readonly location: LocationApi
+    readonly project: ProjectApi
+    readonly worktree: WorktreeApi
+  }
   scope: ServerScope
   requestFailedTitle: string
   translate: (key: string, vars?: Record<string, string | number>) => string
@@ -144,7 +170,7 @@ export async function bootstrapGlobal(input: {
     () => input.queryClient.fetchQuery(loadPathQuery(input.scope, null, input.serverAPI.location)),
     () =>
       input.queryClient
-        .fetchQuery(loadProjectsQuery(input.scope, input.serverAPI.project))
+        .fetchQuery(loadProjectsQuery(input.scope, input.serverAPI.project, input.serverAPI.worktree))
         .then((data) => input.setGlobalStore("project", data)),
   ]
   await runAll(slow)
