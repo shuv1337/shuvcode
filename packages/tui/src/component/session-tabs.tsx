@@ -307,6 +307,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
   const [addHovered, setAddHovered] = createSignal(false)
   const marquee = createTabMarquee(animations)
   const hovered = marquee.hovered
+  // OpenTUI captures the first drag target, which may differ from the tab pressed on a fast move.
   const [dragging, setDragging] = createSignal<string>()
   const [preview, setPreview] = createSignal<{ sessionID: string; index: number }>()
   const [contextMenu, setContextMenu] = createSignal<TabContextMenuState>()
@@ -343,6 +344,9 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
   const itemStatus = (tab: SessionTab) => statuses().get(tab.sessionID)!
   let rail: { screenX: number; screenY: number } | undefined
   let scroll: ScrollBoxRenderable | undefined
+  let didDrag = false
+  // A captured drag ends with a synthetic up on its drop target; do not turn that into a click.
+  let suppressClick = false
 
   createEffect(() => {
     const pending = preview()
@@ -364,6 +368,29 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
     }
   })
 
+  const release = () => {
+    const source = dragging()
+    if (!source) return
+    if (didDrag) suppressClick = true
+    setDragging(undefined)
+    const pending = preview()
+    if (pending?.sessionID === source) tabs.move(pending.sessionID, pending.index)
+    tabs.select(source)
+  }
+
+  const drag = (event: MouseEvent) => {
+    if (!rail) return
+    const source = dragging()
+    if (!source) return
+    didDrag = true
+    const target = Math.max(
+      0,
+      Math.min(tabs.tabs().length - 1, Math.floor((event.y - rail.screenY - 1 + (scroll?.scrollTop ?? 0)) / 3)),
+    )
+    const sourceIndex = items().findIndex((item) => item.sessionID === source)
+    if (target !== sourceIndex && preview()?.index !== target) setPreview({ sessionID: source, index: target })
+  }
+
   return (
     <box
       ref={(element) => (rail = element)}
@@ -375,6 +402,15 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
       paddingTop={1}
       backgroundColor={theme.background.default}
       onMouseOut={marquee.leaveHovered}
+      onMouseUp={(event) => {
+        if (event.button === RIGHT_MOUSE_BUTTON) return
+        release()
+        if (!didDrag) return
+        didDrag = false
+        queueMicrotask(() => (suppressClick = false))
+      }}
+      onMouseDrag={drag}
+      onMouseDragEnd={release}
     >
       <scrollbox ref={(element) => (scroll = element)} flexGrow={1} scrollbarOptions={{ visible: false }}>
         <box flexShrink={0} flexDirection="column" gap={1}>
@@ -522,12 +558,6 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                   : color
                 return separator ? tint(faded, pulseBackground(), 0.55) : faded
               }
-              const release = () => {
-                setDragging(undefined)
-                const pending = preview()
-                if (pending?.sessionID === tab.sessionID) tabs.move(pending.sessionID, pending.index)
-                tabs.select(tab.sessionID)
-              }
               return (
                 <box
                   height={2}
@@ -539,6 +569,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                   onMouseOut={() => marquee.leave(tab.sessionID)}
                   onMouseDown={(event) => {
                     if (event.button === RIGHT_MOUSE_BUTTON) {
+                      didDrag = false
                       setDragging(undefined)
                       if (!rail) return
                       setContextMenu({
@@ -551,26 +582,10 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                       event.stopPropagation()
                       return
                     }
+                    didDrag = false
                     marquee.enter(tab.sessionID, title(), hoveredTitleWidth())
                     setDragging(tab.sessionID)
                   }}
-                  onMouseUp={(event) => {
-                    if (event.button === RIGHT_MOUSE_BUTTON) return
-                    release()
-                  }}
-                  onMouseDrag={(event) => {
-                    if (!rail) return
-                    const target = Math.max(
-                      0,
-                      Math.min(
-                        tabs.tabs().length - 1,
-                        Math.floor((event.y - rail.screenY - 1 + (scroll?.scrollTop ?? 0)) / 3),
-                      ),
-                    )
-                    if (target !== index() && preview()?.index !== target)
-                      setPreview({ sessionID: tab.sessionID, index: target })
-                  }}
-                  onMouseDragEnd={release}
                 >
                   <TabPulse
                     top={-1}
@@ -677,8 +692,14 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                         selectable={false}
                         onMouseOver={() => setCloseHovered(true)}
                         onMouseOut={() => setCloseHovered(false)}
+                        onMouseDown={(event) => {
+                          if (event.button === RIGHT_MOUSE_BUTTON || hovered() !== tab.sessionID) return
+                          didDrag = false
+                          event.stopPropagation()
+                        }}
                         onMouseUp={(event) => {
                           if (event.button === RIGHT_MOUSE_BUTTON) return
+                          if (suppressClick) return
                           if (hovered() !== tab.sessionID) return
                           event.stopPropagation()
                           tabs.close(tab.sessionID)
@@ -737,6 +758,8 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
               onMouseOver={() => setAddHovered(true)}
               onMouseOut={() => setAddHovered(false)}
               onMouseDown={(event: MouseEvent) => {
+                didDrag = false
+                setDragging(undefined)
                 if (event.button !== RIGHT_MOUSE_BUTTON) return
                 if (!rail) return
                 setContextMenu({ x: event.x, y: event.y })
@@ -745,6 +768,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
               }}
               onMouseUp={(event: MouseEvent) => {
                 if (event.button === RIGHT_MOUSE_BUTTON) return
+                if (suppressClick) return
                 if (!newTab()) tabs.add?.()
               }}
             >
@@ -774,6 +798,7 @@ function VerticalSessionTabs(props: { controller?: SessionTabsController; animat
                   selectable={false}
                   onMouseUp={(event) => {
                     if (event.button === RIGHT_MOUSE_BUTTON) return
+                    if (suppressClick) return
                     if (!addHovered()) return
                     event.stopPropagation()
                     tabs.close()
@@ -803,6 +828,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
   const [addHovered, setAddHovered] = createSignal(false)
   const marquee = createTabMarquee(animations)
   const hovered = marquee.hovered
+  // OpenTUI captures the first drag target, which may differ from the tab pressed on a fast move.
   const [dragging, setDragging] = createSignal<string>()
   // A drag reorders a local preview and persists one move on release instead of writing
   // per slot crossing; the preview holds after release until the store reflects the move,
@@ -810,6 +836,9 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
   const [preview, setPreview] = createSignal<{ sessionID: string; index: number }>()
   const [contextMenu, setContextMenu] = createSignal<TabContextMenuState>()
   let strip: { screenX: number; screenY: number } | undefined
+  let didDrag = false
+  // A captured drag ends with a synthetic up on its drop target; do not turn that into a click.
+  let suppressClick = false
   const hueStep = () => (mode() === "light" ? 800 : 200)
   const accent = () => theme.hue.accent[hueStep()]
   const activeNumber = () => theme.hue.interactive[hueStep()]
@@ -931,6 +960,29 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
     return layout().before + layout().widths.length - 1
   }
 
+  const release = () => {
+    const source = dragging()
+    if (!source) return
+    if (didDrag) suppressClick = true
+    setDragging(undefined)
+    const pending = preview()
+    if (pending?.sessionID === source) tabs.move(pending.sessionID, pending.index)
+    if (source === NEW_SESSION_TAB.sessionID) return
+    tabs.select(source)
+  }
+
+  const drag = (event: MouseEvent) => {
+    const source = dragging()
+    if (!source || source === NEW_SESSION_TAB.sessionID) return
+    didDrag = true
+    const slot = slotAt(event.x)
+    const target = slot === undefined ? undefined : Math.min(slot, tabs.tabs().length - 1)
+    const sourceIndex = items().findIndex((item) => item.sessionID === source)
+    if (target !== undefined && target !== sourceIndex && preview()?.index !== target) {
+      setPreview({ sessionID: source, index: target })
+    }
+  }
+
   return (
     <box
       ref={(element) => (strip = element)}
@@ -940,6 +992,15 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
       flexDirection="row"
       zIndex={1}
       onMouseOut={marquee.leaveHovered}
+      onMouseUp={(event) => {
+        if (event.button === RIGHT_MOUSE_BUTTON) return
+        release()
+        if (!didDrag) return
+        didDrag = false
+        queueMicrotask(() => (suppressClick = false))
+      }}
+      onMouseDrag={drag}
+      onMouseDragEnd={release}
       renderAfter={function (buffer) {
         const x = Math.max(0, this.screenX)
         const y = this.screenY + this.height
@@ -1051,15 +1112,6 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           }
           const bold = () => (selected() || dragged() ? TextAttributes.BOLD : undefined)
           const closeColor = () => tint(theme.text.subdued, theme.text.default, 0.6)
-          // Releasing a drag (or a plain click) selects the tab, matching browser tab strips and
-          // keeping sloppy clicks indistinguishable from clean ones.
-          const release = () => {
-            setDragging(undefined)
-            const pending = preview()
-            if (pending?.sessionID === tab.sessionID) tabs.move(pending.sessionID, pending.index)
-            if (tab === NEW_SESSION_TAB) return
-            tabs.select(tab.sessionID)
-          }
           return (
             <box
               width={width()}
@@ -1070,6 +1122,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
               onMouseOut={() => marquee.leave(tab.sessionID)}
               onMouseDown={(event) => {
                 if (event.button === RIGHT_MOUSE_BUTTON) {
+                  didDrag = false
                   setDragging(undefined)
                   setContextMenu({
                     x: event.x,
@@ -1081,20 +1134,10 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
                   event.stopPropagation()
                   return
                 }
+                didDrag = false
                 marquee.enter(tab.sessionID, title(), hoveredTitleWidth())
                 setDragging(tab.sessionID)
               }}
-              onMouseUp={(event) => {
-                if (event.button === RIGHT_MOUSE_BUTTON) return
-                release()
-              }}
-              onMouseDrag={(event) => {
-                if (tab === NEW_SESSION_TAB) return
-                const slot = slotAt(event.x)
-                if (slot !== undefined && slot !== tabNumber() - 1)
-                  setPreview({ sessionID: tab.sessionID, index: slot })
-              }}
-              onMouseDragEnd={release}
             >
               <TabPulse
                 enabled={animations()}
@@ -1140,8 +1183,14 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
                   selectable={false}
                   onMouseOver={() => setCloseHovered(true)}
                   onMouseOut={() => setCloseHovered(false)}
+                  onMouseDown={(event) => {
+                    if (event.button === RIGHT_MOUSE_BUTTON || hovered() !== tab.sessionID) return
+                    didDrag = false
+                    event.stopPropagation()
+                  }}
                   onMouseUp={(event) => {
                     if (event.button === RIGHT_MOUSE_BUTTON) return
+                    if (suppressClick) return
                     // The close mark only renders while hovered; without motion events a click can
                     // land here first, and must select the tab instead of closing it invisibly.
                     if (hovered() !== tab.sessionID) return
@@ -1170,6 +1219,8 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           onMouseOver={() => setAddHovered(true)}
           onMouseOut={() => setAddHovered(false)}
           onMouseDown={(event) => {
+            didDrag = false
+            setDragging(undefined)
             if (event.button !== RIGHT_MOUSE_BUTTON) return
             setContextMenu({ x: event.x, y: event.y })
             event.preventDefault()
@@ -1177,6 +1228,7 @@ function HorizontalSessionTabs(props: { controller?: SessionTabsController; anim
           }}
           onMouseUp={(event) => {
             if (event.button === RIGHT_MOUSE_BUTTON) return
+            if (suppressClick) return
             tabs.add?.()
           }}
         >
