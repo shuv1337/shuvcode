@@ -10534,7 +10534,7 @@
         "summary": "List references"
       }
     },
-    "/api/experimental/project/{projectID}/worktree": {
+    "/api/worktree/{projectID}": {
       "get": {
         "tags": ["worktree"],
         "operationId": "v2.worktree.list",
@@ -10736,7 +10736,7 @@
         }
       }
     },
-    "/api/experimental/project/{projectID}/worktree/refresh": {
+    "/api/worktree/{projectID}/refresh": {
       "post": {
         "tags": ["worktree"],
         "operationId": "v2.worktree.refresh",
