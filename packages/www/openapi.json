@@ -24076,6 +24076,9 @@
           "experimental": {
             "type": "object",
             "properties": {
+              "portable_shell_scanner": {
+                "type": "boolean"
+              },
               "subagent_depth": {
                 "type": "integer",
                 "allOf": [
