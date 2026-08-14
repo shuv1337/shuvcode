@@ -70,6 +70,7 @@ import {
 import { DialogImagePreview } from "../dialog-image-preview"
 import { useDirectoryRecents } from "../../prompt/directory-recents"
 import { directoryRecentValue } from "../../prompt/directory-completion"
+import { useWorkingDirectoryActions } from "../../ui/working-directory-actions"
 
 export type PromptProps = {
   sessionID?: string
@@ -1539,20 +1540,24 @@ export function Prompt(props: PromptProps) {
     const width = dimensions().width < 44 ? dimensions().width - 5 : Math.min(75, dimensions().width - 4) - 5
     return Locale.takeWidth(value, Math.max(1, width)).trimEnd()
   })
-  const locationLabel = createMemo(() => {
+  const footerLocation = createMemo(() => {
     if (!props.sessionID) {
       // No session yet: show where the next session will be created.
-      const location = currentLocation.ref ?? data.location.default()
-      const directory = abbreviateHome(location.directory, paths.home)
-      const branch = data.location.vcs.info(location)?.branch.current
-      return branch ? `${directory}:${branch}` : directory
+      return currentLocation.ref ?? data.location.default()
     }
     if (status() !== "idle") return
-    const location = data.session.get(props.sessionID)?.location
+    return data.session.get(props.sessionID)?.location
+  })
+  const locationLabel = createMemo(() => {
+    const location = footerLocation()
     if (!location) return
     const directory = abbreviateHome(location.directory, paths.home)
     const branch = data.location.vcs.info(location)?.branch.current
     return branch ? `${directory}:${branch}` : directory
+  })
+  const locationActions = useWorkingDirectoryActions({
+    directory: () => footerLocation()?.directory,
+    onMove: () => void move.open(),
   })
 
   const spinnerDef = createMemo(() => {
@@ -1874,7 +1879,17 @@ export function Prompt(props: PromptProps) {
                   <Match when={true}>
                     <Show when={!props.hint && locationLabel()} fallback={props.hint ?? <text />}>
                       {(location) => (
-                        <text fg={theme.text.subdued} wrapMode="none" truncate flexGrow={1} flexShrink={1}>
+                        <text
+                          id="prompt.footer.location"
+                          fg={locationActions.hovered() ? theme.text.default : theme.text.subdued}
+                          wrapMode="none"
+                          truncate
+                          flexGrow={1}
+                          flexShrink={1}
+                          onMouseOver={locationActions.onMouseOver}
+                          onMouseOut={locationActions.onMouseOut}
+                          onMouseUp={locationActions.onMouseUp}
+                        >
                           {location()}
                         </text>
                       )}
