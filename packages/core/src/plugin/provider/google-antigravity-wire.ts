@@ -81,6 +81,10 @@ export function modelEnumsFrom(models: readonly GoogleAntigravityOAuth.CatalogMo
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
+/**
+ * Strips JSON Schema keywords Cloud Code rejects. Known limitation: a `$ref` is dropped rather
+ * than resolved, so a tool parameter defined only by reference degrades to untyped.
+ */
 export function cleanSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(cleanSchema)
   if (!isRecord(value)) return value
@@ -113,7 +117,8 @@ function withSystemRole(systemInstruction: unknown) {
 }
 
 function sessionNumber(sessionID: string) {
-  return String(createHash("sha256").update(sessionID).digest().readBigInt64BE(0))
+  // Unsigned: a signed read yields a negative id for half of all Session IDs.
+  return String(createHash("sha256").update(sessionID).digest().readBigUInt64BE(0))
 }
 
 function safeSession(sessionID: string) {
@@ -220,7 +225,13 @@ export function applyCatalog(evt: CatalogDraft, active: boolean) {
       draft.cost = []
       draft.enabled = true
       draft.status = "active"
-      draft.limit = { ...draft.limit, ...FLASH_LIMIT }
+      // Fallback only. Antigravity model ids are absent upstream, so their limits arrive as 0;
+      // a real catalog limit wins so Pro models are not pinned to Flash numbers forever.
+      draft.limit = {
+        ...draft.limit,
+        context: draft.limit.context || FLASH_LIMIT.context,
+        output: draft.limit.output || FLASH_LIMIT.output,
+      }
       draft.capabilities = { tools: true, input: ["text", "image"], output: ["text"] }
       if (!draft.package) draft.package = "@opencode-ai/ai/providers/google"
     })
