@@ -4,12 +4,7 @@ import { Endpoint, type EndpointPatch } from "./endpoint.js"
 import { RequestExecutor } from "./executor.js"
 import { Framing } from "./framing.js"
 import { HttpTransport } from "./transport/index.js"
-import type {
-  HttpMiddleware,
-  Transport,
-  TransportRuntime,
-  WebSocketChannelExecutor,
-} from "./transport/index.js"
+import type { HttpMiddleware, Transport, TransportRuntime, WebSocketChannelExecutor } from "./transport/index.js"
 import type { Protocol } from "./protocol.js"
 import { applyCachePolicy } from "../cache-policy.js"
 import * as ProviderShared from "../protocols/shared.js"

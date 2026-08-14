@@ -484,9 +484,7 @@ generic dynamic resolver:
 
 ```ts
 const model =
-  providerID === "azure"
-    ? Azure.configure(resolvedAzureConfig).responses(apiModelID)
-    : OpenAI.responses(apiModelID)
+  providerID === "azure" ? Azure.configure(resolvedAzureConfig).responses(apiModelID) : OpenAI.responses(apiModelID)
 ```
 
 That boundary can branch on durable config/catalog metadata and call typed
