@@ -159,8 +159,7 @@ const responseHttp = (input: {
   })
 
 const statusError =
-  (request: HttpClientRequest.HttpClientRequest) =>
-  (response: HttpClientResponse.HttpClientResponse) =>
+  (request: HttpClientRequest.HttpClientRequest) => (response: HttpClientResponse.HttpClientResponse) =>
     Effect.gen(function* () {
       if (response.status < 400) return response
       const body = yield* response.text.pipe(Effect.catch(() => Effect.void))

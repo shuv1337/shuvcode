@@ -257,9 +257,7 @@ describe("RequestExecutor", () => {
         _tag: "InvalidRequest",
         message: "Provider request failed with HTTP 400",
       })
-    }).pipe(
-      Effect.provide(responsesLayer([new Response('{"error":{"message":"  "}}', { status: 400 })])),
-    ),
+    }).pipe(Effect.provide(responsesLayer([new Response('{"error":{"message":"  "}}', { status: 400 })]))),
   )
 
   it.effect("classifies provider rate limits hidden behind HTTP 400", () =>
@@ -508,9 +506,7 @@ describe("RequestExecutor", () => {
       const error = yield* executor.execute(secretRequest).pipe(Effect.flip)
 
       expectAIError(error)
-      expect(errorHttp(error)?.body).toBe(
-        "provider echoed query-secret-123 and authorization header-secret-456",
-      )
+      expect(errorHttp(error)?.body).toBe("provider echoed query-secret-123 and authorization header-secret-456")
     }).pipe(
       Effect.provide(
         responsesLayer([
