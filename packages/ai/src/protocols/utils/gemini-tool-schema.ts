@@ -74,7 +74,10 @@ const projectNode = (schema: unknown, nested = false): Record<string, unknown> |
       ["description", schema.description],
       ["required", schema.required],
       ["format", schema.format],
-      ["type", types ? (types.length === 0 ? "null" : undefined) : schema.type],
+      // A single non-null type stays a plain `type` so an optional object keeps carrying its
+      // `properties` and `required`; Gemini reads those only on an OBJECT-typed node and rejects
+      // the whole request when the type is expressed as a combiner instead.
+      ["type", types ? (types.length === 0 ? "null" : types.length === 1 ? types[0] : undefined) : schema.type],
       [
         "nullable",
         (Array.isArray(schema.type) && schema.type.includes("null") && types && types.length > 0) || hasNullAnyOf
@@ -103,7 +106,7 @@ const projectNode = (schema: unknown, nested = false): Record<string, unknown> |
           ? hasNullAnyOf && anyOfTypes.length === 1
             ? undefined
             : anyOfTypes.map((item) => projectNode(item, true))
-          : types && types.length > 0
+          : types && types.length > 1
             ? types.map((type) => ({ type }))
             : undefined,
       ],

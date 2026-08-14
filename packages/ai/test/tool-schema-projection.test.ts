@@ -50,6 +50,36 @@ describe("tool schema projections", () => {
     })
   })
 
+  test("gemini keeps an optional object typed so its properties survive", () => {
+    // Shape an MCP server emits for an optional object parameter.
+    expect(
+      ToolSchemaProjection.gemini({
+        type: "object",
+        properties: {
+          cursor_theme: {
+            type: ["object", "null"],
+            properties: { theme_id: { type: "string" } },
+            required: ["theme_id"],
+          },
+          note: { type: ["string", "null"] },
+          either: { type: ["string", "number"] },
+        },
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        cursor_theme: {
+          type: "object",
+          nullable: true,
+          required: ["theme_id"],
+          properties: { theme_id: { type: "string" } },
+        },
+        note: { type: "string", nullable: true },
+        either: { anyOf: [{ type: "string" }, { type: "number" }] },
+      },
+    })
+  })
+
   test("openai keeps one flat object top-level schema", () => {
     expect(
       ToolSchemaProjection.openAI({

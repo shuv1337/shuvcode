@@ -465,8 +465,8 @@ describe("Gemini route", () => {
             anyOf: [{ type: "number" }, { type: "string" }],
           },
           maybe: {
+            type: "string",
             nullable: true,
-            anyOf: [{ type: "string" }],
           },
           nothing: {
             type: "null",
