@@ -26,10 +26,41 @@ import { stringWidth } from "../../util/string-width"
 import { parseFileLineRange, stripFileLineRange } from "../../prompt/parse"
 import { moveSelection, revealSelectionOffset } from "../../ui/select-controller"
 import { usePlugin } from "../../plugin/context"
+import type { PromptAutocompleteProvider } from "@opencode-ai/plugin/tui/context"
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
   visible: false | string
+}
+
+/**
+ * Builds the options a plugin trigger contributes. Every option settles on a select handler:
+ * a skill option attaches the skill, and a plain option completes its text.
+ */
+export function pluginTriggerOptions(
+  providers: ReadonlyArray<{ readonly provider: PromptAutocompleteProvider }>,
+  trigger: string,
+  request: Parameters<PromptAutocompleteProvider["options"]>[0],
+  select: {
+    skill: (trigger: string, value: string, skill: string) => void
+    text: (trigger: string, value: string) => void
+  },
+): AutocompleteOption[] {
+  return providers
+    .filter((item) => item.provider.trigger === trigger)
+    .flatMap((item) =>
+      item.provider.options(request).map((option) => {
+        const skill = option.skill
+        return {
+          display: option.display ?? item.provider.trigger + option.value,
+          value: option.value,
+          description: option.description,
+          onSelect: skill
+            ? () => select.skill(item.provider.trigger, option.value, skill)
+            : () => select.text(item.provider.trigger, option.value),
+        }
+      }),
+    )
 }
 
 export type AutocompleteOption = {
@@ -232,6 +263,21 @@ export function Autocomplete(props: {
     })
 
     if (part.type === "file" && part.path) frecency.updateFrecency(part.path)
+  }
+
+  /** Completes a plugin trigger token in place. Plain completions carry no prompt part to track. */
+  function insertTrigger(trigger: string, value: string) {
+    const input = props.input()
+    const currentCursorOffset = input.cursorOffset
+    const needsSpace = displayCharAt(props.value, currentCursorOffset) !== " "
+
+    input.cursorOffset = store.index
+    const startCursor = input.logicalCursor
+    input.cursorOffset = currentCursorOffset
+    const endCursor = input.logicalCursor
+
+    input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
+    input.insertText(trigger + value + (needsSpace ? " " : ""))
   }
 
   function createFilePart(
@@ -479,27 +525,20 @@ export function Autocomplete(props: {
 
   const pluginOptions = createMemo((): AutocompleteOption[] => {
     if (!store.visible || store.visible === "@" || store.visible === "/") return []
-    return plugins
-      .autocomplete()
-      .filter((item) => item.provider.trigger === store.visible)
-      .flatMap((item) =>
-        item.provider.options({ query: search(), sessionID: props.sessionID, location: location.current }).map((option) => ({
-          display: option.display ?? store.visible + option.value,
-          value: option.value,
-          description: option.description,
-          onSelect: option.skill
-            ? () =>
-                insertPart(
-                  option.value,
-                  {
-                    type: "skill",
-                    value: { id: Skill.ID.make(option.skill!), mention: { start: 0, end: 0, text: "" } },
-                  },
-                  item.provider.trigger,
-                )
-            : undefined,
-        })),
-      )
+    return pluginTriggerOptions(
+      plugins.autocomplete(),
+      store.visible,
+      { query: search(), sessionID: props.sessionID, location: location.current },
+      {
+        skill: (trigger, value, skill) =>
+          insertPart(
+            value,
+            { type: "skill", value: { id: Skill.ID.make(skill), mention: { start: 0, end: 0, text: "" } } },
+            trigger,
+          ),
+        text: insertTrigger,
+      },
+    )
   })
 
   const options = createMemo(() => {

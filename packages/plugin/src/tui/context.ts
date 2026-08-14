@@ -403,18 +403,19 @@ export interface UI {
 }
 
 export interface PromptAutocompleteOption {
-  /** Text inserted into the prompt, excluding the trigger. */
+  /** Text inserted into the prompt, excluding the trigger. Replaces the typed trigger token. */
   readonly value: string
   /** Optional display text. Defaults to trigger + value. */
   readonly display?: string
   readonly description?: string
-  /** Attach an indexed skill to the prompt when this option is selected. */
+  /** Attach an indexed skill to the prompt when this option is selected, instead of inserting text. */
   readonly skill?: string
 }
 
 export interface PromptAutocompleteProvider {
-  /** One non-whitespace character that opens this provider. */
+  /** One non-whitespace character that opens this provider. `@` and `/` are reserved by the prompt. */
   readonly trigger: string
+  /** Returns the matches for `query`. The provider owns its own filtering and ordering. */
   readonly options: (input: {
     readonly query: string
     readonly sessionID?: string

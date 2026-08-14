@@ -34,8 +34,23 @@ export type Dispose = () => Promise<void>
 // The provider's registration store, narrowed to what a plugin context needs:
 // route/slot registration lands there, but ordering and lifecycle stay owned
 // by the provider.
+
+// The prompt owns these: "@" mentions files, agents, and references, and "/" runs commands.
+const RESERVED_PROMPT_TRIGGERS = new Set(["@", "/"])
+
+/** Rejects an unusable prompt autocomplete trigger. Returns the reason, or undefined when usable. */
+export function promptTriggerError(trigger: string, taken: (trigger: string) => boolean) {
+  if (trigger.length !== 1 || /\s/.test(trigger))
+    return "Prompt autocomplete trigger must be one non-whitespace character"
+  if (RESERVED_PROMPT_TRIGGERS.has(trigger)) return `Prompt autocomplete trigger is reserved by the prompt: ${trigger}`
+  // Exclusivity spans every plugin: two providers on one trigger would merge their options
+  // silently and resolve the cursor by load order.
+  if (taken(trigger)) return `Prompt autocomplete trigger already registered: ${trigger}`
+}
 export type Registry = {
   has(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): boolean
+  /** Whether any plugin, not just the calling one, already claimed this name. */
+  taken(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): boolean
   set(kind: "routes", name: string, page: Page): void
   set(kind: "slots", name: string, slot: Slot): void
   set(kind: "markdown", name: string, render: MarkdownCodeBlockRenderer): void
@@ -196,12 +211,10 @@ export function createPluginContext(input: {
       prompt: {
         autocomplete: {
           register(provider) {
-            if (provider.trigger.length !== 1 || /\s/.test(provider.trigger)) {
-              throw new Error("Prompt autocomplete trigger must be one non-whitespace character")
-            }
-            if (input.registry.has("autocomplete", provider.trigger)) {
-              throw new Error(`Prompt autocomplete trigger already registered: ${provider.trigger}`)
-            }
+            const error = promptTriggerError(provider.trigger, (trigger) =>
+              input.registry.taken("autocomplete", trigger),
+            )
+            if (error) throw new Error(error)
             input.registry.set("autocomplete", provider.trigger, provider)
             return registration("autocomplete", provider.trigger)
           },

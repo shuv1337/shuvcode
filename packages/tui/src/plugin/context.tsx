@@ -122,12 +122,13 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
       owned,
       registry: {
         has: (kind, name) => Boolean(store.registrations[id]?.[kind][name]),
+        taken: (kind, name) =>
+          Object.values(store.registrations).some((registration) => Boolean(registration[kind][name])),
         set: (
           kind: "routes" | "slots" | "markdown" | "autocomplete",
           name: string,
           value: Page | Slot | MarkdownCodeBlockRenderer | PromptAutocompleteProvider,
-        ) =>
-          setStore("registrations", id, kind, name, () => value),
+        ) => setStore("registrations", id, kind, name, () => value),
         remove: (kind, name) =>
           setStore(
             "registrations",
@@ -461,9 +462,7 @@ export function PluginProvider(props: ParentProps<{ packages: PackageResolver; d
         markdown,
         autocomplete: () =>
           Object.entries(store.registrations).flatMap(([id, registration]) =>
-            registration.active
-              ? Object.values(registration.autocomplete).map((provider) => ({ id, provider }))
-              : [],
+            registration.active ? Object.values(registration.autocomplete).map((provider) => ({ id, provider })) : [],
           ),
         // Manual dialog toggles join the same chain as reconciles so a
         // toggle mid-reload cannot mix registrations across generations.
