@@ -1,10 +1,10 @@
-import { Component, createMemo, createSignal, startTransition } from "solid-js"
+import { Component, createEffect, createMemo, createSignal, startTransition } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/v2/dialog-v2"
 import { TabsV2 } from "@opencode-ai/ui/v2/tabs-v2"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
-import { SettingsGeneralV2 } from "./general"
+import { SettingsGeneral } from "./general"
 import { SettingsAppearanceV2 } from "./appearance"
 import { SettingsKeybinds } from "../settings-keybinds"
 import { SettingsNotificationsV2 } from "./notifications"
@@ -18,9 +18,8 @@ import { SettingsServerScope } from "../settings-server-picker"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
 import { useTabs } from "@/context/tabs"
-import { useServerSync } from "@/context/server-sync"
-import { useGlobal } from "@/context/global"
-import { ServerConnection } from "@/context/server"
+import { useGlobal, useServerCtx } from "@/context/global"
+import { ServerConnection, useServers } from "@/context/servers"
 import "./settings-v2.css"
 
 export const DialogSettings: Component<{
@@ -31,22 +30,40 @@ export const DialogSettings: Component<{
   const platform = usePlatform()
   const dialog = useDialog()
   const layout = useLayout()
+  const servers = useServers()
   const tabs = useTabs()
-  const serverSync = useServerSync()
   const global = useGlobal()
-  const currentServer = global.servers.list().find((server) => global.ensureServerCtx(server).sync === serverSync())
-  if (currentServer) global.settings.server.set(ServerConnection.key(currentServer))
   const [tab, setTab] = createSignal(props.defaultValue ?? "general")
-  const directory = createMemo(() => {
-    const server = global.settings.server.selected()
-    if (!server || serverSync() !== global.ensureServerCtx(server).sync) return
+  const server = createMemo(() => {
     const route = layout.route()
-    if (route.type === "dir-new-sesssion") return route.dir
+    switch (route.type) {
+      case "draft": {
+        const draft = tabs.store.find((item) => item.type === "draft" && item.draftID === route.draftID)
+        return servers.list.find((item) => ServerConnection.key(item) === draft?.server)
+      }
+      case "session":
+        return servers.list.find((item) => ServerConnection.key(item) === route.server)
+      case "home":
+        return servers.list.find((item) => ServerConnection.key(item) === layout.home.selection().server)
+    }
+  })
+  const serverCtx = useServerCtx(server)
+
+  createEffect(() => {
+    const current = server()
+    if (current) global.settings.server.set(ServerConnection.key(current))
+  })
+
+  const directory = createMemo(() => {
+    const selected = global.settings.server.selected()
+    const current = server()
+    if (!selected || !current || ServerConnection.key(selected) !== ServerConnection.key(current)) return
+    const route = layout.route()
     if (route.type === "draft") {
       const draft = tabs.store.find((item) => item.type === "draft" && item.draftID === route.draftID)
       return draft?.type === "draft" ? draft.directory : undefined
     }
-    if (route.type === "session") return serverSync().session.get(route.sessionId)?.location.directory
+    if (route.type === "session") return serverCtx()?.sync.session.get(route.sessionId)?.location.directory
     return undefined
   })
 
@@ -127,7 +144,7 @@ export const DialogSettings: Component<{
         </TabsV2.List>
 
         <TabsV2.Content value="general" class="settings-v2-panel">
-          <SettingsGeneralV2 sessionID={props.sessionID} />
+          <SettingsGeneral server={server()} sessionID={props.sessionID} />
         </TabsV2.Content>
         <TabsV2.Content value="appearance" class="settings-v2-panel">
           <SettingsAppearanceV2 />
@@ -136,7 +153,7 @@ export const DialogSettings: Component<{
           <SettingsNotificationsV2 />
         </TabsV2.Content>
         <TabsV2.Content value="shortcuts" class="settings-v2-panel">
-          <SettingsKeybinds v2 />
+          <SettingsKeybinds />
         </TabsV2.Content>
         <TabsV2.Content value="servers" class="settings-v2-panel">
           <SettingsServersV2 />

@@ -9,7 +9,7 @@ import { SDKProvider } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { decode64 } from "@/utils/base64"
 import { Schema } from "effect"
-import type { ServerConnection } from "@/context/server"
+import type { ServerConnection } from "@/context/servers"
 import { sessionHref } from "@/utils/session-route"
 import { useServerSync } from "@/context/server-sync"
 
@@ -44,17 +44,14 @@ export function DirectoryDataProvider(
 
   createResource(
     () => params.id,
-    (id) =>
-      serverSync()
-        .session.hydrate(id)
-        .catch(() => {}),
+    (id) => serverSync.session.hydrate(id).catch(() => {}),
   )
 
   createEffect(() => {
     const sessionID = params.id
     if (!sessionID) return
-    serverSync().session.pin(sessionID)
-    onCleanup(() => serverSync().session.unpin(sessionID))
+    serverSync.session.pin(sessionID)
+    onCleanup(() => serverSync.session.unpin(sessionID))
   })
 
   return (

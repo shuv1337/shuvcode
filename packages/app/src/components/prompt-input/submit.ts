@@ -8,7 +8,6 @@ import { batch, startTransition, type Accessor } from "solid-js"
 import { useTabs } from "@/context/tabs"
 import { useServerSync, type ServerSync } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
-import { useLayout } from "@/context/layout"
 import { useLocal, type ModelSelection } from "@/context/local"
 import { usePermission } from "@/context/permission"
 import { type ContextItem, type ImageAttachmentPart, type Prompt, type usePrompt } from "@/context/prompt"
@@ -232,7 +231,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const local = useLocal()
   const permission = usePermission()
   const prompt = input.prompt
-  const layout = useLayout()
   const language = useLanguage()
   const params = useParams()
   const [search] = useSearchParams<{ draftId?: string }>()
@@ -250,7 +248,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const abort = async () => {
     const sessionID = params.id
     if (!sessionID) return Promise.resolve()
-    serverSync().session.set("todo", sessionID, [])
+    serverSync.session.set("todo", sessionID, [])
 
     input.onAbort?.()
 
@@ -330,7 +328,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     const submissionSDK = sdk()
     const submissionSync = sync()
-    const submissionServerSync = serverSync()
+    const submissionServerSync = serverSync
     const submissionScope = submissionSDK.scope
     const projectDirectory = submissionSDK.directory
     const sessionID = params.id
@@ -340,10 +338,9 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const draftServer = draftID ? tabs.draft(draftID).server : undefined
     const capturePrompt = prompt.capture
     const localSession = local.session
-    const handoff = layout.handoff
     const resetWorktree = input.onNewSessionWorktreeReset
     const onSubmit = input.onSubmit
-    const permissionState = permission.currentServerState()
+    const permissionState = permission
     const shouldAutoAccept = isNewSession && input.autoAccept()
     const worktreeSelection = input.newSessionWorktree?.() || "main"
     const submissionKey = ScopedKey.from(
@@ -418,7 +415,6 @@ export function createPromptSubmit(input: PromptSubmitInput) {
               model: { providerID: currentModel.provider.id, modelID: currentModel.id },
               variant: variant ?? null,
             })
-            handoff.setTabs(base64Encode(sessionDirectory), session.id)
             if (draftID && draftServer) tabs.promoteDraft(draftID, { server: draftServer, sessionId: session.id })
             else navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`)
             submission.retarget(

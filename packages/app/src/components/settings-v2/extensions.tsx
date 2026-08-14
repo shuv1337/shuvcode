@@ -23,7 +23,7 @@ export const SettingsExtensionsV2: Component = () => {
   const serverSdk = useServerSDK()
   const serverSync = useServerSync()
   const mcps = createMemo<McpRowItem[]>(() => {
-    const configMcp = serverSync().data.config.mcp ?? {}
+    const configMcp = serverSync.data.config.mcp ?? {}
     return Object.entries(configMcp).map(([name, config]) => ({
       name,
       enabled: typeof config !== "object" || config === null || !("enabled" in config) || config.enabled !== false,
@@ -31,18 +31,16 @@ export const SettingsExtensionsV2: Component = () => {
   })
 
   const handleMcpToggle = (item: McpRowItem, checked: boolean) => {
-    const before = serverSync().data.config.mcp ?? {}
+    const before = serverSync.data.config.mcp ?? {}
     const config = before[item.name]
     if (typeof config !== "object" || config === null) return
     const next = { ...before, [item.name]: { ...config, enabled: checked } }
-    serverSync().set("config", "mcp", next)
-    void serverSync()
-      .updateConfig({ mcp: next })
-      .catch(() => serverSync().set("config", "mcp", before))
+    serverSync.set("config", "mcp", next)
+    void serverSync.updateConfig({ mcp: next }).catch(() => serverSync.set("config", "mcp", before))
   }
 
   const plugins = createMemo<PluginRowItem[]>(() => {
-    const raw = serverSync().data.config.plugin ?? []
+    const raw = serverSync.data.config.plugin ?? []
     return raw.map((item) => {
       const name = typeof item === "string" ? item : item[0]
       return { name }

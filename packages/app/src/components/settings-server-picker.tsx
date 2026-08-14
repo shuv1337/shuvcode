@@ -1,9 +1,8 @@
 import { type ParentProps, Show } from "solid-js"
 import { useGlobal } from "@/context/global"
 import { ModelsProvider } from "@/context/models"
-import { ServerConnection } from "@/context/server"
-import { ServerSDKProvider } from "@/context/server-sdk"
-import { ServerSyncProvider } from "@/context/server-sync"
+import { ServerProvider } from "@/context/server"
+import { ServerConnection } from "@/context/servers"
 
 export function SettingsServerScope(props: ParentProps<{ directory?: string }>) {
   const global = useGlobal()
@@ -20,10 +19,8 @@ export function SettingsServerScope(props: ParentProps<{ directory?: string }>) 
 
 export function SettingsServerDataScope(props: ParentProps<{ server: ServerConnection.Any; directory?: string }>) {
   return (
-    <ServerSDKProvider server={props.server}>
-      <ServerSyncProvider server={props.server}>
-        <ModelsProvider directory={props.directory}>{props.children}</ModelsProvider>
-      </ServerSyncProvider>
-    </ServerSDKProvider>
+    <ServerProvider conn={props.server}>
+      <ModelsProvider directory={props.directory}>{props.children}</ModelsProvider>
+    </ServerProvider>
   )
 }

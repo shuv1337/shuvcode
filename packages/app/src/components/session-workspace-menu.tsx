@@ -30,14 +30,14 @@ export function SessionWorkspaceMenu(props: {
   const openWorkspaces = useSettingsDialog("workspaces")
   const [store, setStore] = createStore({ selected: undefined as string | undefined })
   const [directories, setDirectories] = createSignal(workspaceDirectories(props.project))
-  const blocked = () => props.eligible === false || serverSync().session.data.session_working(props.sessionID)
+  const blocked = () => props.eligible === false || serverSync.session.data.session_working(props.sessionID)
   const currentWorkspace = () => directories().find((workspace) => containsDirectory(workspace, props.directory))
   const workspaces = () =>
     directories().filter((workspace) => pathKey(workspace) !== pathKey(currentWorkspace() ?? props.directory))
   const onOpenChange = (open: boolean) => {
     props.onOpenChange?.(open)
     if (!open) return
-    const sdk = serverSDK()
+    const sdk = serverSDK
     void sdk.api.worktree
       .refresh({ projectID: props.project.id })
       .then(() => sdk.api.worktree.list({ projectID: props.project.id }))
@@ -50,7 +50,7 @@ export function SessionWorkspaceMenu(props: {
   }
   const move = async (selection: "create" | string) => {
     if (store.selected || blocked()) return
-    const sdk = serverSDK()
+    const sdk = serverSDK
     const sessionID = props.sessionID
     setStore("selected", selection)
 
@@ -125,7 +125,7 @@ export function SessionWorkspaceMenu(props: {
   )
 }
 
-async function createWorkspace(project: Project, serverSDK: ReturnType<ReturnType<typeof useServerSDK>>) {
+async function createWorkspace(project: Project, serverSDK: ReturnType<typeof useServerSDK>) {
   const created = await serverSDK.api.worktree.create({
     projectID: project.id,
     strategy: "git",

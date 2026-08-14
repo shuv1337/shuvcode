@@ -90,7 +90,7 @@ export const ProjectSettingsExtensions: Component = () => {
     { initialValue: {} },
   )
   const globalMcpNames = createMemo(() =>
-    [...new Set([...Object.keys(serverSync().data.config.mcp ?? {}), ...Object.keys(serverMcp.latest)])].sort(),
+    [...new Set([...Object.keys(serverSync.data.config.mcp ?? {}), ...Object.keys(serverMcp.latest)])].sort(),
   )
   const projectMcpNames = createMemo(() => {
     const shared = new Set(globalMcpNames())
@@ -102,7 +102,7 @@ export const ProjectSettingsExtensions: Component = () => {
   })
   const mcpEnabled = (name: string) => sync().data.mcp?.[name]?.status === "connected"
 
-  const globalPlugins = createMemo(() => (serverSync().data.config.plugin ?? []).map(pluginName))
+  const globalPlugins = createMemo(() => (serverSync.data.config.plugin ?? []).map(pluginName))
   const projectPlugins = createMemo(() => {
     const shared = new Set(globalPlugins())
     return (sync().data.config.plugin ?? []).map(pluginName).filter((name) => !shared.has(name))

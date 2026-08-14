@@ -218,14 +218,6 @@ beforeAll(async () => {
     usePrompt: () => prompt,
   }))
 
-  mock.module("@/context/layout", () => ({
-    useLayout: () => ({
-      handoff: {
-        setTabs: () => undefined,
-      },
-    }),
-  }))
-
   mock.module("@/context/sdk", () => ({
     useSDK: () => {
       return () => ({
@@ -262,7 +254,7 @@ beforeAll(async () => {
   }))
 
   mock.module("@/context/server-sync", () => ({
-    useServerSync: () => () => {
+    useServerSync: () => {
       const server = activeServerSync
       return {
         session: {

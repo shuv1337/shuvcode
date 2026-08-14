@@ -61,7 +61,7 @@ export function createNewSessionWorkspaceController(input: {
     if (!project) return "main"
     return workspaceDefaultSelection(
       settings.workspaces.defaultDestination(),
-      settings.workspaces.lastUsed(serverSDK().scope, project.id),
+      settings.workspaces.lastUsed(serverSDK.scope, project.id),
     )
   })
   const value = createMemo(() =>
@@ -74,19 +74,19 @@ export function createNewSessionWorkspaceController(input: {
     }),
   )
   const projectRoot = createMemo(() => sync().project?.worktree ?? sdk().directory)
-  const localBranch = createMemo(() => serverSync().child(projectRoot())[0].vcs?.branch)
+  const localBranch = createMemo(() => serverSync.child(projectRoot())[0].vcs?.branch)
   const branch = createMemo(() =>
     resolveNewSessionBranch({
       worktree: value(),
       local: localBranch(),
-      worktreeBranch: (worktree) => serverSync().child(worktree)[0].vcs?.branch,
+      worktreeBranch: (worktree) => serverSync.child(worktree)[0].vcs?.branch,
     }),
   )
   const remember = (worktree = value()) => {
     const project = sync().project
     if (!project) return
     const local = worktree === "main" || sameDirectory(worktree, project.worktree)
-    settings.workspaces.setLastUsed(serverSDK().scope, project.id, local ? "local" : "workspace")
+    settings.workspaces.setLastUsed(serverSDK.scope, project.id, local ? "local" : "workspace")
   }
 
   return {

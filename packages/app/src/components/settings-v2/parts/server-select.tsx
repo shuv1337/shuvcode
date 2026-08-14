@@ -1,7 +1,7 @@
 import { Show, createMemo, type Component } from "solid-js"
 import { SelectV2 } from "@opencode-ai/ui/v2/select-v2"
 import { useGlobal } from "@/context/global"
-import { ServerConnection, serverName } from "@/context/server"
+import { ServerConnection, serverName } from "@/context/servers"
 
 const allServers = { type: "all" } as const
 type ServerOption = ServerConnection.Any | typeof allServers

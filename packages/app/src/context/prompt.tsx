@@ -3,7 +3,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { useParams, useSearchParams } from "@solidjs/router"
 import { createMemo, createResource, createRoot, getOwner, onCleanup } from "solid-js"
 import { requireServerKey } from "@/utils/session-route"
-import { ServerConnection } from "./server"
+import { ServerConnection } from "./servers"
 import { useServerSDK } from "./server-sdk"
 import { useSettings } from "./settings"
 import { useSDK } from "./sdk"
@@ -102,14 +102,14 @@ export const { use: usePrompt, provider: PromptProvider } = createSimpleContext(
 
     const owner = getOwner()
     const serverKey = () =>
-      params.serverKey ? requireServerKey(params.serverKey) : ServerConnection.key(serverSDK().server)
+      params.serverKey ? requireServerKey(params.serverKey) : ServerConnection.key(serverSDK.server)
     const scope = (): PromptScope =>
       search.draftId ? { draftID: search.draftId } : { dir: base64Encode(sdk().directory), id: params.id }
     const load = (scope: PromptScope, target?: { server?: ServerConnection.Key; scope: ServerScope }) => {
       const current = settings.general.newLayoutDesigns()
         ? selectPromptTab(tabs.store, scope, target?.server ?? serverKey())
         : undefined
-      if (current) return createTabPromptState(tabs, current, target?.scope ?? serverSDK().scope, scope)
+      if (current) return createTabPromptState(tabs, current, target?.scope ?? serverSDK.scope, scope)
 
       const key = target ? `${target.scope}:${scopeKey(scope)}` : scopeKey(scope)
       const existing = cache.get(key)
@@ -121,7 +121,7 @@ export const { use: usePrompt, provider: PromptProvider } = createSimpleContext(
 
       const entry = createRoot(
         (dispose) => ({
-          value: createPromptSession(target?.scope ?? serverSDK().scope, scope),
+          value: createPromptSession(target?.scope ?? serverSDK.scope, scope),
           dispose,
         }),
         owner,

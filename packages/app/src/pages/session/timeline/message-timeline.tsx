@@ -1469,7 +1469,7 @@ function MessageTimelineView(
                                 directory={sessionDirectory()}
                                 local={!workspaceSession()}
                                 branch={sync().data.vcs?.branch}
-                                baseBranch={serverSync().child(project().worktree)[0].vcs?.branch}
+                                baseBranch={serverSync.child(project().worktree)[0].vcs?.branch}
                                 diffs={sessionDiffs()}
                                 sessionID={id}
                                 moveEligible={props.workspaceMoveEligible}

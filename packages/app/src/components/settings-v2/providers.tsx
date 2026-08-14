@@ -97,7 +97,7 @@ export const SettingsProvidersV2: Component<{
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
   const isConfigCustom = (providerID: string) => {
-    const provider = serverSync().data.config.provider?.[providerID]
+    const provider = serverSync.data.config.provider?.[providerID]
     if (!provider) return false
     if (provider.npm !== "@ai-sdk/openai-compatible") return false
     if (!provider.models || Object.keys(provider.models).length === 0) return false
@@ -106,13 +106,13 @@ export const SettingsProvidersV2: Component<{
 
   const disconnect = async (providerID: string, name: string) => {
     const location = props.directory ? { directory: props.directory } : undefined
-    await serverSdk()
-      .api.integration.get({ integrationID: providerID, location })
+    await serverSdk.api.integration
+      .get({ integrationID: providerID, location })
       .then(async (integration) => {
         const credentials = integration.data?.connections.filter((item) => item.type === "credential") ?? []
         if (credentials.length === 0) throw new Error(`No removable credentials found for ${name}`)
         await Promise.all(
-          credentials.map((credential) => serverSdk().api.credential.remove({ credentialID: credential.id, location })),
+          credentials.map((credential) => serverSdk.api.credential.remove({ credentialID: credential.id, location })),
         )
         showToast({
           variant: "success",

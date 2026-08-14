@@ -10,8 +10,8 @@ export function useIntegrations(directory: Accessor<string | undefined>) {
   const query = createQuery(() => {
     const value = directory()
     return {
-      ...serverSync().queryOptions.integrations(value ? pathKey(value) : null),
-      enabled: serverSDK().connection.status() === "connected",
+      ...serverSync.queryOptions.integrations(value ? pathKey(value) : null),
+      enabled: serverSDK.connection.status() === "connected",
     }
   })
 

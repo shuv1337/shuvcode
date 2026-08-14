@@ -387,7 +387,7 @@ function ProviderConnection(props: {
     id: props.provider,
     name:
       providers.all().get(props.provider)?.name ??
-      serverSync().data.provider.all.get(props.provider)?.name ??
+      serverSync.data.provider.all.get(props.provider)?.name ??
       controller.integration()?.name ??
       props.provider,
   }))

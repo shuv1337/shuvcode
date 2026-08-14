@@ -37,10 +37,10 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const queryClient = useQueryClient()
   const language = useLanguage()
   const permission = usePermission()
-  const shellKey = () => [serverSDK().scope, sdk().directory, "shell"] as const
+  const shellKey = () => [serverSDK.scope, sdk().directory, "shell"] as const
   const shells = createQuery(() => ({
     queryKey: shellKey(),
-    enabled: !!params.id && serverSDK().connection.status() === "connected",
+    enabled: !!params.id && serverSDK.connection.status() === "connected",
     queryFn: () =>
       sdk()
         .api.shell.list({ location: { directory: sdk().directory } })
@@ -59,7 +59,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   )
 
   const questionRequest = createMemo((): FormInfo | undefined => {
-    return sessionQuestionForm(sync().data.session, serverSync().session.data.form, params.id)
+    return sessionQuestionForm(sync().data.session, serverSync.session.data.form, params.id)
   })
 
   const permissionRequest = createMemo((): PermissionRequest | undefined => {
@@ -77,7 +77,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const todos = createMemo((): Todo[] => {
     const id = params.id
     if (!id) return []
-    return serverSync().session.data.todo[id] ?? []
+    return serverSync.session.data.todo[id] ?? []
   })
 
   const done = createMemo(
@@ -87,13 +87,13 @@ export function createSessionComposerController(options?: { closeMs?: number | (
   const live = createMemo(() => sync().data.session_working(params.id ?? "") || blocked())
   const primary = () => {
     const id = params.id
-    return !!id && !serverSync().session.get(id)?.parentID
+    return !!id && !serverSync.session.get(id)?.parentID
   }
   const backgroundBlocking = createMemo(() => {
     if (!primary()) return []
     const id = params.id
     if (!id) return []
-    const assistant = (serverSync().session.data.session_message[id] ?? []).findLast(
+    const assistant = (serverSync.session.data.session_message[id] ?? []).findLast(
       (message) => message.type === "assistant" && message.time.completed === undefined,
     )
     if (assistant?.type !== "assistant") return []
@@ -116,7 +116,7 @@ export function createSessionComposerController(options?: { closeMs?: number | (
     const id = params.id
     if (!id) return []
     const blocking = backgroundBlocking()
-    const messages = serverSync().session.data.session_message[id] ?? []
+    const messages = serverSync.session.data.session_message[id] ?? []
     const completed = new Set(
       messages.flatMap((message) => {
         if (message.type !== "synthetic") return []
@@ -144,9 +144,9 @@ export function createSessionComposerController(options?: { closeMs?: number | (
         ]
       })
     })
-    const active = Object.values(serverSync().session.data.info).flatMap((info) => {
+    const active = Object.values(serverSync.session.data.info).flatMap((info) => {
       if (info?.parentID !== id) return []
-      if ((serverSync().session.data.session_status[info.id]?.type ?? "idle") === "idle") return []
+      if ((serverSync.session.data.session_status[info.id]?.type ?? "idle") === "idle") return []
       if (
         blocking.some(
           (item) => item.type === "subagent" && (item.id === info.id || (!!item.label && info.title === item.label)),

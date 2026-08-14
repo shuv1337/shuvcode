@@ -1,8 +1,8 @@
 import type { Config, Path, Project, ProviderAuthResponse } from "@/types"
 import { showToast } from "@/utils/toast"
 import { getFilename } from "@opencode-ai/core/util/path"
-import { batch, createMemo, getOwner, onCleanup, untrack } from "solid-js"
-import { createStore, produce, reconcile } from "solid-js/store"
+import { batch, getOwner, onCleanup, untrack } from "solid-js"
+import { createStore, reconcile } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import type { InitError } from "../pages/error"
 import { type ServerEvent, type ServerSDK } from "./server-sdk"
@@ -32,12 +32,9 @@ import { createRefreshQueue } from "./global-sync/queue"
 import { directoryKey } from "./global-sync/utils"
 import { pathKey, PathKey } from "@/utils/path-key"
 import { createDirSyncContext } from "./directory-sync"
-import { createSimpleContext } from "@opencode-ai/ui/context"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { createRefCountMap } from "@/utils/refcount"
-import { useGlobal } from "./global"
-import { ServerConnection, useServer } from "./server"
-import { retry } from "@opencode-ai/core/util/retry"
+import { ServerConnection } from "./servers"
 import type { ServerScope } from "@/utils/server-scope"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
 import { persisted } from "@/utils/persist"
@@ -57,6 +54,7 @@ import { createServerSession, type ServerSession } from "./server-session"
 import { createCatalogSync } from "./server-sync/catalog"
 import { createConnectionSync } from "./server-sync/connection"
 import { usePlatform } from "./platform"
+import { useServer } from "./server"
 
 export function shouldRefreshWorkspaceSessions(event: ServerEvent) {
   const type = event.current?.type ?? event.type
@@ -812,24 +810,12 @@ export function createServerSyncContext(serverSDK: ServerSDK) {
 
 export type ServerSync = ReturnType<typeof createServerSyncContext>
 
-export const { use: useServerSync, provider: ServerSyncProvider } = createSimpleContext({
-  name: "ServerSync",
-  // Returns an accessor so the resolved server can change reactively without
-  // re-instantiating the subtree (mirrors useServerSDK).
-  init: (props: { server?: ServerConnection.Any }) => {
-    const global = useGlobal()
-    const language = useLanguage()
-    const server = useServer()
-
-    return createMemo<ServerSync>(() => {
-      const conn = props.server ?? server.current
-      if (!conn) throw new Error(language.t("error.serverSDK.noServerAvailable"))
-      return global.ensureServerCtx(conn).sync
-    })
-  },
-})
+export const useServerSync = () => {
+  const server = useServer()
+  return server.ctx.sync
+}
 
 export function useQueryOptions() {
   const sync = useServerSync()
-  return createMemo(() => sync().queryOptions)
+  return sync.queryOptions
 }

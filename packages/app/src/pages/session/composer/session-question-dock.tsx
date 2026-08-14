@@ -71,7 +71,7 @@ export const SessionQuestionDock: Component<{ request: FormInfo; onSubmit: () =>
   const sdk = useSDK()
   const serverSDK = useServerSDK()
   const language = useLanguage()
-  const cacheKey = ScopedKey.from(serverSDK().scope, props.request.id)
+  const cacheKey = ScopedKey.from(serverSDK.scope, props.request.id)
 
   const questions = createMemo(() =>
     props.request.fields.filter(questionField).map((field) => ({

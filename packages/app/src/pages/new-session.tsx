@@ -11,7 +11,7 @@ import { createNewSessionWorkspaceController } from "./new-session/new-session-w
 import { useNewSessionCommands } from "./new-session/use-new-session-commands"
 
 /** The draft-only V2 session page. Submitting promotes the draft into a real session. */
-export default function NewSessionPage() {
+export default function NewSessionPage(props: { draftId: string }) {
   const settings = useSettings()
   const rightMount = useTitlebarRightMount()
   const [search] = useSearchParams<{ draftId?: string }>()
@@ -30,6 +30,7 @@ export default function NewSessionPage() {
   const draft = createNewSessionDraftController({
     worktree: workspace.selection.value,
     resetWorktree: workspace.selection.reset,
+    draftId: props.draftId,
     onSubmit: workspace.selection.remember,
   })
   const project = createPromptProjectController({

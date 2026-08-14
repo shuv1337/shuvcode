@@ -22,7 +22,7 @@ import { InlineServerSelect } from "./parts/server-select"
 import { useTabs } from "@/context/tabs"
 import { usePlatform } from "@/context/platform"
 import { clearWorkspaceTerminals } from "@/context/terminal"
-import { ServerConnection } from "@/context/server"
+import { ServerConnection } from "@/context/servers"
 import type { Project } from "@/types"
 import {
   containsDirectory,
@@ -56,9 +56,9 @@ export const SettingsWorkspacesV2: Component<{ activeDirectory?: string }> = (pr
     transaction: undefined as "confirm" | "running" | undefined,
   })
 
-  const workspaces = createMemo(() => workspaceInventory(serverSync().data.project))
+  const workspaces = createMemo(() => workspaceInventory(serverSync.data.project))
   const projects = createMemo(() =>
-    serverSync().data.project.filter((project) => managedWorkspaceDirectories(project).length > 0),
+    serverSync.data.project.filter((project) => managedWorkspaceDirectories(project).length > 0),
   )
   const projectName = (project: Project) => project.name || getFilename(project.worktree)
   const projectOptions = createMemo(() => [
@@ -70,8 +70,8 @@ export const SettingsWorkspacesV2: Component<{ activeDirectory?: string }> = (pr
   )
   const filtered = createMemo(() => filterWorkspaceInventory(workspaces(), selectedProject()))
   const captureDeleteContext = () => {
-    const sdk = serverSDK()
-    return { sdk, sync: serverSync(), server: ServerConnection.key(sdk.server), activeDirectory: props.activeDirectory }
+    const sdk = serverSDK
+    return { sdk, sync: serverSync, server: ServerConnection.key(sdk.server), activeDirectory: props.activeDirectory }
   }
   const loadSessions = async (context = captureDeleteContext()) => {
     const fetched = await listAllSessions(context.sdk.api.session, { order: "desc" })
@@ -81,7 +81,7 @@ export const SettingsWorkspacesV2: Component<{ activeDirectory?: string }> = (pr
     )
   }
   const sessionQuery = useQuery(() => ({
-    queryKey: [serverSDK().scope, null, "settings-workspace-sessions"] as const,
+    queryKey: [serverSDK.scope, null, "settings-workspace-sessions"] as const,
     queryFn: () => loadSessions(),
     refetchOnMount: "always",
   }))
