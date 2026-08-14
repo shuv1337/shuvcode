@@ -32,6 +32,11 @@ export function DirectoryDataProvider(
     if (props.server) return sessionHref(props.server, sessionID)
     return `/${slug()}/session/${sessionID}`
   }
+  const navigateToSession = async (sessionID: string) => {
+    const session = serverSync.session
+    await Promise.allSettled([session.lineage.resolve(sessionID), session.sync(sessionID)])
+    navigate(href(sessionID))
+  }
 
   createEffect(() => {
     // A draft lives at /new-session?draftId=… and has no directory segment to normalize.
@@ -61,7 +66,7 @@ export function DirectoryDataProvider(
           data={sync().data}
           directory={directory}
           sessionID={params.id}
-          onNavigateToSession={(sessionID: string) => navigate(href(sessionID))}
+          onNavigateToSession={navigateToSession}
           onSessionHref={href}
         >
           <LocalProvider>{props.children}</LocalProvider>
