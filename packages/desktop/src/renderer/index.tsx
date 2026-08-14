@@ -29,6 +29,7 @@ import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { windowFullscreen } from "./window-fullscreen"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
+import { MigrationStatus } from "./migration-status"
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
@@ -357,7 +358,7 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
   )
   const onboarding = Promise.withResolvers<void>()
 
-  function Inner() {
+  function DesktopEffects() {
     const cmd = useCommand()
     menuTrigger = (id) => cmd.trigger(id)
 
@@ -412,7 +413,10 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
                 onLoaded={onboarding.resolve}
                 serverKey={key}
               />
-              <Inner />
+              <DesktopEffects />
+              <Show when={initializationData(sidecar)} keyed>
+                {(server) => <MigrationStatus server={server} />}
+              </Show>
             </AppInterface>
           )}
         </Show>
