@@ -191,9 +191,7 @@ export const layer = Layer.effect(
       // preserving their prompt cache prefix. Calls are still rejected at execution.
       const tools = input.context.tools
       const system = [
-        agent.info.system
-          ? agent.info.system
-          : SessionSystemPrompt.make(tools.definitions.map((tool) => tool.name)),
+        agent.info.system ? agent.info.system : SessionSystemPrompt.make(tools.definitions.map((tool) => tool.name)),
         input.context.initial,
       ]
         .filter((part) => part.length > 0)
