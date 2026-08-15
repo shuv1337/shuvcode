@@ -767,7 +767,7 @@ const verifyEphemeralDeltas = (kind: FragmentKind) =>
     yield* admit(session, prompt)
     const bus = yield* Bus.Service
     const live = fixture.delta
-      ? yield* bus.subscribe(fixture.delta).pipe(Stream.take(2), Stream.runCollect, Effect.forkScoped)
+      ? yield* bus.subscribe(fixture.delta).pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
       : undefined
     yield* Effect.yieldNow
     yield* TestLLM.push(fixture.completeEvents)
@@ -785,7 +785,7 @@ const verifyEphemeralDeltas = (kind: FragmentKind) =>
       : []
     if (live) {
       const streamed = Array.from(yield* Fiber.join(live))
-      expect(streamed).toHaveLength(2)
+      expect(streamed).toHaveLength(1)
       expect(
         streamed
           .map((event) => {

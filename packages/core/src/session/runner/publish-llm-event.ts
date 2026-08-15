@@ -150,6 +150,10 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
       if (!current) return yield* Effect.die(new Error(`${name} delta before start: ${id}`))
       if (!current.pending) return undefined
       const now = yield* Clock.currentTimeMillis
+      if (!force && current.publishedAt === undefined) {
+        current.publishedAt = now
+        return undefined
+      }
       if (!force && current.publishedAt !== undefined && now - current.publishedAt < deltaBatchInterval)
         return undefined
       yield* delta(id, current.pending, current.ordinal)

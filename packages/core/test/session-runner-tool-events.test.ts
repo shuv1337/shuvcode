@@ -217,16 +217,13 @@ it.effect("batches text deltas and flushes pending text before the terminal even
       { discard: true },
     )
 
-    expect(published.filter((event) => event.type === "session.text.delta").map((event) => event.data)).toMatchObject([
-      { delta: "one" },
-    ])
+    expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(0)
     yield* TestClock.adjust("99 millis")
-    expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(1)
+    expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(0)
     yield* TestClock.adjust("1 millis")
     yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " four" }))
     expect(published.filter((event) => event.type === "session.text.delta").map((event) => event.data)).toMatchObject([
-      { delta: "one" },
-      { delta: " two three four" },
+      { delta: "one two three four" },
     ])
 
     yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " five" }))
@@ -253,7 +250,7 @@ it.effect("batches reasoning deltas and flushes pending reasoning before the ter
 
     expect(
       published.filter((event) => event.type === "session.reasoning.delta").map((event) => event.data),
-    ).toMatchObject([{ delta: "one" }, { delta: " two three" }])
+    ).toMatchObject([{ delta: "one two three" }])
     expect(published.slice(-2).map((event) => event.type)).toEqual([
       "session.reasoning.delta",
       "session.reasoning.ended.1",
