@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { rm } from "fs/promises"
+import { mkdir, rm } from "fs/promises"
 import path from "path"
 import { Script } from "@opencode-ai/script"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
@@ -99,6 +99,7 @@ for (const item of targets) {
   }
   const target = targetName(item)
   const name = target.replace(binary, "cli")
+  const executablePath = await compileExecutable(item)
   console.log(`building ${name}`)
   const result = await Bun.build({
     entrypoints: ["./src/index.ts"],
@@ -115,6 +116,7 @@ for (const item of targets) {
       autoloadTsconfig: true,
       autoloadPackageJson: true,
       target: target.replace(binary, "bun") as Bun.Build.CompileTarget,
+      executablePath,
       outfile: path.join(outdir, name, "bin", binary),
       execArgv: [`--user-agent=${binary}/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
@@ -152,6 +154,28 @@ for (const item of targets) {
     ),
   )
   await verifyArtifact(path.join(outdir, name))
+}
+
+async function compileExecutable(item: (typeof allTargets)[number]) {
+  const release = process.env.BUN_COMPILE_RELEASE
+  if (!release) return
+
+  const platform = item.os === "win32" ? "windows" : item.os
+  const name = ["bun", platform, item.arch, item.abi, item.avx2 === false ? "baseline" : undefined]
+    .filter(Boolean)
+    .join("-")
+  const cache = path.join(outdir, ".bun", release)
+  const executable = path.join(cache, name, item.os === "win32" ? "bun.exe" : "bun")
+  if (await Bun.file(executable).exists()) return executable
+
+  await mkdir(cache, { recursive: true })
+  const archive = path.join(cache, `${name}.zip`)
+  const response = await fetch(`https://github.com/oven-sh/bun/releases/download/${release}/${name}.zip`)
+  if (!response.ok) throw new Error(`Failed to download ${name} from Bun release ${release}: ${response.status}`)
+  await Bun.write(archive, response)
+  await $`unzip -oq ${archive} -d ${cache}`
+  await rm(archive)
+  return executable
 }
 
 function targetName(item: (typeof allTargets)[number]) {

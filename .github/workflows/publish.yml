@@ -81,6 +81,8 @@ jobs:
           fetch-tags: true
 
       - uses: ./.github/actions/setup-bun
+        with:
+          bun-version: canary # Bun 1.4 until its stable release is published
 
       - name: Setup git committer
         id: committer
@@ -102,6 +104,7 @@ jobs:
         id: build
         run: ./packages/cli/script/build.ts ${{ (github.ref_name == 'beta' && '--sourcemaps') || '' }}
         env:
+          BUN_COMPILE_RELEASE: canary
           OPENCODE_VERSION: ${{ needs.version.outputs.version }}
           OPENCODE_RELEASE: ${{ needs.version.outputs.release }}
           GH_REPO: ${{ needs.version.outputs.repo }}
