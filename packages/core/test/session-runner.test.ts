@@ -413,7 +413,8 @@ const execution = Layer.effect(
       active: coordinator.active,
       resume: coordinator.run,
       wake: coordinator.wake,
-      interrupt: coordinator.interrupt,
+      wakeActive: coordinator.wakeActive,
+      interrupt: (sessionID) => coordinator.interrupt(sessionID),
       awaitIdle: coordinator.awaitIdle,
     })
   }),
@@ -1380,6 +1381,44 @@ describe("SessionRunnerLLM", () => {
       expect(requests).toHaveLength(2)
       expect(requests.map(messageRoles).at(1)?.slice(0, 3)).toEqual(["user", "assistant", "tool"])
       expect(yield* session.inbox(sessionID)).toEqual([])
+    }),
+  )
+
+  it.effect("keeps queued input parked across a mid-turn move", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      yield* admit(session, "Echo before moving")
+      yield* TestLLM.push(
+        TestLLM.tool("call-move", "echo", { text: "moving" }),
+        TestLLM.text("Done", "text-after-move"),
+        TestLLM.text("Handled queue", "text-after-queue"),
+      )
+      const tools = yield* blockTools()
+      const run = yield* session.resume(sessionID).pipe(Effect.forkChild)
+      yield* tools.started
+      yield* session.prompt({ sessionID, text: "Queued for later", delivery: "queue", resume: false })
+      yield* SessionInbox.admit(db, bus, {
+        id: SessionMessage.ID.create(),
+        sessionID,
+        item: {
+          type: "move",
+          payload: {
+            location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
+            projectID: Project.ID.global,
+          },
+          delivery: "steer",
+        },
+      })
+
+      yield* tools.release
+      yield* Fiber.join(run)
+
+      // The resumed turn absorbs steers only; queued input waits for the turn to end.
+      expect(requests).toHaveLength(3)
+      expect(userTexts(requests[1])).not.toContain("Queued for later")
+      expect(userTexts(requests[2])).toContain("Queued for later")
     }),
   )
 
@@ -3085,6 +3124,24 @@ describe("SessionRunnerLLM", () => {
       expect(userTexts(requests[0])).toEqual(["Start working"])
       expect(userTexts(requests[1])).toEqual(["Start working", "Queue first"])
       expect(userTexts(requests[2])).toEqual(["Start working", "Queue first", "Queue second"])
+    }),
+  )
+
+  it.effect("stops a steer-scoped drain before queued input", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const { db } = yield* Database.Service
+      yield* session.prompt({ sessionID, text: "Queue for later", delivery: "queue", resume: false })
+      yield* session.prompt({ sessionID, text: "Steer now", resume: false })
+      yield* TestLLM.push(TestLLM.stop())
+
+      const runner = yield* SessionRunner.Service
+      yield* runner.drain({ sessionID, force: false, promotable: "steer" })
+
+      expect(requests).toHaveLength(1)
+      expect(userTexts(requests[0])).toEqual(["Steer now"])
+      expect(yield* SessionInbox.has(db, sessionID, "steer")).toBe(false)
+      expect(yield* SessionInbox.has(db, sessionID, "queue")).toBe(true)
     }),
   )
 
