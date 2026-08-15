@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import Notifications from "../../../../src/feature-plugins/system/notifications"
-import type { OpenCodeEvent, PermissionAsked, QuestionAsked } from "@opencode-ai/client"
+import type { OpenCodeEvent, PermissionAsked } from "@opencode-ai/client"
 import type { AttentionNotifyOptions, Context } from "@opencode-ai/plugin/tui/context"
 
 type Session = { id: string; title: string; parentID?: string }
@@ -72,14 +72,6 @@ async function setup() {
   }
 }
 
-function question(id: string, sessionID = "session"): QuestionAsked["data"] {
-  return {
-    id,
-    sessionID,
-    questions: [],
-  }
-}
-
 function form(id: string, sessionID = "session"): Extract<OpenCodeEvent, { type: "form.created" }>["data"]["form"] {
   return {
     id,
@@ -137,13 +129,6 @@ function executionFailed(id: string, sessionID = "session"): OpenCodeEvent {
   }
 }
 
-const questionNotification: AttentionNotifyOptions = {
-  title: "Demo session",
-  message: "Question needs input",
-  notification: { when: "blurred" },
-  sound: { name: "question", when: "always" },
-}
-
 const formNotification: AttentionNotifyOptions = {
   title: "Input requested",
   message: "Input needs response",
@@ -169,7 +154,7 @@ const permissionNotification: AttentionNotifyOptions = {
 }
 
 describe("internal notifications TUI plugin", () => {
-  test("notifies for form, question, and permission requests with blurred notifications and always-on sounds", async () => {
+  test("notifies for form and permission requests with blurred notifications and always-on sounds", async () => {
     const harness = await setup()
 
     harness.emit({
@@ -178,10 +163,9 @@ describe("internal notifications TUI plugin", () => {
       type: "form.created",
       data: { form: { ...form("form-1"), title: "Confirm deployment" } },
     })
-    harness.emit({ id: "event-2", created: 0, type: "question.asked", data: question("question-1") })
     harness.emit({ id: "event-3", created: 0, type: "permission.asked", data: permission("permission-1") })
 
-    expect(harness.notifications).toEqual([titledFormNotification, questionNotification, permissionNotification])
+    expect(harness.notifications).toEqual([titledFormNotification, permissionNotification])
   })
 
   test("notifies for global forms once the TUI can render them", async () => {
@@ -197,7 +181,7 @@ describe("internal notifications TUI plugin", () => {
     expect(harness.notifications).toEqual([globalFormNotification])
   })
 
-  test("dedupes pending forms, questions, and permissions until they are resolved", async () => {
+  test("dedupes pending forms and permissions until they are resolved", async () => {
     const harness = await setup()
 
     harness.emit({ id: "event-1", created: 0, type: "form.created", data: { form: form("form-1") } })
@@ -209,16 +193,6 @@ describe("internal notifications TUI plugin", () => {
       data: { sessionID: "session", id: "form-1" },
     })
     harness.emit({ id: "event-4", created: 0, type: "form.created", data: { form: form("form-1") } })
-
-    harness.emit({ id: "event-5", created: 0, type: "question.asked", data: question("question-1") })
-    harness.emit({ id: "event-6", created: 0, type: "question.asked", data: question("question-1") })
-    harness.emit({
-      id: "event-7",
-      created: 0,
-      type: "question.replied",
-      data: { sessionID: "session", requestID: "question-1", answers: [] },
-    })
-    harness.emit({ id: "event-8", created: 0, type: "question.asked", data: question("question-1") })
 
     harness.emit({ id: "event-9", created: 0, type: "permission.asked", data: permission("permission-1") })
     harness.emit({ id: "event-10", created: 0, type: "permission.asked", data: permission("permission-1") })
@@ -233,8 +207,6 @@ describe("internal notifications TUI plugin", () => {
     expect(harness.notifications).toEqual([
       formNotification,
       formNotification,
-      questionNotification,
-      questionNotification,
       permissionNotification,
       permissionNotification,
     ])

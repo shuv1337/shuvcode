@@ -2,22 +2,22 @@ export * as Tool from "./tool.js"
 export { CallID, Content, Error, FileContent, PolicyDeniedError, TextContent } from "@opencode-ai/schema/tool"
 export type { Context, Metadata, Options, Result } from "@opencode-ai/schema/tool"
 
-import type { ToolCall, ToolDefinition } from "@opencode-ai/ai"
+import { ToolDefinition, type ToolCall } from "@opencode-ai/ai"
 import { Tool } from "@opencode-ai/schema/tool"
 import { Context, Effect, Layer, Schema, Scope, Semaphore } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import type { Agent } from "./agent"
-import { CodeModeCatalog } from "./codemode/catalog"
-import { CodeModeTool } from "./codemode/tool"
-import { Config } from "./config"
-import { ConfigCodeMode } from "./config/codemode"
-import { Image } from "./image"
-import { Permission } from "./permission"
-import { PluginHooks } from "./plugin/hooks"
-import { SessionMessage } from "./session/message"
-import { SessionSchema } from "./session/schema"
-import { definition, execute, normalizeContent } from "./tool/runtime"
-import { Wildcard } from "./util/wildcard"
+import type { Agent } from "./agent.js"
+import { CodeModeCatalog } from "./codemode/catalog.js"
+import { CodeModeTool } from "./codemode/tool.js"
+import { Config } from "./config.js"
+import { ConfigCodeMode } from "./config/codemode.js"
+import { Image } from "./image.js"
+import { Permission } from "./permission.js"
+import { PluginHooks } from "./plugin/hooks.js"
+import { SessionMessage } from "./session/message.js"
+import { SessionSchema } from "./session/schema.js"
+import { definition, execute, normalizeContent } from "./tool/runtime.js"
+import { Wildcard } from "./util/wildcard.js"
 import type { SessionPolicy } from "@opencode-ai/schema/session-policy"
 
 const MAX_METADATA_BYTES = 64 * 1024
@@ -232,6 +232,19 @@ const layer = Layer.effect(
           }),
         )
       if (entries.length === 0) return
+      yield* Effect.forEach(
+        entries,
+        (entry) =>
+          Effect.try({
+            try: () => ToolDefinition.make(definition(entry.tool)),
+            catch: (error) =>
+              new RegistrationError({
+                name: entry.key,
+                message: `Invalid tool definition ${entry.key}: ${error instanceof Error ? error.message : String(error)}`,
+              }),
+          }),
+        { discard: true },
+      )
       yield* Effect.uninterruptible(
         lock.withPermit(
           Effect.gen(function* () {

@@ -3,9 +3,9 @@ import { define } from "@opencode-ai/plugin/effect/plugin"
 import { Effect, Semaphore, Stream } from "effect"
 import { Bus } from "../../bus"
 import { Integration } from "../../integration"
-import { Provider } from "../../provider"
-import { AnthropicClaudeCode } from "./anthropic-claude-code"
-import { AnthropicClaudeCodeProxy } from "./anthropic-claude-code-proxy"
+import { Provider } from "../../provider.js"
+import { AnthropicClaudeCode } from "./anthropic-claude-code.js"
+import { AnthropicClaudeCodeProxy } from "./anthropic-claude-code-proxy.js"
 
 const claudeProMax = {
   integrationID: AnthropicClaudeCode.integrationID,
@@ -15,8 +15,8 @@ const claudeProMax = {
     label: "Claude Pro/Max",
   },
   authorize: () =>
-    Effect.sync(() => {
-      const { verifier, challenge } = AnthropicClaudeCode.pkce()
+    Effect.promise(async () => {
+      const { verifier, challenge } = await AnthropicClaudeCode.pkce()
       return {
         // Anthropic's callback page displays the code rather than redirecting
         // to a loopback port, so this cannot be "auto" like ChatGPT's.

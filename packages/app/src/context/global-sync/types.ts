@@ -2,7 +2,6 @@ import type { Agent, Config, LspStatus, Message, Part, Path, Todo, VcsInfo } fro
 import type {
   FileDiffInfo,
   PermissionRequest,
-  QuestionRequest,
   ReferenceInfo,
   SessionInfo,
   SessionStatus,
@@ -49,9 +48,6 @@ export type State = {
   }
   permission: {
     [sessionID: string]: PermissionRequest[]
-  }
-  question: {
-    [sessionID: string]: QuestionRequest[]
   }
   mcp_ready: boolean
   mcp: {

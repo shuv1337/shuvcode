@@ -1,4 +1,4 @@
-export * as AnthropicClaudeCode from "./anthropic-claude-code"
+export * as AnthropicClaudeCode from "./anthropic-claude-code.js"
 
 // Claude Pro/Max subscription support.
 //
@@ -24,9 +24,8 @@ export * as AnthropicClaudeCode from "./anthropic-claude-code"
 // `x-api-key`. The middleware simply moves that value to `Authorization:
 // Bearer`. Platform owns the lifecycle; this file owns the disguise.
 
-import { createHash, randomBytes } from "node:crypto"
 import type { TransportDef } from "@opencode-ai/ai/route"
-import { Stream } from "effect"
+import { Effect, Stream } from "effect"
 import { Integration } from "../../integration"
 
 export const methodID = Integration.MethodID.make("claude-pro-max")
@@ -70,11 +69,18 @@ export const isSubscription = (credential: CredentialLike | undefined) => {
 
 export type Tokens = { access: string; refresh: string; expires: number }
 
-const base64url = (buf: Buffer) => buf.toString("base64url").replace(/=+$/, "")
+const base64url = (buf: Uint8Array) =>
+  btoa(String.fromCharCode(...buf))
+    .replace(/=+$/, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
 
-export const pkce = () => {
-  const verifier = base64url(randomBytes(32))
-  return { verifier, challenge: base64url(createHash("sha256").update(verifier).digest()) }
+export const pkce = async () => {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  const verifier = base64url(bytes)
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
+  return { verifier, challenge: base64url(new Uint8Array(digest)) }
 }
 
 export const authorizeURL = (challenge: string, state: string) =>
@@ -321,9 +327,12 @@ export function transport<Body, Prepared>(
   return {
     id: `${base.id}/claude-code`,
     prepare: (input) => base.prepare({ ...input, body: shapeRequestBody(input.body, warn) as Body }),
-    frames: (prepared, request, runtime) =>
-      base
-        .frames(prepared, request, runtime)
-        .pipe(Stream.map((frame) => (typeof frame === "string" ? restoreToolNames(frame) : frame))),
+    execute: (prepared, request, runtime, options) =>
+      base.execute(prepared, request, runtime, options).pipe(
+        Effect.map((execution) => ({
+          ...execution,
+          frames: execution.frames.pipe(Stream.map((frame) => (typeof frame === "string" ? restoreToolNames(frame) : frame))),
+        })),
+      ),
   }
 }

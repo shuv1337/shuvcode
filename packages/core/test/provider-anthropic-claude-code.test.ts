@@ -191,7 +191,7 @@ describe("AnthropicClaudeCode.transport", () => {
   const base = {
     id: "http-json",
     prepare: (input: any) => Effect.succeed({ seen: input.body }),
-    frames: () => Stream.fromIterable(['{"name": "Bash"}', '{"name": "mcp_x"}']),
+    execute: () => Effect.succeed({ frames: Stream.fromIterable(['{"name": "Bash"}', '{"name": "mcp_x"}']) }),
   }
 
   test("shapes the request body before the protocol encodes it", async () => {
@@ -205,9 +205,8 @@ describe("AnthropicClaudeCode.transport", () => {
 
   test("restores opencode tool names on the response frames", async () => {
     const wrapped = AnthropicClaudeCode.transport(base as any)
-    const frames = await Effect.runPromise(
-      Stream.runCollect(wrapped.frames({} as any, {} as any, {} as any)) as any,
-    )
+    const execution: any = await Effect.runPromise(wrapped.execute({} as any, {} as any, {} as any) as any)
+    const frames = await Effect.runPromise(Stream.runCollect(execution.frames) as any)
     expect(Array.from(frames as any)).toEqual(['{"name": "bash"}', '{"name": "mcp_x"}'])
   })
 

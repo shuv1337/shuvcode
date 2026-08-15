@@ -17,9 +17,9 @@ export default Runtime.handler(Commands.commands.mini, (input) =>
       mismatch: "replace",
     })
     const config = yield* Config.Service
+    const global = yield* Global.Service
     const resolved = resolve(yield* config.get(), { terminalSuspend: process.platform !== "win32" })
     const fileSystem = yield* FileSystem.FileSystem
-    const global = yield* Global.Service
     const serviceContext = Context.make(FileSystem.FileSystem, fileSystem).pipe(Context.add(Global.Service, global))
     const runServicePromise = Effect.runPromiseWith(serviceContext)
     const service = server.service
@@ -42,6 +42,7 @@ export default Runtime.handler(Commands.commands.mini, (input) =>
         config: {
           update: (update) => runServicePromise(config.update(update)),
         },
+        paths: { home: global.home, state: global.state, log: global.log },
       }),
     )
   }),

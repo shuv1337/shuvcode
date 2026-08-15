@@ -1,7 +1,6 @@
 export * as ServerProcess from "./process"
 
 import { NodeHttpServer, NodeHttpServerRequest } from "@effect/platform-node"
-import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { ServiceStatus } from "@opencode-ai/protocol/groups/health"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
 import { Cause, Context, Deferred, Effect, Exit, Layer, Option, Ref, Schema, Scope } from "effect"
@@ -31,6 +30,8 @@ type App = Effect.Effect<
   HttpServerRequest.HttpServerRequest | Scope.Scope
 >
 
+export type Transform = (app: App) => App
+
 const errorResponseLogger = HttpMiddleware.make((app) =>
   HttpMiddleware.logger(
     Effect.tap(app, (response) =>
@@ -42,6 +43,7 @@ const errorResponseLogger = HttpMiddleware.make((app) =>
 export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
   options: ServerOptions,
   lifecycle?: Lifecycle<E, R>,
+  transform?: Transform,
 ) {
   const password = options.password
   if (!password) return yield* Effect.fail(new Error("Missing server password"))
@@ -98,12 +100,8 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
       ).pipe(Layer.provide(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )
-    if (lifecycle) {
-      yield* installRestartContinuity(Context.get(context, SessionRestart.Service)).pipe(
-        Effect.provideService(Scope.Scope, applicationScope),
-      )
-    }
-    yield* Ref.set(application, Option.some(Context.get(context, HttpRouter.HttpRouter).asHttpEffect()))
+    const app = Context.get(context, HttpRouter.HttpRouter).asHttpEffect()
+    yield* Ref.set(application, Option.some(transform ? transform(app) : app))
     yield* status.ready
     return { address: bound.http.address, shutdown: Deferred.await(shutdown) }
   }).pipe(
@@ -249,13 +247,6 @@ function unavailable(status: Status.State) {
   )
 }
 
-/**
- * The managed server owns restart continuity: it resumes Sessions the previous server suspended and
- * suspends its own active Sessions on graceful shutdown. Suspension runs while the drains are still
- * alive: connections close first, this finalizer runs next, and Session execution teardown follows.
- */
-const installRestartContinuity = Effect.fnUntraced(function* (restart: SessionRestart.Interface) {
-  yield* Effect.forkScoped(restart.resumeSuspendedSessions)
-  // Registered after the fork so suspension observes still-running resumed drains during teardown.
-  yield* Effect.addFinalizer(() => restart.suspendActiveSessions)
-})
+// Boot deliberately performs no execution recovery: an unreleased claim from a
+// dead process stays inert and no provider work is replayed. Continuing an
+// interrupted turn is a user-initiated prompt, not a start-up side effect.

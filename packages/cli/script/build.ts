@@ -7,7 +7,8 @@ import { Script } from "@opencode-ai/script"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import type { BunPlugin } from "bun"
 import pkg from "../package.json"
-import { modelsData } from "./generate"
+import { buildAppArchive } from "./app-assets"
+import { verifyArtifact, verifySimulationGraph } from "./verify-artifact"
 
 const dir = path.resolve(import.meta.dirname, "..")
 const binary = "shuvcode"
@@ -22,7 +23,9 @@ await rm(outdir, { recursive: true, force: true })
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
+const requestedTarget = process.argv.find((arg) => arg.startsWith("--target="))?.slice("--target=".length)
 const skipInstall = process.argv.includes("--skip-install")
+const skipWebUi = process.argv.includes("--skip-web-ui")
 const solidPlugin = createSolidTransformPlugin()
 
 const allTargets: {
@@ -45,17 +48,45 @@ const allTargets: {
   { os: "win32", arch: "x64", avx2: false },
 ]
 
-const targets = singleFlag
-  ? allTargets.filter((item) => {
-      if (item.os !== process.platform || item.arch !== process.arch) return false
-      if (item.avx2 === false) return baselineFlag
-      return item.abi === undefined
-    })
-  : allTargets
+const targets =
+  requestedTarget !== undefined
+    ? allTargets.filter((item) => targetName(item) === requestedTarget)
+    : singleFlag
+      ? allTargets.filter((item) => {
+          if (item.os !== process.platform || item.arch !== process.arch) return false
+          if (item.avx2 === false) return baselineFlag
+          return item.abi === undefined
+        })
+      : allTargets
+if (!targets.length) throw new Error(`Unknown build target: ${requestedTarget}`)
 
 if (!skipInstall) await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
+const appArchive = await buildAppArchive(Script.channel, { skipBuild: skipWebUi })
+const appAssetsPlugin: BunPlugin = {
+  name: "opencode-app-assets",
+  setup(build) {
+    build.onResolve({ filter: /^virtual:opencode-app-assets$/ }, () => ({
+      path: "opencode-app-assets",
+      namespace: "opencode",
+    }))
+    build.onLoad({ filter: /^opencode-app-assets$/, namespace: "opencode" }, () => ({
+      loader: "js",
+      contents: `export default ${JSON.stringify(appArchive)}`,
+    }))
+  },
+}
 
 for (const item of targets) {
+  const simulationInputs = new Set<string>()
+  const simulationGraphPlugin: BunPlugin = {
+    name: "opencode-simulation-graph",
+    setup(build) {
+      build.onLoad(
+        { filter: /packages[/\\]simulation[/\\]src[/\\](frontend[/\\](simulation|server)|control-server)\.ts$/ },
+        (args) => void simulationInputs.add(args.path),
+      )
+    },
+  }
   const parcelWatcherPackage = `@parcel/watcher-${item.os}-${item.arch}${item.os === "linux" ? `-${item.abi ?? "glibc"}` : ""}`
   const parcelWatcherPlugin: BunPlugin = {
     name: "parcel-watcher-binding",
@@ -66,21 +97,13 @@ for (const item of targets) {
       }))
     },
   }
-  const target = [
-    binary,
-    item.os === "win32" ? "windows" : item.os,
-    item.arch,
-    item.avx2 === false ? "baseline" : undefined,
-    item.abi,
-  ]
-    .filter(Boolean)
-    .join("-")
+  const target = targetName(item)
   const name = target
   console.log(`building ${name}`)
   const result = await Bun.build({
     entrypoints: ["./src/index.ts"],
     tsconfig: "./tsconfig.json",
-    plugins: [solidPlugin, parcelWatcherPlugin],
+    plugins: [appAssetsPlugin, solidPlugin, parcelWatcherPlugin, simulationGraphPlugin],
     external: ["node-gyp"],
     format: "esm",
     minify: true,
@@ -99,7 +122,6 @@ for (const item of targets) {
     define: {
       OPENCODE_VERSION: `'${Script.version}'`,
       OPENCODE_CLI_NAME: `'${binary}'`,
-      OPENCODE_MODELS_DEV: modelsData,
       OPENCODE_CHANNEL: `'${Script.channel}'`,
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "undefined",
       // FFF_LIBC selects the fff native lib variant: "musl" or "gnu".
@@ -112,6 +134,7 @@ for (const item of targets) {
     for (const log of result.logs) console.error(log)
     process.exit(1)
   }
+  verifySimulationGraph(simulationInputs)
 
   await Bun.write(
     path.join(outdir, name, "package.json"),
@@ -128,4 +151,17 @@ for (const item of targets) {
       2,
     ),
   )
+  await verifyArtifact(path.join(outdir, name))
+}
+
+function targetName(item: (typeof allTargets)[number]) {
+  return [
+    binary,
+    item.os === "win32" ? "windows" : item.os,
+    item.arch,
+    item.avx2 === false ? "baseline" : undefined,
+    item.abi,
+  ]
+    .filter(Boolean)
+    .join("-")
 }

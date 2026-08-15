@@ -49,7 +49,9 @@ const client = LLMClient.layer.pipe(
   Layer.provide(
     Layer.succeed(
       RequestExecutor.Service,
-      RequestExecutor.Service.of({ execute: () => Effect.die("Unexpected HTTP request") }),
+      RequestExecutor.Service.of({
+        execute: () => Effect.die("Unexpected HTTP request"),
+      }),
     ),
   ),
 )
@@ -275,6 +277,73 @@ it.effect("projects replay metadata onto AI SDK prompt parts", () =>
   }),
 )
 
+it.effect("preserves tool result content in AI SDK prompts", () =>
+  Effect.gen(function* () {
+    const aisdk = yield* AISDK.Service
+    yield* aisdk.hook.sdk((event) => {
+      event.sdk = { languageModel: () => ({ provider: event.model.providerID }) }
+    })
+
+    const resolved = yield* aisdk.model(model("test-ai-sdk"))
+    const prepared = yield* compileRequest(
+      LLM.request({
+        model: resolved,
+        messages: [
+          Message.tool({
+            id: "call_1",
+            name: "read",
+            result: {
+              type: "content",
+              value: [
+                { type: "text", text: "attachments" },
+                { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png", name: "pixel.png" },
+                {
+                  type: "file",
+                  uri: "data:application/pdf;charset=utf-8;base64,JVBERg==",
+                  mime: "application/pdf",
+                  name: "document.pdf",
+                },
+                { type: "file", uri: "data:audio/mpeg;base64,SUQz", mime: "audio/mpeg", name: "clip.mp3" },
+                { type: "file", uri: "https://example.com/pixel.png", mime: "image/png" },
+                { type: "file", uri: "https://example.com/document.pdf", mime: "application/pdf" },
+              ],
+            },
+          }),
+        ],
+      }),
+    )
+
+    expect(prepared.body.prompt).toEqual([
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            toolName: "read",
+            output: {
+              type: "content",
+              value: [
+                { type: "text", text: "attachments" },
+                { type: "image-data", data: "AAAA", mediaType: "image/png" },
+                {
+                  type: "file-data",
+                  data: "JVBERg==",
+                  mediaType: "application/pdf",
+                  filename: "document.pdf",
+                },
+                { type: "file-data", data: "SUQz", mediaType: "audio/mpeg", filename: "clip.mp3" },
+                { type: "image-url", url: "https://example.com/pixel.png" },
+                { type: "file-url", url: "https://example.com/document.pdf" },
+              ],
+            },
+          },
+        ],
+      },
+    ])
+  }),
+)
+
 it.effect("emits malformed AI SDK tool input without executing it", () =>
   Effect.gen(function* () {
     const aisdk = yield* AISDK.Service
@@ -399,7 +468,7 @@ it.effect("derives status and code when the AI SDK error message is empty", () =
   }),
 )
 
-it.effect("preserves redacted HTTP context on AI SDK call errors", () =>
+it.effect("preserves complete HTTP context on AI SDK call errors", () =>
   Effect.gen(function* () {
     const error = yield* streamFailure(
       apiCallError({
@@ -411,7 +480,7 @@ it.effect("preserves redacted HTTP context on AI SDK call errors", () =>
     const http = "http" in error.reason ? error.reason.http : undefined
     expect(http?.request.url).toBe("https://api.example.com/chat")
     expect(http?.response?.status).toBe(404)
-    expect(http?.response?.headers["authorization"]).toBe("<redacted>")
+    expect(http?.response?.headers["authorization"]).toBe("Bearer secret-token")
     expect(http?.body).toBe('{"error":{"message":"","code":"not_found"}}')
   }),
 )
@@ -475,7 +544,12 @@ it.effect("retries status-less AI SDK transport failures", () =>
         isRetryable: true,
       }),
     )
-    expect(error.reason).toMatchObject({ _tag: "Transport", kind: "AI_APICallError" })
+    expect(error.reason).toMatchObject({
+      _tag: "Transport",
+      transport: "http",
+      operation: "request",
+      code: "AI_APICallError",
+    })
     expect(SessionRunnerRetry.isRetryable(error)).toBeTrue()
     expect("http" in error.reason ? error.reason.http?.request.url : undefined).toBe("https://api.example.com/chat")
   }),

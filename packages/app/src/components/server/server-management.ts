@@ -1,4 +1,4 @@
-import { normalizeServerUrl, ServerConnection } from "@/context/server"
+import { normalizeServerUrl, ServerConnection } from "@/context/servers"
 import type { ServerHealth } from "@/utils/server-health"
 
 export type ServerFormValues = {
@@ -42,18 +42,18 @@ export function replaceServerConnection(
   originalKey: ServerConnection.Key,
   next: ServerConnection.Http,
   operations: {
-    active: () => ServerConnection.Key | undefined
+    active?: () => ServerConnection.Key | undefined
     removeTabs: (key: ServerConnection.Key) => void
     add: (server: ServerConnection.Http) => ServerConnection.Any | undefined
-    setActive: (key: ServerConnection.Key) => void
+    setActive?: (key: ServerConnection.Key) => void
     remove: (key: ServerConnection.Key) => void
   },
 ) {
-  const active = operations.active()
+  const active = operations.active?.()
   const added = operations.add(next)
   if (!added) return
   operations.removeTabs(originalKey)
   const nextActive = active === originalKey ? ServerConnection.key(added) : active
-  if (nextActive) operations.setActive(nextActive)
+  if (nextActive) operations.setActive?.(nextActive)
   operations.remove(originalKey)
 }

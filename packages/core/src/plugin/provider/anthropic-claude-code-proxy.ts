@@ -15,7 +15,7 @@ export * as AnthropicClaudeCodeProxy from "./anthropic-claude-code-proxy"
 // shape and its billing canary. This proxy only replaces the credential and
 // header presentation, so the two seams cannot drift apart.
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
+import type { IncomingMessage, Server, ServerResponse } from "node:http"
 import { AnthropicClaudeCode } from "./anthropic-claude-code"
 
 const ANTHROPIC_ORIGIN = "https://api.anthropic.com"
@@ -49,6 +49,7 @@ export async function start(input: {
   /** Upstream transport override; defaults to a captured global fetch so the upstream call cannot re-enter a patch. */
   fetchImpl?: (input: Request | string | URL, init?: RequestInit) => Promise<Response>
 }): Promise<Proxy> {
+  const { createServer } = await import("node:http")
   const fetchImpl = input.fetchImpl ?? globalThis.fetch.bind(globalThis)
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {

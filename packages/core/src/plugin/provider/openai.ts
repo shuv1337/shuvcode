@@ -1,16 +1,15 @@
-import { createServer } from "node:http"
 import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
 import { define } from "@opencode-ai/plugin/effect/plugin"
 import { Money } from "@opencode-ai/schema/money"
 import { Deferred, Effect, Option, Schema, Semaphore, Stream } from "effect"
-import { App } from "../../app"
-import { Credential } from "../../credential"
-import { Bus } from "../../bus"
-import { Integration } from "../../integration"
-import { Model } from "../../model"
-import { OauthCallbackPage } from "../../oauth/page"
-import { Provider } from "../../provider"
-import type { PluginInternal } from "../internal"
+import { App } from "../../app.js"
+import { Credential } from "../../credential.js"
+import { Bus } from "../../bus.js"
+import { Integration } from "../../integration.js"
+import { OauthCallbackPage } from "../../oauth/page.js"
+import { Provider } from "../../provider.js"
+import { Model } from "../../model.js"
+import type { PluginInternal } from "../internal.js"
 
 const clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
 const issuer = "https://auth.openai.com"
@@ -65,6 +64,8 @@ const browser = (app: App.Info) =>
         const state = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)).buffer)
         const code = yield* Deferred.make<string, Error>()
         const redirect = `http://localhost:${callbackPort}/auth/callback`
+        // Lazy so runtimes without a loopback listener (workerd) never evaluate node:http.
+        const { createServer } = yield* Effect.promise(() => import("node:http"))
         const server = createServer((request, response) => {
           const url = new URL(request.url ?? "/", `http://localhost:${callbackPort}`)
           if (url.pathname !== "/auth/callback") {
@@ -248,10 +249,10 @@ export const OpenAIPlugin = define({
       if (!chatgpt) return
       item.provider.settings = Provider.mergeOverlay(item.provider.settings, { baseURL: codexBaseURL })
       const account = chatgpt.metadata?.accountID
-      item.provider.headers = Provider.mergeHeaders(
-        item.provider.headers,
-        typeof account === "string" ? { "chatgpt-account-id": account } : undefined,
-      )
+      item.provider.headers = Provider.mergeHeaders(item.provider.headers, {
+        originator: "codex_cli_rs",
+        ...(typeof account === "string" ? { "chatgpt-account-id": account } : {}),
+      })
       for (const model of item.models.values()) {
         // ChatGPT-plan tokens only authorize codex-eligible models, and the
         // subscription covers usage, so hide the rest and zero the cost.
@@ -278,17 +279,6 @@ export const OpenAIPlugin = define({
         })
       }
     })
-    yield* ctx.session.hook("http.request", (evt) =>
-      Effect.sync(() => {
-        if (!chatgpt || evt.model.providerID !== Provider.ID.openai) return
-        const url = new URL(evt.request.url)
-        evt.request.headers.set("originator", "codex_cli_rs")
-        evt.request.headers.set("session-id", evt.sessionID)
-        if (url.origin !== "https://api.openai.com") return
-        evt.request = new Request(`${codexBaseURL}${url.pathname.replace(/^\/v1/, "")}${url.search}`, evt.request)
-      }),
-    )
-
     const refresh = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
     yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(
       Stream.filter((event) => event.data.integrationID === Integration.ID.make("openai")),
@@ -378,7 +368,7 @@ function authorizeURL(redirect: string, pkce: Pkce, state: string) {
     id_token_add_organizations: "true",
     codex_cli_simplified_flow: "true",
     state,
-    originator: "opencode",
+    originator: "codex_cli_rs",
   })}`
 }
 

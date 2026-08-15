@@ -1,4 +1,4 @@
-export * as Integration from "./integration"
+export * as Integration from "./integration.js"
 
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import {
@@ -13,20 +13,20 @@ import {
   Schedule,
   Schema,
   Scope,
-  Semaphore,
   Stream,
   SynchronizedRef,
   Types,
 } from "effect"
 import { Integration } from "@opencode-ai/schema/integration"
 import { Auth } from "@opencode-ai/schema/auth"
-import { Credential } from "./credential"
-import { State } from "./state"
-import { Bus } from "./bus"
-import { IntegrationConnection } from "./integration/connection"
+import { Credential } from "./credential.js"
+import { State } from "./state.js"
+import { Bus } from "./bus.js"
+import { IntegrationConnection } from "./integration/connection.js"
 import { AppProcess } from "@opencode-ai/util/process"
 import { ChildProcess } from "effect/unstable/process"
-import { Form } from "./form"
+import { Form } from "./form.js"
+import { KeyedMutex } from "./effect/keyed-mutex.js"
 
 export const ID = Integration.ID
 export type ID = Integration.ID
@@ -111,7 +111,6 @@ export class CodeRequiredError extends Schema.TaggedErrorClass<CodeRequiredError
   attemptID: AttemptID,
 }) {}
 
-/** Reads a defect's readable text. Opaque values add noise rather than signal, so they yield nothing. */
 export function causeMessage(cause: unknown) {
   if (cause instanceof Error) return cause.message
   if (typeof cause === "string") return cause
@@ -120,14 +119,7 @@ export function causeMessage(cause: unknown) {
 
 export class AuthorizationError extends Schema.TaggedErrorClass<AuthorizationError>()("Integration.Authorization", {
   cause: Schema.Defect(),
-}) {
-  // Without this the message is empty, so a failed token refresh renders as a blank error
-  // and the provider's reason (invalid_grant, revoked consent) never reaches the user.
-  override get message() {
-    const detail = causeMessage(this.cause)
-    return detail ? `Authorization failed: ${detail}` : "Authorization failed"
-  }
-}
+}) {}
 
 export type Error = CodeRequiredError | AuthorizationError
 
@@ -282,6 +274,7 @@ const layer = Layer.effect(
     const bus = yield* Bus.Service
     const processes = yield* AppProcess.Service
     const scope = yield* Scope.Scope
+    const refreshLocks = KeyedMutex.makeUnsafe<string>()
     const attempts = SynchronizedRef.makeUnsafe(new Map<AttemptID, AttemptEntry>())
     const commandAttempts = SynchronizedRef.makeUnsafe(new Map<AttemptID, CommandAttemptEntry>())
     const state = State.create<Data, Draft>({
@@ -372,14 +365,8 @@ const layer = Layer.effect(
         connections,
       })
 
-    // Wraps plugin-implemented surfaces (authorize/callback/refresh): defects
-    // from broken plugins must surface as AuthorizationError rather than crash
-    // the caller (for refresh, the whole session drain).
     const authorize = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-      effect.pipe(Effect.catchCause((cause) => Effect.fail(new AuthorizationError({ cause: Cause.squash(cause) }))))
-
-    const refreshWindow = Duration.toMillis(Duration.minutes(5))
-    const refreshGates = new Map<Credential.ID, Semaphore.Semaphore>()
+      effect.pipe(Effect.mapError((cause) => new AuthorizationError({ cause })))
 
     const close = (attemptScope: Scope.Closeable) =>
       Scope.close(attemptScope, Exit.void).pipe(Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
@@ -732,30 +719,24 @@ const layer = Layer.effect(
           const credential = yield* credentials.get(connection.id)
           if (!credential) return undefined
           if (credential.value.type === "key") return credential.value
-          const refresh = state
-            .get()
-            .integrations.get(credential.integrationID)
-            ?.implementations.get(credential.value.methodID)?.refresh
-          if (!refresh) return credential.value
-          const now = yield* Clock.currentTimeMillis
-          if (credential.value.expires > now + refreshWindow) return credential.value
-          // Single-flight per credential: providers rotate refresh tokens, so
-          // concurrent refreshes race each other and the loser invalidates the
-          // stored credential. Waiters re-read state under the permit and skip
-          // the refresh the winner already persisted.
-          const gate = refreshGates.get(credential.id) ?? Semaphore.makeUnsafe(1)
-          refreshGates.set(credential.id, gate)
-          return yield* gate.withPermit(
-            Effect.gen(function* () {
-              const current = yield* credentials.get(connection.id)
-              if (!current || current.value.type !== "oauth") return current?.value
-              const now = yield* Clock.currentTimeMillis
-              if (current.value.expires > now + refreshWindow) return current.value
-              const value = yield* authorize(refresh(current.value))
-              yield* credentials.update(current.id, { value })
-              return value
-            }),
-          )
+          return yield* refreshLocks
+            .withLock(credential.id)(
+              Effect.gen(function* () {
+                const current = yield* credentials.get(connection.id)
+                if (!current || current.value.type === "key") return current?.value
+                const implementation = state
+                  .get()
+                  .integrations.get(current.integrationID)
+                  ?.implementations.get(current.value.methodID)
+                if (!implementation?.refresh) return current.value
+                const now = yield* Clock.currentTimeMillis
+                if (current.value.expires > now + Duration.toMillis(Duration.minutes(5))) return current.value
+                const value = yield* authorize(implementation.refresh(current.value))
+                yield* credentials.update(current.id, { value })
+                return value
+              }),
+            )
+            .pipe(Effect.catchCause((cause) => Effect.fail(new AuthorizationError({ cause: Cause.squash(cause) }))))
         }),
         key: Effect.fn("Integration.connection.key")(function* (input) {
           const method = state

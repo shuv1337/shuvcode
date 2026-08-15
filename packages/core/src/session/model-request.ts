@@ -1,26 +1,26 @@
-export * as SessionModelRequest from "./model-request"
+export * as SessionModelRequest from "./model-request.js"
 
-import { LLM, Message, SystemPart, ToolChoice, ToolDefinition, type LLMRequest } from "@opencode-ai/ai"
+import { LLM, Message, SystemPart, type LLMRequest } from "@opencode-ai/ai"
 import type { StreamOptions } from "@opencode-ai/ai/route"
 import type { Content } from "@opencode-ai/schema/tool"
-import { SessionError } from "@opencode-ai/schema/session-error"
-import { Cause, Config, Context, Effect, JsonSchema, Layer, Result, Stream } from "effect"
-import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { Cause, Config, Context, Effect, Layer, Result } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { App } from "../app"
-import { Decline } from "../decline"
-import { Model } from "../model"
-import { PluginHooks } from "../plugin/hooks"
-import { Tool } from "../tool"
-import { SessionContext } from "./context"
-import { SessionModelHeaders } from "./model-headers"
-import { SessionPromptCacheKey } from "./prompt-cache-key"
-import { PromptCacheDiagnostics } from "./prompt-cache-diagnostics"
-import { MAX_STEPS_PROMPT } from "./runner/max-steps"
-import PROMPT_DEFAULT from "./runner/prompt/base.txt"
-import { toLLMMessages } from "./runner/to-llm-message"
-import { SessionStructuredOutput } from "./structured-output"
-import type { StructuredOutput } from "@opencode-ai/schema/structured-output"
+import { App } from "../app.js"
+import { Model } from "../model.js"
+import { Provider } from "../provider.js"
+import { Permission } from "../permission.js"
+import { PluginHooks } from "../plugin/hooks.js"
+import { QuestionTool } from "../tool/plugin/question.js"
+import { Tool } from "../tool.js"
+import { SessionContext } from "./context.js"
+import { SessionModelHeaders } from "./model-headers.js"
+import { SessionModelHttp } from "./model-http.js"
+import { SessionModelTransport } from "./model-transport.js"
+import { SessionPromptCacheKey } from "./prompt-cache-key.js"
+import { PromptCacheDiagnostics } from "./prompt-cache-diagnostics.js"
+import { MAX_STEPS_PROMPT } from "./runner/max-steps.js"
+import { SessionSystemPrompt } from "./system-prompt.js"
+import { toLLMMessages } from "./runner/to-llm-message.js"
 
 const IMAGE_BYTES_TRIGGER = 25 * 1024 * 1024 // 25 MiB
 const IMAGE_BYTES_TARGET = 15 * 1024 * 1024 // 15 MiB
@@ -28,16 +28,18 @@ const IMAGE_REMOVED =
   "[This image was removed to reduce the request size and is no longer visible. Do not make claims about its contents from memory. If needed, retrieve it again with an available tool or ask the user to attach it again.]"
 
 /** Failures a prepared execution can surface: infrastructure errors plus user declines resurfaced from the defect tunnel. */
-export type ExecuteError = Tool.Error | Decline.Error
+export type ExecuteError = Tool.Error | Permission.DeclinedError | QuestionTool.CancelledError
 
 // User declines dive under the leaves' blanket `mapError` as defects (the deliberate
 // tunnel entered in Permission.assert and the question tool), so a user's "no" can
 // never become model-facing tool output. They resurface as typed failures exactly once,
-// here at the seam the runner executes through — including declines raised inside a Code Mode
-// program, which the Code Mode host re-raises as the same defect.
+// here at the seam the runner executes through.
 const declineDefect = (cause: Cause.Cause<Tool.Error>) => {
   const decline = cause.reasons.flatMap((reason) =>
-    Cause.isDieReason(reason) && Decline.is(reason.defect) ? [reason.defect] : [],
+    Cause.isDieReason(reason) &&
+    (reason.defect instanceof Permission.DeclinedError || reason.defect instanceof QuestionTool.CancelledError)
+      ? [reason.defect]
+      : [],
   )[0]
   return decline ? Result.succeed(decline) : Result.fail(cause)
 }
@@ -45,6 +47,8 @@ const declineDefect = (cause: Cause.Cause<Tool.Error>) => {
 interface Prepared {
   readonly request: LLMRequest
   readonly options: StreamOptions
+  /** False when Session HTTP hooks require the request to remain on HTTP. */
+  readonly webSocketEligible: boolean
   /**
    * One request-scoped execution operation. Unknown, hook-removed, and
    * step-limit-violating calls fail individually through the same seam.
@@ -52,7 +56,6 @@ interface Prepared {
   readonly executeTool: (input: Parameters<Tool.Snapshot["execute"]>[0]) => Effect.Effect<Tool.Result, ExecuteError>
   /** True when this request is the final Step; violating calls are rejected and no continuation follows. */
   readonly stepLimitReached: boolean
-  readonly structuredOutput?: StructuredOutput.Request
 }
 
 interface PrepareInput {
@@ -165,7 +168,12 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
+    const transport = yield* SessionModelTransport.Service
     const app = yield* App.Metadata
+    const webSocket = yield* Config.boolean("OPENCODE_EXPERIMENTAL_OPENAI_RESPONSES_WEBSOCKET").pipe(
+      Config.withDefault(false),
+      Effect.orDie,
+    )
     const diagnostics = yield* Config.boolean("OPENCODE_PROMPT_CACHE_DIAGNOSTICS").pipe(
       Config.withDefault(false),
       Effect.orDie,
@@ -182,7 +190,10 @@ export const layer = Layer.effect(
       // The final Step keeps definitions available to protocols with native "none",
       // preserving their prompt cache prefix. Calls are still rejected at execution.
       const tools = input.context.tools
-      const system = [agent.info.system ? agent.info.system : PROMPT_DEFAULT, input.context.initial]
+      const system = [
+        agent.info.system ? agent.info.system : SessionSystemPrompt.make(tools.definitions.map((tool) => tool.name)),
+        input.context.initial,
+      ]
         .filter((part) => part.length > 0)
         .map(SystemPart.make)
       const history = toLLMMessages(input.context.messages, resolved.ref, providerMetadataKey)
@@ -195,7 +206,6 @@ export const layer = Layer.effect(
           (tool) => [{ description: tool.description, input: { ...tool.inputSchema } }, tool] as const,
         ),
       )
-      const structuredOutput = input.context.messages.findLast((message) => message.type === "user")?.output
       // Hooks mutate this record in place: edit descriptions and schemas, rename, or remove.
       const context = yield* hooks.trigger("session", "context", {
         sessionID: session.id,
@@ -216,13 +226,6 @@ export const layer = Layer.effect(
           return [[name, { ...tool, description: definition.description, inputSchema: definition.input }] as const]
         }),
       )
-      const structuredTool = structuredOutput
-        ? ToolDefinition.make({
-            name: SessionStructuredOutput.ToolName,
-            description: structuredOutput.description ?? "Return the final structured result.",
-            inputSchema: structuredOutput.schema as JsonSchema.JsonSchema,
-          })
-        : undefined
       const request = LLM.request({
         model,
         http: {
@@ -231,48 +234,26 @@ export const layer = Layer.effect(
         promptCacheKey: SessionPromptCacheKey.make(session.id),
         system: context.system,
         messages: boundImages(unsupportedParts(context.messages, resolved.capabilities)),
-        tools: structuredTool
-          ? [...Array.from(hooked, ([name, tool]) => ({ ...tool, name })), structuredTool]
-          : Array.from(hooked, ([name, tool]) => ({ ...tool, name })),
-        toolChoice: structuredTool
-          ? hooked.size > 0 && !stepLimitReached
-            ? ToolChoice.make("required")
-            : ToolChoice.named(SessionStructuredOutput.ToolName)
-          : stepLimitReached
-            ? "none"
-            : undefined,
+        tools: Array.from(hooked, ([name, tool]) => ({ ...tool, name })),
+        toolChoice: stepLimitReached ? "none" : undefined,
       })
+      const webSocketEligible =
+        !(yield* hooks.has("session", "http.request")) && !(yield* hooks.has("session", "http.response"))
+      const http = webSocketEligible
+        ? undefined
+        : SessionModelHttp.middleware(hooks, {
+            sessionID: session.id,
+            agent: agent.id,
+            model: resolved.ref,
+          })
       const options: StreamOptions = {
-        http: (request, handler) =>
-          Effect.gen(function* () {
-            const before = yield* hooks.trigger("session", "http.request", {
-              sessionID: session.id,
-              agent: agent.id,
-              model: resolved.ref,
-              request: yield* HttpClientRequest.toWeb(request),
-            })
-            let sent = HttpClientRequest.fromWeb(before.request)
-            if (before.request.body)
-              sent = HttpClientRequest.bodyUint8Array(
-                sent,
-                new Uint8Array(yield* Effect.promise(() => before.request.clone().arrayBuffer())),
-                before.request.headers.get("content-type") ?? undefined,
-              )
-            const response = yield* handler(sent)
-            const after = yield* hooks.trigger("session", "http.response", {
-              sessionID: session.id,
-              agent: agent.id,
-              model: resolved.ref,
-              request: before.request,
-              response: new Response(
-                [204, 205, 304].includes(response.status)
-                  ? null
-                  : yield* Stream.toReadableStreamEffect(response.stream),
-                { status: response.status, headers: response.headers },
-              ),
-            })
-            return HttpClientResponse.fromWeb(sent, after.response)
-          }).pipe(Effect.mapError((cause) => (cause instanceof Error ? cause : new Error(String(cause))))),
+        ...(http ? { http } : {}),
+        ...(webSocket &&
+        webSocketEligible &&
+        resolved.ref.providerID === Provider.ID.openai &&
+        model.route.id === "openai-responses"
+          ? { webSocket: transport.bind(session.id) }
+          : {}),
       }
       if (promptCacheSnapshots) {
         const current = PromptCacheDiagnostics.snapshot(request)
@@ -304,9 +285,9 @@ export const layer = Layer.effect(
       return {
         request,
         options,
+        webSocketEligible,
         executeTool,
         stepLimitReached,
-        structuredOutput,
       }
     })
 
@@ -317,5 +298,5 @@ export const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, App.node],
+  deps: [PluginHooks.node, SessionModelTransport.node, App.node],
 })

@@ -3,7 +3,7 @@ import { $ } from "bun"
 import { fileURLToPath } from "url"
 import path from "path"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
-import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
+import { EffectDrizzleSqlite } from "@opencode-ai/core/database/drizzle"
 import { Effect, Layer } from "effect"
 import { sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
@@ -11,11 +11,22 @@ import { migrations } from "@opencode-ai/core/database/migration.gen"
 import { Database } from "@opencode-ai/core/database/database"
 import { tmpdir } from "./fixture/tmpdir"
 import type { SqlClient } from "effect/unstable/sql/SqlClient"
-import { importLegacyCredentials } from "@opencode-ai/core/database/migration/20260805200742_import_legacy_credentials"
+import legacyCredentialsMigration from "@opencode-ai/core/database/migration/20260805200742_import_legacy_credentials"
+import sessionInboxMigration from "@opencode-ai/core/database/migration/20260812181746_session_inbox"
+import forkPendingToInboxMigration from "@opencode-ai/core/database/migration/20260812181747_fork_pending_to_inbox"
+import worktreeMigration from "@opencode-ai/core/database/migration/20260812213948_worktree"
+import { Global } from "@opencode-ai/util/global"
 
-const run = <A, E>(effect: Effect.Effect<A, E, SqlClient>) =>
+const run = <A, E>(
+  effect: Effect.Effect<A, E, SqlClient | Global.Service>,
+  global = Global.make({ data: path.join(process.cwd(), ".test-data") }),
+) =>
   Effect.runPromise(
-    effect.pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:", disableWAL: true })), Effect.scoped),
+    effect.pipe(
+      Effect.provideService(Global.Service, global),
+      Effect.provide(SqliteClient.layer({ filename: ":memory:", disableWAL: true })),
+      Effect.scoped,
+    ),
   )
 
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
@@ -31,7 +42,7 @@ describe("DatabaseMigration", () => {
           Effect.scoped(Layer.build(layer)),
         ),
         { concurrency: "unbounded" },
-      ),
+      ).pipe(Effect.provideService(Global.Service, Global.make({ data: tmp.path }))),
     )
   })
 
@@ -156,6 +167,19 @@ describe("DatabaseMigration", () => {
     ).rejects.toThrow("Database is not empty and has no session table")
   })
 
+  test("bootstraps alongside underscore-prefixed embedder tables", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE _embedder_state (id text PRIMARY KEY)`)
+        yield* DatabaseMigration.apply(db)
+        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_v2'`)).toEqual(
+          { name: "session_v2" },
+        )
+      }),
+    )
+  })
+
   test("applies generic migrations once and records their order", async () => {
     await run(
       Effect.gen(function* () {
@@ -186,6 +210,107 @@ describe("DatabaseMigration", () => {
     )
   })
 
+  test("copies fork session_pending rows into session_inbox without dropping pending", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE session_v2 (id text PRIMARY KEY)`)
+        yield* db.run(sql`INSERT INTO session_v2 (id) VALUES ('session')`)
+        yield* db.run(sql`
+          CREATE TABLE session_pending (
+            id text PRIMARY KEY,
+            session_id text NOT NULL,
+            type text NOT NULL,
+            data text NOT NULL,
+            delivery text,
+            admitted_seq integer NOT NULL,
+            time_created integer NOT NULL
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO session_pending (id, session_id, type, data, delivery, admitted_seq, time_created)
+          VALUES
+            ('user-steer', 'session', 'user', ${JSON.stringify({ text: "steer me", output: { schema: { type: "object" } } })}, 'steer', 1, 10),
+            ('user-queue', 'session', 'user', ${JSON.stringify({ text: "queue me" })}, 'queue', 2, 20),
+            ('synthetic', 'session', 'synthetic', ${JSON.stringify({ text: "sys", description: "note" })}, 'queue', 3, 30),
+            ('compaction', 'session', 'compaction', '{}', NULL, 4, 40)
+        `)
+
+        yield* DatabaseMigration.applyOnly(db, [sessionInboxMigration, forkPendingToInboxMigration])
+
+        expect(
+          yield* db.all(sql`
+            SELECT id, type, payload, delivery, enqueued_seq, time_created
+            FROM session_inbox
+            ORDER BY enqueued_seq ASC
+          `),
+        ).toEqual([
+          {
+            id: "user-steer",
+            type: "user",
+            payload: JSON.stringify({ text: "steer me", output: { schema: { type: "object" } } }),
+            delivery: "steer",
+            enqueued_seq: 1,
+            time_created: 10,
+          },
+          {
+            id: "user-queue",
+            type: "user",
+            payload: JSON.stringify({ text: "queue me" }),
+            delivery: "queue",
+            enqueued_seq: 2,
+            time_created: 20,
+          },
+          {
+            id: "synthetic",
+            type: "synthetic",
+            payload: JSON.stringify({ text: "sys", description: "note" }),
+            delivery: "queue",
+            enqueued_seq: 3,
+            time_created: 30,
+          },
+          {
+            id: "compaction",
+            type: "compaction",
+            payload: JSON.stringify({}),
+            delivery: "queue",
+            enqueued_seq: 4,
+            time_created: 40,
+          },
+        ])
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM session_pending`)).toEqual({ count: 4 })
+        expect(
+          yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_pending'`),
+        ).toEqual({ name: "session_pending" })
+      }),
+    )
+  })
+
+  test("copies project directories into worktrees without removing the old table", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE project (id text PRIMARY KEY)`)
+        yield* db.run(
+          sql`CREATE TABLE project_directory (project_id text NOT NULL, directory text NOT NULL, type text, strategy text, time_created integer NOT NULL, PRIMARY KEY (project_id, directory))`,
+        )
+        yield* db.run(
+          sql`INSERT INTO project_directory (project_id, directory, type, strategy, time_created) VALUES ('project', '/root', 'main', NULL, 1), ('project', '/legacy', 'git_worktree', NULL, 2), ('project', '/strategy', NULL, 'git_worktree', 3), ('project', '/custom', NULL, 'acme/snapshot', 4)`,
+        )
+
+        yield* DatabaseMigration.applyOnly(db, [worktreeMigration])
+
+        expect(yield* db.all(sql`SELECT directory, strategy FROM worktree ORDER BY directory`)).toEqual([
+          { directory: "/custom", strategy: "acme/snapshot" },
+          { directory: "/legacy", strategy: "git" },
+          { directory: "/root", strategy: null },
+          { directory: "/strategy", strategy: "git" },
+        ])
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM project_directory`)).toEqual({ count: 4 })
+      }),
+    )
+  })
+
   test("imports legacy JSON credentials without changing the source file or existing credentials", async () => {
     await using tmp = await tmpdir()
     const source = path.join(tmp.path, "auth.json")
@@ -208,7 +333,8 @@ describe("DatabaseMigration", () => {
           VALUES ('existing', 'existing', 'Existing', ${JSON.stringify({ type: "key", key: "current-key" })}, ${now}, ${now})
         `)
 
-        yield* db.transaction((tx) => importLegacyCredentials(tx, source))
+        yield* db.run(sql`DELETE FROM migration WHERE id = ${legacyCredentialsMigration.id}`)
+        yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
 
         expect(yield* db.all(sql`SELECT integration_id, label, value FROM credential ORDER BY integration_id`)).toEqual(
           [
@@ -251,9 +377,26 @@ describe("DatabaseMigration", () => {
           value: JSON.stringify(["https://example.com"]),
         })
       }),
+      Global.make({ data: tmp.path }),
     )
 
     expect(await Bun.file(source).text()).toBe(content)
+  })
+
+  test("skips legacy credential import when the source file is absent", async () => {
+    await using tmp = await tmpdir()
+
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql`DELETE FROM migration WHERE id = ${legacyCredentialsMigration.id}`)
+        yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
+
+        expect(yield* db.all(sql`SELECT id FROM credential`)).toEqual([])
+      }),
+      Global.make({ data: tmp.path }),
+    )
   })
 
   test("rolls back a failed migration without recording it", async () => {

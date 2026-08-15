@@ -60,7 +60,7 @@ function managedService() {
 
 const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mismatch: NonNullable<Args["mismatch"]>) {
   if (mismatch === "replace")
-    return yield* ServiceLifecycle.ensure({ version: options.version, onStart: options.onStart })
+    return yield* ServiceLifecycle.ensure({ version: typeof options.version === "string" ? options.version : undefined, onStart: options.onStart })
   if (mismatch === "ignore") return yield* ServiceLifecycle.ensure({ version: undefined, onStart: options.onStart })
 
   const compatible = yield* Service.discover(options)
@@ -68,7 +68,7 @@ const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mism
   const existing = yield* Service.discover({ ...options, version: undefined })
   if (existing !== undefined)
     return yield* Effect.fail(new Error("Background server version does not match this client"))
-  return yield* ServiceLifecycle.ensure({ version: options.version, onStart: options.onStart })
+  return yield* ServiceLifecycle.ensure({ version: typeof options.version === "string" ? options.version : undefined, onStart: options.onStart })
 })
 
 function connectError(endpoint: Endpoint, cause: unknown) {

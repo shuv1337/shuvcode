@@ -1,13 +1,8 @@
 import { Binary } from "@opencode-ai/core/util/binary"
+import { Worktree } from "@opencode-ai/schema/worktree"
 import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type { Message, Part, Project, Todo } from "@/types"
-import type {
-  FileDiffInfo,
-  PermissionRequest,
-  QuestionRequest,
-  SessionInfo,
-  SessionStatus,
-} from "@opencode-ai/client/promise"
+import type { FileDiffInfo, PermissionRequest, SessionInfo, SessionStatus } from "@opencode-ai/client/promise"
 import type { State, VcsCache } from "./types"
 import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"
@@ -26,9 +21,6 @@ const SESSION_CONTENT_EVENTS = new Set([
   "message.part.delta",
   "permission.asked",
   "permission.replied",
-  "question.asked",
-  "question.replied",
-  "question.rejected",
 ])
 
 export function applyGlobalEvent(input: {
@@ -37,11 +29,10 @@ export function applyGlobalEvent(input: {
   setGlobalProject: (next: Project[] | ((draft: Project[]) => Project[])) => void
   refresh: () => void
 }) {
-  if (input.event.type === "global.disposed" || input.event.type === "server.connected") {
+  if (input.event.type === "global.disposed") {
     input.refresh()
     return
   }
-
   if (input.event.type !== "project.updated") return
   const properties = input.event.properties as Project
   const result = Binary.search(input.project, properties.id, (s) => s.id)
@@ -86,7 +77,6 @@ export function cleanupDroppedSessionCaches(
     ...Object.keys(store.session_diff),
     ...Object.keys(store.todo),
     ...Object.keys(store.permission),
-    ...Object.keys(store.question),
     ...Object.keys(store.session_status),
     ...Object.values(store.part)
       .map((parts) => parts?.find((part) => !!part?.sessionID)?.sessionID)
@@ -185,6 +175,18 @@ export function applyDirectoryEvent(input: {
       cleanupSessionCaches(input.setStore, sessionID, input.setSessionTodo)
       if (info?.parentID) break
       input.setStore("sessionTotal", (value) => Math.max(0, value - 1))
+      break
+    }
+    case "worktree.resolved": {
+      const properties = event.properties as { projectID: string; directory: string; previous: string }
+      input.store.session.forEach((session, index) => {
+        const adopted = Worktree.adopt(
+          { projectID: session.projectID, directory: session.location.directory },
+          properties,
+        )
+        if (!adopted) return
+        input.setStore("session", index, (current) => ({ ...current, ...adopted }))
+      })
       break
     }
     case "session.renamed": {
@@ -419,43 +421,6 @@ export function applyDirectoryEvent(input: {
       if (!result.found) break
       input.setStore(
         "permission",
-        props.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 1)
-        }),
-      )
-      break
-    }
-    case "question.asked": {
-      const question = event.properties as QuestionRequest
-      const questions = input.store.question[question.sessionID]
-      if (!questions) {
-        input.setStore("question", question.sessionID, [question])
-        break
-      }
-      const result = Binary.search(questions, question.id, (q) => q.id)
-      if (result.found) {
-        input.setStore("question", question.sessionID, result.index, reconcile(question))
-        break
-      }
-      input.setStore(
-        "question",
-        question.sessionID,
-        produce((draft) => {
-          draft.splice(result.index, 0, question)
-        }),
-      )
-      break
-    }
-    case "question.replied":
-    case "question.rejected": {
-      const props = event.properties as { sessionID: string; requestID: string }
-      const questions = input.store.question[props.sessionID]
-      if (!questions) break
-      const result = Binary.search(questions, props.requestID, (q) => q.id)
-      if (!result.found) break
-      input.setStore(
-        "question",
         props.sessionID,
         produce((draft) => {
           draft.splice(result.index, 1)

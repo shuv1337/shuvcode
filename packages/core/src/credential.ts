@@ -1,13 +1,13 @@
-export * as Credential from "./credential"
+export * as Credential from "./credential.js"
 
 import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Auth } from "@opencode-ai/schema/auth"
 import { Credential } from "@opencode-ai/schema/credential"
 import { Integration } from "@opencode-ai/schema/integration"
-import { Database } from "./database/database"
+import { Database } from "./database/database.js"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
-import { CredentialTable } from "./credential/sql"
+import { CredentialTable } from "./credential/sql.js"
 
 export const ID = Credential.ID
 export type ID = Credential.ID

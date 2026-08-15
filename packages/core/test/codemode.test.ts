@@ -23,6 +23,7 @@ const configLayer = (info?: ConfigCodeMode.Info) =>
             : [new Config.Document({ type: "document", info: new Config.Info({ codemode: info }) })],
         ),
       changes: () => Stream.empty,
+      update: () => Effect.succeed(new Config.Info({ codemode: info })), 
     }),
   )
 

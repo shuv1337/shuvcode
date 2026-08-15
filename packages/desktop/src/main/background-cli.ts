@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
-import { chmod, copyFile, mkdir, rename, rm } from "node:fs/promises"
+import { chmod, copyFile, mkdir, readdir, rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { app } from "electron"
+import { parseCliVersion } from "./cli-version"
 import { selectBackgroundStateHome } from "./background-cli-state"
 
 const execFileAsync = promisify(execFile)
@@ -22,7 +23,7 @@ export async function startBackgroundCli(logger: Logger, shellStateHome?: string
     ? join(process.resourcesPath, executableName())
     : join(root, "../../resources", executableName())
   logger.log("v2 CLI executable resolved", { bundled, packaged: app.isPackaged })
-  const version = await run(bundled, ["--version"], logger)
+  const version = parseCliVersion(await run(bundled, ["--version"], logger))
   const binary = app.isPackaged ? await installCli(bundled, version, logger) : bundled
 
   const candidates = [
@@ -51,11 +52,34 @@ export async function startBackgroundCli(logger: Logger, shellStateHome?: string
     username: "opencode",
     ...endpoint(url),
   })
+  if (app.isPackaged) await cleanCliStages(binary, logger)
   return {
     url,
     username: "opencode",
     password,
+    version,
+    wslBuild:
+      app.isPackaged || !process.env.OPENCODE_DESKTOP_WSL_CLI_BUILD || !process.env.OPENCODE_DESKTOP_WSL_CLI_OUTPUT
+        ? undefined
+        : {
+            script: process.env.OPENCODE_DESKTOP_WSL_CLI_BUILD,
+            output: process.env.OPENCODE_DESKTOP_WSL_CLI_OUTPUT,
+          },
   }
+}
+
+async function cleanCliStages(binary: string, logger: Logger) {
+  const current = dirname(binary)
+  const root = dirname(current)
+  await Promise.all(
+    (await readdir(root, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && join(root, entry.name) !== current)
+      .map((entry) =>
+        rm(join(root, entry.name), { recursive: true, force: true }).catch((error) =>
+          logger.error("failed to clean staged v2 CLI", { path: join(root, entry.name), error }),
+        ),
+      ),
+  )
 }
 
 async function installCli(source: string, version: string, logger: Logger) {
