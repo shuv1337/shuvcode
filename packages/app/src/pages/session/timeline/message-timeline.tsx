@@ -1203,6 +1203,8 @@ function MessageTimelineView(
 
     onCleanup(() => {
       if (contentMeasureFrame !== undefined) cancelAnimationFrame(contentMeasureFrame)
+      // Solid runs cleanup before it disconnects the row, so defer TanStack's null-ref cleanup.
+      queueMicrotask(() => virtualizer.measureElement(null))
     })
 
     return (
