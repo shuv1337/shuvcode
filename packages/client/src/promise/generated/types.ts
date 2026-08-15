@@ -1787,7 +1787,7 @@ export type ConfigEntry =
             | { repository: string; branch?: string; description?: string; hidden?: boolean }
             | { path: string; description?: string; hidden?: boolean }
         }
-        websearch?: { provider: string }
+        websearch?: false | { provider: "random" | (string & {}) }
         plugins?: Array<string | { package: string; options?: { [x: string]: JsonValue } }>
         warming?: boolean | { prompt?: string; interval?: string; duration?: string }
         providers?: {
@@ -1842,7 +1842,6 @@ export type ConfigEntry =
       }
     }
   | { type: "directory"; path: string }
-  | { type: "file"; path: string }
   | { type: "agents"; path: string }
   | { type: "claude"; path: string }
 
