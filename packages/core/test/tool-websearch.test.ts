@@ -135,13 +135,17 @@ const config = Layer.succeed(
       Effect.succeed([
         new Document({
           type: "document",
-          info: new Info({ websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection } }),
+          info: new Info({
+            websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection },
+          }),
         }),
       ]),
     update: (update) =>
       Effect.sync(() => {
         const info = produce(
-          new Info({ websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection } }),
+          new Info({
+            websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection },
+          }),
           update,
         )
         selection = info.websearch === false ? false : info.websearch?.provider

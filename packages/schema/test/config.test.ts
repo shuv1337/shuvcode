@@ -41,13 +41,7 @@ describe("Config.Entry", () => {
     expect(decoded).toEqual(entries)
     expect(decoded[0]).toBeInstanceOf(Config.Document)
     expect(decoded[1]).not.toHaveProperty("path")
-    expect(decoded.map((entry) => entry.type)).toEqual([
-      "document",
-      "document",
-      "directory",
-      "agents",
-      "claude",
-    ])
+    expect(decoded.map((entry) => entry.type)).toEqual(["document", "document", "directory", "agents", "claude"])
     expect(decoded[0]?.type === "document" ? decoded[0].info.permissions : undefined).toEqual([
       { action: "shell", resource: "*", effect: "ask" },
       { action: "shell", resource: "git status", effect: "allow" },

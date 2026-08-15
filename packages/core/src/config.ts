@@ -82,7 +82,8 @@ export const testLayer = (initial: Entry[] = []) =>
           Effect.gen(function* () {
             const current = yield* Ref.get(entries)
             const index = current.findIndex((entry) => entry.type === "document" && entry.path !== undefined)
-            if (index === -1) return yield* Effect.fail(new UpdateError({ message: "No editable config document found" }))
+            if (index === -1)
+              return yield* Effect.fail(new UpdateError({ message: "No editable config document found" }))
             const entry = current[index]
             if (!entry || entry.type !== "document")
               return yield* Effect.fail(new UpdateError({ message: "No editable config document found" }))
@@ -247,9 +248,7 @@ export const layer = (options?: Options) =>
           .toReversed()
         fileTargets.clear()
         directPaths.forEach((filepath) => fileTargets.add(AbsolutePath.make(filepath)))
-        const direct = yield* Effect.forEach(directPaths, (filepath) =>
-          loadFile(filepath),
-        ).pipe(
+        const direct = yield* Effect.forEach(directPaths, (filepath) => loadFile(filepath)).pipe(
           Effect.orDie,
           Effect.map((entries) => entries.filter((entry): entry is Document => entry !== undefined)),
         )
@@ -396,9 +395,13 @@ export const layer = (options?: Options) =>
             })
             const edits = changes(document.info, next)
             if (!edits.length) return document.info
-            const text = yield* fs.readFileString(document.path).pipe(
-              Effect.mapError((cause) => new UpdateError({ message: `Failed to read config: ${document.path}`, cause })),
-            )
+            const text = yield* fs
+              .readFileString(document.path)
+              .pipe(
+                Effect.mapError(
+                  (cause) => new UpdateError({ message: `Failed to read config: ${document.path}`, cause }),
+                ),
+              )
             const updated = edits.reduce(
               (text, edit) =>
                 applyEdits(
@@ -408,11 +411,14 @@ export const layer = (options?: Options) =>
               text,
             )
             const info = yield* parseInfo(updated, document.path)
-            if (!info) return yield* Effect.fail(new UpdateError({ message: `Invalid config update: ${document.path}` }))
+            if (!info)
+              return yield* Effect.fail(new UpdateError({ message: `Invalid config update: ${document.path}` }))
             const temporary = document.path + ".tmp"
             yield* fs.writeFileString(temporary, updated.endsWith("\n") ? updated : updated + "\n").pipe(
               Effect.andThen(fs.rename(temporary, document.path)),
-              Effect.mapError((cause) => new UpdateError({ message: `Failed to write config: ${document.path}`, cause })),
+              Effect.mapError(
+                (cause) => new UpdateError({ message: `Failed to write config: ${document.path}`, cause }),
+              ),
             )
             return info
           }),

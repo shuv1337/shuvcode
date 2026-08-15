@@ -23517,6 +23517,24 @@
         "required": ["path"],
         "additionalProperties": false
       },
+      "ConfigWebSearch.Info": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["random"]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": ["provider"],
+        "additionalProperties": false
+      },
       "Config.Plugin.Entry": {
         "type": "object",
         "properties": {
@@ -24035,14 +24053,15 @@
             }
           },
           "websearch": {
-            "type": "object",
-            "properties": {
-              "provider": {
-                "type": "string"
+            "anyOf": [
+              {
+                "type": "boolean",
+                "enum": [false]
+              },
+              {
+                "$ref": "#/components/schemas/ConfigWebSearch.Info"
               }
-            },
-            "required": ["provider"],
-            "additionalProperties": false
+            ]
           },
           "plugins": {
             "type": "array",
@@ -24145,20 +24164,6 @@
         "required": ["type", "path"],
         "additionalProperties": false
       },
-      "Config.File": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["file"]
-          },
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": ["type", "path"],
-        "additionalProperties": false
-      },
       "Config.AgentsDirectory": {
         "type": "object",
         "properties": {
@@ -24194,9 +24199,6 @@
           },
           {
             "$ref": "#/components/schemas/Config.Directory"
-          },
-          {
-            "$ref": "#/components/schemas/Config.File"
           },
           {
             "$ref": "#/components/schemas/Config.AgentsDirectory"
