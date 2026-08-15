@@ -282,7 +282,7 @@ export const OpenAIPlugin = define({
       Effect.sync(() => {
         if (!chatgpt || evt.model.providerID !== Provider.ID.openai) return
         const url = new URL(evt.request.url)
-        evt.request.headers.set("originator", "opencode")
+        evt.request.headers.set("originator", "codex_cli_rs")
         evt.request.headers.set("session-id", evt.sessionID)
         if (url.origin !== "https://api.openai.com") return
         evt.request = new Request(`${codexBaseURL}${url.pathname.replace(/^\/v1/, "")}${url.search}`, evt.request)
