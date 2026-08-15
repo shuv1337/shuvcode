@@ -11,6 +11,8 @@ import { ServiceConfig } from "../src/services/service-config"
 
 test("managed service ports are stable per installation channel", () => {
   expect(ServiceConfig.defaultPort("latest")).toBe(0xc0de)
+  expect(ServiceConfig.defaultPort("dev")).toBe(0xc0de)
+  expect(ServiceConfig.defaultPort("beta")).toBe(0xc0de)
   expect(ServiceConfig.defaultPort("next")).toBe(0xc0de)
   expect(ServiceConfig.defaultPort("local")).toBe(0xc0df)
   expect(ServiceConfig.defaultPort("preview-a")).toBe(ServiceConfig.defaultPort("preview-a"))
@@ -37,6 +39,8 @@ test("local channel stores service config with the local service filename", asyn
 
 test("service filenames share release channels and identify preview channels", () => {
   expect(ServiceConfig.filename("latest")).toBe("service.json")
+  expect(ServiceConfig.filename("dev")).toBe("service.json")
+  expect(ServiceConfig.filename("beta")).toBe("service.json")
   expect(ServiceConfig.filename("next")).toBe("service.json")
   expect(ServiceConfig.filename("local")).toBe("service-local.json")
   expect(ServiceConfig.filename("preview-a")).toBe("service-preview-a.json")
