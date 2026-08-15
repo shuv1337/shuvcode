@@ -1,4 +1,10 @@
-import type { OpenCodeEvent, SessionInboxItem, SessionInfo, SessionMessageInfo } from "@opencode-ai/client/promise"
+import type {
+  OpenCodeEvent,
+  SessionInboxInfo,
+  SessionInboxItem,
+  SessionInfo,
+  SessionMessageInfo,
+} from "@opencode-ai/client/promise"
 
 type Assistant = Extract<SessionMessageInfo, { type: "assistant" }>
 type Compaction = Extract<SessionMessageInfo, { type: "compaction" }>
@@ -29,12 +35,14 @@ export function createV2SessionReducer() {
     })
     const append = (message: SessionMessageInfo) =>
       result(source.some((item) => item.id === message.id) ? [...source] : [...source, message], [message.id])
+    const replace = (message: SessionMessageInfo) =>
+      result([...source.filter((item) => item.id !== message.id), message], [message.id])
 
     switch (event.type) {
       case "session.inbox.enqueued":
         pending.set(key(sessionID, event.data.inboxID), event.data.item)
         if (event.data.item.type === "user")
-          return append({
+          return replace({
             id: event.data.inboxID,
             type: "user",
             metadata: event.data.item.payload.metadata,
@@ -44,7 +52,7 @@ export function createV2SessionReducer() {
             time: { created: event.created },
           })
         if (event.data.item.type !== "synthetic") return result([...source])
-        return append({
+        return replace({
           id: event.data.inboxID,
           type: "synthetic",
           metadata: event.data.item.payload.metadata,
@@ -480,6 +488,9 @@ export function createV2SessionReducer() {
 
   return {
     reduce,
+    confirm(item: SessionInboxInfo) {
+      pending.set(key(item.sessionID, item.id), item)
+    },
     clear(sessionID: string) {
       for (const id of pending.keys()) {
         if (id.startsWith(`${sessionID}:`)) pending.delete(id)

@@ -231,7 +231,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       return { pending, forms }
     })
   }
-  const hydrateSession = (sessionID: string) => Promise.all([session.sync(sessionID), hydrateSessionState(sessionID)])
+  const hydrateSession = async (sessionID: string) => {
+    await Promise.all([session.sync(sessionID), hydrateSessionState(sessionID)])
+    session.inbox.reconcile(sessionID)
+  }
 
   const [configQuery, providerQuery, pathQuery] = useQueries(() => ({
     queries: [
