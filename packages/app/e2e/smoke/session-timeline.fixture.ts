@@ -227,11 +227,12 @@ const sourceMessages = Array.from({ length: 12 }, (_, index) => [
   userMessage(sourceID, index + 1000, 120),
   assistantMessage(sourceID, index + 1000, id("msg_user", index + 1000), [textPart(index + 1000, 0, 240)]),
 ]).flat()
+const messages: Record<string, Message[]> = { [sourceID]: sourceMessages, [targetID]: targetMessages }
 
 function renderable(part: MessagePart) {
   if (part.type === "tool" && part.tool === "todowrite") return false
-  if (part.type === "text") return !!part.text.trim()
-  if (part.type === "reasoning") return !!part.text.trim()
+  if (part.type === "text") return !!part.text?.trim()
+  if (part.type === "reasoning") return !!part.text?.trim()
   return part.type !== "step-start" && part.type !== "step-finish" && part.type !== "patch"
 }
 
@@ -290,7 +291,7 @@ export const fixture = {
   ],
   sourceID,
   targetID,
-  messages: { [sourceID]: sourceMessages, [targetID]: targetMessages },
+  messages,
   expected: {
     sourceTitle: "Uncommitted changes inquiry",
     targetTitle: "Example Game: sample jump movement & sample physics analysis",
@@ -304,7 +305,7 @@ export const fixture = {
 }
 
 export function pageMessages(sessionID: string, limit: number, before?: string) {
-  const messages = fixture.messages[sessionID as keyof typeof fixture.messages] ?? []
+  const messages = fixture.messages[sessionID] ?? []
   const end = before
     ? Math.max(
         0,
@@ -314,6 +315,6 @@ export function pageMessages(sessionID: string, limit: number, before?: string) 
   const start = Math.max(0, end - limit)
   return {
     items: messages.slice(start, end),
-    cursor: start > 0 ? messages[start]!.info.id : undefined,
+    cursor: start > 0 ? messages[start].info.id : undefined,
   }
 }

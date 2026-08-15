@@ -1,28 +1,27 @@
 import { expect, test } from "@playwright/test"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
 import { session, sessionID, setupTimeline } from "../performance/timeline-stability/fixture"
 
 const user = { id: "msg_user", type: "user", text: "Run it", time: { created: 1 } } satisfies SessionMessageInfo
 
-const assistant = (completed: boolean, tool = false, childID?: string) =>
-  ({
-    id: "msg_assistant",
-    type: "assistant",
-    agent: "build",
-    model: { id: "model", providerID: "provider" },
-    content: tool
-      ? [
-          {
-            type: "tool",
-            id: "call_subagent",
-            name: "subagent",
-            state: { status: "running", input: {}, metadata: childID ? { sessionID: childID } : {} },
-            time: { created: 2 },
-          },
-        ]
-      : [{ type: "text", text: "Working" }],
-    time: { created: 2, ...(completed ? { completed: 3 } : {}) },
-  }) satisfies SessionMessageInfo
+const assistant = (completed: boolean, tool = false, childID?: string): SessionMessageAssistant => ({
+  id: "msg_assistant",
+  type: "assistant",
+  agent: "build",
+  model: { id: "model", providerID: "provider" },
+  content: tool
+    ? [
+        {
+          type: "tool",
+          id: "call_subagent",
+          name: "subagent",
+          state: { status: "running", input: {}, metadata: childID ? { sessionID: childID } : {} },
+          time: { created: 2 },
+        },
+      ]
+    : [{ type: "text", text: "Working" }],
+  time: { created: 2, ...(completed ? { completed: 3 } : {}) },
+})
 
 test("renders current protocol notices in CLI order", async ({ page }) => {
   const ownerWarnings: string[] = []

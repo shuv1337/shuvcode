@@ -280,6 +280,7 @@ function summaryDiff(index: number) {
     file: `src/diff-${index}.ts`,
     additions: 1,
     deletions: 1,
+    status: "modified" as const,
     patch: `@@ -1 +1 @@\n-export const value = ${index}\n+export const value = ${index + 1}`,
   }
 }

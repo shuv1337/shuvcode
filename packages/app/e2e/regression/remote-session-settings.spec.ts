@@ -220,7 +220,8 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
     }
     if (url.pathname === "/api/project/current")
       return json(route, { id: remote ? sessionB.projectID : "project-server-a", directory })
-    if (url.pathname === "/api/session") return json(route, { data: sessions.map(currentSession), cursor: {} })
+    if (url.pathname === "/api/session")
+      return json(route, { data: sessions.map((session) => currentSession(session)), cursor: {} })
     if (url.pathname === "/api/session/active") return json(route, { data: {} })
     const currentSessionInfo = sessions.find((session) => url.pathname === `/api/session/${session.id}`)
     if (currentSessionInfo) return json(route, { data: currentSession(currentSessionInfo) })
