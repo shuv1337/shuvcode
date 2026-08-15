@@ -727,7 +727,7 @@ function expectCompleteScroll(
   ).toEqual([])
   expect(new Set(expectedPartIDs).size).toBe(expectedPartIDs.length)
   expect(new Set(expectedMessageIDs).size).toBe(expectedMessageIDs.length)
-  expect(expectedPartIDs.length).toBe(331)
+  expect(expectedPartIDs.length).toBe(465)
 }
 
 async function selectHomeProject(page: Page, projectName: string) {

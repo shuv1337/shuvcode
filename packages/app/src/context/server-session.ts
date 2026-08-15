@@ -30,8 +30,7 @@ type MessageApi = ServerApi["message"]
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
-const initialMessagePageSize = 20
-const historyMessagePageSize = 200
+const messagePageSize = 200
 const sessionInfoLimit = 2_048
 const emptyIDs: ReadonlySet<string> = new Set()
 
@@ -242,7 +241,6 @@ export function createServerSession(
     return created
   }
   const [meta, setMeta] = createStore({
-    limit: {} as Record<string, number | undefined>,
     cursor: {} as Record<string, string | undefined>,
     complete: {} as Record<string, boolean | undefined>,
     loading: {} as Record<string, boolean | undefined>,
@@ -423,7 +421,6 @@ export function createServerSession(
     setMeta(
       produce((draft) => {
         for (const sessionID of sessionIDs) {
-          delete draft.limit[sessionID]
           delete draft.cursor[sessionID]
           delete draft.complete[sessionID]
           delete draft.loading[sessionID]
@@ -457,11 +454,15 @@ export function createServerSession(
       pickSessionCacheEvictions({ seen, keep: sessionID, limit: SESSION_CACHE_LIMIT, preserve: protectedSessions() }),
     )
 
-  const fetchMessages = async (sessionID: string, limit: number, before?: string, onAttempt?: () => void) => {
+  const fetchMessages = async (sessionID: string, before?: string, onAttempt?: () => void) => {
     const request = (cursor?: string) =>
       (options?.retry ?? retry)(() => {
         onAttempt?.()
-        return messageApi.list(cursor ? { sessionID, limit, cursor } : { sessionID, limit, order: "desc" })
+        return messageApi.list(
+          cursor
+            ? { sessionID, limit: messagePageSize, cursor }
+            : { sessionID, limit: messagePageSize, order: "desc" },
+        )
       })
     const first = await request(before)
     const pages = [first]
@@ -632,14 +633,13 @@ export function createServerSession(
         }
         orphanParts.delete(sessionID)
       }
-      setMeta("limit", sessionID, messages.length)
       setMeta("cursor", sessionID, merged.cursor)
       setMeta("complete", sessionID, merged.complete)
       setMeta("at", sessionID, Date.now())
     })
   }
 
-  const loadMessages = async (sessionID: string, limit: number, before?: string, mode?: "replace" | "prepend") => {
+  const loadMessages = async (sessionID: string, before?: string, mode?: "replace" | "prepend") => {
     if (meta.loading[sessionID]) return
     const active = generation(sessionID)
     const load: MessageLoadState = {
@@ -658,7 +658,7 @@ export function createServerSession(
     setMeta("loading", sessionID, true)
     let applied = false
     try {
-      const page = await fetchMessages(sessionID, limit, before, () => resetMessageLoad(sessionID, load))
+      const page = await fetchMessages(sessionID, before, () => resetMessageLoad(sessionID, load))
       const first = page.session.reduce<Message | undefined>(
         (oldest, message) => (!oldest || compareMessages(message, oldest) < 0 ? message : oldest),
         undefined,
@@ -737,32 +737,30 @@ export function createServerSession(
     }
   }
 
-  const sync = (sessionID: string, options?: { force?: boolean; messageLimit?: number }) => {
+  const sync = (sessionID: string, options?: { force?: boolean }) => {
     touch(sessionID)
     return runInflight(inflight, sessionID, async () => {
-      const cached = data.message[sessionID] !== undefined && meta.limit[sessionID] !== undefined
+      const cached = data.message[sessionID] !== undefined && meta.complete[sessionID] !== undefined
       const invalid = invalidated.has(sessionID)
       const revision = invalidationRevision
       if (cached && data.info[sessionID] && !invalid && !options?.force) return
       await Promise.all([
         resolve(sessionID, invalid ? { ...options, force: true } : options),
-        cached && !invalid && !options?.force
-          ? Promise.resolve()
-          : loadMessages(sessionID, options?.messageLimit ?? meta.limit[sessionID] ?? initialMessagePageSize),
+        cached && !invalid && !options?.force ? Promise.resolve() : loadMessages(sessionID),
       ])
       if (invalid && invalidationRevision === revision) invalidated.delete(sessionID)
     })
   }
 
-  const prefetch = async (sessionID: string, limit: number) => {
+  const prefetch = async (sessionID: string, messageCount: number) => {
     touch(sessionID)
     await inflight.get(sessionID)
     if (
       Date.now() - (meta.at[sessionID] ?? 0) <= 15_000 &&
-      (meta.complete[sessionID] || (data.message[sessionID]?.length ?? 0) >= limit)
+      (meta.complete[sessionID] || (data.message[sessionID]?.length ?? 0) >= messageCount)
     )
       return
-    await runInflight(inflight, sessionID, () => loadMessages(sessionID, limit))
+    await runInflight(inflight, sessionID, () => loadMessages(sessionID))
   }
 
   const eventSessionID = (event: { type: string; properties?: unknown }) => {
@@ -1354,11 +1352,11 @@ export function createServerSession(
       setMeta("at", {})
     },
     prefetch,
-    shouldPrefetch(sessionID: string, limit: number) {
+    shouldPrefetch(sessionID: string, messageCount: number) {
       if (data.message[sessionID] === undefined) return true
       if (Date.now() - (meta.at[sessionID] ?? 0) > 15_000) return true
       if (meta.complete[sessionID]) return false
-      return (meta.limit[sessionID] ?? 0) <= limit
+      return (data.message[sessionID]?.length ?? 0) <= messageCount
     },
     fresh(sessionID: string, ttl: number) {
       return Date.now() - (meta.at[sessionID] ?? 0) <= ttl
@@ -1440,14 +1438,14 @@ export function createServerSession(
     history: {
       more: (sessionID: string) =>
         data.message[sessionID] !== undefined &&
-        meta.limit[sessionID] !== undefined &&
+        meta.complete[sessionID] !== undefined &&
         !meta.complete[sessionID] &&
         !!meta.cursor[sessionID],
       loading: (sessionID: string) => meta.loading[sessionID] ?? false,
-      async loadMore(sessionID: string, count = historyMessagePageSize) {
+      async loadMore(sessionID: string) {
         touch(sessionID)
         if (meta.loading[sessionID] || meta.complete[sessionID] || !meta.cursor[sessionID]) return
-        await loadMessages(sessionID, count, meta.cursor[sessionID], "prepend")
+        await loadMessages(sessionID, meta.cursor[sessionID], "prepend")
       },
     },
     evict(sessionID: string) {

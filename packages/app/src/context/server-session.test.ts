@@ -618,7 +618,7 @@ describe("server session", () => {
     await ctx.store.sync("root")
 
     expect(ctx.get).toEqual([{ sessionID: "root" }])
-    expect(ctx.messages).toEqual([{ sessionID: "root", limit: 20, order: "desc" }])
+    expect(ctx.messages).toEqual([{ sessionID: "root", limit: 200, order: "desc" }])
     expect(ctx.store.data.message.root).toEqual([])
   })
 
@@ -629,8 +629,32 @@ describe("server session", () => {
     ctx.store.invalidate()
     await ctx.store.sync("root")
 
+    expect(ctx.store.data.message.root).toEqual([])
     expect(ctx.get).toHaveLength(2)
-    expect(ctx.messages).toHaveLength(2)
+    expect(ctx.messages).toEqual([
+      { sessionID: "root", limit: 200, order: "desc" },
+      { sessionID: "root", limit: 200, order: "desc" },
+    ])
+  })
+
+  test("keeps a fixed page size after the local message cache exceeds the API limit", async () => {
+    const client = messageClient(response(), response())
+    const store = createServerSession(client)
+    await store.sync("child")
+    Array.from({ length: 428 }, (_, index) =>
+      store.apply({
+        type: "message.updated",
+        properties: { info: userMessage(`message-${index}`, { time: { created: index } }) },
+      }),
+    )
+
+    expect(store.data.message.child).toHaveLength(428)
+    await store.sync("child", { force: true })
+
+    expect(client.requests).toEqual([
+      { sessionID: "child", limit: 200, order: "desc" },
+      { sessionID: "child", limit: 200, order: "desc" },
+    ])
   })
 
   test("loads current session content through the current message API", async () => {
@@ -655,7 +679,7 @@ describe("server session", () => {
 
     await store.sync("root")
 
-    expect(requests).toEqual([{ sessionID: "root", limit: 20, order: "desc" }])
+    expect(requests).toEqual([{ sessionID: "root", limit: 200, order: "desc" }])
     expect(store.data.session_message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
     expect(store.data.message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
   })
@@ -731,14 +755,34 @@ describe("server session", () => {
     await store.sync("root")
 
     expect(requests).toEqual([
-      { sessionID: "root", limit: 20, order: "desc" },
-      { sessionID: "root", limit: 20, cursor: "older" },
+      { sessionID: "root", limit: 200, order: "desc" },
+      { sessionID: "root", limit: 200, cursor: "older" },
     ])
     expect(store.data.message.root.map((message) => message.id)).toEqual([
       user.id,
       ...assistants.map((item) => item.id),
     ])
     expect(assistants.map((item) => store.data.part[item.id]?.[0]?.type)).toEqual(["text", "text", "text"])
+  })
+
+  test("loads older messages by cursor with the fixed page size", async () => {
+    const older = userMessage("message-1")
+    const latest = userMessage("message-2", { time: { created: 2 } })
+    const client = messageClient(
+      response([{ info: latest, parts: [] }], "older"),
+      response([{ info: older, parts: [] }]),
+    )
+    const store = createServerSession(client)
+    await store.sync("child")
+
+    await store.history.loadMore("child")
+
+    expect(client.requests).toEqual([
+      { sessionID: "child", limit: 200, order: "desc" },
+      { sessionID: "child", limit: 200, cursor: "older" },
+    ])
+    expect(store.data.message.child).toEqual([older, latest])
+    expect(store.history.more("child")).toBe(false)
   })
 
   // V2 messages are ordered projections and do not expose V1 assistant parent IDs.
@@ -754,7 +798,7 @@ describe("server session", () => {
 
       await store.sync("child")
 
-      expect(client.requests).toEqual([{ sessionID: "child", limit: 20, order: "desc" }])
+      expect(client.requests).toEqual([{ sessionID: "child", limit: 200, order: "desc" }])
       expect(client.rootRequests).toEqual([{ sessionID: "child", messageID: user.id }])
       expect(store.data.message.child).toEqual([user, ...assistants])
       expect(store.history.more("child")).toBe(false)

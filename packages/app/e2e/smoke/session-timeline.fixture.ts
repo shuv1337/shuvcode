@@ -222,7 +222,7 @@ function turn(index: number): Message[] {
   return [user, assistantMessage(targetID, index, user.info.id, parts)]
 }
 
-const targetMessages = Array.from({ length: 72 }, (_, index) => turn(index)).flat()
+const targetMessages = Array.from({ length: 101 }, (_, index) => turn(index)).flat()
 const sourceMessages = Array.from({ length: 12 }, (_, index) => [
   userMessage(sourceID, index + 1000, 120),
   assistantMessage(sourceID, index + 1000, id("msg_user", index + 1000), [textPart(index + 1000, 0, 240)]),
