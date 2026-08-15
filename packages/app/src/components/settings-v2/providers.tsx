@@ -4,6 +4,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
+import { useIntegrations } from "@/hooks/use-integrations"
 import { createMemo, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServerSDK } from "@/context/server-sdk"
@@ -40,7 +41,9 @@ export const SettingsProvidersV2: Component<{
   const serverSdk = useServerSDK()
   const serverSync = useServerSync()
   const providers = useProviders(() => props.directory)
+  const integrations = useIntegrations(() => props.directory)
   const providerConnect = useProviderConnectController({ onBack: props.onBack })
+  const integration = (providerID: string) => integrations.list().find((item) => item.id === providerID)
 
   const connect = (provider?: string) => {
     providerConnect.select(provider)
@@ -73,7 +76,14 @@ export const SettingsProvidersV2: Component<{
     return items
   })
 
+  // Connection state comes from the integration list like the TUI: credential
+  // connections mean an API key or OAuth grant, env connections mean detected
+  // environment variables, and a connectionless integration is config-provided.
   const source = (item: ProviderItem): ProviderSource | undefined => {
+    const current = integration(item.id)
+    if (current?.connections.some((connection) => connection.type === "credential")) return "api"
+    if (current?.connections.some((connection) => connection.type === "env")) return "env"
+    if (current) return "config"
     if (!("source" in item)) return
     const value = item.source
     if (value === "env" || value === "api" || value === "config" || value === "custom") return value
@@ -92,7 +102,11 @@ export const SettingsProvidersV2: Component<{
     return language.t("settings.providers.tag.other")
   }
 
-  const canDisconnect = (item: ProviderItem) => source(item) !== "env" && !isConfigCustom(item.id)
+  const canDisconnect = (item: ProviderItem) => {
+    const current = integration(item.id)
+    if (current) return current.connections.some((connection) => connection.type === "credential")
+    return source(item) !== "env" && !isConfigCustom(item.id)
+  }
 
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 

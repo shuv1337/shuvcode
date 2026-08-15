@@ -119,9 +119,11 @@ export function createProviderConnectionController(options: {
   const finish = async () => {
     cancelPolling()
     const directory = options.directory()
-    await queryClient
-      .refetchQueries(serverSync.queryOptions.providers(directory ? pathKey(directory) : null))
-      .catch(() => undefined)
+    const key = directory ? pathKey(directory) : null
+    await Promise.all([
+      queryClient.refetchQueries(serverSync.queryOptions.providers(key)).catch(() => undefined),
+      queryClient.refetchQueries(serverSync.queryOptions.integrations(key)).catch(() => undefined),
+    ])
     if (polling.disposed) return
     options.onComplete()
   }
