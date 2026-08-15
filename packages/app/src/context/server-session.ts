@@ -459,9 +459,7 @@ export function createServerSession(
       (options?.retry ?? retry)(() => {
         onAttempt?.()
         return messageApi.list(
-          cursor
-            ? { sessionID, limit: messagePageSize, cursor }
-            : { sessionID, limit: messagePageSize, order: "desc" },
+          cursor ? { sessionID, limit: messagePageSize, cursor } : { sessionID, limit: messagePageSize, order: "desc" },
         )
       })
     const first = await request(before)
