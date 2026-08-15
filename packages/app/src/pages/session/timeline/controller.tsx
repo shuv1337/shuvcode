@@ -94,7 +94,7 @@ export function createTimelineController(input: {
       fallback: language.t("command.session.new"),
     })
   })
-  const showHeader = createMemo(() => !!(titleValue() || input.session.data.parentID()))
+  const showHeader = createMemo(() => !!input.session.identity.sessionID())
   const projection = createTimelineProjection({
     messages: input.session.history.messages,
     userMessages: input.userMessages,
