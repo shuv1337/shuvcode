@@ -22,13 +22,24 @@ export namespace JsonRpc {
     data: Schema.optional(Schema.Json),
   })
 
-  export const Response = Schema.Struct({
-    jsonrpc: Schema.Literal("2.0"),
-    id: JsonRpcID,
-    result: Schema.optional(Schema.Json),
-    error: Schema.optional(ErrorObject),
-  })
-  export interface Response extends Schema.Schema.Type<typeof Response> {}
+  export const Response = Schema.Union(
+    [
+      Schema.Struct({
+        jsonrpc: Schema.Literal("2.0"),
+        id: JsonRpcID,
+        result: Schema.Json,
+        error: Schema.optionalKey(Schema.Never),
+      }),
+      Schema.Struct({
+        jsonrpc: Schema.Literal("2.0"),
+        id: JsonRpcID,
+        result: Schema.optionalKey(Schema.Never),
+        error: ErrorObject,
+      }),
+    ],
+    { mode: "oneOf" },
+  )
+  export type Response = Schema.Schema.Type<typeof Response>
 
   export const decodeRequest = Schema.decodeUnknownSync(Request)
 
@@ -48,6 +59,28 @@ export namespace JsonRpc {
     }
   }
 }
+
+export class SimulationRequestError extends Schema.TaggedErrorClass<SimulationRequestError>()(
+  "SimulationRequestError",
+  {
+    method: Schema.String,
+    code: Schema.Number,
+    message: Schema.String,
+    data: Schema.optionalKey(Schema.Json),
+  },
+) {}
+
+const request = <
+  const Tag extends string,
+  Payload extends Schema.Top | Schema.Struct.Fields = typeof Schema.Void,
+  Success extends Schema.Top = typeof Schema.Void,
+>(
+  tag: Tag,
+  options?: {
+    readonly payload?: Payload
+    readonly success?: Success
+  },
+) => Rpc.make(tag, { ...options, error: SimulationRequestError })
 
 export namespace Handshake {
   export const ProtocolVersion = Schema.Literal(1)
@@ -81,7 +114,7 @@ export namespace Handshake {
     protocolVersion: ProtocolVersion,
     role: EndpointRole,
     server: Identity,
-    capabilities: Schema.Array(Capability),
+    capabilities: Schema.Array(Capability).check(Schema.isUnique()),
   })
   export interface Response extends Schema.Schema.Type<typeof Response> {}
 
@@ -564,29 +597,28 @@ export namespace Backend {
     matched: Schema.Boolean,
   })
   export interface NetworkLogEntry extends Schema.Schema.Type<typeof NetworkLogEntry> {}
+
+  export const Notification = Schema.Union([
+    Schema.Struct({
+      jsonrpc: Schema.Literal("2.0"),
+      method: Schema.Literal("llm.request"),
+      params: ProviderInvocation,
+    }),
+    Schema.Struct({
+      jsonrpc: Schema.Literal("2.0"),
+      method: Schema.Literal("tool.invocation"),
+      params: ToolInvocation,
+    }),
+    Schema.Struct({
+      jsonrpc: Schema.Literal("2.0"),
+      method: Schema.Literal("tool.cancel"),
+      params: ToolCancellation,
+    }),
+  ])
+  export type Notification = Schema.Schema.Type<typeof Notification>
+  export const decodeNotification = Schema.decodeUnknownSync(Notification)
+  export const decodeNotificationEffect = Schema.decodeUnknownEffect(Schema.fromJsonString(Notification))
 }
-
-export class SimulationRequestError extends Schema.TaggedErrorClass<SimulationRequestError>()(
-  "SimulationRequestError",
-  {
-    method: Schema.String,
-    code: Schema.Number,
-    message: Schema.String,
-    data: Schema.optionalKey(Schema.Json),
-  },
-) {}
-
-const request = <
-  const Tag extends string,
-  Payload extends Schema.Top | Schema.Struct.Fields = typeof Schema.Void,
-  Success extends Schema.Top = typeof Schema.Void,
->(
-  tag: Tag,
-  options?: {
-    readonly payload?: Payload
-    readonly success?: Success
-  },
-) => Rpc.make(tag, { ...options, error: SimulationRequestError })
 
 export const UiRpcs = RpcGroup.make(
   request("simulation.handshake", { payload: Handshake.Params, success: Handshake.Response }),
