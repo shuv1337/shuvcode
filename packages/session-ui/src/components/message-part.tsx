@@ -479,6 +479,12 @@ function readToolPath(input: Record<string, unknown>) {
   if (typeof input.filePath === "string") return input.filePath
 }
 
+function skillToolName(input: Record<string, unknown>, metadata?: Record<string, unknown>) {
+  if (typeof metadata?.name === "string") return metadata.name
+  if (typeof input.id === "string") return input.id
+  if (typeof input.name === "string") return input.name
+}
+
 export function getToolInfo(
   tool: string,
   input: any = {},
@@ -575,7 +581,7 @@ export function getToolInfo(
     case "skill":
       return {
         icon: "brain",
-        title: input.name || i18n.t("ui.tool.skill"),
+        title: skillToolName(input, metadata) || i18n.t("ui.tool.skill"),
       }
     default:
       return {
@@ -2631,7 +2637,7 @@ ToolRegistry.register({
   name: "skill",
   render(props) {
     const i18n = useI18n()
-    const title = createMemo(() => props.input.name || i18n.t("ui.tool.skill"))
+    const title = createMemo(() => skillToolName(props.input, props.metadata) || i18n.t("ui.tool.skill"))
     const running = createMemo(() => props.status === "pending" || props.status === "running")
 
     const titleContent = () => <TextShimmer text={title()} active={running()} />
