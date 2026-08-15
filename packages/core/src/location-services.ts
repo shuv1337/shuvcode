@@ -1,4 +1,5 @@
 import { Effect, Layer, LayerMap } from "effect"
+import path from "path"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
 import { Catalog } from "./catalog.js"
@@ -49,6 +50,7 @@ import { ReadToolFileSystem } from "./tool/read-filesystem.js"
 import { Tool } from "./tool.js"
 import { ToolOutput } from "./tool-output.js"
 import { Vcs } from "./vcs.js"
+import { AbsolutePath } from "./schema.js"
 
 export { LocationServiceMap } from "./location-service-map.js"
 
@@ -110,11 +112,13 @@ export type LocationError = LayerNode.Error<typeof locationServices>
 export function buildLocationServiceMap(
   replacements: LayerNode.Replacements = [],
 ): Layer.Layer<LocationServiceMap.Service> {
-  // Structural Equal is own-key-set sensitive, so `{ directory }` (schema-decoded
-  // payloads omit optional keys) and `{ directory, workspaceID: undefined }` are
-  // different RcMap keys. The RcMap caches by the raw key before the build
-  // callback runs, so canonicalize at the map boundary to the key-present shape.
-  const canonical = (ref: Location.Ref) => Location.Ref.make({ directory: ref.directory, workspaceID: ref.workspaceID })
+  // Structural Equal distinguishes optional-key shape and Windows separator style.
+  // The RcMap caches the raw key before the build callback, so normalize both here.
+  const canonical = (ref: Location.Ref) =>
+    Location.Ref.make({
+      directory: AbsolutePath.make(process.platform === "win32" ? path.normalize(ref.directory) : ref.directory),
+      workspaceID: ref.workspaceID,
+    })
   return Layer.effect(
     LocationServiceMap.Service,
     Effect.map(
