@@ -88,6 +88,12 @@ const SESSION_LIST_EVENTS = new Set([
   "session.usage.updated",
 ])
 
+export function sessionListEventDirectories(event: ServerEvent) {
+  if (!SESSION_LIST_EVENTS.has(event.current?.type ?? event.type)) return []
+  const destination = event.current?.type === "session.moved" ? event.current.data.location.directory : undefined
+  return [...new Set([event.current?.location?.directory, destination].filter((item): item is string => !!item))]
+}
+
 type McpListApi = {
   readonly list: (input?: McpListInput) => Promise<McpListOutput>
 }
@@ -554,14 +560,11 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       type: "session.updated",
       properties: { sessionID: info.id, info },
     })
-  const markSessionListChanged = (event: ServerEvent, directory: string, previousDirectory?: string) => {
-    if (SESSION_LIST_EVENTS.has(event.current?.type ?? event.type)) {
+  const markSessionListsChanged = (event: ServerEvent) => {
+    sessionListEventDirectories(event).forEach((directory) => {
       const key = directoryKey(directory)
       sessionRevision.set(key, (sessionRevision.get(key) ?? 0) + 1)
-    }
-    if (!previousDirectory || previousDirectory === directory) return
-    const key = directoryKey(previousDirectory)
-    sessionRevision.set(key, (sessionRevision.get(key) ?? 0) + 1)
+    })
   }
   const toDirectoryEvent = (event: ServerEvent) => {
     if (event.current?.type === "session.created") return
@@ -572,15 +575,10 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
   }
 
   const unsub = serverSDK.event.listen((e) => {
-    const directory = e.name
-    const key = directoryKey(directory)
     const event = e.details
+    const directory = event.current?.location?.directory
     const eventType: string = event.type
-    const previousDirectory =
-      event.current?.type === "session.moved"
-        ? session.get(event.current.data.sessionID)?.location.directory
-        : undefined
-    markSessionListChanged(event, directory, previousDirectory)
+    markSessionListsChanged(event)
     if (event.current) session.applyV2(event.current)
     session.apply(event)
     if (event.current?.type === "session.moved") {
@@ -632,9 +630,9 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     }
     homeSessions.refresh(event.type)
     catalog.handleEvent({ type: eventType, directory })
-    connection.handleEvent({ type: eventType, directory })
+    connection.handleEvent({ type: eventType })
 
-    if (directory === "global") {
+    if (!directory) {
       applyGlobalEvent({
         event,
         project: globalStore.project,
@@ -647,6 +645,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       return
     }
 
+    const key = directoryKey(directory)
     if (event.current?.type === "session.forked")
       void session
         .resolve(event.current.data.sessionID, { force: true })

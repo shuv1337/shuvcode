@@ -12,7 +12,7 @@ import { ServerScope } from "@/utils/server-scope"
 import { useServer } from "./server"
 
 export type ServerEvent = Event & { id?: string; current?: OpenCodeEvent }
-type QueuedServerEvent = { directory: string; payload: ServerEvent }
+type ServerEventMap = { [Type in ServerEvent["type"]]: Extract<ServerEvent, { type: Type }> }
 type CurrentDelta = Extract<
   OpenCodeEvent,
   { type: "session.text.delta" | "session.reasoning.delta" | "session.tool.input.delta" | "session.compaction.delta" }
@@ -22,22 +22,17 @@ export function adaptServerEvent(event: OpenCodeEvent): ServerEvent {
   return { id: event.id, type: event.type, properties: event.data, current: event } as ServerEvent
 }
 
-export function enqueueServerEvent(queue: QueuedServerEvent[], event: QueuedServerEvent) {
-  queue.push(event)
-  return true
-}
-
-export function coalesceServerEvents(events: QueuedServerEvent[]) {
-  const output: QueuedServerEvent[] = []
+export function coalesceServerEvents(events: ServerEvent[]) {
+  const output: ServerEvent[] = []
   events.forEach((event) => {
-    const current = currentDelta(event.payload.current)
+    const current = currentDelta(event.current)
     if (current) {
       const previous = output[output.length - 1]
-      const prior = currentDelta(previous?.payload.current)
+      const prior = currentDelta(previous?.current)
       if (
         previous &&
         prior &&
-        previous.directory === event.directory &&
+        prior.location?.directory === current.location?.directory &&
         currentDeltaKey(prior) === currentDeltaKey(current)
       ) {
         const fragment = currentDeltaFragment(prior) + currentDeltaFragment(current)
@@ -46,13 +41,10 @@ export function coalesceServerEvents(events: QueuedServerEvent[]) {
             ? { ...current.data, text: fragment }
             : { ...current.data, delta: fragment }
         output[output.length - 1] = {
-          directory: event.directory,
-          payload: {
-            ...event.payload,
-            properties: data,
-            current: { ...current, data } as CurrentDelta,
-          } as ServerEvent,
-        }
+          ...event,
+          properties: data,
+          current: { ...current, data } as CurrentDelta,
+        } as ServerEvent
         return
       }
       output.push(event)
@@ -89,7 +81,8 @@ export function resumeStreamAfterPageShow(event: PageTransitionEvent, start: () 
   start()
 }
 
-type ServerEventEmitter = ReturnType<typeof createGlobalEmitter<{ [key: string]: ServerEvent }>>
+type ServerEventEmitter = ReturnType<typeof createGlobalEmitter<ServerEventMap>>
+type ServerLocationEventEmitter = ReturnType<typeof createGlobalEmitter<{ [directory: string]: ServerEvent }>>
 export type ServerConnectionStatus = "connecting" | "connected" | "reconnecting"
 type ServerSDKBase = {
   server: ServerConnection.Any
@@ -104,6 +97,9 @@ type ServerSDKBase = {
   event: {
     on: ServerEventEmitter["on"]
     listen: ServerEventEmitter["listen"]
+    location: {
+      on: ServerLocationEventEmitter["on"]
+    }
   }
 }
 
@@ -123,18 +119,16 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   })()
 
   const eventApi = createApiForServer({ server: server.http, fetch: eventFetch })
-  const emitter = createGlobalEmitter<{
-    [key: string]: ServerEvent
-  }>()
+  const emitter = createGlobalEmitter<ServerEventMap>()
+  const locations = createGlobalEmitter<{ [directory: string]: ServerEvent }>()
 
-  type Queued = QueuedServerEvent
   const FLUSH_FRAME_MS = 16
   const STREAM_YIELD_MS = 8
   const CONNECT_TIMEOUT_MS = 2_000
   const RECONNECT_DELAY_MS = 1_000
 
-  let queue: Queued[] = []
-  let buffer: Queued[] = []
+  let queue: ServerEvent[] = []
+  let buffer: ServerEvent[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
   let last = 0
 
@@ -152,7 +146,11 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     last = Date.now()
     const output = coalesceServerEvents(events)
     batch(() => {
-      output.forEach((event) => emitter.emit(event.directory, event.payload))
+      output.forEach((event) => {
+        emitter.emit(event.type, event)
+        const directory = event.current?.location?.directory
+        if (directory) locations.emit(directory, event)
+      })
     })
 
     buffer.length = 0
@@ -165,8 +163,8 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
   }
 
   function publish(event: OpenCodeEvent) {
-    const directory = event.location?.directory ?? "global"
-    if (enqueueServerEvent(queue, { directory, payload: adaptServerEvent(event) })) schedule()
+    queue.push(adaptServerEvent(event))
+    schedule()
   }
 
   function wait(delay: number, signal: AbortSignal) {
@@ -313,6 +311,7 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     queue = []
     buffer = []
     emitter.clear()
+    locations.clear()
   })
 
   const api = createApiForServer({ server: server.http, fetch: platform.fetch })
@@ -330,6 +329,9 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     event: {
       on: emitter.on.bind(emitter),
       listen: emitter.listen.bind(emitter),
+      location: {
+        on: locations.on.bind(locations),
+      },
     },
   }
 }
@@ -365,7 +367,7 @@ export type DirectorySDK = {
 function createDirSdkContext(directory: string, serverSDK: ServerSDKBase): DirectorySDK {
   const emitter = createGlobalEmitter<SDKEventMap>()
 
-  const unsub = serverSDK.event.on(directory, (event) => {
+  const unsub = serverSDK.event.location.on(directory, (event) => {
     emitter.emit(event.type, event)
   })
   onCleanup(unsub)
