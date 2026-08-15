@@ -87,15 +87,15 @@ describe("updater controller", () => {
     expect(app.calls).toEqual(["check", "download"])
   })
 
-  test("clicking install twice stops the servers once and installs once", async () => {
+  test("clicking install twice checks once and installs the staged version once", async () => {
     const app = setup()
     await app.controller.start()
 
     void app.controller.install()
     void app.controller.install()
 
-    await Promise.resolve()
-    expect(app.calls).toEqual(["check", "download", "prepare", "install:2.0.0"])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(app.calls).toEqual(["check", "download", "check", "prepare", "install:2.0.0"])
     expect(app.controller.getState()).toEqual({ status: "installing", version: "2.0.0" })
   })
 
@@ -105,8 +105,41 @@ describe("updater controller", () => {
     void app.controller.install()
 
     await app.controller.check()
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(app.calls).toEqual(["check", "download", "prepare", "install:2.0.0"])
+    expect(app.calls).toEqual(["check", "download", "check", "prepare", "install:2.0.0"])
+  })
+
+  test("clicking install downloads and installs a newer release", async () => {
+    let latest = "2.0.0"
+    const app = setup({ latest: () => latest })
+    await app.controller.start()
+
+    latest = "3.0.0"
+    void app.controller.install()
+
+    expect(app.controller.getState()).toEqual({ status: "installing", version: "2.0.0" })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(app.calls).toEqual(["check", "download", "check", "download", "prepare", "install:3.0.0"])
+    expect(app.controller.getState()).toEqual({ status: "installing", version: "3.0.0" })
+  })
+
+  test("clicking install uses the staged release when the final check fails", async () => {
+    let offline = false
+    const app = setup({
+      latest: () => {
+        if (offline) throw new Error("offline")
+        return "2.0.0"
+      },
+    })
+    await app.controller.start()
+
+    offline = true
+    void app.controller.install()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(app.calls).toEqual(["check", "download", "check", "prepare", "install:2.0.0"])
+    expect(app.controller.getState()).toEqual({ status: "installing", version: "2.0.0" })
   })
 
   test("later checks stay silent while ready and pick up newer versions", async () => {
@@ -188,7 +221,7 @@ describe("updater controller", () => {
     expect(app.controller.getState()).toEqual({ status: "ready", version: "2.0.0" })
 
     void app.controller.install()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(attempts).toBe(2)
     expect(app.controller.getState()).toEqual({ status: "installing", version: "2.0.0" })
   })

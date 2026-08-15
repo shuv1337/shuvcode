@@ -95,10 +95,12 @@ export function createUpdaterController(input: {
     const platform = input.platform
     if (!platform || state.status !== "ready") return Promise.reject(new Error("Update is not ready to install"))
 
-    transition({ status: "installing", version: state.version })
+    const staged = state.version
+    transition({ status: "installing", version: staged })
     installing = (async () => {
-      // A click during a silent refresh waits for the newer download, then installs it.
-      if (pending) await pending
+      // Installation is the commit point: refresh once more so one restart lands
+      // on the newest release, or keep the known-good staged update if checking fails.
+      await (pending ?? refreshStaged(platform, staged))
       await input.lifecycle.prepareToRestart()
       await platform.installAndRestart()
     })().catch((error) => {
