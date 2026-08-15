@@ -17728,8 +17728,9 @@
           "name": {
             "type": "string"
           },
-          "disabled": {
-            "type": "boolean"
+          "activation": {
+            "type": "string",
+            "enum": ["auto", "enabled", "disabled"]
           },
           "package": {
             "type": "string"
@@ -17747,7 +17748,7 @@
             "type": "object"
           }
         },
-        "required": ["id", "name", "package"],
+        "required": ["id", "name", "activation", "package"],
         "additionalProperties": false
       },
       "ProviderNotFoundError": {
