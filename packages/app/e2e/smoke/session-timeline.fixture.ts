@@ -237,14 +237,13 @@ function renderable(part: MessagePart) {
 
 function currentPartIDs(message: Message) {
   const ordinals = { text: 0, reasoning: 0 }
-  return message.parts
-    .flatMap((part) => {
-      if (!renderable(part)) return []
-      if (part.type === "text") return [`${message.info.id}:text:${ordinals.text++}`]
-      if (part.type === "reasoning") return [`${message.info.id}:reasoning:${ordinals.reasoning++}`]
-      if (part.type === "tool") return [typeof part.callID === "string" ? part.callID : part.id]
-      return []
-    })
+  return message.parts.flatMap((part) => {
+    if (!renderable(part)) return []
+    if (part.type === "text") return [`${message.info.id}:text:${ordinals.text++}`]
+    if (part.type === "reasoning") return [`${message.info.id}:reasoning:${ordinals.reasoning++}`]
+    if (part.type === "tool") return [typeof part.callID === "string" ? part.callID : part.id]
+    return []
+  })
 }
 
 export const fixture = {
