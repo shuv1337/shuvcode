@@ -161,6 +161,7 @@ export function createServerSession(
     input: {} as Record<string, string[]>,
     message: {} as Record<string, Message[]>,
     session_message: {} as Record<string, SessionMessageInfo[]>,
+    // Part order is semantic and follows SessionMessageAssistant.content; IDs identify parts only.
     part: {} as Record<string, Part[]>,
     part_text_accum_delta: {} as Record<string, string>,
     session_working(id: string) {
@@ -217,7 +218,7 @@ export function createServerSession(
       if (part.id !== `${messageID}:text:0` || part.type !== "text") return [part]
       return text?.type === "text" && text.text ? [{ ...part, text: text.text }] : []
     })
-    return merge(projected, comments)
+    return [...projected, ...comments]
   }
   const deleteMessageParts = (
     cache: { part: Record<string, Part[] | undefined>; part_text_accum_delta: Record<string, string | undefined> },
@@ -474,9 +475,7 @@ export function createServerSession(
     const normalized = normalizeSessionMessages(sessionID, source)
     return {
       session: normalized.messages.sort(compareMessages),
-      part: [...normalized.parts.entries()]
-        .map(([id, part]) => ({ id, part: part.sort((a, b) => cmp(a.id, b.id)) }))
-        .sort((a, b) => cmp(a.id, b.id)),
+      part: [...normalized.parts.entries()].map(([id, part]) => ({ id, part })).sort((a, b) => cmp(a.id, b.id)),
       source,
       sourceMode: before ? ("older" as const) : ("latest" as const),
       projectSource: true,
@@ -607,9 +606,7 @@ export function createServerSession(
             return {
               ...page,
               session: normalized.messages.sort(compareMessages),
-              part: [...normalized.parts.entries()]
-                .map(([id, part]) => ({ id, part: part.sort((a, b) => cmp(a.id, b.id)) }))
-                .sort((a, b) => cmp(a.id, b.id)),
+              part: [...normalized.parts.entries()].map(([id, part]) => ({ id, part })).sort((a, b) => cmp(a.id, b.id)),
             }
           })()
         : page
@@ -823,7 +820,7 @@ export function createServerSession(
         for (const part of next) {
           apply({ type: "message.part.updated", properties: { sessionID: reduction.sessionID, part } })
         }
-        for (const part of data.part[messageID] ?? []) {
+        for (const part of [...(data.part[messageID] ?? [])]) {
           if (nextIDs.has(part.id)) continue
           apply({
             type: "message.part.removed",
@@ -1191,14 +1188,9 @@ export function createServerSession(
           setData("part", part.messageID, [part])
           return
         }
-        const result = Binary.search(parts, part.id, (item) => item.id)
-        if (result.found) setData("part", part.messageID, result.index, reconcile(part))
-        if (!result.found)
-          setData("part", part.messageID, (value = []) => {
-            const next = value.slice()
-            next.splice(result.index, 0, part)
-            return next
-          })
+        const index = parts.findIndex((item) => item.id === part.id)
+        if (index >= 0) setData("part", part.messageID, index, reconcile(part))
+        if (index < 0) setData("part", part.messageID, (value = []) => [...value, part])
         return
       }
       case "message.part.removed": {
@@ -1228,8 +1220,8 @@ export function createServerSession(
             deltaBases.delete(props.partID)
             const parts = draft.part[props.messageID]
             if (!parts) return
-            const result = Binary.search(parts, props.partID, (part) => part.id)
-            if (result.found) parts.splice(result.index, 1)
+            const index = parts.findIndex((part) => part.id === props.partID)
+            if (index >= 0) parts.splice(index, 1)
             if (parts.length === 0) delete draft.part[props.messageID]
           }),
         )
@@ -1245,8 +1237,8 @@ export function createServerSession(
         }
         const parts = data.part[props.messageID]
         if (!parts) return
-        const result = Binary.search(parts, props.partID, (part) => part.id)
-        if (!result.found) return
+        const index = parts.findIndex((part) => part.id === props.partID)
+        if (index < 0) return
         trackPartChange(props.sessionID, props.messageID, props.partID)
         const load = messageLoads.get(props.sessionID)
         if (load) {
@@ -1258,7 +1250,7 @@ export function createServerSession(
           if (carried?.size === 0) load.carriedDeltaParts.delete(props.messageID)
         }
         const field = props.field as keyof (typeof parts)[number]
-        const current = parts[result.index]?.[field]
+        const current = parts[index]?.[field]
         if (!deltaBases.has(props.partID) && typeof current === "string")
           deltaBases.set(props.partID, { base: current, sessionID: props.sessionID })
         setData(
@@ -1271,7 +1263,7 @@ export function createServerSession(
           props.messageID,
           produce((draft) => {
             if (!draft) return
-            const part = draft[result.index]
+            const part = draft[index]
             const field = props.field as keyof typeof part
             ;(part[field] as string) = ((part[field] as string | undefined) ?? "") + props.delta
           }),
@@ -1420,7 +1412,7 @@ export function createServerSession(
           synthetic: true,
           metadata: createCommentMetadata(comment),
         }))
-        const parts = merge(projected.parts.get(input.messageID) ?? [], comments).sort((a, b) => cmp(a.id, b.id))
+        const parts = [...(projected.parts.get(input.messageID) ?? []), ...comments]
         removedMessages.get(input.sessionID)?.delete(input.messageID)
         markEcho(input.sessionID, input.messageID)
         pendingRevision.set(input.sessionID, (pendingRevision.get(input.sessionID) ?? 0) + 1)

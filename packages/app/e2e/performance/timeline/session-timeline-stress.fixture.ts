@@ -275,10 +275,6 @@ function renderable(part: MessagePart) {
   return part.type !== "step-start" && part.type !== "step-finish" && part.type !== "patch"
 }
 
-function orderedParts(message: Message) {
-  return message.parts.slice().sort((a, b) => a.id.localeCompare(b.id))
-}
-
 export const fixture = {
   directory,
   project: {
@@ -345,11 +341,7 @@ export const fixture = {
       .filter((message) => message.info.role === "user")
       .map((message) => message.info.id),
     childMessageIDs: childMessages.filter((message) => message.info.role === "user").map((message) => message.info.id),
-    targetPartIDs: targetMessages.flatMap((message) =>
-      orderedParts(message)
-        .filter(renderable)
-        .map((part) => part.id),
-    ),
+    targetPartIDs: targetMessages.flatMap((message) => message.parts.filter(renderable).map((part) => part.id)),
   },
 }
 

@@ -245,7 +245,6 @@ function currentPartIDs(message: Message) {
       if (part.type === "tool") return [typeof part.callID === "string" ? part.callID : part.id]
       return []
     })
-    .sort()
 }
 
 export const fixture = {

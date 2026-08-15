@@ -370,14 +370,38 @@ describe("server session", () => {
       location: { directory: "/repo" },
       data: { sessionID: "child", assistantMessageID: "msg_2_assistant", ordinal: 0, delta: "world" },
     })
+    apply({
+      id: "evt_tool_z",
+      created: 5,
+      type: "session.tool.input.started",
+      durable: { aggregateID: "child", seq: 3, version: 1 },
+      location: { directory: "/repo" },
+      data: { sessionID: "child", assistantMessageID: "msg_2_assistant", id: "call_z", name: "shell" },
+    })
+    apply({
+      id: "evt_tool_a",
+      created: 6,
+      type: "session.tool.input.started",
+      durable: { aggregateID: "child", seq: 4, version: 1 },
+      location: { directory: "/repo" },
+      data: { sessionID: "child", assistantMessageID: "msg_2_assistant", id: "call_a", name: "shell" },
+    })
 
     expect(ctx.store.data.session_message.child?.at(-1)).toMatchObject({
       id: "msg_2_assistant",
       type: "assistant",
-      content: [{ type: "text", text: "world" }],
+      content: [
+        { type: "text", text: "world" },
+        { type: "tool", id: "call_z" },
+        { type: "tool", id: "call_a" },
+      ],
     })
     expect(ctx.store.data.message.child?.map((message) => message.id)).toEqual(["msg_1_user", "msg_2_assistant"])
-    expect(ctx.store.data.part.msg_2_assistant).toMatchObject([{ type: "text", text: "world" }])
+    expect(ctx.store.data.part.msg_2_assistant?.map((part) => part.id)).toEqual([
+      "msg_2_assistant:text:0",
+      "call_z",
+      "call_a",
+    ])
   })
 
   test("projects V2 pending inputs and forms", () => {
@@ -634,6 +658,45 @@ describe("server session", () => {
     expect(requests).toEqual([{ sessionID: "root", limit: 20, order: "desc" }])
     expect(store.data.session_message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
     expect(store.data.message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
+  })
+
+  test("preserves assistant content order from message history", async () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "inspect it", time: { created: 1 } },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [
+          { type: "text", text: "I will inspect it." },
+          {
+            type: "tool",
+            id: "call_z",
+            name: "shell",
+            state: { status: "streaming", input: "" },
+            time: { created: 2 },
+          },
+          {
+            type: "tool",
+            id: "call_a",
+            name: "shell",
+            state: { status: "streaming", input: "" },
+            time: { created: 3 },
+          },
+        ],
+        time: { created: 2 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const messageApi = {
+      list: async () => ({ data: source.toReversed(), cursor: { previous: null, next: null } }),
+    } as unknown as MessageApi
+    const store = createServerSession({} as SessionApi, messageApi)
+    store.remember(session("root"))
+
+    await store.sync("root")
+
+    expect(store.data.part.msg_assistant?.map((part) => part.id)).toEqual(["msg_assistant:text:0", "call_z", "call_a"])
   })
 
   test("extends a current page to include the user for split assistant turns", async () => {
@@ -1091,6 +1154,8 @@ describe("server session", () => {
     expect(store.data.session_message.child).toBeUndefined()
     expect(store.data.message.child?.map((message) => message.id)).toEqual(["msg_prompt"])
     expect(store.data.part.msg_prompt).toMatchObject([
+      { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:file:0", type: "file", filename: "foo.ts" },
       { id: "msg_prompt:agent:0", type: "agent", name: "explore" },
       {
         id: "msg_prompt:comment:0",
@@ -1106,8 +1171,6 @@ describe("server session", () => {
           },
         },
       },
-      { id: "msg_prompt:file:0", type: "file", filename: "foo.ts" },
-      { id: "msg_prompt:text:0", type: "text", text: "hello" },
     ])
 
     store.applyV2({
@@ -1129,8 +1192,8 @@ describe("server session", () => {
     } as OpenCodeEvent)
 
     expect(store.data.part.msg_prompt).toMatchObject([
-      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
       { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
     ])
   })
 
@@ -1174,8 +1237,8 @@ describe("server session", () => {
     await store.sync("child")
 
     expect(store.data.part.msg_prompt).toMatchObject([
-      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
       { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
     ])
   })
 
