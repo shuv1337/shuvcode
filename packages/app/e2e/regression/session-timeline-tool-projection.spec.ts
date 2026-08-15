@@ -83,6 +83,17 @@ test("labels all web search provider variants", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Web Search/ })).toBeVisible()
 })
 
+test("labels V2 read tools from their path input", async ({ page }) => {
+  const id = "prt_read_path"
+  await setupTimeline(page, {
+    messages: [userMessage(), assistantMessage([toolPart(id, "read", "completed", { path: "src/a.ts" })])],
+  })
+
+  const group = page.locator(`[data-timeline-part-ids="${id}"]`)
+  await group.locator('[data-slot="collapsible-trigger"]').click()
+  await expect(group.locator('[data-slot="basic-tool-tool-subtitle"]')).toHaveText("a.ts")
+})
+
 function questionInput() {
   return { questions: [{ header: "Stability", question: "Keep it stable?", options: [] }] }
 }

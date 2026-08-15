@@ -474,6 +474,11 @@ function webSearchProviderLabel(provider: unknown, i18n: ReturnType<typeof useI1
   return i18n.t("ui.tool.websearch")
 }
 
+function readToolPath(input: Record<string, unknown>) {
+  if (typeof input.path === "string") return input.path
+  if (typeof input.filePath === "string") return input.filePath
+}
+
 export function getToolInfo(
   tool: string,
   input: any = {},
@@ -481,12 +486,14 @@ export function getToolInfo(
 ): ToolInfo {
   const i18n = useI18n()
   switch (tool) {
-    case "read":
+    case "read": {
+      const path = readToolPath(input)
       return {
         icon: "glasses",
         title: i18n.t("ui.tool.read"),
-        subtitle: input.filePath ? getFilename(input.filePath) : undefined,
+        subtitle: path ? getFilename(path) : undefined,
       }
+    }
     case "list":
       return {
         icon: "bullet-list",
@@ -847,7 +854,7 @@ function contextToolDetail(part: ToolPart): string | undefined {
 function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
   const input = (part.state.input ?? {}) as Record<string, unknown>
   const path = typeof input.path === "string" ? input.path : "/"
-  const filePath = typeof input.filePath === "string" ? input.filePath : undefined
+  const filePath = readToolPath(input)
   const pattern = typeof input.pattern === "string" ? input.pattern : undefined
   const include = typeof input.include === "string" ? input.include : undefined
   const offset = typeof input.offset === "number" ? input.offset : undefined
@@ -1793,7 +1800,7 @@ ToolRegistry.register({
           icon="glasses"
           trigger={{
             title: i18n.t("ui.tool.read"),
-            subtitle: props.input.filePath ? getFilename(props.input.filePath) : "",
+            subtitle: getFilename(readToolPath(props.input) ?? ""),
             args,
           }}
         />
