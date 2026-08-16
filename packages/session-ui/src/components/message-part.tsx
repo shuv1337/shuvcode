@@ -2000,17 +2000,25 @@ ToolRegistry.register({
     const title = createMemo(() => agent().name ?? i18n.t("ui.tool.agent.default"))
     const tone = createMemo(() => agent().color)
     const v2Tone = createMemo(() => agent().v2Color)
+    const background = createMemo(() => {
+      if (props.tool === "task") return props.metadata.background === true
+      return props.status === "completed" && props.metadata.status === "running"
+    })
     const subtitle = createMemo(() => {
       const value =
         typeof props.input.description === "string" && props.input.description
           ? props.input.description
           : childSessionId()
       if (!value) return value
-      if (props.input.background === true || props.metadata.background === true || props.metadata.status === "running")
-        return `${value} (background)`
+      if (background()) return `${value} (background)`
       return value
     })
-    const running = createMemo(() => props.status === "pending" || props.status === "running")
+    const running = createMemo(() => {
+      if (props.status === "pending" || props.status === "running") return true
+      const id = childSessionId()
+      if (!id) return false
+      return (data.store.session_status[id]?.type ?? "idle") !== "idle"
+    })
 
     const href = createMemo(() => sessionLink(childSessionId(), data.sessionHref))
     const clickable = createMemo(() => !!(childSessionId() && (data.navigateToSession || href())))
