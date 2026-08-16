@@ -2637,21 +2637,40 @@ ToolRegistry.register({
   name: "skill",
   render(props) {
     const i18n = useI18n()
-    const title = createMemo(() => skillToolName(props.input, props.metadata) || i18n.t("ui.tool.skill"))
+    const name = createMemo(() => skillToolName(props.input, props.metadata))
     const running = createMemo(() => props.status === "pending" || props.status === "running")
 
-    const titleContent = () => <TextShimmer text={title()} active={running()} />
-
     const trigger = () => (
-      <div data-slot="basic-tool-tool-info-structured">
-        <div data-slot="basic-tool-tool-info-main">
-          <span data-slot="basic-tool-tool-title" class="capitalize agent-title">
-            {titleContent()}
-          </span>
-        </div>
+      <div data-slot="skill-tool-trigger" class="flex min-w-0 items-center gap-1.5">
+        <Icon name="post-skill" size="small" class="shrink-0 text-v2-icon-icon-muted" />
+        <span
+          data-slot="skill-tool-label"
+          class="shrink-0 text-[13px] font-[530] leading-5 tracking-[-0.04px] text-v2-text-text-muted"
+        >
+          {i18n.t("ui.tool.skill")}
+        </span>
+        <Show when={name()}>
+          {(name) => (
+            <>
+              <span
+                data-slot="skill-tool-separator"
+                aria-hidden="true"
+                class="shrink-0 text-v2-text-text-muted"
+              >
+                ·
+              </span>
+              <TextShimmer
+                as="bdi"
+                text={name()}
+                active={running()}
+                class="min-w-0 truncate text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted"
+              />
+            </>
+          )}
+        </Show>
       </div>
     )
 
-    return <BasicTool icon="brain" status={props.status} trigger={trigger()} hideDetails />
+    return <BasicTool icon="post-skill" status={props.status} trigger={trigger()} hideDetails />
   },
 })

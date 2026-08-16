@@ -59,6 +59,8 @@ test("renders current protocol notices in CLI order", async ({ page }) => {
   await expect(notices.nth(1)).toContainText("explore finished · Search code")
   await expect(notices.nth(2)).toContainText("Continuing after restart")
   await expect(notices.nth(3)).toContainText("Skill · Review")
+  await expect(notices).toHaveClass([/text-text-weak/, /text-text-weak/, /text-text-weak/, /text-text-weak/])
+  await expect(notices.locator(".text-text-strong")).toHaveCount(0)
   expect(ownerWarnings).toEqual([])
 })
 

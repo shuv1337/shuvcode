@@ -1057,9 +1057,12 @@ function MessageTimelineView(
           <TimelineRowFrame row={noticeRow()}>
             <Show when={content()}>
               {(content) => (
-                <div data-slot="session-timeline-notice" class={`w-full pt-3 pb-1 text-13-regular ${turnPadding()}`}>
-                  <span class="text-13-medium text-text-strong">{content().label}</span>
-                  <Show when={content().data}>{(data) => <span class="text-text-weak"> · {data()}</span>}</Show>
+                <div
+                  data-slot="session-timeline-notice"
+                  class={`w-full pt-3 pb-1 text-13-regular text-text-weak ${turnPadding()}`}
+                >
+                  <span class="text-13-medium">{content().label}</span>
+                  <Show when={content().data}>{(data) => <span> · {data()}</span>}</Show>
                 </div>
               )}
             </Show>

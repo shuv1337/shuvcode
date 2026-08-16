@@ -115,6 +115,12 @@ test("labels V2 skill tools from IDs and result metadata", async ({ page }) => {
     "aria-label",
     "OpenCode",
   )
+  for (const id of [pending, completed]) {
+    const skill = page.locator(`[data-timeline-part-id="${id}"]`)
+    await expect(skill.locator('[data-slot="skill-tool-label"]')).toHaveText("Skill")
+    await expect(skill.locator('[data-slot="skill-tool-separator"]')).toHaveText("·")
+    await expect(skill.locator('use[href="#opencode-icon-post-skill"]')).toBeVisible()
+  }
 })
 
 function questionInput() {
