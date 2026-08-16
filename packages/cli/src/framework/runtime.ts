@@ -95,7 +95,9 @@ function provide(node: Spec.Any, handlers: ReadonlyArray<LazyHandler>): Provided
             const target = path.resolve(cpuProfile)
             const previous = process.env.OPENCODE_CPU_PROFILE
             process.env.OPENCODE_CPU_PROFILE = target
-            return yield* (node.name === "serve" ? CpuProfile.run(target, module.default(input)) : module.default(input)).pipe(
+            return yield* (
+              node.name === "serve" ? CpuProfile.run(target, module.default(input)) : module.default(input)
+            ).pipe(
               Effect.ensuring(
                 Effect.sync(() => {
                   if (previous === undefined) delete process.env.OPENCODE_CPU_PROFILE
