@@ -119,7 +119,7 @@ for (const item of targets) {
       target: target.replace(binary, "bun") as Bun.Build.CompileTarget,
       executablePath,
       outfile: path.join(outdir, name, "bin", binary),
-      execArgv: [`--user-agent=${binary}/${Script.version}`, "--use-system-ca", "--"],
+      execArgv: [`--user-agent=${binary}/${Script.version}`, "--use-system-ca", "--no-warnings", "--"],
       windows: {},
     },
     define: {
