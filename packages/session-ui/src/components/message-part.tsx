@@ -2652,11 +2652,7 @@ ToolRegistry.register({
         <Show when={name()}>
           {(name) => (
             <>
-              <span
-                data-slot="skill-tool-separator"
-                aria-hidden="true"
-                class="shrink-0 text-v2-text-text-muted"
-              >
+              <span data-slot="skill-tool-separator" aria-hidden="true" class="shrink-0 text-v2-text-text-muted">
                 ·
               </span>
               <TextShimmer
