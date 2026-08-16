@@ -71,7 +71,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       description: "Debugging and troubleshooting tools",
       commands: [
         Spec.make("agents", { description: "List all agents" }),
-        Spec.make("config", { description: "Show resolved configuration" }),
+        Spec.make("config", { description: "List configuration sources" }),
       ],
     }),
     Spec.make("console", {
