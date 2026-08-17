@@ -188,12 +188,15 @@
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
+        "solid-js": "catalog:",
       },
       "peerDependencies": {
         "effect": "4.0.0-beta.101",
+        "solid-js": ">=1.9.0",
       },
       "optionalPeers": [
         "effect",
+        "solid-js",
       ],
     },
     "packages/codemode": {
