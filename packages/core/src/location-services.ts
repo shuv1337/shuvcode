@@ -2,6 +2,7 @@ import { Effect, Layer, LayerMap } from "effect"
 import path from "path"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
+import { BootPhase } from "./boot-phase.js"
 import { Catalog } from "./catalog.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
@@ -125,6 +126,7 @@ export function buildLocationServiceMap(
       LayerMap.make(
         (ref: Location.Ref) => {
           const startedAt = performance.now()
+          const phases: BootPhase.Phases = {}
           const allReplacements = replacements.concat([[Location.node, Location.boundNode(ref)]])
           // Apply replacements during hoist, not afterward: replacements can
           // introduce new tagged dependencies (Location.boundNode depends on
@@ -132,16 +134,22 @@ export function buildLocationServiceMap(
           // those back out.
           const location = LayerNode.hoist(locationServices, Node.tags.values.global, allReplacements)
 
-          return LayerNode.compile(location.node).pipe(
-            Layer.fresh,
-            Layer.tap(() =>
-              Effect.logInfo("location services booted", {
-                directory: ref.directory,
-                workspaceID: ref.workspaceID,
-                durationMs: Math.round(performance.now() - startedAt),
-              }),
+          return BootPhase.record(
+            LayerNode.compile(location.node).pipe(
+              Layer.fresh,
+              Layer.tap(() =>
+                Effect.logInfo("location services booted", {
+                  directory: ref.directory,
+                  workspaceID: ref.workspaceID,
+                  durationMs: Math.round(performance.now() - startedAt),
+                  // Unattributed remainder is node construction and, under
+                  // concurrent boots, time-slicing against other builds.
+                  phaseMs: BootPhase.summarize(phases),
+                }),
+              ),
+              Layer.provide(LayerNode.compile(location.hoisted)),
             ),
-            Layer.provide(LayerNode.compile(location.hoisted)),
+            phases,
           )
         },
         { idleTimeToLive: "60 minutes" },
