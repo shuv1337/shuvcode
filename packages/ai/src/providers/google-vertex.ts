@@ -42,7 +42,9 @@ const fromRequest = Effect.fn("GoogleVertex.fromRequest")(function* (request: LL
   const body = yield* Gemini.protocol.body.from(request)
   const value = request.providerOptions?.gemini?.labels
   const labels = ProviderShared.isRecord(value)
-    ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+    ? Object.fromEntries(
+        Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+      )
     : undefined
   return { ...body, labels }
 })
@@ -111,10 +113,7 @@ export const provider = {
   id,
   configure,
 }
-export const model: ProviderPackage.Definition<Settings, GeminiProviderOptionsInput>["model"] = (
-  modelID,
-  settings,
-) => {
+export const model: ProviderPackage.Definition<Settings, GeminiProviderOptionsInput>["model"] = (modelID, settings) => {
   if (settings.apiKey !== undefined && settings.accessToken !== undefined)
     throw new Error("Google Vertex apiKey cannot be combined with accessToken or auth")
   return configure({
