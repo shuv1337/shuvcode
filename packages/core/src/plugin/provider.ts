@@ -11,6 +11,7 @@ import { DynamicProviderPlugin } from "./provider/dynamic.js"
 import { GatewayPlugin } from "./provider/gateway.js"
 import { GithubCopilotPlugin } from "./provider/github-copilot.js"
 import { GitLabPlugin } from "./provider/gitlab.js"
+import { GoogleAntigravityPlugin } from "./provider/google-antigravity.js"
 import { GoogleVertexPlugin } from "./provider/google-vertex.js"
 import { GroqPlugin } from "./provider/groq.js"
 import { KiloPlugin } from "./provider/kilo.js"
@@ -47,6 +48,7 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   GatewayPlugin,
   GithubCopilotPlugin,
   GitLabPlugin,
+  GoogleAntigravityPlugin,
   GoogleVertexPlugin,
   GroqPlugin,
   KiloPlugin,
