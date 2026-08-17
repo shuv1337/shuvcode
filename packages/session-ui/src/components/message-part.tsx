@@ -866,6 +866,12 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
   const include = typeof input.include === "string" ? input.include : undefined
   const offset = typeof input.offset === "number" ? input.offset : undefined
   const limit = typeof input.limit === "number" ? input.limit : undefined
+  const metadata = "metadata" in part.state ? part.state.metadata : undefined
+  const count = part.tool === "glob" ? metadata?.count : part.tool === "grep" ? metadata?.matches : undefined
+  const matches =
+    typeof count === "number" && Number.isFinite(count) && count !== 0
+      ? i18n.plural("ui.messagePart.context.match", count)
+      : undefined
 
   switch (part.tool) {
     case "read": {
@@ -887,12 +893,13 @@ function contextToolTrigger(part: ToolPart, i18n: ReturnType<typeof useI18n>) {
       return {
         title: i18n.t("ui.tool.glob"),
         subtitle: getDirectory(path),
-        args: pattern ? ["pattern=" + pattern] : [],
+        args: [...(pattern ? ["pattern=" + pattern] : []), ...(matches ? [matches] : [])],
       }
     case "grep": {
       const args: string[] = []
       if (pattern) args.push("pattern=" + pattern)
       if (include) args.push("include=" + include)
+      if (matches) args.push(matches)
       return {
         title: i18n.t("ui.tool.grep"),
         subtitle: getDirectory(path),
