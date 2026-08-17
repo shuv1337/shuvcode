@@ -160,8 +160,14 @@ function withTmp<A, E, R>(
     Effect.promise(async () => {
       const tmp = await tmpdir()
       if (options?.vcs === "hg") {
-        await fs.mkdir(path.join(tmp.path, ".hg"))
-        return { tmp, vcs: { type: "hg" as const, store: AbsolutePath.make(path.join(tmp.path, ".hg")) } }
+        const store = path.join(tmp.path, ".hg")
+        await fs.mkdir(store)
+        // Match git init: seed branch metadata so the file watch attaches to an
+        // existing leaf before LocationWatcher starts (create-only watches are
+        // flaky under some tmpfs/inotify setups).
+        await fs.writeFile(path.join(store, "branch"), "default\n")
+        await options.init?.(tmp.path)
+        return { tmp, vcs: { type: "hg" as const, store: AbsolutePath.make(store) } }
       }
       if (options?.vcs !== "git") return { tmp, vcs: undefined }
       await $`git init`.cwd(tmp.path).quiet()
@@ -261,7 +267,11 @@ function nextUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: Effect.
   })
 }
 
-function eventuallyUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: () => Effect.Effect<void, E>) {
+function eventuallyUpdate<E>(
+  check: (event: WatcherEvent) => boolean,
+  trigger: () => Effect.Effect<void, E>,
+  timeout: Duration.Input = "5 seconds",
+) {
   return Effect.gen(function* () {
     while (true) {
       const result = yield* maybeNextUpdate(check, trigger(), "250 millis")
@@ -269,7 +279,7 @@ function eventuallyUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: (
     }
   }).pipe(
     Effect.timeoutOrElse({
-      duration: "5 seconds",
+      duration: timeout,
       orElse: () => Effect.fail(new Error("timed out waiting for file watcher readiness")),
     }),
   )
@@ -383,18 +393,27 @@ describeNative("LocationWatcher", () => {
     )
   })
 
-  it.live("publishes .hg/branch events", () =>
-    withTmp(
-      (directory) =>
-        Effect.gen(function* () {
-          const fs = yield* FSUtil.Service
-          const branch = path.join(directory, ".hg", "branch")
-          yield* ready(branch)
-          expect(
-            yield* nextUpdate((event) => event.file === branch, fs.writeFileString(branch, "feature\n")),
-          ).toMatchObject({ file: branch })
-        }),
-      { vcs: "hg" },
-    ),
+  it.live(
+    "publishes .hg/branch events",
+    () =>
+      withTmp(
+        (directory) =>
+          Effect.gen(function* () {
+            const fs = yield* FSUtil.Service
+            const branch = path.resolve(directory, ".hg", "branch")
+            // LocationWatcher starts watches on a forked fiber; keep rewriting with
+            // unique content until the bus sees the path (identical rewrites are
+            // silent under inotify on some tmpfs setups).
+            expect(
+              yield* eventuallyUpdate(
+                (event) => path.resolve(event.file) === branch,
+                () => fs.writeFileString(branch, `feature-${Math.random()}\n`),
+                "12 seconds",
+              ),
+            ).toMatchObject({ file: branch })
+          }),
+        { vcs: "hg" },
+      ),
+    { timeout: 15_000 },
   )
 })
