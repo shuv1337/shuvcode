@@ -239,11 +239,14 @@ export const Plugin = {
                     }
                     if (change.moveTarget) {
                       const moveTarget = change.moveTarget
+                      // Remove the lexical source path so a move of a symlink
+                      // unlinks the entry without deleting the realpath target.
+                      const sourcePath = path.resolve(location.directory, change.path)
                       yield* environment.files
                         .write(moveTarget.absolute, new TextEncoder().encode(change.content))
                         .pipe(Effect.mapError((error) => fail(`Failed to write ${moveTarget.resource}`, error)))
                       yield* environment.files
-                        .remove(change.target.absolute)
+                        .remove(sourcePath)
                         .pipe(
                           Effect.mapError((error) =>
                             fail(`Wrote ${moveTarget.resource} but failed to remove ${change.target.resource}`, error),
