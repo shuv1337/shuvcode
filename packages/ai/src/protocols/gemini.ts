@@ -531,9 +531,8 @@ const finish = (state: ParserState): ReadonlyArray<LLMEvent> => {
     : state.lifecycle
   Lifecycle.finish(lifecycle, events, {
     reason: {
-      normalized: promptBlockReason === undefined
-        ? mapFinishReason(finishReason, state.hasToolCalls)
-        : "content-filter",
+      normalized:
+        promptBlockReason === undefined ? mapFinishReason(finishReason, state.hasToolCalls) : "content-filter",
       raw: finishReason,
     },
     usage: state.usage,
