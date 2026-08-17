@@ -8,6 +8,7 @@ import { Config } from "@opencode-ai/core/config"
 import { Form } from "@opencode-ai/core/form"
 import { WebSearch } from "@opencode-ai/core/websearch"
 import { Document, Info } from "@opencode-ai/schema/config"
+import { ConfigWebSearch } from "@opencode-ai/schema/config/websearch"
 import { Session } from "@opencode-ai/core/session"
 import { toSessionError } from "@opencode-ai/core/session/to-session-error"
 import { Tool } from "@opencode-ai/core/tool"
@@ -128,6 +129,13 @@ const form = Layer.succeed(
     cancel: () => Effect.die("unused"),
   }),
 )
+const websearchConfig = () =>
+  selection === undefined
+    ? undefined
+    : selection === false
+      ? false
+      : new ConfigWebSearch.Info({ provider: selection })
+
 const config = Layer.succeed(
   Config.Service,
   Config.Service.of({
@@ -136,7 +144,7 @@ const config = Layer.succeed(
         new Document({
           type: "document",
           info: new Info({
-            websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection },
+            websearch: websearchConfig(),
           }),
         }),
       ]),
@@ -144,7 +152,7 @@ const config = Layer.succeed(
       Effect.sync(() => {
         const info = produce(
           new Info({
-            websearch: selection === undefined ? undefined : selection === false ? false : { provider: selection },
+            websearch: websearchConfig(),
           }),
           update,
         )
