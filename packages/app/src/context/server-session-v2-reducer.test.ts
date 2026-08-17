@@ -129,11 +129,11 @@ describe("v2 session reducer", () => {
         },
       }),
     )
-    const legacyAgent = reducer.reduce(
+    const derivedAgent = reducer.reduce(
       source,
       event({
         ...base,
-        id: "evt_legacy_agent",
+        id: "evt_derived_agent",
         type: "session.agent.selected",
         data: { sessionID: "ses_1", agent: "plan" },
       }),
@@ -145,7 +145,7 @@ describe("v2 session reducer", () => {
       model: { id: "new" },
       previous: { id: "durable" },
     })
-    expect(legacyAgent?.messages.at(-1)).toMatchObject({
+    expect(derivedAgent?.messages.at(-1)).toMatchObject({
       type: "agent-switched",
       agent: "plan",
       previous: "build",

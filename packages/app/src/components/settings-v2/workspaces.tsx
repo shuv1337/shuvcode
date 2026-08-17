@@ -176,12 +176,7 @@ export const SettingsWorkspacesV2: Component<{ activeDirectory?: string }> = (pr
         worktree: undefined,
       })
     })
-    clearWorkspaceTerminals(
-      workspace.directory,
-      preflight.sessions.map((session) => session.id),
-      platform,
-      context.sdk.scope,
-    )
+    clearWorkspaceTerminals(workspace.directory, platform, context.sdk.scope)
     context.sync.set(
       "project",
       produce((draft) => {

@@ -11,6 +11,8 @@ import { extractPromptFromParts } from "@/utils/prompt"
 import type { TextPart as SDKTextPart } from "@/types"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLanguage } from "@/context/language"
+import { useServer } from "@/context/server"
+import { sessionHref } from "@/utils/session-route"
 
 interface ForkableMessage {
   id: string
@@ -30,6 +32,7 @@ export const DialogFork: Component = () => {
   const prompt = usePrompt()
   const dialog = useDialog()
   const language = useLanguage()
+  const server = useServer()
 
   const messages = createMemo((): ForkableMessage[] => {
     const sessionID = params.id
@@ -73,7 +76,7 @@ export const DialogFork: Component = () => {
       .then((forked) => {
         dialog.close()
         prompt.set(restored, undefined, { dir, id: forked.id })
-        navigate(`/${dir}/session/${forked.id}`)
+        navigate(sessionHref(server.key, forked.id))
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)

@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createRoot, getOwner, onCleanup } from "solid-js"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import type { PermissionRequest } from "@opencode-ai/client/promise"
 import { Persist, persisted } from "@/utils/persist"
@@ -12,12 +12,13 @@ import { ServerConnection, useServers } from "./servers"
 import { type DraftTab, useTabs } from "./tabs"
 import { useSettings } from "./settings"
 import { requireServerKey } from "@/utils/session-route"
-import type { ServerScope } from "@/utils/server-scope"
+import { ServerScope } from "@/utils/server-scope"
 import {
   acceptKey,
   directoryAcceptKey,
   isDirectoryAutoAccepting,
   autoRespondsPermission,
+  relocateAutoAccept,
   sessionAutoAccept,
 } from "./permission-auto-respond"
 import { useServer } from "./server"
@@ -57,7 +58,8 @@ type PermissionEvent = Parameters<Parameters<ServerSDK["event"]["listen"]>[0]>[0
 export function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync }) {
   const [store, setStore, _, ready] = persisted(
     {
-      ...Persist.serverGlobal(input.sdk.scope, "permission", ["permission.v3"]),
+      ...Persist.serverGlobal(input.sdk.scope, "permission"),
+      ...(input.sdk.scope === ServerScope.local ? { previousKey: "permission.v3" } : {}),
       migrate(value) {
         if (!value || typeof value !== "object" || Array.isArray(value)) return value
 
@@ -147,8 +149,15 @@ export function createServerPermissionState(input: { sdk: ServerSDK; sync: Serve
     return [...info, ...input.sync.child(directory, { bootstrap: false })[0].session]
   }
 
+  function autoAccept(directory?: string) {
+    if (!directory) return store.autoAccept
+    const next = relocateAutoAccept(store.autoAccept, sessions(directory), directory)
+    if (next !== store.autoAccept) setStore("autoAccept", reconcile(next))
+    return next
+  }
+
   function isAutoAccepting(sessionID: string, directory?: string) {
-    return autoRespondsPermission(store.autoAccept, sessions(directory), { sessionID }, directory)
+    return autoRespondsPermission(autoAccept(directory), sessions(directory), { sessionID }, directory)
   }
 
   function isAutoAcceptingDirectory(directory: string) {
@@ -156,7 +165,7 @@ export function createServerPermissionState(input: { sdk: ServerSDK; sync: Serve
   }
 
   function shouldAutoRespond(permission: PermissionRequest, directory?: string) {
-    return autoRespondsPermission(store.autoAccept, sessions(directory), permission, directory)
+    return autoRespondsPermission(autoAccept(directory), sessions(directory), permission, directory)
   }
 
   function isPending(permission: PermissionRequest) {
@@ -165,7 +174,7 @@ export function createServerPermissionState(input: { sdk: ServerSDK; sync: Serve
   }
 
   async function shouldAutoRespondResolved(permission: PermissionRequest, directory?: string) {
-    const override = sessionAutoAccept(store.autoAccept, sessions(directory), permission, directory)
+    const override = sessionAutoAccept(autoAccept(directory), sessions(directory), permission, directory)
     if (override !== undefined) return override
     if (input.sync.session.lineage.peek(permission.sessionID)) return shouldAutoRespond(permission, directory)
     const lineage = await input.sync.session.lineage.resolve(permission.sessionID).catch(() => undefined)

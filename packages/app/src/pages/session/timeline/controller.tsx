@@ -13,7 +13,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { useTabs } from "@/context/tabs"
 import type { SessionController } from "@/pages/session/session-controller"
-import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
+import { sessionHref } from "@/utils/session-route"
 import { sessionTitle } from "@/utils/session-title"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/utils/session-export"
 import { showToast } from "@/utils/toast"
@@ -142,20 +142,12 @@ export function createTimelineController(input: {
     const id = input.session.identity.sessionID()
     if (!id || pending.unshare || !shareEnabled()) return
   }
-  const href = (id: string) =>
-    input.session.identity.params.serverKey
-      ? sessionHref(requireServerKey(input.session.identity.params.serverKey), id)
-      : legacySessionHref(sdk().directory, id)
+  const href = (id: string) => sessionHref(server.key, id)
   const navigateAfterRemoval = (id: string, parent?: string, next?: string) => {
     if (input.session.identity.params.id !== id) return
     if (parent) return navigate(href(parent))
     if (next) return navigate(href(next))
-    if (input.session.identity.params.serverKey)
-      return tabs.newDraft({
-        server: requireServerKey(input.session.identity.params.serverKey),
-        directory: sdk().directory,
-      })
-    navigate(`/${input.session.identity.params.dir}/session`)
+    return tabs.newDraft({ server: server.key, directory: sdk().directory })
   }
   const exportSession = async (id: string) => {
     try {

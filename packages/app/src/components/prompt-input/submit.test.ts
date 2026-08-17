@@ -39,6 +39,7 @@ const updatedDrafts: Array<{ draftID: string; worktree?: string }> = []
 const syncedServers: string[] = []
 const admittedServers: string[] = []
 const promptCaptures: Array<{ scope?: unknown; target?: unknown }> = []
+const navigations: string[] = []
 let serverSessionSyncs = 0
 let restoredPrompts = 0
 let clearEchoCalls = 0
@@ -55,12 +56,12 @@ let promptFailure: Error | undefined
 let clearEchoResult = true
 let worktreeCreates = 0
 let activeSDK = "server-a"
+let activeServer = "server-a"
 let activeServerSync = "server-a"
 let activeDirectorySync = "server-a"
 let commands: Array<{ name: string }> = []
 let worktreeDirectory = "/repo/new-0"
 let worktreeID = 0
-const draftServers: Record<string, string> = {}
 const sessionDirectories: Record<string, string> = {}
 
 let promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
@@ -178,7 +179,7 @@ beforeAll(async () => {
   const rootClient = clientFor("/repo/main")
 
   mock.module("@solidjs/router", () => ({
-    useNavigate: () => () => undefined,
+    useNavigate: () => (href: string) => navigations.push(href),
     useParams: () => params,
     useLocation: () => ({}),
     useSearchParams: () => [search, () => undefined],
@@ -191,7 +192,10 @@ beforeAll(async () => {
   }))
 
   mock.module("@opencode-ai/core/util/encode", () => ({
+    base64Decode: (value: string) => value,
     base64Encode: (value: string) => value,
+    checksum: (value: string) => value,
+    sampledChecksum: (value: string) => value,
   }))
 
   mock.module("@/context/local", () => ({
@@ -214,12 +218,11 @@ beforeAll(async () => {
   })
 
   mock.module("@/context/server", () => ({
-    useServer: () => ({ key: "server-key" }),
+    useServer: () => ({ key: activeServer }),
   }))
 
   mock.module("@/context/tabs", () => ({
     useTabs: () => ({
-      draft: (draftID: string) => ({ server: draftServers[draftID] ?? "project-server" }),
       updateDraft: (draftID: string, draft: { worktree?: string }) => {
         updatedDrafts.push({ draftID, ...draft })
       },
@@ -343,6 +346,7 @@ beforeEach(() => {
   syncedServers.length = 0
   admittedServers.length = 0
   promptCaptures.length = 0
+  navigations.length = 0
   restoredPrompts = 0
   clearEchoCalls = 0
   params = {}
@@ -352,6 +356,7 @@ beforeEach(() => {
   selected = "/repo/worktree-a"
   variant = undefined
   activeSDK = "server-a"
+  activeServer = "server-a"
   activeServerSync = "server-a"
   activeDirectorySync = "server-a"
   commands = []
@@ -365,7 +370,6 @@ beforeEach(() => {
   promptFailure = undefined
   clearEchoResult = true
   worktreeCreates = 0
-  for (const key of Object.keys(draftServers)) delete draftServers[key]
   for (const key of Object.keys(sessionDirectories)) delete sessionDirectories[key]
   for (const key of Object.keys(storedSessions)) delete storedSessions[key]
 })
@@ -414,6 +418,7 @@ describe("prompt submit worktree selection", () => {
     expect(worktreeCreates).toBe(1)
     expect(createdSessions).toHaveLength(1)
     expect(sentPrompts).toEqual([worktreeDirectory])
+    expect(navigations).toEqual(["/server/server-a/session/session-1"])
   })
 
   test("stops when the created workspace cannot initialize", async () => {
@@ -429,8 +434,6 @@ describe("prompt submit worktree selection", () => {
 
   test("keeps async submission effects bound to the initiating context", async () => {
     search = { draftId: "draft-1" }
-    draftServers["draft-1"] = "project-server-a"
-    draftServers["draft-2"] = "project-server-b"
     let release = () => {}
     createSessionGate = new Promise<void>((resolve) => {
       release = resolve
@@ -442,6 +445,7 @@ describe("prompt submit worktree selection", () => {
 
     const result = submit.handleSubmit(event)
     activeSDK = "server-b"
+    activeServer = "server-b"
     activeServerSync = "server-b"
     activeDirectorySync = "server-b"
     search.draftId = "draft-2"
@@ -450,10 +454,10 @@ describe("prompt submit worktree selection", () => {
     await settle()
 
     expect(updatedDrafts).toEqual([{ draftID: "draft-1", worktree: undefined }])
-    expect(promotedDrafts).toEqual([{ draftID: "draft-1", server: "project-server-a", sessionId: "session-1" }])
+    expect(promotedDrafts).toEqual([{ draftID: "draft-1", server: "server-a", sessionId: "session-1" }])
     expect(syncedServers.every((server) => server === "server-a")).toBe(true)
     expect(admittedServers).toEqual(["server-a"])
-    expect(promptCaptures.at(-1)?.target).toEqual({ server: "project-server-a", scope: ServerScope.local })
+    expect(promptCaptures.at(-1)?.target).toEqual({ server: "server-a", scope: ServerScope.local })
     expect(submitted).toBe(0)
   })
 

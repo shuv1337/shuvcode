@@ -97,7 +97,7 @@ import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { extractPromptFromParts } from "@/utils/prompt"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
-import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
+import { requireServerKey, sessionHref } from "@/utils/session-route"
 import { useUsageExceededDialogs } from "./session/usage-exceeded-dialogs"
 import { createSessionLineage } from "./session/session-lineage"
 
@@ -506,7 +506,7 @@ export default function Page() {
   })
 
   const [followup, setFollowup] = persisted(
-    Persist.serverWorkspace(serverSDK.scope, sdk().directory, "followup", ["followup.v1"]),
+    Persist.serverWorkspace(serverSDK.scope, sdk().directory, "followup"),
     createStore<{
       items: Record<string, FollowupItem[] | undefined>
       failed: Record<string, string | undefined>
@@ -2083,11 +2083,7 @@ export default function Page() {
             openParent: () => {
               const id = controller.data.parentID()
               if (!id) return
-              navigate(
-                controller.identity.params.serverKey
-                  ? sessionHref(requireServerKey(controller.identity.params.serverKey), id)
-                  : legacySessionHref(sdk().directory, id),
-              )
+              navigate(sessionHref(requireServerKey(controller.identity.params.serverKey), id))
             },
             setPromptRef: (el) => {
               inputRef = el

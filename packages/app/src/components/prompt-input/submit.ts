@@ -21,6 +21,8 @@ import { ScopedKey } from "@/utils/server-scope"
 import { createPromptSubmissionState } from "./submission-state"
 import { Event } from "@opencode-ai/schema/event"
 import { blobDataUrl } from "@/utils/draft-store"
+import { useServer } from "@/context/server"
+import { sessionHref } from "@/utils/session-route"
 
 const submitting = new Set<string>()
 
@@ -189,6 +191,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const sdk = useSDK()
   const sync = useSync()
   const serverSync = useServerSync()
+  const server = useServer()
   const local = useLocal()
   const permission = usePermission()
   const prompt = input.prompt
@@ -291,12 +294,12 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const submissionSync = sync()
     const submissionServerSync = serverSync
     const submissionScope = submissionSDK.scope
+    const submissionServer = server.key
     const projectDirectory = submissionSDK.directory
     const sessionID = params.id
     const isNewSession = !sessionID
     const currentSession = input.info()
     const draftID = search.draftId
-    const draftServer = draftID ? tabs.draft(draftID).server : undefined
     const capturePrompt = prompt.capture
     const localSession = local.session
     const resetWorktree = input.onNewSessionWorktreeReset
@@ -376,12 +379,12 @@ export function createPromptSubmit(input: PromptSubmitInput) {
               model: { providerID: currentModel.provider.id, modelID: currentModel.id },
               variant: variant ?? null,
             })
-            if (draftID && draftServer) tabs.promoteDraft(draftID, { server: draftServer, sessionId: session.id })
-            else navigate(`/${base64Encode(sessionDirectory)}/session/${session.id}`)
+            if (draftID) tabs.promoteDraft(draftID, { server: submissionServer, sessionId: session.id })
+            else navigate(sessionHref(submissionServer, session.id))
             submission.retarget(
               capturePrompt(
                 { dir: base64Encode(sessionDirectory), id: session.id },
-                { server: draftServer, scope: submissionScope },
+                { server: submissionServer, scope: submissionScope },
               ),
             )
           })
