@@ -118,9 +118,14 @@ describe("OpenAIPlugin", () => {
       expect(provider.package).toBe("@opencode-ai/ai/providers/openai")
       expect(provider.settings).toMatchObject({ baseURL: "https://chatgpt.com/backend-api/codex" })
       expect(provider.headers).toMatchObject({ originator: "codex_cli_rs", "chatgpt-account-id": "acct_123" })
+      expect(request.url).toBe("https://chatgpt.com/backend-api/codex/responses")
+      expect(request.headers).toMatchObject({ originator: "codex_cli_rs", "session-id": "ses_test" })
       expect(custom.headers).not.toHaveProperty("originator")
+      expect(proxy.url).toBe("https://proxy.example/v1/responses?region=us")
+      expect(proxy.headers).toMatchObject({ originator: "codex_cli_rs", "session-id": "ses_test" })
       const eligible = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5")))
       expect(eligible.package).toBe("@opencode-ai/ai/providers/openai")
+      expect(eligible.headers).toMatchObject({ originator: "codex_cli_rs", "chatgpt-account-id": "acct_123" })
       expect(eligible.cost).toEqual([])
       expect(eligible.limit).toEqual({ context: 400_000, input: 272_000, output: 128_000 })
       expect(eligible.enabled).toBe(true)
@@ -184,11 +189,13 @@ describe("OpenAIPlugin", () => {
       yield* addPlugin()
 
       const request = yield* http(Provider.ID.openai, "https://api.openai.com/v1/responses")
+
+      const provider = required(yield* catalog.provider.get(Provider.ID.openai))
       const model = required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.5")))
       expect(model.package).toBe("@opencode-ai/ai/providers/openai")
       expect(model.enabled).toBe(true)
       expect(model.limit).toEqual({ context: 1_050_000, input: 922_000, output: 128_000 })
-      const provider = required(yield* catalog.provider.get(Provider.ID.openai))
+      expect(request.headers).not.toHaveProperty("originator")
       expect(provider.headers).not.toHaveProperty("originator")
       const daybreak = required(
         yield* catalog.model.get(Provider.ID.openai, Model.ID.make("daybreak-blue-latest")),

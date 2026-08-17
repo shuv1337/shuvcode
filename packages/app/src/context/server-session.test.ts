@@ -185,6 +185,16 @@ const textPart = (messageID: string, input: Partial<TextPart> = {}): TextPart =>
   id: `${messageID}:text:${input.id === "pending" ? 1 : 0}`,
 })
 
+const promptEcho = (messageID: string, text = "hello") => ({
+  sessionID: "child",
+  messageID,
+  text,
+  displayText: text,
+  agent: "build",
+  model: { providerID: "provider", modelID: "model" },
+  comments: [],
+})
+
 const response = (data: MessageResponse["data"] = [], cursor?: string): MessageResponse => ({
   data,
   response: { headers: new Headers(cursor ? { "x-next-cursor": cursor } : undefined) },
@@ -299,6 +309,26 @@ function setup(sessions: Record<string, SessionInfo>) {
 }
 
 describe("server session", () => {
+  test("hydrates session info after a native session.created event", async () => {
+    const ctx = setup({ created: session("created") })
+
+    ctx.store.apply({
+      type: "session.created",
+      properties: {
+        sessionID: "created",
+        projectID: "project",
+        location: { directory: "/repo" },
+        slug: "created",
+        version: "test",
+      },
+    })
+
+    expect(ctx.store.get("created")).toBeUndefined()
+    await ctx.store.resolve("created")
+    expect(ctx.store.get("created")?.location.directory).toBe("/repo")
+    expect(ctx.get).toEqual([{ sessionID: "created" }])
+  })
+
   test("projects V2 session events into current and legacy message state", () => {
     const ctx = setup({ child: session("child") })
     ctx.store.remember(session("child"))
@@ -340,14 +370,38 @@ describe("server session", () => {
       location: { directory: "/repo" },
       data: { sessionID: "child", assistantMessageID: "msg_2_assistant", ordinal: 0, delta: "world" },
     })
+    apply({
+      id: "evt_tool_z",
+      created: 5,
+      type: "session.tool.input.started",
+      durable: { aggregateID: "child", seq: 3, version: 1 },
+      location: { directory: "/repo" },
+      data: { sessionID: "child", assistantMessageID: "msg_2_assistant", id: "call_z", name: "shell" },
+    })
+    apply({
+      id: "evt_tool_a",
+      created: 6,
+      type: "session.tool.input.started",
+      durable: { aggregateID: "child", seq: 4, version: 1 },
+      location: { directory: "/repo" },
+      data: { sessionID: "child", assistantMessageID: "msg_2_assistant", id: "call_a", name: "shell" },
+    })
 
     expect(ctx.store.data.session_message.child?.at(-1)).toMatchObject({
       id: "msg_2_assistant",
       type: "assistant",
-      content: [{ type: "text", text: "world" }],
+      content: [
+        { type: "text", text: "world" },
+        { type: "tool", id: "call_z" },
+        { type: "tool", id: "call_a" },
+      ],
     })
     expect(ctx.store.data.message.child?.map((message) => message.id)).toEqual(["msg_1_user", "msg_2_assistant"])
-    expect(ctx.store.data.part.msg_2_assistant).toMatchObject([{ type: "text", text: "world" }])
+    expect(ctx.store.data.part.msg_2_assistant?.map((part) => part.id)).toEqual([
+      "msg_2_assistant:text:0",
+      "call_z",
+      "call_a",
+    ])
   })
 
   test("projects V2 pending inputs and forms", () => {
@@ -564,7 +618,7 @@ describe("server session", () => {
     await ctx.store.sync("root")
 
     expect(ctx.get).toEqual([{ sessionID: "root" }])
-    expect(ctx.messages).toEqual([{ sessionID: "root", limit: 20, order: "desc" }])
+    expect(ctx.messages).toEqual([{ sessionID: "root", limit: 200, order: "desc" }])
     expect(ctx.store.data.message.root).toEqual([])
   })
 
@@ -575,8 +629,32 @@ describe("server session", () => {
     ctx.store.invalidate()
     await ctx.store.sync("root")
 
+    expect(ctx.store.data.message.root).toEqual([])
     expect(ctx.get).toHaveLength(2)
-    expect(ctx.messages).toHaveLength(2)
+    expect(ctx.messages).toEqual([
+      { sessionID: "root", limit: 200, order: "desc" },
+      { sessionID: "root", limit: 200, order: "desc" },
+    ])
+  })
+
+  test("keeps a fixed page size after the local message cache exceeds the API limit", async () => {
+    const client = messageClient(response(), response())
+    const store = createServerSession(client)
+    await store.sync("child")
+    Array.from({ length: 428 }, (_, index) =>
+      store.apply({
+        type: "message.updated",
+        properties: { info: userMessage(`message-${index}`, { time: { created: index } }) },
+      }),
+    )
+
+    expect(store.data.message.child).toHaveLength(428)
+    await store.sync("child", { force: true })
+
+    expect(client.requests).toEqual([
+      { sessionID: "child", limit: 200, order: "desc" },
+      { sessionID: "child", limit: 200, order: "desc" },
+    ])
   })
 
   test("loads current session content through the current message API", async () => {
@@ -601,9 +679,48 @@ describe("server session", () => {
 
     await store.sync("root")
 
-    expect(requests).toEqual([{ sessionID: "root", limit: 20, order: "desc" }])
+    expect(requests).toEqual([{ sessionID: "root", limit: 200, order: "desc" }])
     expect(store.data.session_message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
     expect(store.data.message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
+  })
+
+  test("preserves assistant content order from message history", async () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "inspect it", time: { created: 1 } },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [
+          { type: "text", text: "I will inspect it." },
+          {
+            type: "tool",
+            id: "call_z",
+            name: "shell",
+            state: { status: "streaming", input: "" },
+            time: { created: 2 },
+          },
+          {
+            type: "tool",
+            id: "call_a",
+            name: "shell",
+            state: { status: "streaming", input: "" },
+            time: { created: 3 },
+          },
+        ],
+        time: { created: 2 },
+      },
+    ] satisfies SessionMessageInfo[]
+    const messageApi = {
+      list: async () => ({ data: source.toReversed(), cursor: { previous: null, next: null } }),
+    } as unknown as MessageApi
+    const store = createServerSession({} as SessionApi, messageApi)
+    store.remember(session("root"))
+
+    await store.sync("root")
+
+    expect(store.data.part.msg_assistant?.map((part) => part.id)).toEqual(["msg_assistant:text:0", "call_z", "call_a"])
   })
 
   test("extends a current page to include the user for split assistant turns", async () => {
@@ -638,14 +755,34 @@ describe("server session", () => {
     await store.sync("root")
 
     expect(requests).toEqual([
-      { sessionID: "root", limit: 20, order: "desc" },
-      { sessionID: "root", limit: 20, cursor: "older" },
+      { sessionID: "root", limit: 200, order: "desc" },
+      { sessionID: "root", limit: 200, cursor: "older" },
     ])
     expect(store.data.message.root.map((message) => message.id)).toEqual([
       user.id,
       ...assistants.map((item) => item.id),
     ])
     expect(assistants.map((item) => store.data.part[item.id]?.[0]?.type)).toEqual(["text", "text", "text"])
+  })
+
+  test("loads older messages by cursor with the fixed page size", async () => {
+    const older = userMessage("message-1")
+    const latest = userMessage("message-2", { time: { created: 2 } })
+    const client = messageClient(
+      response([{ info: latest, parts: [] }], "older"),
+      response([{ info: older, parts: [] }]),
+    )
+    const store = createServerSession(client)
+    await store.sync("child")
+
+    await store.history.loadMore("child")
+
+    expect(client.requests).toEqual([
+      { sessionID: "child", limit: 200, order: "desc" },
+      { sessionID: "child", limit: 200, cursor: "older" },
+    ])
+    expect(store.data.message.child).toEqual([older, latest])
+    expect(store.history.more("child")).toBe(false)
   })
 
   // V2 messages are ordered projections and do not expose V1 assistant parent IDs.
@@ -661,7 +798,7 @@ describe("server session", () => {
 
       await store.sync("child")
 
-      expect(client.requests).toEqual([{ sessionID: "child", limit: 20, order: "desc" }])
+      expect(client.requests).toEqual([{ sessionID: "child", limit: 200, order: "desc" }])
       expect(client.rootRequests).toEqual([{ sessionID: "child", messageID: user.id }])
       expect(store.data.message.child).toEqual([user, ...assistants])
       expect(store.history.more("child")).toBe(false)
@@ -710,19 +847,17 @@ describe("server session", () => {
       expect(store.data.part[parent.id]).toBeUndefined()
     })
 
-    test("does not let an optimistic user suppress initial root backfill", async () => {
+    test("does not let an admitted user suppress initial root backfill", async () => {
       const user = userMessage("message-1")
-      const part = textPart(user.id)
       const assistants = [assistantMessage("message-2", user.id), assistantMessage("message-3", user.id)]
       const client = rootMessageClient(
         [response(assistants.map((info) => ({ info, parts: [] })))],
         [singleResponse(user)],
       )
       const store = createServerSession(client)
-      store.optimistic.add({ sessionID: "child", message: user, parts: [part] })
+      store.inbox.echo(promptEcho(user.id, "text"))
 
       await store.sync("child")
-      store.optimistic.remove({ sessionID: "child", messageID: user.id })
 
       expect(client.requests).toHaveLength(1)
       expect(client.rootRequests).toHaveLength(1)
@@ -781,28 +916,6 @@ describe("server session", () => {
       expect(client.rootRequests).toEqual([{ sessionID: "child", messageID: stale.id }])
       expect(store.data.message.child).toEqual([fresh, assistant])
       expect(store.data.part[stale.id]).toEqual([freshPart])
-    })
-
-    test("refreshes a confirmed optimistic parent while preserving pending parts", async () => {
-      const stale = userMessage("message-1", { summary: { title: "stale", diffs: [] } })
-      const fresh = { ...stale, summary: { title: "fresh", diffs: [] } }
-      const confirmed = textPart(stale.id, { id: "confirmed", text: "stale" })
-      const refreshed = { ...confirmed, text: "fresh" }
-      const pending = textPart(stale.id, { id: "pending", text: "pending" })
-      const assistant = assistantMessage("message-2", stale.id)
-      const client = rootMessageClient(
-        [response([{ info: stale, parts: [confirmed] }]), response([{ info: assistant, parts: [] }])],
-        [singleResponse(fresh, [refreshed])],
-      )
-      const store = createServerSession(client)
-      store.optimistic.add({ sessionID: "child", message: stale, parts: [confirmed, pending] })
-      await store.sync("child")
-
-      await store.sync("child", { force: true })
-
-      expect(client.rootRequests).toEqual([{ sessionID: "child", messageID: stale.id }])
-      expect(store.data.message.child).toEqual([fresh, assistant])
-      expect(store.data.part[stale.id]).toEqual([refreshed, pending])
     })
 
     test("uses a parent received by SSE during the replacement load", async () => {
@@ -1040,30 +1153,6 @@ describe("server session", () => {
     expect(store.data.part[message.id]).toBeUndefined()
   })
 
-  test("preserves optimistic parts re-added after removal during a refresh", async () => {
-    const pending = deferredResponse()
-    const message = userMessage("message")
-    const stale = textPart(message.id, { id: "stale", text: "stale" })
-    const part = textPart(message.id, { id: "optimistic", text: "optimistic" })
-    const store = createServerSession(
-      messageClient(response([{ info: message, parts: [] }]), pending.promise, response()),
-    )
-    await store.sync("child")
-    const refreshing = store.sync("child", { force: true })
-
-    store.apply({ type: "message.removed", properties: { sessionID: "child", messageID: message.id } })
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    pending.resolve(response([{ info: message, parts: [stale] }]))
-    await refreshing
-
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([part])
-
-    await store.sync("child", { force: true })
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([part])
-  })
-
   test("drops stale event content omitted by a complete initial page", async () => {
     const stale = userMessage("stale")
     const store = createServerSession(messageClient(response()))
@@ -1085,170 +1174,309 @@ describe("server session", () => {
     expect(store.data.message.child).toEqual([live, fetched])
   })
 
-  test("does not restore removed optimistic content on refresh", async () => {
-    const message = userMessage("message")
-    const part = textPart(message.id, { text: "removed" })
-    const kept = { ...message, id: "kept" }
-    const keptPart = { ...part, id: "kept-part", messageID: kept.id }
-    const store = createServerSession(messageClient(response([{ info: kept, parts: [] }])))
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    store.optimistic.add({ sessionID: "child", message: kept, parts: [keptPart] })
-
-    store.apply({ type: "message.removed", properties: { sessionID: "child", messageID: message.id } })
-    store.apply({
-      type: "message.part.removed",
-      properties: { sessionID: "child", messageID: kept.id, partID: keptPart.id },
-    })
-    await store.sync("child", { force: true })
-
-    expect(store.data.message.child).toEqual([kept])
-    expect(store.data.part[message.id]).toBeUndefined()
-    expect(store.data.part[kept.id]).toBeUndefined()
-  })
-
-  test("replaces confirmed optimistic content with the initial page", async () => {
-    const optimistic = userMessage("message")
-    const fetched = { ...optimistic, time: { created: 2 } }
-    const store = createServerSession(messageClient(response([{ info: fetched, parts: [] }])))
-    store.optimistic.add({ sessionID: "child", message: optimistic, parts: [] })
-
-    await store.sync("child")
-
-    expect(store.data.message.child).toEqual([fetched])
-  })
-
-  test("replaces a confirmed optimistic part with fetched content", async () => {
-    const pending = deferredResponse()
-    const message = userMessage("message")
-    const optimistic = textPart(message.id, { text: "optimistic" })
-    const fetched = { ...optimistic, text: "fetched" }
-    const store = createServerSession(messageClient(pending.promise))
-    const loading = store.sync("child")
-
-    store.optimistic.add({ sessionID: "child", message, parts: [optimistic] })
-    pending.resolve(response([{ info: message, parts: [fetched] }]))
-    await loading
-
-    expect(store.data.part[message.id]).toEqual([fetched])
-  })
-
-  test("rolls back only unconfirmed optimistic parts", async () => {
-    const pending = deferredResponse()
-    const message = userMessage("message")
-    const confirmed = textPart(message.id, { id: "confirmed", text: "confirmed" })
-    const pendingPart = textPart(message.id, { id: "pending", text: "pending" })
-    const store = createServerSession(messageClient(pending.promise))
-    const loading = store.sync("child")
-    store.optimistic.add({ sessionID: "child", message, parts: [confirmed, pendingPart] })
-
-    pending.resolve(response([{ info: message, parts: [confirmed] }]))
-    await loading
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
-
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([confirmed])
-  })
-
-  test("updates confirmed optimistic parts from later pages", async () => {
-    const message = userMessage("message")
-    const confirmed = textPart(message.id, { id: "confirmed", text: "first" })
-    const updated = { ...confirmed, text: "updated" }
-    const pendingPart = textPart(message.id, { id: "pending", text: "pending" })
-    const store = createServerSession(
-      messageClient(response([{ info: message, parts: [confirmed] }]), response([{ info: message, parts: [updated] }])),
-    )
-    store.optimistic.add({ sessionID: "child", message, parts: [confirmed, pendingPart] })
-    await store.sync("child")
-
-    await store.sync("child", { force: true })
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
-
-    expect(store.data.part[message.id]).toEqual([updated])
-  })
-
-  test("does not restore a confirmed optimistic part after its removal event", async () => {
-    const message = userMessage("message")
-    const confirmed = textPart(message.id, { id: "confirmed", text: "confirmed" })
-    const pendingPart = textPart(message.id, { id: "pending", text: "pending" })
-    const store = createServerSession(
-      messageClient(response([{ info: message, parts: [confirmed] }]), response([{ info: message, parts: [] }])),
-    )
-    store.optimistic.add({ sessionID: "child", message, parts: [confirmed, pendingPart] })
-    await store.sync("child")
-    store.apply({
-      type: "message.part.removed",
-      properties: { sessionID: "child", messageID: message.id, partID: confirmed.id },
-    })
-
-    await store.sync("child", { force: true })
-
-    expect(store.data.part[message.id]).toEqual([pendingPart])
-  })
-
-  test("clears delta buffers when removing optimistic content", () => {
-    const message = userMessage("message")
-    const part = textPart(message.id, { text: "optimistic" })
+  test("echoes a prompt without changing durable message order", () => {
     const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    store.apply({
-      type: "message.part.delta",
-      properties: { sessionID: "child", messageID: message.id, partID: part.id, field: "text", delta: " delta" },
+
+    store.inbox.echo({
+      ...promptEcho("msg_prompt"),
+      text: "hello\nThe user made the following comment regarding line 4 of src/foo.ts: check this",
+      files: [{ uri: "file:///repo/src/foo.ts", mime: "text/plain", name: "foo.ts" }],
+      agents: [{ name: "explore" }],
+      comments: [
+        {
+          path: "src/foo.ts",
+          selection: { startLine: 4, startChar: 1, endLine: 4, endChar: 5 },
+          comment: "check this",
+          preview: "const value = 1",
+          origin: "review",
+        },
+      ],
     })
 
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    expect(store.data.pending.child).toMatchObject([{ id: "msg_prompt", type: "user", delivery: "steer" }])
+    expect(store.data.input.child).toEqual(["msg_prompt"])
+    expect(store.data.session_message.child).toBeUndefined()
+    expect(store.data.message.child?.map((message) => message.id)).toEqual(["msg_prompt"])
+    expect(store.data.part.msg_prompt).toMatchObject([
+      { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:file:0", type: "file", filename: "foo.ts" },
+      { id: "msg_prompt:agent:0", type: "agent", name: "explore" },
+      {
+        id: "msg_prompt:comment:0",
+        type: "text",
+        synthetic: true,
+        metadata: {
+          opencodeComment: {
+            path: "src/foo.ts",
+            selection: { startLine: 4, startChar: 1, endLine: 4, endChar: 5 },
+            comment: "check this",
+            preview: "const value = 1",
+            origin: "review",
+          },
+        },
+      },
+    ])
 
-    expect(store.data.part[message.id]).toBeUndefined()
-    expect(store.data.part_text_accum_delta[part.id]).toBeUndefined()
+    store.applyV2({
+      id: "evt_prompt",
+      created: 2,
+      type: "session.inbox.enqueued",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: {
+        sessionID: "child",
+        inboxID: "msg_prompt",
+        item: {
+          type: "user",
+          delivery: "steer",
+          payload: {
+            text: "hello\nThe user made the following comment regarding line 4 of src/foo.ts: check this",
+          },
+        },
+      },
+    } as OpenCodeEvent)
+
+    expect(store.data.part.msg_prompt).toMatchObject([
+      { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
+    ])
   })
 
-  test("removes projected messages when rolling back optimistic content", () => {
-    const message = userMessage("message")
-    const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [] })
+  test("preserves a local echo while message history omits pending input", async () => {
+    const store = createServerSession(messageClient(response()))
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.inbox.confirm({
+      id: "msg_prompt",
+      sessionID: "child",
+      timeCreated: 1,
+      type: "user",
+      delivery: "steer",
+      payload: { text: "hello" },
+    })
 
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    await store.sync("child")
 
+    expect(store.data.message.child?.map((message) => message.id)).toEqual(["msg_prompt"])
+    expect(store.data.part.msg_prompt).toMatchObject([{ type: "text", text: "hello" }])
+  })
+
+  test("preserves local comment presentation through message refresh", async () => {
+    const note = "The user made the following comment regarding line 4 of src/foo.ts: check this"
+    const message = userMessage("msg_prompt")
+    const store = createServerSession(
+      messageClient(response([{ info: message, parts: [textPart(message.id, { text: note })] }])),
+    )
+    store.inbox.echo({
+      ...promptEcho(message.id),
+      text: `hello\n${note}`,
+      comments: [
+        {
+          path: "src/foo.ts",
+          selection: { startLine: 4, startChar: 1, endLine: 4, endChar: 5 },
+          comment: "check this",
+          origin: "review",
+        },
+      ],
+    })
+
+    await store.sync("child")
+
+    expect(store.data.part.msg_prompt).toMatchObject([
+      { id: "msg_prompt:text:0", type: "text", text: "hello" },
+      { id: "msg_prompt:comment:0", type: "text", synthetic: true },
+    ])
+  })
+
+  test("retires an admitted echo absent from authoritative reconnect state", async () => {
+    const store = createServerSession(messageClient(response()))
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.inbox.confirm({
+      id: "msg_prompt",
+      sessionID: "child",
+      timeCreated: 1,
+      type: "user",
+      delivery: "steer",
+      payload: { text: "hello" },
+    })
+
+    await Promise.all([store.sync("child"), store.hydrateTransient("child", async () => ({ pending: [], forms: [] }))])
+    store.inbox.reconcile("child")
+
+    expect(store.data.pending.child).toEqual([])
+    expect(store.data.message.child).toEqual([])
+    expect(store.data.part.msg_prompt).toBeUndefined()
+  })
+
+  test("retires a stale enqueued message when inbox hydration finishes after history", async () => {
+    const store = createServerSession(messageClient(response()))
+    store.applyV2({
+      id: "evt_prompt",
+      created: 1,
+      type: "session.inbox.enqueued",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: {
+        sessionID: "child",
+        inboxID: "msg_prompt",
+        item: { type: "user", delivery: "steer", payload: { text: "hello" } },
+      },
+    } as OpenCodeEvent)
+
+    await store.sync("child")
+    await store.hydrateTransient("child", async () => ({ pending: [], forms: [] }))
+    store.inbox.reconcile("child")
+
+    expect(store.data.pending.child).toEqual([])
     expect(store.data.session_message.child).toEqual([])
+    expect(store.data.message.child).toEqual([])
+    expect(store.data.part.msg_prompt).toBeUndefined()
   })
 
-  test("does not remove content confirmed by a message event", () => {
-    const message = userMessage("message")
-    const part = textPart(message.id)
+  test("deduplicates the durable admission event against its local echo", () => {
     const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    store.apply({ type: "message.updated", properties: { sessionID: "child", info: message } })
+    store.inbox.echo(promptEcho("msg_prompt"))
 
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    store.applyV2({
+      id: "evt_prompt",
+      created: 2,
+      type: "session.inbox.enqueued",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: {
+        sessionID: "child",
+        inboxID: "msg_prompt",
+        item: { type: "user", delivery: "steer", payload: { text: "hello" } },
+      },
+    } as OpenCodeEvent)
 
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toBeUndefined()
+    expect(store.data.pending.child).toHaveLength(1)
+    expect(store.data.input.child).toEqual(["msg_prompt"])
+    expect(store.data.session_message.child?.filter((message) => message.id === "msg_prompt")).toHaveLength(1)
+    expect(store.data.message.child?.filter((message) => message.id === "msg_prompt")).toHaveLength(1)
+    expect(store.data.part.msg_prompt).toMatchObject([{ type: "text", text: "hello" }])
   })
 
-  test("does not remove parts confirmed by part events", () => {
-    const message = userMessage("message")
-    const part = textPart(message.id)
+  test("uses the prompt response when the admission event was missed", () => {
     const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    store.apply({ type: "message.updated", properties: { sessionID: "child", info: message } })
-    store.apply({ type: "message.part.updated", properties: { sessionID: "child", part, time: 2 } })
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.inbox.confirm({
+      id: "msg_prompt",
+      sessionID: "child",
+      timeCreated: 2,
+      type: "user",
+      delivery: "steer",
+      payload: { text: "hello" },
+    })
 
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    store.applyV2({
+      id: "evt_delivered",
+      created: Date.now() + 1,
+      type: "session.inbox.delivered",
+      durable: { aggregateID: "child", seq: 2, version: 1 },
+      data: { sessionID: "child", inboxID: "msg_prompt" },
+    } as OpenCodeEvent)
 
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([part])
+    expect(store.data.pending.child).toEqual([])
+    expect(store.data.input.child).toEqual([])
+    expect(store.data.session_message.child).toMatchObject([{ id: "msg_prompt", type: "user", text: "hello" }])
+    expect(store.data.message.child?.filter((message) => message.id === "msg_prompt")).toHaveLength(1)
+    expect(store.data.part.msg_prompt).toMatchObject([{ type: "text", text: "hello" }])
   })
 
-  test("treats a part event as confirmation when it precedes the message event", () => {
-    const message = userMessage("message")
-    const part = textPart(message.id)
+  test("keeps a durable admission when the HTTP request later fails", () => {
     const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-    store.apply({ type: "message.part.updated", properties: { sessionID: "child", part, time: 2 } })
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.applyV2({
+      id: "evt_prompt",
+      created: 2,
+      type: "session.inbox.enqueued",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: {
+        sessionID: "child",
+        inboxID: "msg_prompt",
+        item: { type: "user", delivery: "steer", payload: { text: "hello" } },
+      },
+    } as OpenCodeEvent)
 
-    store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    expect(store.inbox.clearEcho({ sessionID: "child", messageID: "msg_prompt" })).toBe(false)
+    expect(store.data.pending.child).toHaveLength(1)
+    expect(store.data.message.child?.map((message) => message.id)).toEqual(["msg_prompt"])
+  })
 
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([part])
+  test("places durable admission after delayed selection events", () => {
+    const store = setup({ child: session("child") }).store
+    store.remember(session("child"))
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.applyV2({
+      id: "evt_agent",
+      created: 1,
+      type: "session.agent.selected",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: { sessionID: "child", agent: "review" },
+    } as OpenCodeEvent)
+    store.applyV2({
+      id: "evt_model",
+      created: 2,
+      type: "session.model.selected",
+      durable: { aggregateID: "child", seq: 2, version: 1 },
+      data: { sessionID: "child", model: { id: "new-model", providerID: "new-provider" } },
+    } as OpenCodeEvent)
+    store.applyV2({
+      id: "evt_prompt",
+      created: 3,
+      type: "session.inbox.enqueued",
+      durable: { aggregateID: "child", seq: 3, version: 1 },
+      data: {
+        sessionID: "child",
+        inboxID: "msg_prompt",
+        item: { type: "user", delivery: "steer", payload: { text: "hello" } },
+      },
+    } as OpenCodeEvent)
+
+    expect(store.data.session_message.child?.map((message) => message.type)).toEqual([
+      "agent-switched",
+      "model-switched",
+      "user",
+    ])
+    expect(store.data.message.child?.find((message) => message.id === "msg_prompt")).toMatchObject({
+      agent: "review",
+      model: { providerID: "new-provider", modelID: "new-model" },
+    })
+  })
+
+  test("removes an echoed prompt when submission fails", () => {
+    const store = setup({ child: session("child") }).store
+    store.inbox.echo(promptEcho("msg_prompt"))
+
+    expect(store.inbox.clearEcho({ sessionID: "child", messageID: "msg_prompt" })).toBe(true)
+
+    expect(store.data.pending.child).toEqual([])
+    expect(store.data.input.child).toEqual([])
+    expect(store.data.session_message.child).toBeUndefined()
+    expect(store.data.message.child).toEqual([])
+    expect(store.data.part.msg_prompt).toBeUndefined()
+  })
+
+  test("removes a response-confirmed echo when the server cancels it", () => {
+    const store = setup({ child: session("child") }).store
+    store.inbox.echo(promptEcho("msg_prompt"))
+    store.inbox.confirm({
+      id: "msg_prompt",
+      sessionID: "child",
+      timeCreated: 1,
+      type: "user",
+      delivery: "steer",
+      payload: { text: "hello" },
+    })
+
+    store.applyV2({
+      id: "evt_cancelled",
+      created: 2,
+      type: "session.inbox.cancelled",
+      durable: { aggregateID: "child", seq: 2, version: 1 },
+      data: { sessionID: "child", inboxID: "msg_prompt" },
+    } as OpenCodeEvent)
+
+    expect(store.data.pending.child).toEqual([])
+    expect(store.data.message.child).toEqual([])
+    expect(store.data.part.msg_prompt).toBeUndefined()
   })
 
   test("clears stale parts when the initial page has none", async () => {
@@ -1469,28 +1697,6 @@ describe("server session", () => {
     expect(store.data.part[message.id]).toBeUndefined()
   })
 
-  test("preserves optimistic re-adds across message retries", async () => {
-    const failed = Promise.withResolvers<MessageResponse>()
-    const retried = Promise.withResolvers<MessageResponse>()
-    const message = userMessage("message")
-    const stale = textPart(message.id, { id: "stale", text: "stale" })
-    const optimistic = textPart(message.id, { id: "optimistic", text: "optimistic" })
-    const client = messageClient(response([{ info: message, parts: [stale] }]), failed.promise, retried.promise)
-    const store = createServerSession(client, { retry: retryImmediately })
-    await store.sync("child")
-    const loading = store.sync("child", { force: true })
-
-    store.apply({ type: "message.removed", properties: { sessionID: "child", messageID: message.id } })
-    store.optimistic.add({ sessionID: "child", message, parts: [optimistic] })
-    failed.reject(new Error("failed to fetch"))
-    await client.requested(3)
-    retried.resolve(response([{ info: message, parts: [stale] }]))
-    await loading
-
-    expect(store.data.message.child).toEqual([message])
-    expect(store.data.part[message.id]).toEqual([optimistic])
-  })
-
   test("accepts part omission from a successful retry after an earlier delta", async () => {
     const failed = Promise.withResolvers<MessageResponse>()
     const retried = Promise.withResolvers<MessageResponse>()
@@ -1652,33 +1858,6 @@ describe("server session", () => {
     await store.sync("child", { force: true })
 
     expect(store.data.part[message.id]).toBeUndefined()
-  })
-
-  test("does not cache skipped optimistic parts", () => {
-    const message = userMessage("message")
-    const part = { id: "part", sessionID: "child", messageID: message.id, type: "step-start" as const }
-    const store = setup({ child: session("child") }).store
-
-    store.optimistic.add({ sessionID: "child", message, parts: [part] })
-
-    expect(store.data.part[message.id]).toEqual([])
-  })
-
-  test("clears stale delta buffers when replacing optimistic parts", () => {
-    const message = userMessage("message")
-    const stale = textPart(message.id, { id: "stale", text: "stale" })
-    const optimistic = textPart(message.id, { id: "optimistic", text: "optimistic" })
-    const store = setup({ child: session("child") }).store
-    store.optimistic.add({ sessionID: "child", message, parts: [stale] })
-    store.apply({
-      type: "message.part.delta",
-      properties: { sessionID: "child", messageID: message.id, partID: stale.id, field: "text", delta: " delta" },
-    })
-
-    store.optimistic.add({ sessionID: "child", message, parts: [optimistic] })
-
-    expect(store.data.part_text_accum_delta[stale.id]).toBeUndefined()
-    expect(store.data.part_text_accum_delta[optimistic.id]).toBeUndefined()
   })
 
   test("preserves removals during history prepend", async () => {
@@ -1906,24 +2085,7 @@ describe("server session", () => {
   test("preserves pinned session content under server-wide cache pressure", () => {
     const ctx = setup({})
     ctx.store.pin("active")
-    ctx.store.optimistic.add({
-      sessionID: "active",
-      message: {
-        id: "message",
-        sessionID: "active",
-        role: "assistant",
-        time: { created: 1 },
-        parentID: "parent",
-        modelID: "model",
-        providerID: "provider",
-        mode: "build",
-        agent: "agent",
-        path: { cwd: "/repo", root: "/repo" },
-        cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      },
-      parts: [],
-    })
+    ctx.store.inbox.echo({ ...promptEcho("message", "keep"), sessionID: "active" })
 
     for (let index = 0; index < 50; index++) {
       ctx.store.remember(session(`session-${index}`))

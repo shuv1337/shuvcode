@@ -22,12 +22,12 @@ test("preserves permission roots and self-contained metadata", () => {
   )
 })
 
-test("uses shuvcode in persistent permission guidance", () => {
+test("describes persistent permission guidance per project", () => {
   expect(permissionAlwaysLines({ action: "bash", save: ["*"] })).toEqual([
-    "This will allow bash until shuvcode is restarted.",
+    "This will always allow bash for this project.",
   ])
   expect(permissionAlwaysLines({ action: "edit", save: ["src/**/*.ts"] })).toEqual([
-    "This will allow the following patterns until shuvcode is restarted.",
+    "This will always allow the following patterns for this project.",
     "- src/**/*.ts",
   ])
 })

@@ -75,7 +75,7 @@ import { SessionSystemPrompt } from "@opencode-ai/core/session/system-prompt"
 import { ID } from "@opencode-ai/core/model"
 import { Location } from "@opencode-ai/core/location"
 import { Provider } from "@opencode-ai/core/provider"
-import { Cause, DateTime, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope, Stream } from "effect"
+import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { asc, desc, eq } from "drizzle-orm"
@@ -413,7 +413,8 @@ const execution = Layer.effect(
       active: coordinator.active,
       resume: coordinator.run,
       wake: coordinator.wake,
-      interrupt: coordinator.interrupt,
+      wakeActive: coordinator.wakeActive,
+      interrupt: (sessionID) => coordinator.interrupt(sessionID),
       awaitIdle: coordinator.awaitIdle,
     })
   }),
@@ -671,7 +672,7 @@ const replaySessionProjection = (id: Session.ID) =>
     yield* Effect.forEach(
       recorded.map((event) => ({
         id: event.id,
-        created: DateTime.makeUnsafe(event.created),
+        created: event.created,
         aggregateID: event.aggregate_id,
         seq: event.seq,
         type: event.type,
@@ -685,7 +686,7 @@ const replaySessionProjection = (id: Session.ID) =>
 type FragmentKind = "text" | "reasoning" | "tool input"
 
 type FragmentFixture = {
-  readonly delta: Event.Definition
+  readonly delta?: Event.Definition
   readonly completeEvents: LLMEvent[]
   readonly partialEvents: LLMEvent[]
   readonly expectedAssistant: unknown
@@ -747,7 +748,6 @@ const fragmentFixture = (kind: FragmentKind, id: string, chunks: readonly string
       ]
       const expectedContent = { type: "tool", id, state: { status: "streaming", input: text } }
       return {
-        delta: SessionEvent.Tool.Input.Delta,
         partialEvents,
         completeEvents: [...partialEvents, LLMEvent.toolInputEnd({ id, name: "echo" })],
         expectedAssistant: { type: "assistant", content: [expectedContent] },
@@ -766,20 +766,37 @@ const verifyEphemeralDeltas = (kind: FragmentKind) =>
     const expectedContext = [{ type: "user", text: prompt }, fixture.expectedAssistant]
     yield* admit(session, prompt)
     const bus = yield* Bus.Service
-    const live = yield* bus.subscribe(fixture.delta).pipe(Stream.take(32), Stream.runCollect, Effect.forkScoped)
+    const live = fixture.delta
+      ? yield* bus.subscribe(fixture.delta).pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
+      : undefined
     yield* Effect.yieldNow
     yield* TestLLM.push(fixture.completeEvents)
 
     yield* session.resume(sessionID)
 
     const { db } = yield* Database.Service
-    const deltas = yield* db
-      .select({ type: EventTable.type })
-      .from(EventTable)
-      .where(eq(EventTable.type, Bus.versionedType(fixture.delta.type, 1)))
-      .all()
-      .pipe(Effect.orDie)
-    expect(Array.from(yield* Fiber.join(live))).toHaveLength(32)
+    const deltas = fixture.delta
+      ? yield* db
+          .select({ type: EventTable.type })
+          .from(EventTable)
+          .where(eq(EventTable.type, Bus.versionedType(fixture.delta.type, 1)))
+          .all()
+          .pipe(Effect.orDie)
+      : []
+    if (live) {
+      const streamed = Array.from(yield* Fiber.join(live))
+      expect(streamed).toHaveLength(1)
+      expect(
+        streamed
+          .map((event) => {
+            if (!event.data || typeof event.data !== "object" || !("delta" in event.data))
+              throw new Error("Expected delta event")
+            if (typeof event.data.delta !== "string") throw new Error("Expected string delta")
+            return event.data.delta
+          })
+          .join(""),
+      ).toBe(chunks.join(""))
+    }
     expect(deltas).toHaveLength(0)
     expect(yield* session.context(sessionID)).toMatchObject(expectedContext)
 
@@ -1383,6 +1400,44 @@ describe("SessionRunnerLLM", () => {
     }),
   )
 
+  it.effect("keeps queued input parked across a mid-turn move", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const bus = yield* Bus.Service
+      const { db } = yield* Database.Service
+      yield* admit(session, "Echo before moving")
+      yield* TestLLM.push(
+        TestLLM.tool("call-move", "echo", { text: "moving" }),
+        TestLLM.text("Done", "text-after-move"),
+        TestLLM.text("Handled queue", "text-after-queue"),
+      )
+      const tools = yield* blockTools()
+      const run = yield* session.resume(sessionID).pipe(Effect.forkChild)
+      yield* tools.started
+      yield* session.prompt({ sessionID, text: "Queued for later", delivery: "queue", resume: false })
+      yield* SessionInbox.admit(db, bus, {
+        id: SessionMessage.ID.create(),
+        sessionID,
+        item: {
+          type: "move",
+          payload: {
+            location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
+            projectID: Project.ID.global,
+          },
+          delivery: "steer",
+        },
+      })
+
+      yield* tools.release
+      yield* Fiber.join(run)
+
+      // The resumed turn absorbs steers only; queued input waits for the turn to end.
+      expect(requests).toHaveLength(3)
+      expect(userTexts(requests[1])).not.toContain("Queued for later")
+      expect(userTexts(requests[2])).toContain("Queued for later")
+    }),
+  )
+
   it.effect("seeds a fork with the parent's newest instruction values", () =>
     Effect.gen(function* () {
       const session = yield* setup
@@ -1424,7 +1479,7 @@ describe("SessionRunnerLLM", () => {
       yield* Effect.forEach(
         recorded.map((event) => ({
           id: event.id,
-          created: DateTime.makeUnsafe(event.created),
+          created: event.created,
           aggregateID: event.aggregate_id,
           seq: event.seq,
           type: event.type,
@@ -3085,6 +3140,24 @@ describe("SessionRunnerLLM", () => {
       expect(userTexts(requests[0])).toEqual(["Start working"])
       expect(userTexts(requests[1])).toEqual(["Start working", "Queue first"])
       expect(userTexts(requests[2])).toEqual(["Start working", "Queue first", "Queue second"])
+    }),
+  )
+
+  it.effect("stops a steer-scoped drain before queued input", () =>
+    Effect.gen(function* () {
+      const session = yield* setup
+      const { db } = yield* Database.Service
+      yield* session.prompt({ sessionID, text: "Queue for later", delivery: "queue", resume: false })
+      yield* session.prompt({ sessionID, text: "Steer now", resume: false })
+      yield* TestLLM.push(TestLLM.stop())
+
+      const runner = yield* SessionRunner.Service
+      yield* runner.drain({ sessionID, force: false, promotable: "steer" })
+
+      expect(requests).toHaveLength(1)
+      expect(userTexts(requests[0])).toEqual(["Steer now"])
+      expect(yield* SessionInbox.has(db, sessionID, "steer")).toBe(false)
+      expect(yield* SessionInbox.has(db, sessionID, "queue")).toBe(true)
     }),
   )
 
@@ -5162,8 +5235,11 @@ describe("SessionRunnerLLM", () => {
   )
 
   for (const kind of fragmentKinds) {
-    it.effect(`broadcasts provider ${kind} deltas without storing projection rewrites`, () =>
-      verifyEphemeralDeltas(kind),
+    it.effect(
+      kind === "tool input"
+        ? "does not broadcast provider tool input deltas"
+        : `batches provider ${kind} deltas without storing projection rewrites`,
+      () => verifyEphemeralDeltas(kind),
     )
 
     it.effect(`durably closes partial ${kind} when the provider stream fails`, () => verifyPartialFlushOnFailure(kind))

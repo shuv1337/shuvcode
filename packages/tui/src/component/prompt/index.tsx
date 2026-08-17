@@ -71,6 +71,7 @@ import { DialogImagePreview } from "../dialog-image-preview"
 import { useDirectoryRecents } from "../../prompt/directory-recents"
 import { directoryRecentValue } from "../../prompt/directory-completion"
 import { useWorkingDirectoryActions } from "../../ui/working-directory-actions"
+import { truncateFilePath } from "../../ui/file-path"
 
 export type PromptProps = {
   sessionID?: string
@@ -451,7 +452,6 @@ export function Prompt(props: PromptProps) {
         title: "Queue prompt",
         name: "prompt.queue",
         category: "Prompt",
-        palette: undefined,
         run: async (_input: string | undefined, event?: KeyEvent) => {
           event?.preventDefault()
           event?.stopPropagation()
@@ -1205,6 +1205,19 @@ export function Prompt(props: PromptProps) {
 
       sessionID = created.id
       session = created
+      if (created.location.workspaceID === undefined && terminalEnvironment.variables !== undefined) {
+        const error = await client.api.session
+          .environment({ sessionID, variables: terminalEnvironment.variables })
+          .then(
+            () => undefined,
+            (error) => error,
+          )
+        if (error) {
+          if (finishMoveProgress) move.finishSubmit()
+          toast.show({ title: "Failed to set session environment", message: errorMessage(error), variant: "error" })
+          return true
+        }
+      }
     }
 
     // Capture mode before it gets reset
@@ -1555,6 +1568,12 @@ export function Prompt(props: PromptProps) {
     const branch = data.location.vcs.info(location)?.branch.current
     return branch ? `${directory}:${branch}` : directory
   })
+  const [locationWidth, setLocationWidth] = createSignal(dimensions().width)
+  const locationLabelDisplay = createMemo(() => {
+    const label = locationLabel()
+    if (!label) return
+    return truncateFilePath(label, locationWidth())
+  })
   const locationActions = useWorkingDirectoryActions({
     directory: () => footerLocation()?.directory,
     onMove: () => void move.open(),
@@ -1840,7 +1859,15 @@ export function Prompt(props: PromptProps) {
         <box width="100%" flexDirection="row" justifyContent="space-between" gap={2}>
           <Slot path="prompt.footer" input={footerInput()}>
             <Slot path="prompt.footer.status" input={footerInput()}>
-              <box flexGrow={1} flexShrink={1} minWidth={0}>
+              <box
+                flexGrow={1}
+                flexShrink={1}
+                minWidth={0}
+                onSizeChange={function (this: BoxRenderable) {
+                  const width = this.width
+                  queueMicrotask(() => setLocationWidth(width))
+                }}
+              >
                 <Switch>
                   <Match when={status() === "running"}>
                     <box flexDirection="row" gap={1} flexGrow={1} justifyContent="flex-start">
@@ -1877,7 +1904,7 @@ export function Prompt(props: PromptProps) {
                     </box>
                   </Match>
                   <Match when={true}>
-                    <Show when={!props.hint && locationLabel()} fallback={props.hint ?? <text />}>
+                    <Show when={!props.hint && locationLabelDisplay()} fallback={props.hint ?? <text />}>
                       {(location) => (
                         <text
                           id="prompt.footer.location"

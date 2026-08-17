@@ -6,9 +6,9 @@ import { App } from "../../app.js"
 import { Credential } from "../../credential.js"
 import { Bus } from "../../bus.js"
 import { Integration } from "../../integration.js"
+import { Model } from "../../model.js"
 import { OauthCallbackPage } from "../../oauth/page.js"
 import { Provider } from "../../provider.js"
-import { Model } from "../../model.js"
 import type { PluginInternal } from "../internal.js"
 
 const clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
@@ -279,6 +279,16 @@ export const OpenAIPlugin = define({
         })
       }
     })
+    yield* ctx.session.hook("http.request", (evt) =>
+      Effect.sync(() => {
+        if (!chatgpt || evt.model.providerID !== Provider.ID.openai) return
+        const url = new URL(evt.request.url)
+        evt.request.headers.set("originator", "codex_cli_rs")
+        evt.request.headers.set("session-id", evt.sessionID)
+        if (url.origin !== "https://api.openai.com") return
+        evt.request = new Request(`${codexBaseURL}${url.pathname.replace(/^\/v1/, "")}${url.search}`, evt.request)
+      }),
+    )
     const refresh = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
     yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(
       Stream.filter((event) => event.data.integrationID === Integration.ID.make("openai")),

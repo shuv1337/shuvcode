@@ -198,7 +198,7 @@ export type ProviderInfo = {
   id: string
   integrationID?: string
   name: string
-  disabled?: boolean
+  activation: "auto" | "enabled" | "disabled"
   package: string
   settings?: { [x: string]: any }
   headers?: { [x: string]: string }
@@ -4109,6 +4109,13 @@ export type SessionMessageInput = {
 }
 
 export type SessionMessageOutput = { data: SessionMessageInfo }["data"]
+
+export type SessionEnvironmentInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly variables: { readonly variables: { readonly [x: string]: string } }["variables"]
+}
+
+export type SessionEnvironmentOutput = void
 
 export type MessageListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]

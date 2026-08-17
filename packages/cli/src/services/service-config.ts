@@ -31,12 +31,12 @@ const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(Service.Info))
 
 export function filename(channel = OPENCODE_CHANNEL) {
-  if (channel === "latest" || channel === "next") return "service.json"
+  if (channel === "latest" || channel === "dev" || channel === "beta" || channel === "next") return "service.json"
   return `service-${channel.replace(/[^a-zA-Z0-9._-]/g, "-")}.json`
 }
 
 export function defaultPort(channel = OPENCODE_CHANNEL) {
-  if (channel === "latest" || channel === "next") return 0xc0de
+  if (channel === "latest" || channel === "dev" || channel === "beta" || channel === "next") return 0xc0de
   if (channel === "local") return 0xc0df
   return 10_000 + (Number.parseInt(Hash.fast(channel).slice(0, 8), 16) % 50_000)
 }
@@ -115,7 +115,12 @@ export const options = Effect.fnUntraced(function* (
     command:
       (input.config ?? (yield* read())).manager === "systemd"
         ? [process.env.OPENCODE_SYSTEMCTL ?? "systemctl", "--user", "start", "shuvcode.service"]
-        : [...selfCommand(), "serve", "--service"],
+        : [
+            ...selfCommand(),
+            "serve",
+            "--service",
+            ...(process.env.OPENCODE_CPU_PROFILE ? ["--cpu-profile", process.env.OPENCODE_CPU_PROFILE] : []),
+          ],
   }
 })
 
