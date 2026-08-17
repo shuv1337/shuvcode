@@ -4127,6 +4127,85 @@
         "summary": "Get session message"
       }
     },
+    "/api/session/{sessionID}/environment": {
+      "put": {
+        "tags": ["session"],
+        "operationId": "v2.session.environment",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "allOf": [
+                {
+                  "pattern": "^ses"
+                }
+              ]
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionNotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace the process environment used by local shell commands for this session.",
+        "summary": "Set session environment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variables": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["variables"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/api/session/{sessionID}/message": {
       "get": {
         "tags": ["session"],
