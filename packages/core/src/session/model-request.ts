@@ -197,7 +197,10 @@ export const layer = Layer.effect(
         .filter((part) => part.length > 0)
         .map(SystemPart.make)
       const history = toLLMMessages(input.context.messages, resolved.ref, providerMetadataKey)
-      const messages = stepLimitReached ? [...history, Message.assistant(MAX_STEPS_PROMPT)] : history
+      // A synthetic assistant message is an assistant prefill. Newer Anthropic
+      // models reject prefills, so keep the final-step guardrail in the user
+      // turn instead.
+      const messages = stepLimitReached ? [...history, Message.user(MAX_STEPS_PROMPT)] : history
       const registry = new Map(tools.definitions.map((tool) => [tool.name, tool]))
       // The definition objects we hand to hooks, mapped back to their tools. Hooks rename a
       // tool by moving its definition to a new key; recognizing the object recovers the tool.

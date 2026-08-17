@@ -4946,6 +4946,7 @@ describe("SessionRunnerLLM", () => {
       expect(requests).toHaveLength(2)
       expect(requests[0]?.toolChoice).toBeUndefined()
       expect(requests[1]?.toolChoice).toMatchObject({ type: "none" })
+      expect(requests[1]?.messages.at(-1)?.role).toBe("user")
       expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session.tool.failed.2")).toHaveLength(2)
     }),
   )
