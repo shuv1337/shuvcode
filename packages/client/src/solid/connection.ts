@@ -75,7 +75,8 @@ export function createClientConnection(initialApi: OpenCodeClient, options: Clie
       if (signal.aborted) return { error: undefined, connectedAt }
       if (first.done)
         return {
-          error: request.signal.reason instanceof Error ? request.signal.reason : new Error("Event stream disconnected"),
+          error:
+            request.signal.reason instanceof Error ? request.signal.reason : new Error("Event stream disconnected"),
           connectedAt,
         }
       if (first.value.type !== "server.connected")
