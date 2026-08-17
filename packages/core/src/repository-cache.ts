@@ -31,13 +31,10 @@ export type EnsureInput = {
   readonly branch?: string
 }
 
-export class InvalidBranchError extends Schema.TaggedError<InvalidBranchError>()(
-  "RepositoryCacheInvalidBranchError",
-  {
-    branch: Schema.String,
-    message: Schema.String,
-  },
-) {}
+export class InvalidBranchError extends Schema.TaggedError<InvalidBranchError>()("RepositoryCacheInvalidBranchError", {
+  branch: Schema.String,
+  message: Schema.String,
+}) {}
 
 export class CloneFailedError extends Schema.TaggedError<CloneFailedError>()("RepositoryCacheCloneFailedError", {
   repository: Schema.String,
@@ -68,14 +65,11 @@ export class LockFailedError extends Schema.TaggedError<LockFailedError>()("Repo
   message: Schema.String,
 }) {}
 
-export class CacheOperationError extends Schema.TaggedError<CacheOperationError>()(
-  "RepositoryCacheOperationError",
-  {
-    operation: Schema.String,
-    path: Schema.String,
-    message: Schema.String,
-  },
-) {}
+export class CacheOperationError extends Schema.TaggedError<CacheOperationError>()("RepositoryCacheOperationError", {
+  operation: Schema.String,
+  path: Schema.String,
+  message: Schema.String,
+}) {}
 
 export type Error =
   | InvalidBranchError

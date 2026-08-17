@@ -461,7 +461,9 @@ function effectType(schema: Schema.Top, references: ReturnType<typeof effectType
     imports.add(direct.import)
     return direct.name
   }
-  const document = SchemaRepresentation.toCodeDocument(SchemaRepresentation.toRepresentations([codegenAst(projected.ast)]))
+  const document = SchemaRepresentation.toCodeDocument(
+    SchemaRepresentation.toRepresentations([codegenAst(projected.ast)]),
+  )
   const source = new Map(document.references.nonRecursives.map((reference) => [reference.$ref, reference.code.Type]))
   const expand = (type: string, seen = new Set<string>()): string => {
     for (const [name, value] of source) {
@@ -1844,10 +1846,9 @@ function renderSchemas(slots: ReadonlyArray<Slot>) {
   ]
   const [first, ...rest] = expanded
   const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.toRepresentations(codegenAsts(expanded.map((slot) => slot.schema.ast)) as [
-      SchemaAST.AST,
-      ...Array<SchemaAST.AST>,
-    ]),
+    SchemaRepresentation.toRepresentations(
+      codegenAsts(expanded.map((slot) => slot.schema.ast)) as [SchemaAST.AST, ...Array<SchemaAST.AST>],
+    ),
   )
   const artifacts = document.artifacts.flatMap((artifact) => {
     if (artifact._tag === "Import") return [artifact.importDeclaration]

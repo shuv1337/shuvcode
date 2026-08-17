@@ -60,15 +60,12 @@ export namespace JsonRpc {
   }
 }
 
-export class SimulationRequestError extends Schema.TaggedError<SimulationRequestError>()(
-  "SimulationRequestError",
-  {
-    method: Schema.String,
-    code: Schema.Number,
-    message: Schema.String,
-    data: Schema.optionalKey(Schema.Json),
-  },
-) {}
+export class SimulationRequestError extends Schema.TaggedError<SimulationRequestError>()("SimulationRequestError", {
+  method: Schema.String,
+  code: Schema.Number,
+  message: Schema.String,
+  data: Schema.optionalKey(Schema.Json),
+}) {}
 
 const request = <
   const Tag extends string,

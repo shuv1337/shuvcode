@@ -92,9 +92,10 @@ describe("AI.Usage", () => {
 
   test("sseFraming maps decoder failures to AI errors", async () => {
     const error = await Effect.runPromise(
-      ProviderShared.sseFraming(
-        Stream.make(new TextEncoder().encode(`data: ${"x".repeat(10 * 1024 * 1024)}`)),
-      ).pipe(Stream.runCollect, Effect.flip),
+      ProviderShared.sseFraming(Stream.make(new TextEncoder().encode(`data: ${"x".repeat(10 * 1024 * 1024)}`))).pipe(
+        Stream.runCollect,
+        Effect.flip,
+      ),
     )
 
     expect(error).toBeInstanceOf(AIError)

@@ -33,12 +33,9 @@ export class ProviderRequiredError extends Schema.TaggedError<ProviderRequiredEr
   {},
 ) {}
 
-export class ProviderNotFoundError extends Schema.TaggedError<ProviderNotFoundError>()(
-  "WebSearch.ProviderNotFound",
-  {
-    providerID: ID,
-  },
-) {}
+export class ProviderNotFoundError extends Schema.TaggedError<ProviderNotFoundError>()("WebSearch.ProviderNotFound", {
+  providerID: ID,
+}) {}
 
 export class DisabledError extends Schema.TaggedError<DisabledError>()("WebSearch.Disabled", {}) {}
 

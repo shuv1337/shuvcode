@@ -147,10 +147,9 @@ class ToolInvocationNotFoundError extends Schema.TaggedError<ToolInvocationNotFo
   { id: Schema.String, message: Schema.String },
 ) {}
 
-class ToolControllerError extends Schema.TaggedError<ToolControllerError>()(
-  "SimulatedProvider.ToolControllerError",
-  { message: Schema.String },
-) {}
+class ToolControllerError extends Schema.TaggedError<ToolControllerError>()("SimulatedProvider.ToolControllerError", {
+  message: Schema.String,
+}) {}
 
 export const layerDrive = (options: { readonly endpoint: string; readonly version: string }) =>
   Layer.effect(

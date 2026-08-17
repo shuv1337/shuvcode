@@ -25,10 +25,9 @@ export class InvalidModeError extends Schema.TaggedError<InvalidModeError>()("AC
 
 export class AuthRequiredError extends Schema.TaggedError<AuthRequiredError>()("ACPAuthRequiredError", {}) {}
 
-export class UnknownAuthMethodError extends Schema.TaggedError<UnknownAuthMethodError>()(
-  "ACPUnknownAuthMethodError",
-  { methodId: Schema.String },
-) {}
+export class UnknownAuthMethodError extends Schema.TaggedError<UnknownAuthMethodError>()("ACPUnknownAuthMethodError", {
+  methodId: Schema.String,
+}) {}
 
 export class ServiceFailureError extends Schema.TaggedError<ServiceFailureError>()("ACPServiceFailureError", {
   safeMessage: Schema.String,
