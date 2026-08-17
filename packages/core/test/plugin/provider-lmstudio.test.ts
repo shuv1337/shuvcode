@@ -154,68 +154,70 @@ describe("LMStudioPlugin", () => {
     ),
   )
 
-  it.live("discovers from configured endpoints with bearer authentication", () =>
-    Effect.acquireUseRelease(
-      Effect.sync(() => {
-        const requests: Array<{ authorization: string | null; path: string }> = []
-        const model = (key: string) => ({
-          type: "llm",
-          key,
-          display_name: key,
-          loaded_instances: [],
-          max_context_length: 32_768,
-        })
-        return {
-          requests,
-          initial: Bun.serve({ port: 0, fetch: () => Response.json({ models: [model("initial-model")] }) }),
-          configured: Bun.serve({
-            port: 0,
-            fetch: (request) => {
-              requests.push({
-                authorization: request.headers.get("authorization"),
-                path: new URL(request.url).pathname,
-              })
-              return Response.json({ models: [model("configured-model")] })
-            },
-          }),
-        }
-      }),
-      ({ requests, initial, configured }) =>
-        Effect.gen(function* () {
-          const bus = yield* Bus.Service
-          const catalog = yield* Catalog.Service
-          const config = yield* Config.Test
-          const providerID = Provider.ID.make("lmstudio")
-          yield* addPlugin(initial.url.origin)
-          yield* eventually(
-            catalog.model.get(providerID, Model.ID.make("initial-model")),
-            (model) => model !== undefined,
-          )
-
-          const baseURL = `${configured.url.origin}/proxy/v1`
-          yield* config.setEntries([configuration(baseURL, "secret")])
-          yield* bus.publish(Event.Updated, {})
-          yield* eventually(
-            catalog.model.get(providerID, Model.ID.make("configured-model")),
-            (model) => model !== undefined,
-          )
-
-          expect(requests).toContainEqual({ authorization: "Bearer secret", path: "/proxy/api/v1/models" })
-          expect(yield* catalog.model.get(providerID, Model.ID.make("initial-model"))).toBeUndefined()
-          expect((yield* catalog.provider.get(providerID))?.settings).toEqual({
-            baseURL,
-            provider: "lmstudio",
-            apiKey: "secret",
+  it.live(
+    "discovers from configured endpoints with bearer authentication",
+    () =>
+      Effect.acquireUseRelease(
+        Effect.sync(() => {
+          const requests: Array<{ authorization: string | null; path: string }> = []
+          const model = (key: string) => ({
+            type: "llm",
+            key,
+            display_name: key,
+            loaded_instances: [],
+            max_context_length: 32_768,
           })
-
-          requests.splice(0)
-          yield* config.setEntries([configuration(baseURL, "secret"), configuration(baseURL, null)])
-          yield* bus.publish(Event.Updated, {})
-          yield* eventually(catalog.provider.get(providerID), (provider) => provider?.settings?.apiKey === "")
-          expect(requests).toContainEqual({ authorization: null, path: "/proxy/api/v1/models" })
+          return {
+            requests,
+            initial: Bun.serve({ port: 0, fetch: () => Response.json({ models: [model("initial-model")] }) }),
+            configured: Bun.serve({
+              port: 0,
+              fetch: (request) => {
+                requests.push({
+                  authorization: request.headers.get("authorization"),
+                  path: new URL(request.url).pathname,
+                })
+                return Response.json({ models: [model("configured-model")] })
+              },
+            }),
+          }
         }),
-      ({ initial, configured }) => Effect.promise(() => Promise.all([initial.stop(true), configured.stop(true)])),
-    ),
+        ({ requests, initial, configured }) =>
+          Effect.gen(function* () {
+            const bus = yield* Bus.Service
+            const catalog = yield* Catalog.Service
+            const config = yield* Config.Test
+            const providerID = Provider.ID.make("lmstudio")
+            yield* addPlugin(initial.url.origin)
+            yield* eventually(
+              catalog.model.get(providerID, Model.ID.make("initial-model")),
+              (model) => model !== undefined,
+            )
+
+            const baseURL = `${configured.url.origin}/proxy/v1`
+            yield* config.setEntries([configuration(baseURL, "secret")])
+            yield* bus.publish(Event.Updated, {})
+            yield* eventually(
+              catalog.model.get(providerID, Model.ID.make("configured-model")),
+              (model) => model !== undefined,
+            )
+
+            expect(requests).toContainEqual({ authorization: "Bearer secret", path: "/proxy/api/v1/models" })
+            expect(yield* catalog.model.get(providerID, Model.ID.make("initial-model"))).toBeUndefined()
+            expect((yield* catalog.provider.get(providerID))?.settings).toEqual({
+              baseURL,
+              provider: "lmstudio",
+              apiKey: "secret",
+            })
+
+            requests.splice(0)
+            yield* config.setEntries([configuration(baseURL, "secret"), configuration(baseURL, null)])
+            yield* bus.publish(Event.Updated, {})
+            yield* eventually(catalog.provider.get(providerID), (provider) => provider?.settings?.apiKey === "")
+            expect(requests).toContainEqual({ authorization: null, path: "/proxy/api/v1/models" })
+          }),
+        ({ initial, configured }) => Effect.promise(() => Promise.all([initial.stop(true), configured.stop(true)])),
+      ),
     10_000,
   )
 
