@@ -55,7 +55,7 @@ function authFetch(fetchWithRuntimeOptions?: unknown) {
 }
 
 export const GoogleVertexPlugin = define({
-  id: "opencode.provider.google-vertex",
+  id: "opencode.provider.google.vertex",
   effect: Effect.fn(function* (ctx) {
     yield* ctx.catalog.transform((evt) => {
       for (const item of evt.provider.list()) {

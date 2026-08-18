@@ -6,7 +6,7 @@ import { ModelsDev } from "../models-dev.js"
 import { Provider } from "../provider.js"
 
 export const ModelsDevPlugin = define({
-  id: "opencode.models-dev",
+  id: "opencode.models.dev",
   effect: Effect.fn(function* (ctx) {
     const modelsDev = yield* ModelsDev.Service
     const bus = yield* Bus.Service
