@@ -1,7 +1,12 @@
 import { ServerConnection, useServers, useTabs } from "@opencode-ai/app"
 import { onMount } from "solid-js"
+import type { ElectronAPI } from "../../preload/types"
 
-export function DesktopFirstLaunchOnboarding(props: { serverKey: ServerConnection.Key; initialUrl: string }) {
+export function DesktopFirstLaunchOnboarding(props: {
+  api: ElectronAPI
+  serverKey: ServerConnection.Key
+  initialUrl: string
+}) {
   const server = useServers()
   const tabs = useTabs()
 
@@ -12,7 +17,7 @@ export function DesktopFirstLaunchOnboarding(props: { serverKey: ServerConnectio
   async function runFirstLaunchOnboarding() {
     try {
       await Promise.all([tabs.ready.promise, tabs.recentReady.promise].map((p) => p ?? Promise.resolve()))
-      const pending = await window.api.isFirstLaunchOnboardingPending()
+      const pending = await props.api.isFirstLaunchOnboardingPending()
       if (!pending) return
 
       const shouldTrigger =
@@ -26,7 +31,7 @@ export function DesktopFirstLaunchOnboarding(props: { serverKey: ServerConnectio
         servers: server.list.map(ServerConnection.key),
       })
 
-      const directory = await window.api.finishFirstLaunchOnboarding(shouldTrigger)
+      const directory = await props.api.finishFirstLaunchOnboarding(shouldTrigger)
       if (!shouldTrigger || !directory) return
 
       console.info("[desktop-onboarding] starting first launch draft", { directory })

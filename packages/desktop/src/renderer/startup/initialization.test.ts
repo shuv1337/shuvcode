@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Ipc } from "../shared/ipc-contract"
+import { Ipc } from "../../shared/ipc-contract"
 import { initializationData, initializationReady } from "./initialization"
 
 describe("desktop renderer initialization", () => {

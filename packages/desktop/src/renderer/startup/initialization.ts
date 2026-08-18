@@ -20,4 +20,4 @@ export function initializationReady<A>(state: (() => A | undefined) & { error: u
   initializationData(state)
   return true
 }
-import { Ipc } from "../shared/ipc-contract"
+import { Ipc } from "../../shared/ipc-contract"
