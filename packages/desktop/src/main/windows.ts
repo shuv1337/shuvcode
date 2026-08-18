@@ -7,7 +7,7 @@ import { rmSync } from "node:fs"
 import { app, BrowserWindow, dialog, net, nativeImage, nativeTheme, protocol, shell } from "electron"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import type { TitlebarTheme } from "../preload/types"
+import { Ipc, sendIpcEvent, type TitlebarTheme } from "../shared/ipc-contract"
 import { exportDebugLogs, write as writeLog } from "./logging"
 import { getStore, removeStoreFile } from "./store"
 import { PINCH_ZOOM_ENABLED_KEY, WINDOW_IDS_KEY } from "./store-keys"
@@ -132,7 +132,7 @@ export function setPinchZoomEnabled(enabled: boolean) {
   getStore().set(PINCH_ZOOM_ENABLED_KEY, enabled)
   for (const win of BrowserWindow.getAllWindows()) {
     pinchZoomEnabled.set(win, enabled)
-    win.webContents.send("pinch-zoom-enabled-changed", enabled)
+    sendIpcEvent(win.webContents, Ipc.window.pinchZoomEnabledChanged, enabled)
     if (!enabled && win.webContents.getZoomFactor() !== 1) win.webContents.setZoomFactor(1)
     updateZoom(win)
   }
@@ -533,7 +533,7 @@ function wireZoom(win: BrowserWindow) {
 function wireFullscreen(win: BrowserWindow) {
   const send = (fullscreen: boolean) => {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
-    win.webContents.send("window-fullscreen-changed", fullscreen)
+    sendIpcEvent(win.webContents, Ipc.window.fullscreenChanged, fullscreen)
   }
 
   win.on("enter-full-screen", () => send(true))
@@ -546,7 +546,7 @@ function clampZoom(value: number) {
 
 function updateZoom(win: BrowserWindow) {
   updateTitlebar(win)
-  win.webContents.send("zoom-factor-changed", win.webContents.getZoomFactor())
+  sendIpcEvent(win.webContents, Ipc.window.zoomFactorChanged, win.webContents.getZoomFactor())
 }
 
 function upsertKeyValue(obj: Record<string, any>, keyToChange: string, value: any) {

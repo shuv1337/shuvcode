@@ -1,4 +1,6 @@
-import { app, dialog, ipcMain } from "electron"
+import { app, dialog } from "electron"
+import type { WebContents } from "electron"
+import { Ipc, sendIpcEvent } from "../shared/ipc-contract"
 import { UPDATER_ENABLED } from "./constants"
 import { createUpdaterController, type UpdaterController, type UpdaterReadyRecord } from "./updater-controller"
 import { getLogger } from "./logging"
@@ -28,7 +30,7 @@ export function setupAutoUpdater(prepareToRestart: () => Promise<void>) {
   })
 }
 
-export function registerUpdaterIpc(controller: UpdaterController) {
+export function createUpdaterIpc(controller: UpdaterController) {
   const subscriptions = new Map<number, () => void>()
   const unsubscribe = (id: number) => {
     subscriptions.get(id)?.()
@@ -36,22 +38,26 @@ export function registerUpdaterIpc(controller: UpdaterController) {
   }
   app.once("will-quit", () => subscriptions.forEach((dispose) => dispose()))
 
-  ipcMain.handle("updater-subscribe", (event) => {
-    const id = event.sender.id
-    subscriptions.get(id)?.() // a reloaded renderer replaces its previous subscription
-    subscriptions.set(
-      id,
-      controller.subscribe((state) => {
-        if (event.sender.isDestroyed()) return unsubscribe(id)
-        event.sender.send("updater-state", state)
-      }),
-    )
-    event.sender.once("destroyed", () => unsubscribe(id))
-  })
-  ipcMain.handle("updater-unsubscribe", (event) => unsubscribe(event.sender.id))
-  ipcMain.handle("updater-check", () => controller.check())
-  ipcMain.handle("updater-install", () => controller.install())
+  return {
+    subscribe(sender: WebContents) {
+      const id = sender.id
+      subscriptions.get(id)?.() // a reloaded renderer replaces its previous subscription
+      subscriptions.set(
+        id,
+        controller.subscribe((state) => {
+          if (sender.isDestroyed()) return unsubscribe(id)
+          sendIpcEvent(sender, Ipc.updater.state, state)
+        }),
+      )
+      sender.once("destroyed", () => unsubscribe(id))
+    },
+    unsubscribe,
+    check: () => controller.check(),
+    install: () => controller.install(),
+  }
 }
+
+export type UpdaterIpc = ReturnType<typeof createUpdaterIpc>
 
 export async function showUpdaterDialog(controller: UpdaterController) {
   const state = await controller.check()

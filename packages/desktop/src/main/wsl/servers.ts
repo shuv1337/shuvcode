@@ -7,7 +7,7 @@ import type {
   WslServerRuntime,
   WslServersEvent,
   WslServersState,
-} from "../../preload/types"
+} from "@opencode-ai/app/wsl/types"
 import { WSL_SERVERS_KEY } from "../store-keys"
 import { getStore } from "../store"
 import { nativeT } from "../native-translations"

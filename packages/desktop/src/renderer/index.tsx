@@ -223,9 +223,10 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     async openPath(path: string, app?: string) {
       if (os === "windows") {
         const resolvedApp = app ? await window.api.resolveAppPath(app).catch(() => null) : null
-        return window.api.openPath(path, resolvedApp ?? undefined)
+        await window.api.openPath(path, resolvedApp ?? undefined)
+        return
       }
-      return window.api.openPath(path, app)
+      await window.api.openPath(path, app)
     },
     async revealPath(path: string) {
       return window.api.revealPath(path)

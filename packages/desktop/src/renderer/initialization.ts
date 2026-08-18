@@ -5,7 +5,7 @@ export function initializationData<A>(state: (() => A | undefined) & { error: un
 
 function markLocalServerStartup(error: unknown) {
   const failure = error instanceof Error ? error : new Error(String(error))
-  const prefix = "Error invoking remote method 'await-initialization': Error: "
+  const prefix = `Error invoking remote method '${Ipc.app.awaitInitialization}': Error: `
   if (failure.message.startsWith(prefix)) {
     const previous = failure.message
     failure.message = failure.message.slice(prefix.length)
@@ -20,3 +20,4 @@ export function initializationReady<A>(state: (() => A | undefined) & { error: u
   initializationData(state)
   return true
 }
+import { Ipc } from "../shared/ipc-contract"

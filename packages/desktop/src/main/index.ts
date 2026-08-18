@@ -10,10 +10,16 @@ import { app, BrowserWindow } from "electron"
 import { Deferred, Effect, Fiber } from "effect"
 import contextMenu from "electron-context-menu"
 
-import type { ServerReadyData } from "../preload/types"
+import type { ServerReadyData } from "../shared/ipc-contract"
 import { checkAppExists, resolveAppPath } from "./apps"
 import { CHANNEL, VERSION } from "./constants"
-import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
+import {
+  registerIpcHandlers,
+  registerUpdaterIpcHandlers,
+  registerWslIpcHandlers,
+  sendDeepLinks,
+  sendMenuCommand,
+} from "./ipc"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
 import { createMenu } from "./menu"
@@ -23,7 +29,7 @@ import {
   isFirstLaunchOnboardingPending,
 } from "./onboarding"
 import { getDefaultServerUrl, preferAppEnv, setDefaultServerUrl } from "./server"
-import { registerUpdaterIpc, setupAutoUpdater, showUpdaterDialog } from "./updater"
+import { createUpdaterIpc, setupAutoUpdater, showUpdaterDialog } from "./updater"
 import { safeWebContentsURL } from "./window-state"
 import {
   getLastFocusedWindow,
@@ -34,7 +40,7 @@ import {
   setDockIcon,
   restoreMainWindows,
 } from "./windows"
-import { registerWslIpcHandlers } from "./wsl/ipc"
+import { createWslIpc } from "./wsl/ipc"
 import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
@@ -267,7 +273,7 @@ const main = Effect.gen(function* () {
       if (setNativeTranslations(bundle)) createMenu(menuDeps)
     },
   })
-  registerUpdaterIpc(updater)
+  registerUpdaterIpcHandlers(createUpdaterIpc(updater))
   void updater.start()
   const updateTimer = setInterval(() => void updater.check(), 10 * 60 * 1000)
   updateTimer.unref()
@@ -314,7 +320,7 @@ const main = Effect.gen(function* () {
 
 async function startWslServers(cli: { version: string; wslBuild?: { script: string; output: string } }) {
   if (process.platform !== "win32") {
-    registerWslIpcHandlers()
+    registerWslIpcHandlers(createWslIpc())
     return async () => {}
   }
 
@@ -344,7 +350,7 @@ async function startWslServers(cli: { version: string; wslBuild?: { script: stri
       error: (message, meta) => logger.error(message, meta),
     },
   })
-  registerWslIpcHandlers(controller)
+  registerWslIpcHandlers(createWslIpc(controller))
   controller.startConfiguredServers()
   return async () => controller.stopServers()
 }
