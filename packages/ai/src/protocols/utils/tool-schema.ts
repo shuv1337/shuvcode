@@ -65,6 +65,25 @@ const openAI = (schema: JsonSchema): JsonSchema => {
 
 const responses = openAI
 
+// Anthropic rejects oneOf/allOf/anyOf at the top level of input_schema (nested combinators
+// are fine). Hoist each variant's properties into the base object as optional fields and
+// drop the combinators; branch-only constraints such as conditional `required` are hints the
+// executing tool still enforces on the actual input.
+const anthropic = (schema: JsonSchema): JsonSchema => {
+  const variants = [schema.anyOf, schema.oneOf, schema.allOf]
+    .flatMap((value) => (Array.isArray(value) ? value : []))
+    .filter(isRecord)
+  if (variants.length === 0) return schema
+  const base = Object.fromEntries(
+    Object.entries(schema).filter(([key]) => key !== "anyOf" && key !== "oneOf" && key !== "allOf"),
+  )
+  const properties = variants.reduce(
+    (merged, variant) => ({ ...(isRecord(variant.properties) ? variant.properties : {}), ...merged }),
+    isRecord(base.properties) ? base.properties : {},
+  )
+  return { ...base, type: "object", ...(Object.keys(properties).length === 0 ? {} : { properties }) }
+}
+
 const gemini = (schema: JsonSchema): JsonSchema => GeminiToolSchema.convert(schema) ?? {}
 
 const modelCompatibility = (
@@ -81,6 +100,7 @@ const modelCompatibility = (
 }
 
 export const ToolSchemaProjection = {
+  anthropic,
   gemini,
   modelCompatibility,
   moonshot,

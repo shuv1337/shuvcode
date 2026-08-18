@@ -50,6 +50,70 @@ describe("tool schema projections", () => {
     })
   })
 
+  test("gemini drops boolean const/enum constraints and folds other consts into string enums", () => {
+    // Shape observed from an MCP server: a top-level anyOf branch constraining a boolean
+    // property with `const: true` (issue #357). Gemini's enum is string-only, so raw
+    // booleans must never survive into `enum`.
+    expect(
+      ToolSchemaProjection.gemini({
+        type: "object",
+        properties: {
+          allow_launch: { type: "boolean", const: true },
+          flag: { type: "boolean", enum: [true, false] },
+          mode: { const: "fast" },
+          count: { type: "integer", const: 5 },
+        },
+        anyOf: [{ required: ["pid"] }, { properties: { allow_launch: { const: true } }, required: ["allow_launch"] }],
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        allow_launch: { type: "boolean" },
+        flag: { type: "boolean" },
+        mode: { enum: ["fast"] },
+        count: { type: "string", enum: ["5"] },
+      },
+      anyOf: [{ required: ["pid"] }, { properties: { allow_launch: {} }, required: ["allow_launch"] }],
+    })
+  })
+
+  test("anthropic hoists top-level combinators into a flat object schema", () => {
+    // Anthropic rejects oneOf/allOf/anyOf at the top level of input_schema (issue #357).
+    expect(
+      ToolSchemaProjection.anthropic({
+        type: "object",
+        properties: {
+          pid: { type: "integer" },
+          allow_launch: { type: "boolean", description: "launch flag" },
+        },
+        required: [],
+        additionalProperties: false,
+        anyOf: [
+          { required: ["pid"] },
+          { properties: { allow_launch: { const: true }, profile: { type: "object" } }, required: ["allow_launch"] },
+        ],
+      }),
+    ).toEqual({
+      type: "object",
+      properties: {
+        pid: { type: "integer" },
+        allow_launch: { type: "boolean", description: "launch flag" },
+        profile: { type: "object" },
+      },
+      required: [],
+      additionalProperties: false,
+    })
+  })
+
+  test("anthropic leaves schemas without top-level combinators untouched", () => {
+    const schema = {
+      type: "object",
+      properties: { path: { type: "string" }, maybe: { anyOf: [{ type: "string" }, { type: "null" }] } },
+      required: ["path"],
+    }
+    expect(ToolSchemaProjection.anthropic(schema)).toEqual(schema)
+  })
+
   test("gemini keeps an optional object typed so its properties survive", () => {
     // Shape an MCP server emits for an optional object parameter.
     expect(

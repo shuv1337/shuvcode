@@ -426,6 +426,43 @@ describe("Gemini route", () => {
     }),
   )
 
+  // Regression (issue #357): Gemini's enum is string-only. An MCP tool schema with a
+  // top-level anyOf branch constraining a boolean via `const: true` must not surface a
+  // raw boolean inside `enum`.
+  it.effect("never emits raw booleans into Gemini enums", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          prompt: "Prepare the browser.",
+          tools: [
+            {
+              name: "browser_prepare",
+              description: "Prepare a browser.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  pid: { type: "integer" },
+                  allow_launch: { type: "boolean", const: true },
+                },
+                anyOf: [{ required: ["pid"] }, { properties: { allow_launch: { const: true } }, required: ["allow_launch"] }],
+              },
+            },
+          ],
+        }),
+      )
+
+      expect(prepared.body.tools?.[0]?.functionDeclarations[0]?.parameters).toEqual({
+        type: "object",
+        properties: {
+          pid: { type: "integer" },
+          allow_launch: { type: "boolean" },
+        },
+        anyOf: [{ required: ["pid"] }, { properties: { allow_launch: {} }, required: ["allow_launch"] }],
+      })
+    }),
+  )
+
   it.effect("projects Gemini type arrays without narrowing their allowed values", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

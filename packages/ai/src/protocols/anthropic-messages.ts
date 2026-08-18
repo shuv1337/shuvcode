@@ -634,7 +634,9 @@ const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (reques
           lowerTool(
             breakpoints,
             tool,
-            ToolSchemaProjection.modelCompatibility(tool.inputSchema, toolSchemaCompatibility),
+            ToolSchemaProjection.anthropic(
+              ToolSchemaProjection.modelCompatibility(tool.inputSchema, toolSchemaCompatibility),
+            ),
           ),
         )
   // Anthropic rejects tool_choice when tools are absent; "none" is only meaningful with tools present.

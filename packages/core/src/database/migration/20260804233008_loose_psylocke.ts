@@ -124,7 +124,11 @@ const migration: DatabaseMigration.Migration = {
           CONSTRAINT \`fk_session_v2_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
-      yield* tx.run(`ALTER TABLE \`event\` ADD \`created\` integer DEFAULT 0 NOT NULL;`)
+      // ALTER TABLE ADD COLUMN is not idempotent like the CREATE TABLE IF NOT EXISTS
+      // statements around it: guard so a replayed run (e.g. against a database captured
+      // mid-migration) does not fail on the existing column.
+      if (!(yield* tx.get(sql`SELECT 1 FROM pragma_table_info('event') WHERE name = 'created'`)))
+        yield* tx.run(`ALTER TABLE \`event\` ADD \`created\` integer DEFAULT 0 NOT NULL;`)
       yield* tx.run(`
         CREATE TABLE IF NOT EXISTS \`__new_session_message\` (
           \`id\` text PRIMARY KEY,

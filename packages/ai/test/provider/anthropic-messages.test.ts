@@ -340,6 +340,51 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
+  // Regression (issue #357): Anthropic rejects oneOf/allOf/anyOf at the top level of
+  // input_schema. MCP servers emit such schemas; the protocol must hoist them.
+  it.effect("hoists top-level anyOf out of tool input schemas", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          id: "req_top_level_anyof",
+          model,
+          prompt: "Prepare the browser.",
+          tools: [
+            {
+              name: "browser_prepare",
+              description: "Prepare a browser.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  pid: { type: "integer" },
+                  allow_launch: { type: "boolean" },
+                },
+                required: [],
+                additionalProperties: false,
+                anyOf: [
+                  { required: ["pid"] },
+                  { properties: { allow_launch: { const: true }, profile: { type: "object" } }, required: ["allow_launch"] },
+                ],
+              },
+            },
+          ],
+          cache: "none",
+        }),
+      )
+
+      expect(prepared.body.tools?.[0]?.input_schema).toEqual({
+        type: "object",
+        properties: {
+          pid: { type: "integer" },
+          allow_launch: { type: "boolean" },
+          profile: { type: "object" },
+        },
+        required: [],
+        additionalProperties: false,
+      })
+    }),
+  )
+
   // Regression: read tool results must stay structured so base64 media data is
   // not JSON-stringified into `tool_result.content`.
   it.effect("lowers media tool-result content as structured blocks", () =>

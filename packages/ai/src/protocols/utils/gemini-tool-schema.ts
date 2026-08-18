@@ -36,6 +36,16 @@ const sanitizeNode = (schema: unknown): unknown => {
     ]),
   )
 
+  // Gemini's enum accepts only strings. A boolean constraint cannot round-trip through a
+  // string enum without changing the value the model sends, so drop it and keep the type;
+  // other consts become single-value enums so the string coercions below apply uniformly.
+  if (typeof result.const === "boolean") delete result.const
+  if (result.const !== undefined) {
+    result.enum = [String(result.const)]
+    delete result.const
+  }
+  if (result.type === "boolean") delete result.enum
+
   if (Array.isArray(result.enum) && (result.type === "integer" || result.type === "number")) result.type = "string"
 
   const properties = result.properties
@@ -84,7 +94,8 @@ const projectNode = (schema: unknown, nested = false): Record<string, unknown> |
           ? true
           : undefined,
       ],
-      ["enum", schema.const !== undefined ? [schema.const] : schema.enum],
+      // `const` is folded into a string enum (or dropped for booleans) by sanitizeNode.
+      ["enum", schema.enum],
       [
         "properties",
         isRecord(schema.properties)
