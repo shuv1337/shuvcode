@@ -21,6 +21,8 @@ export interface Interface {
     | "command"
     | "rename"
     | "resume"
+    | "switchAgent"
+    | "switchModel"
     | "interrupt"
     | "synthetic"
     | "wait"
@@ -75,6 +77,8 @@ export const layerWithCell = (cell: Cell) =>
         command: (input) => require(cell, (runtime) => runtime.session.command(input)),
         rename: (input) => require(cell, (runtime) => runtime.session.rename(input)),
         resume: (sessionID) => require(cell, (runtime) => runtime.session.resume(sessionID)),
+        switchAgent: (input) => require(cell, (runtime) => runtime.session.switchAgent(input)),
+        switchModel: (input) => require(cell, (runtime) => runtime.session.switchModel(input)),
         interrupt: (sessionID) => require(cell, (runtime) => runtime.session.interrupt(sessionID)),
         synthetic: (input) => require(cell, (runtime) => runtime.session.synthetic(input)),
         wait: (sessionID) => require(cell, (runtime) => runtime.session.wait(sessionID)),
