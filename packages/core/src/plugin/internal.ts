@@ -14,6 +14,7 @@ import { Credential } from "../credential.js"
 import { ConfigAgentPlugin } from "../config/plugin/agent.js"
 import { ConfigCommandPlugin } from "../config/plugin/command.js"
 import { ConfigFormatterPlugin } from "../config/plugin/formatter.js"
+import { ConfigImagePlugin } from "../config/plugin/image.js"
 import { ConfigInstructionPlugin } from "../config/plugin/instruction.js"
 import { ConfigMCPPlugin } from "../config/plugin/mcp.js"
 import { ConfigProviderPlugin } from "../config/plugin/provider.js"
@@ -238,6 +239,7 @@ const post = [
   ConfigAgentPlugin.Plugin,
   ConfigCommandPlugin.Plugin,
   ConfigFormatterPlugin.Plugin,
+  ConfigImagePlugin.Plugin,
   ConfigSkillPlugin.Plugin,
   ConfigProviderPlugin.Plugin,
   ConfigWebSearchPlugin.Plugin,
