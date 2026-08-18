@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createWindowRegistry } from "./window-registry"
+import { createWindowRegistry } from "./registry"
 
 function setup(initial: unknown = []) {
   const state = { stored: initial }

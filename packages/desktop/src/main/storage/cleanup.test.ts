@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, readdir, rm, utimes, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { cleanupStoreFiles, deleteStoreFileIfEmpty } from "./store-cleanup"
+import { cleanupStoreFiles, deleteStoreFileIfEmpty } from "./cleanup"
 
 const roots: string[] = []
 

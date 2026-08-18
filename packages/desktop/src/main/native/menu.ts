@@ -6,11 +6,12 @@ import {
   type DesktopMenuEntry,
   type DesktopMenuRole,
 } from "@opencode-ai/app/desktop-menu"
+import { Ipc, sendIpcEvent } from "../../shared/ipc-contract"
 
-import { UPDATER_ENABLED } from "./constants"
-import { runDesktopMenuAction } from "./desktop-menu-actions"
-import { openExternalURL } from "./windows"
-import { nativeT } from "./native-translations"
+import { UPDATER_ENABLED } from "../constants"
+import { openExternalURL } from "../files"
+import { runDesktopMenuAction } from "./menu-actions"
+import { nativeT } from "./translations"
 
 type Deps = {
   trigger: (id: string) => void
@@ -32,6 +33,10 @@ export function createMenu(deps: Deps) {
   })
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+export function sendMenuCommand(win: BrowserWindow, id: string) {
+  sendIpcEvent(win.webContents, Ipc.menu.command, id)
 }
 
 function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOptions {

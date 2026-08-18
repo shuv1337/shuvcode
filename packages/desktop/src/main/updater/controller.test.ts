@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createUpdaterController, type UpdaterReadyRecord } from "./updater-controller"
+import { createUpdaterController, type UpdaterReadyRecord } from "./controller"
 
 // Drives the controller the way the app does: start or check, observe the states
 // the renderer sees, then install like a button click. `calls` records the platform

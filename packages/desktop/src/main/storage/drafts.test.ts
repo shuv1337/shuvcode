@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { createDesktopDraftStore } from "./draft-store"
+import { createDesktopDraftStore } from "./drafts"
 
 test("flushes the latest buffered draft and stores blobs", () => {
   const store = createDesktopDraftStore(":memory:")

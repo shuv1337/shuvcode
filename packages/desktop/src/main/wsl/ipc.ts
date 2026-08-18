@@ -3,7 +3,7 @@ import type { WebContents } from "electron"
 import type { WslServerConfig, WslServersState } from "@opencode-ai/app/wsl/types"
 import { Ipc, sendIpcEvent } from "../../shared/ipc-contract"
 import type { WslServersController } from "./servers"
-import { nativeT } from "../native-translations"
+import { nativeT } from "../native/translations"
 
 export type WslIpc = {
   subscribe(sender: WebContents): void

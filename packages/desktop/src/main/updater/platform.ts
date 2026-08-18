@@ -1,8 +1,8 @@
 import { app, autoUpdater } from "electron"
 import pkg from "electron-updater"
-import { getLogger } from "./logging"
-import { setAppQuitting } from "./windows"
-import type { UpdaterPlatform } from "./updater-controller"
+import { getLogger } from "../native/logging"
+import { setAppQuitting } from "../windows"
+import type { UpdaterPlatform } from "./controller"
 
 const updateClient = pkg.autoUpdater
 const restartTimeout = 10_000

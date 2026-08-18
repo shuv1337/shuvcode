@@ -1,12 +1,12 @@
 import { app, dialog } from "electron"
 import type { WebContents } from "electron"
-import { Ipc, sendIpcEvent } from "../shared/ipc-contract"
-import { UPDATER_ENABLED } from "./constants"
-import { createUpdaterController, type UpdaterController, type UpdaterReadyRecord } from "./updater-controller"
-import { getLogger } from "./logging"
-import { getStore } from "./store"
-import { nativeT } from "./native-translations"
-import { createUpdaterPlatform } from "./updater-platform"
+import { Ipc, sendIpcEvent } from "../../shared/ipc-contract"
+import { UPDATER_ENABLED } from "../constants"
+import { getLogger } from "../native/logging"
+import { nativeT } from "../native/translations"
+import { getStore } from "../storage/store"
+import { createUpdaterController, type UpdaterController, type UpdaterReadyRecord } from "./controller"
+import { createUpdaterPlatform } from "./platform"
 
 const key = "ready"
 
@@ -28,6 +28,13 @@ export function setupAutoUpdater(prepareToRestart: () => Promise<void>) {
     },
     log: (message, data) => logger.log(message, data),
   })
+}
+
+export function startAutoUpdater(controller: UpdaterController) {
+  void controller.start()
+  const timer = setInterval(() => void controller.check(), 10 * 60 * 1000)
+  timer.unref()
+  app.once("will-quit", () => clearInterval(timer))
 }
 
 export function createUpdaterIpc(controller: UpdaterController) {

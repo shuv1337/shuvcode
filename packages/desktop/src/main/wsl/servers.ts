@@ -8,9 +8,9 @@ import type {
   WslServersEvent,
   WslServersState,
 } from "@opencode-ai/app/wsl/types"
-import { WSL_SERVERS_KEY } from "../store-keys"
-import { getStore } from "../store"
-import { nativeT } from "../native-translations"
+import { nativeT } from "../native/translations"
+import { WSL_SERVERS_KEY } from "../storage/keys"
+import { getStore } from "../storage/store"
 import {
   installWslCli,
   installWslDistro,

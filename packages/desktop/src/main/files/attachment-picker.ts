@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { open } from "node:fs/promises"
-import { nativeT } from "./native-translations"
+import { nativeT } from "../native/translations"
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 

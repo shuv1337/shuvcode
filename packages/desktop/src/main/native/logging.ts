@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { ZipWriter, BlobWriter, BlobReader } from "@zip.js/zip.js"
 import { dirname, join } from "node:path"
 import { homedir } from "node:os"
-import { VERSION } from "./constants"
+import { VERSION } from "../constants"
 
 const MAX_LOG_AGE_DAYS = 7
 const TAIL_LINES = 1000
@@ -19,6 +19,7 @@ let netLogPath: string | undefined
 
 let logger: MainLogger
 export const getLogger = () => logger
+export type DesktopLogger = ReturnType<typeof initLogging>
 
 export function initLogging() {
   initRunDirectory()
@@ -39,25 +40,29 @@ export function initCrashReporter() {
   mkdirSync(dir, { recursive: true })
   app.setPath("crashDumps", dir)
   crashReporter.start({ uploadToServer: false, compress: true })
-  write("crash", "crash reporter started", { path: dir })
+  writeLog("crash", "crash reporter started", { path: dir })
 }
 
-export async function startNetLog() {
+async function startNetLog() {
   if (netLog.currentlyLogging) return
   netLogPath = join(run, "network.netlog")
   await netLog.startLogging(netLogPath, { captureMode: "default", maxFileSize: NET_LOG_SIZE })
-  write("network", "net log started", { path: netLogPath })
+  writeLog("network", "net log started", { path: netLogPath })
+}
+
+export function startNetworkLogging() {
+  return startNetLog().catch((error) => logger.warn("failed to start net log", error))
 }
 
 export async function exportDebugLogs() {
   const restartNetLog = netLog.currentlyLogging
   if (restartNetLog) {
-    await netLog.stopLogging().catch((error) => write("network", "failed to stop net log", { error }))
+    await netLog.stopLogging().catch((error) => writeLog("network", "failed to stop net log", { error }))
   }
 
   const output = join(app.getPath("downloads"), `opencode-debug-${stamp()}.zip`)
   try {
-    write("main", "exporting debug logs", { output })
+    writeLog("main", "exporting debug logs", { output })
     await writeZip(output, [
       { name: "manifest.json", data: Buffer.from(JSON.stringify(manifest(), null, 2)) },
       ...collect(root, "desktop"),
@@ -68,12 +73,12 @@ export async function exportDebugLogs() {
     return output
   } finally {
     if (restartNetLog) {
-      await startNetLog().catch((error) => write("network", "failed to restart net log", { error }))
+      await startNetLog().catch((error) => writeLog("network", "failed to restart net log", { error }))
     }
   }
 }
 
-export function write(
+export function writeLog(
   name: string,
   message: string,
   extra?: Record<string, unknown>,
@@ -195,10 +200,10 @@ function initConsoleTransport() {
     return
   }
 
-  const write = log.transports.console.writeFn.bind(log.transports.console)
+  const writeConsole = log.transports.console.writeFn.bind(log.transports.console)
   log.transports.console.writeFn = (options) => {
     try {
-      write(options)
+      writeConsole(options)
     } catch (err) {
       if (!isBrokenPipe(err)) throw err
       log.transports.console.level = false

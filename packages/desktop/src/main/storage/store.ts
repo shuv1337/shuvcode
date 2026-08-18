@@ -3,8 +3,8 @@ import electron from "electron"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
 
-import { SETTINGS_STORE } from "./store-keys"
-import { deleteStoreFileIfEmpty } from "./store-cleanup"
+import { deleteStoreFileIfEmpty } from "./cleanup"
+import { SETTINGS_STORE } from "./keys"
 
 const cache = new Map<string, Store>()
 

@@ -3,14 +3,12 @@ import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
 import { chmod, copyFile, mkdir, readdir, rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { app } from "electron"
 import { parseCliVersion } from "./cli-version"
+import { developmentResourcesRoot } from "../paths"
 
 const execFileAsync = promisify(execFile)
-const root = dirname(fileURLToPath(import.meta.url))
-
 type Logger = {
   log(message: string, meta?: Record<string, unknown>): void
   error(message: string, meta?: Record<string, unknown>): void
@@ -69,7 +67,7 @@ export async function startBackgroundCli(logger: Logger) {
 async function resolveBundledCli(isolated: boolean, logger: Logger) {
   const bundled = app.isPackaged
     ? join(process.resourcesPath, executableName())
-    : join(root, "../../resources", isolated ? developmentExecutableName() : executableName())
+    : join(developmentResourcesRoot, isolated ? developmentExecutableName() : executableName())
   logger.log("v2 CLI executable resolved", { bundled, packaged: app.isPackaged })
   const version = parseCliVersion(await run(bundled, ["--version"], logger))
   const binary = app.isPackaged || isolated ? await installCli(bundled, version, logger) : bundled

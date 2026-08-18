@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron"
-import { write as writeLog } from "./logging"
-import { safeWindowURL } from "./window-state"
+import { writeLog } from "../native/logging"
+import { safeWindowURL } from "./state"
 
 const sampleInterval = 1000
 const samplePeriod = 15000
