@@ -2,13 +2,45 @@ name: notify-discord
 
 on:
   release:
-    types: [released] # fires when a draft release is published
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to post"
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   notify:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - name: Send nicely-formatted embed to Discord
+      - id: release
+        name: Load release for a manual run
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          name="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json name --jq .name)"
+          url="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url)"
+          delimiter="release-notes-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "name=$name"
+            echo "url=$url"
+            echo "body<<$delimiter"
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post release notes to Discord
         uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
         with:
-          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+          webhook_url: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          release_name: ${{ steps.release.outputs.name }}
+          release_body: ${{ steps.release.outputs.body }}
+          release_html_url: ${{ steps.release.outputs.url }}
+          username: shuvcode releases
+          reduce_headings: true
