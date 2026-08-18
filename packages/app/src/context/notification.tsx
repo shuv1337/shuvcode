@@ -3,12 +3,12 @@ import { type Accessor, batch, createEffect, createMemo, createRoot, getOwner, o
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import type { ServerSDK } from "./server-sdk"
 import type { Data } from "@opencode-ai/client/solid"
+import type { OpenCodeEvent } from "@opencode-ai/client/promise"
 import { usePlatform } from "@/context/platform"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { decode64 } from "@/utils/base64"
-import type { EventSessionError } from "@/types"
 import { Persist, persisted } from "@/utils/persist"
 import { playSoundById } from "@/utils/sound"
 import { useGlobal } from "./global"
@@ -32,7 +32,7 @@ type TurnCompleteNotification = NotificationBase & {
 
 type ErrorNotification = NotificationBase & {
   type: "error"
-  error: EventSessionError["properties"]["error"]
+  error: Extract<OpenCodeEvent, { type: "session.execution.failed" }>["data"]["error"]
 }
 
 export type Notification = TurnCompleteNotification | ErrorNotification
@@ -216,8 +216,7 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
     dispatchEvent(new PopStateEvent("popstate"))
   }
 
-  const handleSessionIdle = (directory: string, event: { properties: { sessionID: string } }, time: number) => {
-    const sessionID = event.properties.sessionID
+  const handleSessionIdle = (directory: string, sessionID: string, time: number) => {
     void lookup(sessionID).then((session) => {
       if (meta.disposed) return
       if (!session) return
@@ -246,10 +245,10 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
 
   const handleSessionError = (
     directory: string,
-    event: { properties: EventSessionError["properties"] },
+    sessionID: string,
+    error: ErrorNotification["error"],
     time: number,
   ) => {
-    const sessionID = event.properties.sessionID
     void lookup(sessionID).then((session) => {
       if (meta.disposed) return
       if (session?.parentID) return
@@ -258,27 +257,25 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
         void playSoundById(settings.sounds.errors())
       }
 
-      const error = event.properties.error
       append({
         directory,
         time,
         viewed: viewedInCurrentSession(sessionID),
         type: "error",
-        session: sessionID ?? "global",
+        session: sessionID,
         error,
       })
       const description =
         session?.title ??
         (typeof error === "string" ? error : language.t("notification.session.error.fallbackDescription"))
-      const href = sessionHref(input.key, sessionID ?? "global")
+      const href = sessionHref(input.key, sessionID)
       if (settings.notifications.errors()) {
         void platform.notify(language.t("notification.session.error.title"), description, () => navigate(href))
       }
     })
   }
 
-  const unsub = input.sdk.eventByDir.listen((e) => {
-    const event = e.details
+  const unsub = input.sdk.event.listen((event) => {
     if (
       event.type !== "session.execution.succeeded" &&
       event.type !== "session.execution.interrupted" &&
@@ -286,14 +283,14 @@ export function createServerNotificationState(input: { sdk: ServerSDK; data: Dat
     )
       return
 
-    const directory = event.current?.location?.directory
+    const directory = event.location?.directory
     if (!directory) return
     const time = Date.now()
     if (event.type === "session.execution.failed") {
-      handleSessionError(directory, event, time)
+      handleSessionError(directory, event.data.sessionID, event.data.error, time)
       return
     }
-    handleSessionIdle(directory, event, time)
+    handleSessionIdle(directory, event.data.sessionID, time)
   })
   onCleanup(() => {
     meta.disposed = true

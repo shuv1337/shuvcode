@@ -215,8 +215,8 @@ function createWorkspaceTerminalSession(
     })
   }
 
-  const unsub = sdk.event.on("pty.exited", (event: { properties: { id: string } }) => {
-    removeExited(event.properties.id)
+  const unsub = sdk.event.on("pty.exited", (event) => {
+    removeExited(event.data.id)
   })
   onCleanup(unsub)
 

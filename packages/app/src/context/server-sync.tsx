@@ -7,7 +7,6 @@ import { useLanguage } from "@/context/language"
 import { type ServerSDK } from "./server-sdk"
 import { bootstrapDirectory, bootstrapGlobal, loadGlobalConfigQuery, loadPathQuery } from "./global-sync/bootstrap"
 import { createChildStoreManager } from "./global-sync/child-store"
-import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
 import type { ProjectMeta } from "./global-sync/types"
 import { formatServerError } from "@/utils/server-errors"
 import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/solid-query"
@@ -219,51 +218,23 @@ export function createServerSyncContextInner(serverSDK: ServerSDK, data: Data) {
     return promise
   }
 
-  const unsub = serverSDK.eventByDir.listen((e) => {
-    const directory = e.name
-    const key = directoryKey(directory)
-    const event = e.details
-    const eventType: string = event.type
-    connection.handleEvent({ type: eventType })
+  const unsub = serverSDK.event.listen((event) => {
+    connection.handleEvent({ type: event.type })
 
-    if (directory === "global") {
-      applyGlobalEvent({
-        event,
-        project: globalStore.project,
-        refresh: () => void bootstrap.refetch(),
-        setGlobalProject: setProjects,
-      })
-      if (eventType === "config.updated" || eventType === "agent.updated" || eventType === "worktree.updated")
+    if (!event.location) {
+      if (event.type === "config.updated" || event.type === "agent.updated" || event.type === "worktree.updated")
         bootstrap.refetch()
-      if (eventType === "global.disposed") Object.keys(children.children).filter(children.active).forEach(queue.push)
       return
     }
 
-    const existing = children.children[key]
-    if (!existing) return
+    const directory = event.location.directory
+    const key = directoryKey(directory)
+    if (!children.children[key]) return
     children.mark(key)
-    if (eventType === "config.updated" || eventType === "agent.updated") queue.push(key)
-    const [store, setStore] = existing
-    if (eventType === "worktree.updated") void bootstrap.refetch()
-    if (eventType !== "vcs.branch.updated")
-      applyDirectoryEvent({
-        event,
-        directory,
-        store,
-        setStore,
-        push: (directory) => {
-          if (children.active(directory)) queue.push(directory)
-        },
-        vcsCache: children.vcsCache.get(key),
-        loadLsp: () => {
-          if (!children.active(key)) return
-          void queryClient.fetchQuery(queryOptionsApi.lsp(key))
-        },
-        loadReferences: () => {
-          if (!children.active(key)) return
-          void data.location.reference.sync({ directory: key }).catch(() => undefined)
-        },
-      })
+    if (event.type === "config.updated" || event.type === "agent.updated") queue.push(key)
+    if (event.type === "worktree.updated") void bootstrap.refetch()
+    if (event.type === "reference.updated" && children.active(key))
+      void data.location.reference.sync({ directory: key }).catch(() => undefined)
   })
 
   onCleanup(unsub)

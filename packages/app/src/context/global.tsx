@@ -102,7 +102,10 @@ function createServerController(
   const sdk = createServerSdkContext(conn, scope)
   const data = createData({
     api: () => sdk.api,
-    event: sdk.event,
+    event: {
+      on: sdk.event.on,
+      listen: (handler) => sdk.event.listen((event) => handler({ name: event.type, details: event })),
+    },
     connection: sdk.connection,
     directory: "",
   })

@@ -54,8 +54,6 @@ function hasPermissionPromptRules(permission: unknown) {
   return Object.values(config).some(isNonAllowRule)
 }
 
-type PermissionEvent = Parameters<Parameters<ServerSDK["eventByDir"]["listen"]>[0]>[0]
-
 export function createServerPermissionState(input: { sdk: ServerSDK; sync: ServerSync; data: Data }) {
   const [store, setStore, _, ready] = persisted(
     {
@@ -204,20 +202,14 @@ export function createServerPermissionState(input: { sdk: ServerSDK; sync: Serve
     return next
   }
 
-  const handlePermission = (e: PermissionEvent) => {
-    const event = e.details
-    if (event?.type !== "permission.asked") return
-    void respondPending(event.properties, event.current?.location?.directory)
-  }
-
-  const unsubscribe = input.sdk.eventByDir.listen((event) => {
+  const unsubscribe = input.sdk.event.on("permission.asked", (event) => {
     if (ready()) {
-      handlePermission(event)
+      void respondPending(event.data, event.location?.directory)
       return
     }
     void ready.promise?.then(() => {
       if (meta.disposed) return
-      handlePermission(event)
+      void respondPending(event.data, event.location?.directory)
     })
   })
   onCleanup(() => {

@@ -1,6 +1,5 @@
 import type { OpenCodeEvent } from "@opencode-ai/client/promise"
 import { createClientConnection, type ClientConnectionStatus } from "@opencode-ai/client/solid"
-import type { Event } from "@/types"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { type Accessor, onCleanup } from "solid-js"
 import { createApiForServer, type ServerApi } from "@/utils/server"
@@ -10,15 +9,52 @@ import { createRefCountMap } from "@/utils/refcount"
 import { ServerScope } from "@/utils/server-scope"
 import { useServer } from "./server"
 
-export type ServerEvent = Event & { id?: string; current?: OpenCodeEvent }
+type OpenCodeEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
 
-export function adaptServerEvent(event: OpenCodeEvent): ServerEvent {
-  return { id: event.id, type: event.type, properties: event.data, current: event } as ServerEvent
+export type OpenCodeEventStream = {
+  on<Type extends OpenCodeEvent["type"]>(type: Type, handler: (event: OpenCodeEventMap[Type]) => void): VoidFunction
+  listen(handler: (event: OpenCodeEvent) => void): VoidFunction
 }
 
-type ServerEventEmitter = ReturnType<typeof createGlobalEmitter<{ [key: string]: ServerEvent }>>
-type CurrentEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
-type CurrentEventEmitter = ReturnType<typeof createGlobalEmitter<CurrentEventMap>>
+type OpenCodeEventSource = OpenCodeEventStream & {
+  location(directory: string): OpenCodeEventStream
+}
+
+export function createOpenCodeEventSource() {
+  const emitter = createGlobalEmitter<OpenCodeEventMap>()
+
+  function stream(directory?: string): OpenCodeEventStream {
+    return {
+      on(type, handler) {
+        return emitter.on(type, (event) => {
+          if (directory !== undefined && event.location?.directory !== directory) return
+          handler(event)
+        })
+      },
+      listen(handler) {
+        return emitter.listen((event) => {
+          if (directory !== undefined && event.details.location?.directory !== directory) return
+          handler(event.details)
+        })
+      },
+    }
+  }
+
+  const event: OpenCodeEventSource = {
+    ...stream(),
+    location: (directory) => stream(directory),
+  }
+
+  onCleanup(() => emitter.clear())
+
+  return {
+    event,
+    publish(event: OpenCodeEvent) {
+      emitter.emit(event.type, event)
+    },
+  }
+}
+
 export type ServerConnectionStatus = ClientConnectionStatus
 type ServerSDKBase = {
   server: ServerConnection.Any
@@ -30,28 +66,19 @@ type ServerSDKBase = {
     attempt: Accessor<number>
     error: Accessor<string | undefined>
   }
-  eventByDir: {
-    on: ServerEventEmitter["on"]
-    listen: ServerEventEmitter["listen"]
-  }
-  event: {
-    on: CurrentEventEmitter["on"]
-    listen: CurrentEventEmitter["listen"]
-  }
+  event: OpenCodeEventSource
 }
 
 function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerScope): ServerSDKBase {
   const platform = usePlatform()
   const api = createApiForServer({ server: server.http, fetch: platform.fetch })
-  const dirEmitter = createGlobalEmitter<{ [key: string]: ServerEvent }>()
-  const emitter = createGlobalEmitter<CurrentEventMap>()
+  const events = createOpenCodeEventSource()
 
   const connection = createClientConnection(api, {
     flushInterval: 16,
     pageLifecycle: true,
     onEvent(event) {
-      emitter.emit(event.type, event)
-      dirEmitter.emit(event.location?.directory ?? "global", adaptServerEvent(event))
+      events.publish(event)
     },
     log: {
       info(message, data) {
@@ -61,25 +88,13 @@ function createServerSdkContextBase(server: ServerConnection.Any, scope: ServerS
     },
   })
 
-  onCleanup(() => {
-    dirEmitter.clear()
-    emitter.clear()
-  })
-
   return {
     server,
     scope,
     url: server.http.url,
     api,
     connection,
-    eventByDir: {
-      on: dirEmitter.on.bind(dirEmitter),
-      listen: dirEmitter.listen.bind(dirEmitter),
-    },
-    event: {
-      on: emitter.on.bind(emitter),
-      listen: emitter.listen.bind(emitter),
-    },
+    event: events.event,
   }
 }
 
@@ -99,25 +114,14 @@ export const useServerSDK = () => {
   return server.ctx.sdk
 }
 
-type SDKEventMap = {
-  [key in Event["type"]]: Extract<ServerEvent, { type: key }>
-}
-
 export type LocationContext = {
   directory: string
-  event: ReturnType<typeof createGlobalEmitter<SDKEventMap>>
+  event: OpenCodeEventStream
 }
 
 function createDirSdkContext(directory: string, serverSDK: ServerSDKBase): LocationContext {
-  const emitter = createGlobalEmitter<SDKEventMap>()
-
-  const unsub = serverSDK.eventByDir.on(directory, (event) => {
-    emitter.emit(event.type, event)
-  })
-  onCleanup(unsub)
-
   return {
     directory,
-    event: emitter,
+    event: serverSDK.event.location(directory),
   }
 }

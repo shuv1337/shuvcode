@@ -616,7 +616,7 @@ export default function Page() {
   }, 100)
   onCleanup(
     sdk().event.listen((event) => {
-      if (event.details.type === "filesystem.changed") refreshVcs()
+      if (event.type === "filesystem.changed") refreshVcs()
     }),
   )
   createEffect(

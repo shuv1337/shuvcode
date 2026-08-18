@@ -52,13 +52,13 @@ export function useUsageExceededDialogs() {
 
   onCleanup(
     sdk().event.on("session.status", (evt) => {
-      if (evt.properties.sessionID !== params.id) return
-      if (evt.properties.status.type !== "retry") return
-      const { action } = evt.properties.status
+      if (evt.data.sessionID !== params.id) return
+      if (evt.data.status.type !== "retry") return
+      const { action } = evt.data.status
       if (!action) return
       if (dialog.active) return
 
-      const keys = goUpsellKeys(evt.properties.status)
+      const keys = goUpsellKeys(evt.data.status)
       if (!keys) return
 
       const seen = goUpsellState[keys.lastSeenAt]

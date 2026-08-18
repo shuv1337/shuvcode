@@ -225,8 +225,8 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
           },
         )
 
-    const stop = sdk().event.listen((e) => {
-      invalidateFromWatcher(e.details, {
+    const stop = sdk().event.on("filesystem.changed", (event) => {
+      invalidateFromWatcher(event, {
         normalize: path.normalize,
         hasFile: (file) => Boolean(store.file[file]),
         isOpen: (file) => tabs.all().some((tab) => path.pathFromTab(tab) === file),
