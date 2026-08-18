@@ -90,8 +90,8 @@ export const ProjectSettingsExtensions: Component = () => {
       .sort()
   })
   const mcpEnabled = (name: string) =>
-    data.location.mcp.server.list({ directory: directorySDK().directory })?.find((server) => server.name === name)?.status
-      .status === "connected"
+    data.location.mcp.server.list({ directory: directorySDK().directory })?.find((server) => server.name === name)
+      ?.status.status === "connected"
 
   const [globalPluginList] = createResource(
     () => serverSDK.connection.status() === "connected",
@@ -196,7 +196,6 @@ export const ProjectSettingsExtensions: Component = () => {
             <SharedSection count={serverSkills().length}>{skillRows(serverSkills())}</SharedSection>
           </div>
         </TabsV2.Content>
-
       </TabsV2>
     </div>
   )

@@ -63,7 +63,10 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
 
   const [head, ...tail] = text.split(" ")
   const cmd = head?.startsWith("/") ? head.slice(1) : undefined
-  if (cmd && input.data.location.command.list({ directory: input.draft.sessionDirectory })?.some((item) => item.name === cmd)) {
+  if (
+    cmd &&
+    input.data.location.command.list({ directory: input.draft.sessionDirectory })?.some((item) => item.name === cmd)
+  ) {
     setBusy()
     try {
       const messageID = Identifier.ascending("message")
@@ -197,8 +200,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     if (!sessionID) return Promise.resolve()
     input.onAbort?.()
 
-    return serverSDK.api.session.interrupt({ sessionID })
-      .catch(() => {})
+    return serverSDK.api.session.interrupt({ sessionID }).catch(() => {})
   }
 
   const restoreCommentItems = (

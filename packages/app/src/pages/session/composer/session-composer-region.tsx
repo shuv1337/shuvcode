@@ -72,9 +72,7 @@ export function SessionComposerRegion(props: {
                     </div>
                   )}
                 </Show>
-                <div
-                  class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none"
-                >
+                <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
                   {controller.handoffPrompt() || language.t("prompt.loading")}
                 </div>
               </>

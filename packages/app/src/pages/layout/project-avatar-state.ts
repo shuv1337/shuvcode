@@ -15,9 +15,14 @@ export function useSessionTabAvatarState(
     const ctx = serverCtx()
     if (!ctx) return false
     const permission = ctx.permission
-    return !!sessionPermissionRequest(ctx.data.session.list(), ctx.data.session.permission.list, sessionId(), (item) => {
-      return !permission.autoResponds(item, directory())
-    })
+    return !!sessionPermissionRequest(
+      ctx.data.session.list(),
+      ctx.data.session.permission.list,
+      sessionId(),
+      (item) => {
+        return !permission.autoResponds(item, directory())
+      },
+    )
   })
   const hasQuestions = createMemo(() => {
     const data = serverCtx()?.data

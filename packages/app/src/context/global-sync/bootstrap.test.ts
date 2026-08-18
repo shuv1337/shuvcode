@@ -86,5 +86,4 @@ describe("query keys", () => {
       { id: "b", sandboxes: [] },
     ])
   })
-
 })

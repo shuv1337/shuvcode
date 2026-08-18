@@ -78,16 +78,14 @@ export const { use: useFile, provider: FileProvider } = createSimpleContext({
       scope,
       normalizeDir: path.normalizeDir,
       list: (dir) =>
-        serverSDK.api.file
-          .list({ path: dir, location: { directory: scope() } })
-          .then((x) =>
-            x.data.map((entry) => ({
-              ...entry,
-              name: entry.path.split("/").at(-1) ?? entry.path,
-              absolute: `${scope()}/${entry.path}`,
-              ignored: false,
-            })),
-          ),
+        serverSDK.api.file.list({ path: dir, location: { directory: scope() } }).then((x) =>
+          x.data.map((entry) => ({
+            ...entry,
+            name: entry.path.split("/").at(-1) ?? entry.path,
+            absolute: `${scope()}/${entry.path}`,
+            ignored: false,
+          })),
+        ),
       onError: (message) => {
         showToast({
           variant: "error",

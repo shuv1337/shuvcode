@@ -44,7 +44,6 @@ export function createTimelineModel(input: { session: Pick<SessionController, "i
     userMessages: input.session.history.userMessages,
     visibleUserMessages: input.session.history.visibleUserMessages,
   }
-
 }
 
 export function isTimelineReady(messages: Message[] | undefined, loading: boolean) {

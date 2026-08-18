@@ -26,7 +26,8 @@ export function useMcpToggle(directory?: Accessor<string | undefined>, onSuccess
       } else if (server.status.status === "needs_auth" && server.integrationID) {
         const integration = await serverSDK.api.integration.get({ integrationID: server.integrationID, location: ref })
         const method = integration.data?.methods.find((item) => item.type === "oauth" && !item.form?.length)
-        if (!method || method.type !== "oauth") throw new Error(`MCP server ${name} requires an interactive authentication form`)
+        if (!method || method.type !== "oauth")
+          throw new Error(`MCP server ${name} requires an interactive authentication form`)
         const attempt = await serverSDK.api.integration.oauth.connect({
           integrationID: server.integrationID,
           methodID: method.id,

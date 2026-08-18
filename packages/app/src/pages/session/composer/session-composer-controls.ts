@@ -40,7 +40,9 @@ export function createPromptInputController(input: {
       model: {
         selection: input.model ?? local.model,
         paid: providers.paid().length > 0,
-        loading: (local.agent.visible() && data.location.agent.list({ directory: sdk().directory }) === undefined) || !providers.ready(),
+        loading:
+          (local.agent.visible() && data.location.agent.list({ directory: sdk().directory }) === undefined) ||
+          !providers.ready(),
       },
       session: {
         id: input.sessionID(),

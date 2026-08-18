@@ -50,7 +50,8 @@ export const DialogSelectMcp: Component = () => {
       >
         {(i) => {
           const mcpStatus = () =>
-            data.location.mcp.server.list({ directory: sdk().directory })?.find((server) => server.name === i.name)?.status
+            data.location.mcp.server.list({ directory: sdk().directory })?.find((server) => server.name === i.name)
+              ?.status
           const status = () => mcpStatus()?.status
           const statusLabel = () => {
             const key = status() ? statusLabels[status() as keyof typeof statusLabels] : undefined

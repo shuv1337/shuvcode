@@ -57,17 +57,16 @@ export function createHomeSessionsController(home: HomeController) {
         ? homeSessionIndexKey(ServerConnection.key(conn))
         : (["home", "session-index", "unselected"] as const),
       enabled: !!ctx && ctx.sdk.connection.status() === "connected",
-      queryFn:
-        ctx
-          ? async ({ signal }) => {
-              const index = await loadHomeSessionIndex(
-                (input, options) => ctx.sdk.api.session.list(input, options),
-                signal,
-              )
-              index.forEach(ctx.data.session.remember)
-              return Date.now()
-            }
-          : skipToken,
+      queryFn: ctx
+        ? async ({ signal }) => {
+            const index = await loadHomeSessionIndex(
+              (input, options) => ctx.sdk.api.session.list(input, options),
+              signal,
+            )
+            index.forEach(ctx.data.session.remember)
+            return Date.now()
+          }
+        : skipToken,
       retry: false,
       staleTime: 30_000,
       refetchOnMount: true,

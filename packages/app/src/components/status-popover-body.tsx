@@ -27,15 +27,16 @@ export function StatusPopoverBody(props: { shown: boolean }) {
 
   const toggleMcp = useMcpToggle(() => sdk().directory)
   const mcp = () => data.location.mcp.server.list({ directory: sdk().directory }) ?? []
-  const mcpNames = createMemo(() => mcp().map((server) => server.name).sort((a, b) => a.localeCompare(b)))
+  const mcpNames = createMemo(() =>
+    mcp()
+      .map((server) => server.name)
+      .sort((a, b) => a.localeCompare(b)),
+  )
   const mcpStatus = (name: string) => mcp().find((server) => server.name === name)?.status.status
   const mcpConnected = createMemo(() => mcpNames().filter((name) => mcpStatus(name) === "connected").length)
   const [pluginList] = createResource(
     () => (props.shown ? sdk().directory : undefined),
-    (directory) =>
-      serverSDK.api.plugin
-        .list({ location: { directory } })
-        .then((result) => result.data),
+    (directory) => serverSDK.api.plugin.list({ location: { directory } }).then((result) => result.data),
   )
   const plugins = createMemo(() => (pluginList.latest ?? []).map((item) => item.id))
   const pluginCount = createMemo(() => plugins().length)

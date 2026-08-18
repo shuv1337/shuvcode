@@ -5,12 +5,7 @@ import { getOwner, onCleanup, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import { type ServerSDK } from "./server-sdk"
-import {
-  bootstrapDirectory,
-  bootstrapGlobal,
-  loadGlobalConfigQuery,
-  loadPathQuery,
-} from "./global-sync/bootstrap"
+import { bootstrapDirectory, bootstrapGlobal, loadGlobalConfigQuery, loadPathQuery } from "./global-sync/bootstrap"
 import { createChildStoreManager } from "./global-sync/child-store"
 import { applyDirectoryEvent, applyGlobalEvent } from "./global-sync/event-reducer"
 import type { ProjectMeta } from "./global-sync/types"
@@ -247,11 +242,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK, data: Data) {
     const existing = children.children[key]
     if (!existing) return
     children.mark(key)
-    if (
-      eventType === "config.updated" ||
-      eventType === "agent.updated"
-    )
-      queue.push(key)
+    if (eventType === "config.updated" || eventType === "agent.updated") queue.push(key)
     const [store, setStore] = existing
     if (eventType === "worktree.updated") void bootstrap.refetch()
     if (eventType !== "vcs.branch.updated")

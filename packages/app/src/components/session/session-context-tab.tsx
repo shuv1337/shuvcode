@@ -181,8 +181,7 @@ export function SessionContextTab() {
     { label: "context.stats.reasoningTokens", value: () => formatter().number(ctx()?.tokens.reasoning) },
     {
       label: "context.stats.cacheTokens",
-      value: () =>
-        `${formatter().number(ctx()?.tokens.cache.read)} / ${formatter().number(ctx()?.tokens.cache.write)}`,
+      value: () => `${formatter().number(ctx()?.tokens.cache.read)} / ${formatter().number(ctx()?.tokens.cache.write)}`,
     },
     { label: "context.stats.userMessages", value: () => counts().user.toLocaleString(language.intl()) },
     { label: "context.stats.assistantMessages", value: () => counts().assistant.toLocaleString(language.intl()) },
@@ -305,9 +304,7 @@ export function SessionContextTab() {
           </div>
           <Accordion multiple>
             <For each={messages()}>
-              {(message) => (
-                <RawMessage message={message} onRendered={restoreScroll} time={formatter().time} />
-              )}
+              {(message) => <RawMessage message={message} onRendered={restoreScroll} time={formatter().time} />}
             </For>
           </Accordion>
         </div>

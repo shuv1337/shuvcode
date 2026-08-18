@@ -53,9 +53,9 @@ export function createSessionComposerController() {
     if (!primary()) return []
     const id = params.id
     if (!id) return []
-    const assistant = data.session.message.list(id).findLast(
-      (message) => message.type === "assistant" && message.time.completed === undefined,
-    )
+    const assistant = data.session.message
+      .list(id)
+      .findLast((message) => message.type === "assistant" && message.time.completed === undefined)
     if (assistant?.type !== "assistant") return []
     return assistant.content.flatMap((part) => {
       if (part.type !== "tool" || part.state.status !== "running") return []
@@ -149,14 +149,12 @@ export function createSessionComposerController() {
     if (!primary()) return
     const sessionID = params.id
     if (!sessionID) return
-    await serverSDK.api.session
-      .background({ sessionID })
-      .catch((error) => {
-        showToast({
-          title: language.t("common.requestFailed"),
-          description: error instanceof Error ? error.message : String(error),
-        })
+    await serverSDK.api.session.background({ sessionID }).catch((error) => {
+      showToast({
+        title: language.t("common.requestFailed"),
+        description: error instanceof Error ? error.message : String(error),
       })
+    })
   }
 
   const [store, setStore] = createStore({

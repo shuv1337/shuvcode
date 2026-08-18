@@ -13,10 +13,7 @@ export type WorkspaceLocation = LocationContext & {
 
 const context = createSimpleContext({
   name: "Location",
-  init: (props: {
-    directory: string | Accessor<string>
-    workspaceID?: string | Accessor<string | undefined>
-  }) => {
+  init: (props: { directory: string | Accessor<string>; workspaceID?: string | Accessor<string | undefined> }) => {
     const serverSDK = useServerSDK()
     const data = useData()
     const ref = createMemo(() => ({
@@ -44,9 +41,7 @@ const context = createSimpleContext({
       })
     })
 
-    const location = createMemo(() =>
-      serverSDK.ensureDirSdkContext(current()?.directory ?? ref().directory),
-    )
+    const location = createMemo(() => serverSDK.ensureDirSdkContext(current()?.directory ?? ref().directory))
     return createMemo<WorkspaceLocation>(() => ({
       ...location(),
       ref: ref(),

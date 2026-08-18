@@ -277,8 +277,7 @@ function ProviderConnection(props: {
   })
   const provider = createMemo(() => ({
     id: props.provider,
-    name:
-      providers.all().get(props.provider)?.name ?? controller.integration()?.name ?? props.provider,
+    name: providers.all().get(props.provider)?.name ?? controller.integration()?.name ?? props.provider,
   }))
   const methodLabel = (value?: { type?: string; label?: string }) => {
     if (!value) return ""

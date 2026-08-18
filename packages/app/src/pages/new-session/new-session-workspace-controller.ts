@@ -88,7 +88,9 @@ export function createNewSessionWorkspaceController(input: {
   )
   const projectRoot = createMemo(() => currentProject()?.worktree ?? sdk().directory)
   createEffect(() => {
-    void Promise.all([data.location.syncInfo({ directory: sdk().directory }), data.project.sync()]).catch(() => undefined)
+    void Promise.all([data.location.syncInfo({ directory: sdk().directory }), data.project.sync()]).catch(
+      () => undefined,
+    )
     const project = currentProject()
     const directories = project ? [project.worktree, ...workspaceDirectories(project)] : [sdk().directory]
     directories.forEach((directory) => void data.location.vcs.sync({ directory }).catch(() => undefined))

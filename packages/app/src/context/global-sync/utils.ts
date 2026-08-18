@@ -1,8 +1,4 @@
-import type {
-  AgentListOutput,
-  ModelListOutput,
-  ProviderListOutput,
-} from "@opencode-ai/client/promise"
+import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@opencode-ai/client/promise"
 import type { Agent, Project, Provider, ProviderListResponse } from "@/types"
 import type { Project as CurrentProject } from "@opencode-ai/client/promise"
 import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
