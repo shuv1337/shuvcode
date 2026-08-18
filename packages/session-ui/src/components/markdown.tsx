@@ -1,6 +1,6 @@
 import { useI18n } from "@opencode-ai/ui/context/i18n"
 import morphdom from "morphdom"
-import { checksum } from "@opencode-ai/core/util/encode"
+import { checksum } from "@opencode-ai/util/encode"
 import {
   type ComponentProps,
   createEffect,

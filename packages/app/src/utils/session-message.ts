@@ -3,7 +3,7 @@ import type {
   SessionMessageAssistantTool,
   SessionMessageUser,
 } from "@opencode-ai/client/promise"
-import type { AssistantMessage, FilePart, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, FilePart, Part, ToolPart, UserMessage } from "@/types"
 import { Option, Schema } from "effect"
 import { createCommentMetadata, formatCommentNote, readPromptPresentation } from "./comment-note"
 

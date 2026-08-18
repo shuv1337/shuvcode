@@ -1,4 +1,3 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useNavigate, useSearchParams } from "@solidjs/router"
 import { type Accessor, createMemo } from "solid-js"
 import type { PromptInputControls } from "@/components/prompt-input/contracts"

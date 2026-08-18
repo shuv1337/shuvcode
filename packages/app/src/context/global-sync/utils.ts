@@ -1,7 +1,6 @@
 import type { AgentListOutput, ModelListOutput, ProviderListOutput } from "@opencode-ai/client/promise"
 import type { Agent, Project, Provider, ProviderListResponse } from "@/types"
 import type { Project as CurrentProject } from "@opencode-ai/client/promise"
-import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 export { pathKey as directoryKey, type PathKey as DirectoryKey } from "@/utils/path-key"
 
 export const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -33,7 +32,7 @@ export function normalizeAgentList(input: AgentListOutput["data"] | Agent[]): Ag
 export function normalizeProviderList(
   providers: ProviderListOutput["data"] | ProviderListResponse,
   models?: ModelListOutput["data"],
-): NormalizedProviderListResponse {
+): ProviderListResponse {
   if (!Array.isArray(providers)) {
     return providers
   }

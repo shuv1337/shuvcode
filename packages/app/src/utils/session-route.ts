@@ -1,4 +1,4 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
+import { base64Encode } from "@opencode-ai/util/encode"
 import { ServerConnection } from "@/context/servers"
 import { decode64 } from "@/utils/base64"
 

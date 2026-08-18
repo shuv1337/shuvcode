@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import { QueryClient } from "@tanstack/solid-query"
-import type { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import { loadPathQuery, loadProjectsQuery } from "./bootstrap"
 import { ServerScope } from "@/utils/server-scope"
 import type { ServerApi } from "@/utils/server"

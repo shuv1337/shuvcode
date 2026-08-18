@@ -10,7 +10,7 @@ import {
   partDefaultOpen,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
-import type { ToolPart } from "@opencode-ai/sdk/v2"
+import type { ToolPart } from "@/types"
 import {
   presentAssistantMessage,
   presentAssistantContent,
@@ -56,9 +56,7 @@ export function CurrentAssistantContent(props: {
   onContentRendered?: () => void
 }) {
   const message = createMemo(() => presentAssistantMessage(props.sessionID, props.parentID, props.message))
-  const part = createMemo(() =>
-    presentAssistantContent(props.sessionID, props.message, props.contentID, props.content),
-  )
+  const part = createMemo(() => presentAssistantContent(props.sessionID, props.message, props.contentID, props.content))
   return (
     <Show when={part()}>
       {(part) => (
@@ -113,9 +111,5 @@ export function currentPartDefaultOpen(
   shellExpanded: boolean,
   editExpanded: boolean,
 ) {
-  return partDefaultOpen(
-    presentAssistantContent(sessionID, message, contentID, content),
-    shellExpanded,
-    editExpanded,
-  )
+  return partDefaultOpen(presentAssistantContent(sessionID, message, contentID, content), shellExpanded, editExpanded)
 }

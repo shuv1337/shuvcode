@@ -1,6 +1,5 @@
-import type { Agent, Config, LspStatus, Path, VcsInfo } from "@/types"
+import type { Agent, Config, LspStatus, Path, ProviderListResponse, VcsInfo } from "@/types"
 import type { ReferenceInfo } from "@opencode-ai/client/promise"
-import { NormalizedProviderListResponse } from "@opencode-ai/session-ui/context"
 import type { CommandInfo, McpResource, McpServer } from "@opencode-ai/client/promise"
 import type { Accessor } from "solid-js"
 import type { SetStoreFunction, Store } from "solid-js/store"
@@ -25,7 +24,7 @@ export type State = {
   projectMeta: ProjectMeta | undefined
   icon: string | undefined
   provider_ready: boolean
-  provider: NormalizedProviderListResponse
+  provider: ProviderListResponse
   config: Config
   path: Path
   mcp_ready: boolean
