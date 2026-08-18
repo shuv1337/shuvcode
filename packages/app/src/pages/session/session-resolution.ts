@@ -1,15 +1,18 @@
 import { createEffect, createMemo, createSignal, on, onCleanup } from "solid-js"
 import { sessionNotFoundError } from "@/utils/server-errors"
 
-type LineageStore<T> = { peek: (id: string) => T | undefined; resolve: (id: string) => Promise<unknown> }
+type SessionStore<T> = {
+  get: (id: string) => T | undefined
+  sync: (id: string, options?: { children?: boolean }) => Promise<unknown>
+}
 
-type Resolution<T> = { id: string; store: LineageStore<T> } & (
+type Resolution<T> = { id: string; store: SessionStore<T> } & (
   | { state: "pending" }
   | { state: "settled" }
   | { state: "failed"; failure: unknown }
 )
 
-// Reactive session lineage for the target session route, read from the sync store.
+// Reactive target session for the session route, read from the data store.
 // All session tabs on a server share one route instance, so the target session ID
 // changes in place; the effect is only a trigger that starts resolution for the
 // current target, and each run cancels the previous one through onCleanup so a
@@ -25,23 +28,27 @@ type Resolution<T> = { id: string; store: LineageStore<T> } & (
 // so trusting a previous target's settlement would fabricate a not-found for a
 // session that simply has not resolved yet. Resolve failures rethrow on read so
 // the enclosing SessionRouteErrorBoundary renders the scoped session error.
-export function createSessionLineage<T>(sessionID: () => string, lineage: () => LineageStore<T>) {
-  const cached = createMemo(() => lineage().peek(sessionID()))
+export function createSessionResolution<T>(
+  sessionID: () => string,
+  sessions: () => SessionStore<T>,
+  options?: { children?: boolean },
+) {
+  const cached = createMemo(() => sessions().get(sessionID()))
   const [status, setStatus] = createSignal<Resolution<T>>()
 
   createEffect(
-    on([sessionID, lineage] as const, ([id, store]) => {
+    on([sessionID, sessions] as const, ([id, store]) => {
       let stale = false
       onCleanup(() => {
         stale = true
       })
-      if (cached()) {
+      if (cached() && !options?.children) {
         setStatus({ id, store, state: "settled" })
         return
       }
       setStatus({ id, store, state: "pending" })
       store
-        .resolve(id)
+        .sync(id, options)
         .then(() => {
           if (!stale) setStatus({ id, store, state: "settled" })
         })
@@ -56,12 +63,10 @@ export function createSessionLineage<T>(sessionID: () => string, lineage: () => 
     const value = cached()
     if (value) return value
     const state = status()
-    if (state?.id !== id || state.store !== lineage()) return undefined
+    if (state?.id !== id || state.store !== sessions()) return undefined
     if (state.state === "failed") throw state.failure
-    // The viewed session is pinned (DirectoryDataProvider, directory-layout.tsx)
-    // and pinned lineages are exempt from cache pruning, so a lineage missing
-    // after settlement means the session (or an ancestor) was deleted, possibly
-    // by another client. Match the resolve error so the boundary shows the
+    // A session missing after settlement was deleted, possibly by another client.
+    // Match the resolve error so the boundary shows the
     // session not found fallback.
     if (state.state === "settled") throw sessionNotFoundError(id)
     return undefined

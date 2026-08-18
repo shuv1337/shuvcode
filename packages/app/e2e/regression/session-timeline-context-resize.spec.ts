@@ -310,45 +310,10 @@ function toolContent(part: ContextTool): SessionMessageAssistant["content"][numb
   }
 }
 
-let eventSequence = 0
+let eventSequence = -1
 
 function toolEvents(part: ContextTool): OpenCodeEvent[] {
-  const events = [
-    eventValue(
-      "session.tool.input.started",
-      {
-        sessionID,
-        assistantMessageID: part.messageID,
-        id: part.callID,
-        name: part.tool,
-      },
-      1,
-    ),
-    eventValue(
-      "session.tool.input.ended",
-      {
-        sessionID,
-        assistantMessageID: part.messageID,
-        id: part.callID,
-        text: JSON.stringify(part.state.input),
-      },
-      1,
-    ),
-    eventValue(
-      "session.tool.called",
-      {
-        sessionID,
-        assistantMessageID: part.messageID,
-        id: part.callID,
-        input: part.state.input,
-        executed: true,
-      },
-      1,
-    ),
-  ] satisfies OpenCodeEvent[]
-  if (part.state.status === "running") return events
   return [
-    ...events,
     eventValue(
       "session.tool.success",
       {
@@ -381,6 +346,7 @@ function eventValue<Type extends OpenCodeEvent["type"]>(
 }
 
 async function mockServer(page: Page, events: OpenCodeEvent[] = [], fixtureMessages = messages) {
+  eventSequence = -1
   await mockOpenCodeServer(page, {
     directory,
     project: project(),

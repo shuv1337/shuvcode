@@ -114,6 +114,7 @@ const nextOrdinals = new Map<string, { text: number; reasoning: number }>()
 const startedParts = new Set<string>()
 const toolStates = new Map<string, ToolStatus>()
 let eventSequence = 0
+let durableSequence = -1
 
 export async function setupTimeline(
   page: Page,
@@ -132,6 +133,8 @@ export async function setupTimeline(
     seedHistory?: boolean
   } = {},
 ) {
+  eventSequence = 0
+  durableSequence = -1
   const sessions = input.sessions ?? [session()]
   const messages =
     input.sessionMessages ??
@@ -427,9 +430,14 @@ export function messageUpdated(info: SessionMessageAssistant) {
 }
 
 export function status(type: SessionStatus["type"], attempt = 1) {
-  return event("session.status", {
+  if (type === "busy") return makeEvent("session.execution.started", { sessionID })
+  if (type === "idle") return makeEvent("session.execution.succeeded", { sessionID })
+  return makeEvent("session.retry.scheduled", {
     sessionID,
-    status: type === "retry" ? { type, attempt, message: "Rate limited", next: 1700000010000 } : { type },
+    assistantMessageID: assistantID,
+    attempt,
+    at: 1700000010000,
+    error: { type: "provider.error", message: "Rate limited" },
   })
 }
 
@@ -803,7 +811,7 @@ function makeEvent<Type extends OpenCodeEvent["type"]>(
     definition.durability === "durable"
       ? {
           ...base,
-          durable: { aggregateID: sessionID, seq: eventSequence, version: definition.durable.version },
+          durable: { aggregateID: sessionID, seq: ++durableSequence, version: definition.durable.version },
         }
       : base
   return Schema.decodeUnknownSync(definition)(input) as unknown as OpenCodeEvent

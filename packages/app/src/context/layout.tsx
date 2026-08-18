@@ -3,7 +3,6 @@ import { batch, createEffect, createMemo, onCleanup, onMount, type Accessor } fr
 import { useLocation } from "@solidjs/router"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { makeEventListener } from "@solid-primitives/event-listener"
-import { useServerSync } from "./server-sync"
 import { ServerConnection, useServers } from "./servers"
 import { usePlatform } from "./platform"
 import type { Project } from "@/types"
@@ -68,7 +67,6 @@ type SessionView = {
   reviewFile?: string
   pendingMessage?: string
   pendingMessageAt?: number
-  todoCollapsed?: boolean
 }
 
 export type LocalProject = Partial<Project> & { worktree: string; expanded: boolean }
@@ -145,7 +143,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
   name: "Layout",
   gate: false,
   init: () => {
-    // const serverSync = useServerSync()
     const servers = useServers()
     const platform = usePlatform()
 
@@ -699,18 +696,6 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           },
           setScroll(tab: string, pos: SessionScroll) {
             scroll.setScroll(key(), tab, pos)
-          },
-          todoCollapsed: {
-            get: () => s().todoCollapsed ?? false,
-            set(collapsed: boolean) {
-              const session = key()
-              const current = store.sessionView[session]
-              if (!current) {
-                setStore("sessionView", session, { scroll: {}, todoCollapsed: collapsed })
-              } else {
-                setStore("sessionView", session, "todoCollapsed", collapsed)
-              }
-            },
           },
           terminal: {
             opened: terminalOpened,

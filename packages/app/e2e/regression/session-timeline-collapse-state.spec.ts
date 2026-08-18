@@ -93,7 +93,9 @@ test.describe("regression: session timeline local row state", () => {
 
     events.push(...textEvents())
 
-    await expect(page.locator(`[data-timeline-part-id="${textPartID}"]`).first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator(`[data-timeline-part-id="${assistantMessageID}:text:0"]`).first()).toBeVisible({
+      timeout: 10_000,
+    })
 
     expect(await readToolState(page)).toEqual({
       expanded: false,
@@ -119,7 +121,9 @@ test.describe("regression: session timeline local row state", () => {
 
     events.push(...textEvents())
 
-    await expect(page.locator(`[data-timeline-part-id="${textPartID}"]`).first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator(`[data-timeline-part-id="${assistantMessageID}:text:0"]`).first()).toBeVisible({
+      timeout: 10_000,
+    })
     const siblingProbe = await readDiffProbe(page)
     expect(siblingProbe).toEqual({
       fileMarker: "before",
@@ -232,7 +236,7 @@ async function readToolState(page: Page) {
         row: element.closest("[data-timeline-row]")?.getAttribute("data-timeline-row"),
         streamedTextVisible: !!document.querySelector(`[data-timeline-part-id="${textPartID}"]`),
       }),
-      textPartID,
+      `${assistantMessageID}:text:0`,
     )
 }
 
@@ -309,7 +313,7 @@ function toolContent(part: typeof editPart): SessionMessageAssistant["content"][
   }
 }
 
-let eventSequence = 0
+let eventSequence = -1
 
 function textEvents(): OpenCodeEvent[] {
   return [
@@ -410,6 +414,7 @@ async function mockServer(
   events: EventPayload[],
   messages: SessionMessageInfo[] = [userMessage, assistantMessage],
 ) {
+  eventSequence = -1
   await mockOpenCodeServer(page, {
     directory,
     project: project(),

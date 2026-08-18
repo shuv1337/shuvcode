@@ -1,7 +1,7 @@
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { batch, createEffect, createMemo, createRoot, on, onCleanup } from "solid-js"
-import { useSDK, type DirectorySDK } from "./sdk"
+import { useWorkspaceLocation, type LocationContext } from "./location"
 import type { Platform } from "./platform"
 import { useServerSDK } from "./server-sdk"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -119,10 +119,16 @@ export function clearWorkspaceTerminals(dir: string, platform?: Platform, scope:
     entry?.value.clear()
   }
 
-  void removePersisted(terminalPersistTarget(scope, storageDir), platform)
+  const target = terminalPersistTarget(scope, storageDir)
+  void removePersisted({ storage: target.storage, key: target.key }, platform)
 }
 
-function createWorkspaceTerminalSession(sdk: DirectorySDK, dir: string, scope: ServerScopeValue) {
+function createWorkspaceTerminalSession(
+  sdk: LocationContext,
+  serverSDK: ReturnType<typeof useServerSDK>,
+  dir: string,
+  scope: ServerScopeValue,
+) {
   const location = { directory: sdk.directory }
 
   const [store, setStore, _, ready] = persisted(
@@ -221,7 +227,7 @@ function createWorkspaceTerminalSession(sdk: DirectorySDK, dir: string, scope: S
       setStore("all", index, (item) => ({ ...item, ...pty }))
     }
     const doUpdate = async () => {
-      await sdk.api.pty.update({
+      await serverSDK.api.pty.update({
         ptyID: pty.id,
         location,
         title: pty.title,
@@ -241,7 +247,7 @@ function createWorkspaceTerminalSession(sdk: DirectorySDK, dir: string, scope: S
     const index = store.all.findIndex((x) => x.id === id)
     const pty = store.all[index]
     if (!pty) return
-    const data = await sdk.api.pty
+    const data = await serverSDK.api.pty
       .create({ location, title: pty.title })
       .then((result) => result.data)
       .catch((error: unknown) => {
@@ -284,7 +290,7 @@ function createWorkspaceTerminalSession(sdk: DirectorySDK, dir: string, scope: S
       const focusRequest = options?.focus ? requestFocus(undefined, true) : undefined
 
       const doCreate = async () => {
-        return sdk.api.pty.create({ location, title: defaultTitle(nextNumber) }).then((result) => result.data)
+        return serverSDK.api.pty.create({ location, title: defaultTitle(nextNumber) }).then((result) => result.data)
       }
       doCreate()
         .then((data) => {
@@ -388,7 +394,7 @@ function createWorkspaceTerminalSession(sdk: DirectorySDK, dir: string, scope: S
         })
       }
 
-      await sdk.api.pty.remove({ ptyID: id, location }).catch((error: unknown) => {
+      await serverSDK.api.pty.remove({ ptyID: id, location }).catch((error: unknown) => {
         console.error("Failed to close terminal", error)
       })
     },
@@ -409,7 +415,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
   name: "Terminal",
   gate: false,
   init: () => {
-    const sdk = useSDK()
+    const sdk = useWorkspaceLocation()
     const serverSDK = useServerSDK()
     const cache = new Map<string, TerminalCacheEntry>()
     const scope = () => serverSDK.scope
@@ -448,7 +454,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
 
       const entry = createRoot((dispose) => ({
-        value: createWorkspaceTerminalSession(sdk(), dir, serverScope),
+        value: createWorkspaceTerminalSession(sdk(), serverSDK, dir, serverScope),
         dispose,
       }))
 
