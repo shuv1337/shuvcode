@@ -180,27 +180,38 @@ const register = Effect.fnUntraced(function* (
     password,
   }
   const encoded = yield* encodeInfo(info)
-  const current = fs.readFileString(file).pipe(
-    Effect.flatMap(decodeInfo),
-    Effect.orElseSucceed(() => undefined),
-  )
-  const owns = (found: Info | undefined) =>
-    found?.id === info.id &&
+  const current = fs.readFileString(file).pipe(Effect.flatMap(decodeInfo))
+  const owns = (found: Info) =>
+    found.id === info.id &&
     found.version === info.version &&
     found.url === info.url &&
     found.pid === info.pid &&
     found.password === info.password
   yield* fs.writeFileString(temp, encoded, { mode: 0o600 }).pipe(Effect.andThen(fs.rename(temp, file)))
   yield* current.pipe(
-    Effect.filterOrFail(owns),
-    Effect.repeat(Schedule.spaced("5 seconds")),
-    Effect.tapError(() =>
-      Effect.logWarning("managed service registration lost; shutting down", {
+    Effect.catchCause((cause) =>
+      Effect.logWarning("managed service registration check failed; shutting down", {
+        cause,
         serviceID: id,
         servicePID: process.pid,
         registration: file,
-      }),
+      }).pipe(Effect.andThen(Effect.failCause(cause))),
     ),
+    Effect.tap((found) =>
+      owns(found)
+        ? Effect.void
+        : Effect.logWarning("managed service registration replaced; shutting down", {
+            serviceID: id,
+            servicePID: process.pid,
+            registration: file,
+            observedServiceID: found.id,
+            observedServicePID: found.pid,
+            observedVersion: found.version,
+            observedURL: found.url,
+          }),
+    ),
+    Effect.filterOrFail(owns),
+    Effect.repeat(Schedule.spaced("5 seconds")),
     Effect.ignore,
     Effect.andThen(shutdown),
     Effect.forkScoped,
