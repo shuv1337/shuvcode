@@ -590,8 +590,7 @@ function App(props: { pair?: DialogPairCredentials }) {
   const pasteSummaryEnabled = () => config.data.prompt?.paste !== "full"
   const tabsVertical = () =>
     config.data.tabs.layout === "vertical" && sessionTabsFitVertically(dimensions().width, preferredTabsWidth())
-  const tabsVisible = () =>
-    sessionTabs.enabled() && (sessionTabs.tabs().length > 0 || sessionTabs.newTab()) && route.data.type !== "plugin"
+  const tabsVisible = () => sessionTabs.enabled() && sessionTabs.tabs().length > 0 && route.data.type !== "plugin"
   const verticalTabsVisible = () => tabsVisible() && tabsVertical()
 
   createEffect(() => {
