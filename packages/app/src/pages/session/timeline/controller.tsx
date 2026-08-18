@@ -1,8 +1,8 @@
-import type { Message, Part, UserMessage } from "@/types"
+import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, on, type Accessor } from "solid-js"
+import { createEffect, createMemo, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -17,17 +17,22 @@ import { sessionHref } from "@/utils/session-route"
 import { sessionTitle } from "@/utils/session-title"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/utils/session-export"
 import { showToast } from "@/utils/toast"
-import { timelineChildTitle, timelineRemovedSessionIDs } from "./controller-projection"
+import { timelineChildTitle, timelineRemovedSessionIDs, visibleTimelineMessages } from "./controller-projection"
 import { createTimelineProjection } from "./projection"
 import { useServer } from "@/context/server"
-import { normalizeSessionMessages } from "@/utils/session-message"
 
-const emptyMessages: Message[] = []
-const taskDescription = (part: Part, sessionID: string): string | undefined => {
-  if (part.type !== "tool" || part.tool !== "task") return undefined
-  const metadata = "metadata" in part.state ? part.state.metadata : undefined
-  if (metadata?.sessionId !== sessionID) return undefined
-  const value = part.state.input?.description
+const emptyMessages: SessionMessageInfo[] = []
+const taskDescription = (message: SessionMessageInfo, sessionID: string): string | undefined => {
+  if (message.type !== "assistant") return
+  const tool = message.content.findLast((item) => {
+    if (item.type !== "tool" || (item.name !== "task" && item.name !== "subagent")) return false
+    const metadata =
+      item.state.status === "running" || item.state.status === "completed" ? item.state.metadata : undefined
+    return metadata?.sessionId === sessionID || metadata?.sessionID === sessionID
+  })
+  if (tool?.type !== "tool") return
+  const input = typeof tool.state.input === "string" ? undefined : tool.state.input
+  const value = input?.description
   if (typeof value === "string" && value) return value
   return undefined
 }
@@ -35,13 +40,10 @@ const taskDescription = (part: Part, sessionID: string): string | undefined => {
 export type TimelineSessionSource = {
   identity: Pick<SessionController["identity"], "params" | "sessionID" | "sessionKey">
   data: Pick<SessionController["data"], "info" | "parent" | "parentID" | "status">
-  history: Pick<SessionController["history"], "messages" | "parts">
+  history: Pick<SessionController["history"], "messages">
 }
 
-export function createTimelineController(input: {
-  session: TimelineSessionSource
-  userMessages: Accessor<UserMessage[]>
-}) {
+export function createTimelineController(input: { session: TimelineSessionSource }) {
   const navigate = useNavigate()
   const sdk = useWorkspaceLocation()
   const serverSDK = useServerSDK()
@@ -54,36 +56,28 @@ export function createTimelineController(input: {
   const platform = usePlatform()
   const projectedMessages = createMemo(() => {
     const id = input.session.identity.sessionID()
-    if (!id) return []
-    const visible = new Set(input.userMessages().map((message) => message.id))
-    const boundary = input.session.history
-      .messages()
-      .find((message) => message.role === "user" && !visible.has(message.id))?.id
-    const projected = data.session.message.list(id)
-    if (!boundary) return projected
-    const index = projected.findIndex((message) => message.id === boundary)
-    return index < 0 ? projected : projected.slice(0, index)
+    return visibleTimelineMessages(
+      input.session.history.messages(),
+      id ? data.session.pending.list(id) : [],
+      input.session.data.info()?.revert?.messageID,
+    )
   })
   const titleValue = createMemo(() => input.session.data.info()?.title)
   const titleLabel = createMemo(() => sessionTitle(titleValue()) ?? language.t("command.session.new"))
   const shareUrl = (): string | undefined => undefined
   const shareEnabled = () => false
-  const parentTranscript = createMemo(() => {
+  const parentMessages = createMemo(() => {
     const id = input.session.data.parentID()
-    return id ? normalizeSessionMessages(id, data.session.message.list(id)) : undefined
+    return id ? data.session.message.list(id) : emptyMessages
   })
-  const parentMessages = createMemo(() => parentTranscript()?.messages ?? emptyMessages)
   const parentTitle = createMemo(
     () => sessionTitle(input.session.data.parent()?.title) ?? language.t("command.session.new"),
   )
-  const parts = input.session.history.parts
-  const part = (messageID: string, partID: string) => parts(messageID).find((item) => item.id === partID)
   const childTaskDescription = createMemo(() => {
     const id = input.session.identity.sessionID()
     if (!id) return undefined
     return parentMessages()
-      .flatMap((message) => parentTranscript()?.parts.get(message.id) ?? [])
-      .map((item) => taskDescription(item, id))
+      .map((message) => taskDescription(message, id))
       .findLast((value): value is string => !!value)
   })
   const childTitle = createMemo(() => {
@@ -96,10 +90,7 @@ export function createTimelineController(input: {
   })
   const showHeader = createMemo(() => !!input.session.identity.sessionID())
   const projection = createTimelineProjection({
-    messages: input.session.history.messages,
-    userMessages: input.userMessages,
     sessionMessages: projectedMessages,
-    parts,
     status: input.session.data.status,
     showReasoningSummaries: settings.general.showReasoningSummaries,
   })
@@ -238,8 +229,6 @@ export function createTimelineController(input: {
       parentTitle,
       childTitle,
       showHeader,
-      parts,
-      part,
       projection,
       showReasoningSummaries: settings.general.showReasoningSummaries,
       shellToolPartsExpanded: settings.general.shellToolPartsExpanded,

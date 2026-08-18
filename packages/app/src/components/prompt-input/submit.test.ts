@@ -407,6 +407,12 @@ describe("prompt submit worktree selection", () => {
       text: "ls",
       files: [],
       agents: [],
+      metadata: {
+        displayText: "ls",
+        comments: [],
+        agent: "agent",
+        model: { providerID: "provider", modelID: "model", variant: "high" },
+      },
     })
     expect((promptInputs[0] as { id?: string }).id).toStartWith("msg_")
   })

@@ -1,4 +1,4 @@
-import type { Message } from "@/types"
+import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { createMemo, createResource, type Accessor } from "solid-js"
 import { useData } from "@/context/server"
 import type { SessionController } from "../session-controller"
@@ -46,8 +46,11 @@ export function createTimelineModel(input: { session: Pick<SessionController, "i
   }
 }
 
-export function isTimelineReady(messages: Message[] | undefined, loading: boolean) {
-  return messages !== undefined && (messages.some((message) => message.role === "user") || !loading)
+export function isTimelineReady(messages: SessionMessageInfo[] | undefined, loading: boolean) {
+  return (
+    messages !== undefined &&
+    (messages.some((message) => message.type === "user" || message.type === "shell") || !loading)
+  )
 }
 
 export async function loadOlderTimeline(input: {

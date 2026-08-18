@@ -1,9 +1,8 @@
-import type { Message, UserMessage } from "@/types"
+import type { SessionMessageInfo, SessionMessageUser } from "@opencode-ai/client/promise"
 import { createMemo, type Accessor } from "solid-js"
 import { useFile } from "@/context/file"
 import { useData } from "@/context/server"
 import { same } from "@/utils/same"
-import { normalizeSessionMessages } from "@/utils/session-message"
 import { createSessionTabs } from "./helpers"
 import {
   normalizeSessionTab,
@@ -14,8 +13,8 @@ import {
 import { useSessionLayout } from "./session-layout"
 import { createSessionOwnership } from "./session-ownership"
 
-const emptyMessages: Message[] = []
-const emptyUserMessages: UserMessage[] = []
+const emptyMessages: SessionMessageInfo[] = []
+const emptyUserMessages: SessionMessageUser[] = []
 const idle = { type: "idle" as const }
 
 export function createSessionController(input: {
@@ -40,12 +39,10 @@ export function createSessionController(input: {
     const id = sessionID()
     return id && data.session.status(id) === "running" ? { type: "busy" as const } : idle
   })
-  const transcript = createMemo(() => {
+  const messages = createMemo(() => {
     const id = sessionID()
-    return id ? normalizeSessionMessages(id, data.session.message.list(id)) : undefined
+    return id ? data.session.message.list(id) : emptyMessages
   })
-  const messages = createMemo(() => transcript()?.messages ?? emptyMessages)
-  const parts = (messageID: string) => transcript()?.parts.get(messageID) ?? []
   const userMessages = createMemo(() => selectSessionUserMessages(messages()), emptyUserMessages, { equals: same })
   const revertMessageID = createMemo(() => info()?.revert?.messageID)
   const visibleUserMessages = createMemo(
@@ -84,7 +81,6 @@ export function createSessionController(input: {
     },
     history: {
       messages,
-      parts,
       userMessages,
       visibleUserMessages,
       lastUserMessage: createMemo(() => visibleUserMessages().at(-1)),

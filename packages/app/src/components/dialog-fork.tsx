@@ -9,8 +9,7 @@ import { showToast } from "@/utils/toast"
 import { useLanguage } from "@/context/language"
 import { useServerSDK } from "@/context/server-sdk"
 import { base64Encode } from "@opencode-ai/core/util/encode"
-import { extractPromptFromParts } from "@/utils/prompt"
-import { normalizeSessionMessages } from "@/utils/session-message"
+import { extractPromptComments, extractPromptFromMessage } from "@/utils/prompt"
 import { useWorkspaceLocation } from "@/context/location"
 import { useServer } from "@/context/server"
 import { sessionHref } from "@/utils/session-route"
@@ -61,13 +60,12 @@ export const DialogFork: Component = () => {
 
     const sessionID = params.id
     if (!sessionID) return
-    const restored = extractPromptFromParts(
-      normalizeSessionMessages(sessionID, data.session.message.list(sessionID)).parts.get(item.id) ?? [],
-      {
-        directory: location().directory,
-        attachmentName: language.t("common.attachment"),
-      },
-    )
+    const message = data.session.message.get(sessionID, item.id)
+    if (message?.type !== "user") return
+    const restored = extractPromptFromMessage(message, {
+      directory: location().directory,
+      attachmentName: language.t("common.attachment"),
+    })
     const dir = base64Encode(location().directory)
 
     serverSDK.api.session
@@ -75,7 +73,18 @@ export const DialogFork: Component = () => {
       .then((forked) => {
         data.session.remember(forked)
         dialog.close()
-        prompt.set(restored, undefined, { dir, id: forked.id })
+        const target = prompt.capture({ dir, id: forked.id })
+        target.set(restored)
+        target.context.replaceComments(
+          extractPromptComments(message).map((comment) => ({
+            type: "file",
+            path: comment.path,
+            selection: comment.selection,
+            comment: comment.comment,
+            preview: comment.preview,
+            commentOrigin: comment.origin,
+          })),
+        )
         navigate(sessionHref(server.key, forked.id))
       })
       .catch((err: unknown) => {

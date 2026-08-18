@@ -441,6 +441,15 @@ export function status(type: SessionStatus["type"], attempt = 1) {
   })
 }
 
+export function stepStarted(message: SessionMessageAssistant) {
+  return makeEvent("session.step.started", {
+    sessionID,
+    assistantMessageID: message.id,
+    agent: message.agent,
+    model: message.model,
+  })
+}
+
 export function userMessage(
   parts?: PartSeed<"user">[],
   input: { id?: string; summary?: unknown; created?: number } = {},

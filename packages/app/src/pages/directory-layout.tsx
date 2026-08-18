@@ -21,7 +21,7 @@ export function SessionUIProvider(
     await data.session.sync(sessionID).catch(() => undefined)
     navigate(href(sessionID))
   }
-  const legacyData = createMemo(() => ({
+  const sessionUIData = createMemo(() => ({
     session: data.session.list(),
     session_status: Object.fromEntries(
       data.session
@@ -32,13 +32,11 @@ export function SessionUIProvider(
         ]),
     ),
     session_diff: {},
-    message: {},
-    part: {},
   }))
 
   return (
     <DataProvider
-      data={legacyData()}
+      data={sessionUIData()}
       directory={directory()}
       sessionID={params.id}
       onNavigateToSession={navigateToSession}

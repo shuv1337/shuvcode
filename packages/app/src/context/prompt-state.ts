@@ -1,5 +1,4 @@
 import { checksum } from "@opencode-ai/core/util/encode"
-import type { FilePartSource } from "@/types"
 import { batch, createMemo, type Accessor } from "solid-js"
 import { createStore, type SetStoreFunction } from "solid-js/store"
 import type { FileSelection } from "@/context/file"
@@ -13,6 +12,19 @@ interface PartBase {
   start: number
   end: number
 }
+
+type FilePartSourceText = { value: string; start: number; end: number }
+type FilePartSource =
+  | { text: FilePartSourceText; type: "file"; path: string }
+  | {
+      text: FilePartSourceText
+      type: "symbol"
+      path: string
+      range: { start: { line: number; character: number }; end: { line: number; character: number } }
+      name: string
+      kind: number
+    }
+  | { text: FilePartSourceText; type: "resource"; clientName: string; uri: string }
 
 export interface TextPart extends PartBase {
   type: "text"

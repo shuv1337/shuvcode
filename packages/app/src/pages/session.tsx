@@ -1,5 +1,5 @@
-import type { FilePart, UserMessage } from "@/types"
-import type { FileDiffInfo } from "@opencode-ai/client/promise"
+import type { FilePart } from "@opencode-ai/sdk/v2"
+import type { FileDiffInfo, SessionMessageUser } from "@opencode-ai/client/promise"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createQuery, skipToken, useMutation, useQueryClient } from "@tanstack/solid-query"
@@ -92,7 +92,6 @@ import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
-import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { formatServerError, isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
 import { requireServerKey, sessionHref } from "@/utils/session-route"
@@ -439,11 +438,29 @@ export default function Page() {
 
   createEffect(
     on(
-      () => lastUserMessage()?.id,
+      () => [lastUserMessage(), controller.data.info()] as const,
       () => {
-        const msg = lastUserMessage()
-        if (!msg) return
-        syncSessionModel(local, msg)
+        const message = lastUserMessage()
+        const info = controller.data.info()
+        const metadata = message?.metadata
+        const agent = typeof metadata?.agent === "string" ? metadata.agent : info?.agent
+        const model = metadata?.model
+        const selected =
+          model &&
+          typeof model === "object" &&
+          !Array.isArray(model) &&
+          typeof model.providerID === "string" &&
+          typeof model.modelID === "string"
+            ? {
+                providerID: model.providerID,
+                modelID: model.modelID,
+                variant: typeof model.variant === "string" ? model.variant : undefined,
+              }
+            : info?.model
+              ? { providerID: info.model.providerID, modelID: info.model.id, variant: info.model.variant }
+              : undefined
+        if (!info || !agent || !selected) return
+        syncSessionModel(local, { sessionID: info.id, agent, model: selected })
       },
     ),
   )
@@ -520,8 +537,6 @@ export default function Page() {
     return open
   }, desktopReviewOpen())
 
-  // TODO: Restore turn diffs when current transcript projections expose message summaries.
-  const turnDiffs = createMemo(() => list(undefined))
   const nogit = createMemo(() => {
     const current = project()
     return !!current && current.vcs !== "git"
@@ -539,7 +554,6 @@ export default function Page() {
     ) {
       list.push("branch")
     }
-    list.push("turn")
     return list
   })
   const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
@@ -619,7 +633,8 @@ export default function Page() {
     if (reviewMode() === "git" || reviewMode() === "branch")
       // avoids suspense
       return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
-    return turnDiffs()
+    // TODO: Restore turn diffs when the V2 transcript exposes snapshot diffs.
+    return []
   }
   const activeReviewFile = () => {
     const diffs = reviewDiffs()
@@ -685,7 +700,7 @@ export default function Page() {
     return "main"
   })
 
-  const setActiveMessage = (message: UserMessage | undefined) => {
+  const setActiveMessage = (message: SessionMessageUser | undefined) => {
     messageMark = scrollMark
     setStore("messageId", message?.id)
   }

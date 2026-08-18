@@ -138,6 +138,15 @@ export async function sendFollowupDraft(input: FollowupSendInput) {
       text: request.text,
       files: request.files.map((file) => ({ uri: file.uri, name: file.name, mention: file.mention })),
       agents: request.agents,
+      metadata: {
+        displayText: request.displayText,
+        comments: request.comments,
+        agent: input.draft.agent,
+        model: {
+          ...input.draft.model,
+          ...(input.draft.variant ? { variant: input.draft.variant } : {}),
+        },
+      },
     })
     return true
   } catch (err) {
