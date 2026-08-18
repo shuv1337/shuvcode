@@ -71,6 +71,8 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
     if (!plugin) continue
     const previous = packages.get(operation.target)
     if (previous) enabled.delete(previous.id)
+    const duplicate = Array.from(packages.entries()).find(([, candidate]) => candidate.id === plugin.id)
+    if (duplicate) packages.delete(duplicate[0])
     packages.set(operation.target, plugin)
     enabled.add(plugin.id)
   }

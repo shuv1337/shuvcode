@@ -345,6 +345,32 @@ describe("PluginSupervisor config", () => {
     ),
   )
 
+  it.live("lets an explicit plugin source replace an auto-discovered plugin with the same ID", () =>
+    withLocation(
+      { plugins: ["./explicit.ts"] },
+      Effect.gen(function* () {
+        yield* ready()
+        const agents = yield* Agent.Service
+        expect(yield* agents.get(Agent.ID.make("duplicate-source"))).toMatchObject({
+          description: "explicit",
+        })
+      }),
+      false,
+      async (directory) => {
+        const discovered = path.join(directory, ".opencode", "plugins")
+        await fs.mkdir(discovered, { recursive: true })
+        await fs.writeFile(
+          path.join(discovered, "duplicate.ts"),
+          mutablePluginWithID("duplicate-source", "duplicate-source", "discovered"),
+        )
+        await fs.writeFile(
+          path.join(directory, "explicit.ts"),
+          mutablePluginWithID("duplicate-source", "duplicate-source", "explicit"),
+        )
+      },
+    ),
+  )
+
   it.live("loads user plugins before internal post plugins", () =>
     Effect.gen(function* () {
       const sdk = yield* SdkPlugins.Service
@@ -441,15 +467,19 @@ function withLocation<A, E, R>(
 }
 
 function mutablePlugin(description: string) {
+  return mutablePluginWithID("mutable-plugin", "mutable", description)
+}
+
+function mutablePluginWithID(id: string, agentID: string, description: string) {
   const plugin = pathToFileURL(path.join(import.meta.dir, "../../../plugin/src/promise/index.ts")).href
   return `
 import { Plugin } from ${JSON.stringify(plugin)}
 
 export default Plugin.define({
-  id: "mutable-plugin",
+  id: ${JSON.stringify(id)},
   setup: async (ctx) => {
     await ctx.agent.transform((agents) => {
-      agents.update("mutable", (agent) => {
+      agents.update(${JSON.stringify(agentID)}, (agent) => {
         agent.description = ${JSON.stringify(description)}
         agent.mode = "subagent"
       })
