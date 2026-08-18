@@ -957,9 +957,12 @@ const onMessageDelta = (state: ParserState, event: AnthropicEvent): StepResult =
   ]
 }
 
-const onMessageStop = (state: ParserState): StepResult => {
+const onMessageStop = Effect.fn("AnthropicMessages.onMessageStop")(function* (state: ParserState) {
+  const result = yield* ToolStream.finishAll(ADAPTER, state.tools)
   const events: LLMEvent[] = []
-  const lifecycle = Lifecycle.finish(state.lifecycle, events, {
+  const lifecycle = result.events.length ? Lifecycle.stepStart(state.lifecycle, events) : state.lifecycle
+  events.push(...result.events)
+  const finished = Lifecycle.finish(lifecycle, events, {
     reason: state.pendingFinish?.reason ?? {
       normalized: "unknown",
       raw: undefined,
@@ -967,8 +970,8 @@ const onMessageStop = (state: ParserState): StepResult => {
     usage: state.usage,
     providerMetadata: state.pendingFinish?.providerMetadata,
   })
-  return [{ ...state, lifecycle }, events]
-}
+  return [{ ...state, lifecycle: finished, tools: result.tools }, events] satisfies StepResult
+})
 
 // Prefix `error.type` so overloads, rate limits, and quota errors are visible
 // even when the provider message is generic or empty.
@@ -992,7 +995,7 @@ const step = (state: ParserState, event: AnthropicEvent) => {
   if (event.type === "content_block_delta") return onContentBlockDelta(state, event)
   if (event.type === "content_block_stop") return onContentBlockStop(state, event)
   if (event.type === "message_delta") return Effect.succeed(onMessageDelta(state, event))
-  if (event.type === "message_stop") return Effect.succeed(onMessageStop(state))
+  if (event.type === "message_stop") return onMessageStop(state)
   if (event.type === "error") return onError(event)
   return Effect.succeed<StepResult>([state, NO_EVENTS])
 }
