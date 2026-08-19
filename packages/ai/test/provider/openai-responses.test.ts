@@ -246,11 +246,7 @@ describe("OpenAI Responses route", () => {
       const prepared = yield* compileRequest(
         LLM.request({
           model,
-          messages: [
-            Message.user("Before."),
-            Message.system("Operator update."),
-            Message.assistant("After."),
-          ],
+          messages: [Message.user("Before."), Message.system("Operator update."), Message.assistant("After.")],
         }),
       )
 
@@ -1278,12 +1274,20 @@ describe("OpenAI Responses route", () => {
           model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).model("gpt-5.2"),
           prompt: "think",
           promptCacheKey: "session_123",
+          tools: [
+            ToolDefinition.make({ name: "read", description: "Read a file", inputSchema: { type: "object" } }),
+            ToolDefinition.make({ name: "grep", description: "Search files", inputSchema: { type: "object" } }),
+          ],
+          toolChoice: "none",
           providerOptions: {
             openai: {
               reasoningEffort: "high",
               reasoningSummary: "auto",
               include: ["reasoning.encrypted_content"],
               truncation: "disabled",
+              allowedTools: { toolNames: ["read", "grep"], mode: "required" },
+              maxToolCalls: 4,
+              parallelToolCalls: false,
             },
           },
         }),
@@ -1295,6 +1299,16 @@ describe("OpenAI Responses route", () => {
       expect(prepared.body.reasoning).toEqual({ effort: "high", summary: "auto" })
       expect(prepared.body.text).toEqual({ verbosity: "low" })
       expect(prepared.body.truncation).toBe("disabled")
+      expect(prepared.body.tool_choice).toEqual({
+        type: "allowed_tools",
+        mode: "required",
+        tools: [
+          { type: "function", name: "read" },
+          { type: "function", name: "grep" },
+        ],
+      })
+      expect(prepared.body.max_tool_calls).toBe(4)
+      expect(prepared.body.parallel_tool_calls).toBe(false)
     }),
   )
 
@@ -1320,20 +1334,17 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
-  it.effect("filters unknown includable values out of the include array", () =>
+  it.effect("passes forward-compatible includable values through", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         LLM.request({
           model,
           prompt: "hi",
-          // The user passed one invalid entry alongside a valid one. Keep the
-          // valid one so the request still succeeds rather than failing on a
-          // typo from upstream config.
           providerOptions: { openai: { include: ["reasoning.encrypted_content", "bogus.thing"] } },
         }),
       )
 
-      expect(prepared.body.include).toEqual(["reasoning.encrypted_content"])
+      expect(prepared.body.include).toEqual(["reasoning.encrypted_content", "bogus.thing"])
     }),
   )
 
@@ -1347,13 +1358,13 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
-  it.effect("treats an all-invalid include as no include at all", () =>
+  it.effect("passes an unknown includable value through", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         LLM.request({ model, prompt: "hi", providerOptions: { openai: { include: ["bogus.thing"] } } }),
       )
 
-      expect(prepared.body.include).toBeUndefined()
+      expect(prepared.body.include).toEqual(["bogus.thing"])
     }),
   )
 
