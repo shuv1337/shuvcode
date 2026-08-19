@@ -6,6 +6,9 @@ import { DEFAULT_THEMES, type Theme, type ThemeV1Json } from "./v1"
 export { DEFAULT_THEMES, generateSyntax, selectedForeground, type Theme, type ThemeV1Json } from "./v1"
 export { resolveThemeDocument, type ThemeDocument }
 
+// Shuvcode ships Night Owl as the opinionated default theme.
+export const DEFAULT_THEME_NAME = "nightowl"
+
 export type ThemeDocumentSource = Record<string, unknown>
 
 const pluginThemes: Record<string, ThemeDocumentSource> = {}

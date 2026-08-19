@@ -4,7 +4,7 @@ import { expect, test } from "bun:test"
 import { RGBA } from "@opentui/core"
 import { DEFAULT_THEME, selectTheme } from "@opencode-ai/theme/tui"
 import { createTuiResolvedConfig } from "../../fixture/tui-runtime"
-import { DEFAULT_THEMES } from "../../../src/theme"
+import { DEFAULT_THEMES, DEFAULT_THEME_NAME } from "../../../src/theme"
 import { ConfigProvider } from "../../../src/config"
 import { ThemeContextProvider, ThemeProvider, type ThemeError, useTheme, useThemes } from "../../../src/context/theme"
 
@@ -82,7 +82,7 @@ test.each([
   ["schema", { version: 2, light: { categorical: [] } }],
   ["mode merging", { version: 2, light: { mergeMode: true } }],
   ["token reference", { version: 2, light: { text: { default: "$missing" } } }],
-] as const)("falls back to OpenCode when configured V2 theme %s is invalid", async (_label, source) => {
+] as const)("falls back to the default theme when configured V2 theme %s is invalid", async (_label, source) => {
   let themes: ReturnType<typeof useThemes> | undefined
   let failure: ThemeError | undefined
   let unsubscribe: (() => void) | undefined
@@ -110,7 +110,7 @@ test.each([
 
   try {
     await wait(() => themes?.ready === true)
-    expect(themes?.selected).toBe("opencode")
+    expect(themes?.selected).toBe(DEFAULT_THEME_NAME)
     expect(failure?.name).toBe("invalid")
     expect(failure?.error).toBeInstanceOf(Error)
     expect(failure?.error.message.length).toBeGreaterThan(0)

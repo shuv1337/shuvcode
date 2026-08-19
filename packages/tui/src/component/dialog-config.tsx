@@ -1,6 +1,7 @@
 import { createMemo, createSignal } from "solid-js"
 import { useConfig } from "../config"
 import { useThemes } from "../context/theme"
+import { DEFAULT_THEME_NAME } from "../theme"
 import { DialogSelect } from "../ui/dialog-select"
 import { useToast } from "../ui/toast"
 
@@ -23,7 +24,7 @@ export const settings: Setting[] = [
     title: "Theme",
     category: "Appearance",
     path: ["theme", "name"],
-    default: "opencode",
+    default: DEFAULT_THEME_NAME,
     keywords: ["color scheme", "colors"],
   },
   {

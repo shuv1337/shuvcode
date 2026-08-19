@@ -9,6 +9,7 @@ import {
 } from "@opencode-ai/theme/tui"
 import {
   DEFAULT_THEMES,
+  DEFAULT_THEME_NAME,
   addTheme,
   allThemes,
   hasTheme,
@@ -130,7 +131,7 @@ const [store, setStore] = createStore<State>({
   themes: allThemes(),
   mode: "dark",
   lock: undefined,
-  active: "opencode",
+  active: DEFAULT_THEME_NAME,
   ready: false,
 })
 
@@ -154,8 +155,8 @@ const themeContext = createSimpleContext({
         const mode = lock ?? pick(renderer.themeMode) ?? props.mode
         draft.mode = mode
         draft.lock = lock
-        const active = config.theme?.name ?? "opencode"
-        draft.active = typeof active === "string" ? active : "opencode"
+        const active = config.theme?.name ?? DEFAULT_THEME_NAME
+        draft.active = typeof active === "string" ? active : DEFAULT_THEME_NAME
         draft.ready = false
       }),
     )
@@ -180,7 +181,7 @@ const themeContext = createSimpleContext({
         .then((themes) => {
           setCustomThemes(themes)
         })
-        .catch(() => setStore("active", "opencode"))
+        .catch(() => setStore("active", DEFAULT_THEME_NAME))
     }
 
     onMount(() => {
@@ -200,7 +201,7 @@ const themeContext = createSimpleContext({
           if (!colors.palette[0]) {
             if (hasResolvedSystemTheme) return
             setSystemTheme(undefined)
-            if (store.active === "system") setStore("active", "opencode")
+            if (store.active === "system") setStore("active", DEFAULT_THEME_NAME)
             return
           }
           const next = store.lock ?? terminalMode(colors) ?? mode
@@ -215,7 +216,7 @@ const themeContext = createSimpleContext({
         .catch(() => {
           if (hasResolvedSystemTheme) return
           setSystemTheme(undefined)
-          if (store.active === "system") setStore("active", "opencode")
+          if (store.active === "system") setStore("active", DEFAULT_THEME_NAME)
         })
     }
 
@@ -304,14 +305,14 @@ const themeContext = createSimpleContext({
 
     const initStarted = performance.now()
     const selected = createMemo(() => {
-      const name = store.themes[store.active] ? store.active : "opencode"
+      const name = store.themes[store.active] ? store.active : DEFAULT_THEME_NAME
       try {
         return loadTheme(store.themes[name], name, store.mode)
       } catch (error) {
-        if (name === "opencode") throw error
+        if (name === DEFAULT_THEME_NAME) throw error
         themeErrors.emit(name, error)
-        setStore("active", "opencode")
-        return loadTheme(store.themes.opencode, "opencode", store.mode)
+        setStore("active", DEFAULT_THEME_NAME)
+        return loadTheme(store.themes[DEFAULT_THEME_NAME], DEFAULT_THEME_NAME, store.mode)
       }
     })
     const modes = () => selected().modes
