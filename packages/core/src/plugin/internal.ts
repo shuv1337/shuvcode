@@ -20,6 +20,7 @@ import { ConfigMCPPlugin } from "../config/plugin/mcp.js"
 import { ConfigProviderPlugin } from "../config/plugin/provider.js"
 import { ConfigPolicyPlugin } from "../config/plugin/policy.js"
 import { ConfigReferencePlugin } from "../config/plugin/reference.js"
+import { ConfigSnapshotPlugin } from "../config/plugin/snapshot.js"
 import { ConfigSkillPlugin } from "../config/plugin/skill.js"
 import { ConfigToolOutputPlugin } from "../config/plugin/tool-output.js"
 import { ConfigPluginSource } from "../config/plugin/source.js"
@@ -47,6 +48,7 @@ import { WebSearch } from "../websearch.js"
 import { Ripgrep } from "../ripgrep.js"
 import { SessionInstructions } from "../session/instructions.js"
 import { Shell } from "../shell.js"
+import { Snapshot } from "../snapshot.js"
 import { Skill } from "../skill.js"
 import { SkillDiscovery } from "../skill/discovery.js"
 import { Watcher } from "../filesystem/watcher.js"
@@ -114,6 +116,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
   const ripgrep = yield* Ripgrep.Service
   const instructions = yield* SessionInstructions.Service
   const shell = yield* Shell.Service
+  const snapshot = yield* Snapshot.Service
   const skill = yield* Skill.Service
   const skillDiscovery = yield* SkillDiscovery.Service
   const tools = yield* Tool.Service
@@ -154,6 +157,7 @@ const services = Effect.fn("PluginInternal.services")(function* () {
     Context.make(Ripgrep.Service, ripgrep),
     Context.make(SessionInstructions.Service, instructions),
     Context.make(Shell.Service, shell),
+    Context.make(Snapshot.Service, snapshot),
     Context.make(Skill.Service, skill),
     Context.make(SkillDiscovery.Service, skillDiscovery),
     Context.make(Tool.Service, tools),
@@ -201,6 +205,7 @@ export const requirements = LayerNode.group([
   Ripgrep.node,
   SessionInstructions.node,
   Shell.node,
+  Snapshot.node,
   Skill.node,
   SkillDiscovery.node,
   Tool.node,
@@ -245,6 +250,7 @@ const post = [
   ConfigCommandPlugin.Plugin,
   ConfigFormatterPlugin.Plugin,
   ConfigImagePlugin.Plugin,
+  ConfigSnapshotPlugin.Plugin,
   ConfigToolOutputPlugin.Plugin,
   ConfigSkillPlugin.Plugin,
   ConfigProviderPlugin.Plugin,
