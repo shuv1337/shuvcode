@@ -1,22 +1,10 @@
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 import { forkRepository, publishPlan } from "../../../script/publish-plan"
+import { buildTargets, targetName } from "./build-targets"
 
 export const expectedNpmMaintainer = "kcrommett"
-export const forkBunPlatformPackages = [
-  "shuvcode-linux-arm64",
-  "shuvcode-linux-arm64-musl",
-  "shuvcode-linux-x64",
-  "shuvcode-linux-x64-baseline",
-  "shuvcode-linux-x64-musl",
-  "shuvcode-linux-x64-baseline-musl",
-  "shuvcode-darwin-arm64",
-  "shuvcode-darwin-x64",
-  "shuvcode-darwin-x64-baseline",
-  "shuvcode-windows-arm64",
-  "shuvcode-windows-x64",
-  "shuvcode-windows-x64-baseline",
-] as const
+export const forkBunPlatformPackages = buildTargets.map(targetName)
 export const forkNodePlatformPackages = [
   "shuvcode-node-linux-arm64",
   "shuvcode-node-linux-x64",

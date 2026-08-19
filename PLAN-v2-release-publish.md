@@ -1,6 +1,6 @@
 # Fork release runbook
 
-Shuvcode releases are manual and fork-only. Dispatch `.github/workflows/publish.yml` in `Latitudes-Dev/shuvcode` with either a version or bump. The workflow builds and publishes CLI npm packages only; it does not publish `@opencode-ai/*`, desktop applications, containers, AUR packages, or `update.opencode.ai` artifacts.
+Shuvcode releases are manual and fork-only. Dispatch `.github/workflows/publish.yml` in `Latitudes-Dev/shuvcode` with either a version or bump. The workflow publishes the CLI npm packages and 12 standalone GitHub binary archives; it does not publish `@opencode-ai/*`, desktop applications, containers, AUR packages, or `update.opencode.ai` artifacts.
 
 ## npm packages
 
@@ -28,6 +28,12 @@ Every release preflights and publishes exactly these 19 public packages:
 
 All 19 names exist publicly under the expected npm maintainer, `kcrommett`. The six `shuvcode-node*` packages were bootstrapped and are currently published at `2.0.0-alpha-8`. The live ownership preflight passed for all 19 packages on 2026-08-03.
 
+## GitHub binaries
+
+Every GitHub release publishes the same 12 standalone Bun targets as the platform npm packages. Linux assets use `.tar.gz`; macOS and Windows assets use `.zip`. Each archive contains exactly one `shuvcode` or `shuvcode.exe`, with executable mode preserved for Unix targets. Node SEA builds remain npm-only.
+
+The publisher restores executable modes after the Actions artifact round-trip, validates and archives all 12 targets before npm publication, replaces assets on the exact draft release ID, verifies the remote names and non-zero sizes, and only then continues. The release stays draft until npm publication and the generated release tag both succeed.
+
 The `shuvcode` umbrella also publishes the version-matched, zero-Effect Promise client at `shuvcode/client`. Consumers should spawn the package's `shuvcode` binary with `serve --stdio`, read its first JSON line for the loopback URL, and use `OpenCode.make(...)` from that client surface. The source-only `shuvcode/server-process` entrypoint is not a supported release API.
 
 After every package exists, configure its npm trusted publisher with these exact values:
@@ -51,9 +57,9 @@ The release fails closed when the repository is missing or unknown, a package is
 Two behaviors observed during the `2.0.0-alpha-9` release are worth knowing before the next dispatch:
 
 - Artifact upload/download between the build and publish jobs does not preserve file modes, and platform packages declare no `bin` entry, so the mode recorded in the packed tarball is the only thing that makes an installed platform binary executable. Publication repairs modes with a blanket `chmod -R 755`, but the pack/install smoke verification runs earlier; `packages/cli/script/binary-modes.ts` now restores an exact `0o755` on every platform binary during preparation so verification exercises the modes publication ships.
-- `prepareForkDraft` looks a release up with `repos/:owner/:repo/releases/tags/:tag`, which never matches a draft because drafts have no tag. A redispatch after a failed publish therefore creates a _second_ draft with the same name instead of reusing the existing one, and the later `gh release edit --draft=false` can undraft either of them. The tag is pushed before the undraft, so the published release still attaches to the correct commit, but the duplicate draft must be deleted by hand. After any retried release, check for duplicates with the release tag substituted in, for example `gh api "repos/Latitudes-Dev/shuvcode/releases" --jq '.[]|select(.name=="v2.0.0-alpha-9")'`.
+- Fork draft lookup paginates the release list because GitHub's tag endpoint does not return drafts. A redispatch reuses exactly one matching draft by database ID; duplicate, published, mismatched-target, or unrelated-tag state fails without mutation.
 
-Version idempotence applies only after the complete preflight succeeds. Redispatching the same explicit version, or the same bump while the latest published version is unchanged, reuses an existing fork draft only when its tag name, title, target commit, and any existing tag target exactly match. A published release, a mismatched draft, or an unrelated tag fails without being overwritten. Reused drafts retain their generated notes because the target release is unchanged. npm retries skip exact package versions that already exist, publish missing platform versions, and defer both umbrellas until all platform versions exist.
+Version idempotence applies only after the complete preflight succeeds. Redispatching the same explicit version, or the same bump while the latest published version is unchanged, reuses an existing fork draft only when its tag name, title, target commit, prerelease state, and any existing tag target exactly match. Reused drafts retain their generated notes because the target release is unchanged; new notes explicitly start at the most recently published release, including prereleases. Asset retries clear and replace only the verified draft release's assets before npm side effects. npm retries skip exact package versions that already exist, publish missing platform versions, and defer both umbrellas until all platform versions exist.
 
 npm publication is unavoidably non-transactional: a failure can leave an immutable subset of the 19 versions published. After correcting the cause, rerun the same release input so exact versions are reconciled and only missing packages are published; never choose a new version merely to hide a partial publication.
 
@@ -103,7 +109,7 @@ Do not include `.pi/`, `PLAN-npm-trusted-publishing.md`, `PLAN-upstream-v2-sync.
 3. Confirm all 19 package pages list `kcrommett` and verify each package authorizes the exact `Latitudes-Dev/shuvcode` + `publish.yml` trusted publisher configuration above.
 4. Dispatch `publish.yml` manually with exactly one of `version` or `bump`.
 5. Confirm the preflight reports 19 packages before any release or publish step proceeds.
-6. Verify all 19 versions and dist-tags on npm, then verify the GitHub tag/release targets the intended commit.
+6. Verify all 19 versions and dist-tags on npm, verify all 12 GitHub binary assets, then verify the GitHub tag/release targets the intended commit and prerelease state.
 7. If publication stopped after a subset reached npm, resolve the failure and redispatch; never overwrite an immutable npm version or move a published tag.
 
 Local tests must use synthetic npm responses. Do not use tests to call the live registry, publish packages, bootstrap names, or mutate GitHub releases.

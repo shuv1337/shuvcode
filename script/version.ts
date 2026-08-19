@@ -3,7 +3,17 @@
 import { Script } from "@opencode-ai/script"
 import { $ } from "bun"
 import { currentRepository, forkRepository, publishPlan } from "./publish-plan"
-import { planDraftRelease, type DraftRelease } from "./version-plan"
+import {
+  decodeReleaseCommit,
+  decodeReleaseSummary,
+  isPrereleaseVersion,
+  latestPublishedTag,
+  normalizeReleaseTagTarget,
+  planDraftRelease,
+  releaseForTag,
+  type ReleaseCommit,
+  type ReleaseSummary,
+} from "./version-plan"
 
 const repository = currentRepository()
 publishPlan(repository)
@@ -12,25 +22,44 @@ const sha = process.env.GITHUB_SHA ?? (await $`git rev-parse HEAD`.text()).trim(
 const tag = `v${Script.version}`
 
 async function prepareForkDraft() {
-  const releaseFilter = "{tagName:.tag_name,name:.name,targetCommitish:.target_commitish,isDraft:.draft}"
-  const releaseResult = await $`gh api ${`repos/${repository}/releases/tags/${tag}`} --jq ${releaseFilter}`
-    .quiet()
-    .nothrow()
-  if (releaseResult.exitCode !== 0 && !releaseResult.stderr.toString().includes("HTTP 404")) {
-    throw new Error(`Could not inspect release ${tag}: ${releaseResult.stderr.toString().trim()}`)
-  }
-  const release =
-    releaseResult.exitCode === 0 ? (JSON.parse(releaseResult.stdout.toString()) as DraftRelease) : undefined
+  const releases = await forkReleases()
+  const release = releaseForTag(tag, releases)
   const tagResult = await $`gh api ${`repos/${repository}/git/ref/tags/${tag}`} --jq .object.sha`.quiet().nothrow()
   if (tagResult.exitCode !== 0 && !tagResult.stderr.toString().includes("HTTP 404")) {
     throw new Error(`Could not inspect tag ${tag}: ${tagResult.stderr.toString().trim()}`)
   }
   const tagTarget = tagResult.exitCode === 0 ? tagResult.stdout.toString().trim() : undefined
-  const decision = planDraftRelease(tag, sha, release, tagTarget)
-  if (decision === "create") {
-    await $`gh release create ${tag} -d --repo ${repository} --target ${sha} --title ${tag} --generate-notes`
+  const releaseCommit = tagTarget && tagTarget !== sha ? await inspectReleaseCommit(tagTarget) : undefined
+  const decision = planDraftRelease(tag, sha, release, normalizeReleaseTagTarget(tag, sha, tagTarget, releaseCommit))
+  if (decision === "reuse") {
+    if (!release) throw new Error(`Draft release planning lost ${tag}`)
+    return release
   }
-  return await $`gh release view ${tag} --repo ${repository} --json tagName,databaseId`.json()
+
+  const previous = latestPublishedTag(releases)
+  const notesStart = previous ? ["--notes-start-tag", previous] : []
+  const prerelease = isPrereleaseVersion(Script.version) ? ["--prerelease"] : []
+  await $`gh release create ${tag} -d --repo ${repository} --target ${sha} --title ${tag} --generate-notes ${notesStart} ${prerelease}`
+  const created = releaseForTag(tag, await forkReleases())
+  if (!created) throw new Error(`GitHub did not return the draft release ${tag} after creating it`)
+  return created
+}
+
+async function inspectReleaseCommit(target: string): Promise<ReleaseCommit | undefined> {
+  const fields = "{message:.commit.message,parents:[.parents[].sha]}"
+  const result = await $`gh api ${`repos/${repository}/commits/${target}`} --jq ${fields}`.quiet().nothrow()
+  if (result.exitCode !== 0) return undefined
+  return decodeReleaseCommit(JSON.parse(result.stdout.toString()))
+}
+
+async function forkReleases() {
+  const fields =
+    ".[] | {databaseId:.id,tagName:.tag_name,name:.name,targetCommitish:.target_commitish,isDraft:.draft,publishedAt:.published_at,isPrerelease:.prerelease}"
+  const text = await $`gh api --paginate ${`repos/${repository}/releases?per_page=100`} --jq ${fields}`.text()
+  return text
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => decodeReleaseSummary(JSON.parse(line))) satisfies ReleaseSummary[]
 }
 
 if (!Script.preview) {
@@ -55,7 +84,7 @@ if (!Script.preview) {
     output.push(`tag=${release.tagName}`)
   }
 } else if (Script.channel === "beta") {
-  await $`gh release create ${tag} -d --title ${tag} --repo ${repository}`
+  await $`gh release create ${tag} -d --prerelease --title ${tag} --repo ${repository}`
   const release = await $`gh release view ${tag} --json tagName,databaseId --repo ${repository}`.json()
   output.push(`release=${release.databaseId}`)
   output.push(`tag=${release.tagName}`)
