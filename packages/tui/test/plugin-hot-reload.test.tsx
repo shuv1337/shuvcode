@@ -8,9 +8,8 @@ import { pathToFileURL } from "node:url"
 import { createEventStream, createFetch, json } from "./fixture/tui-client"
 import { tmpdir } from "./fixture/fixture"
 
-function lifecycleSource(marker: string, id: string, version: string) {
+function lifecyclePluginSource(marker: string, id: string, version: string) {
   return `
-import { appendFile } from "node:fs/promises"
 export default {
   id: ${JSON.stringify(id)},
   setup: async () => {
@@ -18,6 +17,29 @@ export default {
     return () => appendFile(${JSON.stringify(marker)}, "${version}:cleanup\\n")
   },
 }
+`
+}
+
+function lifecycleSource(marker: string, id: string, version: string) {
+  return `
+import { appendFile } from "node:fs/promises"
+${lifecyclePluginSource(marker, id, version)}
+`
+}
+
+function gatedLifecycleSource(marker: string, ready: string, gate: string, id: string, version: string) {
+  return `
+import { access, appendFile } from "node:fs/promises"
+await appendFile(${JSON.stringify(ready)}, "ready\\n")
+while (true) {
+  try {
+    await access(${JSON.stringify(gate)})
+    break
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+${lifecyclePluginSource(marker, id, version)}
 `
 }
 
@@ -169,6 +191,40 @@ test("editing a discovered TUI plugin hot-reloads its fresh module", async () =>
 
   await writeFile(source, lifecycleSource(marker, "test.hot", "v2"))
   expect(await until(read, (value) => value?.includes("v2:setup") ?? false)).toBe("v1:setup\nv1:cleanup\nv2:setup\n")
+
+  process.emit("SIGHUP")
+  await app.task
+})
+
+test("does not activate a local plugin whose source changes during import", async () => {
+  await using tmp = await tmpdir()
+  const directory = path.join(tmp.path, ".opencode", "plugins", "tui")
+  await mkdir(directory, { recursive: true })
+  const marker = path.join(tmp.path, "marker.txt")
+  const ready = path.join(tmp.path, "ready.txt")
+  const gate = path.join(tmp.path, "gate.txt")
+  const source = path.join(directory, "hot.ts")
+  await writeFile(source, lifecycleSource(marker, "test.hot", "v1"))
+
+  await using app = await bootApp(tmp.path)
+  const read = () => readFile(marker, "utf8")
+  expect(await until(read, (value) => value === "v1:setup\n")).toBe("v1:setup\n")
+
+  await writeFile(source, gatedLifecycleSource(marker, ready, gate, "test.hot", "v2"))
+  try {
+    expect(
+      await until(
+        () => readFile(ready, "utf8"),
+        (value) => value === "ready\n",
+      ),
+    ).toBe("ready\n")
+    await writeFile(source, lifecycleSource(marker, "test.hot", "v3"))
+    await writeFile(gate, "open")
+
+    expect(await until(read, (value) => value?.includes("v3:setup") ?? false)).toBe("v1:setup\nv1:cleanup\nv3:setup\n")
+  } finally {
+    await writeFile(gate, "open")
+  }
 
   process.emit("SIGHUP")
   await app.task
