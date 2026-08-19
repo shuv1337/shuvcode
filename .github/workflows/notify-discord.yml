@@ -1,8 +1,16 @@
 name: notify-discord
 
+# Invoked by publish.yml after a successful cut, or dispatched by hand for a
+# backfill. Do not use on.release: GITHUB_TOKEN publish events do not start
+# other workflows, so that trigger never fires for our manual release path.
+
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing release tag to post"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -18,8 +26,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - id: release
-        name: Load release for a manual run
-        if: github.event_name == 'workflow_dispatch'
+        name: Load release notes
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}

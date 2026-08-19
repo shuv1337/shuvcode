@@ -184,3 +184,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           OPENCODE_VERSION: ${{ needs.version.outputs.version }}
           OPENCODE_RELEASE: ${{ needs.version.outputs.release }}
+
+  notify-discord:
+    needs:
+      - version
+      - publish
+    if: success()
+    uses: ./.github/workflows/notify-discord.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+    secrets: inherit
+    continue-on-error: true
