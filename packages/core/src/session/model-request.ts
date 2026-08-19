@@ -197,9 +197,8 @@ export const layer = Layer.effect(
         .filter((part) => part.length > 0)
         .map(SystemPart.make)
       const history = toLLMMessages(input.context.messages, resolved.ref, providerMetadataKey)
-      // A synthetic assistant message is an assistant prefill. Newer Anthropic
-      // models reject prefills, so keep the final-step guardrail in the user
-      // turn instead.
+      // Anthropic rejects synthetic assistant prefills, so append the final-step
+      // guardrail as a synthetic user message.
       const messages = stepLimitReached ? [...history, Message.user(MAX_STEPS_PROMPT)] : history
       const registry = new Map(tools.definitions.map((tool) => [tool.name, tool]))
       // The definition objects we hand to hooks, mapped back to their tools. Hooks rename a

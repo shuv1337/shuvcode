@@ -43,6 +43,7 @@ import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator"
 import { SessionRunner } from "@opencode-ai/core/session/runner/index"
 import * as SessionRunnerLLM from "@opencode-ai/core/session/runner/llm"
+import { MAX_STEPS_PROMPT } from "@opencode-ai/core/session/runner/max-steps"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { PromptCacheDiagnostics } from "@opencode-ai/core/session/prompt-cache-diagnostics"
 import { SessionUsage } from "@opencode-ai/core/session/usage"
@@ -4031,8 +4032,8 @@ describe("SessionRunnerLLM", () => {
       // Protocols with native "none" keep these definitions for prompt caching.
       expect(requests[1]?.tools.map((tool) => tool.name)).toContain("echo")
       expect(requests[1]?.messages.at(-1)).toMatchObject({
-        role: "assistant",
-        content: [{ type: "text", text: expect.stringContaining("MAXIMUM STEPS REACHED") }],
+        role: "user",
+        content: [{ type: "text", text: MAX_STEPS_PROMPT }],
       })
       expect(executions).toEqual(["done"])
       expect(yield* session.context(sessionID)).toMatchObject([
@@ -4583,16 +4584,13 @@ describe("SessionRunnerLLM", () => {
       expect(requests[0]?.tools.map((tool) => tool.name)).toContain("echo")
       expect(requests[1]?.toolChoice).toBeUndefined()
       expect(requests[1]?.tools.map((tool) => tool.name)).toContain("echo")
-      expect(requests[1]?.messages.at(-1)).not.toMatchObject({
-        role: "assistant",
-        content: [{ type: "text", text: expect.stringContaining("MAXIMUM STEPS REACHED") }],
-      })
+      expect(JSON.stringify(requests[1]?.messages)).not.toContain("MAXIMUM STEPS REACHED")
       expect(requests[2]?.toolChoice).toMatchObject({ type: "none" })
       // The final step keeps tool definitions to preserve provider prompt caching.
       expect(requests[2]?.tools.map((tool) => tool.name)).toContain("echo")
       expect(requests[2]?.messages.at(-1)).toMatchObject({
-        role: "assistant",
-        content: [{ type: "text", text: expect.stringContaining("MAXIMUM STEPS REACHED") }],
+        role: "user",
+        content: [{ type: "text", text: MAX_STEPS_PROMPT }],
       })
       expect(executions).toEqual(["recovered"])
       const eventTypes = yield* recordedEventTypes(sessionID)
@@ -4946,7 +4944,10 @@ describe("SessionRunnerLLM", () => {
       expect(requests).toHaveLength(2)
       expect(requests[0]?.toolChoice).toBeUndefined()
       expect(requests[1]?.toolChoice).toMatchObject({ type: "none" })
-      expect(requests[1]?.messages.at(-1)?.role).toBe("user")
+      expect(requests[1]?.messages.at(-1)).toMatchObject({
+        role: "user",
+        content: [{ type: "text", text: MAX_STEPS_PROMPT }],
+      })
       expect((yield* recordedEventTypes(sessionID)).filter((type) => type === "session.tool.failed.2")).toHaveLength(2)
     }),
   )
