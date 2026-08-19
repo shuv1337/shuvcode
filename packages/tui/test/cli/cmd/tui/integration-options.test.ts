@@ -18,11 +18,12 @@ describe("integrationOptions", () => {
     expect(
       integrationOptions([
         integration({ id: "mistral", name: "Mistral" }),
+        integration({ id: "xai", name: "xAI" }),
         integration({ id: "openai", name: "OpenAI" }),
         integration({ id: "custom-z", name: "Zebra" }),
         integration({ id: "anthropic", name: "Anthropic" }),
       ]).map((item) => item.id),
-    ).toEqual(["openai", "anthropic", "mistral", "custom-z"])
+    ).toEqual(["openai", "anthropic", "xai", "mistral", "custom-z"])
   })
 })
 

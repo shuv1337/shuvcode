@@ -31,6 +31,7 @@ const INTEGRATION_PRIORITY: Record<string, number> = {
   "github-copilot": 3,
   anthropic: 4,
   google: 5,
+  xai: 6,
 }
 
 type ConnectMethod = Exclude<IntegrationInfo["methods"][number], { type: "env" }>
