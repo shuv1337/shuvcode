@@ -138,8 +138,7 @@ const serialize = (message: SessionMessage.Info) => {
         (file) =>
           `[Attached ${file.mime}: ${file.name ?? (file.source.type === "uri" ? file.source.uri : "inline attachment")}]`,
       ) ?? []
-    const skills = message.skills?.map((skill) => `[Attached skill: ${skill.name}]\n${skill.text}`) ?? []
-    return [`[User]: ${message.text}`, ...skills, ...files].join("\n")
+    return [`[User]: ${message.text}`, ...files].join("\n")
   }
   if (message.type === "location-switched")
     return `[User]: The working directory has been changed to ${message.location.directory}.`
