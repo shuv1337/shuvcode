@@ -40,7 +40,11 @@ async function prepareForkDraft() {
   const notesStart = previous ? ["--notes-start-tag", previous] : []
   const prerelease = isPrereleaseVersion(Script.version) ? ["--prerelease"] : []
   await $`gh release create ${tag} -d --repo ${repository} --target ${sha} --title ${tag} --generate-notes ${notesStart} ${prerelease}`
-  const created = releaseForTag(tag, await forkReleases())
+  let created = releaseForTag(tag, await forkReleases())
+  for (let attempt = 0; !created && attempt < 5; attempt++) {
+    await Bun.sleep(1000)
+    created = releaseForTag(tag, await forkReleases())
+  }
   if (!created) throw new Error(`GitHub did not return the draft release ${tag} after creating it`)
   return created
 }
