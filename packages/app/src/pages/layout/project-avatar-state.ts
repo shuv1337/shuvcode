@@ -1,6 +1,6 @@
 import { createMemo, type Accessor } from "solid-js"
 import { useGlobal, useServerCtx } from "@/context/global"
-import { sessionPermissionRequest, sessionQuestionForm } from "@/pages/session/composer/session-request-tree"
+import { sessionPermissionRequest, sessionQuestionForm } from "@/session/requests/session-request-tree"
 import { ServerConnection } from "@/context/servers"
 
 export function useSessionTabAvatarState(
