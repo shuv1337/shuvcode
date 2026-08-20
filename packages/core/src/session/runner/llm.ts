@@ -323,7 +323,6 @@ const layer = Layer.effect(
       const loaded = yield* context.load(selected)
       const { session, agent } = loaded
       const resolved = loaded.model
-      const model = resolved.model
       // Make room: history must fit the context window before the call. A pending manual
       // compaction owns this instead; the runner executes it between steps.
       const compactionInput = { session, messages: loaded.messages, resolved }

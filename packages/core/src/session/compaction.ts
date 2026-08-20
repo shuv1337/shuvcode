@@ -1,6 +1,6 @@
 export * as SessionCompaction from "./compaction.js"
 
-import { LLM, LLMClient, AIError, LLMEvent, Message, type LLMRequest } from "@opencode-ai/ai"
+import { LLMClient, AIError, LLMEvent, Message, type LLMRequest } from "@opencode-ai/ai"
 import type { StreamOptions } from "@opencode-ai/ai/route"
 import { SessionError } from "@opencode-ai/schema/session-error"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -9,17 +9,12 @@ import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { llmClient } from "../effect/app-node-platform.js"
 import { SessionEvent } from "./event.js"
 import type { SessionMessage } from "./message.js"
-import { SessionModelHeaders } from "./model-headers.js"
-import { SessionModelHook } from "./model-hook.js"
-import { SessionModelHttp } from "./model-http.js"
-import { SessionPromptCacheKey } from "./prompt-cache-key.js"
-import { App } from "../app.js"
+import { SessionModelRequest } from "./model-request.js"
 import { SessionRunnerModel } from "./runner/model.js"
 import { SessionSchema } from "./schema.js"
 import { toSessionError } from "./to-session-error.js"
 import { Token } from "../util/token.js"
 import { SessionUsage } from "./usage.js"
-import { PluginHooks } from "../plugin/hooks.js"
 import { Agent } from "../agent.js"
 import { State } from "../state.js"
 
@@ -70,13 +65,12 @@ export type Draft = {
 }
 
 type Dependencies = {
-  readonly app: App.Info
   readonly bus: Bus.Interface
   readonly llm: {
     readonly stream: (request: LLMRequest, options?: StreamOptions) => Stream.Stream<LLMEvent, AIError>
   }
   readonly models: SessionRunnerModel.Interface
-  readonly hooks: PluginHooks.Interface
+  readonly modelRequests: SessionModelRequest.Interface
 }
 
 export type AutoInput = {
@@ -85,14 +79,14 @@ export type AutoInput = {
   readonly resolved: SessionRunnerModel.Resolved
 }
 
+type RequiredInput = Pick<AutoInput, "messages" | "resolved">
+
 export type ManualInput = {
   readonly session: SessionSchema.Info
   readonly messages: readonly SessionMessage.Info[]
   readonly inputID: SessionMessage.ID
   readonly started?: boolean
 }
-
-type RequiredInput = Pick<AutoInput, "messages" | "resolved">
 
 type Plan = {
   readonly session: SessionSchema.Info
@@ -278,65 +272,51 @@ const make = (dependencies: Dependencies) => {
           })
         : Effect.void,
     )
-    const request = yield* SessionModelHook.apply(
-      dependencies.hooks,
-      { sessionID: plan.session.id, agent: Agent.ID.make("compaction"), model: plan.resolved.ref },
-      LLM.request({
-        model: plan.resolved.model,
-        promptCacheKey: SessionPromptCacheKey.make(plan.session.id),
-        http: { headers: SessionModelHeaders.make(plan.session, dependencies.app) },
-        messages: [Message.user(plan.prompt)],
-        tools: [],
+    const prepared = yield* dependencies.modelRequests.prepare({
+      scope: { session: plan.session, agentID: Agent.ID.make("compaction"), model: plan.resolved },
+      transcript: { system: [], messages: [Message.user(plan.prompt)] },
+      contextHooks: false,
+    })
+    yield* dependencies.llm.stream(prepared.request, prepared.options).pipe(
+      Stream.runForEach((event) => {
+        if (LLMEvent.is.providerError(event))
+          failure = {
+            type: event.classification === "context-overflow" ? "provider.invalid-request" : "provider.error",
+            message: event.message,
+          }
+        if (LLMEvent.is.textDelta(event)) {
+          chunks.push(event.text)
+          return dependencies.bus.publish(SessionEvent.Compaction.Delta, {
+            sessionID: plan.session.id,
+            text: event.text,
+          })
+        }
+        if (LLMEvent.is.stepFinish(event)) {
+          const step = SessionUsage.record(event.usage, plan.resolved.cost)
+          usage = usage ? SessionUsage.add(usage, step) : step
+        }
+        return Effect.void
       }),
-    )
-    yield* dependencies.llm
-      .stream(request, {
-        http: SessionModelHttp.middleware(dependencies.hooks, {
-          sessionID: plan.session.id,
-          agent: Agent.ID.make("compaction"),
-          model: plan.resolved.ref,
+      Effect.catchTag("AI.Error", (error) =>
+        Effect.sync(() => {
+          failure = toSessionError(error)
         }),
-      })
-      .pipe(
-        Stream.runForEach((event) => {
-          if (LLMEvent.is.providerError(event))
-            failure = {
-              type: event.classification === "context-overflow" ? "provider.invalid-request" : "provider.error",
-              message: event.message,
-            }
-          if (LLMEvent.is.textDelta(event)) {
-            chunks.push(event.text)
-            return dependencies.bus.publish(SessionEvent.Compaction.Delta, {
-              sessionID: plan.session.id,
-              text: event.text,
-            })
-          }
-          if (LLMEvent.is.stepFinish(event)) {
-            const step = SessionUsage.record(event.usage, plan.resolved.cost)
-            usage = usage ? SessionUsage.add(usage, step) : step
-          }
-          return Effect.void
-        }),
-        Effect.catchTag("AI.Error", (error) =>
-          Effect.sync(() => {
-            failure = toSessionError(error)
-          }),
-        ),
-        Effect.onInterrupt(() =>
-          recordUsage.pipe(
-            Effect.andThen(
-              plan.reason === "auto"
-                ? failed({
-                    sessionID: plan.session.id,
-                    reason: plan.reason,
-                    error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
-                    inputID: plan.inputID,
-                  }).pipe(Effect.asVoid)
-                : Effect.void,
-            ),
+      ),
+      Effect.onInterrupt(() =>
+        recordUsage.pipe(
+          Effect.andThen(
+            plan.reason === "auto"
+              ? failed({
+                  sessionID: plan.session.id,
+                  reason: plan.reason,
+                  error: { type: "compaction.interrupted", message: "Compaction was interrupted" },
+                  inputID: plan.inputID,
+                }).pipe(Effect.asVoid)
+              : Effect.void,
           ),
         ),
-      )
+      ),
+    )
     yield* recordUsage
     const summary = chunks.join("")
     if (failure || !summary.trim()) {
@@ -437,14 +417,13 @@ export const layer = Layer.effect(
     const bus = yield* Bus.Service
     const llm = yield* LLMClient.Service
     const models = yield* SessionRunnerModel.Service
-    const app = yield* App.Metadata
-    const hooks = yield* PluginHooks.Service
-    return make({ bus, llm, models, app, hooks })
+    const modelRequests = yield* SessionModelRequest.Service
+    return make({ bus, llm, models, modelRequests })
   }),
 )
 
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Bus.node, llmClient, SessionRunnerModel.node, App.node, PluginHooks.node],
+  deps: [Bus.node, llmClient, SessionRunnerModel.node, SessionModelRequest.node],
 })
