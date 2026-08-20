@@ -1293,7 +1293,7 @@ export function createData(config: CreateDataInput) {
       async sync(ref?: LocationRef) {
         await result.location.syncInfo(ref)
         const location = ref ?? defaultLocation()
-        await Promise.all([
+        await Promise.allSettled([
           result.location.vcs.sync(location),
           result.location.agent.sync(location),
           result.location.command.sync(location),
