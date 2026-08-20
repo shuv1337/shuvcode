@@ -221,7 +221,6 @@ describe("OpenAIPlugin", () => {
       })
       const sessionID = Session.ID.make("ses_websocket_hooks")
       const agentID = Agent.ID.make("build")
-      const agent = Agent.Info.make(Agent.Info.default(agentID))
       const model = SessionRunnerModel.resolved(OpenAIResponses.route.model({ id: "gpt-5.5" }), {
         capabilities: { tools: true, input: ["text"], output: ["text"] },
         cost: [],
@@ -229,7 +228,7 @@ describe("OpenAIPlugin", () => {
       const program = Effect.gen(function* () {
         const requests = yield* SessionModelRequest.Service
         return yield* requests.prepare({
-          context: {
+          scope: {
             session: Session.Info.make({
               id: sessionID,
               projectID: Project.ID.global,
@@ -238,13 +237,12 @@ describe("OpenAIPlugin", () => {
               time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
               location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
             }),
-            agent: { id: agentID, info: agent },
+            agentID,
             model,
-            initial: "",
-            messages: [],
             tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
           },
-          step: 1,
+          transcript: { system: [], messages: [] },
+          webSocket: "session",
         })
       }).pipe(
         Effect.provide(SessionModelRequest.layer),
@@ -258,7 +256,6 @@ describe("OpenAIPlugin", () => {
 
       const prepared = yield* program
 
-      expect(prepared.webSocketEligible).toBe(true)
       expect(prepared.options.webSocket).toBe(executor)
       expect(prepared.options.http).toBeUndefined()
     }),
