@@ -211,7 +211,7 @@ function modelDailyScope() {
     eq(modelStat.grain, "day"),
     eq(modelStat.client, "all"),
     eq(modelStat.source, "all"),
-    inArray(modelStat.tier, ["Free", "free", "Go", "go"]),
+    inArray(modelStat.tier, ["Go", "go"]),
   )
 }
 

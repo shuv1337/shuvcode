@@ -215,7 +215,7 @@ async function listModelDaily(): Promise<ModelStatMetric[]> {
     await queryRows(`select period_key, updated_at, tier, provider, model, sessions, unique_users, input_tokens,
     output_tokens, reasoning_tokens, cache_read_tokens, total_tokens, input_cost_microcents, output_cost_microcents,
     total_cost_microcents from model_stat where grain = 'day' and client = 'all' and source = 'all'
-    and tier in ('Free', 'free', 'Go', 'go') order by period_key`)
+    and tier in ('Go', 'go') order by period_key`)
   ).map((row) => ({
     periodKey: stringValue(row.period_key),
     updatedAt: dateValue(row.updated_at),
@@ -238,8 +238,7 @@ async function listModelDaily(): Promise<ModelStatMetric[]> {
 async function listProviderDaily(): Promise<ProviderStatMetric[]> {
   return (
     await queryRows(`select period_key, updated_at, tier, provider, total_tokens from provider_stat
-    where grain = 'day' and client = 'all' and source = 'all'
-    and tier in ('Free', 'free', 'Go', 'go') order by period_key`)
+    where grain = 'day' and client = 'all' and source = 'all' and tier in ('Go', 'go') order by period_key`)
   ).map((row) => ({
     periodKey: stringValue(row.period_key),
     updatedAt: dateValue(row.updated_at),
@@ -260,8 +259,7 @@ async function listGeoDaily(opts?: { provider?: string; model?: string }): Promi
   return (
     await queryRows(
       `select period_key, updated_at, tier, provider, model, country, continent, total_tokens from geo_stat
-    where grain = 'day' and client = 'all' and source = 'all'
-    and tier in ('Free', 'free', 'Go', 'go') ${scope} order by period_key`,
+    where grain = 'day' and client = 'all' and source = 'all' and tier in ('Go', 'go') ${scope} order by period_key`,
       params,
     )
   ).map((row) => ({
@@ -737,7 +735,6 @@ function rowsForProduct<T extends { periodStart: number; tier: string }>(
   end: number,
 ) {
   const windowRows = rows.filter((row) => row.periodStart >= start && row.periodStart < end)
-  if (product === "Go") return windowRows.filter((row) => row.tier === "Free" || row.tier === "Go")
   if (product !== "All Users") return windowRows.filter((row) => row.tier === product)
 
   const allRows = windowRows.filter((row) => row.tier === "all")
@@ -950,7 +947,6 @@ function normalizeGeoRow(row: GeoStatMetric): GeoMetricRow[] {
 function normalizeTier(value: string) {
   const normalized = value.toLowerCase()
   if (normalized === "paid" || normalized === "zen") return "Zen"
-  if (normalized === "free") return "Free"
   if (normalized === "go") return "Go"
   if (normalized === "enterprise") return "Enterprise"
   if (normalized === "all") return "all"
