@@ -1263,7 +1263,12 @@ export function Prompt(props: PromptProps) {
           return false
         }
       }
-      const error = await client.api.session
+      // The data layer admits optimistically: the prompt renders immediately
+      // and rolls back if the server rejects it, so submission does not wait
+      // on the network. On rejection the row is already rolled back; restore
+      // the composer unless the user has started typing something new.
+      const entry = { ...store.prompt, mode: currentMode }
+      data.session
         .prompt({
           sessionID,
           text: inputText,
@@ -1272,14 +1277,15 @@ export function Prompt(props: PromptProps) {
           skills: store.prompt.skills?.length ? store.prompt.skills : undefined,
           delivery,
         })
-        .then(
-          () => undefined,
-          (error) => error,
-        )
-      if (error) {
-        toast.show({ title: "Failed to send prompt", message: errorMessage(error), variant: "error" })
-        return false
-      }
+        .catch((error) => {
+          toast.show({ title: "Failed to send prompt", message: errorMessage(error), variant: "error" })
+          if (disposed || input.isDestroyed || input.plainText !== "") return
+          input.setText(entry.text)
+          setStore("prompt", entry)
+          setStore("mode", entry.mode ?? "normal")
+          restoreExtmarksFromPrompt(entry)
+          input.cursorOffset = entry.text.length
+        })
       if (pendingEditorSelection) editor.markSelectionSent()
     }
     history.append({
@@ -1291,15 +1297,14 @@ export function Prompt(props: PromptProps) {
     setStore("extmarkToPart", new Map())
     props.onSubmit?.()
 
-    // temporary hack to make sure the message is sent
+    // Optimistic admission puts the message in the store synchronously, so
+    // the session view renders it on arrival.
     if (!props.sessionID) {
       if (pendingEditorSelection) editor.preserveSelectionFromNewSession()
-      setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 50)
+      route.navigate({
+        type: "session",
+        sessionID,
+      })
     }
     input.clear()
     if (finishMoveProgress) move.finishSubmit()

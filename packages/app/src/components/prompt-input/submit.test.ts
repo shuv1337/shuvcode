@@ -235,6 +235,9 @@ beforeAll(async () => {
       session: {
         remember: () => undefined,
         setStatus: () => undefined,
+        // Delegates straight to the API client; optimistic admission and
+        // rollback are covered by the data-layer tests in packages/tui.
+        prompt: (input: unknown) => rootClient.api.session.prompt(input as never),
       },
       location: {
         info: () => ({ project: { id: "project", directory: "/repo/main" } }),
