@@ -53,7 +53,6 @@ const execution = Layer.succeed(
       Effect.sync(() => {
         wakeCalls.push(sessionID)
       }),
-    wakeActive: () => Effect.void,
     awaitIdle: () => Effect.void,
   }),
 )
@@ -1130,12 +1129,11 @@ describe("Session.inbox", () => {
       const { db } = yield* Database.Service
 
       const barrier = yield* session.compact({ sessionID })
-      expect(yield* SessionInbox.has(db, sessionID, "any")).toBe(true)
       expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(true)
       expect(yield* session.inbox(sessionID)).toMatchObject([{ id: barrier.id, type: "compaction" }])
 
       yield* session.cancelInbox({ sessionID, inboxID: barrier.id })
-      expect(yield* SessionInbox.has(db, sessionID, "any")).toBe(false)
+      expect(yield* SessionInbox.has(db, sessionID, "input")).toBe(false)
       expect(yield* session.inbox(sessionID)).toEqual([])
     }),
   )

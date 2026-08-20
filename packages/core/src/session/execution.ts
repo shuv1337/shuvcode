@@ -21,8 +21,6 @@ export interface Interface {
   readonly resume: (sessionID: SessionSchema.ID) => Effect.Effect<void, SessionRunner.RunError>
   /** Registers newly recorded work. Repeated wakeups may coalesce. */
   readonly wake: (sessionID: SessionSchema.ID) => Effect.Effect<void>
-  /** Wakes only an active execution, preserving its current input eligibility. */
-  readonly wakeActive: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   /** Interrupt active work owned by this process. Idle interruption is a no-op. */
   readonly interrupt: (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) => Effect.Effect<void>
   /** Resolves once this process owns no active execution for the Session. Returns immediately when idle and never starts work. */
@@ -32,7 +30,7 @@ export interface Interface {
 /** Routes execution from a Session ID to the runner owned by that Session's Location. */
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionExecution") {}
 
-type InterruptReason = "user" | "shutdown" | "superseded"
+type InterruptReason = "user" | "shutdown"
 
 export function terminal(exit: Exit.Exit<void, SessionRunner.RunError>, reason?: InterruptReason) {
   if (Exit.isSuccess(exit)) return { type: "succeeded" as const }
@@ -113,8 +111,8 @@ export const layer = Layer.effect(
               return
             }
             if (outcome.type === "interrupted") {
-              // A user cancel (or a superseding execution) releases the claim: the turn must not
-              // resurrect at the next boot. Shutdown interruption keeps it for restart continuity.
+              // A user cancel releases the claim: the turn must not resurrect at the next
+              // boot. Shutdown interruption keeps it for restart continuity.
               yield* bus.publish(
                 SessionEvent.Execution.Interrupted,
                 { sessionID, reason: outcome.reason },
@@ -137,16 +135,19 @@ export const layer = Layer.effect(
     return Service.of({
       active: coordinator.active,
       interrupt: (sessionID, options) =>
-        coordinator.interrupt(
-          sessionID,
-          "user",
-          options?.continue
-            ? { continue: { request: "steer", when: SessionInbox.has(db, sessionID, "steer") } }
-            : undefined,
-        ),
+        Effect.gen(function* () {
+          yield* coordinator.interrupt(sessionID, "user")
+          if (!options?.continue) return
+          // Resume steering input and between-turn control work from the interrupted
+          // intent. Queued next-turn prompts stay parked: a steer-scoped drain never
+          // promotes them, and a control item behind a queued prompt waits its turn.
+          const next = yield* SessionInbox.nextPromotable(db, sessionID, "input")
+          if (next === undefined) return
+          if (next.delivery === "steer" || next.type === "compaction" || next.type === "move")
+            yield* coordinator.wake(sessionID, "steer")
+        }),
       resume: coordinator.run,
       wake: coordinator.wake,
-      wakeActive: coordinator.wakeActive,
       awaitIdle: coordinator.awaitIdle,
     })
   }),
@@ -165,7 +166,6 @@ export const noopLayer = Layer.succeed(
     active: Effect.succeed(new Set()),
     resume: () => Effect.void,
     wake: () => Effect.void,
-    wakeActive: () => Effect.void,
     interrupt: () => Effect.void,
     awaitIdle: () => Effect.void,
   }),
