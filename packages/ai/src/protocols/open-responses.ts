@@ -298,6 +298,20 @@ export const Event = Schema.StructWithRest(
 )
 export type Event = Schema.Schema.Type<typeof Event>
 
+const RefusalEvent = Schema.Union([
+  Schema.Struct({
+    type: Schema.tag("response.refusal.delta"),
+    item_id: Schema.String,
+    delta: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.tag("response.refusal.done"),
+    item_id: Schema.String,
+    refusal: Schema.String,
+  }),
+])
+const isRefusalEvent = Schema.is(RefusalEvent)
+
 export interface Extension {
   readonly id: string
   readonly name: string
@@ -1071,6 +1085,14 @@ export const step = (state: ParserState, event: Event) => {
       event.type === "response.output_text.delta"
         ? onOutputTextDelta(state, event, event.item_id)
         : onOutputTextDone(state, event, event.item_id),
+    )
+  }
+  if (event.type === "response.refusal.delta" || event.type === "response.refusal.done") {
+    if (!isRefusalEvent(event)) return ProviderShared.eventError(state.id, `${event.type} is malformed`)
+    return Effect.succeed(
+      event.type === "response.refusal.delta"
+        ? onOutputTextDelta(state, event, event.item_id)
+        : onOutputTextDone(state, { ...event, text: event.refusal }, event.item_id),
     )
   }
   if (event.type === "response.reasoning.delta" || event.type === "response.reasoning_summary_text.delta") {
