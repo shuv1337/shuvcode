@@ -218,8 +218,6 @@ function run(db: DatabaseService, event: MessageEvent) {
     const decodeRow = (row: typeof SessionMessageTable.$inferSelect) =>
       decodeMessage({ ...row.data, id: row.id, type: row.type })
     const updateMessage = (message: SessionMessage.Info) => {
-      if (event.durable === undefined)
-        return Effect.die(new Error("Durable Session event is missing aggregate sequence"))
       const encoded = encodeMessage(message)
       const { id, type, ...data } = encoded
       return db
@@ -374,7 +372,6 @@ function run(db: DatabaseService, event: MessageEvent) {
 }
 
 function insertMessage(db: DatabaseService, event: SessionEvent.DurableEvent, message: SessionMessage.Info) {
-  if (event.durable === undefined) return Effect.die(new Error("Durable Session event is missing aggregate sequence"))
   const encoded = encodeMessage(message)
   const { id, type, ...data } = encoded
   return db
@@ -516,8 +513,6 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Forked, (event) => projectFork(db, event))
     yield* bus.project(SessionEvent.InboxDelivered, (event) =>
       Effect.gen(function* () {
-        if (event.durable === undefined)
-          return yield* Effect.die(new Error("Durable Session event is missing aggregate sequence"))
         const input = yield* SessionInbox.projectDelivered(db, {
           id: event.data.inboxID,
           sessionID: event.data.sessionID,
@@ -550,8 +545,6 @@ const layer = Layer.effectDiscard(
     )
     yield* bus.project(SessionEvent.InboxEnqueued, (event) =>
       Effect.gen(function* () {
-        if (event.durable === undefined)
-          return yield* Effect.die(new Error("Durable Session event is missing aggregate sequence"))
         yield* SessionInbox.projectAdmitted(db, {
           enqueuedSeq: event.durable.seq,
           id: event.data.inboxID,
@@ -622,17 +615,9 @@ const layer = Layer.effectDiscard(
       Effect.gen(function* () {
         yield* run(db, event)
         yield* InstructionState.advanceEpoch(db, event.data.sessionID, event.durable.seq)
-        if (event.durable === undefined)
-          return yield* Effect.die(new Error("Durable Session event is missing aggregate sequence"))
       }),
     )
-    yield* bus.project(SessionEvent.Compaction.Failed, (event) =>
-      Effect.gen(function* () {
-        yield* run(db, event)
-        if (event.durable === undefined)
-          return yield* Effect.die(new Error("Durable Session event is missing aggregate sequence"))
-      }),
-    )
+    yield* bus.project(SessionEvent.Compaction.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.RevertEvent.Staged, (event) =>
       Effect.gen(function* () {
         const revert = event.data.revert
