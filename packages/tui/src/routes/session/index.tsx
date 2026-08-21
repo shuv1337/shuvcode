@@ -1252,6 +1252,7 @@ export function Session(props: { verticalTabsWidth: number }) {
                 >
                   <SessionLocationMissing
                     directory={session()!.location.directory}
+                    workspaceID={session()!.location.workspaceID}
                     projectID={session()!.projectID}
                     sessionID={route.sessionID}
                   />

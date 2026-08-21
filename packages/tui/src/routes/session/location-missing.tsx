@@ -5,13 +5,26 @@ import { Locale } from "../../util/locale"
 import { abbreviateHome } from "../../util/path-format"
 import { SessionQuestion } from "./permission"
 import { usePromptMove } from "../../component/prompt/move"
+import { useLocation } from "../../context/location"
 
-export function SessionLocationMissing(props: { directory: string; projectID: string; sessionID: string }) {
+export function SessionLocationMissing(props: {
+  directory: string
+  workspaceID?: string
+  projectID: string
+  sessionID: string
+}) {
   const move = usePromptMove({ projectID: () => props.projectID, sessionID: () => props.sessionID })
-  return <SessionLocationUnavailable directory={props.directory} onMove={move.open} />
+  const location = useLocation()
+  return (
+    <SessionLocationUnavailable
+      directory={props.directory}
+      onRetry={() => location.set({ directory: props.directory, workspaceID: props.workspaceID })}
+      onMove={move.open}
+    />
+  )
 }
 
-export function SessionLocationUnavailable(props: { directory: string; onMove: () => void }) {
+export function SessionLocationUnavailable(props: { directory: string; onRetry: () => void; onMove: () => void }) {
   const paths = useTuiPaths()
   const theme = useTheme("elevated")
   const directory = createMemo(() => Locale.truncateMiddle(abbreviateHome(props.directory, paths.home), 72))
@@ -26,11 +39,11 @@ export function SessionLocationUnavailable(props: { directory: string; onMove: (
       body={
         <box paddingLeft={1} gap={1}>
           <text fg={theme.text.subdued}>{directory()}</text>
-          <text fg={theme.text.default}>Choose another directory to continue this session.</text>
+          <text fg={theme.text.default}>Try this directory again or choose another directory.</text>
         </box>
       }
-      options={{ move: "Choose directory" }}
-      onSelect={props.onMove}
+      options={{ retry: "Try again", move: "Choose directory" }}
+      onSelect={(option) => (option === "retry" ? props.onRetry() : props.onMove())}
     />
   )
 }

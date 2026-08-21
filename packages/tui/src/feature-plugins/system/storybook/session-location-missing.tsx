@@ -58,7 +58,11 @@ function SessionLocationMissingStory(props: { context: Plugin.Context }) {
         <text fg={theme.text.default}>Build · GPT-5.6 Sol (high)</text>
         <text fg={theme.text.subdued}>The deployment is verified and the worktree is clean.</text>
         <box flexGrow={1} />
-        <SessionLocationUnavailable directory={directory} onMove={open} />
+        <SessionLocationUnavailable
+          directory={directory}
+          onRetry={() => setMessage(`Retried ${directory}`)}
+          onMove={open}
+        />
       </box>
       <StoryFooter
         context={props.context}
