@@ -45,9 +45,9 @@ export const call = <F extends Schema.Struct.Fields, R extends Schema.Struct.Fie
           params: Schema.Struct({ name: Schema.String, arguments: schema.input }),
         }),
       )({
-        jsonrpc: "2.0" as const,
-        id: 1 as const,
-        method: "tools/call" as const,
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
         params: { name: tool, arguments: value },
       }),
     )
