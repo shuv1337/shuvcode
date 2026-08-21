@@ -179,8 +179,9 @@ const layer = Layer.effect(
       yield* settleStaleToolCalls(input.sessionID)
       while (true) {
         // Between-turn control items run under any drain scope: scope gates which user
-        // input may promote, not whether admitted housekeeping runs. Enqueue order still
-        // holds — a control item behind a queued prompt is not the next eligible item.
+        // input may promote, not whether admitted housekeeping runs. Steered control
+        // items go ahead of any queued input; only a queue-delivered control item
+        // parked behind a queued prompt is not the next eligible item.
         if (yield* runPendingCompaction(input.sessionID, "input")) {
           force = false
           continue
@@ -216,15 +217,23 @@ const layer = Layer.effect(
       let promotable: SessionInbox.Promotable = continuation ? "steer" : drainPromotable
       let step = continuation?.step ?? 1
       let next = continuation
+      // The drain admitted this work, so the first step always runs — even after a
+      // control item consumed at this boundary (unlike drain's one-shot force).
+      let first = true
+      // Every boundary has the same shape: control items first, then one exit decision,
+      // then the model. The turn continues only while the first step, a continuation, or
+      // steer input is owed. Deciding after control items means consuming the last
+      // steered compaction ends the turn instead of issuing an input-free model call.
       while (true) {
         if (yield* runPendingCompaction(sessionID, "steer")) continue
         if (yield* runPendingMove(sessionID, "steer")) return { type: "moved" as const, continuation: next }
-        const result = yield* runStep(sessionID, promotable, step)
-        next = result.needsContinuation ? { step: result.step + 1 } : undefined
-        if (!result.needsContinuation && !(yield* SessionInbox.has(db, sessionID, "steer")))
+        if (!first && !next && !(yield* SessionInbox.has(db, sessionID, "steer")))
           return { type: "complete" as const }
+        const result = yield* runStep(sessionID, promotable, step)
+        first = false
         promotable = "steer"
         step = result.step + 1
+        next = result.needsContinuation ? { step } : undefined
       }
     })
 
