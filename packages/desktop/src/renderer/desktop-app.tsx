@@ -5,7 +5,6 @@ import {
   AppBaseProviders,
   AppInterface,
   PlatformProvider,
-  preloadRoute,
   ServerConnection,
   useCommand,
   useLanguage,
@@ -15,7 +14,7 @@ import {
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import type { BaseRouterProps } from "@solidjs/router"
 import { createEffect, createMemo, createResource, lazy, Show, Suspense } from "solid-js"
-import type { ElectronAPI } from "../preload/types"
+import type { ElectronAPI } from "./api-types"
 import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { createDesktopPlatform, type DesktopWindowState } from "./platform"
 import { bindDesktopMenu } from "./platform/menu"
@@ -39,11 +38,9 @@ export function DesktopApp(props: { api: ElectronAPI; updater: UpdaterPlatform; 
 
 function DesktopWindow(props: { api: ElectronAPI; updater: UpdaterPlatform; windowState: DesktopWindowState }) {
   const platform = createDesktopPlatform(props.api, props.windowState, props.updater)
-  const initialUrl = getLastActiveUrl(props.windowState.id)
   const [sidecar] = createResource(() => props.api.awaitInitialization())
   const [defaultServer] = createResource(() => platform.getDefaultServer?.())
   const [locale] = createResource(() => preloadStoredLocale(platform))
-  const [route] = createResource(() => preloadRoute(initialUrl))
   const router = (routerProps: BaseRouterProps) => (
     <DesktopMemoryRouter {...routerProps} windowID={props.windowState.id} />
   )
@@ -51,7 +48,9 @@ function DesktopWindow(props: { api: ElectronAPI; updater: UpdaterPlatform; wind
   function ReadyApp() {
     const wslServers = useWslServers()
     const language = useLanguage()
-    const ready = createMemo(() => !defaultServer.loading && !sidecar.loading && !locale.loading && !route.loading)
+    const ready = createMemo(
+      () => !defaultServer.loading && !sidecar.loading && !locale.loading && !wslServers.isLoading,
+    )
     const servers = createMemo(() => {
       const data = initializationData(sidecar)
       const list: ServerConnection.Any[] = []
@@ -81,7 +80,7 @@ function DesktopWindow(props: { api: ElectronAPI; updater: UpdaterPlatform; wind
             <AppInterface defaultServer={key} servers={servers()} router={router}>
               <DesktopFirstLaunchOnboarding
                 api={props.api}
-                initialUrl={initialUrl}
+                initialUrl={getLastActiveUrl(props.windowState.id)}
                 serverKey={key}
               />
               <DesktopEffects api={props.api} />

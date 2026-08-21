@@ -6,16 +6,18 @@ import {
   type DesktopMenuEntry,
   type DesktopMenuRole,
 } from "@opencode-ai/app/desktop-menu"
-import { Ipc, sendIpcEvent } from "../../shared/ipc-contract"
+import { MenuCommandTriggered } from "../../shared/ipc-rpc/events"
+import { emitIpcEvent } from "../ipc-events"
 
 import { UPDATER_ENABLED } from "../constants"
-import { openExternalURL } from "../files"
 import { runDesktopMenuAction } from "./menu-actions"
 import { nativeT } from "./translations"
 
 type Deps = {
   trigger: (id: string) => void
   checkForUpdates: () => void
+  createWindow: () => void
+  openExternal: (url: string) => void
   relaunch: () => void
 }
 
@@ -36,7 +38,7 @@ export function createMenu(deps: Deps) {
 }
 
 export function sendMenuCommand(win: BrowserWindow, id: string) {
-  sendIpcEvent(win.webContents, Ipc.menu.command, id)
+  emitIpcEvent(win.webContents, new MenuCommandTriggered({ id }))
 }
 
 function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOptions {
@@ -58,12 +60,13 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOpt
     item.click = () =>
       runDesktopMenuAction(BrowserWindow.getFocusedWindow(), action, {
         checkForUpdates: deps.checkForUpdates,
+        createWindow: deps.createWindow,
         relaunch: deps.relaunch,
       })
   }
   if (entry.href) {
     const href = entry.href
-    item.click = () => openExternalURL(href)
+    item.click = () => deps.openExternal(href)
   }
 
   return item
