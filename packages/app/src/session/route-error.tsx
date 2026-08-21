@@ -1,10 +1,10 @@
 import { Button } from "@opencode-ai/ui/button"
 import { createMemo, Show } from "solid-js"
-import { ErrorPage } from "@/pages/error"
-import { useLanguage } from "@/context/language"
-import { ServerConnection, serverName, useServers } from "@/context/servers"
-import { useTabs } from "@/context/tabs"
-import { isLocalSessionNotFoundError, isSessionNotFoundError } from "@/utils/server-errors"
+import { ErrorPage } from "@/shell/errors/error"
+import { useLanguage } from "@/runtime/i18n/language"
+import { ServerConnection, serverName, useServers } from "@/runtime/server/registry"
+import { useTabs } from "@/shell/tabs/tabs"
+import { isLocalSessionNotFoundError, isSessionNotFoundError } from "@/runtime/server/errors"
 
 export function SessionErrorFallback(props: { error: unknown; sessionID?: string; serverKey?: ServerConnection.Key }) {
   const language = useLanguage()
