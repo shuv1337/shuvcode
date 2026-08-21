@@ -181,7 +181,7 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
       item,
       reuseToolProviderMetadata
         ? providerMetadata(providerMetadataKey, item.providerResultState ?? item.providerState)
-        : sameProvider && item.executed === true && item.providerResultState !== undefined
+        : sameProvider && item.providerResultState !== undefined
           ? providerMetadata(providerMetadataKey, item.providerResultState)
           : undefined,
     )
