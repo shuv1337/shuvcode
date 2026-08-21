@@ -50,6 +50,9 @@ await $`bun ./packages/ai/script/publish.ts`
 console.log("\n=== util ===\n")
 await $`bun ./packages/util/script/publish.ts`
 
+console.log("\n=== shell scan ===\n")
+await $`bun ./packages/shell-scan/script/publish.ts`
+
 console.log("\n=== protocol ===\n")
 await $`bun ./packages/protocol/script/publish.ts`
 
@@ -64,6 +67,15 @@ await $`bun ./packages/plugin/script/publish.ts`
 
 console.log("\n=== core ===\n")
 await $`bun ./packages/core/script/publish.ts`
+
+console.log("\n=== simulation ===\n")
+await $`bun ./packages/simulation/script/publish.ts`
+
+console.log("\n=== server ===\n")
+await $`bun ./packages/server/script/publish.ts`
+
+console.log("\n=== sdk ===\n")
+await $`bun ./packages/sdk/script/publish.ts`
 
 console.log("\n=== ui ===\n")
 await $`bun ./packages/ui/script/publish.ts`

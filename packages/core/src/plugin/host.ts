@@ -2,7 +2,6 @@ export * as PluginHost from "./host.js"
 
 import { Plugin } from "@opencode-ai/plugin/effect"
 import type { IntegrationMethodRegistration } from "@opencode-ai/plugin/effect/integration"
-import type { CredentialOAuth } from "@opencode-ai/sdk/v2/types"
 import { EventManifest } from "@opencode-ai/schema/event-manifest"
 import { Mcp } from "@opencode-ai/schema/mcp"
 import { App } from "../app.js"
@@ -481,6 +480,6 @@ function methodImplementation(input: IntegrationMethodRegistration): Integration
   }
 }
 
-function credential(value: CredentialOAuth) {
+function credential(value: Credential.OAuth) {
   return Credential.OAuth.make({ ...value, methodID: Integration.MethodID.make(value.methodID) })
 }

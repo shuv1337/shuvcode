@@ -1,27 +1,69 @@
-import { OpenCode } from "@opencode-ai/client/effect"
+import { OpenCode, type OpenCodeClient } from "@opencode-ai/client/effect"
+import type { Database } from "@opencode-ai/core/database/database"
+import type { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
 import { Workspace } from "@opencode-ai/core/workspace"
 import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
-import type { ServerFetch } from "@opencode-ai/server/fetch"
 import { createEmbeddedRoutes } from "@opencode-ai/server/routes"
-import type { ServerOptions } from "@opencode-ai/server/options"
-import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
+import type { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Config, Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/unstable/http"
 import * as Logging from "./logging"
 
 export type { LogEntry, LogLevel, LogOptions, LogWriter } from "./logging"
 import type { LogOptions } from "./logging"
 
-export type CreateOptions = ServerOptions & {
+export interface CreateOptions {
+  readonly app?: {
+    readonly name?: string
+    readonly version?: string
+    readonly channel?: string
+  }
+  readonly hostname?: string
+  readonly port?: number
+  readonly password?: string
+  readonly simulation?: boolean
+  readonly database?: Database.Options
+  readonly events?: { readonly persist?: boolean }
+  readonly models?: ModelsDev.Options
+  readonly config?: {
+    readonly directory?: string
+    readonly project?: boolean
+    readonly file?: string
+    readonly content?: string
+  }
+  readonly windows?: { readonly gitbash?: string }
+  readonly fs?: {
+    readonly filewatcher?: boolean
+    readonly fff?: boolean
+  }
   readonly log?: LogOptions
   readonly workspaceProviders?: Readonly<Record<string, WorkspaceDriver.Interface>>
 }
 
 /** Host hooks for embedding opencode on a non-default runtime profile (e.g. workerd). */
-export type EmbedOptions = ServerFetch.BootOptions
+export interface EmbedOptions {
+  readonly overrides?: LayerNode.Replacements
+}
 
-export const create = Effect.fn("OpenCode.create")(function* (options: CreateOptions = {}, embed: EmbedOptions = {}) {
+export type Interface = Omit<OpenCodeClient, "plugin" | "workspace"> & {
+  readonly sessions: OpenCodeClient["session"]
+  readonly events: OpenCodeClient["event"]
+  readonly workspace: {
+    readonly create: (options: { readonly provider: string }) => ReturnType<Workspace.Interface["create"]>
+    readonly destroy: (options: { readonly workspaceID: Workspace.ID }) => ReturnType<Workspace.Interface["destroy"]>
+  }
+  readonly plugin: SdkPlugins.Interface["register"] & OpenCodeClient["plugin"]
+}
+
+export const create: (
+  options?: CreateOptions,
+  embed?: EmbedOptions,
+) => Effect.Effect<Interface, Config.ConfigError | Error, Scope.Scope> = Effect.fn("OpenCode.create")(function* (
+  options: CreateOptions = {},
+  embed: EmbedOptions = {},
+) {
   const { log, workspaceProviders, ...server } = options
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() =>
@@ -75,8 +117,7 @@ export const create = Effect.fn("OpenCode.create")(function* (options: CreateOpt
   }
 })
 
-export type Interface = Effect.Success<ReturnType<typeof create>>
+export class Service extends Context.Service<Service, Interface>()("@opencode-ai/sdk/OpenCode") {}
 
-export class Service extends Context.Service<Service, Interface>()("@opencode-ai/sdk-next/OpenCode") {}
-
-export const layer = (options: CreateOptions = {}) => Layer.effect(Service, create(options))
+export const layer = (options: CreateOptions = {}): Layer.Layer<Service, Config.ConfigError | Error> =>
+  Layer.effect(Service, create(options))

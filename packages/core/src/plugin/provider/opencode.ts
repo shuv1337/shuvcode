@@ -2,7 +2,6 @@ import { Duration, Effect, Schema, Semaphore, Stream } from "effect"
 import type { Scope } from "effect"
 import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/effect/integration"
 import { define } from "@opencode-ai/plugin/effect/plugin"
-import type { CredentialValue } from "@opencode-ai/sdk/v2/types"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Bus } from "../../bus.js"
 import { Credential } from "../../credential.js"
@@ -199,7 +198,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
   }),
 })
 
-function fetchProviders(http: HttpClient.HttpClient, value: CredentialValue) {
+function fetchProviders(http: HttpClient.HttpClient, value: Credential.Value) {
   const metadata = value.metadata
   const server = typeof metadata?.server === "string" ? metadata.server : defaultServer
   const orgID = typeof metadata?.orgID === "string" ? metadata.orgID : undefined

@@ -1,11 +1,11 @@
-# @opencode-ai/sdk-next
+# @opencode-ai/sdk
 
-Effect-native scoped OpenCode host for in-process applications. This transitional package will replace the existing generated `@opencode-ai/sdk` after its consumers migrate.
+Effect-native scoped OpenCode host for in-process applications.
 
 The SDK executes Server's assembled HTTP router in memory. It opens no listener and performs no network I/O, while preserving the same routing, middleware, handlers, codecs, and errors as the network client.
 
 ```ts
-import { OpenCode } from "@opencode-ai/sdk-next"
+import { OpenCode } from "@opencode-ai/sdk"
 
 const opencode = yield * OpenCode.create()
 const session = yield * opencode.sessions.get({ sessionID })
