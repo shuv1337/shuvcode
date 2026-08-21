@@ -1107,7 +1107,15 @@ describe("SessionTransfer", () => {
 
       const imported = yield* transfer.import({
         data: {
-          info: { ...template, id: sessionID },
+          info: {
+            ...template,
+            id: sessionID,
+            time: {
+              ...template.time,
+              idle: DateTime.makeUnsafe(200),
+              viewed: DateTime.makeUnsafe(150),
+            },
+          },
           messages: [
             {
               id: sourceMessageID,
@@ -1130,13 +1138,18 @@ describe("SessionTransfer", () => {
       const messages = yield* session.messages({ sessionID, order: "asc" })
 
       expect(imported).toMatchObject({ id: sessionID, title: "Exported", location })
+      expect(imported.time).toMatchObject({ idle: DateTime.makeUnsafe(200), viewed: DateTime.makeUnsafe(150) })
       expect(messages).toMatchObject([
         { id: sourceMessageID, type: "user", text: "Imported message" },
         { id: errorMessageID, type: "compaction", error: { type: "test_error", message: "Original error" } },
       ])
       expect(yield* Bus.latestSequence(db, sessionID)).toBe(2)
-      expect((yield* transfer.export({ sessionID })).messages).toEqual(messages)
-      expect((yield* transfer.export({ sessionID, sanitize: true })).messages).toMatchObject([
+      const exported = yield* transfer.export({ sessionID })
+      expect(exported.info.time).toMatchObject({ idle: DateTime.makeUnsafe(200), viewed: DateTime.makeUnsafe(150) })
+      expect(exported.messages).toEqual(messages)
+      const sanitized = yield* transfer.export({ sessionID, sanitize: true })
+      expect(sanitized.info.time).toMatchObject({ idle: DateTime.makeUnsafe(200), viewed: DateTime.makeUnsafe(150) })
+      expect(sanitized.messages).toMatchObject([
         { id: sourceMessageID, text: `[redacted:text:${sourceMessageID}]` },
         { id: errorMessageID, error: { type: "test_error", message: "Original error" } },
       ])
@@ -1163,6 +1176,33 @@ describe("SessionTransfer", () => {
       expect(exit._tag).toBe("Failure")
       expect((yield* session.get(existing.id)).title).toBe("Existing")
       expect(yield* session.messages({ sessionID: existing.id })).toEqual([])
+    }),
+  )
+
+  it.effect("clamps an imported viewed watermark to its idle transition", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const transfer = yield* SessionTransfer.Service
+      const template = yield* session.create({ location })
+      const imported = yield* transfer.import({
+        data: {
+          info: {
+            ...template,
+            id: Session.ID.create(),
+            outcome: "succeeded",
+            time: {
+              ...template.time,
+              idle: DateTime.makeUnsafe(200),
+              viewed: DateTime.makeUnsafe(250),
+            },
+          },
+          messages: [],
+        },
+        location,
+      })
+
+      expect(imported.time).toMatchObject({ idle: DateTime.makeUnsafe(200), viewed: DateTime.makeUnsafe(200) })
+      expect(imported.outcome).toBe("succeeded")
     }),
   )
 })
