@@ -1,4 +1,3 @@
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { createMemo, createResource, type Accessor } from "solid-js"
 import { useData } from "@/context/server"
 import type { SessionModel } from "../model"
@@ -13,7 +12,7 @@ export function createTimelineModel(input: { session: Pick<SessionModel, "identi
 
   const [resource] = createResource(
     () => input.session.identity.sessionID(),
-    (id) => (id ? data.session.message.sync(id) : undefined),
+    (id) => (id ? Promise.all([data.session.message.sync(id), data.session.pending.sync(id)]) : undefined),
   )
   const ready = createMemo(() => !input.session.identity.sessionID() || !resource.loading)
   const more = () => {
@@ -41,16 +40,8 @@ export function createTimelineModel(input: { session: Pick<SessionModel, "identi
     messages: input.session.history.messages,
     ready,
     resource,
-    userMessages: input.session.history.userMessages,
     visibleUserMessages: input.session.history.visibleUserMessages,
   }
-}
-
-export function isTimelineReady(messages: SessionMessageInfo[] | undefined, loading: boolean) {
-  return (
-    messages !== undefined &&
-    (messages.some((message) => message.type === "user" || message.type === "shell") || !loading)
-  )
 }
 
 export async function loadOlderTimeline(input: {

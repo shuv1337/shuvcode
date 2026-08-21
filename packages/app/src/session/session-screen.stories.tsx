@@ -6,10 +6,8 @@ import {
   editThenTestDocument,
   emptySessionDocument,
   largeCompletedDocument,
-  pendingAndQueuedDocument,
   permissionPendingDocument,
   questionPendingDocument,
-  queuedPrompts,
   retryDocument,
   streamingDocument,
   STORY_TIME,
@@ -54,7 +52,7 @@ export default {
     docs: {
       description: {
         component:
-          "A server-free Session workbench for product and design review. It composes the production current timeline, titlebar actions, composer region, prompt input, request docks, queue, and review components.",
+          "A server-free Session workbench for product and design review. It composes the production current timeline, titlebar actions, Composer, request docks, and review components.",
       },
     },
   },
@@ -68,18 +66,6 @@ export const ImplementAndVerifyLight = {
 export const ImplementAndVerifyDark = {
   globals: { theme: "dark" },
   render: implementAndVerify,
-}
-
-export const QueueAFollowUp = {
-  render: () => (
-    <SessionPreview
-      title="Add deterministic Session stories"
-      description={description}
-      document={pendingAndQueuedDocument}
-      followups={queuedPrompts}
-      backgroundTasks={[{ id: "task_storybook", type: "subagent", label: "Review the current Storybook scenarios" }]}
-    />
-  ),
 }
 
 export const WorkFromAttachments = {

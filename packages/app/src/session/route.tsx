@@ -5,7 +5,7 @@ import { FileProvider } from "@/context/file"
 import { LocationProvider, useWorkspaceLocation } from "@/context/location"
 import { ModelsProvider } from "@/context/models"
 import { useNotification } from "@/context/notification"
-import { PromptProvider } from "@/context/prompt"
+import { ComposerPersistenceProvider } from "@/composer/persistence"
 import { useData, useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { ServerConnection } from "@/context/servers"
@@ -94,11 +94,11 @@ function TargetSessionPage() {
     <Show when={`${server.scope}\0${location().directory}`} keyed>
       <TerminalProvider>
         <FileProvider>
-          <PromptProvider>
+          <ComposerPersistenceProvider>
             <CommentsProvider>
               <SessionPage />
             </CommentsProvider>
-          </PromptProvider>
+          </ComposerPersistenceProvider>
         </FileProvider>
       </TerminalProvider>
     </Show>

@@ -4,17 +4,19 @@ import { useTitlebarRightMount } from "@/components/titlebar"
 import { useSettings } from "@/context/settings"
 import { useTabs, type DraftTab } from "@/context/tabs"
 import { useSearchParams } from "@solidjs/router"
-import { createEffect, createMemo, createResource } from "solid-js"
-import { createNewSessionDraftController } from "./new-session/new-session-draft-controller"
+import { createEffect, createMemo, createResource, untrack } from "solid-js"
+import { createComposerModel } from "@/composer/model"
+import { useComposerCommands } from "@/composer/commands"
+import { createNewSessionComposerAdapter } from "./new-session/composer-adapter"
 import { NewSessionStatus, NewSessionView } from "./new-session/new-session-view"
 import { createNewSessionWorkspaceController } from "./new-session/new-session-workspace-controller"
 import { useNewSessionCommands } from "./new-session/use-new-session-commands"
 
-/** The draft-only V2 session page. Submitting promotes the draft into a real session. */
+/** The draft-only Session page. Submitting promotes the draft into a real Session. */
 export default function NewSessionPage(props: { draftId: string }) {
   const settings = useSettings()
   const rightMount = useTitlebarRightMount()
-  const [search] = useSearchParams<{ draftId?: string }>()
+  const [search, setSearch] = useSearchParams<{ draftId?: string; prompt?: string }>()
   const tabs = useTabs()
   const openWorkspaces = useSettingsDialog("workspaces")
   const draftTab = createMemo(() =>
@@ -27,30 +29,40 @@ export default function NewSessionPage(props: { draftId: string }) {
     },
     onViewAll: openWorkspaces,
   })
-  const draft = createNewSessionDraftController({
+  const composer = createNewSessionComposerAdapter({
+    draftID: props.draftId,
     worktree: workspace.selection.value,
-    resetWorktree: workspace.selection.reset,
-    draftId: props.draftId,
-    onSubmit: workspace.selection.remember,
+    submitted: workspace.selection.remember,
   })
+  const model = createComposerModel(composer.adapter)
+  useComposerCommands({ model: composer.model })
   const project = createPromptProjectController({
-    controls: draft.project.controls,
-    onDone: draft.input.restoreFocus,
+    controls: composer.project,
+    onDone: model.restoreFocus,
   })
   useNewSessionCommands({
-    restoreFocus: draft.input.restoreFocus,
+    restoreFocus: model.restoreFocus,
     project: {
       empty: project.empty,
       open: () => project.setOpen(true),
     },
   })
   createEffect(() => {
-    if (!draft.prompt.ready()) return
-    draft.input.restoreFocus()
+    if (!composer.ready()) return
+    model.restoreFocus()
+  })
+  createEffect(() => {
+    if (!composer.ready()) return
+    untrack(() => {
+      const text = search.prompt
+      if (!text) return
+      composer.adapter.state.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+      setSearch({ ...search, prompt: undefined })
+    })
   })
   const ready = Promise.resolve()
   const [suspendUntilPromptReady] = createResource(
-    () => draft.prompt.readyPromise() ?? ready,
+    () => composer.ready.promise ?? ready,
     (promise) => promise.then(() => true),
   )
 
@@ -59,7 +71,7 @@ export default function NewSessionPage(props: { draftId: string }) {
       {suspendUntilPromptReady()}
       <NewSessionStatus mount={rightMount()} visible={settings.visibility.status()} />
       <div class="flex-1 min-h-0 flex flex-col gap-2 p-2">
-        <NewSessionView input={draft.input} project={project} workspace={workspace} />
+        <NewSessionView composer={model} project={project} workspace={workspace} />
       </div>
     </div>
   )

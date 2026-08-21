@@ -3,7 +3,7 @@ import { useCommand } from "@/context/command"
 import { Keybind } from "@opencode-ai/ui/keybind"
 import { For, createMemo } from "solid-js"
 import { createStore } from "solid-js/store"
-import { SessionComposerPullout } from "@/session/composer/session-composer-pullout"
+import { SessionBackgroundPullout } from "./session-background-pullout"
 
 export function SessionBackgroundDock(props: {
   blocking: { type: "shell" | "subagent"; id?: string; label?: string }[]
@@ -44,8 +44,7 @@ export function SessionBackgroundDock(props: {
   }
 
   return (
-    <SessionComposerPullout
-      name="background"
+    <SessionBackgroundPullout
       label={
         <span class="flex flex-col items-start">
           {blocking() && (
@@ -79,6 +78,6 @@ export function SessionBackgroundDock(props: {
           )}
         </For>
       </div>
-    </SessionComposerPullout>
+    </SessionBackgroundPullout>
   )
 }

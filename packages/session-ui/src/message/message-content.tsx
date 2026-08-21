@@ -6,8 +6,8 @@ import { useI18n } from "@opencode-ai/ui/context/i18n"
 import { Markdown } from "../components/markdown"
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { getFilename } from "@opencode-ai/util/path"
-import { AttachmentCardV2 } from "../v2/components/attachment-card-v2"
-import { CommentCardV2 } from "../v2/components/comment-card-v2"
+import { AttachmentCard } from "./attachment-card"
+import { CommentCard } from "./comment-card"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -49,12 +49,11 @@ function MessageActionButton(
   props: Pick<ComponentProps<"button">, "disabled" | "onMouseDown" | "onClick" | "aria-label"> & {
     icon: "check" | "copy" | "reset"
     label: JSX.Element
-    useV2?: boolean
   },
 ) {
   const icon = () => (props.icon === "copy" ? "outline-copy" : props.icon)
   return (
-    <Tooltip appearance={props.useV2 ? "compact" : "standard"} value={props.label} placement="top" gutter={4}>
+    <Tooltip appearance="compact" value={props.label} placement="top" gutter={4}>
       <IconButton
         icon={<Icon name={icon()} size="small" />}
         size="normal"
@@ -174,7 +173,7 @@ function UserMessageComments(props: { comments: SessionUserComment[]; bounded: b
     <div data-slot="user-message-comments" data-bounded={props.bounded ? "true" : undefined}>
       <For each={comments()}>
         {(comment) => (
-          <CommentCardV2
+          <CommentCard
             comment={comment.comment}
             path={comment.path}
             selection={comment.selection}
@@ -228,8 +227,11 @@ export function CurrentUserMessageDisplay(props: {
   const revert = async () => {
     if (!props.actions?.revert || state.reverting) return
     setState("reverting", true)
-    await props.actions.revert({ sessionID: props.sessionID, messageID: props.message.id })
-    setState("reverting", false)
+    try {
+      await props.actions.revert({ sessionID: props.sessionID, messageID: props.message.id })
+    } finally {
+      setState("reverting", false)
+    }
   }
   const renderAttachments = () => (
     <Show when={attachments().length > 0}>
@@ -253,14 +255,14 @@ export function CurrentUserMessageDisplay(props: {
                   </div>
                 }
               >
-                <AttachmentCardV2
+                <AttachmentCard
                   title={getFilename(name())}
                   hover={name()}
                   clickable={!!props.actions?.openAttachment}
                   onClick={() => props.actions?.openAttachment?.(file)}
                 >
                   {typeLabel(name(), file.mime, i18n.t("ui.common.file"))}
-                </AttachmentCardV2>
+                </AttachmentCard>
               </Show>
             )
           }}
@@ -310,7 +312,6 @@ export function CurrentUserMessageDisplay(props: {
             <MessageActionButton
               icon="reset"
               label={i18n.t("ui.message.revertMessage")}
-              useV2
               disabled={state.reverting}
               onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
@@ -324,7 +325,6 @@ export function CurrentUserMessageDisplay(props: {
             <MessageActionButton
               icon={state.copied ? "check" : "copy"}
               label={state.copied ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
-              useV2
               onMouseDown={(event) => event.preventDefault()}
               onClick={(event) => {
                 event.stopPropagation()
@@ -450,7 +450,6 @@ export function AssistantTextContent(props: {
             <MessageActionButton
               icon={copied() ? "check" : "copy"}
               label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
-              useV2
               onMouseDown={(event) => event.preventDefault()}
               onClick={copy}
               aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}

@@ -153,7 +153,7 @@ export const SessionQuestionDock: Component<{ request: FormInfo; onSubmit: () =>
       return
     }
 
-    const dock = root.closest('[data-component="session-prompt-dock"]')
+    const dock = root.closest('[data-component="session-composer-dock"]')
     if (!(dock instanceof HTMLElement)) return
 
     const dockBottom = dock.getBoundingClientRect().bottom
@@ -200,7 +200,7 @@ export const SessionQuestionDock: Component<{ request: FormInfo; onSubmit: () =>
 
     makeEventListener(window, "resize", update)
 
-    const dock = root?.closest('[data-component="session-prompt-dock"]')
+    const dock = root?.closest('[data-component="session-composer-dock"]')
     const scroller = document.querySelector(".scroll-view__viewport")
     createResizeObserver([dock, scroller], update)
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { sessionPanelLayout } from "./session-panel-layout"
 
 describe("sessionPanelLayout", () => {
-  test("keeps one V2 owner while changing panel geometry", () => {
+  test("keeps one owner while changing panel geometry", () => {
     expect(sessionPanelLayout({ review: false, terminal: false, files: false })).toEqual({
       visible: false,
       stacked: false,

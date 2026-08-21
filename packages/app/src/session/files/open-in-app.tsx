@@ -208,7 +208,7 @@ export function useOpenInApp(input: { directory: () => string }) {
         showToast({
           variant: "success",
           icon: "circle-check",
-          title: language.t("session.share.copy.copied"),
+          title: language.t("common.copied"),
           description: directory,
         })
       })

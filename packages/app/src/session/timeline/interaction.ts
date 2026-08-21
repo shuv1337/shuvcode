@@ -19,7 +19,6 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     gestureAt: 0,
     scroll: {
       overflow: false,
-      bottom: true,
       jump: false,
     },
   })
@@ -75,10 +74,9 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     const max = element.scrollHeight - element.clientHeight
     const distance = max - element.scrollTop
     const overflow = max > 1
-    const bottom = !overflow || distance <= 2
     const jump = overflow && distance > jumpThreshold(element)
-    if (state.scroll.overflow === overflow && state.scroll.bottom === bottom && state.scroll.jump === jump) return
-    setState("scroll", { overflow, bottom, jump })
+    if (state.scroll.overflow === overflow && state.scroll.jump === jump) return
+    setState("scroll", { overflow, jump })
   }
   const scheduleScrollState = (element: HTMLDivElement) => {
     scrollStateTarget = element
@@ -97,7 +95,7 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     visibleUserMessages,
     historyMore: timeline.history.more,
     historyLoading: timeline.history.loading,
-    loadMore: async () => undefined,
+    loadMore: loadOlder,
     currentMessageId: () => state.messageID,
     pendingMessage: () => state.pendingMessage,
     setPendingMessage: (value) => setState("pendingMessage", value),
@@ -152,7 +150,7 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     scheduleScrollState(element)
     fill()
   }
-  const loadOlder = async () => {
+  async function loadOlder() {
     const owner = session.ownership.capture()
     if (timeline.history.loading() || historyRequests.has(owner.key)) return
     historyRequests.add(owner.key)
@@ -291,7 +289,6 @@ export function createSessionTimelineInteraction(session: SessionModel) {
     ready: timeline.ready,
     scroll: state.scroll,
     scroller: () => scroller,
-    userMessages: visibleUserMessages,
     view: {
       anchor,
       hasGesture: () => Date.now() - state.gestureAt < 250,

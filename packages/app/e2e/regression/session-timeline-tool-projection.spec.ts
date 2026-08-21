@@ -103,7 +103,7 @@ test("labels completed searches with result counts", async ({ page }) => {
   await expect(rows.nth(1)).toContainText("(12 matches)")
 })
 
-test("labels V2 read tools from their path input", async ({ page }) => {
+test("labels read tools from their path input", async ({ page }) => {
   const id = "prt_read_path"
   await setupTimeline(page, {
     messages: [userMessage(), assistantMessage([toolPart(id, "read", "completed", { path: "src/a.ts" })])],
@@ -114,7 +114,7 @@ test("labels V2 read tools from their path input", async ({ page }) => {
   await expect(group.locator('[data-slot="basic-tool-tool-subtitle"]')).toHaveText("a.ts")
 })
 
-test("labels V2 skill tools from IDs and result metadata", async ({ page }) => {
+test("labels skill tools from IDs and result metadata", async ({ page }) => {
   const pending = "prt_skill_id"
   const completed = "prt_skill_name"
   await setupTimeline(page, {
@@ -131,9 +131,10 @@ test("labels V2 skill tools from IDs and result metadata", async ({ page }) => {
     "aria-label",
     "sample-skill",
   )
-  await expect(
-    page.locator(`[data-timeline-part-id="${completed}"] [data-component="text-shimmer"]`),
-  ).toHaveAttribute("aria-label", "OpenCode")
+  await expect(page.locator(`[data-timeline-part-id="${completed}"] [data-component="text-shimmer"]`)).toHaveAttribute(
+    "aria-label",
+    "OpenCode",
+  )
   for (const id of [pending, completed]) {
     const skill = page.locator(`[data-timeline-part-id="${id}"]`)
     await expect(skill.locator('[data-slot="skill-tool-label"]')).toHaveText("Skill")
@@ -152,8 +153,7 @@ function errorInput(tool: string) {
   if (tool === "patch") return { patchText: "Update src/error.ts" }
   if (tool === "webfetch") return { url: "https://example.com" }
   if (tool === "websearch") return { query: "failure" }
-  if (tool === "subagent")
-    return { description: "Fail subagent", agent: "explore", prompt: "Inspect the failure." }
+  if (tool === "subagent") return { description: "Fail subagent", agent: "explore", prompt: "Inspect the failure." }
   if (tool === "skill") return { name: "failure" }
   return { target: "failure" }
 }

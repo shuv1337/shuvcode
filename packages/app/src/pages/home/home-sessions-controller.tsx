@@ -105,9 +105,9 @@ export function createHomeSessionsController(home: HomeController) {
         if (!conn) return
         const ctx = home.server.focusedContext()
         if (!ctx) return
-        const { DialogHomeCommandPaletteV2 } = await import("@/components/dialog-command-palette-v2")
+        const { DialogHomeCommandPalette } = await import("@/components/dialog-command-palette")
         void dialog.show(() => (
-          <DialogHomeCommandPaletteV2
+          <DialogHomeCommandPalette
             server={conn}
             onSelectSession={(entry) => {
               if (!entry.sessionID || !entry.directory || !entry.server) return

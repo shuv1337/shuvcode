@@ -1,7 +1,8 @@
-import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
+import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt, SkillPart } from "@/composer/state"
 import { createLegacyBlobReference } from "@/utils/draft-store"
 import type { SessionMessageUser } from "@opencode-ai/client/promise"
 import { readPromptPresentation } from "./comment-note"
+import { Skill } from "@opencode-ai/schema/skill"
 
 type Inline =
   | {
@@ -16,6 +17,8 @@ type Inline =
         startChar: number
         endChar: number
       }
+      mime?: string
+      filename?: string
     }
   | {
       type: "agent"
@@ -23,6 +26,14 @@ type Inline =
       end: number
       value: string
       name: string
+    }
+  | {
+      type: "skill"
+      start: number
+      end: number
+      value: string
+      id: Skill.ID
+      name: Skill.Name
     }
 
 function selectionFromFileUrl(url: string): Extract<Inline, { type: "file" }>["selection"] {
@@ -95,6 +106,18 @@ export function extractPromptFromMessage(
       name: agent.name,
     })
   }
+  for (const attached of message.skills ?? []) {
+    const mention = attached.mention
+    if (!mention) continue
+    inline.push({
+      type: "skill",
+      start: mention.start,
+      end: mention.end,
+      value: mention.text,
+      id: Skill.ID.make(attached.id),
+      name: Skill.Name.make(attached.name),
+    })
+  }
   return buildPrompt(text, inline, images)
 }
 
@@ -132,6 +155,8 @@ function buildPrompt(text: string, inline: Inline[], images: ImageAttachmentPart
       start: position,
       end: position + content.length,
       selection: item.selection,
+      mime: item.mime,
+      filename: item.filename,
     }
     result.push(attachment)
     position += content.length
@@ -150,6 +175,20 @@ function buildPrompt(text: string, inline: Inline[], images: ImageAttachmentPart
     position += content.length
   }
 
+  const pushSkill = (item: Extract<Inline, { type: "skill" }>) => {
+    const content = item.value
+    const skill: SkillPart = {
+      type: "skill",
+      id: item.id,
+      name: item.name,
+      content,
+      start: position,
+      end: position + content.length,
+    }
+    result.push(skill)
+    position += content.length
+  }
+
   for (const item of inline) {
     if (item.start < 0 || item.end < item.start) continue
 
@@ -165,6 +204,7 @@ function buildPrompt(text: string, inline: Inline[], images: ImageAttachmentPart
 
     if (item.type === "file") pushFile(item)
     if (item.type === "agent") pushAgent(item)
+    if (item.type === "skill") pushSkill(item)
 
     cursor = end
   }

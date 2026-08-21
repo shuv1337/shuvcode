@@ -5,22 +5,20 @@ import { useFile, selectionFromLines, type FileSelection, type SelectedLineRange
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePermission } from "@/context/permission"
-import { usePrompt } from "@/context/prompt"
+import { useComposerState } from "@/composer/persistence"
 import { useWorkspaceLocation } from "@/context/location"
-import { useData } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useSettings } from "@/context/settings"
 import { useTerminal } from "@/context/terminal"
 import { showToast } from "@/utils/toast"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/utils/session-export"
-import { extractPromptComments, extractPromptFromMessage } from "@/utils/prompt"
-import type { SessionMessageUser } from "@opencode-ai/client/promise"
 import type { SessionModel } from "@/session/model"
+import type { SessionRevert } from "@/session/revert"
 
 type SessionCommandSource = {
   identity: SessionModel["identity"]
   data: Pick<SessionModel["data"], "info" | "revertMessageID">
-  history: Pick<SessionModel["history"], "userMessages" | "visibleUserMessages">
+  history: Pick<SessionModel["history"], "visibleUserMessages">
   layout: SessionModel["layout"]
   ownership: SessionModel["ownership"]
   tabs: Pick<SessionModel["tabs"], "activeFileTab" | "closableTab">
@@ -33,7 +31,7 @@ export type SessionCommandContext = {
     move: () => Promise<void>
   }
   navigateMessageByOffset: (offset: number) => void
-  setActiveMessage: (message: SessionMessageUser | undefined) => void
+  revert: Pick<SessionRevert, "undo" | "redo">
   focusInput: () => void
 }
 
@@ -50,10 +48,9 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const file = useFile()
   const language = useLanguage()
   const permission = usePermission()
-  const prompt = usePrompt()
+  const prompt = useComposerState()
   const sdk = useWorkspaceLocation()
   const serverSDK = useServerSDK()
-  const data = useData()
   const settings = useSettings()
   const terminal = useTerminal()
   const layout = useLayout()
@@ -61,17 +58,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     const owner = actions.session.ownership.capture()
     const value = await load()
     owner.run(() => show(value))
-  }
-  const runCommand = async <T,>(input: {
-    owner: ReturnType<SessionModel["ownership"]["capture"]>
-    prompt: T
-    request: () => Promise<unknown>
-    updatePrompt: (prompt: T) => void
-    updateViewport: () => void
-  }) => {
-    await input.request()
-    input.updatePrompt(input.prompt)
-    input.owner.run(input.updateViewport)
   }
   const shown = settings.visibility.fileTree
 
@@ -100,7 +86,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   }
 
   const navigateMessageByOffset = actions.navigateMessageByOffset
-  const setActiveMessage = actions.setActiveMessage
   const focusInput = actions.focusInput
 
   const sessionCommand = withCategory(language.t("command.category.session"))
@@ -143,8 +128,8 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
 
   const openFile = () => {
     void openDialog(
-      () => import("@/components/dialog-command-palette-v2"),
-      (x) => dialog.show(() => <x.DialogCommandPaletteV2 onOpenFile={showAllFiles} />),
+      () => import("@/components/dialog-command-palette"),
+      (x) => dialog.show(() => <x.DialogCommandPalette onOpenFile={showAllFiles} />),
     )
   }
 
@@ -212,74 +197,8 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     })
   }
 
-  const undo = async () => {
-    const sessionID = actions.session.identity.params.id
-    if (!sessionID) return
-    const owner = actions.session.ownership.capture()
-    const session = serverSDK.api.session
-    const promptSession = prompt.capture()
-    const revert = actions.session.data.revertMessageID()
-    const messages = actions.session.history.userMessages()
-    const boundary = revert ? messages.findIndex((message) => message.id === revert) : messages.length
-    if (boundary < 0) return
-    const message = messages[boundary - 1]
-    if (!message) return
-
-    if (data.session.status(sessionID) === "running") await session.interrupt({ sessionID }).catch(() => {})
-
-    await runCommand({
-      owner,
-      prompt: promptSession,
-      request: () => session.revert.stage({ sessionID, messageID: message.id }),
-      updatePrompt: (target) => {
-        target.set(extractPromptFromMessage(message, { directory: sdk().directory }))
-        target.context.replaceComments(
-          extractPromptComments(message).map((comment) => ({
-            type: "file",
-            path: comment.path,
-            selection: comment.selection,
-            comment: comment.comment,
-            preview: comment.preview,
-            commentOrigin: comment.origin,
-          })),
-        )
-      },
-      updateViewport: () => setActiveMessage(messages[boundary - 2]),
-    })
-  }
-
-  const redo = async () => {
-    const sessionID = actions.session.identity.params.id
-    if (!sessionID) return
-    const owner = actions.session.ownership.capture()
-    const session = serverSDK.api.session
-    const messages = actions.session.history.userMessages()
-    const promptSession = prompt.capture()
-    const revertMessageID = actions.session.data.revertMessageID()
-    if (!revertMessageID) return
-
-    const boundary = messages.findIndex((message) => message.id === revertMessageID)
-    if (boundary < 0) return
-    const next = messages[boundary + 1]
-    if (!next) {
-      await runCommand({
-        owner,
-        prompt: promptSession,
-        request: () => session.revert.clear({ sessionID }),
-        updatePrompt: (target) => target.reset(),
-        updateViewport: () => setActiveMessage(messages.at(-1)),
-      })
-      return
-    }
-
-    await runCommand({
-      owner,
-      prompt: promptSession,
-      request: () => session.revert.stage({ sessionID, messageID: next.id }),
-      updatePrompt: () => undefined,
-      updateViewport: () => setActiveMessage(messages[boundary]),
-    })
-  }
+  const undo = actions.revert.undo
+  const redo = actions.revert.redo
 
   const compact = async () => {
     const sessionID = actions.session.identity.params.id

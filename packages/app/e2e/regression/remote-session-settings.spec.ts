@@ -224,6 +224,8 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
     if (currentSessionInfo) return json(route, { data: currentSession(currentSessionInfo) })
     if (sessions.some((session) => url.pathname === `/api/session/${session.id}/message`))
       return json(route, { data: [], cursor: {} })
+    if (sessions.some((session) => url.pathname === `/api/session/${session.id}/inbox`))
+      return json(route, { data: [] })
     if (url.pathname === "/api/location") return json(route, { directory })
     if (url.pathname === "/api/vcs")
       return json(route, { location: { directory }, data: { branch: "main", defaultBranch: "main" } })

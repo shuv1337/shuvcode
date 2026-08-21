@@ -7,7 +7,6 @@ import { createStore } from "solid-js/store"
 import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
-import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useWorkspaceLocation } from "@/context/location"
 import { useTabs } from "@/context/tabs"
@@ -53,7 +52,6 @@ export function createTimelineController(input: { session: TimelineSessionSource
   const tabs = useTabs()
   const dialog = useDialog()
   const language = useLanguage()
-  const platform = usePlatform()
   const projectedMessages = createMemo(() => {
     const id = input.session.identity.sessionID()
     return visibleTimelineMessages(
@@ -64,8 +62,6 @@ export function createTimelineController(input: { session: TimelineSessionSource
   })
   const titleValue = createMemo(() => input.session.data.info()?.title)
   const titleLabel = createMemo(() => sessionTitle(titleValue()) ?? language.t("command.session.new"))
-  const shareUrl = (): string | undefined => undefined
-  const shareEnabled = () => false
   const parentMessages = createMemo(() => {
     const id = input.session.data.parentID()
     return id ? data.session.message.list(id) : emptyMessages
@@ -94,7 +90,7 @@ export function createTimelineController(input: { session: TimelineSessionSource
     status: input.session.data.status,
     showReasoningSummaries: settings.general.showReasoningSummaries,
   })
-  const [pending, setPending] = createStore({ rename: false, share: false, unshare: false })
+  const [pending, setPending] = createStore({ rename: false })
 
   const errorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -122,14 +118,6 @@ export function createTimelineController(input: { session: TimelineSessionSource
     const current = data.session.get(id)
     if (current) data.session.remember({ ...current, title: next })
     return true
-  }
-  const share = async () => {
-    const id = input.session.identity.sessionID()
-    if (!id || pending.share || !shareEnabled()) return
-  }
-  const unshare = async () => {
-    const id = input.session.identity.sessionID()
-    if (!id || pending.unshare || !shareEnabled()) return
   }
   const href = (id: string) => sessionHref(server.key, id)
   const navigateAfterRemoval = (id: string, parent?: string, next?: string) => {
@@ -223,8 +211,6 @@ export function createTimelineController(input: { session: TimelineSessionSource
       status: input.session.data.status,
       titleValue,
       titleLabel,
-      shareUrl,
-      shareEnabled,
       parentID: input.session.data.parentID,
       parentTitle,
       childTitle,
@@ -236,36 +222,14 @@ export function createTimelineController(input: { session: TimelineSessionSource
     },
     pending: {
       rename: () => pending.rename,
-      share: () => pending.share,
-      unshare: () => pending.unshare,
     },
     action: {
       rename,
-      share,
-      unshare,
       export: exportSession,
       showDelete: (id: string) => dialog.show(() => <DeleteDialog sessionID={id} />),
       navigateParent: () => {
         const id = input.session.data.parentID()
         if (id) navigate(href(id))
-      },
-      viewShare: () => {
-        const url = shareUrl()
-        if (url) platform.openExternal(url)
-      },
-      copyShareUrl: async () => {
-        const url = shareUrl()
-        if (!url) return
-        await navigator.clipboard.writeText(url).then(
-          () =>
-            showToast({
-              variant: "success",
-              icon: "circle-check",
-              title: language.t("session.share.copy.copied"),
-              description: url,
-            }),
-          (error) => showToast({ title: language.t("common.requestFailed"), description: errorMessage(error) }),
-        )
       },
     },
   }

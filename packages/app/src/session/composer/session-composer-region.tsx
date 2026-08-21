@@ -2,8 +2,6 @@ import { Show, type JSX } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { SessionPermissionDock } from "@/session/requests/session-permission-dock"
 import { SessionQuestionDock } from "@/session/requests/session-question-dock"
-import { SessionFollowupDock } from "@/session/composer/session-followup-dock"
-import { SessionRevertDock } from "@/session/composer/session-revert-dock"
 import { SessionBackgroundDock } from "@/session/requests/session-background-dock"
 import type { SessionComposerRegionController } from "./session-composer-region-controller"
 
@@ -17,8 +15,6 @@ type SessionComposerRegionState = Pick<
 export type SessionComposerRegionViewController = Pick<
   SessionComposerRegionController,
   | "centered"
-  | "followup"
-  | "revert"
   | "onResponseSubmit"
   | "openParent"
   | "setPromptRef"
@@ -28,26 +24,21 @@ export type SessionComposerRegionViewController = Pick<
   | "showComposer"
   | "handoffPrompt"
   | "promptReady"
-  | "lift"
 > & { state: SessionComposerRegionState }
 
 export function SessionComposerRegion(props: {
   controller: SessionComposerRegionViewController
-  promptInput: JSX.Element
+  composer: JSX.Element
 }) {
   const language = useLanguage()
   const controller = props.controller
   const background = () =>
     controller.state.background.blocking().length > 0 || controller.state.background.tasks().length > 0
-  const rolled = () => {
-    const revert = controller.revert()
-    return revert?.items.length ? revert : undefined
-  }
 
   return (
     <div
       ref={controller.setDockRef}
-      data-component="session-prompt-dock"
+      data-component="session-composer-dock"
       class="w-full shrink-0 flex flex-col justify-center items-center pb-3 pointer-events-none bg-v2-background-bg-base"
     >
       <div
@@ -84,38 +75,14 @@ export function SessionComposerRegion(props: {
             when={controller.promptReady()}
             fallback={
               <>
-                <Show when={rolled()} keyed>
-                  {(revert) => (
-                    <div class="pb-2">
-                      <SessionRevertDock
-                        items={revert.items}
-                        restoring={revert.restoring}
-                        disabled={revert.disabled}
-                        onRestore={revert.onRestore}
-                      />
-                    </div>
-                  )}
-                </Show>
                 <div class="w-full min-h-32 md:min-h-40 rounded-md border border-border-weak-base bg-background-base/50 px-4 py-3 text-text-weak whitespace-pre-wrap pointer-events-none">
                   {controller.handoffPrompt() || language.t("prompt.loading")}
                 </div>
               </>
             }
           >
-            <Show when={rolled()} keyed>
-              {(revert) => (
-                <div>
-                  <SessionRevertDock
-                    items={revert.items}
-                    restoring={revert.restoring}
-                    disabled={revert.disabled}
-                    onRestore={revert.onRestore}
-                  />
-                </div>
-              )}
-            </Show>
             <Show when={background()}>
-              <div style={{ "margin-top": `${-controller.lift()}px` }}>
+              <div>
                 <SessionBackgroundDock
                   blocking={controller.state.background.blocking()}
                   tasks={controller.state.background.tasks()}
@@ -128,20 +95,12 @@ export function SessionComposerRegion(props: {
                 "relative z-[70]": true,
               }}
               style={{
-                "margin-top": `${background() ? -36 : -controller.lift()}px`,
+                "margin-top": `${background() ? -36 : 0}px`,
               }}
             >
-              <Show when={controller.followup()?.items.length}>
-                <SessionFollowupDock
-                  items={controller.followup()!.items}
-                  sending={controller.followup()!.sending}
-                  onSend={controller.followup()!.onSend}
-                  onEdit={controller.followup()!.onEdit}
-                />
-              </Show>
               <Show
                 when={controller.child()}
-                fallback={<Show when={!controller.state.blocked()}>{props.promptInput}</Show>}
+                fallback={<Show when={!controller.state.blocked()}>{props.composer}</Show>}
               >
                 <div
                   ref={controller.setPromptRef}

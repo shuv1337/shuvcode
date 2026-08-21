@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageAssistant, SessionMessageInfo, SessionMessageUser } from "@opencode-ai/client/promise"
-import { isTimelineReady, loadOlderTimeline, selectUserMessages, selectVisibleUserMessages } from "./model"
+import { loadOlderTimeline, selectUserMessages, selectVisibleUserMessages } from "./model"
 
 const user = (id: string): SessionMessageUser => ({ id, type: "user", text: id, time: { created: 1 } })
 const assistant = (id: string): SessionMessageAssistant => ({
@@ -23,21 +23,6 @@ describe("timeline model", () => {
     expect(selectVisibleUserMessages(users)).toBe(users)
   })
 
-  test("waits for an assistant-only load to hydrate its user root", () => {
-    const currentAssistant = {
-      id: "msg_2",
-      type: "assistant",
-      agent: "build",
-      model: { id: "model", providerID: "provider" },
-      content: [],
-      time: { created: 2 },
-    } satisfies SessionMessageInfo
-    const currentUser = { id: "msg_1", type: "user", text: "hello", time: { created: 1 } } satisfies SessionMessageInfo
-    expect(isTimelineReady([currentAssistant], true)).toBe(false)
-    expect(isTimelineReady([currentUser, currentAssistant], true)).toBe(true)
-    expect(isTimelineReady([], false)).toBe(true)
-  })
-
   test("loads exactly one opaque cursor page", async () => {
     let calls = 0
     const anchors: Array<string | boolean> = []
@@ -55,20 +40,6 @@ describe("timeline model", () => {
 
     expect(calls).toBe(1)
     expect(anchors).toEqual(["before", "after", true])
-  })
-
-  test("stops when a page adds no raw messages", async () => {
-    let calls = 0
-    await loadOlderTimeline({
-      sessionID: () => "ses_test",
-      more: () => true,
-      loading: () => false,
-      loadMore: async () => {
-        calls += 1
-      },
-    })
-
-    expect(calls).toBe(1)
   })
 
   test("does not restore an anchor after the session changes", async () => {

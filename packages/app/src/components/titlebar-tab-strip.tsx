@@ -14,7 +14,7 @@ import { useGlobal, useServerCtx, type ServerCtx } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
 import { useTabs } from "@/context/tabs"
-import { createTabPromptState } from "@/context/prompt"
+import { createTabComposerState } from "@/composer/persistence"
 import { base64Encode } from "@opencode-ai/util/encode"
 import { showToast } from "@/utils/toast"
 import { canStartTabDrag, isTabCloseTarget } from "./titlebar-tab-gesture"
@@ -146,7 +146,7 @@ function SessionTabEntry(props: {
     tabs.rememberSessionInfo(props.tab, value)
     const current = sdk()
     if (!current) return
-    createTabPromptState(tabs, props.tab, current.scope, {
+    createTabComposerState(tabs, props.tab, current.scope, {
       dir: base64Encode(value.location.directory),
       id: value.id,
     })

@@ -37,7 +37,6 @@ export default defineMain({
           { find: "@solidjs/router", replacement: path.resolve(mocks, "solid-router.tsx") },
           { find: /^@\/context\/local$/, replacement: path.resolve(mocks, "app/context/local.ts") },
           { find: /^@\/context\/file$/, replacement: path.resolve(mocks, "app/context/file.ts") },
-          { find: /^@\/context\/prompt$/, replacement: path.resolve(mocks, "app/context/prompt.ts") },
           { find: /^@\/context\/layout$/, replacement: path.resolve(mocks, "app/context/layout.ts") },
           { find: /^@\/context\/location$/, replacement: path.resolve(mocks, "app/context/location.ts") },
           { find: /^@\/context\/sync$/, replacement: path.resolve(mocks, "app/context/sync.ts") },

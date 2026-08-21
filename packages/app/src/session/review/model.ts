@@ -10,7 +10,7 @@ import { useComments } from "@/context/comments"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
-import { usePrompt } from "@/context/prompt"
+import { useComposerState } from "@/composer/persistence"
 import { useWorkspaceLocation } from "@/context/location"
 import { useServerSDK } from "@/context/server-sdk"
 import { createOpenReviewFile } from "../helpers"
@@ -34,7 +34,7 @@ export function createSessionReview(input: {
   const file = useFile()
   const language = useLanguage()
   const layout = useLayout()
-  const prompt = usePrompt()
+  const prompt = useComposerState()
   const location = useWorkspaceLocation()
   const server = useServerSDK()
   const [state, setState] = createStore({

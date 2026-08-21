@@ -22,6 +22,7 @@ export interface MockServerConfig {
   onMessages?: (input: { sessionID: string; before?: string; phase: "start" | "end" }) => void
   message?: (sessionID: string, messageID: string) => SessionMessageInfo | undefined
   onMessage?: (input: { sessionID: string; messageID: string }) => void
+  onRevertStage?: (input: { sessionID: string; messageID: string }) => void
   events?: () => OpenCodeEvent[]
   eventRetry?: number
   permissions?: unknown[] | (() => unknown[])
@@ -382,6 +383,15 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       route.request().method() === "POST"
     ) {
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })
+    }
+    const revertStage = path.match(/^\/api\/session\/([^/]+)\/revert\/stage$/)?.[1]
+    if (revertStage && route.request().method() === "POST") {
+      const body = route.request().postDataJSON()
+      if (!body || typeof body !== "object" || !("messageID" in body) || typeof body.messageID !== "string") {
+        return json(route, { error: "Invalid revert request" }, undefined, 400)
+      }
+      config.onRevertStage?.({ sessionID: revertStage, messageID: body.messageID })
+      return json(route, { data: { messageID: body.messageID } })
     }
     if (/^\/api\/session\/[^/]+$/.test(path) && route.request().method() === "DELETE") {
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })

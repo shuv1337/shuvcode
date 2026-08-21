@@ -1,5 +1,6 @@
 import type { ModelSelection } from "@/context/local"
-import { PromptInputV2Composer, type PromptInputV2ComposerController } from "@/components/prompt-input-v2"
+import { Composer } from "@/composer/composer"
+import type { ComposerModel } from "@/composer/model"
 import { SessionHeaderActions } from "@/session/header/session-header-actions"
 import {
   SessionComposerRegion,
@@ -11,8 +12,8 @@ import type { SessionDocument } from "@opencode-ai/session-ui/document"
 import { CurrentSessionProviders, STORY_MODEL } from "@opencode-ai/session-ui/storybook"
 import { SessionTimeline } from "@opencode-ai/session-ui/timeline"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
-import { createPromptInputV2Controller } from "@opencode-ai/session-ui/v2/prompt-input/interaction"
-import type { PromptInputV2PersistedState } from "@opencode-ai/session-ui/v2/prompt-input/types"
+import { createComposerEditor } from "@/composer/editor/interaction"
+import type { ComposerPersistedState } from "@/composer/types"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
@@ -81,7 +82,6 @@ export type SessionPreviewProps = {
   description: string
   document: SessionDocument
   draft?: string
-  followups?: { id: string; text: string }[]
   request?: { type: "permission"; value: PermissionRequest } | { type: "question"; value: FormInfo }
   reviewOpened?: boolean
   backgroundTasks?: { id: string; type: "shell" | "subagent"; label: string }[]
@@ -124,13 +124,13 @@ function createPromptController(input: {
   onSubmit: (text: string) => void
   onStop: () => void
 }) {
-  const draft = createStore<PromptInputV2PersistedState>({
+  const draft = createStore<ComposerPersistedState>({
     prompt: [{ type: "text", content: input.initial, start: 0, end: input.initial.length }],
     cursor: input.initial.length,
     model: { providerID: STORY_MODEL.providerID, modelID: STORY_MODEL.id, variant: STORY_MODEL.variant },
     context: { items: [] },
   })
-  const interaction = createPromptInputV2Controller({
+  const interaction = createComposerEditor({
     store: draft,
     commands: () => [],
     context: () => [],
@@ -160,7 +160,7 @@ function createPromptController(input: {
     controller: {
       ...interaction,
       model: { selection: modelSelection, paid: true, loading: false },
-    } satisfies PromptInputV2ComposerController,
+    } satisfies ComposerModel,
     setValue(value: string) {
       draft[1]("prompt", [{ type: "text", content: value, start: 0, end: value.length }])
       draft[1]("cursor", value.length)
@@ -173,12 +173,10 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
   const [state, setState] = createStore<{
     activity: string
     reviewOpened: boolean
-    followups: { id: string; text: string }[]
     request: SessionPreviewProps["request"]
   }>({
     activity: "Ready",
     reviewOpened: props.reviewOpened ?? false,
-    followups: props.followups?.map((item) => ({ ...item })) ?? [],
     request: props.request,
   })
   const prompt = createPromptController({
@@ -189,7 +187,6 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
     onSubmit: (text) => setState("activity", `Submitted locally: ${text}`),
     onStop: () => setState("activity", "Requested a local stop"),
   })
-  const removeFollowup = (id: string) => setState("followups", (items) => items.filter((item) => item.id !== id))
   const region = {
     state: {
       questionRequest: () => (state.request?.type === "question" ? state.request.value : undefined),
@@ -209,23 +206,6 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
       blocked: () => state.request !== undefined,
     },
     centered: () => true,
-    followup: () =>
-      state.followups.length
-        ? {
-            items: state.followups,
-            onSend: (id: string) => {
-              removeFollowup(id)
-              setState("activity", "Requested immediate delivery for the queued message")
-            },
-            onEdit: (id: string) => {
-              const item = state.followups.find((value) => value.id === id)
-              if (item) prompt.setValue(item.text)
-              removeFollowup(id)
-              setState("activity", "Moved the queued message into the composer")
-            },
-          }
-        : undefined,
-    revert: () => undefined,
     onResponseSubmit: () => {
       setState("request", undefined)
       setState("activity", "Submitted the answer locally")
@@ -238,7 +218,6 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
     showComposer: () => true,
     handoffPrompt: () => undefined,
     promptReady: () => true,
-    lift: () => 0,
   } satisfies SessionComposerRegionViewController
 
   return (
@@ -273,7 +252,7 @@ function SessionSurfaceState(props: SessionPreviewProps & { onReset: () => void 
                   </div>
                   <SessionComposerRegion
                     controller={region}
-                    promptInput={<PromptInputV2Composer controller={prompt.controller} borderUnderlay />}
+                    composer={<Composer model={prompt.controller} borderUnderlay />}
                   />
                 </section>
                 <Show when={state.reviewOpened}>

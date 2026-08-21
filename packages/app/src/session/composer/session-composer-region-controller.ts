@@ -1,32 +1,15 @@
 import { type Accessor, createEffect, createMemo, createResource } from "solid-js"
-import type { PromptInputState } from "@/components/prompt-input"
+import type { useComposerState } from "@/composer/persistence"
 import { useData } from "@/context/server"
 import { getSessionHandoff, setSessionHandoff } from "@/session/handoff"
-import type { SessionComposerController } from "./session-composer-state"
-
-export type SessionComposerFollowupDock = {
-  items: { id: string; text: string }[]
-  sending?: string
-  onSend: (id: string) => void
-  onEdit: (id: string) => void
-}
-
-export type SessionComposerRevertDock = {
-  items: { id: string; text: string }[]
-  restoring?: string
-  disabled?: boolean
-  onRestore: (id: string) => void
-}
+import type { SessionRequestModel } from "../requests/model"
 
 export function createSessionComposerRegionController(input: {
-  state: SessionComposerController
+  state: SessionRequestModel
   sessionKey: Accessor<string>
   sessionID: Accessor<string | undefined>
-  prompt: PromptInputState
-  ready: Accessor<boolean>
+  prompt: ReturnType<typeof useComposerState>
   centered: Accessor<boolean>
-  followup: Accessor<SessionComposerFollowupDock | undefined>
-  revert: Accessor<SessionComposerRevertDock | undefined>
   onResponseSubmit: () => void
   openParent: () => void
   setPromptRef: (el: HTMLDivElement) => void
@@ -62,8 +45,6 @@ export function createSessionComposerRegionController(input: {
   return {
     state: input.state,
     centered: input.centered,
-    followup: input.followup,
-    revert: input.revert,
     onResponseSubmit: input.onResponseSubmit,
     openParent: input.openParent,
     setPromptRef: input.setPromptRef,
@@ -73,7 +54,6 @@ export function createSessionComposerRegionController(input: {
     showComposer: () => !input.state.blocked() || !!parentID(),
     handoffPrompt: () => getSessionHandoff(input.sessionKey())?.prompt,
     promptReady: () => input.prompt.ready() || promptReady(),
-    lift: () => (input.revert()?.items.length ? 18 : 0),
   }
 }
 

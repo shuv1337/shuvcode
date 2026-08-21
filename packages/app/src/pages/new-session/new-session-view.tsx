@@ -6,26 +6,26 @@ import { Show, createMemo, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import createPresence from "solid-presence"
-import { PromptInputV2Composer } from "@/components/prompt-input-v2"
+import { Composer } from "@/composer/composer"
+import type { ComposerModel } from "@/composer/model"
 import { PromptGitStatus, PromptWorkspaceSelector } from "@/components/prompt-workspace-selector"
 import {
   PromptProjectAddButton,
   PromptProjectSelector,
   type PromptProjectController,
 } from "@/components/prompt-project-selector"
-import { StatusPopoverV2 } from "@/components/status-popover"
+import { StatusPopover } from "@/components/status-popover"
 import { useLanguage } from "@/context/language"
 import { useWorkspaceLocation } from "@/context/location"
 import { useProviders } from "@/hooks/use-providers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/new-session/new-session-layout"
 import { Persist, persisted } from "@/utils/persist"
-import type { NewSessionDraftController } from "./new-session-draft-controller"
 import type { NewSessionWorkspaceController } from "./new-session-workspace-controller"
 
 const providerTipDismissalDuration = 30 * 24 * 60 * 60 * 1000
 
 export function NewSessionView(props: {
-  input: NewSessionDraftController["input"]
+  composer: ComposerModel
   project: PromptProjectController
   workspace: NewSessionWorkspaceController
 }) {
@@ -41,14 +41,14 @@ export function NewSessionView(props: {
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
       <div
-        data-component="session-new-design"
+        data-component="new-session"
         class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-deep"
       >
         <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             <Wordmark class="h-auto w-full text-v2-background-bg-inverse" />
             <div class="mt-8 flex flex-col gap-8">
-              <PromptInputV2Composer controller={props.input} accentSubmit={props.workspace.selection.workspace()} />
+              <Composer model={props.composer} accentSubmit={props.workspace.selection.workspace()} />
               <Show when={props.project.empty()}>
                 <PromptProjectAddButton controller={props.project} />
               </Show>
@@ -72,7 +72,7 @@ export function NewSessionView(props: {
                       branch={props.workspace.bar.branch()}
                       onboarding={onboardingReady() && !onboarding.used}
                       onChange={select}
-                      onDone={props.input.restoreFocus}
+                      onDone={props.composer.restoreFocus}
                       onViewAll={props.workspace.project.openAll}
                     />
                   </Show>
@@ -96,7 +96,7 @@ export function NewSessionStatus(props: { mount: HTMLElement | null; visible: bo
         <Portal mount={mount}>
           <Show when={props.visible}>
             <Tooltip appearance="standard" placement="bottom" value={language.t("status.popover.trigger")}>
-              <StatusPopoverV2 />
+              <StatusPopover />
             </Tooltip>
           </Show>
         </Portal>

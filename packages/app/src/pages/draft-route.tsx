@@ -5,7 +5,7 @@ import { FileProvider } from "@/context/file"
 import { useGlobal } from "@/context/global"
 import { LocationProvider } from "@/context/location"
 import { ModelsProvider } from "@/context/models"
-import { PromptProvider } from "@/context/prompt"
+import { ComposerPersistenceProvider } from "@/composer/persistence"
 import { ServerProvider } from "@/context/server"
 import { ServerConnection } from "@/context/servers"
 import { useTabs, type DraftTab } from "@/context/tabs"
@@ -52,13 +52,13 @@ function ResolvedDraftRoute(props: { draft: DraftTab }) {
 }
 
 // The draft page only renders the prompt composer, so it drops TerminalProvider.
-// FileProvider and CommentsProvider stay because PromptInput uses file search and comment context.
+// FileProvider and CommentsProvider stay because Composer uses file search and comment context.
 function DraftProviders(props: ParentProps) {
   return (
     <FileProvider>
-      <PromptProvider>
+      <ComposerPersistenceProvider>
         <CommentsProvider>{props.children}</CommentsProvider>
-      </PromptProvider>
+      </ComposerPersistenceProvider>
     </FileProvider>
   )
 }

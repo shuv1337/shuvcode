@@ -243,16 +243,20 @@ export function createData(config: CreateDataInput) {
       )
       const input = store.session.input[item.sessionID] ?? []
       if (!input.includes(item.id)) setStore("session", "input", item.sessionID, [...input, item.id])
-      if (item.type !== "user" && item.type !== "synthetic") return
-      message.update(item.sessionID, (draft, index) => {
-        const row =
-          item.type === "user"
-            ? { id: item.id, type: "user" as const, ...item.payload, time: { created: item.timeCreated } }
-            : { id: item.id, type: "synthetic" as const, ...item.payload, time: { created: item.timeCreated } }
-        const position = index.get(item.id)
-        if (position === undefined) return message.append(draft, index, row)
-        draft[position] = row
-      })
+      materializeInboxMessage(item)
+    })
+  }
+
+  function materializeInboxMessage(item: SessionInboxInfo) {
+    if (item.type !== "user" && item.type !== "synthetic") return
+    message.update(item.sessionID, (draft, index) => {
+      const row =
+        item.type === "user"
+          ? { id: item.id, type: "user" as const, ...item.payload, time: { created: item.timeCreated } }
+          : { id: item.id, type: "synthetic" as const, ...item.payload, time: { created: item.timeCreated } }
+      const position = index.get(item.id)
+      if (position === undefined) return message.append(draft, index, row)
+      draft[position] = row
     })
   }
 
@@ -1090,13 +1094,16 @@ export function createData(config: CreateDataInput) {
               (item) => outbox.has(item.id) && !pending.some((row) => row.id === item.id),
             )
             const merged = inflight.length === 0 ? pending : [...pending, ...inflight]
-            setStore("session", "pending", sessionID, reconcile(merged))
-            setStore(
-              "session",
-              "input",
-              sessionID,
-              reconcile(merged.filter((item) => item.type !== "compaction").map((item) => item.id)),
-            )
+            batch(() => {
+              setStore("session", "pending", sessionID, reconcile(merged))
+              setStore(
+                "session",
+                "input",
+                sessionID,
+                reconcile(merged.filter((item) => item.type !== "compaction").map((item) => item.id)),
+              )
+              merged.forEach(materializeInboxMessage)
+            })
           })
         },
         invalidate(sessionID: string) {
@@ -1185,12 +1192,17 @@ export function createData(config: CreateDataInput) {
             const response = await api().message.list({ sessionID, limit: 200, order: "desc" })
             const fetched = response.data.toReversed()
             // Same protection as the pending sync: a re-fetch racing an
-            // optimistic admission must not wipe the in-flight transcript row.
+            // admission must not wipe its local transcript row.
             const ids = new Set(fetched.map((item) => item.id))
-            const inflight = (store.session.message[sessionID] ?? []).filter(
-              (item) => outbox.has(item.id) && !ids.has(item.id),
+            const admitted = new Set(
+              (store.session.pending[sessionID] ?? []).flatMap((item) =>
+                item.type === "user" || item.type === "synthetic" ? [item.id] : [],
+              ),
             )
-            const messages = inflight.length === 0 ? fetched : [...fetched, ...inflight]
+            const local = (store.session.message[sessionID] ?? []).filter(
+              (item) => !ids.has(item.id) && (outbox.has(item.id) || admitted.has(item.id)),
+            )
+            const messages = local.length === 0 ? fetched : [...fetched, ...local]
             messageIndex.set(sessionID, new Map(messages.map((message, index) => [message.id, index])))
             setStore("session", "message", sessionID, reconcile(messages))
             setStore("session", "messageCursor", sessionID, response.cursor.next ?? undefined)

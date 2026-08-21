@@ -1,4 +1,3 @@
-import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Popover } from "@opencode-ai/ui/popover"
@@ -16,72 +15,6 @@ import { useWorkspaceLocation } from "@/context/location"
 const Body = lazy(() => import("./status-popover-body").then((x) => ({ default: x.StatusPopoverBody })))
 
 export function StatusPopover() {
-  const language = useLanguage()
-  const server = useServer()
-  const global = useGlobal()
-  const data = useData()
-  const sdk = useWorkspaceLocation()
-  const [shown, setShown] = createSignal(false)
-  const serverHealth = () => global.servers.health[server.key]?.healthy
-  const mcp = () => data.location.mcp.server.list({ directory: sdk().directory })
-  const ready = createMemo(() => serverHealth() === false || mcp() !== undefined)
-  const attention = createMemo(() =>
-    hasServiceNeedingAttention({
-      mcp: (mcp() ?? []).map((item) => item.status.status),
-    }),
-  )
-  const issue = createMemo(() =>
-    hasNonBlockingServiceIssue({
-      mcp: (mcp() ?? []).map((item) => item.status.status),
-      lsp: [],
-    }),
-  )
-
-  return (
-    <Popover
-      open={shown()}
-      onOpenChange={setShown}
-      triggerAs={Button}
-      triggerProps={{
-        variant: "ghost",
-        class: "titlebar-icon w-8 h-6 p-0 box-border",
-        "aria-label": language.t("status.popover.trigger"),
-        style: { scale: 1 },
-      }}
-      trigger={
-        <div class="relative size-4">
-          <div class="badge-mask-tight size-4 flex items-center justify-center">
-            <Icon name={shown() ? "status-active" : "status"} size="small" />
-          </div>
-          <div
-            class={`absolute -top-px -right-px size-1.5 rounded-full ${serverStatusDotClass({
-              ready: ready(),
-              serverHealth: serverHealth(),
-              attention: attention(),
-              issue: issue(),
-            })}`}
-          />
-        </div>
-      }
-      class="[&_[data-slot=popover-body]]:p-0 w-[360px] max-w-[calc(100vw-40px)] bg-transparent border-0 shadow-none rounded-xl"
-      gutter={4}
-      placement="bottom-end"
-      shift={-168}
-    >
-      <Show when={shown()}>
-        <Suspense
-          fallback={
-            <div class="w-[360px] h-14 rounded-xl bg-background-strong shadow-[var(--shadow-lg-border-base)]" />
-          }
-        >
-          <Body shown={shown()} />
-        </Suspense>
-      </Show>
-    </Popover>
-  )
-}
-
-export function StatusPopoverV2() {
   const language = useLanguage()
   const server = useServer()
   const global = useGlobal()

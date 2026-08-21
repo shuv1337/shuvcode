@@ -1,7 +1,7 @@
 import { Component, createMemo } from "solid-js"
 import { useNavigate, useParams } from "@solidjs/router"
 import { useData } from "@/context/server"
-import { usePrompt } from "@/context/prompt"
+import { useComposerState } from "@/composer/persistence"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Dialog, DialogBody, DialogHeader, DialogTitle } from "@opencode-ai/ui/dialog"
 import { List } from "@opencode-ai/ui/list"
@@ -30,7 +30,7 @@ export const DialogFork: Component = () => {
   const data = useData()
   const serverSDK = useServerSDK()
   const location = useWorkspaceLocation()
-  const prompt = usePrompt()
+  const prompt = useComposerState()
   const dialog = useDialog()
   const language = useLanguage()
   const server = useServer()

@@ -113,113 +113,7 @@ const ModelList: Component<{
 
 type ModelSelectorTriggerProps = Omit<ComponentProps<typeof Kobalte.Trigger>, "as" | "ref">
 type ModelSelectorTrigger = (props: ModelSelectorTriggerProps) => JSX.Element
-type Dismiss = "escape" | "outside" | "select" | "manage" | "provider"
-
 export function ModelSelectorPopover(props: {
-  provider?: string
-  model?: ModelState
-  trigger: ModelSelectorTrigger
-  onClose?: (cause: "escape" | "select") => void
-}) {
-  const [store, setStore] = createStore<{
-    open: boolean
-    dismiss: Dismiss | null
-  }>({
-    open: false,
-    dismiss: null,
-  })
-  const dialog = useDialog()
-  const local = useLocal()
-  const directory = () => decode64(local.slug())
-
-  const close = (dismiss: Dismiss) => {
-    setStore("dismiss", dismiss)
-    setStore("open", false)
-  }
-
-  const handleManage = () => {
-    close("manage")
-    void import("./dialog-manage-models").then((x) => {
-      dialog.show(() => <x.DialogManageModels />)
-    })
-  }
-
-  const handleConnectProvider = () => {
-    close("provider")
-    void import("./dialog-connect-provider").then((x) => {
-      void dialog.show(() => <x.DialogConnectProvider directory={directory()} />)
-    })
-  }
-  const language = useLanguage()
-
-  return (
-    <Kobalte
-      open={store.open}
-      onOpenChange={(next) => {
-        if (next) setStore("dismiss", null)
-        setStore("open", next)
-      }}
-      modal={false}
-      placement="top-start"
-      gutter={4}
-    >
-      <Kobalte.Trigger as={props.trigger} />
-      <Kobalte.Portal>
-        <Kobalte.Content
-          class="w-72 h-80 flex flex-col p-2 rounded-md border border-border-base bg-surface-raised-stronger-non-alpha shadow-md z-50 outline-none overflow-hidden"
-          onEscapeKeyDown={(event) => {
-            close("escape")
-            event.preventDefault()
-            event.stopPropagation()
-          }}
-          onPointerDownOutside={() => close("outside")}
-          onFocusOutside={() => close("outside")}
-          onCloseAutoFocus={(event) => {
-            const dismiss = store.dismiss
-            if (dismiss === "outside") event.preventDefault()
-            if (dismiss === "escape" || dismiss === "select") {
-              event.preventDefault()
-              props.onClose?.(dismiss)
-            }
-            setStore("dismiss", null)
-          }}
-        >
-          <Kobalte.Title class="sr-only">{language.t("dialog.model.select.title")}</Kobalte.Title>
-          <ModelList
-            provider={props.provider}
-            model={props.model}
-            onSelect={() => close("select")}
-            class="p-1"
-            action={
-              <div class="flex items-center gap-1">
-                <Tooltip appearance="standard" placement="top" value={language.t("command.provider.connect")}>
-                  <IconButton
-                    icon={<Icon name="plus-small" />}
-                    variant="ghost"
-                    class="size-6"
-                    aria-label={language.t("command.provider.connect")}
-                    onClick={handleConnectProvider}
-                  />
-                </Tooltip>
-                <Tooltip appearance="standard" placement="top" value={language.t("dialog.model.manage")}>
-                  <IconButton
-                    icon={<Icon name="sliders" />}
-                    variant="ghost"
-                    class="size-6"
-                    aria-label={language.t("dialog.model.manage")}
-                    onClick={handleManage}
-                  />
-                </Tooltip>
-              </div>
-            }
-          />
-        </Kobalte.Content>
-      </Kobalte.Portal>
-    </Kobalte>
-  )
-}
-
-export function ModelSelectorPopoverV2(props: {
   provider?: string
   model?: ModelState
   trigger: ModelSelectorTrigger
@@ -233,7 +127,7 @@ export function ModelSelectorPopoverV2(props: {
   })
 
   return (
-    <ModelSelectorPopoverV2View
+    <ModelSelectorPopoverView
       trigger={props.trigger}
       models={controller.models}
       groups={controller.groups}
@@ -241,7 +135,7 @@ export function ModelSelectorPopoverV2(props: {
       select={controller.select}
       onManage={() => {
         void import("./dialog-manage-models").then((module) => {
-          void dialog.show(() => <module.DialogManageModelsV2 />)
+          void dialog.show(() => <module.DialogManageModels />)
         })
       }}
       onClose={() => props.onClose?.()}
@@ -288,7 +182,7 @@ function createModelSelectorController(input: {
   }
 }
 
-function ModelSelectorPopoverV2View(props: {
+function ModelSelectorPopoverView(props: {
   trigger: ModelSelectorTrigger
   models: (search: string) => ModelItem[]
   groups: (models: ModelItem[]) => { category: string; items: ModelItem[] }[]

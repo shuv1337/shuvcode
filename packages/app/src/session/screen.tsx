@@ -1,7 +1,6 @@
 import { ErrorBoundary, Show, Match, Switch, createMemo, createEffect, createComputed, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
-import { NewSessionView } from "@/session/composer/session-new-view"
 import { SessionHeader } from "@/session/header/session-header"
 import { useLayout } from "@/context/layout"
 import { useServerSDK } from "@/context/server-sdk"
@@ -17,7 +16,7 @@ import { createSessionScreenLayout } from "./screen-layout"
 import { createSessionReview } from "./review/model"
 import { SessionDesktopReview, SessionMobileReview, SessionMobileTabs } from "./review/view"
 import { createSessionTimelineInteraction } from "./timeline/interaction"
-import { ActiveSessionComposer, createActiveSessionComposer } from "./composer/active-session"
+import { ActiveSessionComposerRegion, createActiveSessionRegion } from "./composer/region"
 
 export function SessionScreen(props: { session: SessionModel }) {
   const session = props.session
@@ -42,11 +41,10 @@ export function SessionScreen(props: { session: SessionModel }) {
     return key
   })
   const review = createSessionReview({ session, screen, deferRender: () => store.deferRender })
-  const composer = createActiveSessionComposer({
+  const composer = createActiveSessionRegion({
     session,
     screen,
     timeline,
-    deferRender: () => store.deferRender,
   })
 
   useUsageExceededDialogs()
@@ -88,7 +86,6 @@ export function SessionScreen(props: { session: SessionModel }) {
                   shouldAnchorBottom={timeline.view.shouldAnchorBottom()}
                   centered={screen.centered()}
                   setContentRef={timeline.view.setContentRef}
-                  userMessages={timeline.userMessages()}
                   diffs={review.details.diffs}
                   onReview={review.open}
                   workspaceMoveEligible={composer.workspaceMoveEligible()}
@@ -101,19 +98,18 @@ export function SessionScreen(props: { session: SessionModel }) {
               )}
             </Show>
           </Match>
-          <Match when={true}>
-            <NewSessionView worktree={composer.newSessionWorktree()} />
-          </Match>
         </Switch>
       </div>
 
-      <Show when={session.identity.params.id && !review.mobile.changes()}>
-        <ActiveSessionComposer
-          model={composer}
-          session={session}
-          accentSubmit={session.workspace.current()}
-          onResponseSubmit={timeline.actions.resume}
-        />
+      <Show when={!review.mobile.changes() ? session.identity.params.id : undefined} keyed>
+        {(_id) => (
+          <ActiveSessionComposerRegion
+            model={composer}
+            session={session}
+            accentSubmit={session.workspace.current()}
+            onResponseSubmit={timeline.actions.resume}
+          />
+        )}
       </Show>
       <Show when={!!session.identity.params.id && mobileTabsBottom()}>
         <SessionMobileTabs review={review} compact bottom />

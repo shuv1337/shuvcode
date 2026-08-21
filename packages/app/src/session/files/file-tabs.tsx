@@ -15,7 +15,7 @@ import { showToast } from "@/utils/toast"
 import { selectionFromLines, useFile, type FileSelection, type SelectedLineRange } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useLanguage } from "@/context/language"
-import { usePrompt } from "@/context/prompt"
+import { useComposerState } from "@/composer/persistence"
 import { getSessionHandoff } from "@/session/handoff"
 import { useSessionLayout } from "@/session/session-layout"
 import { createSessionTabs } from "@/session/helpers"
@@ -180,7 +180,7 @@ export function SessionFileView(props: SessionFileViewProps) {
   const file = useFile()
   const comments = useComments()
   const language = useLanguage()
-  const prompt = usePrompt()
+  const prompt = useComposerState()
   const fileComponent = useFileComponent()
   const { sessionKey, tabs, view } = useSessionLayout()
   const activeFileTab = createSessionTabs({

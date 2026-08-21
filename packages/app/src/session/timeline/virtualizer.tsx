@@ -35,7 +35,7 @@ type Input = {
   showHeader: Accessor<boolean>
   shouldAnchorBottom: Accessor<boolean>
   hasScrollGesture: Accessor<boolean>
-  scroll: Accessor<{ overflow: boolean; bottom: boolean; jump: boolean }>
+  scroll: Accessor<{ overflow: boolean; jump: boolean }>
   onResumeScroll: () => void
   setScrollRef: (element: HTMLDivElement | undefined) => void
   setContentRef: (element: HTMLDivElement) => void

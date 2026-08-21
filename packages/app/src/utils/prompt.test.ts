@@ -105,4 +105,24 @@ describe("extractPromptFromMessage", () => {
 
     expect(extractPromptFromMessage(message)[0]).toMatchObject({ type: "text", content: "model text" })
   })
+
+  test("restores skill mentions as structured Composer parts", () => {
+    const message = {
+      id: "msg_1",
+      type: "user",
+      text: "Use @review",
+      skills: [{ id: "review", name: "Review", mention: { text: "@review", start: 4, end: 11 } }],
+      time: { created: 1 },
+    } satisfies SessionMessageUser
+
+    expect(extractPromptFromMessage(message)).toMatchObject([
+      { type: "text", content: "Use " },
+      {
+        type: "skill",
+        id: "review",
+        name: "Review",
+        content: "@review",
+      },
+    ])
+  })
 })

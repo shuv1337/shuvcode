@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { ServerConnection } from "@/context/servers"
-import { selectPromptTab } from "@/context/prompt"
+import { selectPromptTab } from "@/composer/persistence"
 import type { Tab } from "@/context/tabs"
 
 test("selects the explicitly scoped session tab instead of the active tab", () => {

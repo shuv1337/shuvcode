@@ -31,7 +31,7 @@ import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/comp
 import { useGlobal } from "@/context/global"
 import { ServerConnection } from "@/context/servers"
 import { tabKey, useTabs } from "@/context/tabs"
-import type { PromptSession } from "@/context/prompt"
+import type { ComposerState } from "@/composer/persistence"
 import "./titlebar.css"
 import { newTabTooltipKeybind } from "./command-tooltip-keybind"
 
@@ -240,7 +240,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     server: route.server,
                     sessionId: activeSession.id,
                   }
-                  const model = tabs.stateValue<PromptSession>(sessionTab, "prompt")?.model.current()
+                  const model = tabs.stateValue<ComposerState>(sessionTab, "prompt")?.model.current()
                   void tabs.newDraft(
                     { server: sessionTab.server, directory: activeSession.location.directory },
                     "",
@@ -252,7 +252,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   const activeTab = currentTab()
                   if (activeTab?.type !== "draft") return
 
-                  const model = tabs.stateValue<PromptSession>(activeTab, "prompt")?.model.current()
+                  const model = tabs.stateValue<ComposerState>(activeTab, "prompt")?.model.current()
                   void tabs.newDraft({ server: activeTab.server, directory: activeTab.directory }, "", model)
                   return
                 }

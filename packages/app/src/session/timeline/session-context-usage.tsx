@@ -122,7 +122,7 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
       />
     </div>
   )
-  const circleV2 = () => (
+  const compactCircle = () => (
     <div class="flex items-center justify-center">
       <ProgressCircle appearance="compact" percentage={context()?.usage ?? 0} />
     </div>
@@ -149,7 +149,7 @@ export function SessionContextUsage(props: SessionContextUsageProps) {
               type="button"
               variant="ghost-muted"
               size="large"
-              icon={circleV2()}
+              icon={compactCircle()}
               onClick={openContext}
               aria-label={language.t("context.usage.view")}
             />

@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, on, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, createSignal, on, Show, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { SessionUserActions } from "@opencode-ai/session-ui/actions"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -8,7 +8,6 @@ import { InlineInput } from "@opencode-ai/ui/inline-input"
 import { Menu } from "@opencode-ai/ui/menu"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { ProjectAvatar } from "@opencode-ai/ui/project-avatar"
-import { Button } from "@opencode-ai/ui/button"
 import type { Project } from "@/types"
 import { getFilename } from "@opencode-ai/util/path"
 import { Popover } from "@kobalte/core/popover"
@@ -24,7 +23,6 @@ import { containsDirectory, isWorkspaceDirectory, workspaceDirectories } from "@
 import { SessionWorkspaceMenu } from "@/session/timeline/session-workspace-menu"
 import { getProjectAvatarVariant } from "@/context/layout"
 import { displayName, getProjectAvatarSource } from "@/pages/layout/helpers"
-import type { SessionMessageUser } from "@opencode-ai/client/promise"
 import { parseCommentNote, readPromptPresentation } from "@/utils/comment-note"
 
 function WorkspaceMoveAction(props: {
@@ -189,7 +187,7 @@ function SessionSummaryPanel(props: {
 type MessageTimelineProps = {
   session: TimelineSessionSource
   actions?: SessionUserActions
-  scroll: { overflow: boolean; bottom: boolean; jump: boolean }
+  scroll: { overflow: boolean; jump: boolean }
   onResumeScroll: () => void
   setScrollRef: (el: HTMLDivElement | undefined) => void
   onScheduleScrollState: (el: HTMLDivElement) => void
@@ -202,7 +200,6 @@ type MessageTimelineProps = {
   shouldAnchorBottom: boolean
   centered: boolean
   setContentRef: (el: HTMLDivElement) => void
-  userMessages: SessionMessageUser[]
   diffs: Accessor<{ additions: number; deletions: number }[] | undefined>
   onReview: () => void
   workspaceMoveEligible: boolean
@@ -233,8 +230,6 @@ function MessageTimelineView(
   const sessionID = props.data.sessionID
   const sessionStatus = props.data.status
   const titleLabel = props.data.titleLabel
-  const shareUrl = props.data.shareUrl
-  const shareEnabled = props.data.shareEnabled
   const parentID = props.data.parentID
   const parentTitle = props.data.parentTitle
   const childTitle = props.data.childTitle
@@ -298,24 +293,8 @@ function MessageTimelineView(
     editing: false,
     menuOpen: false,
     pendingRename: false,
-    pendingShare: false,
   })
   let titleRef: HTMLInputElement | undefined
-
-  const [share, setShare] = createStore({
-    open: false,
-    dismiss: null as "escape" | "outside" | null,
-  })
-  let more: HTMLButtonElement | undefined
-
-  const selectShareUrlText: JSX.EventHandler<HTMLDivElement, MouseEvent> = (event) => {
-    const selection = window.getSelection()
-    if (!selection) return
-    const range = document.createRange()
-    range.selectNodeContents(event.currentTarget)
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }
 
   createEffect(
     on(
@@ -326,7 +305,6 @@ function MessageTimelineView(
           editing: false,
           menuOpen: false,
           pendingRename: false,
-          pendingShare: false,
         }),
       { defer: true },
     ),
@@ -528,12 +506,8 @@ function MessageTimelineView(
                         icon={<Icon name="outline-dots" />}
                         variant="ghost-muted"
                         size="large"
-                        state={share.open || title.pendingShare ? "pressed" : undefined}
                         aria-label={language.t("common.moreOptions")}
-                        aria-expanded={title.menuOpen || share.open || title.pendingShare}
-                        ref={(el: HTMLButtonElement) => {
-                          more = el
-                        }}
+                        aria-expanded={title.menuOpen}
                       />
                       <Menu.Portal>
                         <Menu.Content
@@ -545,13 +519,6 @@ function MessageTimelineView(
                               openTitleEditor()
                               return
                             }
-                            if (title.pendingShare) {
-                              event.preventDefault()
-                              requestAnimationFrame(() => {
-                                setShare({ open: true, dismiss: null })
-                                setTitle("pendingShare", false)
-                              })
-                            }
                           }}
                         >
                           <Menu.Item
@@ -562,19 +529,10 @@ function MessageTimelineView(
                           >
                             {language.t("common.rename")}
                           </Menu.Item>
-                          <Show when={shareEnabled()}>
-                            <Menu.Item
-                              onSelect={() => {
-                                setTitle({ pendingShare: true, menuOpen: false })
-                              }}
-                            >
-                              {language.t("session.share.action.share")}...
-                            </Menu.Item>
-                          </Show>
                           <Menu.Item onSelect={() => void props.action.export(id)}>
                             {language.t("common.export")}...
                           </Menu.Item>
-                          {/* TODO: Need a V2 session archive API. */}
+                          {/* TODO: Need a session archive API. */}
                           <Menu.Separator />
                           <Menu.Item onSelect={() => props.action.showDelete(id)}>
                             {language.t("common.delete")}...
@@ -582,115 +540,6 @@ function MessageTimelineView(
                         </Menu.Content>
                       </Menu.Portal>
                     </Menu>
-
-                    <Popover
-                      open={share.open}
-                      anchorRef={() => more}
-                      placement="bottom-end"
-                      gutter={6}
-                      modal={false}
-                      onOpenChange={(open) => {
-                        if (open) setShare("dismiss", null)
-                        setShare("open", open)
-                      }}
-                    >
-                      <Popover.Portal>
-                        <Popover.Content
-                          data-component="popover-content"
-                          class="flex w-80 max-w-none flex-col items-start gap-3 rounded-[10px] border-0 bg-v2-background-bg-layer-01 p-3 shadow-[var(--v2-elevation-floating)]"
-                          style={{ "min-width": "320px" }}
-                          onEscapeKeyDown={(event) => {
-                            setShare({ dismiss: "escape", open: false })
-                            event.preventDefault()
-                            event.stopPropagation()
-                          }}
-                          onPointerDownOutside={() => {
-                            setShare({ dismiss: "outside", open: false })
-                          }}
-                          onFocusOutside={() => {
-                            setShare({ dismiss: "outside", open: false })
-                          }}
-                          onCloseAutoFocus={(event) => {
-                            if (share.dismiss === "outside") event.preventDefault()
-                            setShare("dismiss", null)
-                          }}
-                        >
-                          <div class="flex w-full flex-col gap-1.5 px-0.5 pt-0.5">
-                            <div class="select-none text-[13px] font-[530] leading-none tracking-[-0.04px] text-v2-text-text-base [font-variation-settings:'slnt'_0]">
-                              {language.t("session.share.popover.title")}
-                            </div>
-                            <div class="select-none text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted [font-variation-settings:'slnt'_0]">
-                              {shareUrl()
-                                ? language.t("session.share.popover.description.shared")
-                                : language.t("session.share.popover.description.unshared")}
-                            </div>
-                          </div>
-                          <div class="flex w-full flex-col gap-2">
-                            <Show
-                              when={shareUrl()}
-                              fallback={
-                                <Button
-                                  variant="contrast"
-                                  class="w-full"
-                                  onClick={() => void props.action.share()}
-                                  disabled={props.pending.share()}
-                                >
-                                  {props.pending.share()
-                                    ? language.t("session.share.action.publishing")
-                                    : language.t("session.share.action.publish")}
-                                </Button>
-                              }
-                            >
-                              <div class="flex flex-col gap-2">
-                                <div
-                                  class="flex h-8 w-full items-center gap-1.5 rounded-[6px] py-1 pl-2.5 pr-1.5 shadow-[var(--v2-elevation-button-neutral)]"
-                                  style={{
-                                    background:
-                                      "linear-gradient(180deg, var(--v2-alpha-light-2) 0%, var(--v2-alpha-light-0) 100%), var(--v2-background-bg-button-neutral)",
-                                  }}
-                                >
-                                  <div
-                                    class="min-w-0 flex-1 truncate select-text cursor-text text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-base [font-variation-settings:'slnt'_0]"
-                                    onClick={selectShareUrlText}
-                                  >
-                                    {shareUrl()}
-                                  </div>
-                                  <IconButton
-                                    type="button"
-                                    size="small"
-                                    variant="ghost-muted"
-                                    icon={<Icon name="outline-copy" />}
-                                    aria-label={language.t("session.share.copy.copyLink")}
-                                    onClick={() => void props.action.copyShareUrl()}
-                                  />
-                                  <IconButton
-                                    type="button"
-                                    size="small"
-                                    variant="ghost-muted"
-                                    icon={<Icon name="outline-square-arrow" />}
-                                    aria-label={language.t("session.share.action.view")}
-                                    onClick={props.action.viewShare}
-                                    disabled={props.pending.unshare()}
-                                  />
-                                </div>
-                                <div class="flex w-full">
-                                  <Button
-                                    variant="outline"
-                                    class="w-full"
-                                    onClick={() => void props.action.unshare()}
-                                    disabled={props.pending.unshare()}
-                                  >
-                                    {props.pending.unshare()
-                                      ? language.t("session.share.action.unpublishing")
-                                      : language.t("session.share.action.unpublish")}
-                                  </Button>
-                                </div>
-                              </div>
-                            </Show>
-                          </div>
-                        </Popover.Content>
-                      </Popover.Portal>
-                    </Popover>
                   </Show>
                 </div>
               )}
