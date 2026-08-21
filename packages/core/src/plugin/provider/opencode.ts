@@ -46,15 +46,18 @@ function oauth(http: HttpClient.HttpClient) {
       Effect.gen(function* () {
         const server = yield* normalizeServer(answer.server ?? defaultServer)
         const device = yield* post(http, `${server}/auth/device/code`, { client_id: clientID }, Device)
-        const verification = URL.canParse(device.verification_uri_complete)
-          ? new URL(device.verification_uri_complete)
-          : undefined
-        if (verification && verification.protocol !== "http:" && verification.protocol !== "https:") {
-          return yield* Effect.fail(new Error("Invalid device verification URL: expected HTTP(S)"))
-        }
+        const verification = yield* Effect.try({
+          try: () => {
+            const url = new URL(device.verification_uri_complete, `${server}/`)
+            if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("expected HTTP(S)")
+            return url
+          },
+          catch: (cause) =>
+            new Error(`Invalid device verification URL: ${cause instanceof Error ? cause.message : String(cause)}`),
+        })
         return {
           mode: "auto" as const,
-          url: verification?.href ?? `${server}/${device.verification_uri_complete.replace(/^\/+/, "")}`,
+          url: verification.href,
           instructions: `Enter code: ${device.user_code}`,
           callback: poll(http, server, device.device_code, Duration.seconds(device.interval)),
         }
