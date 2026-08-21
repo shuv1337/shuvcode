@@ -12,9 +12,11 @@ import { ServerConnection } from "@/runtime/server/registry"
 import { TerminalProvider } from "@/session/terminal/context"
 import { useSettingsCommand } from "@/settings/command"
 import { SessionUIProvider } from "@/shell/routes/session-ui-provider"
+import { useTabs } from "@/shell/tabs/tabs"
 import { requireServerKey } from "@/shell/routes/session"
 import { useSessionModel } from "./model"
 import { SessionPanelFrame, SessionRouteFrame } from "./session-frame"
+import { IncompatibleServerPanel } from "./incompatible-server-panel"
 import { SessionErrorFallback } from "./route-error"
 import { createSessionResolution } from "./session-resolution"
 import { SessionScreen } from "./screen"
@@ -63,6 +65,7 @@ function SessionRouteErrorBoundary(
 function ResolvedTargetSessionRoute() {
   const params = useParams<{ id: string }>()
   const server = useServer()
+  const tabs = useTabs()
   const data = useData()
   const current = createSessionResolution(
     () => params.id,
@@ -72,14 +75,27 @@ function ResolvedTargetSessionRoute() {
   const directory = createMemo(() => current()?.location.directory)
 
   return (
-    <Show when={directory()}>
-      {(value) => (
-        <LocationProvider directory={value()}>
-          <SessionUIProvider directory={value()} server={server.key}>
-            <TargetSessionPage />
-          </SessionUIProvider>
-        </LocationProvider>
-      )}
+    <Show
+      when={!server.health?.incompatible}
+      fallback={
+        <SessionRouteFrame padded>
+          <SessionPanelFrame raised>
+            <IncompatibleServerPanel
+              onClose={() => tabs.removeSessionTab({ server: server.key, sessionId: params.id })}
+            />
+          </SessionPanelFrame>
+        </SessionRouteFrame>
+      }
+    >
+      <Show when={directory()}>
+        {(value) => (
+          <LocationProvider directory={value()}>
+            <SessionUIProvider directory={value()} server={server.key}>
+              <TargetSessionPage />
+            </SessionUIProvider>
+          </LocationProvider>
+        )}
+      </Show>
     </Show>
   )
 }

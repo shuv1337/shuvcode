@@ -444,6 +444,8 @@ export const dict = {
   "wsl.onboarding.adding": "Adding...",
 
   "server.row.noUsername": "no username",
+  "server.row.incompatible":
+    "This server is running OpenCode {{version}}, which isn't compatible with this app. Upgrade it to OpenCode V2 to continue.",
 
   "dialog.project.edit.title": "Edit project",
   "dialog.project.edit.name": "Name",
@@ -650,6 +652,9 @@ export const dict = {
   "session.error.notFound": "This session cannot be found",
   "session.error.notFound.description": "This tab points to a session that no longer exists on this server.",
   "session.error.notFound.closeTab": "Close Tab",
+  "session.error.incompatible": "This server version isn't supported",
+  "session.error.incompatible.description":
+    "{{server}} is running OpenCode {{version}}, which isn't compatible with this app. Upgrade the server to OpenCode V2 to continue.",
   "session.background.moveTasks": "Move {{tasks}} to background",
   "session.background.inBackground": "Running {{tasks}} in background",
   "session.background.combine": "{{first}} and {{second}}",
