@@ -19,7 +19,7 @@ const opencode = await createOpencode({
 })
 console.log("✅ Opencode server ready")
 
-const sessions = new Map<string, { client: any; server: any; sessionId: string; channel: string; thread: string }>()
+const sessions = new Map<string, { sessionId: string; channel: string; thread: string }>()
 void (async () => {
   const events = await opencode.client.event.subscribe()
   for await (const event of events.stream) {
@@ -27,7 +27,7 @@ void (async () => {
       const part = event.properties.part
       if (part.type === "tool") {
         // Find the session for this tool update
-        for (const [_sessionKey, session] of sessions.entries()) {
+        for (const session of sessions.values()) {
           if (session.sessionId === part.sessionID) {
             void handleToolUpdate(part, session.channel, session.thread)
             break
@@ -66,16 +66,14 @@ app.message(async ({ message, say }) => {
   console.log("✅ Processing message:", message.text)
 
   const channel = message.channel
-  const thread = (message as any).thread_ts || message.ts
+  const thread = ("thread_ts" in message && typeof message.thread_ts === "string" && message.thread_ts) || message.ts
   const sessionKey = `${channel}-${thread}`
 
   let session = sessions.get(sessionKey)
 
   if (!session) {
     console.log("🆕 Creating new opencode session...")
-    const { client, server } = opencode
-
-    const createResult = await client.session.create({
+    const createResult = await opencode.client.session.create({
       body: { title: `Slack thread ${thread}` },
     })
 
@@ -90,10 +88,10 @@ app.message(async ({ message, say }) => {
 
     console.log("✅ Created opencode session:", createResult.data.id)
 
-    session = { client, server, sessionId: createResult.data.id, channel, thread }
+    session = { sessionId: createResult.data.id, channel, thread }
     sessions.set(sessionKey, session)
 
-    const shareResult = await client.session.share({ path: { id: createResult.data.id } })
+    const shareResult = await opencode.client.session.share({ path: { id: createResult.data.id } })
     if (!shareResult.error && shareResult.data) {
       const sessionUrl = shareResult.data.share?.url
       console.log("🔗 Session shared:", sessionUrl)
@@ -102,7 +100,7 @@ app.message(async ({ message, say }) => {
   }
 
   console.log("📝 Sending to opencode:", message.text)
-  const result = await session.client.session.prompt({
+  const result = await opencode.client.session.prompt({
     path: { id: session.sessionId },
     body: { parts: [{ type: "text", text: message.text }] },
   })
@@ -118,16 +116,12 @@ app.message(async ({ message, say }) => {
     return
   }
 
-  const response = result.data
-
   // Build response text
   const responseText =
-    response.info?.content ||
-    response.parts
-      ?.filter((p: any) => p.type === "text")
-      .map((p: any) => p.text)
-      .join("\n") ||
-    "I received your message but didn't have a response."
+    result.data.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n") || "I received your message but didn't have a response."
 
   console.log("💬 Sending response:", responseText)
 
