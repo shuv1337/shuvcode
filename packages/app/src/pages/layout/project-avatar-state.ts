@@ -7,27 +7,33 @@ export function useSessionTabAvatarState(
   server: Accessor<ServerConnection.Key>,
   directory: Accessor<string>,
   sessionId: Accessor<string>,
+  root?: Accessor<boolean>,
 ) {
   const global = useGlobal()
   const connection = createMemo(() => global.servers.list().find((item) => ServerConnection.key(item) === server()))
   const serverCtx = useServerCtx(connection)
+  const sessions = createMemo(() => {
+    const data = serverCtx()?.data
+    if (!data) return []
+    if (!root?.()) return data.session.list()
+    const id = sessionId()
+    return [...new Set([id, ...data.session.family(id)])].flatMap((id) => {
+      const info = data.session.get(id)
+      return info ? [info] : []
+    })
+  })
   const hasPermissions = createMemo(() => {
     const ctx = serverCtx()
     if (!ctx) return false
     const permission = ctx.permission
-    return !!sessionPermissionRequest(
-      ctx.data.session.list(),
-      ctx.data.session.permission.list,
-      sessionId(),
-      (item) => {
-        return !permission.autoResponds(item, directory())
-      },
-    )
+    return !!sessionPermissionRequest(sessions(), ctx.data.session.permission.list, sessionId(), (item) => {
+      return !permission.autoResponds(item, directory())
+    })
   })
   const hasQuestions = createMemo(() => {
     const data = serverCtx()?.data
     if (!data) return false
-    return !!sessionQuestionForm(data.session.list(), data.session.form.list, sessionId())
+    return !!sessionQuestionForm(sessions(), data.session.form.list, sessionId())
   })
   const needsAttention = createMemo(() => hasPermissions() || hasQuestions())
   const unread = createMemo(
