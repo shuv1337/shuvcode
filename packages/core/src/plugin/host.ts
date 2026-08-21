@@ -27,12 +27,10 @@ import { Tool } from "../tool.js"
 import { Workspace } from "../workspace.js"
 import { WebSearch } from "../websearch.js"
 import { PluginHooks } from "./hooks.js"
+import type { Interface } from "../plugin.js"
 
 const mutable = <T>(value: T) => value as DeepMutable<T>
-export const make = Effect.fn("PluginHost.make")(function* (
-  plugin: import("../plugin.js").Interface,
-  pluginID: string = "test",
-) {
+export const make = Effect.fn("PluginHost.make")(function* (plugin: Interface, pluginID: string = "test") {
   const app = yield* App.Metadata
   const agents = yield* Agent.Service
   const aisdk = yield* AISDK.Service
