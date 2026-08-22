@@ -898,21 +898,17 @@ ToolRegistry.register({
               <Show when={!pending() && url()}>
                 <a
                   data-slot="basic-tool-tool-subtitle"
-                  class="clickable subagent-link"
+                  class="clickable webfetch-link"
                   href={url()}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  {url()}
+                  <span data-slot="webfetch-link-text">{url()}</span>
+                  <Icon name="outline-square-arrow" class="webfetch-link-icon" />
                 </a>
               </Show>
             </div>
-            <Show when={!pending() && url()}>
-              <div data-component="tool-action">
-                <Icon name="square-arrow-top-right" size="small" />
-              </div>
-            </Show>
           </div>
         }
       />
