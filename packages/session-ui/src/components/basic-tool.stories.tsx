@@ -147,9 +147,6 @@ export const WebSearch = {
         }}
       >
         <div data-component="exa-tool-output">
-          <div data-slot="exa-tool-rail">
-            <div data-slot="exa-tool-rail-line" />
-          </div>
           <div data-slot="exa-tool-links">
             <For each={visibleLinks()}>
               {(url, index) => (
@@ -179,4 +176,54 @@ export const WebSearch = {
       </BasicTool>
     )
   },
+}
+
+export const GatheredContext = {
+  render: () => (
+    <BasicTool
+      icon="bullet-list"
+      defaultOpen
+      trigger={{ title: "Used", subtitle: "Shell, Explore, Patch", args: ["4"] }}
+    >
+      <div class="flex flex-col gap-1 text-13-regular text-text-base">
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-text-base">Shell</span>
+          <span class="text-text-muted">opencode2 api get /openapi.json</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-text-base">Explore</span>
+          <span class="text-text-muted">inspect active v2 beta service</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-medium text-text-base">Patch</span>
+          <span class="text-text-muted">packages/session-ui/src/tools</span>
+        </div>
+      </div>
+    </BasicTool>
+  ),
+}
+
+export const PatchFileList = {
+  render: () => (
+    <BasicTool icon="code-lines" defaultOpen trigger={{ title: "Patch", subtitle: "4 files" }}>
+      <div class="flex flex-col gap-1.5 text-13-regular text-text-base">
+        <div class="flex items-center gap-2">
+          <Icon name="file-tree" size="small" />
+          <span class="text-text-base">packages/app/src/composer/composer.tsx</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <Icon name="file-tree" size="small" />
+          <span class="text-text-base">packages/session-ui/src/tools/tool-renderer.tsx</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <Icon name="file-tree" size="small" />
+          <span class="text-text-base">packages/session-ui/src/components/basic-tool.css</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <Icon name="file-tree" size="small" />
+          <span class="text-text-base">packages/ui/src/icons/icon/icon.tsx</span>
+        </div>
+      </div>
+    </BasicTool>
+  ),
 }
