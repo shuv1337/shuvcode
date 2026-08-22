@@ -9,7 +9,6 @@ import {
   requestHistoryDocument,
   retryDocument,
   revertDocument,
-  skillWorkflowDocument,
   streamingDocument,
   thinkingDocument,
 } from "../storybook/current-session-fixtures"
@@ -68,17 +67,6 @@ export const CompactionAndContinuation = {
       title="Compaction and continuation"
       description="The context summary separates earlier output from the continued response."
       document={compactionDocument}
-      width="600px"
-    />
-  ),
-}
-
-export const AgentAndSkillContext = {
-  render: () => (
-    <CurrentSessionTimelineStory
-      title="Agent and skill context"
-      description="A review agent and its loaded skill appear chronologically before the response."
-      document={skillWorkflowDocument}
       width="600px"
     />
   ),
