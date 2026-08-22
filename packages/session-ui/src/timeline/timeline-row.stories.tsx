@@ -4,6 +4,8 @@ import {
   attachmentsAndCommentsDocument,
   attachmentsAndCommentsPresentation,
   compactionDocument,
+  instructionsUpdatedMultipleDocument,
+  instructionsUpdatedSingleDocument,
   requestHistoryDocument,
   retryDocument,
   revertDocument,
@@ -126,6 +128,28 @@ export const MixedDirectionRtl = {
       document={attachmentsAndCommentsDocument}
       presentation={attachmentsAndCommentsPresentation}
       width="480px"
+    />
+  ),
+}
+
+export const InstructionsUpdatedSingle = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Instructions updated (single)"
+      description="A system notice in the timeline showing a single updated instruction source."
+      document={instructionsUpdatedSingleDocument}
+      width="600px"
+    />
+  ),
+}
+
+export const InstructionsUpdatedMultiple = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Instructions updated (multiple)"
+      description="A system notice in the timeline showing multiple updated instruction sources."
+      document={instructionsUpdatedMultipleDocument}
+      width="600px"
     />
   ),
 }

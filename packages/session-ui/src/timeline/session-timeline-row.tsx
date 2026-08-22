@@ -8,7 +8,7 @@ import { Card } from "@opencode-ai/ui/card"
 import { useI18n } from "@opencode-ai/ui/context/i18n"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
-import { Show, createMemo, type Accessor, type JSX } from "solid-js"
+import { For, Show, createMemo, type Accessor, type JSX } from "solid-js"
 import type { SessionUserActions, SessionUserComment } from "../actions"
 import {
   MessageDivider,
@@ -152,7 +152,17 @@ export function createSessionTimelineRowRenderer(input: {
     if (message.type === "location-switched")
       return { label: i18n.t("ui.patch.action.moved"), data: message.location.directory }
     if (message.type === "skill") return { label: i18n.t("ui.tool.skill"), data: message.name }
-    if (message.type === "system") return { label: message.description ?? message.text }
+    if (message.type === "system") {
+      const prefix = "Instructions updated: "
+      if (message.description?.startsWith(prefix)) {
+        const keys = message.description.slice(prefix.length).split(",").map((s) => s.trim()).filter(Boolean)
+        return {
+          label: i18n.t("ui.sessionTimeline.notice.instructionsUpdated"),
+          items: keys,
+        }
+      }
+      return { label: message.description ?? message.text }
+    }
     if (message.type === "compaction") return { label: i18n.t("ui.messagePart.compaction"), data: message.status }
     if (message.type !== "synthetic") return undefined
     if (message.description === "Continuing after restart") return { label: message.description }
@@ -274,19 +284,30 @@ export function createSessionTimelineRowRenderer(input: {
             {(content) => (
               <div
                 data-slot="session-timeline-notice"
-                class={`w-full pt-3 pb-1 text-13-regular text-text-weak ${padding()}`}
+                class={`w-full py-1 text-13-regular text-text-weak ${padding()}`}
               >
-                <bdi dir="auto" class="text-13-medium">
-                  {content().label}
-                </bdi>
-                <Show when={content().data}>
-                  {(data) => (
-                    <span>
-                      {" "}
-                      · <bdi dir="auto">{data()}</bdi>
-                    </span>
-                  )}
-                </Show>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <bdi dir="auto" class="text-13-medium text-text-weak">
+                    {content().label}
+                  </bdi>
+                  <Show when={content().items?.length}>
+                    <For each={content().items}>
+                      {(item) => (
+                        <bdi dir="auto" class="text-13-regular text-text-weak">
+                          {item}
+                        </bdi>
+                      )}
+                    </For>
+                  </Show>
+                  <Show when={content().data}>
+                    {(data) => (
+                      <span>
+                        {" "}
+                        · <bdi dir="auto">{data()}</bdi>
+                      </span>
+                    )}
+                  </Show>
+                </div>
               </div>
             )}
           </Show>

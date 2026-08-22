@@ -784,6 +784,50 @@ export const skillWorkflowDocument = document([
   }),
 ] satisfies SessionMessageInfo[])
 
+export const instructionsUpdatedSingleDocument = document([
+  user("msg_user_instructions_single", "Check if beta service reports the shared session as running.", 85_000),
+  assistant({
+    id: "msg_assistant_instructions_single",
+    offset: 86_000,
+    completed: 88_000,
+    content: [
+      {
+        type: "text",
+        text: "The beta service is healthy and already reports this shared session as running. I found unrelated desktop changes in the worktree and will leave them untouched; next I'm narrowing the beta-only capabilities to features that can be demonstrated safely in this session rather than invoking every administrative API.",
+      },
+    ],
+  }),
+  {
+    id: "msg_instructions_updated_single",
+    type: "system",
+    text: "Updated instructions for api/v2-demo",
+    description: "Instructions updated: api/v2-demo",
+    time: { created: STORY_TIME + 89_000 },
+  },
+] satisfies SessionMessageInfo[])
+
+export const instructionsUpdatedMultipleDocument = document([
+  user("msg_user_instructions_multi", "Check if beta service reports the shared session as running.", 85_000),
+  assistant({
+    id: "msg_assistant_instructions_multi",
+    offset: 86_000,
+    completed: 88_000,
+    content: [
+      {
+        type: "text",
+        text: "The beta service is healthy and already reports this shared session as running. I found unrelated desktop changes in the worktree and will leave them untouched; next I'm narrowing the beta-only capabilities to features that can be demonstrated safely in this session rather than invoking every administrative API.",
+      },
+    ],
+  }),
+  {
+    id: "msg_instructions_updated_multi",
+    type: "system",
+    text: "Updated instructions for api/v2-demo and api/session",
+    description: "Instructions updated: api/v2-demo, api/session",
+    time: { created: STORY_TIME + 89_000 },
+  },
+] satisfies SessionMessageInfo[])
+
 export const permissionPendingDocument = document(
   [
     user("msg_user_permission_pending", "Publish the verified preview build to the canary channel.", 83_000),
