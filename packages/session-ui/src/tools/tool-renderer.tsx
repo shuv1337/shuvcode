@@ -412,25 +412,55 @@ function taskSession(
 }
 
 function ExaOutput(props: { output?: string }) {
+  const i18n = useI18n()
+  const [showAll, setShowAll] = createSignal(false)
+  let firstRevealedRef: HTMLAnchorElement | undefined
   const links = createMemo(() => urls(props.output))
+  const visibleLinks = createMemo(() => {
+    const all = links()
+    if (showAll() || all.length <= 10) return all
+    return all.slice(0, 10)
+  })
+  const remaining = createMemo(() => Math.max(0, links().length - 10))
+
+  const expand = (event: MouseEvent) => {
+    event.stopPropagation()
+    setShowAll(true)
+    requestAnimationFrame(() => {
+      firstRevealedRef?.focus()
+    })
+  }
 
   return (
     <Show when={links().length > 0}>
       <div data-component="exa-tool-output">
+        <div data-slot="exa-tool-rail">
+          <div data-slot="exa-tool-rail-line" />
+        </div>
         <div data-slot="exa-tool-links">
-          <For each={links()}>
-            {(url) => (
+          <For each={visibleLinks()}>
+            {(url, index) => (
               <a
+                ref={(el) => {
+                  if (index() === 10) firstRevealedRef = el
+                }}
                 data-slot="exa-tool-link"
+                class="webfetch-link"
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(event) => event.stopPropagation()}
               >
-                {url}
+                <span data-slot="webfetch-link-text">{url}</span>
+                <Icon name="outline-square-arrow" class="webfetch-link-icon" />
               </a>
             )}
           </For>
+          <Show when={!showAll() && remaining() > 0}>
+            <button type="button" data-slot="exa-tool-more" onClick={expand}>
+              {i18n.plural("ui.common.moreCount", remaining())}
+            </button>
+          </Show>
         </div>
       </div>
     </Show>
@@ -898,7 +928,7 @@ ToolRegistry.register({
               <Show when={!pending() && url()}>
                 <a
                   data-slot="basic-tool-tool-subtitle"
-                  class="clickable webfetch-link"
+                  class="webfetch-link"
                   href={url()}
                   target="_blank"
                   rel="noopener noreferrer"

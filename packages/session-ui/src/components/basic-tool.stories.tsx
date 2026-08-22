@@ -1,5 +1,7 @@
+import { createSignal, For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@opencode-ai/ui/button"
+import { Icon } from "@opencode-ai/ui/icon"
 import { BasicTool } from "./basic-tool"
 
 export default {
@@ -70,6 +72,111 @@ export const Controlled = {
           <div class="px-3 py-2 text-12-regular text-text-base">Changed the active Session label.</div>
         </BasicTool>
       </div>
+    )
+  },
+}
+
+export const WebFetch = {
+  render: () => (
+    <BasicTool
+      icon="window-cursor"
+      hideDetails
+      trigger={
+        <div data-slot="basic-tool-tool-info-structured">
+          <div data-slot="basic-tool-tool-info-main">
+            <span data-slot="basic-tool-tool-title">Webfetch</span>
+            <a
+              data-slot="basic-tool-tool-subtitle"
+              class="webfetch-link"
+              href="https://www.figma.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span data-slot="webfetch-link-text">https://www.figma.com</span>
+              <Icon name="outline-square-arrow" class="webfetch-link-icon" />
+            </a>
+          </div>
+        </div>
+      }
+    />
+  ),
+}
+
+const mockSearchUrls = [
+  "https://www.figma.com/community/file/1606560040358762787/figma-mcp-console-setup-guide",
+  "https://designagentlab.com",
+  "https://www.figma.com/community/whiteboarding?resource_type=widgets",
+  "https://figma-console-mcp.southleft.com/mcp",
+  "https://designagentlab.com/figma-console-mcp",
+  "https://designagentlab.com/figma-tutorials",
+  "https://github.com/southleft/figma-console-mcp/issues",
+  "https://designagentlab.com/ui-kits",
+  "https://designagentlab.com/prototyping-tools",
+  "https://www.inthepocket.design/guidelines/figma-mcp/setup-figma-mcp",
+  "https://www.figma.com/community/plugins",
+  "https://figma-console-mcp.southleft.com/docs",
+  "https://designagentlab.com/resources",
+  "https://github.com/southleft/figma-console-mcp/releases",
+  "https://www.inthepocket.design/blog/figma-mcp",
+  "https://designagentlab.com/community",
+]
+
+export const WebSearch = {
+  render: () => {
+    const [showAll, setShowAll] = createSignal(false)
+    let firstRevealedRef: HTMLAnchorElement | undefined
+    const visibleLinks = () => (showAll() ? mockSearchUrls : mockSearchUrls.slice(0, 10))
+    const remaining = () => Math.max(0, mockSearchUrls.length - 10)
+
+    const expand = (event: MouseEvent) => {
+      event.stopPropagation()
+      setShowAll(true)
+      requestAnimationFrame(() => {
+        firstRevealedRef?.focus()
+      })
+    }
+
+    return (
+      <BasicTool
+        icon="window-cursor"
+        defaultOpen
+        trigger={{
+          title: "Firecrawl Web Search",
+          subtitle: "figma mcp setup",
+          subtitleClass: "exa-tool-query",
+        }}
+      >
+        <div data-component="exa-tool-output">
+          <div data-slot="exa-tool-rail">
+            <div data-slot="exa-tool-rail-line" />
+          </div>
+          <div data-slot="exa-tool-links">
+            <For each={visibleLinks()}>
+              {(url, index) => (
+                <a
+                  ref={(el) => {
+                    if (index() === 10) firstRevealedRef = el
+                  }}
+                  data-slot="exa-tool-link"
+                  class="webfetch-link"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <span data-slot="webfetch-link-text">{url}</span>
+                  <Icon name="outline-square-arrow" class="webfetch-link-icon" />
+                </a>
+              )}
+            </For>
+            <Show when={!showAll() && remaining() > 0}>
+              <button type="button" data-slot="exa-tool-more" onClick={expand}>
+                +{remaining()} more
+              </button>
+            </Show>
+          </div>
+        </div>
+      </BasicTool>
     )
   },
 }
