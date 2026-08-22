@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { event, session, sessionID, setupTimeline } from "../performance/timeline-stability/fixture"
+import { event, session, sessionID, setupTimeline, toolPart } from "../performance/timeline-stability/fixture"
 
 const user = { id: "msg_user", type: "user", text: "Run it", time: { created: 1 } } satisfies SessionMessageInfo
 
@@ -73,6 +73,30 @@ test("renders current protocol notices in CLI order", async ({ page }) => {
   expect(ownerWarnings).toEqual([])
 })
 
+test("shows a delegating row while subagent input streams", async ({ page }) => {
+  await setupTimeline(page, {
+    sessionMessages: [
+      user,
+      {
+        ...assistant(false),
+        content: [toolPart("call_subagent", "subagent", "streaming", {})],
+      },
+    ],
+  })
+
+  const delegating = page.locator('[data-component="task-tool-delegating"]')
+  await expect(delegating).toBeVisible()
+  await expect(delegating.locator('[data-component="text-shimmer"]')).toHaveAttribute(
+    "aria-label",
+    "Delegating agent...",
+  )
+  const icon = delegating.locator('[data-slot="icon-svg"]')
+  await expect(icon.locator('use[href="#opencode-v2-icon-subagent"]')).toBeVisible()
+  await expect(icon).toHaveCSS("color", "rgb(174, 174, 174)")
+  await expect(page.locator('[data-component="task-tool-card"]')).toHaveCount(0)
+  await expect(page.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)
+})
+
 test("moves blocking work to the background with Ctrl+B", async ({ page }) => {
   await setupTimeline(page, { sessionMessages: [user, assistant(false, true)] })
   const card = page.locator('[data-component="task-tool-card"]')
@@ -83,20 +107,19 @@ test("moves blocking work to the background with Ctrl+B", async ({ page }) => {
   await expect(page.locator('[data-component="background-tool-control"]')).toHaveCount(0)
   const hint = page.locator('[data-component="session-background-hint"]')
   const hintPrefix = hint.locator('[data-slot="session-background-hint-prefix"]')
-  const thinking = page.locator('[data-slot="session-turn-thinking"]')
   await expect(hint).toBeVisible()
+  await expect(page.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)
   await expect
     .poll(async () => {
-      const [cardBox, hintBox, prefixBox, thinkingBox] = await Promise.all([
+      const [cardBox, hintBox, prefixBox] = await Promise.all([
         card.boundingBox(),
         hint.boundingBox(),
         hintPrefix.boundingBox(),
-        thinking.boundingBox(),
       ])
-      if (!cardBox || !hintBox || !prefixBox || !thinkingBox) return undefined
+      if (!cardBox || !hintBox || !prefixBox) return undefined
       return {
         aligned: Math.abs(cardBox.x - prefixBox.x) < 2,
-        ordered: cardBox.y < hintBox.y && hintBox.y < thinkingBox.y,
+        ordered: cardBox.y < hintBox.y,
       }
     })
     .toEqual({ aligned: true, ordered: true })

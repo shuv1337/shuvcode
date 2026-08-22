@@ -1023,6 +1023,7 @@ ToolRegistry.register({
   render(props) {
     const data = useData()
     const i18n = useI18n()
+    const delegating = () => props.status === "streaming"
     const childSessionId = createMemo(() => {
       const value = props.metadata.sessionID
       if (typeof value === "string" && value) return value
@@ -1114,17 +1115,33 @@ ToolRegistry.register({
     )
 
     return (
-      <BasicTool
-        icon="task"
-        status={props.status}
-        trigger={trigger()}
-        hideDetails
-        triggerAsLink
-        triggerHref={href()}
-        clickable={clickable()}
-        onTriggerClick={navigate}
-        onTriggerKeyDown={navigateKey}
-      />
+      <Show
+        when={delegating()}
+        fallback={
+          <BasicTool
+            icon="task"
+            status={props.status}
+            trigger={trigger()}
+            hideDetails
+            triggerAsLink
+            triggerHref={href()}
+            clickable={clickable()}
+            onTriggerClick={navigate}
+            onTriggerKeyDown={navigateKey}
+          />
+        }
+      >
+        <div
+          data-component="task-tool-delegating"
+          class="flex h-9 w-fit max-w-full items-center gap-2 rounded-[8px] bg-v2-background-bg-layer-01 p-2.5"
+        >
+          <Icon name="subagent" size="small" class="shrink-0 text-v2-icon-icon-faint" />
+          <TextShimmer
+            text={i18n.t("ui.tool.agent.delegating")}
+            class="min-w-0 truncate text-[13px] font-[530] leading-none tracking-[-0.04px]"
+          />
+        </div>
+      </Show>
     )
   },
 })

@@ -222,6 +222,12 @@ export namespace Timeline {
         .filter((entry) => renderable(entry.content, showReasoning))
         .map((entry) => ({ messageID: message.id, messageIndex, partID: entry.id, content: entry.content })),
     )
+    const delegating = assistantPartRefs.some(
+      (entry) =>
+        entry.content.type === "tool" &&
+        entry.content.name === "subagent" &&
+        (entry.content.state.status === "streaming" || entry.content.state.status === "running"),
+    )
 
     if (previousUserMessage) rows.push(new TimelineRow.TurnGap({ userMessageID: turnID }))
     if (userMessage) rows.push(new TimelineRow.UserMessage({ userMessageID: turnID }))
@@ -273,6 +279,7 @@ export namespace Timeline {
       status.type === "busy" &&
       !error &&
       !retry &&
+      !delegating &&
       (showReasoning ? assistantPartRefs.length === 0 : true)
     ) {
       const heading = assistantMessages

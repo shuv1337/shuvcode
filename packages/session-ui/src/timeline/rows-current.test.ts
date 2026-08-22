@@ -166,6 +166,38 @@ describe("current session timeline rows", () => {
     ])
   })
 
+  test("suppresses thinking while a subagent is delegating or running", () => {
+    const statuses = ["streaming", "running"] as const
+    statuses.forEach((status) => {
+      const source = [
+        { id: "msg_user", type: "user", text: "delegate", time: { created: 1 } },
+        {
+          id: "msg_assistant",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            {
+              type: "tool",
+              id: "tool_subagent",
+              name: "subagent",
+              state:
+                status === "streaming"
+                  ? { status, input: "" }
+                  : { status, input: { description: "Inspect code" }, metadata: {} },
+              time: { created: 2 },
+            },
+          ],
+          time: { created: 2 },
+        },
+      ] satisfies SessionMessageInfo[]
+
+      expect(Timeline.constructSessionMessageRows(source, false, { type: "busy" }).rows.map((row) => row._tag)).toEqual(
+        ["UserMessage", "AssistantPart"],
+      )
+    })
+  })
+
   test("renders retry state from the current assistant message", () => {
     const source = [
       { id: "msg_user", type: "user", text: "retry", time: { created: 1 } },
