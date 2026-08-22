@@ -745,33 +745,25 @@ export const webResearchDocument = document([
   }),
 ] satisfies SessionMessageInfo[])
 
-export const skillWorkflowDocument = document([
-  {
-    id: "msg_agent_switched_review",
-    type: "agent-switched",
-    agent: "review",
-    previous: "build",
-    time: { created: STORY_TIME + 78_000 },
-  },
-  {
-    id: "msg_skill_loaded_rtl",
-    type: "skill",
-    skill: "rtl-aware-development",
-    name: "RTL-aware development",
-    text: "Verify direction independently from language.",
-    time: { created: STORY_TIME + 78_500 },
-  },
-  user("msg_user_skill", "Review the mixed-direction file row before I merge it.", 79_000),
+export const loadedResourcesDocument = document([
+  user("msg_user_skill", "Read the project instructions, load the RTL-aware skill, and review the file row.", 79_000),
   assistant({
     id: "msg_assistant_skill",
     offset: 80_000,
     completed: 82_000,
-    agent: "review",
     content: [
+      completedTool({
+        id: "tool_loaded_file",
+        name: "read",
+        offset: 80_100,
+        args: { path: "C:/workspaces/opencode/packages/cli/AGENTS.md" },
+        output: "Project instructions loaded.",
+        metadata: { loaded: ["C:/workspaces/opencode/packages/cli/AGENTS.md"] },
+      }),
       completedTool({
         id: "tool_skill_rtl",
         name: "skill",
-        offset: 80_100,
+        offset: 80_200,
         args: { name: "rtl-aware-development" },
         output: "Loaded RTL-aware development guidance",
         metadata: { name: "rtl-aware-development" },

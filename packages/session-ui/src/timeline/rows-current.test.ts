@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { SessionMessageAssistantTool, SessionMessageInfo } from "@opencode-ai/client/promise"
 import { Timeline, TimelineRow } from "./projection"
 
 describe("current session timeline rows", () => {
@@ -272,6 +272,56 @@ describe("current session timeline rows", () => {
         type: "part",
         key: "part:msg_assistant:msg_assistant:text:1",
         ref: { messageID: "msg_assistant", partID: "msg_assistant:text:1" },
+      },
+    ])
+  })
+
+  test("keeps reads that load files outside context groups", () => {
+    const read = {
+      type: "tool",
+      id: "tool_read",
+      name: "read",
+      state: {
+        status: "completed",
+        input: { path: "packages/cli/AGENTS.md" },
+        content: [{ type: "text", text: "instructions" }],
+        metadata: { loaded: ["packages/cli/AGENTS.md"] },
+      },
+      time: { created: 2, ran: 3, completed: 4 },
+    } satisfies SessionMessageAssistantTool
+    const grep = {
+      type: "tool",
+      id: "tool_grep",
+      name: "grep",
+      state: { status: "running", input: {}, metadata: {} },
+      time: { created: 5 },
+    } satisfies SessionMessageAssistantTool
+    const source = [
+      { id: "msg_user", type: "user", text: "inspect", time: { created: 1 } },
+      {
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: { id: "model", providerID: "provider" },
+        content: [read, grep],
+        time: { created: 2 },
+      },
+    ] satisfies SessionMessageInfo[]
+
+    const groups = Timeline.constructSessionMessageRows(source, false, { type: "idle" }).rows.flatMap((row) =>
+      row._tag === "AssistantPart" ? [row.group] : [],
+    )
+
+    expect(groups).toEqual([
+      {
+        type: "part",
+        key: "part:msg_assistant:tool_read",
+        ref: { messageID: "msg_assistant", partID: "tool_read" },
+      },
+      {
+        type: "context",
+        key: "context:msg_assistant:tool_grep",
+        refs: [{ messageID: "msg_assistant", partID: "tool_grep" }],
       },
     ])
   })

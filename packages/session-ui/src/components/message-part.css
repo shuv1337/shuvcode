@@ -1338,20 +1338,36 @@
   }
 }
 
-[data-component="tool-loaded-file"] {
+[data-component="tool-loaded-item"] {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0 4px 28px;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   font-family: var(--font-family-sans);
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-large);
-  color: var(--v2-text-text-muted);
+  font-size: 13px;
+  line-height: 13px;
+  letter-spacing: -0.04px;
+  color: var(--v2-text-text-base);
 
-  [data-slot="icon-svg"] {
+  [data-slot="tool-loaded-label"] {
     flex-shrink: 0;
-    color: var(--icon-weak);
+    font-weight: 530;
+  }
+
+  [data-slot="tool-loaded-value"] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 440;
+  }
+
+  [data-slot="tool-loaded-kind"] {
+    flex-shrink: 0;
+    margin-inline-start: -2px;
+    font-weight: 440;
+    color: var(--v2-text-text-muted);
   }
 }
 

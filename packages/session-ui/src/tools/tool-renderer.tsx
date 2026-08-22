@@ -795,14 +795,29 @@ ToolRegistry.register({
           }}
         />
         <For each={loaded()}>
-          {(filepath) => (
-            <div data-component="tool-loaded-file">
-              <Icon name="enter" size="small" />
-              <span>
-                {i18n.t("ui.tool.loaded")} {relativizeProjectPath(filepath, data.directory)}
-              </span>
-            </div>
-          )}
+          {(filepath) => {
+            const relative = relativizeProjectPath(filepath, data.directory)
+            const path = relative === filepath ? relative : relative.replace(/^[/\\]/, "")
+            const marker = "__OPENCODE_LOADED_PATH__"
+            const parts = i18n.t("ui.tool.loadedFile", { path: marker }).split(marker)
+            return (
+              <div data-component="tool-loaded-item" aria-label={i18n.t("ui.tool.loadedFile", { path })}>
+                <span data-slot="tool-loaded-label" aria-hidden="true">
+                  {parts[0].trim()}
+                </span>
+                <span data-slot="tool-loaded-value" aria-hidden="true">
+                  {path}
+                </span>
+                <Show when={parts[1]?.trim()}>
+                  {(suffix) => (
+                    <span data-slot="tool-loaded-kind" aria-hidden="true">
+                      {suffix()}
+                    </span>
+                  )}
+                </Show>
+              </div>
+            )
+          }}
         </For>
       </>
     )
@@ -1672,34 +1687,29 @@ ToolRegistry.register({
     const i18n = useI18n()
     const name = createMemo(() => skillToolName(props.input, props.metadata))
     const running = createMemo(() => props.status === "streaming" || props.status === "running")
+    const marker = "__OPENCODE_LOADED_SKILL__"
+    const parts = createMemo(() => i18n.t("ui.tool.loadedSkill", { name: marker }).split(marker))
 
-    const trigger = () => (
-      <div data-slot="skill-tool-trigger" class="flex min-w-0 items-center gap-1.5">
-        <Icon name="post-skill" size="small" class="shrink-0 text-v2-icon-icon-muted" />
-        <span
-          data-slot="skill-tool-label"
-          class="shrink-0 text-[13px] font-[530] leading-5 tracking-[-0.04px] text-v2-text-text-muted"
-        >
-          {i18n.t("ui.tool.skill")}
-        </span>
-        <Show when={name()}>
-          {(name) => (
-            <>
-              <span data-slot="skill-tool-separator" aria-hidden="true" class="shrink-0 text-v2-text-text-muted">
-                ·
-              </span>
-              <TextShimmer
-                as="bdi"
-                text={name()}
-                active={running()}
-                class="min-w-0 truncate text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted"
-              />
-            </>
-          )}
-        </Show>
-      </div>
+    return (
+      <Show when={name()} fallback={<TextShimmer text={i18n.t("ui.tool.skill")} active={running()} />}>
+        {(name) => (
+          <div data-component="tool-loaded-item" aria-label={i18n.t("ui.tool.loadedSkill", { name: name() })}>
+            <span data-slot="tool-loaded-label" aria-hidden="true">
+              {parts()[0].trim()}
+            </span>
+            <span data-slot="tool-loaded-value" aria-hidden="true">
+              <TextShimmer as="span" text={name()} active={running()} />
+            </span>
+            <Show when={parts()[1]?.trim()}>
+              {(suffix) => (
+                <span data-slot="tool-loaded-kind" aria-hidden="true">
+                  {suffix()}
+                </span>
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
     )
-
-    return <BasicTool icon="post-skill" status={props.status} trigger={trigger()} hideDetails />
   },
 })

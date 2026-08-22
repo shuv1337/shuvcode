@@ -152,6 +152,8 @@ const source = {
 
   "ui.tool.read": "Read",
   "ui.tool.loaded": "Loaded",
+  "ui.tool.loadedFile": "Loaded {{path}}",
+  "ui.tool.loadedSkill": "Loaded {{name}} skill",
   "ui.tool.list": "List",
   "ui.tool.glob": "Glob",
   "ui.tool.grep": "Grep",

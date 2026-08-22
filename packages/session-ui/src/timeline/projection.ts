@@ -449,7 +449,7 @@ function groupContent(items: { messageID: string; partID: string; content: Conte
   }
 
   items.forEach((item) => {
-    if (item.content.type === "tool" && contextTools.has(item.content.name)) {
+    if (item.content.type === "tool" && contextTools.has(item.content.name) && !hasLoadedFiles(item.content)) {
       context.push({ messageID: item.messageID, partID: item.partID })
       return
     }
@@ -462,6 +462,12 @@ function groupContent(items: { messageID: string; partID: string; content: Conte
   })
   flush()
   return groups
+}
+
+function hasLoadedFiles(content: Extract<Content, { type: "tool" }>) {
+  if (content.name !== "read" || content.state.status !== "completed") return false
+  const loaded = content.state.metadata?.loaded
+  return Array.isArray(loaded) && loaded.some((path) => typeof path === "string")
 }
 
 function reasoningHeading(text: string): string | undefined {
