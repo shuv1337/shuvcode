@@ -15,6 +15,10 @@ export function createSessionScreenLayout(session: SessionModel, serverScope: st
   const reviewPanelOpen = createMemo(() => reviewOpen() && !!session.identity.params.id)
   const terminalOpen = createMemo(() => session.layout.view().terminal.opened())
   const desktopTerminalOpen = createMemo(() => session.isDesktop() && terminalOpen())
+  const sideTerminalOpen = createMemo(() => desktopTerminalOpen() && settings.general.terminalPlacement() === "side")
+  const bottomTerminalOpen = createMemo(
+    () => desktopTerminalOpen() && settings.general.terminalPlacement() === "bottom",
+  )
   const fileTreeOpen = createMemo(
     () =>
       session.isDesktop() &&
@@ -23,7 +27,7 @@ export function createSessionScreenLayout(session: SessionModel, serverScope: st
         opened: layout.fileTree.opened(),
       }),
   )
-  const resizable = createMemo(() => reviewPanelOpen() || desktopTerminalOpen())
+  const resizable = createMemo(() => reviewPanelOpen() || sideTerminalOpen())
   const sidePanelOpen = createMemo(() => resizable() || fileTreeOpen())
   const [rowWidth, setRowWidth] = createSignal<number>()
   let row: HTMLDivElement | undefined
@@ -57,7 +61,7 @@ export function createSessionScreenLayout(session: SessionModel, serverScope: st
   const panelLayout = createMemo(() =>
     sessionPanelLayout({
       review: reviewPanelOpen(),
-      terminal: desktopTerminalOpen(),
+      terminal: sideTerminalOpen(),
       files: fileTreeOpen(),
     }),
   )
@@ -97,11 +101,11 @@ export function createSessionScreenLayout(session: SessionModel, serverScope: st
       panelOpen: reviewPanelOpen,
       snap: reviewSnap,
     },
-    side: { layout: panelLayout, open: sidePanelOpen },
+    side: { layout: panelLayout },
     size,
     terminal: {
-      desktopOpen: desktopTerminalOpen,
-      inlineOnlyOpen: createMemo(() => desktopTerminalOpen() && !reviewPanelOpen()),
+      bottomOpen: bottomTerminalOpen,
+      inlineOnlyOpen: createMemo(() => sideTerminalOpen() && !reviewPanelOpen()),
       open: terminalOpen,
     },
   }

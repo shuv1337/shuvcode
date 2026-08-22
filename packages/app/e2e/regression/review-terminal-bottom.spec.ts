@@ -18,7 +18,7 @@ const branchDiffs = [
   ),
 ]
 
-test("keeps the review tree and terminal sized when both panels are open", async ({ page }) => {
+test("uses side placement by default and supports the terminal across the bottom", async ({ page }) => {
   test.setTimeout(120_000)
   await page.setViewportSize({ width: 1400, height: 900 })
   await mockOpenCodeServer(page, {
@@ -27,7 +27,7 @@ test("keeps the review tree and terminal sized when both panels are open", async
       id: projectID,
       worktree: directory,
       vcs: "git",
-      name: "review-terminal-stacked",
+      name: "review-terminal-bottom",
       time: { created: 1700000000000, updated: 1700000000000 },
       sandboxes: [],
     },
@@ -45,7 +45,7 @@ test("keeps the review tree and terminal sized when both panels are open", async
     sessions: [
       {
         id: sessionID,
-        slug: "review-terminal-stacked",
+        slug: "review-terminal-bottom",
         projectID,
         directory,
         title,
@@ -138,7 +138,22 @@ test("keeps the review tree and terminal sized when both panels are open", async
   await page.keyboard.press("Control+Backquote")
   await expect(page.locator("#terminal-panel")).toBeVisible()
   await expectTree(page, 2_773, "action.yml")
-  await expectStackGeometry(page)
+  await expectSideGeometry(page)
+
+  await page.evaluate(() => {
+    const settings = JSON.parse(localStorage.getItem("settings.v3") ?? "{}")
+    localStorage.setItem(
+      "settings.v3",
+      JSON.stringify({ ...settings, general: { ...settings.general, terminalPlacement: "bottom" } }),
+    )
+  })
+  await page.reload()
+  await expectSessionReady(page, { server, sessionID, title })
+  await expect(page.locator("#review-panel")).toBeVisible()
+  await page.keyboard.press("Control+Backquote")
+  await expect(page.locator("#terminal-panel")).toBeVisible()
+  await expectTree(page, 2_773, "action.yml")
+  await expectBottomGeometry(page)
 })
 
 async function expectTree(page: Page, total: number, file: string) {
@@ -163,23 +178,51 @@ async function expectMountedTree(page: Page, total: number) {
   expect(state.rows).toBeLessThanOrEqual(60)
 }
 
-async function expectStackGeometry(page: Page) {
+async function expectSideGeometry(page: Page) {
+  const geometry = await page.evaluate(() => {
+    const review = document.querySelector<HTMLElement>("#review-panel")!.getBoundingClientRect()
+    const terminal = document.querySelector<HTMLElement>("#terminal-panel")!.getBoundingClientRect()
+    return {
+      reviewLeft: review.left,
+      reviewRight: review.right,
+      terminalLeft: terminal.left,
+      terminalRight: terminal.right,
+      terminalTop: terminal.top,
+      reviewTop: review.top,
+    }
+  })
+  expect(Math.abs(geometry.terminalLeft - geometry.reviewLeft)).toBeLessThanOrEqual(1)
+  expect(Math.abs(geometry.terminalRight - geometry.reviewRight)).toBeLessThanOrEqual(1)
+  expect(geometry.terminalTop).toBeGreaterThan(geometry.reviewTop)
+}
+
+async function expectBottomGeometry(page: Page) {
   const geometry = await page.evaluate(() => {
     const review = document.querySelector<HTMLElement>("#review-panel")!
     const terminal = document.querySelector<HTMLElement>("#terminal-panel")!
+    const terminalRect = terminal.getBoundingClientRect()
     const reviewParent = review.parentElement!.getBoundingClientRect()
     const terminalParent = terminal.parentElement!.getBoundingClientRect()
     const sidebar = review.querySelector<HTMLElement>('[data-slot="session-review-v2-sidebar"]')!
     return {
       review: review.getBoundingClientRect().height,
+      reviewBottom: review.getBoundingClientRect().bottom,
       reviewParent: reviewParent.height,
-      terminal: terminal.getBoundingClientRect().height,
+      terminal: terminalRect.height,
+      terminalLeft: terminalRect.left,
+      terminalRight: terminalRect.right,
+      terminalTop: terminalRect.top,
       terminalParent: terminalParent.height,
       sidebar: sidebar.getBoundingClientRect().width,
+      viewport: window.innerWidth,
     }
   })
   expect(Math.abs(geometry.review - geometry.reviewParent)).toBeLessThanOrEqual(1)
   expect(Math.abs(geometry.terminal - geometry.terminalParent)).toBeLessThanOrEqual(1)
+  expect(geometry.terminalTop - geometry.reviewBottom).toBeGreaterThanOrEqual(7)
+  expect(geometry.terminalTop - geometry.reviewBottom).toBeLessThanOrEqual(9)
+  expect(geometry.terminalLeft).toBeLessThanOrEqual(9)
+  expect(geometry.terminalRight).toBeGreaterThanOrEqual(geometry.viewport - 9)
   expect(geometry.sidebar).toBeGreaterThanOrEqual(240)
 }
 
