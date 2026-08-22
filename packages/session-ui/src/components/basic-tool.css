@@ -256,7 +256,7 @@
   }
 }
 
-[data-component="collapsible"].tool-collapsible {
+[data-component="collapsible"].tool-collapsible:not([data-rail="false"]) {
   > [data-slot="collapsible-content"] {
     position: relative;
     margin-inline-start: 12px;
