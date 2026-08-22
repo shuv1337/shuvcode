@@ -1089,7 +1089,7 @@ export type PtyUpdated = {
   data: { info: Pty }
 }
 
-export type SessionStatus2 = {
+export type SessionStatusUpdated = {
   id: string
   created: number
   metadata?: { [x: string]: any }
@@ -2117,7 +2117,7 @@ export type V2Event =
   | FormReplied
   | FormCancelled
   | WebsearchUpdated
-  | SessionStatus2
+  | SessionStatusUpdated
   | SessionIdle
   | TuiPromptAppend
   | TuiCommandExecute
