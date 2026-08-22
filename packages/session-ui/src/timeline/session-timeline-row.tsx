@@ -282,33 +282,48 @@ export function createSessionTimelineRowRenderer(input: {
         <Frame row={current()}>
           <Show when={content()}>
             {(content) => (
-              <div
-                data-slot="session-timeline-notice"
-                class={`w-full py-1 text-13-regular text-text-weak ${padding()}`}
+              <Show
+                when={content().items?.length}
+                fallback={
+                  <div
+                    data-slot="session-timeline-notice"
+                    class={`w-full pt-3 pb-1 text-13-regular text-text-weak ${padding()}`}
+                  >
+                    <bdi dir="auto" class="text-13-medium">
+                      {content().label}
+                    </bdi>
+                    <Show when={content().data}>
+                      {(data) => (
+                        <span>
+                          {" "}
+                          · <bdi dir="auto">{data()}</bdi>
+                        </span>
+                      )}
+                    </Show>
+                  </div>
+                }
               >
-                <div class="flex items-center gap-2 flex-wrap">
-                  <bdi dir="auto" class="text-13-medium text-text-weak">
-                    {content().label}
-                  </bdi>
-                  <Show when={content().items?.length}>
+                <div data-slot="session-timeline-notice" class={`w-full py-1 ${padding()}`}>
+                  <div class="flex min-h-5 min-w-0 items-center gap-2 overflow-hidden">
+                    <bdi
+                      dir="auto"
+                      class="shrink-0 text-[13px] font-[530] leading-none tracking-[-0.04px] text-v2-text-text-faint"
+                    >
+                      {content().label}
+                    </bdi>
                     <For each={content().items}>
                       {(item) => (
-                        <bdi dir="auto" class="text-13-regular text-text-weak">
+                        <bdi
+                          dir="auto"
+                          class="min-w-0 truncate text-[13px] font-[440] leading-none tracking-[-0.04px] text-v2-text-text-faint"
+                        >
                           {item}
                         </bdi>
                       )}
                     </For>
-                  </Show>
-                  <Show when={content().data}>
-                    {(data) => (
-                      <span>
-                        {" "}
-                        · <bdi dir="auto">{data()}</bdi>
-                      </span>
-                    )}
-                  </Show>
+                  </div>
                 </div>
-              </div>
+              </Show>
             )}
           </Show>
         </Frame>
