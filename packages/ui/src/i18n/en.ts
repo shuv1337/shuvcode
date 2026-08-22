@@ -210,6 +210,8 @@ const source = {
   "ui.message.duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
   "ui.message.interrupted": "Interrupted",
   "ui.sessionTimeline.notice.model": "Model",
+  "ui.sessionTimeline.notice.movedTo": "Moved to",
+  "ui.sessionTimeline.notice.movedTooltip": "Session working directory changed",
   "ui.sessionTimeline.notice.failed": "{{actor}} failed",
   "ui.sessionTimeline.notice.cancelled": "{{actor}} cancelled",
   "ui.sessionTimeline.notice.finished": "{{actor}} finished",
