@@ -182,7 +182,8 @@
     font-family: var(--v2-font-family-sans);
     font-size: 13px;
     font-weight: 530;
-    line-height: var(--v2-line-height-compact, 16px);
+    /* Keep compact text on the shared metric; solid 13px line boxes clip Inter descenders. */
+    line-height: var(--line-height-compact);
     letter-spacing: -0.04px;
   }
 
@@ -190,7 +191,7 @@
     font-family: var(--v2-font-family-sans);
     font-size: 13px;
     font-weight: 440;
-    line-height: var(--v2-line-height-compact, 16px);
+    line-height: var(--line-height-compact);
     letter-spacing: -0.04px;
   }
 }

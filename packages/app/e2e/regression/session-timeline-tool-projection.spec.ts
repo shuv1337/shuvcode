@@ -121,19 +121,20 @@ test("labels skill tools from IDs and result metadata", async ({ page }) => {
     messages: [
       userMessage(),
       assistantMessage([
-        toolPart(pending, "skill", "running", { id: "sample-skill" }),
+        toolPart(pending, "skill", "running", { id: "frontend-design" }),
         toolPart(completed, "skill", "completed", { id: "opencode" }, { metadata: { name: "OpenCode" } }),
       ]),
     ],
   })
 
   for (const [id, name] of [
-    [pending, "sample-skill"],
+    [pending, "frontend-design"],
     [completed, "OpenCode"],
   ] as const) {
     const skill = page.locator(`[data-timeline-part-id="${id}"]`)
     const loaded = skill.locator('[data-component="tool-loaded-item"]')
     await expect(loaded).toHaveAttribute("aria-label", `Loaded ${name} skill`)
+    await expect(loaded).toHaveCSS("line-height", "16px")
     await expect(loaded.locator('[data-slot="tool-loaded-label"]')).toHaveText("Loaded")
     await expect(loaded.locator('[data-slot="tool-loaded-kind"]')).toHaveText("skill")
     await expect(loaded.locator('[data-component="text-shimmer"]')).toHaveAttribute("aria-label", name)

@@ -509,7 +509,7 @@ function HomeSessionsEmpty(props: { onNewSession?: () => void; language: ReturnT
     <div class="flex min-h-full flex-col items-center gap-4 px-6 pt-[52px] text-center">
       <div
         class={`
-          shrink-0 text-[13px] leading-[13px] tracking-[-0.04px]
+          shrink-0 text-[13px] leading-text-compact tracking-[-0.04px]
           text-v2-text-text-base [font-weight:530]
         `}
       >

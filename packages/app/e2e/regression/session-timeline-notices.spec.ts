@@ -86,10 +86,12 @@ test("shows a delegating row while subagent input streams", async ({ page }) => 
 
   const delegating = page.locator('[data-component="task-tool-delegating"]')
   await expect(delegating).toBeVisible()
-  await expect(delegating.locator('[data-component="text-shimmer"]')).toHaveAttribute(
+  const shimmer = delegating.locator('[data-component="text-shimmer"]')
+  await expect(shimmer).toHaveAttribute(
     "aria-label",
     "Delegating agent...",
   )
+  await expect(shimmer).toHaveCSS("line-height", "16px")
   const icon = delegating.locator('[data-slot="icon-svg"]')
   await expect(icon.locator('use[href="#opencode-v2-icon-subagent"]')).toBeVisible()
   await expect(icon).toHaveCSS("color", "rgb(174, 174, 174)")
@@ -127,11 +129,11 @@ test("renders the moved location notice in its compact timeline style", async ({
   await expect(notice).toHaveCSS("padding-bottom", "4px")
   await expect(label).toHaveCSS("font-size", "13px")
   await expect(label).toHaveCSS("font-weight", "530")
-  await expect(label).toHaveCSS("line-height", "13px")
+  await expect(label).toHaveCSS("line-height", "16px")
   await expect(label).toHaveCSS("color", "rgb(128, 128, 128)")
   await expect(value).toHaveCSS("font-size", "13px")
   await expect(value).toHaveCSS("font-weight", "440")
-  await expect(value).toHaveCSS("line-height", "13px")
+  await expect(value).toHaveCSS("line-height", "16px")
   await expect(value).toHaveCSS("color", "rgb(128, 128, 128)")
   await expect(value).toHaveCSS("text-overflow", "ellipsis")
   await expect(value).toHaveCSS("white-space", "nowrap")

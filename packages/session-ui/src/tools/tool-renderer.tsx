@@ -1175,13 +1175,10 @@ ToolRegistry.register({
       >
         <div
           data-component="task-tool-delegating"
-          class="flex h-9 w-fit max-w-full items-center gap-2 rounded-[8px] bg-v2-background-bg-layer-01 p-2.5"
+          class="flex h-9 w-fit max-w-full items-center gap-2 rounded-[8px] bg-v2-background-bg-layer-01 p-2.5 text-[13px] font-[530] leading-text-compact tracking-[-0.04px]"
         >
           <Icon name="subagent" size="small" class="shrink-0 text-v2-icon-icon-faint" />
-          <TextShimmer
-            text={i18n.t("ui.tool.agent.delegating")}
-            class="min-w-0 truncate text-[13px] font-[530] leading-none tracking-[-0.04px]"
-          />
+          <TextShimmer text={i18n.t("ui.tool.agent.delegating")} class="min-w-0 truncate" />
         </div>
       </Show>
     )
