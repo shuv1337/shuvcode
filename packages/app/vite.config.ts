@@ -25,6 +25,7 @@ export default defineConfig({
     desktopPlugin,
     VitePWA({
       strategies: "generateSW",
+      injectRegister: false,
       manifest: false,
       workbox: {
         cleanupOutdatedCaches: true,
