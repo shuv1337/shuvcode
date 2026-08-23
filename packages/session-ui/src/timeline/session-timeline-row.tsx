@@ -55,7 +55,7 @@ export function createSessionTimelineRowRenderer(input: {
     input.status().type !== "idle" && input.projection.activeMessageID() === messageID
   const duration = (messageID: string) => {
     const user = input.projection.messageByID().get(messageID)
-    if (user?.type !== "user") return undefined
+    if (user?.type !== "user") return null
     const completed = (input.projection.assistantMessagesByParent().get(messageID) ?? emptyAssistantMessages).reduce<
       number | undefined
     >((latest, message) => {
