@@ -50,6 +50,7 @@ type RenderedBlock =
 type RenderResult = {
   text: string
   blocks: RenderedBlock[]
+  ready: boolean
 }
 
 const renderedCodeTokens = new WeakMap<HTMLDivElement, RenderedCodeState>()
@@ -367,8 +368,14 @@ function setupCodeCopy(root: HTMLDivElement, getLabels: () => CopyLabels) {
   }
 }
 
-function initialResult(text: string, key: string | undefined, projection: Projection, owner: string): RenderResult {
-  if (!text) return { text, blocks: [] }
+function initialResult(
+  text: string,
+  key: string | undefined,
+  projection: Projection,
+  owner: string,
+  deferUntilReady: boolean | undefined,
+): RenderResult {
+  if (!text) return { text, blocks: [], ready: true }
   const base = key ?? checksum(text)
   if (base) {
     const blocks = projection.blocks.flatMap((block, index) => {
@@ -378,10 +385,12 @@ function initialResult(text: string, key: string | undefined, projection: Projec
       if (cached?.raw !== block.raw) return []
       return [{ key: `${owner}:${cacheKey}`, mode: block.mode, ...cached }]
     })
-    if (blocks.length === projection.blocks.length) return { text, blocks }
+    if (blocks.length === projection.blocks.length) return { text, blocks, ready: true }
   }
+  if (deferUntilReady) return { text, blocks: [], ready: false }
   return {
     text,
+    ready: false,
     blocks: [
       {
         key: "initial",
@@ -403,11 +412,12 @@ export function Markdown(
     text: string
     cacheKey?: string
     streaming?: boolean
+    deferUntilReady?: boolean
     class?: string
     classList?: Record<string, boolean>
   },
 ) {
-  const [local, others] = splitProps(props, ["text", "cacheKey", "streaming", "class", "classList"])
+  const [local, others] = splitProps(props, ["text", "cacheKey", "streaming", "deferUntilReady", "class", "classList"])
   const i18n = useI18n()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const owner = createUniqueId()
@@ -448,10 +458,11 @@ export function Markdown(
         projection: value,
       }
     },
-    async (src) => {
+    async (src): Promise<RenderResult> => {
       if (isServer)
         return {
           text: src.text,
+          ready: true,
           blocks: [
             {
               key: "server",
@@ -462,7 +473,7 @@ export function Markdown(
             },
           ],
         } satisfies RenderResult
-      if (!src.text) return { text: src.text, blocks: [] } satisfies RenderResult
+      if (!src.text) return { text: src.text, blocks: [], ready: true } satisfies RenderResult
 
       const base = src.key ?? checksum(src.text)
       return Promise.all(
@@ -500,11 +511,12 @@ export function Markdown(
           return { key: blockKey, mode: block.mode, raw: block.raw, hash: hash ?? "", html: safe }
         }),
       )
-        .then((blocks) => ({ text: src.text, blocks }) satisfies RenderResult)
+        .then((blocks) => ({ text: src.text, blocks, ready: true }) satisfies RenderResult)
         .catch(
           () =>
             ({
               text: src.text,
+              ready: true,
               blocks: [
                 {
                   key: base ?? "fallback",
@@ -523,6 +535,7 @@ export function Markdown(
         local.cacheKey,
         local.streaming ? pendingProjection(local.text) : completedProjection(local.text),
         owner,
+        local.deferUntilReady,
       ),
     },
   )
@@ -533,12 +546,14 @@ export function Markdown(
     const container = root()
     const result = html.latest ?? html()
     const projected = currentProjection()
-    const content = local.text ? pendingBlocks(result, projected, local.cacheKey, owner) : []
+    const content = local.text ? pendingBlocks(result, projected, local.cacheKey, owner, local.deferUntilReady) : []
     if (!container) return
     if (isServer) return
+    delete container.dataset.markdownReady
     if (content.length === 0) {
       disposeCopyButtons(container)
       container.innerHTML = ""
+      if (result?.ready && result.text === local.text) container.dataset.markdownReady = ""
       return
     }
 
@@ -567,6 +582,7 @@ export function Markdown(
         copy: i18n.t("ui.message.copy"),
         copied: i18n.t("ui.message.copied"),
       }))
+    if (result?.ready && result.text === local.text) container.dataset.markdownReady = ""
   })
 
   onCleanup(() => {
@@ -579,7 +595,6 @@ export function Markdown(
   return (
     <div
       data-component="markdown"
-      data-markdown-ready={html.loading ? undefined : ""}
       dir="auto"
       classList={{
         ...local.classList,
@@ -596,9 +611,11 @@ function pendingBlocks(
   projection: Projection | undefined,
   cacheKey: string | undefined,
   owner: string,
+  deferUntilReady: boolean | undefined,
 ) {
   if (!result) return []
   if (!projection || result.text === projection.text) return result.blocks
+  if (deferUntilReady) return result.blocks
   const initial = result.blocks.length === 1 && result.blocks[0]?.key === "initial"
   return projection.blocks.map((block, index) => {
     const current = initial ? undefined : result.blocks[index]

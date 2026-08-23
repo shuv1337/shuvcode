@@ -13,6 +13,7 @@ export {
 
 export function createTimelineModel(input: { session: Pick<SessionModel, "identity" | "history"> }) {
   const data = useData()
+  const prepared = new Set<string>()
 
   const [resource] = createResource(
     () => input.session.identity.sessionID(),
@@ -20,7 +21,7 @@ export function createTimelineModel(input: { session: Pick<SessionModel, "identi
       if (!id) return
       const key = input.session.identity.sessionKey()
       await Promise.all([data.session.message.sync(id), data.session.pending.sync(id)])
-      void enrichLeadingTurn({
+      await enrichLeadingTurn({
         current: () => input.session.identity.sessionKey() === key,
         messages: () => data.session.message.list(id),
         more: () => data.session.message.more(id),
@@ -29,9 +30,15 @@ export function createTimelineModel(input: { session: Pick<SessionModel, "identi
         pause: () => new Promise((resolve) => setTimeout(resolve, leadingTurnPageDelay)),
         maxPages: leadingTurnPageLimit,
       }).catch(() => undefined)
+      if (input.session.identity.sessionKey() === key) prepared.add(key)
     },
   )
-  const ready = createMemo(() => !input.session.identity.sessionID() || !resource.loading)
+  const ready = createMemo(() => {
+    const id = input.session.identity.sessionID()
+    if (!id || prepared.has(input.session.identity.sessionKey()) || !resource.loading) return true
+    const messages = data.session.message.list(id)
+    return messages.length > 0 && !leadingTurnNeedsParent(messages)
+  })
   const more = () => {
     const id = input.session.identity.sessionID()
     return id ? data.session.message.more(id) : false

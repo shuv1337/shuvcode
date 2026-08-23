@@ -20,6 +20,7 @@ import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 import { filterVirtualIndexes } from "./virtual-items"
 
 const fallbackItemSize = 60
+const pendingMarkdown = '[data-component="markdown"]:not([data-markdown-ready])'
 // Distance from the bottom that counts as "at the end". Deliberately tight: a collapse clamps
 // exactly to the end, while a one-pixel nudge upward is a deliberate move away from it.
 const endEpsilon = 0.5
@@ -177,10 +178,48 @@ export function createTimelineVirtualizer(input: Input) {
   })
 
   let overscanFrame: number | undefined
+  const pendingMeasurements = () =>
+    virtualizer.getVirtualItems().some((item) => !virtualizer.itemSizeCache.has(item.key))
+  const settleColdBottom = () => {
+    if (input.pinned()) virtualizer.scrollToEnd()
+    if (virtualContent?.querySelector(pendingMarkdown) || pendingMeasurements()) {
+      overscanFrame = requestAnimationFrame(settleColdBottom)
+      return
+    }
+    overscanFrame = requestAnimationFrame(() => {
+      if (input.pinned()) virtualizer.scrollToEnd()
+      if (virtualContent?.querySelector(pendingMarkdown) || pendingMeasurements()) {
+        settleColdBottom()
+        return
+      }
+      overscanFrame = undefined
+      const content = virtualContent
+      if (!content) return
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        content.style.removeProperty("visibility")
+        return
+      }
+      const animation = ["animate-in", "fade-in", "duration-150"]
+      const clearAnimation = (event: AnimationEvent) => {
+        if (event.target !== content) return
+        content.removeEventListener("animationend", clearAnimation)
+        content.removeEventListener("animationcancel", clearAnimation)
+        content.classList.remove(...animation)
+      }
+      content.addEventListener("animationend", clearAnimation)
+      content.addEventListener("animationcancel", clearAnimation)
+      content.classList.add(...animation)
+      content.style.removeProperty("visibility")
+    })
+  }
   onMount(() => {
     overscanFrame = requestAnimationFrame(() => {
-      overscanFrame = undefined
       if (renderOverscan() < 20) setRenderOverscan(20)
+      if (!coldBottomMount) {
+        overscanFrame = undefined
+        return
+      }
+      settleColdBottom()
     })
   })
 
@@ -367,11 +406,17 @@ export function createTimelineVirtualizer(input: Input) {
           <Show when={input.showHeader()}>{props.header}</Show>
           <div
             data-timeline-virtual-content
+            class="motion-reduce:animate-none"
             ref={(element) => {
               virtualContent = element
               input.setContentRef(element)
             }}
-            style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative", width: "100%" }}
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              position: "relative",
+              width: "100%",
+              visibility: coldBottomMount ? "hidden" : undefined,
+            }}
           >
             <For each={virtualRowKeys()}>{(rowKey) => <VirtualRow rowKey={rowKey} />}</For>
             <Show when={rows().length > 0}>
