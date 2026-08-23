@@ -22,6 +22,7 @@ export type UpdaterAPI = {
 
 export type ElectronAPI = {
   awaitInitialization(): Promise<ServerReadyData>
+  reconnectService(): Promise<ServerReadyData>
   wslServers: WslServersAPI
   updater: UpdaterAPI
   consumeInitialDeepLinks(): Promise<string[]>

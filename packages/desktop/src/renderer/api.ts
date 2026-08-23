@@ -24,6 +24,7 @@ const updaterHandler = (state: UpdaterState) => {
 
 export const api: ElectronAPI = {
   awaitInitialization: () => invoke("AppAwaitInitialization"),
+  reconnectService: () => invoke("AppReconnectService"),
   wslServers: {
     getState: () => invoke("WslGetState").then(mutable),
     subscribe: (cb) => {
