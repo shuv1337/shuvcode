@@ -9,7 +9,7 @@ import type { Versioned } from "../plugin.js"
 export const Updated = Bus.ephemeral({ type: "sdk.plugin.updated", schema: {} })
 
 /**
- * Holds the plugins an embedder (the `@opencode-ai/sdk-next` host) contributes,
+ * Holds the plugins an embedder (the `@opencode-ai/sdk` host) contributes,
  * so `PluginSupervisor` can add them on every Location boot through the ordinary
  * generation path that `PluginSupervisor` uses for plugins discovered from
  * config. Registration publishes an unlocated update so every booted Location
@@ -35,7 +35,7 @@ export const layer = Layer.effect(
     return Service.of({
       register: (plugin) =>
         Effect.sync(() => {
-          plugins.set(plugin.id, { ...plugin, version: String(++revision) })
+          plugins.set(plugin.id, { ...plugin, version: String(++revision), source: { type: "sdk" } })
         }).pipe(Effect.andThen(bus.publish(Updated, {})), Effect.asVoid),
       all: () => [...plugins.values()],
     })

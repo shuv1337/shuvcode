@@ -60,7 +60,7 @@ function selectMantleModel(sdk: MantleSDK, modelID: string) {
 }
 
 export const AmazonBedrockPlugin = define({
-  id: "opencode.provider.amazon-bedrock",
+  id: "opencode.provider.amazon.bedrock",
   effect: Effect.fn(function* (ctx) {
     yield* ctx.catalog.transform((evt) => {
       for (const item of evt.provider.list()) {
@@ -86,10 +86,6 @@ export const AmazonBedrockPlugin = define({
           process.env.AWS_BEARER_TOKEN_BEDROCK ??
           (typeof options.bearerToken === "string" ? options.bearerToken : undefined)
         if (bearerToken && !process.env.AWS_BEARER_TOKEN_BEDROCK) process.env.AWS_BEARER_TOKEN_BEDROCK = bearerToken
-        const containerCreds = Boolean(
-          process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI,
-        )
-
         options.region = region
         if (typeof options.endpoint === "string") options.baseURL = options.endpoint
         if (!bearerToken && options.credentialProvider === undefined) {

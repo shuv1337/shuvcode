@@ -30,7 +30,7 @@ const webSearchToolNode = makeLocationNode({
       yield* registerToolPlugin(WebSearchTool.Plugin, { websearch: webSearchHost(websearch) })
     }),
   ),
-  deps: [Tool.node, Permission.node, WebSearch.node, Form.node, Config.node],
+  deps: [Tool.node, Permission.node, WebSearch.node, Form.node],
 })
 
 const sessionID = Session.ID.make("ses_websearch_test")
@@ -94,6 +94,7 @@ const websearch = Layer.succeed(
         if (selection === false) return yield* new WebSearch.DisabledError()
         return selection ? providers.find((provider) => provider.id === selection) : undefined
       }),
+    select: (next) => Effect.sync(() => (selection = next)),
     query: (input) =>
       Effect.gen(function* () {
         queries.push(input)

@@ -153,7 +153,7 @@ const ARITY: Record<string, number> = {
   "yarn run": 3,
 }
 
-export const scan = Effect.fn("ShellParse.scan")(function* (
+export const scan = Effect.fnUntraced(function* (
   command: string,
   shell: string,
   cwd: string,
@@ -163,7 +163,7 @@ export const scan = Effect.fn("ShellParse.scan")(function* (
   return yield* scanLegacy(command, shell, cwd)
 })
 
-const scanLegacy = Effect.fn("ShellParse.scanLegacy")(function* (command: string, shell: string, cwd: string) {
+const scanLegacy = Effect.fnUntraced(function* (command: string, shell: string, cwd: string) {
   const parsers = yield* Effect.promise(load)
   const powershell = ShellSelect.ps(shell)
   const tree = (powershell ? parsers.ps : parsers.bash).parse(command)
@@ -198,7 +198,7 @@ const scanLegacy = Effect.fn("ShellParse.scanLegacy")(function* (command: string
 })
 
 async function scanPortable(command: string, shell: string, cwd: string) {
-  const { ShellScan } = await import("@opencode-ai/shell-scan")
+  const { ShellScan } = await import("./scan.js")
   const powershell = ShellSelect.ps(shell)
   const result = powershell ? ShellScan.scanPowerShell(command) : ShellScan.scan(command)
   if (result.kind === "opaque") return { commands: [{ resource: command, save: command }], directories: [] }

@@ -79,6 +79,15 @@
   color: var(--blume-foreground);
 }
 
+/* Match opentui.com/docs: bold headings and bold header nav links */
+.prose :is(h1, h2, h3, h4) {
+  font-weight: 700;
+}
+
+[data-blume-header] nav[aria-label="Sections"] a {
+  font-weight: 700;
+}
+
 .prose a:not(.blume-heading-anchor, [data-blume-card]) {
   color: var(--blume-accent);
 }

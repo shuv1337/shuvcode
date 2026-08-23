@@ -85,7 +85,7 @@ const TokenResponse = Schema.Struct({
   expires_in: Schema.optional(Schema.Number),
 })
 const decodeToken = Schema.decodeUnknownOption(TokenResponse)
-const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
 const osType = () => {
   if (process.platform === "darwin") return "darwin"

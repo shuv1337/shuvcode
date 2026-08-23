@@ -12,12 +12,13 @@ import { Database } from "@opencode-ai/core/database/database"
 import { tmpdir } from "./fixture/tmpdir"
 import type { SqlClient } from "effect/unstable/sql/SqlClient"
 import legacyCredentialsMigration from "@opencode-ai/core/database/migration/20260805200742_import_legacy_credentials"
-import sessionInboxMigration from "@opencode-ai/core/database/migration/20260812181746_session_inbox"
 import forkPendingToInboxMigration from "@opencode-ai/core/database/migration/20260812181747_fork_pending_to_inbox"
 import worktreeMigration from "@opencode-ai/core/database/migration/20260812213948_worktree"
 import previousV2Migration from "@opencode-ai/core/database/migration/20260804233008_loose_psylocke"
 import workspaceMigration from "@opencode-ai/core/database/migration/20260808023530_workspace_domain"
 import executionClaimsMigration from "@opencode-ai/core/database/migration/20260811161259_execution_claim_attempts"
+import sessionInboxMigration from "@opencode-ai/core/database/migration/20260812181746_session_inbox"
+import sessionViewedStateMigration from "@opencode-ai/core/database/migration/20260819222447_session_viewed_state"
 import { Global } from "@opencode-ai/util/global"
 
 const run = <A, E>(
@@ -154,6 +155,28 @@ describe("DatabaseMigration", () => {
         ])
         const messageForeignKeys = yield* db.all<{ table: string }>(sql`PRAGMA foreign_key_list('session_message')`)
         expect(messageForeignKeys.some((foreignKey) => foreignKey.table === "session_v2")).toBe(true)
+      }),
+    )
+  })
+
+  test("adds nullable attention state to existing sessions", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE session_v2 (id text PRIMARY KEY, title text)`)
+        yield* db.run(sql`INSERT INTO session_v2 (id, title) VALUES ('ses_existing', 'Existing')`)
+
+        yield* DatabaseMigration.applyOnly(db, [sessionViewedStateMigration])
+        yield* DatabaseMigration.applyOnly(db, [sessionViewedStateMigration])
+
+        expect(yield* db.get(sql`SELECT id, title, time_idle, time_viewed, idle_outcome FROM session_v2`)).toEqual({
+          id: "ses_existing",
+          title: "Existing",
+          time_idle: null,
+          time_viewed: null,
+          idle_outcome: null,
+        })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM migration`)).toEqual({ count: 1 })
       }),
     )
   })

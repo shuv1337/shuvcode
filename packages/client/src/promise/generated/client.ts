@@ -1,7 +1,5 @@
 import type {
   HealthGetOutput,
-  HealthStopInput,
-  HealthStopOutput,
   ServerGetOutput,
   LocationGetInput,
   LocationGetOutput,
@@ -82,6 +80,8 @@ import type {
   SessionMessageOutput,
   SessionEnvironmentInput,
   SessionEnvironmentOutput,
+  SessionViewInput,
+  SessionViewOutput,
   MessageListInput,
   MessageListOutput,
   ModelListInput,
@@ -186,6 +186,8 @@ import type {
   PtyUpdateOutput,
   PtyRemoveInput,
   PtyRemoveOutput,
+  PtyConnectTokenInput,
+  PtyConnectTokenOutput,
   ShellListInput,
   ShellListOutput,
   ShellCreateInput,
@@ -367,18 +369,6 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<HealthGetOutput>(
           { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
-          requestOptions,
-        ),
-      stop: (input: HealthStopInput, requestOptions?: RequestOptions) =>
-        request<HealthStopOutput>(
-          {
-            method: "POST",
-            path: `/api/service/stop`,
-            body: { instanceID: input["instanceID"] },
-            successStatus: 200,
-            declaredStatuses: [401, 400],
-            empty: false,
-          },
           requestOptions,
         ),
     },
@@ -908,6 +898,18 @@ export function make(options: ClientOptions) {
             method: "PUT",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/environment`,
             body: { variables: input["variables"] },
+            successStatus: 204,
+            declaredStatuses: [404, 401, 400],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      view: (input: SessionViewInput, requestOptions?: RequestOptions) =>
+        request<SessionViewOutput>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/view`,
+            body: { idle: input["idle"] },
             successStatus: 204,
             declaredStatuses: [404, 401, 400],
             empty: true,
@@ -1602,6 +1604,21 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      connect: {
+        token: (input: PtyConnectTokenInput, requestOptions?: RequestOptions) =>
+          request<PtyConnectTokenOutput>(
+            {
+              method: "POST",
+              path: `/api/pty/${encodeURIComponent(input.ptyID)}/connect-token`,
+              query: { location: input["location"] },
+              headers: { "x-opencode-ticket": input["x-opencode-ticket"] },
+              successStatus: 200,
+              declaredStatuses: [403, 404, 401, 400],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     shell: {
       list: (input?: ShellListInput, requestOptions?: RequestOptions) =>

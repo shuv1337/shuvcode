@@ -48,7 +48,7 @@ export type EffectOutputType = {
 
 type ResolvedEffectTypeReference = Omit<EffectTypeReference, "schema"> & { readonly ast: SchemaAST.AST }
 
-export class GenerationError extends Schema.TaggedErrorClass<GenerationError>()("GenerationError", {
+export class GenerationError extends Schema.TaggedError<GenerationError>()("GenerationError", {
   reason: Schema.String,
 }) {
   override get message() {
@@ -92,7 +92,6 @@ type PromiseInputField =
 
 const resolveHttpApiStatus = SchemaAST.resolveAt<number>("httpApiStatus")
 const resolveHttpApiEncoding = SchemaAST.resolveAt<HttpApiSchema.Encoding>("~httpApiEncoding")
-const resolveContentSchema = SchemaAST.resolveAt<SchemaAST.AST>("contentSchema")
 const Manifest = Schema.fromJsonString(Schema.Array(Schema.String))
 const manifestName = ".httpapi-codegen.json"
 
@@ -217,12 +216,17 @@ export function compile<Id extends string, Groups extends HttpApiGroup.Constrain
   const modules = new Set(["client", "client-error", "index"])
   const groups = Array.from(
     Map.groupBy(endpoints, (endpoint) => endpoint.group),
-    ([identifier, endpoints], index) => {
+    ([identifier, endpoints]) => {
       if (new Set(endpoints.map((endpoint) => endpoint.sourceGroup)).size > 1) {
         throw new GenerationError({ reason: `Client group name collision: ${identifier}` })
       }
-      const base = /^[A-Za-z0-9_-]+$/.test(identifier) ? identifier : `group-${index}`
-      const module = uniqueModule(base, index, modules)
+      // Module names derive from the group identifier so unrelated groups never rename.
+      const sanitized = identifier.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "")
+      const reserved = /^(aux|client|client-error|con|index|nul|prn|com[1-9]|lpt[1-9])$/i.test(sanitized)
+      const module = sanitized === "" || reserved ? `group-${sanitized}` : sanitized
+      if (modules.has(module.toLowerCase())) {
+        throw new GenerationError({ reason: `Client module name collision: ${module}` })
+      }
       modules.add(module.toLowerCase())
       return { identifier, sourceIdentifier: endpoints[0].sourceGroup, module, endpoints }
     },
@@ -364,9 +368,28 @@ function renderEffectShape(
 ) {
   const references = effectTypeReferences(typeReferences)
   const imports = new Set<string>()
-  const endpointTypes = groups.map((group, groupIndex) => {
-    const endpoints = group.endpoints.map((endpoint, endpointIndex) => {
-      const prefix = `Endpoint${groupIndex}_${endpointIndex}`
+  const externalNames = new Set([
+    "AppApi",
+    "Effect",
+    "Stream",
+    ...typeReferences.flatMap((reference) => reference.name.match(/^[A-Za-z_$][A-Za-z0-9_$]*/) ?? []),
+    ...Object.values(outputTypes ?? {}).flatMap((output) => output.name.match(/^[A-Za-z_$][A-Za-z0-9_$]*/) ?? []),
+  ])
+  const generatedNames = groups.flatMap((group) => [
+    groupShapeName(group),
+    ...group.endpoints.flatMap((endpoint) => [
+      ...(endpoint.operation.inputMode === "none" ? [] : [`${endpointTypeName(group, endpoint)}Input`]),
+      `${endpointTypeName(group, endpoint)}Output`,
+      groupShapeTypeName(group, endpoint),
+    ]),
+  ])
+  const collision = generatedNames.find((name) => externalNames.has(name))
+  if (collision !== undefined) {
+    throw new GenerationError({ reason: `Generated Effect type collides with imported type: ${collision}` })
+  }
+  const endpointTypes = groups.map((group) => {
+    const endpoints = group.endpoints.map((endpoint) => {
+      const prefix = endpointTypeName(group, endpoint)
       const input = endpoint.input
         .map((field) => {
           const schema = effectInputSchema(endpoint, field)
@@ -430,7 +453,7 @@ function effectTypeReferences(input: ReadonlyArray<EffectTypeReference>) {
   for (const reference of input) {
     const value = { name: reference.name, import: reference.import, ast: reference.schema.ast }
     const document = SchemaRepresentation.toCodeDocument(
-      SchemaRepresentation.fromASTs([Schema.toType(reference.schema).ast]),
+      SchemaRepresentation.toRepresentations([codegenAst(Schema.toType(reference.schema).ast)]),
     )
     const name = document.codes[0]?.Type
     const type =
@@ -462,7 +485,9 @@ function effectType(schema: Schema.Top, references: ReturnType<typeof effectType
     imports.add(direct.import)
     return direct.name
   }
-  const document = SchemaRepresentation.toCodeDocument(SchemaRepresentation.fromASTs([projected.ast]))
+  const document = SchemaRepresentation.toCodeDocument(
+    SchemaRepresentation.toRepresentations([codegenAst(projected.ast)]),
+  )
   const source = new Map(document.references.nonRecursives.map((reference) => [reference.$ref, reference.code.Type]))
   const expand = (type: string, seen = new Set<string>()): string => {
     for (const [name, value] of source) {
@@ -529,8 +554,23 @@ function groupShapeName(group: Group) {
   return `${identifierPart(group.identifier)}Api`
 }
 
+// Generated symbol names derive from group and endpoint identity, never from traversal
+// position, so adding an endpoint or group cannot rename unrelated generated code.
+// Uniqueness is validated by compile (groupTypeNames/endpointTypeNames).
+function groupTypeName(group: Group) {
+  return identifierPart(group.identifier)
+}
+
+function endpointTypeName(group: Group, endpoint: Endpoint) {
+  return `${groupTypeName(group)}${endpoint.clientPath.map(identifierPart).join("")}`
+}
+
+function endpointAdapterName(group: Group, endpoint: Endpoint) {
+  return `Endpoint${endpointTypeName(group, endpoint)}`
+}
+
 function groupShapeTypeName(group: Group, endpoint: Endpoint) {
-  return `${identifierPart(group.identifier)}${endpoint.clientPath.map(identifierPart).join("")}Operation`
+  return `${endpointTypeName(group, endpoint)}Operation`
 }
 
 function assertPromiseEndpoint(endpoint: Endpoint) {
@@ -584,11 +624,11 @@ function promiseOperations(groups: ReadonlyArray<Group>) {
 
 function renderEffectFiles(groups: ReadonlyArray<Group>): Output["files"] {
   return [
-    ...groups.map((group, index) => ({ path: `${group.module}.ts`, content: renderGroup(group, index) })),
+    ...groups.map((group) => ({ path: `${group.module}.ts`, content: renderGroup(group) })),
     {
       path: "client-error.ts",
       content:
-        'import { Schema } from "effect"\n\nexport class ClientError extends Schema.TaggedErrorClass<ClientError>()("ClientError", {\n  cause: Schema.Defect(),\n}) {}\n',
+        'import { Schema } from "effect"\n\nexport class ClientError extends Schema.TaggedError<ClientError>()("ClientError", {\n  cause: Schema.Defect(),\n}) {}\n',
     },
     { path: "client.ts", content: renderClient(groups) },
     {
@@ -609,10 +649,11 @@ function renderImportedEffectFiles(
         readonly shapeModule?: string
       },
 ): Output["files"] {
-  const adapters = groups.map((group, groupIndex) => {
+  const adapters = groups.map((group) => {
     const rawGroup = group.endpoints[0]?.topLevel ? "RawClient" : `RawClient[${JSON.stringify(group.sourceIdentifier)}]`
-    const methods = group.endpoints.map((item, endpointIndex) => {
-      const prefix = `Endpoint${groupIndex}_${endpointIndex}`
+    const methods = group.endpoints.map((item) => {
+      const prefix = endpointTypeName(group, item)
+      const adapter = endpointAdapterName(group, item)
       const schemaBySource = {
         params: item.params,
         query: item.query,
@@ -659,20 +700,22 @@ function renderImportedEffectFiles(
           : isOpaquePayload(item)
             ? `type ${prefix}Request = Parameters<${rawGroup}[${JSON.stringify(item.endpoint.identifier)}]>[0]\n`
             : ""
-      return `${declarations}const ${prefix} = (raw: ${rawGroup}) => (${argument}) => ${output}`
+      return `${declarations}const ${adapter} = (raw: ${rawGroup}) => (${argument}) => ${output}`
     })
     const fields = renderClientTree(
       group.endpoints,
-      (_item, endpointIndex) => `Endpoint${groupIndex}_${endpointIndex}(raw)`,
+      (item) => `${endpointAdapterName(group, item)}(raw)`,
       (name, value) => `${JSON.stringify(name)}: ${value}`,
       ", ",
     )
-    return `${methods.join("\n\n")}\n\nconst adaptGroup${groupIndex} = (raw: ${rawGroup}) => ({ ${fields} })`
+    return `${methods.join("\n\n")}\n\nconst adaptGroup${groupTypeName(group)} = (raw: ${rawGroup}) => ({ ${fields} })`
   })
-  const fields = groups.flatMap((group, index) =>
+  const fields = groups.flatMap((group) =>
     group.endpoints[0]?.topLevel
-      ? [`...adaptGroup${index}(raw)`]
-      : [`${JSON.stringify(group.identifier)}: adaptGroup${index}(raw[${JSON.stringify(group.sourceIdentifier)}])`],
+      ? [`...adaptGroup${groupTypeName(group)}(raw)`]
+      : [
+          `${JSON.stringify(group.identifier)}: adaptGroup${groupTypeName(group)}(raw[${JSON.stringify(group.sourceIdentifier)}])`,
+        ],
   )
   const usesStream = groups.some((group) => group.endpoints.some((item) => item.operation.success === "stream"))
   const imported = "api" in options
@@ -682,15 +725,24 @@ function renderImportedEffectFiles(
       ? renderImportedGroup(options.group)
       : renderImportedProjection(groups, options.endpoints)
   const api = imported ? options.api : "Api"
+  const adapterNames = new Set(
+    groups.flatMap((group) => group.endpoints.map((endpoint) => endpointAdapterName(group, endpoint))),
+  )
+  const adapterCollision = (projection?.imports ?? [api]).find((name) => adapterNames.has(name))
+  if (adapterCollision !== undefined) {
+    throw new GenerationError({
+      reason: `Generated Effect adapter collides with imported endpoint: ${adapterCollision}`,
+    })
+  }
   const imports =
     projection === undefined
       ? `import { ${api} } from ${JSON.stringify(options.module)}`
       : `import { HttpApi, HttpApiClient${"endpoints" in options ? ", HttpApiGroup" : ""} } from "effect/unstable/httpapi"\nimport { ${projection.imports.join(", ")} } from ${JSON.stringify(options.module)}`
   const httpApiImport = projection === undefined ? 'import { HttpApiClient } from "effect/unstable/httpapi"\n' : ""
-  const shapeTypes = groups.flatMap((group, groupIndex) =>
-    group.endpoints.flatMap((endpoint, endpointIndex) => [
-      ...(endpoint.operation.inputMode === "none" ? [] : [`Endpoint${groupIndex}_${endpointIndex}Input`]),
-      `Endpoint${groupIndex}_${endpointIndex}Output`,
+  const shapeTypes = groups.flatMap((group) =>
+    group.endpoints.flatMap((endpoint) => [
+      ...(endpoint.operation.inputMode === "none" ? [] : [`${endpointTypeName(group, endpoint)}Input`]),
+      `${endpointTypeName(group, endpoint)}Output`,
     ]),
   )
   const shapeImport =
@@ -706,7 +758,7 @@ function renderImportedEffectFiles(
     {
       path: "client-error.ts",
       content:
-        'import { Schema } from "effect"\n\nexport class ClientError extends Schema.TaggedErrorClass<ClientError>()("ClientError", {\n  cause: Schema.Defect(),\n}) {}\n',
+        'import { Schema } from "effect"\n\nexport class ClientError extends Schema.TaggedError<ClientError>()("ClientError", {\n  cause: Schema.Defect(),\n}) {}\n',
     },
     { path: "client.ts", content: client },
     {
@@ -974,18 +1026,20 @@ function renderClientTree(
 }
 
 function identifierPart(value: string) {
-  return value
+  const identifier = value
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join("")
+  return /^[A-Za-z_$]/.test(identifier) ? identifier : `_${identifier}`
 }
 
 function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, reservedNames: ReadonlySet<string>) {
   if (schemas.length === 0) return { types: [], definitions: [] }
-  const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.fromASTs(schemas.map((schema) => schema.ast) as [SchemaAST.AST, ...Array<SchemaAST.AST>]),
+  const representations = SchemaRepresentation.toRepresentations(
+    promiseTypeAsts(schemas) as [SchemaAST.AST, ...Array<SchemaAST.AST>],
   )
+  const document = SchemaRepresentation.toCodeDocument(representations)
   if (
     document.artifacts.some(
       (artifact) =>
@@ -995,9 +1049,35 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
   ) {
     throw new GenerationError({ reason: "Referenced Promise types are not implemented" })
   }
+  const anonymous = new Set(
+    Object.entries(representations.references)
+      .filter(([, reference]) => {
+        if (!("annotations" in reference) || reference.annotations === undefined) return true
+        return reference.annotations.identifier === undefined && reference.annotations["~identifier"] === undefined
+      })
+      .map(([name]) => name),
+  )
+  const anonymousTypes = new Map(
+    document.references.nonRecursives
+      .filter((reference) => anonymous.has(reference.$ref))
+      .map((reference) => [reference.$ref, reference.code.Type]),
+  )
+  const inlineAnonymous = (type: string, seen = new Set<string>()): string => {
+    for (const [reference, value] of anonymousTypes) {
+      const pattern = `(?<![A-Za-z0-9_$.'"])${reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_$.'"])`
+      if (!new RegExp(pattern).test(type)) continue
+      if (seen.has(reference)) {
+        throw new GenerationError({ reason: `Recursive Promise types are not implemented: ${reference}` })
+      }
+      type = type.replaceAll(new RegExp(pattern, "g"), `(${inlineAnonymous(value, new Set([...seen, reference]))})`)
+    }
+    return type
+  }
   const names = new Map<string, string>()
   const usedNames = new Set(reservedNames)
-  for (const reference of document.references.nonRecursives) {
+  const references = document.references.nonRecursives.filter((reference) => !anonymous.has(reference.$ref))
+  const referenceNames = new Set(references.map((reference) => reference.$ref))
+  for (const reference of references) {
     const seed = identifierPart(reference.$ref)
     const name = uniqueTypeName(seed, usedNames)
     names.set(reference.$ref, name)
@@ -1014,11 +1094,30 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
       .replaceAll(/(?<!["'])\bunknown\b(?!["'])/g, "any")
     return mutable ? mutableType(preserveStringSuggestions(output)) : preserveStringSuggestions(output)
   }
+  const equivalent = new Map<string, string>()
+  for (const reference of references) {
+    const base = reference.$ref.replace(/_\d+$/, "")
+    const identifier = referenceNames.has(base) ? base : reference.$ref
+    const key = `${identifier}\0${render(inlineAnonymous(reference.code.Type))}`
+    const existing = equivalent.get(key)
+    if (existing !== undefined) {
+      names.set(reference.$ref, existing)
+      continue
+    }
+    const name = names.get(reference.$ref)
+    if (name === undefined) throw new GenerationError({ reason: `Missing Promise type name: ${reference.$ref}` })
+    equivalent.set(key, name)
+  }
+  const emitted = new Set<string>()
   return {
-    types: document.codes.map((code) => render(code.Type)),
-    definitions: document.references.nonRecursives.map(
-      (reference) => `export type ${names.get(reference.$ref)} = ${render(reference.code.Type)}`,
-    ),
+    types: document.codes.map((code) => render(inlineAnonymous(code.Type))),
+    definitions: references.flatMap((reference) => {
+      const name = names.get(reference.$ref)
+      if (name === undefined) throw new GenerationError({ reason: `Missing Promise type name: ${reference.$ref}` })
+      if (emitted.has(name)) return []
+      emitted.add(name)
+      return [`export type ${name} = ${render(inlineAnonymous(reference.code.Type))}`]
+    }),
   }
 }
 
@@ -1028,7 +1127,7 @@ function uniqueTypeName(seed: string, used: ReadonlySet<string>, suffix = 1): st
 }
 
 function structuralType(schema: Schema.Top) {
-  const document = SchemaRepresentation.toCodeDocument(SchemaRepresentation.fromASTs([schema.ast]))
+  const document = SchemaRepresentation.toCodeDocument(SchemaRepresentation.toRepresentations([promiseTypeAst(schema)]))
   if (
     document.artifacts.some(
       (artifact) =>
@@ -1057,6 +1156,63 @@ function structuralType(schema: Schema.Top) {
       .replaceAll(/ & Brand\.Brand<"[^"]+">/g, "")
       .replaceAll("Schema.Json", "JsonValue"),
   )
+}
+
+function promiseTypeAst(schema: Schema.Top) {
+  return codegenAst(schema.ast)
+}
+
+function promiseTypeAsts(schemas: ReadonlyArray<Schema.Top>) {
+  return codegenAsts(schemas.map((schema) => schema.ast))
+}
+
+function codegenAst(root: SchemaAST.AST) {
+  return codegenAsts([root])[0]
+}
+
+function codegenAsts(roots: ReadonlyArray<SchemaAST.AST>) {
+  const cache = new WeakMap<SchemaAST.AST, SchemaAST.AST>()
+  const references = new Map<string, SchemaAST.AST>()
+  const recur = (ast: SchemaAST.AST): SchemaAST.AST => {
+    const cached = cache.get(ast)
+    if (cached !== undefined) return cached
+    const identifier = SchemaAST.resolveIdentifier(ast)
+    const output = normalize(ast)
+    const referenceKey =
+      identifier === undefined
+        ? undefined
+        : `${identifier}\0${ast.context?.isOptional === true}\0${ast.context?.isMutable === true}\0${representationEncoding(output)}`
+    const reference = referenceKey === undefined ? undefined : references.get(referenceKey)
+    if (reference !== undefined) {
+      cache.set(ast, reference)
+      return reference
+    }
+    cache.set(ast, output)
+    if (referenceKey !== undefined) references.set(referenceKey, output)
+    return output
+  }
+  const normalize = (ast: SchemaAST.AST): SchemaAST.AST => {
+    if (SchemaAST.isDeclaration(ast) && ast.annotations?.toCode === undefined) {
+      const representation = ast.annotations?.representation
+      if (
+        typeof representation === "object" &&
+        representation !== null &&
+        "id" in representation &&
+        representation.id === "effect/schema/Json"
+      ) {
+        return Schema.Json.ast
+      }
+      if (ast.annotations?.["~constructor"] !== undefined && ast.typeParameters[0] !== undefined) {
+        const identifier = SchemaAST.resolveIdentifier(ast)
+        const fields = recur(ast.typeParameters[0])
+        if (identifier === undefined) return fields
+        return Schema.make<Schema.Top>(fields).annotate({ identifier }).ast
+      }
+    }
+    if (!("recur" in ast) || typeof ast.recur !== "function") return ast
+    return ast.recur(recur)
+  }
+  return roots.map(recur)
 }
 
 function preserveStringSuggestions(type: string) {
@@ -1135,14 +1291,6 @@ function promisePath(path: string, input: ReadonlyArray<InputField>, wildcard?: 
   return `\`${template}${wildcard === undefined ? "" : `\${encodePath(input.${wildcard.name})}`}\``
 }
 
-function uniqueModule(base: string, index: number, modules: ReadonlySet<string>) {
-  if (!modules.has(base.toLowerCase())) return base
-  const seed = `${base}-${index}`
-  let suffix = 0
-  while (modules.has(`${seed}${suffix === 0 ? "" : `-${suffix}`}`.toLowerCase())) suffix++
-  return `${seed}${suffix === 0 ? "" : `-${suffix}`}`
-}
-
 function normalizeTransport(
   schema: Schema.Top | undefined,
   source: InputField["source"] | "success" | "error",
@@ -1206,40 +1354,64 @@ function isPathInput(path: string): path is HttpRouter.PathInput {
   return path === "*" || path.startsWith("/")
 }
 
+const encodings = new WeakMap<SchemaAST.AST, string>()
+
 function sameEncoding(left: SchemaAST.AST, right: SchemaAST.AST): boolean {
+  if (!sameRuntimeEncoding(left, right)) return false
+  return sameRepresentation(left, right)
+}
+
+function sameRepresentation(left: SchemaAST.AST, right: SchemaAST.AST): boolean {
+  return representationEncoding(left) === representationEncoding(right)
+}
+
+function representationEncoding(ast: SchemaAST.AST) {
+  const cached = encodings.get(ast)
+  if (cached !== undefined) return cached
+  const encoded = JSON.stringify(SchemaRepresentation.toJson(SchemaRepresentation.toRepresentation(ast)))
+  encodings.set(ast, encoded)
+  return encoded
+}
+
+function sameRuntimeEncoding(left: SchemaAST.AST, right: SchemaAST.AST): boolean {
   if (left._tag !== right._tag || left.encoding?.length !== right.encoding?.length) return false
   if (
     left.encoding?.some((link, index) => {
       const other = right.encoding?.[index]
-      return other === undefined || link.transformation !== other.transformation || !sameEncoding(link.to, other.to)
+      return other === undefined || !sameRuntimeEncoding(link.to, other.to)
     })
-  )
+  ) {
     return false
+  }
   if (!sameChecks(left.checks, right.checks) || !sameContext(left.context, right.context)) return false
-  if (SchemaAST.isSuspend(left) && SchemaAST.isSuspend(right)) return sameEncoding(left.thunk(), right.thunk())
+  if (SchemaAST.isSuspend(left) && SchemaAST.isSuspend(right)) {
+    return sameRuntimeEncoding(left.thunk(), right.thunk())
+  }
   if (SchemaAST.isUnion(left) && SchemaAST.isUnion(right)) {
     return (
       left.types.length === right.types.length &&
-      left.types.every((ast, index) => sameEncoding(ast, right.types[index]))
+      left.types.every((ast, index) => sameRuntimeEncoding(ast, right.types[index]))
     )
   }
   if (SchemaAST.isArrays(left) && SchemaAST.isArrays(right)) {
     return (
       left.elements.length === right.elements.length &&
       left.rest.length === right.rest.length &&
-      left.elements.every((ast, index) => sameEncoding(ast, right.elements[index])) &&
-      left.rest.every((ast, index) => sameEncoding(ast, right.rest[index]))
+      left.elements.every((ast, index) => sameRuntimeEncoding(ast, right.elements[index])) &&
+      left.rest.every((ast, index) => sameRuntimeEncoding(ast, right.rest[index]))
     )
   }
   if (SchemaAST.isObjects(left) && SchemaAST.isObjects(right)) {
     return (
       left.propertySignatures.length === right.propertySignatures.length &&
       left.indexSignatures.length === right.indexSignatures.length &&
-      left.propertySignatures.every((field, index) => sameEncoding(field.type, right.propertySignatures[index].type)) &&
+      left.propertySignatures.every((field, index) =>
+        sameRuntimeEncoding(field.type, right.propertySignatures[index].type),
+      ) &&
       left.indexSignatures.every(
         (field, index) =>
-          sameEncoding(field.parameter, right.indexSignatures[index].parameter) &&
-          sameEncoding(field.type, right.indexSignatures[index].type),
+          sameRuntimeEncoding(field.parameter, right.indexSignatures[index].parameter) &&
+          sameRuntimeEncoding(field.type, right.indexSignatures[index].type),
       )
     )
   }
@@ -1298,7 +1470,7 @@ export function write(
       output.files,
       (file) =>
         fs.exists(join(directory, file.path)).pipe(
-          Effect.flatMap((exists) => (exists ? fs.stat(join(directory, file.path)) : Effect.succeed(undefined))),
+          Effect.flatMap((exists) => (exists ? fs.stat(join(directory, file.path)) : Effect.undefined)),
           Effect.flatMap((info) =>
             info?.type === "SymbolicLink"
               ? new GenerationError({ reason: `Unsafe output path: ${file.path}` })
@@ -1399,9 +1571,9 @@ function assertPortable(schema: Schema.Top, path: string, portable: Map<SchemaAS
     if (!annotationsPortable(ast.annotations)) return false
     if (!checksPortable(ast.checks) || ("encodingChecks" in ast && !checksPortable(ast.encodingChecks))) return false
     if (SchemaAST.isDeclaration(ast)) {
-      return generationPortable(ast.annotations?.generation) && ast.typeParameters.every(visit)
+      return typeof ast.annotations?.toCode === "function" && ast.typeParameters.every(visit)
     }
-    if (ast.encoding !== undefined && ast.annotations?.generation === undefined) return false
+    if (ast.encoding !== undefined && ast.annotations?.toCode === undefined) return false
     if (SchemaAST.isSuspend(ast)) return visit(ast.thunk())
     if (SchemaAST.isUnion(ast)) return ast.types.every(visit)
     if (SchemaAST.isArrays(ast)) {
@@ -1435,7 +1607,8 @@ function checksPortable(checks: SchemaAST.Checks | undefined): boolean {
   return checks.every((check) =>
     check._tag === "Filter"
       ? !check.aborted &&
-        check.annotations?.meta !== undefined &&
+        check.annotations?.representation !== undefined &&
+        serializable(check.annotations.representation) &&
         typeof check.annotations.arbitrary === "object" &&
         check.annotations.arbitrary !== null &&
         "constraint" in check.annotations.arbitrary
@@ -1469,38 +1642,23 @@ function metadataPortable(ast: SchemaAST.AST, seen: Set<SchemaAST.AST>): boolean
   return true
 }
 
-function generationPortable(generation: unknown): boolean {
-  if (typeof generation !== "object" || generation === null) return false
-  const value = generation as {
-    readonly runtime?: unknown
-    readonly Type?: unknown
-    readonly importDeclaration?: unknown
-  }
-  if (typeof value.runtime !== "string" || typeof value.Type !== "string") return false
-  if (value.importDeclaration !== undefined) {
-    if (
-      typeof value.importDeclaration !== "string" ||
-      !/from ["']effect(?:\/[^"']+)?["']$/.test(value.importDeclaration)
-    ) {
-      return false
-    }
-  }
-  const namespace =
-    typeof value.importDeclaration === "string"
-      ? /import(?: type)? \* as ([A-Za-z_$][\w$]*)/.exec(value.importDeclaration)?.[1]
-      : undefined
-  return value.runtime.startsWith("Schema.") || (namespace !== undefined && value.runtime.startsWith(`${namespace}.`))
-}
-
 function annotationsPortable(annotations: Schema.Annotations.Annotations | undefined) {
   if (annotations === undefined) return true
   return Object.entries(annotations).every(([key, value]) => {
     if (
-      ["toCodec", "toCodecJson", "toArbitrary", "toFormatter", "toEquivalence", "~effect/Schema/Class"].includes(key)
+      [
+        "toCodec",
+        "toCodecJson",
+        "toCodecStringTree",
+        "toArbitrary",
+        "toFormatter",
+        "toEquivalence",
+        "toCode",
+        "~constructor",
+      ].includes(key)
     ) {
       return true
     }
-    if (key === "generation") return generationPortable(value)
     return serializable(value)
   })
 }
@@ -1518,7 +1676,7 @@ function taggedErrorFields(schema: Schema.Top) {
 }
 
 function declaredErrorFields(schema: Schema.Top) {
-  if (!SchemaAST.isDeclaration(schema.ast) || schema.ast.annotations?.["~effect/Schema/Class"] === undefined) {
+  if (!SchemaAST.isDeclaration(schema.ast) || schema.ast.annotations?.["~constructor"] === undefined) {
     return undefined
   }
   const fields = schema.ast.typeParameters[0]
@@ -1559,12 +1717,11 @@ function streamDataSchema(schema: Extract<HttpApiSchema.StreamSchema, { readonly
 }
 
 function streamEncodedDataSchema(schema: Extract<HttpApiSchema.StreamSchema, { readonly _tag: "StreamSse" }>) {
-  const data = streamDataAst(schema.events.ast)
-  const encodedAst = data.encoding?.at(-1)?.to
-  if (encodedAst === undefined) throw new GenerationError({ reason: "Invalid SSE data schema" })
-  const encoded = resolveContentSchema(encodedAst)
-  if (!SchemaAST.isAST(encoded)) throw new GenerationError({ reason: "Invalid SSE data schema" })
-  return Schema.make<Schema.Top>(encoded)
+  const replaceEncoding: unknown = Reflect.get(SchemaAST, "replaceEncoding")
+  if (typeof replaceEncoding !== "function") throw new GenerationError({ reason: "Invalid SSE data schema" })
+  const ast: unknown = replaceEncoding(streamDataAst(schema.events.ast), undefined)
+  if (!SchemaAST.isAST(ast)) throw new GenerationError({ reason: "Invalid SSE data schema" })
+  return Schema.toEncoded(Schema.make<Schema.Top>(ast))
 }
 
 function streamDataAst(ast: SchemaAST.AST) {
@@ -1584,10 +1741,10 @@ function streamEffectPortable(schema: Schema.Top) {
   return sameEncoding(schema.events.ast, rebuilt.events.ast)
 }
 
-function renderGroup(group: Group, groupIndex: number) {
+function renderGroup(group: Group) {
   const slots: Array<Slot> = []
   const adapters: Array<string> = []
-  const endpointSources = group.endpoints.map((operation, endpointIndex) => {
+  const endpointSources = group.endpoints.map((operation) => {
     const {
       endpoint,
       errors,
@@ -1597,7 +1754,7 @@ function renderGroup(group: Group, groupIndex: number) {
       query: endpointQuery,
       successes,
     } = operation
-    const prefix = `Endpoint${endpointIndex}`
+    const prefix = `Endpoint${operation.clientPath.map(identifierPart).join("")}`
     const params = addSlot(endpointParams, `${prefix}Params`)
     const query = addSlot(endpointQuery, `${prefix}Query`)
     const headers = addSlot(endpointHeaders, `${prefix}Headers`)
@@ -1692,15 +1849,16 @@ function renderGroup(group: Group, groupIndex: number) {
   const usesHttpApiSchema = endpointSources.some((source) => source.includes("HttpApiSchema."))
   const methods = renderClientTree(
     group.endpoints,
-    (_item, index) => `Endpoint${index}(raw)`,
+    (item) => `Endpoint${item.clientPath.map(identifierPart).join("")}(raw)`,
     (name, value) => `${JSON.stringify(name)}: ${value}`,
     ", ",
   )
+  const name = groupTypeName(group)
   const rawGroup = group.endpoints[0]?.topLevel
-    ? `HttpApiClient.Client<typeof Group${groupIndex}>`
-    : `HttpApiClient.Client.Group<typeof Group${groupIndex}, never, never>`
+    ? `HttpApiClient.Client<typeof Group${name}>`
+    : `HttpApiClient.Client.Group<typeof Group${name}, never, never>`
   const usesStream = group.endpoints.some((item) => item.operation.success === "stream")
-  return `// Generated by @opencode-ai/httpapi-codegen. Do not edit.\nimport { Effect, Schema${usesStream ? ", Stream" : ""} } from "effect"\nimport { Sse } from "effect/unstable/encoding"\nimport { HttpClientError } from "effect/unstable/http"\nimport { HttpApiClient, HttpApiEndpoint, HttpApiGroup${usesHttpApiSchema ? ", HttpApiSchema" : ""} } from "effect/unstable/httpapi"\nimport { ClientError } from "./client-error.js"\n\n${declarations}\n\nexport const Group${groupIndex} = ${groupSource}\n\ntype RawGroup = ${rawGroup}\n\n${adapters.join("\n\n")}\n\nexport const adaptGroup${groupIndex} = (raw: RawGroup) => ({ ${methods} })\n`
+  return `// Generated by @opencode-ai/httpapi-codegen. Do not edit.\nimport { Effect, Schema${usesStream ? ", Stream" : ""} } from "effect"\nimport { Sse } from "effect/unstable/encoding"\nimport { HttpClientError } from "effect/unstable/http"\nimport { HttpApiClient, HttpApiEndpoint, HttpApiGroup${usesHttpApiSchema ? ", HttpApiSchema" : ""} } from "effect/unstable/httpapi"\nimport { ClientError } from "./client-error.js"\n\n${declarations}\n\nexport const Group${name} = ${groupSource}\n\ntype RawGroup = ${rawGroup}\n\n${adapters.join("\n\n")}\n\nexport const adaptGroup${name} = (raw: RawGroup) => ({ ${methods} })\n`
 }
 
 function renderEffectRequestPart(
@@ -1733,12 +1891,14 @@ function renderSchemas(slots: ReadonlyArray<Slot>) {
   ]
   const [first, ...rest] = expanded
   const document = SchemaRepresentation.toCodeDocument(
-    SchemaRepresentation.fromASTs([first.schema.ast, ...rest.map((slot) => slot.schema.ast)]),
+    SchemaRepresentation.toRepresentations(
+      codegenAsts(expanded.map((slot) => slot.schema.ast)) as [SchemaAST.AST, ...Array<SchemaAST.AST>],
+    ),
   )
   const artifacts = document.artifacts.flatMap((artifact) => {
     if (artifact._tag === "Import") return [artifact.importDeclaration]
-    if (artifact._tag === "Enum") return [artifact.generation.runtime]
-    return [`const ${artifact.identifier} = ${artifact.generation.runtime}`]
+    if (artifact._tag === "Enum") return [artifact.code.runtime]
+    return [`const ${artifact.identifier} = ${artifact.code.runtime}`]
   })
   const references = [
     ...document.references.nonRecursives.map(({ $ref, code }) => `const ${$ref} = ${code.runtime}`),
@@ -1761,22 +1921,27 @@ function renderSchemas(slots: ReadonlyArray<Slot>) {
       annotations.length === 0
         ? ""
         : `.annotate({ ${annotations.map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`).join(", ")} })`
-    return `class ${slot.name}Class extends Schema.TaggedErrorClass<${slot.name}Class>(${JSON.stringify(tagged.identifier)})(${JSON.stringify(tagged.tag)}, { ${fields} }) {}\nconst ${slot.name} = ${slot.name}Class${annotate}`
+    return `class ${slot.name}Class extends Schema.TaggedError<${slot.name}Class>(${JSON.stringify(tagged.identifier)})(${JSON.stringify(tagged.tag)}, { ${fields} }) {}\nconst ${slot.name} = ${slot.name}Class${annotate}`
   })
   return [...artifacts, ...references, ...declarations].join("\n\n")
 }
 
 function renderClient(groups: ReadonlyArray<Group>) {
   const imports = groups
-    .map((group, index) => `import { adaptGroup${index}, Group${index} } from ${JSON.stringify(`./${group.module}`)}`)
+    .map(
+      (group) =>
+        `import { adaptGroup${groupTypeName(group)}, Group${groupTypeName(group)} } from ${JSON.stringify(`./${group.module}`)}`,
+    )
     .join("\n")
-  const api = `HttpApi.make("generated")${groups.map((_, index) => `.add(Group${index})`).join("")}`
-  const fields = groups.flatMap((group, index) => {
+  const api = `HttpApi.make("generated")${groups.map((group) => `.add(Group${groupTypeName(group)})`).join("")}`
+  const fields = groups.flatMap((group) => {
     if (!group.endpoints[0]?.topLevel) {
-      return [`${JSON.stringify(group.identifier)}: adaptGroup${index}(raw[${JSON.stringify(group.identifier)}])`]
+      return [
+        `${JSON.stringify(group.identifier)}: adaptGroup${groupTypeName(group)}(raw[${JSON.stringify(group.identifier)}])`,
+      ]
     }
     const raw = `{ ${group.endpoints.map((item) => `${JSON.stringify(item.endpoint.identifier)}: raw[${JSON.stringify(item.endpoint.identifier)}]`).join(", ")} }`
-    return [`...adaptGroup${index}(${raw})`]
+    return [`...adaptGroup${groupTypeName(group)}(${raw})`]
   })
   return `// Generated by @opencode-ai/httpapi-codegen. Do not edit.\nimport { Effect } from "effect"\nimport { HttpApi, HttpApiClient } from "effect/unstable/httpapi"\n${imports}\n\nconst Api = ${api}\nconst adaptClient = (raw: HttpApiClient.ForApi<typeof Api>) => ({ ${fields.join(", ")} })\n\nexport const make = (options?: { readonly baseUrl?: URL | string }) =>\n  HttpApiClient.make(Api, options).pipe(Effect.map(adaptClient))\n`
 }

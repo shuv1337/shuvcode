@@ -40,7 +40,7 @@ export const layer = Layer.effect(
       const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
         fs.readFileString(path.join(global.config, name)).pipe(
           Effect.map(decodePolicy),
-          Effect.catch(() => Effect.succeed(undefined)),
+          Effect.orElseSucceed(() => undefined),
         ),
       )
       return values.findLast((value) => value !== undefined) ?? true
@@ -59,11 +59,14 @@ export const layer = Layer.effect(
             stdout: result.stdout.toString("utf8"),
             stderr: result.stderr.toString("utf8"),
           })),
-          Effect.catch(() => Effect.succeed({ code: 1, stdout: "", stderr: "" })),
+          Effect.orElseSucceed(() => ({ code: 1, stdout: "", stderr: "" })),
         )
     })
 
     const method = Effect.fnUntraced(function* () {
+      // The fork installs host binaries with deploy/install-host.sh into
+      // ~/.local/bin/shuvcode; upstream's curl-installer detection does not
+      // apply and must never fetch upstream's installer.
       const checks: ReadonlyArray<{ method: Method; command: string[] }> = [
         { method: "npm", command: ["npm", "list", "-g", "--depth=0", packageName] },
         { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", packageName] },
@@ -102,19 +105,20 @@ export const layer = Layer.effect(
       const target = `${packageName}@${version}`
       const commands: Record<Exclude<Method, "bun">, string[]> = {
         npm: ["npm", "install", "--global", target],
-        pnpm: ["pnpm", "install", "--global", target],
+        pnpm: ["pnpm", "add", "--global", `--allow-build=${packageName}`, target],
         yarn: ["yarn", "global", "add", target],
       }
-      const result = yield* method === "bun"
-        ? Effect.scoped(
-            Effect.gen(function* () {
-              // Bun does not prune old versions from its shared package cache.
-              yield* fs.makeDirectory(global.cache, { recursive: true })
-              const cache = yield* fs.makeTempDirectoryScoped({ directory: global.cache, prefix: "update-" })
-              return yield* run(["bun", "install", "--global", "--cache-dir", cache, target], "5 minutes")
-            }),
-          )
-        : run(commands[method], "5 minutes")
+      const result = yield* Effect.scoped(
+        Effect.gen(function* () {
+          if (method === "bun") {
+            // Bun does not prune old versions from its shared package cache.
+            yield* fs.makeDirectory(global.cache, { recursive: true })
+            const cache = yield* fs.makeTempDirectoryScoped({ directory: global.cache, prefix: "update-" })
+            return yield* run(["bun", "install", "--global", "--trust", "--cache-dir", cache, target], "5 minutes")
+          }
+          return yield* run(commands[method], "5 minutes")
+        }),
+      )
       if (result.code === 0) return
       return yield* Effect.fail(new Error(result.stderr.trim() || `Failed to update with ${method}`))
     })

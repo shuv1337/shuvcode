@@ -48,7 +48,9 @@ test("compiled metadata commands do not extract OpenTUI native libraries", async
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }
-}, 30_000)
+  // The single-target compile alone takes ~35s after the upstream v2 dependency
+  // growth; give the build plus repeated executions comfortable headroom.
+}, 120_000)
 
 async function run(executable: string, args: string[], bunTmpdir: string, env?: Record<string, string>) {
   const child = Bun.spawn([executable, ...args], {

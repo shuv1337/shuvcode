@@ -4,6 +4,7 @@ import {
   completedAssistantInfo,
   messageUpdated,
   partUpdated,
+  renderedPartID,
   setupTimeline,
   shell,
   status,
@@ -14,7 +15,7 @@ import {
 
 test("groups singleton and separated context operations at correct boundaries", async ({ page }) => {
   const parts = [
-    toolPart("prt_boundary_01_read", "read", "completed", { filePath: "src/a.ts" }),
+    toolPart("prt_boundary_01_read", "read", "completed", { path: "src/a.ts" }),
     textPart("prt_boundary_02_text", "Boundary text"),
     toolPart("prt_boundary_03_glob", "glob", "completed", { path: ".", pattern: "**/*.ts" }),
     toolPart("prt_boundary_04_grep", "grep", "completed", { path: ".", pattern: "stable" }),
@@ -36,8 +37,10 @@ test("reducer-hardening: converges when idle arrives before final part and messa
   await timeline.send(status("busy"), 100)
   await timeline.send(status("idle"), 100)
   await timeline.send(partUpdated(textPart(textID, "Final after early idle")), 120)
-  await timeline.send(messageUpdated(completedAssistantInfo(assistant.info)), 250)
+  await timeline.send(messageUpdated(completedAssistantInfo(assistant)), 250)
 
   await expect(page.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)
-  await expect(page.locator(`[data-timeline-part-id="${textID}"]`)).toContainText("Final after early idle")
+  await expect(page.locator(`[data-timeline-part-id="${renderedPartID(textID)}"]`)).toContainText(
+    "Final after early idle",
+  )
 })

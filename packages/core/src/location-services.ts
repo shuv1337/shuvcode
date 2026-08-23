@@ -1,4 +1,5 @@
 import { Effect, Layer, LayerMap } from "effect"
+import { existsSync } from "fs"
 import path from "path"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
@@ -30,6 +31,7 @@ import { PluginSupervisor } from "./plugin/supervisor.js"
 import { Worktree } from "./worktree.js"
 import { Pty } from "./pty.js"
 import { Shell } from "./shell.js"
+import { ShellSelect } from "./shell/select.js"
 import { Reference } from "./reference.js"
 import { WebSearch } from "./websearch.js"
 import { ReferenceInstructions } from "./reference/instructions.js"
@@ -72,6 +74,7 @@ const locationServiceNodes = [
   Worktree.refreshNode,
   FileSystemSearch.node,
   FileSystem.node,
+  ShellSelect.node,
   Pty.node,
   Shell.node,
   Skill.node,
@@ -152,7 +155,7 @@ export function buildLocationServiceMap(
             phases,
           )
         },
-        { idleTimeToLive: "60 minutes" },
+        { idleTimeToLive: (ref) => (existsSync(ref.directory) ? "60 minutes" : 0) },
       ),
       (inner) => ({
         ...inner,

@@ -8,7 +8,7 @@ import {
 } from "@opencode-ai/schema/session-inbox"
 import type { DatabaseMigration } from "../migration.js"
 
-const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 const decodeUser = Schema.decodeUnknownOption(UserPayload)
 const encodeUser = Schema.encodeSync(UserPayload)
 const decodeSynthetic = Schema.decodeUnknownOption(SyntheticPayload)

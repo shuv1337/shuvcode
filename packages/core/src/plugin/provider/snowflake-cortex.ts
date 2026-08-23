@@ -21,7 +21,7 @@ export function cortexFetch(upstream: FetchLike = fetch) {
     const response = await upstream(url, init)
 
     // Cortex returns 400 "conversation complete" as a normal stop condition
-    if (!response.ok && response.status === 400) {
+    if (response.status === 400) {
       try {
         const errorData = (await response.clone().json()) as Record<string, unknown>
         if (
@@ -65,7 +65,7 @@ export function cortexFetch(upstream: FetchLike = fetch) {
 }
 
 export const SnowflakeCortexPlugin = define({
-  id: "opencode.provider.snowflake-cortex",
+  id: "opencode.provider.snowflake.cortex",
   effect: Effect.fn(function* (ctx) {
     yield* ctx.aisdk.hook(
       "sdk",

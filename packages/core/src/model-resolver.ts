@@ -2,13 +2,7 @@ export * as ModelResolver from "./model-resolver.js"
 
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { LanguageModel } from "@opencode-ai/ai"
-// ast-grep-ignore: no-star-import
-import * as AnthropicMessages from "@opencode-ai/ai/protocols/anthropic-messages"
-// ast-grep-ignore: no-star-import
-import * as OpenAICompatibleChat from "@opencode-ai/ai/protocols/openai-compatible-chat"
-// ast-grep-ignore: no-star-import
-import * as OpenAIResponses from "@opencode-ai/ai/protocols/openai-responses"
-import { Auth, type AnyRoute } from "@opencode-ai/ai/route"
+import { Auth } from "@opencode-ai/ai/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { AISDK } from "./aisdk.js"
@@ -21,7 +15,7 @@ import { Npm } from "@opencode-ai/util/npm"
 import { AnthropicClaudeCode } from "./plugin/provider/anthropic-claude-code.js"
 import { Provider } from "./provider.js"
 
-export class VariantUnavailableError extends Schema.TaggedErrorClass<VariantUnavailableError>()(
+export class VariantUnavailableError extends Schema.TaggedError<VariantUnavailableError>()(
   "SessionRunnerModel.VariantUnavailableError",
   {
     providerID: Provider.ID,
@@ -34,7 +28,7 @@ export class VariantUnavailableError extends Schema.TaggedErrorClass<VariantUnav
   }
 }
 
-export class UnsupportedPackageError extends Schema.TaggedErrorClass<UnsupportedPackageError>()(
+export class UnsupportedPackageError extends Schema.TaggedError<UnsupportedPackageError>()(
   "SessionRunnerModel.UnsupportedPackageError",
   {
     providerID: Provider.ID,
@@ -47,7 +41,7 @@ export class UnsupportedPackageError extends Schema.TaggedErrorClass<Unsupported
   }
 }
 
-export class UnresolvedProviderVariablesError extends Schema.TaggedErrorClass<UnresolvedProviderVariablesError>()(
+export class UnresolvedProviderVariablesError extends Schema.TaggedError<UnresolvedProviderVariablesError>()(
   "SessionRunnerModel.UnresolvedProviderVariablesError",
   {
     providerID: Provider.ID,
@@ -65,7 +59,7 @@ export class UnresolvedProviderVariablesError extends Schema.TaggedErrorClass<Un
  * tokens, so an expired subscription fails here rather than on the wire. Carrying the
  * selection lets the Session record the failed step against the model the user chose.
  */
-export class ProviderAuthorizationError extends Schema.TaggedErrorClass<ProviderAuthorizationError>()(
+export class ProviderAuthorizationError extends Schema.TaggedError<ProviderAuthorizationError>()(
   "ModelResolver.ProviderAuthorizationError",
   {
     providerID: Provider.ID,
@@ -103,6 +97,8 @@ export interface Resolved {
   readonly capabilities: Capabilities
   /** Catalog pricing in dollars per million tokens. */
   readonly cost: Info["cost"]
+  /** Catalog token limits used by Core for context management. */
+  readonly limit: Info["limit"]
 }
 
 export interface Interface {
@@ -112,59 +108,18 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ModelResolver") {}
 
-const apiKey = (model: Info, credential?: Credential.Value) => {
-  if (credential?.type === "key") return Auth.value(credential.key)
-  if (credential?.type === "oauth") return Auth.value(credential.access)
-  const value = model.settings?.apiKey
-  if (typeof value === "string") return Auth.value(value)
-  return undefined
-}
-
-const withDefaults = (model: Info, route: AnyRoute) =>
-  route.with({
-    provider: model.providerID,
-    endpoint: typeof model.settings?.baseURL === "string" ? { baseURL: model.settings.baseURL } : undefined,
-    headers: providerHeaders(model),
-    providerOptions: providerOptions(model),
-    http: model.body === undefined ? undefined : { body: model.body },
-    limits: { context: model.limit.context, input: model.limit.input, output: model.limit.output },
-  })
-
-const providerHeaders = (model: Info) => {
-  const packageName = Provider.packageName(model.package)
-  const generated = new Map<string, string>()
-  if (packageName === "@ai-sdk/openai" && typeof model.settings?.organization === "string")
-    generated.set("OpenAI-Organization", model.settings.organization)
-  if (packageName === "@ai-sdk/openai" && typeof model.settings?.project === "string")
-    generated.set("OpenAI-Project", model.settings.project)
-  if (packageName === "@ai-sdk/anthropic" && typeof model.settings?.authToken === "string")
-    generated.set("Authorization", `Bearer ${model.settings.authToken}`)
-  return Provider.mergeHeaders(generated.size === 0 ? undefined : Object.fromEntries(generated), model.headers)
-}
-
-const providerOptions = (model: Info): { readonly [key: string]: { readonly [key: string]: unknown } } | undefined => {
-  if (!Provider.isAISDK(model.package) || model.settings === undefined) return undefined
-  const { apiKey: _, baseURL: _baseURL, ...settings } = model.settings
-  if (Object.keys(settings).length === 0) return undefined
-  const packageName = Provider.packageName(model.package)
-  if (packageName === "@ai-sdk/openai") return { openai: settings }
-  if (packageName === "@ai-sdk/anthropic") return { anthropic: settings }
-  if (packageName === "@ai-sdk/openai-compatible") return { openai: settings }
-  return undefined
-}
-
 export const withVariant = (
   model: Info,
   variantID: VariantID | undefined,
 ): Effect.Effect<Info, VariantUnavailableError> => {
   const id = variantID === "default" ? undefined : variantID
   const variant = model.variants?.find((item) => item.id === id)
-  if (!variant && variantID !== undefined && variantID !== "default")
+  if (!variant && id !== undefined)
     return Effect.fail(
       new VariantUnavailableError({
         providerID: model.providerID,
         modelID: model.id,
-        variant: variantID,
+        variant: id,
       }),
     )
   return Effect.succeed(
@@ -199,52 +154,14 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
 ) {
   const resolved = prepareRuntimeModel(model, credential)
   const packageName = Provider.packageName(resolved.package)
-  const key = apiKey(resolved, credential)
   const configuration = credential?.type === "key" ? credential.configuration : undefined
-
-  if (Provider.isAISDK(resolved.package) && packageName === "@ai-sdk/openai") {
-    const runtime = yield* prepareProviderModel(resolved)
-    return withDefaults(runtime, OpenAIResponses.route)
-      .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })
-      .model({ id: runtime.modelID ?? runtime.id, compatibility: runtime.compatibility })
-  }
-  if (Provider.isAISDK(resolved.package) && packageName === "@ai-sdk/anthropic") {
-    // A Claude Pro/Max subscription authenticates as Bearer and only draws on
-    // the plan when the request presents as Claude Code, so it needs different
-    // headers and a shaped body. Same seam as the ChatGPT-plan branch above.
-    if (AnthropicClaudeCode.isSubscription(credential)) {
-      const runtime = yield* prepareProviderModel(resolved)
-      const shaped = produce(runtime, (draft) => {
-        draft.headers = Provider.mergeHeaders(draft.headers, AnthropicClaudeCode.headers(draft.headers))
-      })
-      return withDefaults(shaped, AnthropicMessages.route)
-        .with({
-          auth: key === undefined ? Auth.none : Auth.bearer(key),
-          transport: AnthropicClaudeCode.transport(AnthropicMessages.route.transport),
-        })
-        .model({ id: shaped.modelID ?? shaped.id, compatibility: shaped.compatibility })
-    }
-    const runtime = yield* prepareProviderModel(resolved)
-    return withDefaults(runtime, AnthropicMessages.route)
-      .with({ auth: key === undefined ? Auth.none : Auth.header("x-api-key", key) })
-      .model({ id: runtime.modelID ?? runtime.id, compatibility: runtime.compatibility })
-  }
-  if (
-    Provider.isAISDK(resolved.package) &&
-    packageName === "@ai-sdk/openai-compatible" &&
-    typeof resolved.settings?.baseURL === "string"
-  ) {
-    const runtime = yield* prepareProviderModel(resolved)
-    return withDefaults(runtime, OpenAICompatibleChat.route)
-      .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })
-      .model({ id: runtime.modelID ?? runtime.id, compatibility: runtime.compatibility })
-  }
   const configured = { ...resolved.settings, ...credential?.metadata, ...configuration }
   const mapping = Provider.isAISDK(resolved.package)
     ? AISDKNative.map({
         packageName,
         settings: configured,
         modelID: resolved.modelID ?? resolved.id,
+        providerID: resolved.providerID,
       })
     : undefined
   const native = mapping?.package ?? resolved.package
@@ -276,7 +193,6 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
     ...nativeCredentialSettings(specifier, credential),
     headers: Provider.mergeHeaders(mapping?.headers, resolved.headers),
     body: Provider.mergeOverlay(mapping?.body, resolved.body),
-    limits: { context: resolved.limit.context, input: resolved.limit.input, output: resolved.limit.output },
   }
   return yield* Effect.try({
     try: () => {
@@ -309,19 +225,6 @@ function validateProviderVariables(
   if (typeof baseURL !== "string") return Effect.succeed(resolved)
   const failure = unresolvedProviderVariables(model, baseURL)
   return failure ? Effect.fail(failure) : Effect.succeed(resolved)
-}
-
-function prepareProviderModel(model: Info): Effect.Effect<Info, UnresolvedProviderVariablesError> {
-  if (!model.settings) return Effect.succeed(model)
-  return prepareProviderSettings(model, model.settings).pipe(
-    Effect.map((settings) =>
-      settings === model.settings
-        ? model
-        : produce(model, (draft) => {
-            draft.settings = settings
-          }),
-    ),
-  )
 }
 
 function prepareProviderSettings(
@@ -420,13 +323,22 @@ export const layer = Layer.effect(
         loadPackage: (specifier) => Provider.loadPackage(specifier, npm),
         loadAISDK: (model) => aisdk.model(model),
       })
+      // A Claude Pro/Max subscription only draws on the plan when the request
+      // presents as Claude Code, so wrap the resolved route's transport with the
+      // claude-code shaping layer. Shaping lives only in this transport; the
+      // loopback proxy stays auth-only.
+      const shaped = AnthropicClaudeCode.isSubscription(credential)
+        ? LanguageModel.update(model, {
+            route: model.route.with({ transport: AnthropicClaudeCode.transport(model.route.transport) }),
+          })
+        : model
       const runtime =
         provider?.activation === "enabled" &&
         credential === undefined &&
         !hasConfiguredAuth(runtimeInfo) &&
         usesAPIKeyAuth(runtimeInfo.package)
-          ? LanguageModel.update(model, { route: model.route.with({ auth: Auth.none }) })
-          : model
+          ? LanguageModel.update(shaped, { route: shaped.route.with({ auth: Auth.none }) })
+          : shaped
       return {
         model: runtime,
         ref: Ref.make({
@@ -436,6 +348,7 @@ export const layer = Layer.effect(
         }),
         capabilities: selected.capabilities,
         cost: selected.cost,
+        limit: selected.limit,
       }
     })
     return Service.of({

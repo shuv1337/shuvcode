@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises"
+import { readFile, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import type { DiscoverOptions, Endpoint, Info, EnsureOptions, StopOptions } from "../service.js"
@@ -10,7 +10,7 @@ import {
 } from "../service-contender.js"
 import { defaultEnsureTiming, ensureTiming, type EnsureTiming } from "../service-timing.js"
 import { matchesVersion } from "../service-version.js"
-import type { ServiceHealth, ServiceStopResponse } from "./generated/types.js"
+import type { ServiceHealth } from "./generated/types.js"
 
 export * from "../service.js"
 
@@ -22,14 +22,10 @@ export * from "../service.js"
 
 /** Discover a healthy, compatible local service without starting one. */
 export async function discover(options: DiscoverOptions = {}) {
-  return (await discoverLocal(options))?.endpoint
-}
-
-async function discoverLocal(options: DiscoverOptions) {
   const found = (await registered(options.file)).service
   if (found?.state !== "ready") return undefined
   if (!matchesVersion(found.version, options)) return undefined
-  return found
+  return found.endpoint
 }
 
 /** Ensure a healthy, compatible local service is running. */
@@ -51,7 +47,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
     const [command, ...args] = options.command ?? ["opencode", "serve", "--service"]
     if (command === undefined) throw new Error("Missing service command")
     try {
-      return spawnServiceContender(command, args)
+      return spawnServiceContender(command, args, options.env)
     } catch (cause) {
       throw new Error("Failed to start server", { cause })
     }
@@ -68,7 +64,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
         }
         if (timeouts.count >= 3) {
           announce("missing")
-          await evict(registration.info, options, timing)
+          await terminate(registration.info, options, timing)
           timeouts = undefined
           lastSpawn = Date.now() - spawnDelay
         }
@@ -82,7 +78,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
         if (compatible && service.state === "failed") throw new Error("Background service failed to start")
         if (!compatible) {
           announce("version-mismatch", service.version)
-          await kill(service, options, timing).catch(() => undefined)
+          await terminate(service.info, options, timing).catch(() => undefined)
           lastSpawn = 0
         }
       } else {
@@ -110,8 +106,8 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
 
 /** Stop the registered local service. */
 export async function stop(options: StopOptions = {}) {
-  const existing = await find(options)
-  if (existing !== undefined) await kill(existing, options, defaultEnsureTiming)
+  const info = await read(options.file)
+  if (info !== undefined) await terminate(info, options, defaultEnsureTiming)
 }
 
 function fallback() {
@@ -142,10 +138,6 @@ type LocalService = {
   readonly version?: string
   readonly state: "ready" | "waiting" | "failed"
   readonly legacy: boolean
-}
-
-async function probe(info: Info, allowLegacy = false): Promise<LocalService | undefined> {
-  return (await probeResult(info, allowLegacy)).service
 }
 
 async function probeResult(info: Info, allowLegacy = false, timeout = defaultEnsureTiming.requestTimeout) {
@@ -199,10 +191,6 @@ async function registered(file?: string, allowLegacy = false, timeout?: number) 
   return { info, ...(await probeResult(info, allowLegacy, timeout)) }
 }
 
-async function find(options: { readonly file?: string }) {
-  return (await registered(options.file, true)).service
-}
-
 function signal(pid: number, name: NodeJS.Signals) {
   try {
     process.kill(pid, name)
@@ -230,47 +218,19 @@ function same(left: Info, right: Info) {
   return left.id === right.id && left.version === right.version && left.url === right.url && left.pid === right.pid
 }
 
-async function evict(info: Info, options: { readonly file?: string }, timing: EnsureTiming) {
+async function terminate(info: Info, options: { readonly file?: string }, timing: EnsureTiming) {
   const current = await read(options.file)
   if (current === undefined || !same(current, info)) return
   signal(info.pid, "SIGTERM")
-  if (await waitUntilStopped(info.pid, timing)) return
-
+  if (!(await waitUntilStopped(info.pid, timing))) {
+    const latest = await read(options.file)
+    if (latest === undefined || !same(latest, info)) return
+    signal(info.pid, "SIGKILL")
+    if (!(await waitUntilStopped(info.pid, timing))) throw new Error(`Server process ${info.pid} is still running`)
+  }
   const latest = await read(options.file)
   if (latest === undefined || !same(latest, info)) return
-  signal(info.pid, "SIGKILL")
-  if (!(await waitUntilStopped(info.pid, timing))) throw new Error(`Server process ${info.pid} is still running`)
-}
-
-async function kill(service: LocalService, options: { readonly file?: string }, timing: EnsureTiming) {
-  const requested = await requestStop(service, timing.requestTimeout)
-  if (requested === "rejected") return
-  if (requested === "unsupported") {
-    const current = await find(options)
-    if (current === undefined || !same(current.info, service.info)) return
-    signal(service.info.pid, "SIGTERM")
-  }
-  if (await waitUntilStopped(service.info.pid, timing)) return
-
-  const latest = await find(options)
-  if (latest === undefined || !same(latest.info, service.info)) return
-  signal(service.info.pid, "SIGKILL")
-  if (!(await waitUntilStopped(service.info.pid, timing)))
-    throw new Error(`Server process ${service.info.pid} is still running`)
-}
-
-async function requestStop(service: LocalService, timeout = defaultEnsureTiming.requestTimeout) {
-  if (service.info.id === undefined || service.legacy) return "unsupported" as const
-  const response = await fetch(new URL("/api/service/stop", service.info.url), {
-    method: "POST",
-    headers: { ...headers(service.endpoint), "content-type": "application/json" },
-    body: JSON.stringify({ instanceID: service.info.id }),
-    signal: AbortSignal.timeout(timeout),
-  }).catch(() => undefined)
-  if (response === undefined || response.status === 404 || response.status === 405) return "unsupported" as const
-  const body = (await response.json().catch(() => undefined)) as ServiceStopResponse | undefined
-  if (!response.ok || body?.accepted !== true) return "rejected" as const
-  return "accepted" as const
+  await rm(options.file ?? fallback(), { force: true })
 }
 
 function delay(milliseconds: number) {

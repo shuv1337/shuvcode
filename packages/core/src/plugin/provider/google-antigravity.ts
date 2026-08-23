@@ -11,7 +11,7 @@ import type { PluginInternal } from "../internal"
 import { GoogleAntigravityOAuth } from "./google-antigravity-oauth"
 import { GoogleAntigravityWire } from "./google-antigravity-wire"
 
-const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
 const oauth = {
   integrationID: GoogleAntigravityOAuth.integrationID,

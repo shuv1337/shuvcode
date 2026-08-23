@@ -6,7 +6,7 @@ import { Effect, Schema } from "effect"
 import { Hash } from "@opencode-ai/util/hash"
 
 export namespace ProcessLock {
-  export class HeldError extends Schema.TaggedErrorClass<HeldError>()("ProcessLockHeldError", {
+  export class HeldError extends Schema.TaggedError<HeldError>()("ProcessLockHeldError", {
     file: Schema.String,
   }) {
     override get message() {
@@ -14,7 +14,7 @@ export namespace ProcessLock {
     }
   }
 
-  export class SystemError extends Schema.TaggedErrorClass<SystemError>()("ProcessLockSystemError", {
+  export class SystemError extends Schema.TaggedError<SystemError>()("ProcessLockSystemError", {
     file: Schema.String,
     operation: Schema.Literals(["open", "acquire"]),
     code: Schema.String,
@@ -54,9 +54,7 @@ export namespace ProcessLock {
         }),
       ),
     )
-    if (result.acquired) {
-      return fd
-    }
+    if (result.acquired) return fd
     closeSync(fd)
     return yield* result.held
       ? new HeldError({ file })

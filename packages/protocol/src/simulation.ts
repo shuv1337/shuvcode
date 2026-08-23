@@ -60,15 +60,12 @@ export namespace JsonRpc {
   }
 }
 
-export class SimulationRequestError extends Schema.TaggedErrorClass<SimulationRequestError>()(
-  "SimulationRequestError",
-  {
-    method: Schema.String,
-    code: Schema.Number,
-    message: Schema.String,
-    data: Schema.optionalKey(Schema.Json),
-  },
-) {}
+export class SimulationRequestError extends Schema.TaggedError<SimulationRequestError>()("SimulationRequestError", {
+  method: Schema.String,
+  code: Schema.Number,
+  message: Schema.String,
+  data: Schema.optionalKey(Schema.Json),
+}) {}
 
 const request = <
   const Tag extends string,
@@ -131,7 +128,7 @@ export namespace Handshake {
     readonly capabilities: ReadonlyArray<Capability>
   }
 
-  export class RoleMismatchError extends Schema.TaggedErrorClass<RoleMismatchError>()(
+  export class RoleMismatchError extends Schema.TaggedError<RoleMismatchError>()(
     "SimulationHandshake.RoleMismatchError",
     {
       expected: EndpointRole,
@@ -140,7 +137,7 @@ export namespace Handshake {
     },
   ) {}
 
-  export class UnsupportedProtocolError extends Schema.TaggedErrorClass<UnsupportedProtocolError>()(
+  export class UnsupportedProtocolError extends Schema.TaggedError<UnsupportedProtocolError>()(
     "SimulationHandshake.UnsupportedProtocolError",
     {
       offered: Schema.Array(Schema.Number),
@@ -149,7 +146,7 @@ export namespace Handshake {
     },
   ) {}
 
-  export class MissingCapabilityError extends Schema.TaggedErrorClass<MissingCapabilityError>()(
+  export class MissingCapabilityError extends Schema.TaggedError<MissingCapabilityError>()(
     "SimulationHandshake.MissingCapabilityError",
     {
       missing: Schema.Array(Capability),
@@ -447,14 +444,15 @@ export namespace Backend {
   ])
   export type ToolContent = Schema.Schema.Type<typeof ToolContent>
 
+  const ProviderSafeName = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
   const ToolName = Schema.NonEmptyString.check(
     Schema.makeFilter((name) =>
-      /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name) ? undefined : "simulated tool names must be provider-safe",
+      ProviderSafeName.test(name) ? undefined : "simulated tool names must be provider-safe",
     ),
   )
   const ToolNamespace = Schema.NonEmptyString.check(
     Schema.makeFilter((namespace) =>
-      namespace.split(".").every((segment) => /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(segment))
+      namespace.split(".").every((segment) => ProviderSafeName.test(segment))
         ? undefined
         : "simulated tool namespaces must contain provider-safe segments",
     ),
@@ -479,7 +477,7 @@ export namespace Backend {
     tools: Schema.Array(ToolRegistration).check(
       Schema.makeFilter((tools) => {
         const names = tools.map(exposedToolName)
-        if (names.some((name) => !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)))
+        if (names.some((name) => !ProviderSafeName.test(name)))
           return "simulated tool names including namespaces must be provider-safe"
         if (new Set(names).size !== names.length) return "simulated tool registrations must have unique exposed names"
         if (

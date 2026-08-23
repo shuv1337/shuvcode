@@ -149,7 +149,7 @@ export function normalize(input: unknown): Result {
     "agents",
     migratedAgents,
     nativeAgents,
-    isRecord(input.agent) || isRecord(input.mode) || isRecord(input.agents),
+    migratedSmallModel !== undefined || isRecord(input.agent) || isRecord(input.mode) || isRecord(input.agents),
     diagnostics,
   )
 
@@ -794,7 +794,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function own(value: Record<string, unknown>, key: string) {
-  return Object.prototype.hasOwnProperty.call(value, key)
+  return Object.hasOwn(value, key)
 }
 
 function setOwn(value: Record<string, unknown>, key: string, item: unknown) {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { createTwoFilesPatch } from "diff"
 import {
   defineVisualRegions,
   reportVisualStability,
@@ -9,12 +10,66 @@ import {
 import {
   assistantMessage,
   partUpdated,
+  renderedPartID,
   setupTimeline,
   shell,
   textPart,
+  toolPart,
   userMessage,
   type TimelineMessage,
 } from "./fixture"
+
+test("follows an expanded patch that arrives as the user reaches the bottom", async ({ page }) => {
+  const toolID = "prt_bottom_follow_patch"
+  const input = { patchText: "Update src/edit.ts" }
+  const timeline = await setupTimeline(page, {
+    messages: [
+      ...history(20),
+      userMessage(),
+      assistantMessage([textPart("prt_bottom_follow_text", "Working")], { completed: false }),
+    ],
+    settings: { editToolPartsExpanded: true },
+    reducedMotion: true,
+  })
+  const scroller = page.locator(".scroll-view__viewport", { has: page.locator("[data-timeline-row]") })
+  await scroller.evaluate((element) => {
+    element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight - 300)
+    element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 300 }))
+    element.scrollTop = element.scrollHeight
+  })
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop))
+    .toBeLessThanOrEqual(1)
+
+  await timeline.send(partUpdated(toolPart(toolID, "patch", "running", input)))
+  await timeline.send(
+    partUpdated(
+      toolPart(toolID, "patch", "completed", input, {
+        metadata: {
+          files: [
+            {
+              file: "src/edit.ts",
+              status: "modified",
+              patch: createTwoFilesPatch(
+                "a/src/edit.ts",
+                "b/src/edit.ts",
+                Array.from({ length: 40 }, (_, index) => `export const value${index} = ${index}\n`).join(""),
+                Array.from({ length: 40 }, (_, index) => `export const value${index} = ${index + 1}\n`).join(""),
+              ),
+              additions: 40,
+              deletions: 40,
+            },
+          ],
+        },
+      }),
+    ),
+  )
+
+  await timeline.waitForPart(toolID)
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop))
+    .toBeLessThanOrEqual(1)
+})
 
 test("does not reverse visible rows when the user wheels during shell remeasurement", async ({ page }, testInfo) => {
   const shellID = "prt_wheel_01_shell"
@@ -34,8 +89,14 @@ test("does not reverse visible rows when the user wheels during shell remeasurem
   })
   const scroller = page.locator(".scroll-view__viewport", { has: page.locator("[data-timeline-row]") })
   const regions = defineVisualRegions({
-    shell: { selector: `[data-timeline-part-id="${shellID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
-    following: { selector: `[data-timeline-part-id="${followingID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
+    shell: {
+      selector: `[data-timeline-part-id="${renderedPartID(shellID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
+    following: {
+      selector: `[data-timeline-part-id="${renderedPartID(followingID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
   })
   await startVisualProbe(page, regions)
   await timeline.send(partUpdated(shell(shellID, "running", lines(30))), 80)
@@ -143,8 +204,8 @@ test("tracks keyboard scrolling from a focused timeline descendant", async ({ pa
     reducedMotion: true,
   })
   const scroller = page.locator(".scroll-view__viewport", { has: page.locator("[data-timeline-row]") })
-  const row = page.locator(`[data-timeline-part-id="${shellID}"]`).first()
-  const trigger = page.locator(`[data-timeline-part-id="${shellID}"] [data-slot="collapsible-trigger"]`)
+  const row = page.locator(`[data-timeline-part-id="${renderedPartID(shellID)}"]`).first()
+  const trigger = page.locator(`[data-timeline-part-id="${renderedPartID(shellID)}"] [data-slot="collapsible-trigger"]`)
   await row.evaluate((element) => element.setAttribute("tabindex", "0"))
   await row.focus()
   for (let index = 0; index < 3; index++) {
@@ -182,7 +243,7 @@ test("does not claim keyboard scrolling owned by a nested scrollable", async ({ 
     seedHistory: true,
   })
   const scroller = page.locator(".scroll-view__viewport", { has: page.locator("[data-timeline-row]") })
-  const nested = page.locator(`[data-timeline-part-id="${shellID}"] [data-scrollable]`)
+  const nested = page.locator(`[data-timeline-part-id="${renderedPartID(shellID)}"] [data-scrollable]`)
   await nested.evaluate((element) => (element.scrollTop = element.scrollHeight))
   await nested.focus()
   await page.waitForFunction(() => {
@@ -209,7 +270,7 @@ test("does not claim keyboard scrolling owned by a nested scrollable", async ({ 
   await nested.press("PageUp")
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(boundaryBefore)
 
-  const nonOverflowing = page.locator(`[data-timeline-part-id="${shellID}"]`).first()
+  const nonOverflowing = page.locator(`[data-timeline-part-id="${renderedPartID(shellID)}"]`).first()
   await nonOverflowing.evaluate((element) => {
     element.setAttribute("data-scrollable", "")
     element.setAttribute("tabindex", "0")
@@ -238,12 +299,18 @@ test("jump to latest lands on stable final rows after offscreen growth", async (
   )
   await timeline.send(partUpdated(shell(shellID, "running", lines(50))), 300)
   const regions = defineVisualRegions({
-    shell: { selector: `[data-timeline-part-id="${shellID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
-    following: { selector: `[data-timeline-part-id="${followingID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
+    shell: {
+      selector: `[data-timeline-part-id="${renderedPartID(shellID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
+    following: {
+      selector: `[data-timeline-part-id="${renderedPartID(followingID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
   })
   await startVisualProbe(page, regions)
   await page.getByRole("button", { name: /Jump to latest/i }).click()
-  await expect(page.locator(`[data-timeline-part-id="${followingID}"]`)).toBeVisible()
+  await expect(page.locator(`[data-timeline-part-id="${renderedPartID(followingID)}"]`)).toBeVisible()
   await page.waitForTimeout(600)
   const trace = await stopVisualProbe<keyof typeof regions>(page)
   await reportVisualStability(
@@ -277,8 +344,14 @@ test("handles a single row taller than the viewport", async ({ page }, testInfo)
     seedHistory: true,
   })
   const regions = defineVisualRegions({
-    shell: { selector: `[data-timeline-part-id="${shellID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
-    following: { selector: `[data-timeline-part-id="${followingID}"]`, closest: '[data-timeline-row="AssistantPart"]' },
+    shell: {
+      selector: `[data-timeline-part-id="${renderedPartID(shellID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
+    following: {
+      selector: `[data-timeline-part-id="${renderedPartID(followingID)}"]`,
+      closest: '[data-timeline-row="AssistantPart"]',
+    },
   })
   await startVisualProbe(page, regions)
   await timeline.send(partUpdated(shell(shellID, "completed", lines(100))), 700)

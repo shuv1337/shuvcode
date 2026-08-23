@@ -183,7 +183,7 @@ export const OpenAIPlugin = define({
     const load = Effect.fn("OpenAIPlugin.load")(function* () {
       const connection = yield* ctx.integration.connection.active("openai")
       const credential = connection
-        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
         : undefined
       chatgpt =
         credential?.type === "oauth" &&
@@ -198,15 +198,14 @@ export const OpenAIPlugin = define({
     })
     yield* load()
     yield* ctx.catalog.transform((evt) => {
-      for (const item of evt.provider.list()) {
-        if (!Provider.isAISDK(item.provider.package)) continue
-        if (Provider.packageName(item.provider.package) !== "@ai-sdk/openai") continue
-        evt.provider.update(item.provider.id, (provider) => {
-          provider.package = "@opencode-ai/ai/providers/openai"
-        })
-      }
+
       const item = evt.provider.get(Provider.ID.openai)
       if (!item) return
+      for (const model of item.models.values()) {
+        evt.model.update(item.provider.id, model.id, (draft) => {
+          draft.capabilities.responsesWebsockets = true
+        })
+      }
       const daybreakID = Model.ID.make(chatgpt ? "gpt-daybreak-blue-latest" : "daybreak-blue-latest")
       evt.model.update(item.provider.id, daybreakID, (model) => {
         model.modelID = daybreakID
@@ -279,15 +278,18 @@ export const OpenAIPlugin = define({
         })
       }
     })
-    yield* ctx.session.hook("http.request", (evt) =>
-      Effect.sync(() => {
-        if (!chatgpt || evt.model.providerID !== Provider.ID.openai) return
-        const url = new URL(evt.request.url)
-        evt.request.headers.set("originator", "codex_cli_rs")
-        evt.request.headers.set("session-id", evt.sessionID)
-        if (url.origin !== "https://api.openai.com") return
-        evt.request = new Request(`${codexBaseURL}${url.pathname.replace(/^\/v1/, "")}${url.search}`, evt.request)
-      }),
+    yield* ctx.session.hook(
+      "model.request",
+      (evt) =>
+        Effect.sync(() => {
+          if (!chatgpt) return
+          if (evt.baseURL && URL.canParse(evt.baseURL) && new URL(evt.baseURL).origin === "https://api.openai.com")
+            evt.baseURL = codexBaseURL
+          // ChatGPT subscription requests must identify as the Codex CLI.
+          evt.headers.originator = "codex_cli_rs"
+          evt.headers["session-id"] = evt.sessionID
+        }),
+      { providerID: Provider.ID.openai },
     )
     const refresh = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
     yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(

@@ -54,6 +54,27 @@ describe("Google Vertex providers", () => {
     }),
   )
 
+  it.effect("adds billing labels to Vertex Gemini requests", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model: GoogleVertex.configure({
+            accessToken: "vertex-token",
+            project: "vertex-project",
+            providerOptions: {
+              labels: { component: "opencode", environment: "test" },
+            },
+          }).model("gemini-3.5-flash"),
+          prompt: "Say hello.",
+        }),
+      )
+
+      expect(prepared.body).toMatchObject({
+        labels: { component: "opencode", environment: "test" },
+      })
+    }),
+  )
+
   it.effect("projects Anthropic Messages onto the Vertex raw-predict API", () =>
     Effect.gen(function* () {
       const model = GoogleVertexMessages.configure({
@@ -75,7 +96,7 @@ describe("Google Vertex providers", () => {
                 "https://aiplatform.eu.rep.googleapis.com/v1/projects/vertex-project/locations/eu/publishers/anthropic/models/claude-sonnet-4-6:streamRawPredict",
               )
               expect(request.headers.get("authorization")).toBe("Bearer vertex-token")
-              expect(request.headers.get("anthropic-version")).toBeNull()
+              expect(request.headers.get("anthropic-version")).toBe("2023-06-01")
               const body = yield* Effect.promise(() => request.json())
               expect(body).toMatchObject({
                 anthropic_version: "vertex-2023-10-16",

@@ -210,7 +210,7 @@ export function Autocomplete(props: {
 
     const charAfterCursor = displayCharAt(props.value, currentCursorOffset)
     const needsSpace = charAfterCursor !== " "
-    const prefix = trigger ?? (part.type === "skill" ? "/" : "@")
+    const prefix = trigger ?? "@"
     const append = prefix + text + (needsSpace ? " " : "")
 
     input.cursorOffset = store.index
@@ -527,6 +527,22 @@ export function Autocomplete(props: {
       )
   })
 
+  const skillOptions = createMemo(() =>
+    (data.location.skill.list(location.current) ?? []).map(
+      (skill): AutocompleteOption => ({
+        display: "@" + skill.id,
+        description: skill.description,
+        kind: "skill",
+        onSelect: () => {
+          insertPart(skill.id, {
+            type: "skill",
+            value: { id: Skill.ID.make(skill.id), mention: { start: 0, end: 0, text: "" } },
+          })
+        },
+      }),
+    ),
+  )
+
   const referenceAliases = createMemo(() =>
     references()
       .filter((reference) => !reference.hidden)
@@ -586,11 +602,7 @@ export function Autocomplete(props: {
         display: "/" + skill.id,
         description: skill.description,
         kind: "skill",
-        onSelect: () =>
-          insertPart(skill.id, {
-            type: "skill",
-            value: { id: Skill.ID.make(skill.id), mention: { start: 0, end: 0, text: "" } },
-          }),
+        onSelect: () => insertSlash(skill.id),
       })
     }
 
@@ -665,10 +677,10 @@ export function Autocomplete(props: {
     const nonFileOptions: AutocompleteOption[] = pluginMode
       ? pluginOptionsValue
       : store.visible === "reference"
-        ? [...referenceAliasesValue, ...agentsValue, ...mcpResources()]
+        ? [...skillOptions(), ...referenceAliasesValue, ...agentsValue, ...mcpResources()]
         : store.index === 0
           ? [...commandsValue]
-          : commandsValue.filter((item) => item.kind === "skill")
+          : []
 
     if (!searchValue || pluginOptionsValue.length) {
       return [...nonFileOptions, ...fileOptions]

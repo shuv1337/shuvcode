@@ -48,6 +48,7 @@ import m45 from "./migration/20260812181746_session_inbox.js"
 import m46 from "./migration/20260812181747_fork_pending_to_inbox.js"
 import m47 from "./migration/20260812213948_worktree.js"
 import m48 from "./migration/20260815073846_fork_session_policy.js"
+import m49 from "./migration/20260819222447_session_viewed_state.js"
 
 export const migrations = [
   m00,
@@ -99,4 +100,5 @@ export const migrations = [
   m46,
   m47,
   m48,
+  m49,
 ] satisfies DatabaseMigration.Migration[]

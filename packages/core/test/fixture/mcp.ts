@@ -8,6 +8,8 @@ import { location } from "./location"
 export const emptyMcpLayer = Layer.succeed(
   MCP.Service,
   MCP.Service.of({
+    transform: () => Effect.die("unused mcp.transform"),
+    reload: () => Effect.die("unused mcp.reload"),
     servers: () => Effect.succeed([]),
     add: () => Effect.die("unused mcp.add"),
     connect: () => Effect.die("unused mcp.connect"),
@@ -17,9 +19,9 @@ export const emptyMcpLayer = Layer.succeed(
     callTool: () => Effect.die("unused mcp.callTool"),
     instructions: () => Effect.succeed([]),
     prompts: () => Effect.succeed([]),
-    prompt: () => Effect.succeed(undefined),
+    prompt: () => Effect.undefined,
     resourceCatalog: () => Effect.succeed(MCP.ResourceCatalog.make({ resources: [], templates: [] })),
-    readResource: () => Effect.succeed(undefined),
+    readResource: () => Effect.undefined,
   }),
 )
 

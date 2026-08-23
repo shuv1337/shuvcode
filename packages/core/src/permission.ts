@@ -60,13 +60,13 @@ export type AskResult = typeof AskResult.Type
 
 export { Event } from "@opencode-ai/schema/permission"
 
-export class DeclinedError extends Schema.TaggedErrorClass<DeclinedError>()("Permission.DeclinedError", {}) {}
+export class DeclinedError extends Schema.TaggedError<DeclinedError>()("Permission.DeclinedError", {}) {}
 
-export class CorrectedError extends Schema.TaggedErrorClass<CorrectedError>()("Permission.CorrectedError", {
+export class CorrectedError extends Schema.TaggedError<CorrectedError>()("Permission.CorrectedError", {
   feedback: Schema.String,
 }) {}
 
-export class BlockedError extends Schema.TaggedErrorClass<BlockedError>()("Permission.BlockedError", {
+export class BlockedError extends Schema.TaggedError<BlockedError>()("Permission.BlockedError", {
   rules: Permission.Ruleset,
   permission: Schema.String,
   resources: Schema.Array(Schema.String),
@@ -76,7 +76,7 @@ export class BlockedError extends Schema.TaggedErrorClass<BlockedError>()("Permi
   }
 }
 
-export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Permission.NotFoundError", {
+export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Permission.NotFoundError", {
   requestID: ID,
 }) {}
 
@@ -152,14 +152,14 @@ const layer = Layer.effect(
       )
     })
 
-    const configured = Effect.fn("Permission.configured")(function* (sessionID: SessionSchema.ID, agentID?: Agent.ID) {
+    const configured = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, agentID?: Agent.ID) {
       const session = yield* sessions.get(sessionID)
       if (!session) return yield* new SessionErrors.NotFoundError({ sessionID })
       const agent = yield* agents.resolve(agentID ?? session.agent)
       return agent?.permissions ?? missingAgentPermissions
     })
 
-    const allowsAll = Effect.fn("Permission.allowsAll")(function* (input: {
+    const allowsAll = Effect.fnUntraced(function* (input: {
       readonly sessionID: SessionSchema.ID
       readonly action: string
       readonly agent?: Agent.ID
@@ -177,7 +177,7 @@ const layer = Layer.effect(
       return false
     })
 
-    function denied(input: AssertInput, rules: Permission.Ruleset) {
+    function denied(input: Pick<Request, "action" | "resources">, rules: Permission.Ruleset) {
       return input.resources.some((resource) => evaluate(input.action, resource, rules).effect === "deny")
     }
 
@@ -301,12 +301,11 @@ const layer = Layer.effect(
 
           const rememberedRules = yield* savedRules()
           for (const [id, item] of pending) {
-            const input = { ...item.request }
             const rules = yield* configured(item.request.sessionID, item.agent).pipe(
-              Effect.catchTag("Session.NotFoundError", () => Effect.succeed(undefined)),
+              Effect.catchTag("Session.NotFoundError", () => Effect.undefined),
             )
             if (!rules) continue
-            if (denied(input, rules)) continue
+            if (denied(item.request, rules)) continue
             const effective = [...rules, ...rememberedRules]
             if (
               !item.request.resources.every(

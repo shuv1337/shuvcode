@@ -15,6 +15,7 @@ import { Revert } from "./session-revert.js"
 import { Shell as ShellSchema } from "./shell.js"
 import { SessionError } from "./session-error.js"
 import { Instruction } from "./instruction.js"
+import { InstructionEntry } from "./instruction-entry.js"
 import { Agent } from "./agent.js"
 import { Skill as SkillSchema } from "./skill.js"
 import { Money } from "./money.js"
@@ -108,6 +109,17 @@ export const Renamed = Event.durable({
 })
 export type Renamed = typeof Renamed.Type
 
+export const Viewed = Event.durable({
+  type: "session.viewed",
+  ...options,
+  schema: {
+    ...Base,
+    /** Epoch-millisecond idle watermark the viewer observed; projection never marks a newer idle transition viewed. */
+    idle: Schema.Finite,
+  },
+})
+export type Viewed = typeof Viewed.Type
+
 export const UsageRecorded = Event.durable({
   type: "session.usage.recorded",
   ...options,
@@ -152,6 +164,8 @@ export const Forked = Event.durable({
     boundary: SessionFork.Boundary,
     instructions: Instruction.Values.pipe(optional),
     policy: SessionPolicy.Info.pipe(optional),
+    instructionEntries: InstructionEntry.Snapshot.pipe(optional),
+
   },
 })
 export type Forked = typeof Forked.Type
@@ -302,6 +316,8 @@ export namespace Step {
       ...Base,
       assistantMessageID: SessionMessage.ID,
       finish: FinishReason,
+      rawFinish: Schema.String.pipe(optional),
+      providerState: SessionMessage.ProviderState.pipe(optional),
       cost: Money.USD,
       tokens: TokenUsage.Info,
       snapshot: Snapshot.ID.pipe(optional),
@@ -317,6 +333,9 @@ export namespace Step {
       ...Base,
       assistantMessageID: SessionMessage.ID,
       error: SessionError.Error,
+      finish: Schema.Literals(["content-filter"]).pipe(optional),
+      rawFinish: Schema.String.pipe(optional),
+      providerState: SessionMessage.ProviderState.pipe(optional),
       cost: Money.USD.pipe(optional),
       tokens: TokenUsage.Info.pipe(optional),
       snapshot: Snapshot.ID.pipe(optional),
@@ -608,6 +627,7 @@ export const Definitions = Event.inventory(
   ModelSelected,
   Moved,
   Renamed,
+  Viewed,
   UsageUpdated,
   Deleted,
   Forked,

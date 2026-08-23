@@ -11,7 +11,7 @@ import { optionalArray, ProviderShared } from "./shared.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { OpenAIImage } from "./utils/openai-image.js"
 import { ToolSchemaProjection } from "./utils/tool-schema.js"
-import { OpenResponsesChannel } from "./open-responses-channel.js"
+import { OpenResponsesChannel, type Options } from "./open-responses-channel.js"
 import { OpenAIResponsesChannel } from "./openai-responses-channel.js"
 
 const ADAPTER = "openai-responses"
@@ -42,6 +42,8 @@ const OpenAIResponsesToolChoice = Schema.Union([
 
 const OpenAIResponsesInputItem = Schema.Union([
   Schema.Struct({
+    type: Schema.tag("message"),
+    id: Schema.optionalKey(Schema.String),
     role: Schema.tag("assistant"),
     content: Schema.Array(Schema.Struct({ type: Schema.tag("output_text"), text: Schema.String })),
     phase: Schema.optionalKey(Schema.NullOr(OpenResponses.MessagePhase)),
@@ -121,7 +123,8 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
         : yield* Effect.forEach(request.tools, (tool) =>
             lowerTool(tool, ToolSchemaProjection.modelCompatibility(tool.inputSchema, toolSchemaCompatibility)),
           ),
-    tool_choice: request.toolChoice ? yield* lowerToolChoice(request.toolChoice, request.tools) : undefined,
+    tool_choice:
+      body.tool_choice ?? (request.toolChoice ? yield* lowerToolChoice(request.toolChoice, request.tools) : undefined),
   } satisfies OpenAIResponsesBody
 })
 
@@ -244,12 +247,16 @@ const endpoint = Endpoint.path<OpenAIResponsesBody>(PATH, { baseURL: DEFAULT_BAS
 const auth = Auth.none
 
 export const httpTransport = HttpTransport.sseJson.with<OpenAIResponsesBody>()
-export const transport = OpenResponsesChannel.transport<OpenAIResponsesBody>({
+export const channelTransport = (options: Omit<Options, "driver">) =>
+  OpenResponsesChannel.transport<OpenAIResponsesBody>({
+    ...options,
+    driver: (input) => OpenAIResponsesChannel.driver({ id: options.id, name: options.name, ...input }),
+  })
+export const transport = channelTransport({
   id: ADAPTER,
   name: NAME,
   rotateAfterMs: WEBSOCKET_ROTATE_AFTER_MS,
   headers: (headers) => Headers.set(headers, "openai-beta", headers["openai-beta"] ?? WEBSOCKET_PROTOCOL_HEADER),
-  driver: (input) => OpenAIResponsesChannel.driver({ id: ADAPTER, name: NAME, ...input }),
 })
 
 export const route = Route.make({
@@ -260,7 +267,7 @@ export const route = Route.make({
   endpoint,
   auth,
   transport,
-  defaults: { providerOptions: { openai: { store: false } } },
+  defaults: { providerOptions: { store: false } },
 })
 
 export * as OpenAIResponses from "./openai-responses.js"

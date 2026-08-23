@@ -37,7 +37,7 @@ export const shippedModels: readonly ShippedModel[] = [
 const shippedIDs = new Set(shippedModels.map((model) => model.id))
 const aliases: Record<string, string> = { "gemini-3.1-pro-high": "gemini-pro-agent" }
 
-const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
 export const modelEnumDefaults = new Map(
   shippedModels.flatMap((model) => (model.modelEnum ? [[model.id, model.modelEnum] as const] : [])),
@@ -218,6 +218,10 @@ export function applyCatalog(evt: CatalogDraft, active: boolean) {
     provider.integrationID = GoogleAntigravityOAuth.integrationID
     if (!provider.name || provider.name === provider.id) provider.name = "Google"
   })
+  // Antigravity model ids are absent from the upstream catalog, so synthesized
+  // entries receive the generic fallback limits (200k/32k), not real Gemini
+  // limits. Only a real catalog entry's limit wins over the Flash numbers.
+  const cataloged = new Set(evt.provider.get(googleProviderID)?.models.keys() ?? [])
   for (const model of shippedModels) {
     evt.model.update(googleProviderID, model.id, (draft) => {
       draft.modelID = Model.ID.make(model.apiID ?? model.id)
@@ -225,13 +229,7 @@ export function applyCatalog(evt: CatalogDraft, active: boolean) {
       draft.cost = []
       draft.enabled = true
       draft.status = "active"
-      // Fallback only. Antigravity model ids are absent upstream, so their limits arrive as 0;
-      // a real catalog limit wins so Pro models are not pinned to Flash numbers forever.
-      draft.limit = {
-        ...draft.limit,
-        context: draft.limit.context || FLASH_LIMIT.context,
-        output: draft.limit.output || FLASH_LIMIT.output,
-      }
+      if (!cataloged.has(model.id)) draft.limit = { ...FLASH_LIMIT }
       draft.capabilities = { tools: true, input: ["text", "image"], output: ["text"] }
       if (!draft.package) draft.package = "@opencode-ai/ai/providers/google"
     })

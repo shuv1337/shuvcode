@@ -1,4 +1,4 @@
-import { sampledChecksum } from "@opencode-ai/core/util/encode"
+import { sampledChecksum } from "@opencode-ai/util/encode"
 import {
   areFilesEqual,
   areOptionsEqual,
@@ -702,7 +702,7 @@ function ViewerShell(props: {
       data-mode={props.mode}
       dir="ltr"
       style={styleVariables}
-      class="relative outline-none"
+      class="relative select-text outline-none"
       classList={{
         ...props.classList,
         [props.class ?? ""]: !!props.class,

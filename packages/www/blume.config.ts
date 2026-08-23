@@ -25,9 +25,36 @@ export default defineConfig({
   theme: {
     background: { dark: "#000000" },
     fonts: {
-      body: { name: "Monaspace Neon", provider: "fontsource", weights: [400, 500, 600, 700], fallback: "mono" },
-      display: { name: "Monaspace Neon", provider: "fontsource", weights: [400, 500, 600, 700], fallback: "mono" },
-      mono: { name: "Monaspace Neon", provider: "fontsource", weights: [400, 500, 600, 700], fallback: "mono" },
+      body: {
+        name: "OpenTUI Mono",
+        fallback: "mono",
+        variants: [
+          { src: "public/fonts/OpenTUIMono-Regular.woff2", weight: 400 },
+          { src: "public/fonts/OpenTUIMono-Bold.woff2", weight: 700 },
+          { src: "public/fonts/OpenTUIMono-Italic.woff2", weight: 400, style: "italic" },
+          { src: "public/fonts/OpenTUIMono-BoldItalic.woff2", weight: 700, style: "italic" },
+        ],
+      },
+      display: {
+        name: "OpenTUI Mono",
+        fallback: "mono",
+        variants: [
+          { src: "public/fonts/OpenTUIMono-Regular.woff2", weight: 400 },
+          { src: "public/fonts/OpenTUIMono-Bold.woff2", weight: 700 },
+          { src: "public/fonts/OpenTUIMono-Italic.woff2", weight: 400, style: "italic" },
+          { src: "public/fonts/OpenTUIMono-BoldItalic.woff2", weight: 700, style: "italic" },
+        ],
+      },
+      mono: {
+        name: "OpenTUI Mono",
+        fallback: "mono",
+        variants: [
+          { src: "public/fonts/OpenTUIMono-Regular.woff2", weight: 400 },
+          { src: "public/fonts/OpenTUIMono-Bold.woff2", weight: 700 },
+          { src: "public/fonts/OpenTUIMono-Italic.woff2", weight: 400, style: "italic" },
+          { src: "public/fonts/OpenTUIMono-BoldItalic.woff2", weight: 700, style: "italic" },
+        ],
+      },
     },
     mode: "dark",
   },

@@ -6,7 +6,7 @@ import { CassetteSchema, encodeCassette, type Cassette, type CassetteMetadata, t
 
 const DEFAULT_RECORDINGS_DIR = path.resolve(process.cwd(), "test", "fixtures", "recordings")
 
-export class CassetteNotFoundError extends Schema.TaggedErrorClass<CassetteNotFoundError>()("CassetteNotFoundError", {
+export class CassetteNotFoundError extends Schema.TaggedError<CassetteNotFoundError>()("CassetteNotFoundError", {
   cassetteName: Schema.String,
 }) {
   override get message() {
@@ -14,7 +14,7 @@ export class CassetteNotFoundError extends Schema.TaggedErrorClass<CassetteNotFo
   }
 }
 
-export class InvalidCassetteError extends Schema.TaggedErrorClass<InvalidCassetteError>()("InvalidCassetteError", {
+export class InvalidCassetteError extends Schema.TaggedError<InvalidCassetteError>()("InvalidCassetteError", {
   cassetteName: Schema.String,
   description: Schema.String,
 }) {
@@ -23,7 +23,7 @@ export class InvalidCassetteError extends Schema.TaggedErrorClass<InvalidCassett
   }
 }
 
-export class UnsafeCassetteError extends Schema.TaggedErrorClass<UnsafeCassetteError>()("UnsafeCassetteError", {
+export class UnsafeCassetteError extends Schema.TaggedError<UnsafeCassetteError>()("UnsafeCassetteError", {
   cassetteName: Schema.String,
   findings: Schema.Array(SecretFindingSchema),
 }) {
@@ -98,12 +98,12 @@ export const fileSystem = (
       const pathFor = (name: string) => cassettePath(directory, name)
       const walk = (current: string): Effect.Effect<ReadonlyArray<string>> =>
         Effect.gen(function* () {
-          const entries = yield* fs.readDirectory(current).pipe(Effect.catch(() => Effect.succeed([] as string[])))
+          const entries = yield* fs.readDirectory(current).pipe(Effect.orElseSucceed(() => [] as string[]))
           const nested = yield* Effect.forEach(entries, (entry) => {
             const full = path.join(current, entry)
             return fs.stat(full).pipe(
               Effect.flatMap((stat) => (stat.type === "Directory" ? walk(full) : Effect.succeed([full]))),
-              Effect.catch(() => Effect.succeed([] as string[])),
+              Effect.orElseSucceed(() => [] as string[]),
             )
           })
           return nested.flat()
@@ -144,11 +144,7 @@ export const fileSystem = (
               recorded.set(name, { interactions, findings: interactionFindings })
             }),
           ),
-        exists: (name) =>
-          fs.access(pathFor(name)).pipe(
-            Effect.as(true),
-            Effect.catch(() => Effect.succeed(false)),
-          ),
+        exists: (name) => fs.exists(pathFor(name)).pipe(Effect.orElseSucceed(() => false)),
         list: () =>
           walk(directory).pipe(
             Effect.map((files) =>

@@ -65,5 +65,5 @@ export const groupNames = {
   "server.config": "config",
 } as const
 
-export const promiseOmitEndpoints = new Set(["pty.connect", "pty.connectToken"])
-export const effectOmitEndpoints = new Set(["fs.read", "pty.connect", "pty.connectToken"])
+export const promiseOmitEndpoints = new Set(["pty.connect"])
+export const effectOmitEndpoints = new Set(["fs.read", "pty.connect"])

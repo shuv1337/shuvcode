@@ -1,4 +1,4 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
+import { base64Encode } from "@opencode-ai/util/encode"
 import { expect, test, type Page, type Route } from "@playwright/test"
 import { installSseTransport } from "../utils/sse-transport"
 import { currentSession } from "../utils/mock-server"
@@ -19,10 +19,10 @@ test("session settings use the remote server context", async ({ page }) => {
   await configureServers(page)
 
   await page.goto(`/server/${base64Encode(serverB)}/session/${sessionB.id}`)
-  await expect(page.getByText(sessionB.title).first()).toBeVisible()
+  await expect(page.getByRole("heading", { name: sessionB.title, exact: true })).toBeVisible()
   await page.keyboard.press("Control+,")
 
-  const dialog = page.locator(".settings-v2-dialog")
+  const dialog = page.locator(".settings-dialog")
   const autoAccept = dialog.locator('[data-action="settings-auto-accept-permissions"]')
   const input = autoAccept.getByRole("switch")
   await expect(autoAccept).toBeVisible()
@@ -49,7 +49,7 @@ test("auto-accept responds for an unfocused server session", async ({ page }) =>
   const permissionRequests: string[] = []
   const permissionResponses: PermissionResponse[] = []
   await installSseTransport(page, { server: serverB })
-  const transport = await installSseTransport<{ directory: string; payload: Record<string, unknown> }>(page, {
+  const transport = await installSseTransport(page, {
     server: serverA,
     retry: 20,
   })
@@ -61,9 +61,9 @@ test("auto-accept responds for an unfocused server session", async ({ page }) =>
 
   const hrefB = `/server/${base64Encode(serverB)}/session/${sessionB.id}`
   await page.goto(`/server/${base64Encode(serverA)}/session/${sessionA.id}`)
-  await expect(page.getByText(sessionA.title).first()).toBeVisible()
+  await expect(page.getByRole("heading", { name: sessionA.title, exact: true })).toBeVisible()
   await page.keyboard.press("Control+,")
-  const autoAccept = page.locator(".settings-v2-dialog").locator('[data-action="settings-auto-accept-permissions"]')
+  const autoAccept = page.locator(".settings-dialog").locator('[data-action="settings-auto-accept-permissions"]')
   await autoAccept.locator('[data-slot="switch-control"]').click()
   await expect(autoAccept.getByRole("switch")).toBeChecked()
   await expect
@@ -78,22 +78,21 @@ test("auto-accept responds for an unfocused server session", async ({ page }) =>
 
   await page.locator(`[data-titlebar-tab-slot]:has(a[href="${hrefB}"])`).click()
   await expect(page).toHaveURL(new RegExp(`${hrefB.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`))
-  await expect(page.getByText(sessionB.title).first()).toBeVisible()
+  await expect(page.getByRole("heading", { name: sessionB.title, exact: true })).toBeVisible()
   await transport.waitForConnection()
 
   await transport.send({
-    directory: directoryA,
-    payload: {
-      id: "event-permission-background-a",
-      type: "permission.asked",
-      properties: {
-        id: "permission-background-a",
-        sessionID: sessionA.id,
-        permission: "bash",
-        patterns: ["git status"],
-        metadata: {},
-        always: [],
-      },
+    id: "evt_permission_background_a",
+    created: 1700000001000,
+    type: "permission.asked",
+    location: { directory: directoryA },
+    data: {
+      id: "permission-background-a",
+      sessionID: sessionA.id,
+      action: "shell",
+      resources: ["git status"],
+      metadata: {},
+      save: [],
     },
   })
 
@@ -110,18 +109,17 @@ test("auto-accept responds for an unfocused server session", async ({ page }) =>
     ])
 
   await transport.send({
-    directory: directoryA,
-    payload: {
-      id: "event-permission-background-a-child",
-      type: "permission.asked",
-      properties: {
-        id: "permission-background-a-child",
-        sessionID: childSessionA.id,
-        permission: "bash",
-        patterns: ["git diff"],
-        metadata: {},
-        always: [],
-      },
+    id: "evt_permission_background_a_child",
+    created: 1700000002000,
+    type: "permission.asked",
+    location: { directory: directoryA },
+    data: {
+      id: "permission-background-a-child",
+      sessionID: childSessionA.id,
+      action: "shell",
+      resources: ["git diff"],
+      metadata: {},
+      save: [],
     },
   })
 
@@ -210,7 +208,7 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
       return json(route, [
         {
           id: remote ? sessionB.projectID : "project-server-a",
-          worktree: directory,
+          canonical: directory,
           vcs: "git",
           time: { created: 1, updated: 1 },
           sandboxes: [],
@@ -218,7 +216,7 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
       ])
     }
     if (url.pathname === "/api/project/current")
-      return json(route, { id: remote ? sessionB.projectID : "project-server-a", directory })
+      return json(route, { id: remote ? sessionB.projectID : "project-server-a", directory, canonical: directory })
     if (url.pathname === "/api/session")
       return json(route, { data: sessions.map((session) => currentSession(session)), cursor: {} })
     if (url.pathname === "/api/session/active") return json(route, { data: {} })
@@ -226,38 +224,9 @@ async function mockServers(page: Page, permissionRequests: string[], permissionR
     if (currentSessionInfo) return json(route, { data: currentSession(currentSessionInfo) })
     if (sessions.some((session) => url.pathname === `/api/session/${session.id}/message`))
       return json(route, { data: [], cursor: {} })
-    if (/^\/session\/[^/]+$/.test(url.pathname)) return json(route, { name: "NotFoundError" }, 404)
-    if (/^\/session\/[^/]+\/message$/.test(url.pathname)) return json(route, [])
-    if (/^\/session\/[^/]+\/(children|todo|diff)$/.test(url.pathname)) return json(route, [])
-    if (url.pathname === "/permission") {
-      permissionRequests.push(url.toString())
-      return json(route, [])
-    }
-    if (["/skill", "/command", "/lsp", "/formatter", "/question", "/vcs/diff", "/pty/shells"].includes(url.pathname))
-      return json(route, [])
-    if (url.pathname === "/provider") return json(route, provider(remote ? "server-b" : "server-a"))
-    if (url.pathname === "/agent") return json(route, [{ name: "build", mode: "primary" }])
-    if (url.pathname === "/project" || url.pathname === "/project/current") {
-      const project = {
-        id: remote ? sessionB.projectID : "project-server-a",
-        worktree: directory,
-        vcs: "git",
-        time: { created: 1, updated: 1 },
-        sandboxes: [],
-      }
-      return json(route, url.pathname === "/project" ? [project] : project)
-    }
-    if (url.pathname === "/path")
-      return json(route, {
-        state: directory,
-        config: directory,
-        worktree: directory,
-        directory,
-        home: directory,
-      })
-    if (url.pathname === "/api/path")
-      return json(route, { state: directory, config: directory, worktree: directory, directory, home: directory })
-    if (url.pathname === "/vcs") return json(route, { branch: "main", default_branch: "main" })
+    if (sessions.some((session) => url.pathname === `/api/session/${session.id}/inbox`))
+      return json(route, { data: [] })
+    if (url.pathname === "/api/location") return json(route, { directory })
     if (url.pathname === "/api/vcs")
       return json(route, { location: { directory }, data: { branch: "main", defaultBranch: "main" } })
     if (url.pathname === "/api/pty/shells") return json(route, { location: { directory }, data: [] })
@@ -270,7 +239,7 @@ function session(id: string, directory: string, title: string) {
     id,
     slug: id,
     projectID: `project-${id}`,
-    directory,
+    location: { directory },
     title,
     version: "dev",
     time: { created: 1, updated: 1 },

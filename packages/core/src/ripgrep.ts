@@ -35,16 +35,16 @@ const RawMatch = Schema.Struct({
     ),
   }),
 })
-const decodeJsonRecord = Schema.decodeUnknownEffect(Schema.UnknownFromJsonString)
+const decodeJsonRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))
 
 type RawMatchData = (typeof RawMatch.Type)["data"]
 
-export class Error extends Schema.TaggedErrorClass<Error>()("Ripgrep.Error", {
+export class Error extends Schema.TaggedError<Error>()("Ripgrep.Error", {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
 
-export class InvalidPatternError extends Schema.TaggedErrorClass<InvalidPatternError>()("Ripgrep.InvalidPatternError", {
+export class InvalidPatternError extends Schema.TaggedError<InvalidPatternError>()("Ripgrep.InvalidPatternError", {
   pattern: Schema.String,
   message: Schema.String,
 }) {}
@@ -87,6 +87,12 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@opencode/Ripgrep") {}
 
 const failure = (message: string, cause?: unknown) => new Error({ message, cause })
+
+const normalizePath = (value: string) =>
+  value
+    .replace(/^(?:\.[\\/])+/u, "")
+    .replace(/^[\\/]+/u, "")
+    .replaceAll("\\", "/")
 
 const isInvalidPattern = (stderr: string) =>
   stderr.includes("regex parse error") || stderr.includes("error parsing regex")
@@ -169,13 +175,7 @@ const layer = Layer.effect(
             "--glob=!**/.git/**",
             ".",
           ],
-          parse: (line) =>
-            Effect.succeed(
-              line
-                .replace(/^(?:\.[\\/])+/u, "")
-                .replace(/^[\\/]+/u, "")
-                .replaceAll("\\", "/"),
-            ),
+          parse: (line) => Effect.succeed(normalizePath(line)),
         }).pipe(
           Effect.map((result) =>
             result.items.map((relative) =>
@@ -203,10 +203,7 @@ const layer = Layer.effect(
             ".",
           ],
           parse: (line) => {
-            const relative = line
-              .replace(/^(?:\.[\\/])+/u, "")
-              .replace(/^[\\/]+/u, "")
-              .replaceAll("\\", "/")
+            const relative = normalizePath(line)
             return Effect.succeed(
               Entry.make({
                 path: RelativePath.make(relative),
@@ -238,11 +235,11 @@ const layer = Layer.effect(
               Effect.mapError((cause) => failure("Invalid ripgrep JSON output", cause)),
               Effect.flatMap((json) => {
                 if (!json || typeof json !== "object" || !("type" in json) || json.type !== "match")
-                  return Effect.succeed(undefined)
+                  return Effect.undefined
                 return Schema.decodeUnknownEffect(RawMatch)(json).pipe(
                   Effect.map((match) => ({
                     ...match.data,
-                    path: { text: match.data.path.text.replace(/^\.[\\/]/, "") },
+                    path: { text: normalizePath(match.data.path.text) },
                     submatches: match.data.submatches.slice(0, MAX_SUBMATCHES),
                   })),
                   Effect.mapError((cause) => failure("Invalid ripgrep match output", cause)),
@@ -251,14 +248,10 @@ const layer = Layer.effect(
             ),
         }).pipe(
           Effect.map((result) =>
-            result.items.map((match) => {
-              const relative = match.path.text
-                .replace(/^(?:\.[\\/])+/u, "")
-                .replace(/^[\\/]+/u, "")
-                .replaceAll("\\", "/")
-              return Match.make({
+            result.items.map((match) =>
+              Match.make({
                 entry: Entry.make({
-                  path: RelativePath.make(relative),
+                  path: RelativePath.make(match.path.text),
                   type: "file",
                 }),
                 line: match.line_number,
@@ -269,8 +262,8 @@ const layer = Layer.effect(
                   start: submatch.start,
                   end: submatch.end,
                 })),
-              })
-            }),
+              }),
+            ),
           ),
         ),
     })
