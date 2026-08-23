@@ -1,4 +1,4 @@
-import { Effect, Layer, LayerMap } from "effect"
+import { Duration, Effect, Layer, LayerMap } from "effect"
 import { existsSync } from "fs"
 import path from "path"
 import { Agent } from "./agent.js"
@@ -147,7 +147,7 @@ export function buildLocationServiceMap(
             Layer.provide(LayerNode.compile(location.hoisted)),
           )
         },
-        { idleTimeToLive: (ref) => (existsSync(ref.directory) ? "60 minutes" : 0) },
+        { idleTimeToLive: (ref) => (existsSync(ref.directory) ? Duration.infinity : Duration.zero) },
       ),
       (inner) => ({
         ...inner,
