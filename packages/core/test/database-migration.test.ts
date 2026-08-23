@@ -274,7 +274,9 @@ describe("DatabaseMigration", () => {
           {
             id: "user-steer",
             type: "user",
-            payload: JSON.stringify({ text: "steer me", output: { schema: { type: "object" } } }),
+            // The retired structured-output request is dropped when legacy
+            // pending payloads are decoded during migration.
+            payload: JSON.stringify({ text: "steer me" }),
             delivery: "steer",
             enqueued_seq: 1,
             time_created: 10,

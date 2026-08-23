@@ -647,6 +647,9 @@
                   },
                   "location": {
                     "$ref": "#/components/schemas/Union_5ee94d3ca88d"
+                  },
+                  "policy": {
+                    "$ref": "#/components/schemas/Union_d8bf967bf8a2"
                   }
                 },
                 "additionalProperties": false
@@ -1117,6 +1120,9 @@
                 "properties": {
                   "boundary": {
                     "$ref": "#/components/schemas/Session.ForkRequestBoundary"
+                  },
+                  "policy": {
+                    "$ref": "#/components/schemas/Union_d8bf967bf8a2"
                   }
                 },
                 "required": ["boundary"],
@@ -2003,7 +2009,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    }
+                  ]
                 }
               }
             }
@@ -5273,6 +5286,69 @@
         },
         "description": "Cancel a command authentication attempt and terminate its process.",
         "summary": "Cancel command connection"
+      }
+    },
+    "/api/auth/status": {
+      "get": {
+        "tags": ["auth"],
+        "operationId": "v2.auth.status",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Union_ffefb7e3c81d"
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Auth.Status"
+                    }
+                  },
+                  "required": ["location", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Report locally detectable authentication readiness. This does not contact providers, verify credentials externally, refresh OAuth tokens, or expose credential values.",
+        "summary": "Get authentication status"
       }
     },
     "/api/mcp": {
@@ -9868,6 +9944,58 @@
           "$ref": "#/components/schemas/Session.Message.Info"
         }
       },
+      "Auth.Profile": {
+        "type": "object",
+        "properties": {
+          "providerID": {
+            "type": "string"
+          },
+          "profileID": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["stored", "environment"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["key", "oauth", "unknown"]
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["configured", "expired", "empty", "malformed"]
+          }
+        },
+        "required": ["providerID", "source", "type", "usable", "reason"],
+        "additionalProperties": false
+      },
+      "Auth.Status": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "storage": {
+            "type": "string",
+            "enum": ["available", "unavailable"]
+          },
+          "verification": {
+            "type": "string",
+            "enum": ["not_performed"]
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Auth.Profile"
+            }
+          }
+        },
+        "required": ["ready", "storage", "verification", "profiles"],
+        "additionalProperties": false
+      },
       "Command.Info": {
         "type": "object",
         "properties": {
@@ -10271,6 +10399,60 @@
                     "exclusiveMinimum": 0
                   }
                 ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "codemode": {
+            "type": "object",
+            "properties": {
+              "timeout_ms": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "allOf": [
+                      {
+                        "exclusiveMinimum": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Wall-clock milliseconds one Code Mode program may run before it is interrupted. Defaults to 120000."
+              },
+              "max_tool_calls": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "allOf": [
+                      {
+                        "minimum": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Maximum tool calls one Code Mode program may admit, including search. Defaults to 100."
+              },
+              "max_output_bytes": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "allOf": [
+                      {
+                        "minimum": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Maximum UTF-8 bytes retained from a Code Mode program's result and logs. Defaults to 1048576."
               }
             },
             "additionalProperties": false
@@ -13587,6 +13769,9 @@
           },
           "revert": {
             "$ref": "#/components/schemas/Session.Revert"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Session.Policy"
           }
         },
         "required": ["id", "projectID", "cost", "tokens", "time", "location"],
@@ -14390,6 +14575,39 @@
         "required": ["id", "time", "text", "type"],
         "additionalProperties": false
       },
+      "Session.Policy": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "$ref": "#/components/schemas/Session.Policy.Tools"
+          }
+        },
+        "required": ["tools"],
+        "additionalProperties": false
+      },
+      "Session.Policy.ToolID": {
+        "type": "string",
+        "allOf": [
+          {
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+            "description": "Exact effective tool identifier. Wildcards are not supported."
+          }
+        ]
+      },
+      "Session.Policy.Tools": {
+        "type": "object",
+        "properties": {
+          "allow": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session.Policy.ToolID"
+            }
+          }
+        },
+        "required": ["allow"],
+        "additionalProperties": false,
+        "description": "Deny-by-default tool policy. Only exact identifiers in allow may execute."
+      },
       "Session.Revert": {
         "type": "object",
         "properties": {
@@ -14899,6 +15117,16 @@
         "type": "string",
         "enum": ["running", "exited", "timeout", "killed"]
       },
+      "Union_d8bf967bf8a2": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Session.Policy"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "Union_e13209ef6bf4": {
         "anyOf": [
           {
@@ -15182,6 +15410,9 @@
     {
       "name": "integration",
       "description": "Integration discovery and authentication routes."
+    },
+    {
+      "name": "auth"
     },
     {
       "name": "mcp",

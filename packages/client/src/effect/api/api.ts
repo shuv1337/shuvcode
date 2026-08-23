@@ -14,10 +14,10 @@ import type { SessionMessage } from "@opencode-ai/schema/session-message"
 import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
 import type { PromptInput } from "@opencode-ai/schema/prompt-input"
 import type { AgentAttachment } from "@opencode-ai/schema/prompt"
-import type { Schema } from "effect"
 import type { Skill } from "@opencode-ai/schema/skill"
 import type { Event } from "@opencode-ai/schema/event"
 import type { InstructionEntry } from "@opencode-ai/schema/instruction-entry"
+import type { Schema } from "effect"
 import type { EventLog } from "@opencode-ai/schema/event-log"
 import type { Shell } from "@opencode-ai/schema/shell"
 import type { Provider } from "@opencode-ai/schema/provider"
@@ -185,13 +185,6 @@ export type SessionPromptInput = {
   readonly text: string
   readonly files?: ReadonlyArray<PromptInput.FileAttachment> | undefined
   readonly agents?: ReadonlyArray<AgentAttachment> | undefined
-  readonly output?:
-    | {
-        readonly schema: { readonly [x: string]: Schema.Json }
-        readonly name?: string | undefined
-        readonly description?: string | undefined
-      }
-    | undefined
   readonly skills?: ReadonlyArray<PromptInput.SkillAttachment> | undefined
   readonly metadata?: { readonly [x: string]: unknown } | undefined
   readonly delivery?: SessionInbox.Delivery | undefined
@@ -722,32 +715,6 @@ export type SessionLogOutput =
             readonly ordinal: number
             readonly text: string
             readonly state?: SessionMessage.ProviderState | undefined
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session.structured.completed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly value: Schema.Json
-          }
-        }
-      | {
-          readonly id: Event.ID
-          readonly created: number
-          readonly metadata?: { readonly [x: string]: unknown } | undefined
-          readonly type: "session.structured.failed"
-          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
-          readonly location?: Location.Ref | undefined
-          readonly data: {
-            readonly sessionID: Session.ID
-            readonly assistantMessageID: SessionMessage.ID
-            readonly error: { readonly type: string; readonly message: string; readonly status?: number | undefined }
           }
         }
       | {

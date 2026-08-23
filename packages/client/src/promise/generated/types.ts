@@ -236,8 +236,6 @@ export type V2EventServerConnected = {
 
 export type SessionPolicyTools = { allow: Array<SessionPolicyToolID> }
 
-export type StructuredOutputJsonSchema = { [x: string]: JsonValue }
-
 export type SessionMessageProviderState = { [x: string]: JsonValue }
 
 export type SessionMessageToolStateRunning = {
@@ -245,8 +243,6 @@ export type SessionMessageToolStateRunning = {
   input: { [x: string]: JsonValue }
   metadata: { [x: string]: JsonValue }
 }
-
-export type SessionMessageAssistantStructured = { type: "structured"; value: JsonValue }
 
 export type SessionInboxSyntheticPayload = { text: string; description?: string; metadata?: { [x: string]: JsonValue } }
 
@@ -460,26 +456,6 @@ export type SessionTextStarted = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; assistantMessageID: string; ordinal: number }
-}
-
-export type SessionStructuredCompleted = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.structured.completed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; assistantMessageID: string; value: JsonValue }
-}
-
-export type SessionStructuredFailed = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.structured.failed"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; assistantMessageID: string; error: SessionStructuredError }
 }
 
 export type SessionToolInputStarted = {
@@ -1303,8 +1279,6 @@ export type SessionMessageCompactionFailed = {
   error: SessionStructuredError
 }
 
-export type StructuredOutputRequest = { schema: StructuredOutputJsonSchema; name?: string; description?: string }
-
 export type SessionMessageAssistantText = { type: "text"; text: string; state?: SessionMessageProviderState }
 
 export type SessionMessageAssistantReasoning = {
@@ -1764,7 +1738,6 @@ export type SessionMessageUser = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  output?: StructuredOutputRequest
   skills?: Array<PromptSkillAttachment>
   type: "user"
 }
@@ -1773,7 +1746,6 @@ export type SessionInboxUserPayload = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  output?: StructuredOutputRequest
   skills?: Array<PromptSkillAttachment>
   metadata?: { [x: string]: JsonValue }
 }
@@ -1782,7 +1754,6 @@ export type SessionInboxUserPayload1 = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
-  output?: StructuredOutputRequest
   skills?: Array<PromptSkillAttachment>
   metadata?: { [x: string]: any }
 }
@@ -2004,12 +1975,7 @@ export type SessionMessageAssistant = {
   type: "assistant"
   agent: string
   model: ModelRef
-  content: Array<
-    | SessionMessageAssistantText
-    | SessionMessageAssistantReasoning
-    | SessionMessageAssistantTool
-    | SessionMessageAssistantStructured
-  >
+  content: Array<SessionMessageAssistantText | SessionMessageAssistantReasoning | SessionMessageAssistantTool>
   snapshot?: { start?: string; end?: string; files?: Array<string> }
   finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
   rawFinish?: string
@@ -2051,8 +2017,6 @@ export type SessionEventDurable =
   | SessionTextEnded
   | SessionReasoningStarted
   | SessionReasoningEnded
-  | SessionStructuredCompleted
-  | SessionStructuredFailed
   | SessionToolInputStarted
   | SessionToolInputEnded
   | SessionToolCalled
@@ -2142,8 +2106,6 @@ export type V2Event =
   | SessionReasoningStarted
   | SessionReasoningDelta
   | SessionReasoningEnded
-  | SessionStructuredCompleted
-  | SessionStructuredFailed
   | SessionToolInputStarted
   | SessionToolInputDelta
   | SessionToolInputEnded
@@ -2681,11 +2643,6 @@ export type SessionImportInput = {
             readonly name: string
             readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
           }>
-          readonly output?: {
-            readonly schema: { readonly [x: string]: JsonValue }
-            readonly name?: string
-            readonly description?: string
-          }
           readonly skills?: ReadonlyArray<{
             readonly id: string
             readonly name: string
@@ -2816,7 +2773,6 @@ export type SessionImportInput = {
                     }
                 readonly time: { readonly created: number; readonly ran?: number; readonly completed?: number }
               }
-            | { readonly type: "structured"; readonly value: JsonValue }
           >
           readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
           readonly finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
@@ -2963,11 +2919,6 @@ export type SessionImportInput = {
             readonly name: string
             readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
           }>
-          readonly output?: {
-            readonly schema: { readonly [x: string]: JsonValue }
-            readonly name?: string
-            readonly description?: string
-          }
           readonly skills?: ReadonlyArray<{
             readonly id: string
             readonly name: string
@@ -3098,7 +3049,6 @@ export type SessionImportInput = {
                     }
                 readonly time: { readonly created: number; readonly ran?: number; readonly completed?: number }
               }
-            | { readonly type: "structured"; readonly value: JsonValue }
           >
           readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
           readonly finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
@@ -3245,11 +3195,6 @@ export type SessionImportInput = {
             readonly name: string
             readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
           }>
-          readonly output?: {
-            readonly schema: { readonly [x: string]: JsonValue }
-            readonly name?: string
-            readonly description?: string
-          }
           readonly skills?: ReadonlyArray<{
             readonly id: string
             readonly name: string
@@ -3380,7 +3325,6 @@ export type SessionImportInput = {
                     }
                 readonly time: { readonly created: number; readonly ran?: number; readonly completed?: number }
               }
-            | { readonly type: "structured"; readonly value: JsonValue }
           >
           readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
           readonly finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
@@ -3528,11 +3472,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3554,11 +3493,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3580,11 +3514,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3606,11 +3535,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3619,32 +3543,6 @@ export type SessionPromptInput = {
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
   }["agents"]
-  readonly output?: {
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  }["output"]
   readonly skills?: {
     readonly id?: string | null
     readonly text: string
@@ -3658,11 +3556,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3684,11 +3577,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3710,11 +3598,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -3736,11 +3619,6 @@ export type SessionPromptInput = {
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
-    readonly output?: {
-      readonly schema: { readonly [x: string]: JsonValue }
-      readonly name?: string
-      readonly description?: string
-    }
     readonly skills?: ReadonlyArray<{
       readonly id: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }

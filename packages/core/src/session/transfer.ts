@@ -263,11 +263,6 @@ function sanitizeMessage(message: SessionMessage.Info): SessionMessage.Info {
             text: redact("reasoning", message.id, content.text),
             state: content.state ? { redacted: `reasoning-state:${message.id}` } : undefined,
           }
-        if (content.type === "structured")
-          return {
-            ...content,
-            value: { redacted: `structured-output:${message.id}` },
-          }
         return {
           ...content,
           providerState: content.providerState ? { redacted: `tool-provider-state:${message.id}` } : undefined,

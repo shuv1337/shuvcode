@@ -11,7 +11,6 @@ import { Location } from "./location.js"
 import { SessionMessage } from "./session/message.js"
 import { Base64, FileAttachment, Prompt } from "@opencode-ai/schema/prompt"
 import { PromptInput } from "@opencode-ai/schema/prompt-input"
-import { StructuredOutput } from "@opencode-ai/schema/structured-output"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SessionProjector } from "./session/projector.js"
@@ -53,7 +52,6 @@ import { Global } from "@opencode-ai/util/global"
 import { Shell as ShellSchema } from "@opencode-ai/schema/shell"
 import { KeyedMutex } from "./effect/keyed-mutex.js"
 import { fileURLToPath } from "url"
-import { SessionStructuredOutput } from "./session/structured-output"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionHistory } from "./session/history.js"
 import { InstructionEntry } from "./session/instruction-entry.js"
@@ -133,10 +131,6 @@ export class AttachmentError extends Schema.TaggedError<AttachmentError>()("Sess
   uri: Schema.String,
   message: Schema.String,
 }) {}
-export class StructuredOutputSchemaError extends Schema.TaggedError<StructuredOutputSchemaError>()(
-  "Session.StructuredOutputSchemaError",
-  { message: Schema.String },
-) {}
 export class CompactionConflictError extends Schema.TaggedError<CompactionConflictError>()(
   "Session.CompactionConflictError",
   {
@@ -185,7 +179,6 @@ export type Error =
   | PromptConflictError
   | SyntheticConflictError
   | AttachmentError
-  | StructuredOutputSchemaError
   | CompactionConflictError
   | BusyError
   | SkillNotFoundError
@@ -268,14 +261,13 @@ export interface Interface {
     text: string
     files?: PromptInput.Prompt["files"]
     agents?: PromptInput.Prompt["agents"]
-    output?: StructuredOutput.Request
     skills?: PromptInput.Prompt["skills"]
     metadata?: Record<string, unknown>
     delivery?: SessionInbox.Delivery
     resume?: boolean
   }) => Effect.Effect<
     SessionInbox.User,
-    NotFoundError | PromptConflictError | AttachmentError | StructuredOutputSchemaError | SkillNotFoundError
+    NotFoundError | PromptConflictError | AttachmentError | SkillNotFoundError
   >
   /** Generates text from current Session context without admitting input or mutating history. */
   readonly generate: (input: {
@@ -299,8 +291,7 @@ export interface Interface {
     | NotFoundError
     | PromptConflictError
     | AttachmentError
-    | StructuredOutputSchemaError
-    | SkillNotFoundError
+      | SkillNotFoundError
     | Command.NotFoundError
     | Command.EvaluationError
   >
@@ -640,10 +631,6 @@ const layer = Layer.effect(
         Effect.uninterruptible(
           Effect.gen(function* () {
             const session = yield* result.get(input.sessionID)
-            if (input.output)
-              yield* SessionStructuredOutput.compile(input.output.schema).pipe(
-                Effect.mapError((error) => new StructuredOutputSchemaError({ message: error.message })),
-              )
             // A staged revert must be committed before admitting new input so the prompt
             // continues from the reverted boundary rather than stale post-boundary history.
             if (session.revert) yield* SessionRevert.commit(session).pipe(Effect.provideService(Bus.Service, bus))
@@ -660,7 +647,6 @@ const layer = Layer.effect(
                 text: input.text,
                 files: input.files,
                 agents: input.agents,
-                output: input.output,
                 skills: input.skills,
               },
               image,
@@ -1063,7 +1049,7 @@ const resolvePrompt = Effect.fn("Session.resolvePrompt")(function* (
       })
     })
   })
-  return Prompt.make({ text: input.text, agents: input.agents, files, output: input.output, skills: selected?.length ? selected : undefined })
+  return Prompt.make({ text: input.text, agents: input.agents, files, skills: selected?.length ? selected : undefined })
 })
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024

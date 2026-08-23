@@ -304,7 +304,7 @@ export namespace Timeline {
   }
 
   export function contentEntries(message: SessionMessageAssistant) {
-    const ordinals = { text: 0, reasoning: 0, structured: 0 }
+    const ordinals = { text: 0, reasoning: 0 }
     return message.content.map((content) => ({
       id: content.type === "tool" ? content.id : `${message.id}:${content.type}:${ordinals[content.type]++}`,
       content,
@@ -439,7 +439,6 @@ function groupPartKey(userMessageID: string, ref: PartRef) {
 function renderable(content: Content, showReasoning: boolean) {
   if (content.type === "text") return !!content.text.trim()
   if (content.type === "reasoning") return showReasoning && !!content.text.trim()
-  if (content.type === "structured") return true
   if (content.name === "todowrite") return false
   if (content.name === "question") return content.state.status !== "streaming" && content.state.status !== "running"
   return true

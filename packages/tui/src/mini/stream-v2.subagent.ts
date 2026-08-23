@@ -377,20 +377,6 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
             })
           continue
         }
-        if (item.type === "structured") {
-          const fragment = fragmentRef(message.id, "text", textOrdinal++)
-          const text = JSON.stringify(item.value, null, 2)
-          const update = child.fragments.project(fragment, text, true)
-          setFrame(child, update.key, {
-            kind: "assistant",
-            source: "assistant",
-            text,
-            phase: "progress",
-            messageID: message.id,
-            partID: fragment.partID,
-          })
-          continue
-        }
         childTool(child, item, message.id)
       }
       if (message.error) {

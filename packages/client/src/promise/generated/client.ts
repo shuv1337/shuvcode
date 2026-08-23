@@ -602,7 +602,6 @@ export function make(options: ClientOptions) {
               text: input["text"],
               files: input["files"],
               agents: input["agents"],
-              output: input["output"],
               skills: input["skills"],
               metadata: input["metadata"],
               delivery: input["delivery"],

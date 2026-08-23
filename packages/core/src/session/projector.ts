@@ -583,7 +583,6 @@ const layer = Layer.effectDiscard(
                 text: input.payload.text,
                 files: input.payload.files,
                 agents: input.payload.agents,
-                output: input.payload.output,
                 skills: input.payload.skills,
                 time: { created: DateTime.makeUnsafe(event.created) },
               }
@@ -664,8 +663,6 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Tool.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Structured.Completed, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Structured.Failed, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Compaction.Ended, (event) =>

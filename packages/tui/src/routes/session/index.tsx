@@ -33,7 +33,6 @@ import type {
   SessionMessageInfo,
   SessionMessageAssistant,
   SessionMessageAssistantReasoning,
-  SessionMessageAssistantStructured,
   SessionMessageAssistantText,
   SessionMessageAssistantTool,
   SessionMessageUser,
@@ -1626,9 +1625,6 @@ function SessionPartView(props: { partRef: PartRef; message: (messageID: string)
           <Match when={item().type === "tool"}>
             <ToolPart part={item() as SessionMessageAssistantTool} />
           </Match>
-          <Match when={item().type === "structured"}>
-            <StructuredPart part={item() as SessionMessageAssistantStructured} />
-          </Match>
         </Switch>
       )}
     </Show>
@@ -2455,22 +2451,6 @@ function TextPart(props: { last: boolean; part: SessionMessageAssistantText }) {
   )
 }
 
-function StructuredPart(props: { part: SessionMessageAssistantStructured }) {
-  const theme = useTheme()
-  const { currentSyntax: syntax } = useThemes()
-  return (
-    <box paddingLeft={3} flexShrink={0}>
-      <code
-        filetype="json"
-        drawUnstyledText={false}
-        streaming={false}
-        syntaxStyle={syntax()}
-        content={JSON.stringify(props.part.value, null, 2)}
-        fg={theme.markdown.text}
-      />
-    </box>
-  )
-}
 
 // Pending messages moved to individual tool pending functions
 
@@ -3656,7 +3636,6 @@ function formatSessionTranscript(session: SessionInfo, messages: SessionMessageI
     const content = message.content.flatMap((item) => {
       if (item.type === "text") return [item.text]
       if (item.type === "reasoning") return thinking ? [`_Thinking:_\n\n${item.text}`] : []
-      if (item.type === "structured") return [`\`\`\`json\n${JSON.stringify(item.value, null, 2)}\n\`\`\``]
       const input = typeof item.state.input === "string" ? item.state.input : JSON.stringify(item.state.input, null, 2)
       const output =
         item.state.status === "error"
