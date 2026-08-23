@@ -533,7 +533,7 @@ function cleanHeading(value: string) {
     .trim()
 }
 
-function unwrapErrorMessage(message: string) {
+export function unwrapErrorMessage(message: string) {
   const text = message.replace(/^Error:\s*/, "").trim()
   const parse = (value: string) => Option.getOrUndefined(decodeJson(value))
   const read = (value: string) => {

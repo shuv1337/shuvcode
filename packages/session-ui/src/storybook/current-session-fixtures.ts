@@ -917,7 +917,7 @@ export const retryDocument = document(
   { type: "busy" },
 )
 
-export const compactionDocument = document([
+const compactionPrelude = [
   user("msg_user_compact", "Continue the implementation after compacting context.", 60_000),
   assistant({
     id: "msg_assistant_before_compact",
@@ -926,6 +926,26 @@ export const compactionDocument = document([
     content: [{ type: "text", text: "I inspected the timeline and identified the current message boundary." }],
     error: { type: "ExecutionInterrupted", message: "Context compaction started" },
   }),
+] satisfies SessionMessageInfo[]
+
+export const compactionRunningDocument = document(
+  [
+    ...compactionPrelude,
+    {
+      id: "msg_compaction_running",
+      type: "compaction",
+      status: "running",
+      reason: "auto",
+      summary: "## Goal\n\nRestore compaction output while preserving timeline notices.",
+      recent: "",
+      time: { created: STORY_TIME + 63_000 },
+    },
+  ] satisfies SessionMessageInfo[],
+  { type: "busy" },
+)
+
+export const compactionDocument = document([
+  ...compactionPrelude,
   {
     id: "msg_compaction_complete",
     type: "compaction",
@@ -941,6 +961,30 @@ export const compactionDocument = document([
     completed: 66_000,
     content: [{ type: "text", text: "Context restored. I continued from the durable Session messages." }],
   }),
+] satisfies SessionMessageInfo[])
+
+export const compactionFailedDocument = document([
+  ...compactionPrelude,
+  {
+    id: "msg_compaction_failed",
+    type: "compaction",
+    status: "failed",
+    reason: "auto",
+    error: { type: "compaction.failed", message: "The provider rejected the compaction request." },
+    time: { created: STORY_TIME + 63_000 },
+  },
+] satisfies SessionMessageInfo[])
+
+export const compactionCancelledDocument = document([
+  ...compactionPrelude,
+  {
+    id: "msg_compaction_cancelled",
+    type: "compaction",
+    status: "failed",
+    reason: "manual",
+    error: { type: "aborted", message: "Compaction cancelled" },
+    time: { created: STORY_TIME + 63_000 },
+  },
 ] satisfies SessionMessageInfo[])
 
 export const subagentDocument = document(

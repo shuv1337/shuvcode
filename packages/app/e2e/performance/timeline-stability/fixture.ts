@@ -259,6 +259,22 @@ export function event(
   return makeEvent(type, data)
 }
 
+export function compactionStarted(data: Extract<OpenCodeEvent, { type: "session.compaction.started" }>["data"]) {
+  return makeEvent("session.compaction.started", data)
+}
+
+export function compactionDelta(data: Extract<OpenCodeEvent, { type: "session.compaction.delta" }>["data"]) {
+  return makeEvent("session.compaction.delta", data)
+}
+
+export function compactionEnded(data: Extract<OpenCodeEvent, { type: "session.compaction.ended" }>["data"]) {
+  return makeEvent("session.compaction.ended", data)
+}
+
+export function compactionFailed(data: Extract<OpenCodeEvent, { type: "session.compaction.failed" }>["data"]) {
+  return makeEvent("session.compaction.failed", data)
+}
+
 export function toolInputStarted(data: Extract<OpenCodeEvent, { type: "session.tool.input.started" }>["data"]) {
   return makeEvent("session.tool.input.started", data)
 }

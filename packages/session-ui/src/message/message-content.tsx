@@ -12,10 +12,12 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Button } from "@opencode-ai/ui/button"
+import { Card } from "@opencode-ai/ui/card"
 import type {
   PromptAgentAttachment,
   PromptFileAttachment,
   SessionMessageAssistant,
+  SessionMessageCompaction,
   SessionMessageUser,
 } from "@opencode-ai/client/promise"
 import type { SessionUserActions, SessionUserComment } from "../actions"
@@ -379,6 +381,37 @@ export function MessageDivider(props: { label: string }) {
         </span>
         <span data-slot="compaction-part-line" />
       </div>
+    </div>
+  )
+}
+
+export function SessionCompactionMessage(props: { message: SessionMessageCompaction; error: string }) {
+  const i18n = useI18n()
+  const summary = () => (props.message.status === "failed" ? "" : props.message.summary)
+  const error = () => {
+    if (props.message.status !== "failed" || props.message.error.type === "aborted") return ""
+    return props.error
+  }
+
+  return (
+    <div data-component="session-compaction-message">
+      <MessageDivider label={i18n.t("ui.messagePart.compaction")} />
+      <Show when={summary().trim()}>
+        <div data-component="text-part" data-timeline-part-id={props.message.id}>
+          <div data-slot="text-part-body">
+            <PacedMarkdown
+              text={summary()}
+              cacheKey={props.message.id}
+              streaming={props.message.status === "running"}
+            />
+          </div>
+        </div>
+      </Show>
+      <Show when={error()}>
+        <Card variant="error" class="error-card">
+          {error()}
+        </Card>
+      </Show>
     </div>
   )
 }
