@@ -54,6 +54,7 @@
       "name": "@opencode-ai/app",
       "version": "1.18.15",
       "dependencies": {
+        "@ibm/plex": "6.4.1",
         "@corvu/drawer": "catalog:",
         "@dnd-kit/abstract": "0.5.0",
         "@dnd-kit/dom": "0.5.0",

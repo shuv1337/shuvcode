@@ -1,5 +1,6 @@
 import { CurrentSessionTimelineStory } from "../storybook/current-session-story"
 import {
+  expandedShellDocument,
   recoveryDocument,
   standaloneShellCompletedDocument,
   standaloneShellRunningDocument,
@@ -67,6 +68,18 @@ export const TestsPassed = {
       description="A completed focused check shows its command, output, and successful tool state."
       document={terminalPassedDocument}
       width="720px"
+      shellToolDefaultOpen
+    />
+  ),
+}
+
+export const ExpandedShell = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Expanded shell"
+      description="The expanded shell separates the command from its output in a full-width card without a detail rail."
+      document={expandedShellDocument}
+      width="786px"
       shellToolDefaultOpen
     />
   ),

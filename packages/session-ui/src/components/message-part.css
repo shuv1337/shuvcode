@@ -419,9 +419,42 @@
     overflow-wrap: anywhere;
   }
 
-  [data-slot="bash-prompt"] {
-    user-select: none;
+  &[data-variant="shell"] {
+    background: var(--v2-background-bg-base);
+
+    [data-slot="bash-pre"] {
+      padding: 0;
+    }
+
+    [data-slot="bash-pre"] code {
+      font-family: var(--v2-font-family-code);
+      font-weight: 440;
+      line-height: var(--line-height-base);
+      letter-spacing: -0.04px;
+    }
+
+    [data-slot="bash-command"],
+    [data-slot="bash-result"] {
+      display: block;
+      padding: 12px;
+    }
+
+    [data-slot="bash-result"] {
+      border-block-start: 0.5px solid var(--v2-border-border-base);
+      background: var(--v2-background-bg-layer-01);
+      color: var(--v2-text-text-muted);
+    }
+
+    [data-slot="bash-command"] {
+      color: var(--v2-text-text-base);
+    }
   }
+}
+
+[data-component="collapsible"].tool-collapsible:has(
+    > [data-slot="collapsible-content"] [data-component="bash-output"][data-variant="shell"]
+  ) {
+  --tool-content-gap: 6px;
 }
 
 [data-component="edit-trigger"],

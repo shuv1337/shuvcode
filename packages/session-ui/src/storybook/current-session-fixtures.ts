@@ -507,6 +507,29 @@ export const terminalPassedDocument = document([
   }),
 ] satisfies SessionMessageInfo[])
 
+export const expandedShellDocument = document([
+  user("msg_user_shell_expanded", "Inspect the active service and its available feature surface.", 52_100),
+  assistant({
+    id: "msg_assistant_shell_expanded",
+    offset: 52_200,
+    completed: 52_900,
+    content: [
+      completedTool({
+        id: "tool_shell_expanded",
+        name: "shell",
+        offset: 52_300,
+        args: {
+          command:
+            "opencode2 api get /openapi.json > /private/var/folders/j/gd69b2|16y91666jzf3p9g22asdasc0000gn/T/opencode/temp/tes",
+        },
+        output:
+          '{"location":{"directory":"/Users/usrnk1","project":{"id":"global","directory":"/","canonical":"/"}},"data":[{"id":"opencode","name":"OpenCode","description":"Use this skill for any question about OpenCode itself, including how OpenCode works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OpenCode SDK, clients, server, or API, and contributing to the OpenCode codebase."}]}',
+        metadata: { exit: 0 },
+      }),
+    ],
+  }),
+] satisfies SessionMessageInfo[])
+
 export const terminalFailedDocument = document([
   user("msg_user_terminal_failed", "Run the focused Session UI tests.", 53_000),
   assistant({

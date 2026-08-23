@@ -17,6 +17,14 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("@ibm/plex/IBM-Plex-Mono/fonts/complete/woff2/IBMPlexMono-Text.woff2") format("woff2");
+  font-weight: 440;
+  font-style: normal;
+  font-display: swap;
+}
+
 @media (display-mode: standalone) {
   /* WebKit excludes safe-area insets from dvh in installed apps. */
   #root {

@@ -43,6 +43,7 @@ export default defineConfig({
           "web-app-manifest*",
           "assets/index-*.{js,css}",
           "assets/session-*.js",
+          "assets/IBMPlexMono-Text-*.woff2",
           "assets/Inter.ttf",
           "assets/JetBrainsMonoNerdFontMono-Regular.woff2",
         ],
