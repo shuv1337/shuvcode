@@ -16,9 +16,15 @@ import { sessionHref } from "@/shell/routes/session"
 import { sessionTitle } from "@/session/title"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/session/commands/export"
 import { showToast } from "@/shell/notifications/toast"
-import { timelineChildTitle, timelineRemovedSessionIDs, visibleTimelineMessages } from "./controller-projection"
+import {
+  applyTimelineMessageHandoff,
+  timelineChildTitle,
+  timelineRemovedSessionIDs,
+  visibleTimelineMessages,
+} from "./controller-projection"
 import { createTimelineProjection } from "./projection"
 import { useServer } from "@/runtime/server/current"
+import { getSessionMessageHandoff } from "@/session/handoff"
 
 const emptyMessages: SessionMessageInfo[] = []
 const taskDescription = (message: SessionMessageInfo, sessionID: string): string | undefined => {
@@ -52,10 +58,16 @@ export function createTimelineController(input: { session: TimelineSessionSource
   const tabs = useTabs()
   const dialog = useDialog()
   const language = useLanguage()
+  const handedOffMessages = createMemo(() =>
+    applyTimelineMessageHandoff(
+      input.session.history.messages(),
+      getSessionMessageHandoff(input.session.identity.sessionKey()),
+    ),
+  )
   const projectedMessages = createMemo(() => {
     const id = input.session.identity.sessionID()
     return visibleTimelineMessages(
-      input.session.history.messages(),
+      handedOffMessages(),
       id ? data.session.pending.list(id) : [],
       input.session.data.info()?.revert?.messageID,
     )
