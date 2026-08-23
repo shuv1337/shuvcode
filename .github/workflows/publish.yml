@@ -195,4 +195,3 @@ jobs:
     with:
       tag: ${{ needs.version.outputs.tag }}
     secrets: inherit
-    continue-on-error: true
