@@ -13,9 +13,11 @@ interface Props {
   currentSlug: string
   headings: MarkdownHeading[]
   showTableOfContents?: boolean
+  fullWidth?: boolean
 }
 
 const section = getDocsSection(Astro.props.currentSlug)
+const fullWidth = Astro.props.fullWidth ?? false
 const description = Astro.props.description ?? `${Astro.props.title} documentation for OpenCode.`
 const canonical = new URL(Astro.url.pathname, "https://opencode.ai").href
 ---
@@ -35,24 +37,34 @@ const canonical = new URL(Astro.url.pathname, "https://opencode.ai").href
   <body>
     <a class="skip-link" href="#docs-content">Skip to content</a>
     <DocsHeader currentSlug={Astro.props.currentSlug} />
-    <details class="mobile-navigation">
-      <summary>{section.title} navigation</summary>
-      <DocsSidebar groups={section.groups} currentSlug={Astro.props.currentSlug} />
-    </details>
-    <div class="docs-frame">
-      <aside class="sidebar-column">
-        <DocsSidebar groups={section.groups} currentSlug={Astro.props.currentSlug} />
-      </aside>
-      <main id="docs-content">
-        <article class="prose" data-pagefind-body data-pagefind-meta={`title:${Astro.props.title}`}>
-          <h1>{Astro.props.title}</h1>
+    {
+      fullWidth ? (
+        <main id="docs-content" class="full-width-content">
           <slot />
-        </article>
-      </main>
-      <aside class="toc-column">
-        {Astro.props.showTableOfContents !== false && <DocsTableOfContents headings={Astro.props.headings} />}
-      </aside>
-    </div>
+        </main>
+      ) : (
+        <>
+          <details class="mobile-navigation">
+            <summary>{section.title} navigation</summary>
+            <DocsSidebar groups={section.groups} currentSlug={Astro.props.currentSlug} />
+          </details>
+          <div class="docs-frame">
+            <aside class="sidebar-column">
+              <DocsSidebar groups={section.groups} currentSlug={Astro.props.currentSlug} />
+            </aside>
+            <main id="docs-content">
+              <article class="prose" data-pagefind-body data-pagefind-meta={`title:${Astro.props.title}`}>
+                <h1>{Astro.props.title}</h1>
+                <slot />
+              </article>
+            </main>
+            <aside class="toc-column">
+              {Astro.props.showTableOfContents !== false && <DocsTableOfContents headings={Astro.props.headings} />}
+            </aside>
+          </div>
+        </>
+      )
+    }
     <script is:inline>
       const addHeadingAnchors = () => {
         for (const heading of document.querySelectorAll(".prose :is(h2, h3)[id]")) {

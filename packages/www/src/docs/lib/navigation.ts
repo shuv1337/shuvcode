@@ -88,12 +88,11 @@ export const docsSections: DocsSection[] = [
     landingSlug: "build",
     groups: [
       {
-        title: "Build",
         items: [
-          { title: "SDK", slug: "build/sdk" },
           { title: "Build", slug: "build" },
-          { title: "Client", slug: "build/client" },
           { title: "Plugins", slug: "build/plugins" },
+          { title: "Client", slug: "build/client" },
+          { title: "SDK", slug: "build/sdk" },
         ],
       },
     ],
