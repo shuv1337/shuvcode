@@ -160,6 +160,21 @@ export const InstructionEntryTable = sqliteTable(
   (table) => [primaryKey({ columns: [table.session_id, table.key] })],
 )
 
+export const SessionDynamicToolTable = sqliteTable(
+  "session_dynamic_tool",
+  {
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    name: text().notNull(),
+    description: text().notNull(),
+    parameters: text({ mode: "json" }).$type<Record<string, unknown>>(),
+    ...Timestamps,
+  },
+  (table) => [primaryKey({ columns: [table.session_id, table.name] })],
+)
+
 export const InstructionBlobTable = sqliteTable("instruction_blob", {
   hash: text().$type<Instruction.Hash>().primaryKey(),
   value: text({ mode: "json" }).$type<Schema.Json>(),

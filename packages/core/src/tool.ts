@@ -32,7 +32,11 @@ export interface Interface {
   readonly transform: (
     callback: (draft: { readonly add: (tool: Tool.Info) => void }) => void,
   ) => Effect.Effect<void, RegistrationError, Scope.Scope>
-  readonly snapshot: (permissions?: Permission.Ruleset, policy?: SessionPolicy.Info) => Effect.Effect<Snapshot>
+  readonly snapshot: (
+    permissions?: Permission.Ruleset,
+    policy?: SessionPolicy.Info,
+    session?: ReadonlyArray<Tool.Info>,
+  ) => Effect.Effect<Snapshot>
 }
 
 export interface Snapshot {
@@ -269,15 +273,20 @@ const layer = Layer.effect(
 
     return Service.of({
       transform,
-      snapshot: Effect.fn("Tool.snapshot")((permissions, policy) =>
+      snapshot: Effect.fn("Tool.snapshot")((permissions, policy, session) =>
         lock.withPermit(
           Effect.gen(function* () {
             const active = new Map<string, Tool.Info>()
             const rules = permissions ?? []
             const allowed = policy ? new Set(policy.tools.allow) : undefined
             const policyDenied = new Set<string>()
-            for (const [name, entries] of local) {
-              const tool = entries.at(-1)?.tool
+            // Session-scoped tools overlay the shared registry; a colliding
+            // name shadows the location-shared tool for this snapshot only.
+            const candidates = [
+              ...Array.from(local, ([name, entries]) => [name, entries.at(-1)?.tool] as const),
+              ...(session ?? []).map((tool) => [effectiveName(tool), tool] as const),
+            ]
+            for (const [name, tool] of candidates) {
               if (!tool) continue
               if (allowed && (!allowed.has(name) || whollyDisabled(tool.options?.permission ?? name, rules))) {
                 policyDenied.add(name)

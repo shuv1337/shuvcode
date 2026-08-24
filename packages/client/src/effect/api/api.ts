@@ -119,6 +119,14 @@ export type SessionCreateInput = {
   readonly model?: Model.Ref | undefined
   readonly location?: Location.Ref | undefined
   readonly policy?: Session.Policy | undefined
+  readonly metadata?: { readonly [x: string]: unknown } | undefined
+  readonly tools?:
+    | ReadonlyArray<{
+        readonly name: string
+        readonly description: string
+        readonly parameters?: { readonly [x: string]: unknown } | undefined
+      }>
+    | undefined
 }
 export type SessionCreateOutput = Session.Info
 export type SessionCreateOperation<E = never> = (input?: SessionCreateInput) => Effect.Effect<SessionCreateOutput, E>
@@ -150,6 +158,13 @@ export type SessionForkInput = {
   readonly sessionID: Session.ID
   readonly boundary: Session.ForkRequestBoundary
   readonly policy?: Session.Policy | undefined
+  readonly tools?:
+    | ReadonlyArray<{
+        readonly name: string
+        readonly description: string
+        readonly parameters?: { readonly [x: string]: unknown } | undefined
+      }>
+    | undefined
 }
 export type SessionForkOutput = Session.Info
 export type SessionForkOperation<E = never> = (input: SessionForkInput) => Effect.Effect<SessionForkOutput, E>
@@ -324,6 +339,53 @@ export type SessionInstructionsEntryRemoveOperation<E = never> = (
   input: SessionInstructionsEntryRemoveInput,
 ) => Effect.Effect<SessionInstructionsEntryRemoveOutput, E>
 
+export type SessionToolsPutInput = {
+  readonly sessionID: Session.ID
+  readonly tools: ReadonlyArray<{
+    readonly name: string
+    readonly description: string
+    readonly parameters?: { readonly [x: string]: unknown } | undefined
+  }>
+}
+export type SessionToolsPutOutput = void
+export type SessionToolsPutOperation<E = never> = (
+  input: SessionToolsPutInput,
+) => Effect.Effect<SessionToolsPutOutput, E>
+
+export type SessionToolsListInput = { readonly sessionID: Session.ID }
+export type SessionToolsListOutput = ReadonlyArray<{
+  readonly name: string
+  readonly description: string
+  readonly parameters?: { readonly [x: string]: unknown } | undefined
+}>
+export type SessionToolsListOperation<E = never> = (
+  input: SessionToolsListInput,
+) => Effect.Effect<SessionToolsListOutput, E>
+
+export type SessionToolsCallsInput = { readonly sessionID: Session.ID }
+export type SessionToolsCallsOutput = ReadonlyArray<{
+  readonly callID: string
+  readonly sessionID: Session.ID
+  readonly tool: string
+  readonly input: unknown
+  readonly time: { readonly requested: number }
+}>
+export type SessionToolsCallsOperation<E = never> = (
+  input: SessionToolsCallsInput,
+) => Effect.Effect<SessionToolsCallsOutput, E>
+
+export type SessionToolsReplyInput = {
+  readonly sessionID: Session.ID
+  readonly callID: string
+  readonly payload:
+    | { readonly status: "completed"; readonly content: string }
+    | { readonly status: "failed"; readonly message: string }
+}
+export type SessionToolsReplyOutput = void
+export type SessionToolsReplyOperation<E = never> = (
+  input: SessionToolsReplyInput,
+) => Effect.Effect<SessionToolsReplyOutput, E>
+
 export type SessionGenerateInput = { readonly sessionID: Session.ID; readonly prompt: string }
 export type SessionGenerateOutput = { readonly text: string }
 export type SessionGenerateOperation<E = never> = (
@@ -355,6 +417,7 @@ export type SessionLogOutput =
             readonly agent?: Agent.ID | undefined
             readonly model?: Model.Ref | undefined
             readonly policy?: Session.Policy | undefined
+            readonly metadata?: { readonly [x: string]: unknown } | undefined
             readonly version: string
           }
         }
@@ -1010,6 +1073,12 @@ export interface SessionApi<E = never> {
       readonly put: SessionInstructionsEntryPutOperation<E>
       readonly remove: SessionInstructionsEntryRemoveOperation<E>
     }
+  }
+  readonly tools: {
+    readonly put: SessionToolsPutOperation<E>
+    readonly list: SessionToolsListOperation<E>
+    readonly calls: SessionToolsCallsOperation<E>
+    readonly reply: SessionToolsReplyOperation<E>
   }
   readonly generate: SessionGenerateOperation<E>
   readonly log: SessionLogOperation<E>

@@ -75,6 +75,30 @@ const transform = (service: Tool.Interface, tools: Readonly<Record<string, Info>
   )
 
 describe("Tool", () => {
+  it.effect("overlays session-scoped tools only onto the requesting snapshot", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { echo: make() }, { codemode: false })
+      const dynamic: Info = {
+        name: "lookup",
+        description: "Session lookup",
+        input: Schema.Struct({ text: Schema.String }),
+        execute: ({ text }) => Effect.succeed({ content: `dispatched:${text}` }),
+        options: { codemode: false },
+      }
+
+      const scoped = yield* service.snapshot(undefined, undefined, [dynamic])
+      const plain = yield* service.snapshot()
+
+      expect(scoped.definitions.map((tool) => tool.name)).toEqual(["echo", "lookup", "execute"])
+      expect(plain.definitions.map((tool) => tool.name)).toEqual(["echo", "execute"])
+      expect((yield* scoped.execute(call("lookup"))).content).toMatchObject([
+        { type: "text", text: "dispatched:lookup" },
+      ])
+      expect((yield* plain.execute(call("lookup")).pipe(Effect.flip)).message).toBe("Unknown tool: lookup")
+    }),
+  )
+
   it.effect("rejects invalid dotted namespaces", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service

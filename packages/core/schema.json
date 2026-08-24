@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "8765e753-066e-4e29-94eb-8742ad1f0625",
+  "id": "129744a1-9fbf-4595-96a6-71008ce22f63",
   "prevIds": [
-    "3fb67508-0196-4bae-b2bd-c08ece7583fd"
+    "8765e753-066e-4e29-94eb-8742ad1f0625"
   ],
   "ddl": [
     {
@@ -56,6 +56,10 @@
     },
     {
       "name": "instruction_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_dynamic_tool",
       "entityType": "tables"
     },
     {
@@ -854,6 +858,66 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "description",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parameters",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -1623,6 +1687,21 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
+      "name": "fk_session_dynamic_tool_session_id_session_v2_id_fk",
+      "entityType": "fks",
+      "table": "session_dynamic_tool"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session_v2",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
       "name": "fk_session_inbox_session_id_session_v2_id_fk",
       "entityType": "fks",
       "table": "session_inbox"
@@ -1716,6 +1795,16 @@
       "name": "instruction_entry_pk",
       "entityType": "pks",
       "table": "instruction_entry"
+    },
+    {
+      "columns": [
+        "session_id",
+        "name"
+      ],
+      "nameExplicit": false,
+      "name": "session_dynamic_tool_pk",
+      "entityType": "pks",
+      "table": "session_dynamic_tool"
     },
     {
       "columns": [

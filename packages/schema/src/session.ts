@@ -54,6 +54,8 @@ export const Info = Schema.Struct({
   subpath: RelativePath.pipe(optional),
   revert: Revert.pipe(optional),
   policy: Policy.pipe(optional),
+  /** Opaque client-supplied ownership/tagging metadata stamped at creation. */
+  metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(optional),
 }).annotate({ identifier: "Session.Info" })
 
 export const ListAnchor = Schema.Struct({

@@ -68,6 +68,14 @@ import type {
   SessionInstructionsEntryPutOutput,
   SessionInstructionsEntryRemoveInput,
   SessionInstructionsEntryRemoveOutput,
+  SessionToolsPutInput,
+  SessionToolsPutOutput,
+  SessionToolsListInput,
+  SessionToolsListOutput,
+  SessionToolsCallsInput,
+  SessionToolsCallsOutput,
+  SessionToolsReplyInput,
+  SessionToolsReplyOutput,
   SessionGenerateInput,
   SessionGenerateOutput,
   SessionLogInput,
@@ -468,9 +476,11 @@ export function make(options: ClientOptions) {
               model: input?.["model"],
               location: input?.["location"],
               policy: input?.["policy"],
+              metadata: input?.["metadata"],
+              tools: input?.["tools"],
             },
             successStatus: 200,
-            declaredStatuses: [401, 400],
+            declaredStatuses: [400, 401],
             empty: false,
           },
           requestOptions,
@@ -537,7 +547,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/fork`,
-            body: { boundary: input["boundary"], policy: input["policy"] },
+            body: { boundary: input["boundary"], policy: input["policy"], tools: input["tools"] },
             successStatus: 200,
             declaredStatuses: [404, 400, 401],
             empty: false,
@@ -832,6 +842,54 @@ export function make(options: ClientOptions) {
               requestOptions,
             ),
         },
+      },
+      tools: {
+        put: (input: SessionToolsPutInput, requestOptions?: RequestOptions) =>
+          request<SessionToolsPutOutput>(
+            {
+              method: "PUT",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/tools`,
+              body: { tools: input["tools"] },
+              successStatus: 204,
+              declaredStatuses: [404, 400, 401],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        list: (input: SessionToolsListInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: SessionToolsListOutput }>(
+            {
+              method: "GET",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/tools`,
+              successStatus: 200,
+              declaredStatuses: [404, 400, 401],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        calls: (input: SessionToolsCallsInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: SessionToolsCallsOutput }>(
+            {
+              method: "GET",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/tools/calls`,
+              successStatus: 200,
+              declaredStatuses: [404, 400, 401],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        reply: (input: SessionToolsReplyInput, requestOptions?: RequestOptions) =>
+          request<SessionToolsReplyOutput>(
+            {
+              method: "POST",
+              path: `/api/session/${encodeURIComponent(input.sessionID)}/tools/calls/${encodeURIComponent(input.callID)}/reply`,
+              body: input["payload"],
+              successStatus: 204,
+              declaredStatuses: [404, 409, 400, 401],
+              empty: true,
+            },
+            requestOptions,
+          ),
       },
       generate: (input: SessionGenerateInput, requestOptions?: RequestOptions) =>
         request<{ readonly data: SessionGenerateOutput }>(

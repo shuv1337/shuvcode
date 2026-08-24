@@ -98,6 +98,7 @@ type CreateBaseInput = {
   agent?: Agent.ID
   model?: Model.Ref
   policy?: Session.Policy
+  metadata?: Record<string, unknown>
 }
 type CreateInput = CreateBaseInput &
   ({ location: Location.Ref; parentID?: never } | { parentID: SessionSchema.ID; location?: never })
@@ -265,10 +266,7 @@ export interface Interface {
     metadata?: Record<string, unknown>
     delivery?: SessionInbox.Delivery
     resume?: boolean
-  }) => Effect.Effect<
-    SessionInbox.User,
-    NotFoundError | PromptConflictError | AttachmentError | SkillNotFoundError
-  >
+  }) => Effect.Effect<SessionInbox.User, NotFoundError | PromptConflictError | AttachmentError | SkillNotFoundError>
   /** Generates text from current Session context without admitting input or mutating history. */
   readonly generate: (input: {
     sessionID: SessionSchema.ID
@@ -291,7 +289,7 @@ export interface Interface {
     | NotFoundError
     | PromptConflictError
     | AttachmentError
-      | SkillNotFoundError
+    | SkillNotFoundError
     | Command.NotFoundError
     | Command.EvaluationError
   >
@@ -424,6 +422,7 @@ const layer = Layer.effect(
                   }
                 : undefined,
               policy,
+              metadata: input.metadata,
             },
             { location },
           )

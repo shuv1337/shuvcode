@@ -25,6 +25,7 @@ import { SessionInbox } from "./session-inbox.js"
 import { Project } from "./project.js"
 import { SessionFork } from "./session-fork.js"
 import { SessionPolicy } from "./session-policy.js"
+import { SessionDynamicTool } from "./session-dynamic-tool.js"
 
 export { FileAttachment }
 
@@ -61,6 +62,7 @@ export const Created = Event.durable({
     agent: Agent.ID.pipe(optional),
     model: Model.Ref.pipe(optional),
     policy: SessionPolicy.Info.pipe(optional),
+    metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(optional),
     version: Schema.String,
   },
 })
@@ -164,7 +166,6 @@ export const Forked = Event.durable({
     instructions: Instruction.Values.pipe(optional),
     policy: SessionPolicy.Info.pipe(optional),
     instructionEntries: InstructionEntry.Snapshot.pipe(optional),
-
   },
 })
 export type Forked = typeof Forked.Type
@@ -582,6 +583,48 @@ export namespace Compaction {
   export type Failed = typeof Failed.Type
 }
 
+export namespace DynamicTool {
+  /** The session's dynamic tool set was replaced. */
+  export const Updated = Event.ephemeral({
+    type: "session.tools.updated",
+    schema: {
+      ...Base,
+      tools: Schema.Array(SessionDynamicTool.Definition),
+    },
+  })
+  export type Updated = typeof Updated.Type
+
+  /** A dynamic tool invocation awaiting the owning client's reply. */
+  export const Requested = Event.ephemeral({
+    type: "session.tool.dynamic.requested",
+    schema: {
+      ...Base,
+      callID: Schema.String,
+      tool: Schema.String,
+      input: Schema.Unknown,
+    },
+  })
+  export type Requested = typeof Requested.Type
+
+  export const Replied = Event.ephemeral({
+    type: "session.tool.dynamic.replied",
+    schema: {
+      ...Base,
+      callID: Schema.String,
+    },
+  })
+  export type Replied = typeof Replied.Type
+
+  export const Cancelled = Event.ephemeral({
+    type: "session.tool.dynamic.cancelled",
+    schema: {
+      ...Base,
+      callID: Schema.String,
+    },
+  })
+  export type Cancelled = typeof Cancelled.Type
+}
+
 export namespace RevertEvent {
   export const Staged = Event.durable({
     type: "session.revert.staged",
@@ -643,6 +686,10 @@ export const Definitions = Event.inventory(
   RevertEvent.Staged,
   RevertEvent.Cleared,
   RevertEvent.Committed,
+  DynamicTool.Updated,
+  DynamicTool.Requested,
+  DynamicTool.Replied,
+  DynamicTool.Cancelled,
 )
 
 // UsageRecorded is durable but internal: excluded from Definitions so it never reaches the public manifest.

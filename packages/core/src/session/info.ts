@@ -51,6 +51,7 @@ export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.In
     subpath: row.path ? RelativePath.make(row.path) : undefined,
     revert: row.revert ? decodeRevert(row.revert) : undefined,
     policy: row.policy ?? undefined,
+    metadata: row.metadata ?? undefined,
     outcome: row.idle_outcome ?? undefined,
     time: {
       created: DateTime.makeUnsafe(row.time_created),

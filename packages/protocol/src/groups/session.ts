@@ -27,6 +27,7 @@ import { Agent } from "@opencode-ai/schema/agent"
 import { Skill } from "@opencode-ai/schema/skill"
 import { Model } from "@opencode-ai/schema/model"
 import { Location } from "@opencode-ai/schema/location"
+import { SessionDynamicTool } from "@opencode-ai/schema/session-dynamic-tool"
 import { SessionEvent } from "@opencode-ai/schema/session-event"
 import { EventLog } from "@opencode-ai/schema/event-log"
 
@@ -155,8 +156,11 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           model: Model.Ref.pipe(Schema.optional),
           location: Location.Ref.pipe(Schema.optional),
           policy: Session.Policy.pipe(Schema.optional),
+          metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
+          tools: Schema.Array(SessionDynamicTool.Definition).pipe(Schema.optional),
         }),
         success: Schema.Struct({ data: Session.Info }),
+        error: InvalidRequestError,
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "v2.session.create",
@@ -238,7 +242,11 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.fork", "/api/session/:sessionID/fork", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ boundary: Session.ForkRequestBoundary, policy: Session.Policy.pipe(Schema.optional) }),
+        payload: Schema.Struct({
+          boundary: Session.ForkRequestBoundary,
+          policy: Session.Policy.pipe(Schema.optional),
+          tools: Schema.Array(SessionDynamicTool.Definition).pipe(Schema.optional),
+        }),
         success: Schema.Struct({ data: Session.Info }),
         error: [SessionNotFoundError, MessageNotFoundError, InvalidRequestError],
       })
@@ -608,6 +616,71 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             summary: "Remove instruction entry",
             description:
               "Remove one instruction entry; the removal is announced to the model at the next step boundary.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.put("session.tools.put", "/api/session/:sessionID/tools", {
+        params: { sessionID: Session.ID },
+        payload: Schema.Struct({ tools: Schema.Array(SessionDynamicTool.Definition) }),
+        success: HttpApiSchema.NoContent,
+        error: [SessionNotFoundError, InvalidRequestError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.tools.put",
+            summary: "Replace session dynamic tools",
+            description:
+              "Replace the session-scoped dynamic tool set. These tools are visible only to this session; invocations dispatch to the registering client as session.tool.dynamic.requested events and settle through the reply endpoint. Registrations are durable and survive resume.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.get("session.tools.list", "/api/session/:sessionID/tools", {
+        params: { sessionID: Session.ID },
+        success: Schema.Struct({ data: Schema.Array(SessionDynamicTool.Definition) }),
+        error: SessionNotFoundError,
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.tools.list",
+            summary: "List session dynamic tools",
+            description: "List the session-scoped dynamic tool definitions registered for this session.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.get("session.tools.calls", "/api/session/:sessionID/tools/calls", {
+        params: { sessionID: Session.ID },
+        success: Schema.Struct({ data: Schema.Array(SessionDynamicTool.Call) }),
+        error: SessionNotFoundError,
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.tools.calls",
+            summary: "List pending dynamic tool calls",
+            description:
+              "List in-flight dynamic tool invocations awaiting a client reply. A re-attaching client uses this to recover calls dispatched while it was disconnected.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.post("session.tools.reply", "/api/session/:sessionID/tools/calls/:callID/reply", {
+        params: { sessionID: Session.ID, callID: Schema.String },
+        payload: SessionDynamicTool.Reply,
+        success: HttpApiSchema.NoContent,
+        error: [SessionNotFoundError, ConflictError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.tools.reply",
+            summary: "Reply to dynamic tool call",
+            description:
+              "Settle one pending dynamic tool invocation with the owning client's result; the model receives it as the tool output.",
           }),
         ),
     )

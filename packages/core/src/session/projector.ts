@@ -14,7 +14,7 @@ import { SessionMessageUpdater } from "./message-updater.js"
 import { SessionInbox } from "./inbox.js"
 import { Workspace } from "../workspace.js"
 import { InstructionState } from "./instruction-state.js"
-import { SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
+import { SessionDynamicToolTable, SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
 import { InstructionEntry } from "./instruction-entry.js"
 import { Slug } from "../util/slug.js"
 import { FSUtil } from "@opencode-ai/util/fs-util"
@@ -175,6 +175,33 @@ const projectFork = Effect.fn("SessionProjector.projectFork")(function* (
 
   if (event.data.instructionEntries)
     yield* InstructionEntry.initialize(db, event.data.sessionID, event.data.instructionEntries, event.created)
+
+  // Forks keep the parent's session-scoped dynamic tool plane; the owning
+  // client may replace it afterwards through the tools endpoint.
+  const parentTools = yield* db
+    .select({
+      name: SessionDynamicToolTable.name,
+      description: SessionDynamicToolTable.description,
+      parameters: SessionDynamicToolTable.parameters,
+    })
+    .from(SessionDynamicToolTable)
+    .where(eq(SessionDynamicToolTable.session_id, event.data.parentID))
+    .all()
+    .pipe(Effect.orDie)
+  if (parentTools.length > 0)
+    yield* db
+      .insert(SessionDynamicToolTable)
+      .values(
+        parentTools.map((tool) => ({
+          ...tool,
+          session_id: event.data.sessionID,
+          time_created: event.created,
+          time_updated: event.created,
+        })),
+      )
+      .onConflictDoNothing()
+      .run()
+      .pipe(Effect.orDie)
 
   let cursor = -1
   while (copiedSeq !== undefined) {
@@ -447,6 +474,7 @@ const layer = Layer.effectDiscard(
             agent: event.data.agent,
             model: event.data.model,
             policy: event.data.policy,
+            metadata: event.data.metadata,
             version: event.data.version,
             time_created: event.created,
             time_updated: event.created,

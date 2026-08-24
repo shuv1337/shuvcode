@@ -212,6 +212,19 @@ describe("Session.create", () => {
     }),
   )
 
+  it.effect("round-trips creation metadata through get and list", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      const metadata = { owner: "ade", binding: { bot: "bot_1" } }
+
+      const created = yield* session.create({ location, metadata })
+
+      expect(created.metadata).toEqual(metadata)
+      expect((yield* session.get(created.id)).metadata).toEqual(metadata)
+      expect((yield* session.list()).data.find((item) => item.id === created.id)?.metadata).toEqual(metadata)
+    }),
+  )
+
   it.effect("inherits location from an existing parent when omitted", () =>
     Effect.gen(function* () {
       const session = yield* Session.Service

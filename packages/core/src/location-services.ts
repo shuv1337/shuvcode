@@ -46,6 +46,7 @@ import { Snapshot } from "./snapshot.js"
 import { InstructionDiscovery } from "./instruction-discovery.js"
 import { InstructionBuiltIns } from "./instructions/builtins.js"
 import { InstructionEntry } from "./session/instruction-entry.js"
+import { SessionDynamicTool } from "./session/dynamic-tool.js"
 import { SessionInstructions } from "./session/instructions.js"
 import { SessionGenerateNode } from "./session/generate-node.js"
 import { McpTool } from "./tool/mcp.js"
@@ -91,6 +92,7 @@ const locationServiceNodes = [
   SkillInstructions.node,
   ReferenceInstructions.node,
   InstructionEntry.node,
+  SessionDynamicTool.node,
   Form.node,
   Generate.node,
   SessionGenerateNode.node,

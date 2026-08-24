@@ -74,6 +74,14 @@ import type {
   SessionInstructionsEntryPutOutput,
   SessionInstructionsEntryRemoveInput,
   SessionInstructionsEntryRemoveOutput,
+  SessionToolsPutInput,
+  SessionToolsPutOutput,
+  SessionToolsListInput,
+  SessionToolsListOutput,
+  SessionToolsCallsInput,
+  SessionToolsCallsOutput,
+  SessionToolsReplyInput,
+  SessionToolsReplyOutput,
   SessionGenerateInput,
   SessionGenerateOutput,
   SessionLogInput,
@@ -317,6 +325,8 @@ const EndpointSessionCreate = (raw: RawClient["server.session"]) => (input?: Ses
         model: input?.["model"],
         location: input?.["location"],
         policy: input?.["policy"],
+        metadata: input?.["metadata"],
+        tools: input?.["tools"],
       },
     }).pipe(
       Effect.mapError(mapClientError),
@@ -367,7 +377,7 @@ const EndpointSessionFork = (raw: RawClient["server.session"]) => (input: Sessio
   preserveEffect<SessionForkOutput>()(
     raw["session.fork"]({
       params: { sessionID: input["sessionID"] },
-      payload: { boundary: input["boundary"], policy: input["policy"] },
+      payload: { boundary: input["boundary"], policy: input["policy"], tools: input["tools"] },
     }).pipe(
       Effect.mapError(mapClientError),
       Effect.map((value) => value.data),
@@ -579,6 +589,38 @@ const EndpointSessionInstructionsEntryRemove =
       ),
     )
 
+const EndpointSessionToolsPut = (raw: RawClient["server.session"]) => (input: SessionToolsPutInput) =>
+  preserveEffect<SessionToolsPutOutput>()(
+    raw["session.tools.put"]({ params: { sessionID: input["sessionID"] }, payload: { tools: input["tools"] } }).pipe(
+      Effect.mapError(mapClientError),
+    ),
+  )
+
+const EndpointSessionToolsList = (raw: RawClient["server.session"]) => (input: SessionToolsListInput) =>
+  preserveEffect<SessionToolsListOutput>()(
+    raw["session.tools.list"]({ params: { sessionID: input["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+const EndpointSessionToolsCalls = (raw: RawClient["server.session"]) => (input: SessionToolsCallsInput) =>
+  preserveEffect<SessionToolsCallsOutput>()(
+    raw["session.tools.calls"]({ params: { sessionID: input["sessionID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
+type SessionToolsReplyRequest = Parameters<RawClient["server.session"]["session.tools.reply"]>[0]
+const EndpointSessionToolsReply = (raw: RawClient["server.session"]) => (input: SessionToolsReplyInput) =>
+  preserveEffect<SessionToolsReplyOutput>()(
+    raw["session.tools.reply"]({
+      params: { sessionID: input["sessionID"], callID: input["callID"] },
+      payload: input["payload"],
+    } as SessionToolsReplyRequest).pipe(Effect.mapError(mapClientError)),
+  )
+
 const EndpointSessionGenerate = (raw: RawClient["server.session"]) => (input: SessionGenerateInput) =>
   preserveEffect<SessionGenerateOutput>()(
     raw["session.generate"]({ params: { sessionID: input["sessionID"] }, payload: { prompt: input["prompt"] } }).pipe(
@@ -674,6 +716,12 @@ const adaptGroupSession = (raw: RawClient["server.session"]) => ({
       put: EndpointSessionInstructionsEntryPut(raw),
       remove: EndpointSessionInstructionsEntryRemove(raw),
     },
+  },
+  tools: {
+    put: EndpointSessionToolsPut(raw),
+    list: EndpointSessionToolsList(raw),
+    calls: EndpointSessionToolsCalls(raw),
+    reply: EndpointSessionToolsReply(raw),
   },
   generate: EndpointSessionGenerate(raw),
   log: EndpointSessionLog(raw),

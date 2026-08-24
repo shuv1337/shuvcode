@@ -15,6 +15,7 @@ import { PluginSupervisor } from "../plugin/supervisor.js"
 import { ReferenceInstructions } from "../reference/instructions.js"
 import { SkillInstructions } from "../skill/instructions.js"
 import { Tool } from "../tool.js"
+import { SessionDynamicTool } from "./dynamic-tool.js"
 import { AgentNotFoundError } from "./error.js"
 import { SessionHistory } from "./history.js"
 import { InstructionEntry } from "./instruction-entry.js"
@@ -72,6 +73,7 @@ const layer = Layer.effect(
     const skillInstructions = yield* SkillInstructions.Service
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
+    const dynamicTools = yield* SessionDynamicTool.Service
 
     const select = Effect.fn("SessionContext.select")(function* (sessionID: SessionSchema.ID) {
       const session = yield* store.get(sessionID)
@@ -83,9 +85,12 @@ const layer = Layer.effect(
       yield* mcpTools.flush
       const agent = yield* agents.select(session.agent)
       if (!agent.info) return yield* new AgentNotFoundError({ sessionID: session.id, agent: session.agent ?? agent.id })
+      const permissions = agent.info.permissions
       const loaded = yield* Effect.all(
         {
-          tools: registry.snapshot(agent.info.permissions, session.policy),
+          tools: dynamicTools
+            .tools(sessionID)
+            .pipe(Effect.flatMap((dynamic) => registry.snapshot(permissions, session.policy, dynamic))),
           builtins: builtins.load(sessionID),
           discovery: discovery.load(),
           skills: skillInstructions.load(agent),
@@ -138,6 +143,7 @@ export const node = makeLocationNode({
     InstructionDiscovery.node,
     InstructionEntry.node,
     Location.node,
+    SessionDynamicTool.node,
     McpInstructions.node,
     McpTool.node,
     PluginSupervisor.node,

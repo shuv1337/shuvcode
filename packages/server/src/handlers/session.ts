@@ -1,6 +1,8 @@
 import { Session } from "@opencode-ai/core/session"
 import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
+import { SessionDynamicTool } from "@opencode-ai/core/session/dynamic-tool"
+import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
@@ -26,6 +28,9 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
   Effect.gen(function* () {
     const session = yield* Session.Service
     const transfer = yield* SessionTransfer.Service
+    const locations = yield* LocationServiceMap.Service
+    const invalidTool = (error: SessionDynamicTool.InvalidToolError) =>
+      new InvalidRequestError({ message: error.message, field: "tools" })
     const busySession = (error: Session.BusyError) =>
       new SessionBusyError({
         sessionID: error.sessionID,
@@ -89,18 +94,25 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.create",
         Effect.fn(function* (ctx) {
-          return {
-            data: yield* session
-              .create({
-                id: ctx.payload.id,
-                title: ctx.payload.title,
-                agent: ctx.payload.agent,
-                model: ctx.payload.model,
-                location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
-                policy: ctx.payload.policy,
-              })
-              .pipe(Effect.orDie),
-          }
+          const created = yield* session
+            .create({
+              id: ctx.payload.id,
+              title: ctx.payload.title,
+              agent: ctx.payload.agent,
+              model: ctx.payload.model,
+              location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
+              policy: ctx.payload.policy,
+              metadata: ctx.payload.metadata,
+            })
+            .pipe(Effect.orDie)
+          if (ctx.payload.tools)
+            yield* SessionDynamicTool.Service.pipe(
+              Effect.flatMap((tools) => tools.set({ sessionID: created.id, tools: ctx.payload.tools! })),
+              Effect.provide(locations.get(created.location)),
+              Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
+              Effect.catchTag("Session.NotFoundError", (error) => Effect.die(error)),
+            )
+          return { data: created }
         }),
       )
       .handle(
@@ -185,39 +197,45 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.fork",
         Effect.fn(function* (ctx) {
-          return {
-            data: yield* session
-              .fork({
-                sessionID: ctx.params.sessionID,
-                boundary: ctx.payload.boundary,
-                policy: ctx.payload.policy,
-              })
-              .pipe(
-                Effect.catchTag("Session.NotFoundError", missingSession),
-                Effect.catchTag(
-                  "Session.MessageNotFoundError",
-                  (error) =>
-                    new MessageNotFoundError({
-                      sessionID: error.sessionID,
-                      messageID: error.messageID,
-                      message: `Message not found: ${error.messageID}`,
-                    }),
-                ),
-                Effect.catchTag(
-                  "Session.ForkEmptyError",
-                  (error) => new InvalidRequestError({ message: error.message, kind: "empty_session" }),
-                ),
-                Effect.catchTag(
-                  "Session.PolicyWideningError",
-                  (error) =>
-                    new InvalidRequestError({
-                      message: `Fork policy cannot allow tools denied by its parent: ${error.tools.join(", ")}`,
-                      kind: "session.policy.widening",
-                      field: "policy.tools.allow",
-                    }),
-                ),
+          const forked = yield* session
+            .fork({
+              sessionID: ctx.params.sessionID,
+              boundary: ctx.payload.boundary,
+              policy: ctx.payload.policy,
+            })
+            .pipe(
+              Effect.catchTag("Session.NotFoundError", missingSession),
+              Effect.catchTag(
+                "Session.MessageNotFoundError",
+                (error) =>
+                  new MessageNotFoundError({
+                    sessionID: error.sessionID,
+                    messageID: error.messageID,
+                    message: `Message not found: ${error.messageID}`,
+                  }),
               ),
+              Effect.catchTag(
+                "Session.ForkEmptyError",
+                (error) => new InvalidRequestError({ message: error.message, kind: "empty_session" }),
+              ),
+              Effect.catchTag(
+                "Session.PolicyWideningError",
+                (error) =>
+                  new InvalidRequestError({
+                    message: `Fork policy cannot allow tools denied by its parent: ${error.tools.join(", ")}`,
+                    kind: "session.policy.widening",
+                    field: "policy.tools.allow",
+                  }),
+              ),
+            )
+          if (ctx.payload.tools) {
+            const tools = yield* SessionDynamicTool.Service
+            yield* tools.set({ sessionID: forked.id, tools: ctx.payload.tools }).pipe(
+              Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
+              Effect.catchTag("Session.NotFoundError", (error) => Effect.die(error)),
+            )
           }
+          return { data: forked }
         }),
       )
       .handle(
@@ -599,6 +617,46 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         Effect.fn(function* (ctx) {
           const instructions = yield* InstructionEntry.Service
           yield* instructions.remove({ sessionID: ctx.params.sessionID, key: ctx.params.key })
+          return HttpApiSchema.NoContent.make()
+        }),
+      )
+      .handle(
+        "session.tools.put",
+        Effect.fn(function* (ctx) {
+          const tools = yield* SessionDynamicTool.Service
+          yield* tools.set({ sessionID: ctx.params.sessionID, tools: ctx.payload.tools }).pipe(
+            Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
+            Effect.catchTag("Session.NotFoundError", missingSession),
+          )
+          return HttpApiSchema.NoContent.make()
+        }),
+      )
+      .handle(
+        "session.tools.list",
+        Effect.fn(function* (ctx) {
+          const tools = yield* SessionDynamicTool.Service
+          return { data: yield* tools.list(ctx.params.sessionID) }
+        }),
+      )
+      .handle(
+        "session.tools.calls",
+        Effect.fn(function* (ctx) {
+          const tools = yield* SessionDynamicTool.Service
+          return { data: yield* tools.calls(ctx.params.sessionID) }
+        }),
+      )
+      .handle(
+        "session.tools.reply",
+        Effect.fn(function* (ctx) {
+          const tools = yield* SessionDynamicTool.Service
+          yield* tools
+            .reply({ sessionID: ctx.params.sessionID, callID: ctx.params.callID, reply: ctx.payload })
+            .pipe(
+              Effect.catchTag(
+                "SessionDynamicTool.CallNotFoundError",
+                (error) => new ConflictError({ resource: error.callID, message: error.message }),
+              ),
+            )
           return HttpApiSchema.NoContent.make()
         }),
       )
