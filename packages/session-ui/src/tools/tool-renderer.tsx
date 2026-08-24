@@ -492,6 +492,7 @@ export function CurrentContextToolGroup(props: {
         icon="glasses"
         status={pending() ? "running" : "completed"}
         compact
+        rail={false}
         allowOpenWhilePending
         open={props.open}
         onOpenChange={change}
@@ -545,6 +546,10 @@ export function CurrentContextToolGroup(props: {
                               {(arg) => <span data-slot="basic-tool-tool-arg">{arg}</span>}
                             </For>
                           </div>
+                          <Show when={trigger().matches}>
+                            <span data-slot="context-tool-group-dot" />
+                            <span data-slot="context-tool-group-matches">{trigger().matches}</span>
+                          </Show>
                         </div>
                       </div>
                     </div>
@@ -644,23 +649,22 @@ function currentContextToolTrigger(tool: SessionMessageAssistantTool, i18n: Retu
       ...(typeof input.offset === "number" ? [`offset=${input.offset}`] : []),
       ...(typeof input.limit === "number" ? [`limit=${input.limit}`] : []),
     ]
-    return { title: i18n.t("ui.tool.read"), subtitle: getFilename(path), args }
+    return { title: i18n.t("ui.tool.read"), subtitle: getFilename(path), args, matches: undefined }
   }
-  if (tool.name === "list") return { title: i18n.t("ui.tool.list"), subtitle: displayDirectory(path), args: [] }
+  if (tool.name === "list")
+    return { title: i18n.t("ui.tool.list"), subtitle: displayDirectory(path), args: [], matches: undefined }
   if (tool.name === "glob")
     return {
       title: i18n.t("ui.tool.glob"),
       subtitle: displayDirectory(path),
-      args: [...(pattern ? [`pattern=${pattern}`] : []), ...(matches ? [matches] : [])],
+      args: pattern ? [`pattern=${pattern}`] : [],
+      matches,
     }
   return {
     title: i18n.t("ui.tool.grep"),
     subtitle: displayDirectory(path),
-    args: [
-      ...(pattern ? [`pattern=${pattern}`] : []),
-      ...(include ? [`include=${include}`] : []),
-      ...(matches ? [matches] : []),
-    ],
+    args: [...(pattern ? [`pattern=${pattern}`] : []), ...(include ? [`include=${include}`] : [])],
+    matches,
   }
 }
 
