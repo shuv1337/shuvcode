@@ -35,9 +35,11 @@ export interface Interface {
   readonly connect: (
     workspaceID: ID,
   ) => Effect.Effect<EnvironmentDriver, NotFound | WorkspaceDriver.Error | WorkspaceDriver.ProviderNotFound>
-  readonly destroy: (
-    workspaceID: ID,
-  ) => Effect.Effect<void, NotFound | WorkspaceDriver.Error | WorkspaceDriver.ProviderNotFound>
+  /** Makes the workspace absent; reports whether this call destroyed an existing workspace. */
+  readonly destroy: (workspaceID: ID) => Effect.Effect<
+    Workspace.DestroyResult,
+    WorkspaceDriver.Error | WorkspaceDriver.ProviderNotFound
+  >
 }
 
 export interface Options {
@@ -79,13 +81,16 @@ const layer = (options: Options) =>
       const fork = yield* FiberSet.makeRuntime<never, void, never>()
       const idleThreshold = Duration.toMillis(options.idleThreshold ?? Duration.minutes(20))
 
-      const load = Effect.fn("Workspace.load")(function* (workspaceID: ID) {
-        const row = yield* db
+      const find = (workspaceID: ID) =>
+        db
           .select()
           .from(WorkspaceTable)
           .where(eq(WorkspaceTable.id, workspaceID))
           .get()
           .pipe(Effect.orDie)
+
+      const load = Effect.fn("Workspace.load")(function* (workspaceID: ID) {
+        const row = yield* find(workspaceID)
         if (!row) return yield* new NotFound({ workspaceID })
         return row
       })
@@ -267,9 +272,10 @@ const layer = (options: Options) =>
             attempts.delete(workspaceID)
             Deferred.doneUnsafe(attempt, Exit.fail(new NotFound({ workspaceID })))
           }
-          yield* locks.withLock(workspaceID)(
+          return yield* locks.withLock(workspaceID)(
             Effect.gen(function* () {
-              const row = yield* load(workspaceID)
+              const row = yield* find(workspaceID)
+              if (!row) return { destroyed: false }
               const connection = connections.get(workspaceID)
               connections.delete(workspaceID)
               if (connection) yield* Scope.close(connection.scope, Exit.void)
@@ -284,6 +290,7 @@ const layer = (options: Options) =>
                 ),
               )
               yield* db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, workspaceID)).run().pipe(Effect.orDie)
+              return { destroyed: true }
             }),
           )
         }),

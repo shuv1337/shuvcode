@@ -187,6 +187,8 @@ export type WorktreeDirectory = { directory: string; strategy?: string }
 
 export type WorktreeInfo = { directory: string }
 
+export type WorkspaceDestroyResult = { destroyed: boolean }
+
 export type VcsBranch = { current?: string; default?: string }
 
 export type VcsFileStatus = {
@@ -5652,6 +5654,10 @@ export type WorktreeRemoveOutput = void
 export type WorktreeRefreshInput = { readonly projectID: { readonly projectID: string }["projectID"] }
 
 export type WorktreeRefreshOutput = void
+
+export type WorkspaceDestroyInput = { readonly workspaceID: { readonly workspaceID: string }["workspaceID"] }
+
+export type WorkspaceDestroyOutput = WorkspaceDestroyResult
 
 export type VcsGetInput = {
   readonly location?: {
