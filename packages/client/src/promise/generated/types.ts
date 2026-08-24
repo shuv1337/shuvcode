@@ -73,6 +73,8 @@ export type ToolFileContent1 = { type: "file"; uri: string; mime: string; name?:
 
 export type EventLogSynced = { type: "log.synced"; aggregateID: string; seq?: number }
 
+export type SessionInterruptResponse = { interrupted: boolean }
+
 export type ModelReasoningField = "reasoning" | "reasoning_content" | "reasoning_text" | (string & {})
 
 export type ModelMaxTokensField = "max_completion_tokens" | "max_tokens"
@@ -3956,7 +3958,7 @@ export type SessionInterruptInput = {
   readonly continue?: { readonly continue?: boolean | undefined }["continue"]
 }
 
-export type SessionInterruptOutput = void
+export type SessionInterruptOutput = SessionInterruptResponse
 
 export type SessionBackgroundInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
