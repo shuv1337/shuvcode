@@ -37,6 +37,17 @@ export type FileDiffInfo = {
   status: "added" | "deleted" | "modified"
 }
 
+export type SessionStatsActivity = { date: string; steps: number }
+
+export type SessionStatsToolUsage = {
+  name: string
+  calls: number
+  succeeded: number
+  failed: number
+  unfinished: number
+  durationP50?: number
+}
+
 export type SessionMessageAgentSelected = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -421,6 +432,8 @@ export type V2EventServerConnected = {
 }
 
 export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
+
+export type SessionStatsModelUsage = { model: ModelRef; steps: number; tokens: TokenUsageInfo; cost: MoneyUSD }
 
 export type SessionMessageModelSelected = {
   id: string
@@ -1538,6 +1551,22 @@ export type SessionRevertStaged = {
   data: { sessionID: string; revert: SessionRevert }
 }
 
+export type SessionStatsInfo = {
+  range: { from: number; to: number }
+  sessions: number
+  subagents: number
+  prompts: number
+  steps: number
+  tokens: TokenUsageInfo
+  cost: MoneyUSD
+  tools: { calls: number; succeeded: number; failed: number; unfinished: number }
+  activeDays: number
+  streak: number
+  activity: Array<SessionStatsActivity>
+  models: Array<SessionStatsModelUsage>
+  toolUsage: Array<SessionStatsToolUsage>
+}
+
 export type SessionMessageUser = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -2445,6 +2474,74 @@ export type SessionListInput = {
 }
 
 export type SessionListOutput = SessionsResponse
+
+export type SessionStatsInput = {
+  readonly from?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["from"]
+  readonly to?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["to"]
+  readonly project?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["project"]
+  readonly timezone?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["timezone"]
+  readonly models?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["models"]
+  readonly tools?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["tools"]
+  readonly toolSummary?: {
+    readonly from?: number | undefined
+    readonly to?: number | undefined
+    readonly project?: string | undefined
+    readonly timezone?: string | undefined
+    readonly models?: boolean | undefined
+    readonly tools?: boolean | undefined
+    readonly toolSummary?: boolean | undefined
+  }["toolSummary"]
+}
+
+export type SessionStatsOutput = { data: SessionStatsInfo }["data"]
 
 export type SessionCreateInput = {
   readonly id?: {
