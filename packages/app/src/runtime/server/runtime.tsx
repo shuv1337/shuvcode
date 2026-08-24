@@ -8,7 +8,7 @@ import { createServerSdkContext } from "./client"
 import { createServerSyncContext } from "./sync"
 import { createData } from "@opencode-ai/client/solid"
 import type { ServerScope } from "@/runtime/server/scope"
-import { createServerPermissionState } from "@/session/requests/server-permission"
+import { createPermissionAutoApprover } from "@/session/requests/auto-approve"
 import { createServerNotificationState } from "@/shell/notifications/notification"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 
@@ -144,7 +144,7 @@ function createServerController(
     directory: "",
   })
   const sync = createServerSyncContext(sdk, data)
-  const permission = createServerPermissionState({ sdk, sync, data })
+  createPermissionAutoApprover({ sdk, data })
   const notification = createServerNotificationState({ sdk, data, key: connKey })
 
   function enrich(project: { worktree: string; expanded: boolean }) {
@@ -187,7 +187,6 @@ function createServerController(
       list: projectsList,
       recentlyClosed: recentlyClosedList,
     },
-    permission,
     notification,
   }
 }

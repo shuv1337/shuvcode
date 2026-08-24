@@ -373,7 +373,6 @@ export function HomeSessionStatusController(props: {
 }) {
   const avatar = useSessionTabAvatarState(
     () => props.server,
-    () => props.record.session.location.directory,
     () => props.record.session.id,
     () => true,
   )

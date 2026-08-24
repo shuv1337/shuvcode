@@ -4,9 +4,7 @@ import { previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-b
 import { useFile, selectionFromLines, type FileSelection, type SelectedLineRange } from "@/workspaces/files/model"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLayout } from "@/shell/state/layout"
-import { usePermission } from "@/session/requests/permission"
 import { useComposerState } from "@/composer/persistence"
-import { useWorkspaceLocation } from "@/workspaces/location"
 import { useServerSDK } from "@/runtime/server/client"
 import { useSettings } from "@/settings/model"
 import { useTerminal } from "@/session/terminal/context"
@@ -48,9 +46,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const dialog = useDialog()
   const file = useFile()
   const language = useLanguage()
-  const permission = usePermission()
   const prompt = useComposerState()
-  const sdk = useWorkspaceLocation()
   const serverSDK = useServerSDK()
   const settings = useSettings()
   const terminal = useTerminal()
@@ -99,11 +95,6 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const mcpCommand = withCategory(language.t("command.category.mcp"))
   const permissionsCommand = withCategory(language.t("command.category.permissions"))
 
-  const isAutoAcceptActive = () => {
-    const sessionID = actions.session.identity.params.id
-    if (sessionID) return permission.isAutoAccepting(sessionID, sdk().directory)
-    return permission.isAutoAcceptingDirectory(sdk().directory)
-  }
   const exportSession = async () => {
     const sessionID = actions.session.identity.params.id
     if (!sessionID) return
@@ -223,13 +214,8 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   }
 
   const toggleAutoAccept = () => {
-    const sessionID = actions.session.identity.params.id
-    if (sessionID) permission.toggleAutoAccept(sessionID, sdk().directory)
-    else permission.toggleAutoAcceptDirectory(sdk().directory)
-
-    const active = sessionID
-      ? permission.isAutoAccepting(sessionID, sdk().directory)
-      : permission.isAutoAcceptingDirectory(sdk().directory)
+    const active = !settings.permissions.autoApprove()
+    settings.permissions.setAutoApprove(active)
     showToast({
       title: active
         ? language.t("toast.permissions.autoaccept.on.title")
@@ -454,7 +440,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const permissionsCmds = () => [
     permissionsCommand({
       id: "permissions.autoaccept",
-      title: isAutoAcceptActive()
+      title: settings.permissions.autoApprove()
         ? language.t("command.permissions.autoaccept.disable")
         : language.t("command.permissions.autoaccept.enable"),
       keybind: "mod+shift+a",

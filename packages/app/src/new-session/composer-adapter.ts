@@ -8,7 +8,6 @@ import { createComposerControls, createComposerModelSelection } from "@/composer
 import { createComposerProjectControls } from "./project/controller"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLocal } from "@/providers/models/selection"
-import { usePermission } from "@/session/requests/permission"
 import { useData, useServer } from "@/runtime/server/current"
 import { type ServerSDK, useServerSDK } from "@/runtime/server/client"
 import { useTabs } from "@/shell/tabs/tabs"
@@ -30,7 +29,6 @@ export function createNewSessionComposerAdapter(props: {
   const data = useData()
   const server = useServer()
   const serverSDK = useServerSDK()
-  const permission = usePermission()
   const tabs = useTabs()
   const location = useWorkspaceLocation()
   const language = useLanguage()
@@ -86,9 +84,6 @@ export function createNewSessionComposerAdapter(props: {
       )
       const cleanupReady = startTransition(() => {
         tabs.updateDraft(props.draftID, { worktree: undefined })
-        if (permission.isAutoAcceptingDirectory(projectDirectory)) {
-          permission.enableAutoAccept(created.id, sessionDirectory)
-        }
         local.session.promote(sessionDirectory, created.id, {
           agent: selection.agent,
           model: selection.model,
