@@ -138,14 +138,14 @@ V2 config uses more ergonomic shapes, but conversion is optional. When the user
 requests conversion, inspect the complete configuration, preserve behavior and
 unrelated settings, and apply only the relevant migrations from the guide. For
 plugin migrations, fetch and follow both the migration guide and the full
-[plugins guide](https://opencode.ai/v2/docs/build/plugins/overview). If non-API V1
+[plugins guide](https://opencode.ai/v2/docs/build/plugins). If non-API V1
 functionality fails in V2, use the `report` skill to file it as a compatibility
 bug.
 
-## [Plugins](https://opencode.ai/v2/docs/build/plugins/overview)
+## [Plugins](https://opencode.ai/v2/docs/build/plugins)
 
 For questions about creating, configuring, loading, publishing, or migrating
-plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins/overview)
+plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins)
 before answering. Refer to this guide when the user wants to build a plugin. It
 covers hooks, transforms, tools, plugin context capabilities, and package
 entrypoints. Plugins can also extend the TUI; for those, fetch the
