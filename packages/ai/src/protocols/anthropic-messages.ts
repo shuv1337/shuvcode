@@ -793,7 +793,8 @@ const onContentBlockStart = (state: ParserState, event: AnthropicEvent): StepRes
   const block = event.content_block
   if (!block) return [state, NO_EVENTS]
 
-  if ((block.type === "tool_use" || block.type === "server_tool_use") && event.index !== undefined) {
+  if (block.type === "tool_use" || block.type === "server_tool_use") {
+    if (event.index === undefined || !block.id) return [state, NO_EVENTS]
     const events: LLMEvent[] = []
     const lifecycle = Lifecycle.stepStart(state.lifecycle, events)
     return [
@@ -801,7 +802,7 @@ const onContentBlockStart = (state: ParserState, event: AnthropicEvent): StepRes
         ...state,
         lifecycle,
         tools: ToolStream.start(state.tools, event.index, {
-          id: block.id ?? String(event.index),
+          id: block.id,
           name: block.name ?? "",
           input:
             block.input !== undefined && (!ProviderShared.isRecord(block.input) || Object.keys(block.input).length > 0)
@@ -813,7 +814,7 @@ const onContentBlockStart = (state: ParserState, event: AnthropicEvent): StepRes
       [
         ...events,
         LLMEvent.toolInputStart({
-          id: block.id ?? String(event.index),
+          id: block.id,
           name: block.name ?? "",
           providerExecuted: block.type === "server_tool_use" ? true : undefined,
         }),
@@ -1013,7 +1014,18 @@ const onError = (event: AnthropicEvent) =>
 
 const step = (state: ParserState, event: AnthropicEvent) => {
   if (event.type === "message_start") return Effect.succeed(onMessageStart(state, event))
-  if (event.type === "content_block_start") return Effect.succeed(onContentBlockStart(state, event))
+  if (event.type === "content_block_start") {
+    const block = event.content_block
+    if (block && (block.type === "tool_use" || block.type === "server_tool_use")) {
+      if (event.index === undefined)
+        return Effect.fail(ProviderShared.eventError(ADAPTER, `Anthropic ${block.type} missing index`))
+      if (!block.id)
+        return Effect.fail(
+          ProviderShared.eventError(ADAPTER, `Anthropic tool_use missing id at index ${event.index}`),
+        )
+    }
+    return Effect.succeed(onContentBlockStart(state, event))
+  }
   if (event.type === "content_block_delta") return onContentBlockDelta(state, event)
   if (event.type === "content_block_stop") return onContentBlockStop(state, event)
   if (event.type === "message_delta") return Effect.succeed(onMessageDelta(state, event))
