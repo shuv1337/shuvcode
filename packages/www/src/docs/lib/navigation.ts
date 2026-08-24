@@ -88,7 +88,7 @@ export const docsSections: DocsSection[] = [
     landingSlug: "build",
     groups: [
       {
-        items: [{ title: "Build", slug: "build" }],
+        items: [{ title: "Intro", slug: "build" }],
       },
       {
         title: "Plugins",
