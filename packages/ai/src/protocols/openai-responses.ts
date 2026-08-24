@@ -111,8 +111,10 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
     extension,
   )
   const toolSchemaCompatibility = request.model.compatibility?.toolSchema
+  const parallelToolCalls = OpenResponses.resolveParallelToolCalls(request)
   return {
     ...body,
+    ...(parallelToolCalls === undefined ? {} : { parallel_tool_calls: parallelToolCalls }),
     tools:
       request.tools.length === 0
         ? undefined

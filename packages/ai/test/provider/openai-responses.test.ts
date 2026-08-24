@@ -258,6 +258,31 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
+  it.effect("maps the canonical parallel tool setting with provider-option precedence", () =>
+    Effect.gen(function* () {
+      const disabled = yield* compileRequest(
+        LLMRequest.update(request, {
+          toolChoice: { type: "auto", disableParallelToolUse: true },
+        }),
+      )
+      const enabled = yield* compileRequest(
+        LLMRequest.update(request, {
+          toolChoice: { type: "auto", disableParallelToolUse: false },
+        }),
+      )
+      const overridden = yield* compileRequest(
+        LLMRequest.update(request, {
+          toolChoice: { type: "auto", disableParallelToolUse: true },
+          providerOptions: { parallelToolCalls: true },
+        }),
+      )
+
+      expect(disabled.body.parallel_tool_calls).toBe(false)
+      expect(enabled.body.parallel_tool_calls).toBe(true)
+      expect(overridden.body.parallel_tool_calls).toBe(true)
+    }),
+  )
+
   it.effect("lowers chronological system updates to developer messages in order", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

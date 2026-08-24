@@ -132,6 +132,40 @@ describe("Open Responses-compatible route", () => {
     }),
   )
 
+  it.effect("lowers canonical parallel tool control", () =>
+    Effect.gen(function* () {
+      const model = configure({
+        apiKey: "test-key",
+        baseURL: "https://responses.example.test/v1",
+      }).model("example-model")
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          prompt: "Read the file.",
+          tools: [
+            ToolDefinition.make({
+              name: "read",
+              description: "Read a file.",
+              inputSchema: { type: "object" },
+            }),
+          ],
+          toolChoice: { type: "auto", disableParallelToolUse: true },
+        }),
+      )
+
+      expect(prepared.body.parallel_tool_calls).toBe(false)
+      expect(prepared.body.tools).toEqual([
+        {
+          type: "function",
+          name: "read",
+          description: "Read a file.",
+          parameters: { type: "object" },
+          strict: false,
+        },
+      ])
+    }),
+  )
+
   it.effect("keeps foreign item id grammars but drops malformed ids", () =>
     Effect.gen(function* () {
       const model = configure({
