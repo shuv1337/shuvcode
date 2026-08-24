@@ -36,6 +36,7 @@ export const docsSections: DocsSection[] = [
           { title: "Skills", slug: "skills" },
           { title: "Themes", slug: "themes" },
           { title: "Commands", slug: "commands" },
+          { title: "Plugins", slug: "plugins" },
           { title: "Providers", slug: "providers" },
           { title: "Snapshots", slug: "snapshots" },
           { title: "Compaction", slug: "compaction" },
@@ -63,7 +64,6 @@ export const docsSections: DocsSection[] = [
     landingSlug: "cli",
     groups: [
       {
-        title: "Intro",
         items: [
           { title: "Intro", slug: "cli" },
           { title: "Config", slug: "cli/config" },
@@ -88,9 +88,18 @@ export const docsSections: DocsSection[] = [
     landingSlug: "build",
     groups: [
       {
+        items: [{ title: "Build", slug: "build" }],
+      },
+      {
+        title: "Plugins",
         items: [
-          { title: "Build", slug: "build" },
-          { title: "Plugins", slug: "build/plugins" },
+          { title: "Overview", slug: "build/plugins/overview" },
+          { title: "Effect", slug: "build/plugins/effect" },
+          { title: "CLI", slug: "build/plugins/cli" },
+        ],
+      },
+      {
+        items: [
           { title: "Client", slug: "build/client" },
           { title: "SDK", slug: "build/sdk" },
         ],

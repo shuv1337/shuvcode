@@ -138,16 +138,20 @@ V2 config uses more ergonomic shapes, but conversion is optional. When the user
 requests conversion, inspect the complete configuration, preserve behavior and
 unrelated settings, and apply only the relevant migrations from the guide. For
 plugin migrations, fetch and follow both the migration guide and the full
-[plugins guide](https://opencode.ai/v2/docs/build/plugins). If non-API V1
+[plugins guide](https://opencode.ai/v2/docs/build/plugins/overview). If non-API V1
 functionality fails in V2, use the `report` skill to file it as a compatibility
 bug.
 
-## [Plugins](https://opencode.ai/v2/docs/build/plugins)
+## [Plugins](https://opencode.ai/v2/docs/build/plugins/overview)
 
 For questions about creating, configuring, loading, publishing, or migrating
-plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins)
-before answering. This includes questions about the Effect plugin API, hooks,
-transforms, tools, plugin context capabilities, and package entrypoints.
+plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins/overview)
+before answering. For Effect-native plugins, also fetch the
+[Effect plugin guide](https://opencode.ai/v2/docs/build/plugins/effect). For
+terminal UI extensions, fetch the
+[CLI plugin guide](https://opencode.ai/v2/docs/build/plugins/cli). These guides
+cover hooks, transforms, tools, plugin context capabilities, and package
+entrypoints.
 
 ## [Service](https://opencode.ai/v2/docs/troubleshooting#check-the-background-service)
 
