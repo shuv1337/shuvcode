@@ -530,6 +530,26 @@ export const expandedShellDocument = document([
   }),
 ] satisfies SessionMessageInfo[])
 
+export const executeCodeDocument = document([
+  user("msg_user_execute", "Verify the Code Mode runtime responds.", 52_100),
+  assistant({
+    id: "msg_assistant_execute",
+    offset: 52_200,
+    completed: 52_900,
+    content: [
+      completedTool({
+        id: "tool_execute_code",
+        name: "execute",
+        offset: 52_300,
+        args: {
+          code: 'const greeting = "Code Mode execute completed"\nreturn { greeting, timestamp: new Date().toISOString() }',
+        },
+        output: '{\n  "greeting": "Code Mode execute completed",\n  "timestamp": "2026-08-17T09:01:43.590Z"\n}',
+      }),
+    ],
+  }),
+] satisfies SessionMessageInfo[])
+
 export const terminalFailedDocument = document([
   user("msg_user_terminal_failed", "Run the focused Session UI tests.", 53_000),
   assistant({

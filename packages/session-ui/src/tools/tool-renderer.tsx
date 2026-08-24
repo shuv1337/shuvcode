@@ -1255,34 +1255,32 @@ ToolRegistry.register({
     const i18n = useI18n()
     const pending = () => props.status === "streaming" || props.status === "running"
     const code = createMemo(() => (typeof props.input.code === "string" ? props.input.code : ""))
-    const text = createMemo(() => {
-      const output = stripAnsi(props.output ?? "").replace(/\r\n?/g, "\n")
-      return `${code()}${output ? "\n\n" + output : ""}`
-    })
+    const output = createMemo(() => stripAnsi(props.output ?? "").replace(/\r\n?/g, "\n"))
     const sawPending = pending()
     return (
       <BasicTool
         {...props}
         icon="console"
         rail={false}
+        compact
         allowOpenWhilePending
         trigger={(open) => (
           <div data-slot="basic-tool-tool-info-structured">
-            <span data-slot="basic-tool-tool-indicator">
-              <Icon name="console" size="small" />
-            </span>
             <div data-slot="basic-tool-tool-info-main">
               <span data-slot="basic-tool-tool-title">
                 <TextShimmer text={i18n.t("ui.tool.execute")} active={pending()} />
               </span>
               <Show when={!open() && code()}>
-                <ShellSubmessage text={code()} animate={sawPending} />
+                <ShellSubmessage text={code().split("\n")[0]} animate={sawPending} />
               </Show>
             </div>
           </div>
         )}
       >
-        <ConsoleOutput copy={text()}>{text()}</ConsoleOutput>
+        <ConsoleOutput copy={code()} variant="shell">
+          <span data-slot="bash-command">{code()}</span>
+          <Show when={output()}>{(value) => <span data-slot="bash-result">{value()}</span>}</Show>
+        </ConsoleOutput>
       </BasicTool>
     )
   },
