@@ -99,9 +99,18 @@ export const docsSections: DocsSection[] = [
         ],
       },
       {
+        title: "Client",
         items: [
-          { title: "Client", slug: "build/client" },
-          { title: "SDK", slug: "build/sdk" },
+          { title: "JavaScript", slug: "build/client" },
+          { title: "Effect", slug: "build/client/effect" },
+        ],
+      },
+      {
+        title: "SDK",
+        items: [
+          { title: "Overview", slug: "build/sdk" },
+          { title: "Effect", slug: "build/sdk/effect" },
+          { title: "Cloudflare", slug: "build/sdk/cloudflare" },
         ],
       },
     ],
