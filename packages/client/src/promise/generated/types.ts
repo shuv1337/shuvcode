@@ -1408,6 +1408,24 @@ export type Project = {
   sandboxes: Array<string>
 }
 
+export type ProjectUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "project.updated"
+  location?: LocationRef
+  data: {
+    id: string
+    canonical: string
+    vcs?: ProjectVcs
+    name?: string
+    icon?: ProjectIcon
+    commands?: ProjectCommands
+    time: ProjectTime
+    sandboxes: Array<string>
+  }
+}
+
 export type FormAnswer = { [x: string]: FormValue }
 
 export type PermissionRequest = {
@@ -2167,6 +2185,7 @@ export type V2Event =
   | PermissionReplied
   | PluginAdded
   | PluginUpdated
+  | ProjectUpdated
   | WorktreeUpdated
   | WorktreeResolved
   | CommandUpdated
