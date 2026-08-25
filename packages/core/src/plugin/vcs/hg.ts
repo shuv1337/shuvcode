@@ -1,13 +1,15 @@
-export * as VcsHg from "./hg.js"
+export * as VcsHgPlugin from "./hg.js"
 
 import path from "path"
 import { Effect } from "effect"
 import { ChildProcess } from "effect/unstable/process"
+import { define } from "@opencode-ai/plugin/effect/plugin"
 import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { FileStatus, Info, Mode } from "@opencode-ai/schema/vcs"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { AppProcess } from "@opencode-ai/util/process"
-import type { Adapter, DiffOptions } from "../vcs.js"
+import { Location } from "../../location.js"
+import type { Adapter, DiffOptions } from "../../vcs.js"
 import {
   addPatch,
   chunksByFile,
@@ -17,14 +19,40 @@ import {
   MAX_PATCH_BYTES,
   MAX_TOTAL_PATCH_BYTES,
   PATCH_CONTEXT_LINES,
-} from "./patch.js"
+} from "../../vcs/patch.js"
+
+export const Plugin = define({
+  id: "opencode.vcs.hg",
+  effect: Effect.fn("VcsHgPlugin")(function* (ctx) {
+    const location = yield* Location.Service
+    if (location.vcs?.type !== "hg") return
+
+    const processes = yield* AppProcess.Service
+    const fs = yield* FSUtil.Service
+    const adapter = make(processes, fs, {
+      directory: location.directory,
+      worktree: location.project.directory,
+    })
+
+    yield* ctx.vcs.transform((draft) => {
+      draft.add({
+        id: "hg",
+        name: "Mercurial",
+        info: () => adapter.info(),
+        branches: (input) => adapter.branches({ search: input.search, limit: input.limit }),
+        status: () => adapter.status(),
+        diff: (input) => adapter.diff(input.mode, { context: input.context }),
+      })
+    })
+  }),
+})
 
 /**
  * Mercurial adapter for the Vcs service. `hg diff --git` emits git-format
  * patches for tracked changes; untracked (`?`) and missing (`!`) files never
  * appear in `hg diff`, so their patches are synthesized from file contents.
  */
-export function make(
+function make(
   proc: AppProcess.Interface,
   fs: FSUtil.Interface,
   input: { directory: string; worktree: string },
