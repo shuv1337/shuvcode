@@ -42,11 +42,13 @@ describe("Model.Compatibility", () => {
         reasoningField: "vendor_reasoning",
         maxTokensField: "max_completion_tokens",
         requireFinishReason: false,
+        requireAssistantAfterTool: true,
       }),
     ).toEqual({
       reasoningField: "vendor_reasoning",
       maxTokensField: "max_completion_tokens",
       requireFinishReason: false,
+      requireAssistantAfterTool: true,
     })
   })
 })
