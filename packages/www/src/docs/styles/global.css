@@ -788,7 +788,11 @@ main {
 }
 
 .prose h1 {
+  display: flex;
   margin: 0 0 3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   font-size: 1.875rem;
   line-height: 1.2;
 }
@@ -991,6 +995,21 @@ main {
   background: var(--surface);
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.prose h1 button {
+  display: inline-flex;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.prose h1 button:hover,
+.prose h1 button[data-copied] {
+  color: var(--foreground);
 }
 
 .search-dialog {
