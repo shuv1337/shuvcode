@@ -816,6 +816,47 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
+  it.effect("sanitizes outbound WebSocket requests and HTTP fallback bodies", () =>
+    Effect.gen(function* () {
+      const message = yield* Ref.make("")
+      const body = yield* Ref.make("")
+      yield* LLMClient.generate(
+        LLM.request({
+          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
+          prompt: "Say \uD800hello \u{1F600}.",
+          http: { body: { metadata: { source: "overlay\uDC00" } } },
+        }),
+        {
+          webSocket: {
+            execute: (exchange) =>
+              Effect.gen(function* () {
+                yield* exchange.driver.create(undefined).pipe(Effect.flatMap((create) => Ref.set(message, create.message)))
+                return { frames: exchange.fallback(), complete: Effect.void }
+              }),
+          },
+        },
+      ).pipe(
+        Effect.provide(
+          dynamicResponse((input) =>
+            Effect.gen(function* () {
+              yield* Ref.set(body, input.text)
+              return input.respond(sseEvents({ type: "response.completed", response: {} }), {
+                headers: { "content-type": "text/event-stream" },
+              })
+            }),
+          ),
+        ),
+      )
+
+      const expected = {
+        input: [{ role: "user", content: [{ type: "input_text", text: "Say \uFFFDhello \u{1F600}." }] }],
+        metadata: { source: "overlay\uFFFD" },
+      }
+      expect(JSON.parse(yield* Ref.get(message))).toMatchObject(expected)
+      expect(JSON.parse(yield* Ref.get(body))).toMatchObject(expected)
+    }),
+  )
+
   it.effect("builds xAI WebSocket requests without OpenAI handshake headers", () =>
     Effect.gen(function* () {
       const deps = Layer.succeed(
