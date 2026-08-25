@@ -718,7 +718,7 @@ export const protocol = Protocol.make({
       lifecycle: Lifecycle.initial(),
     }),
     step,
-    onHalt: finish,
+    onHalt: (state) => Effect.succeed(finish(state)),
   },
 })
 

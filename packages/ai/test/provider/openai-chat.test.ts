@@ -1251,6 +1251,11 @@ describe("OpenAI Chat route", () => {
       ).pipe(Effect.provide(fixedResponse(body)), Effect.flip)
 
       expect(error.message).toContain("OpenAI Chat tool call delta is missing id or name")
+      expect(error.reason._tag).toBe("InvalidProviderOutput")
+      if (error.reason._tag !== "InvalidProviderOutput") return
+      expect(decodeJson(error.reason.raw ?? "")).toMatchObject({
+        choices: [{ finish_reason: "tool_calls" }],
+      })
     }),
   )
 
@@ -1264,6 +1269,7 @@ describe("OpenAI Chat route", () => {
         deltaChunk({ tool_calls: [{ index: 0, function: { arguments: ':"weather"}' } }] }),
       )
       const input = LLMRequest.update(request, {
+        model: LanguageModel.update(model, { compatibility: { requireFinishReason: false } }),
         tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
       })
       const response = yield* LLMClient.generate(input).pipe(Effect.provide(fixedResponse(body)))

@@ -8,6 +8,8 @@ import { Protocol } from "../route/protocol.js"
 import {
   AIError,
   LLMEvent,
+  ProviderInternalReason,
+  UnknownProviderReason,
   Usage,
   type FinishReason,
   type FinishReasonDetails,
@@ -224,16 +226,22 @@ const OpenAIChatChoice = Schema.StructWithRest(
   [Schema.Record(Schema.String, Schema.Unknown)],
 )
 
-const OpenAIChatError = Schema.Struct({
-  code: optionalNull(Schema.Union([Schema.String, Schema.Number])),
-  message: Schema.String,
-})
+const OpenAIChatError = Schema.StructWithRest(
+  Schema.Struct({
+    code: optionalNull(Schema.Union([Schema.String, Schema.Number])),
+    message: Schema.String,
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+)
 
-export const OpenAIChatEvent = Schema.Struct({
-  choices: optionalNull(Schema.Array(OpenAIChatChoice)),
-  usage: optionalNull(OpenAIChatUsage),
-  error: optionalNull(OpenAIChatError),
-})
+export const OpenAIChatEvent = Schema.StructWithRest(
+  Schema.Struct({
+    choices: optionalNull(Schema.Array(OpenAIChatChoice)),
+    usage: optionalNull(OpenAIChatUsage),
+    error: optionalNull(OpenAIChatError),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+)
 export type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
 type OpenAIChatRequestMessage = LLMRequest["messages"][number]
 
@@ -256,6 +264,7 @@ export interface ParserState {
   readonly reasoningEmitted: boolean
   readonly latestToolIndex?: number
   readonly nextToolIndex: number
+  readonly requireFinishReason: boolean
 }
 
 // =============================================================================
@@ -726,14 +735,40 @@ export const fromRequest = Effect.fn("OpenAIChat.fromRequest")(function* (
 // Streaming parsers are small state machines: every event returns a new state
 // plus the common `LLMEvent`s produced by that event. Tool calls are accumulated
 // because OpenAI streams JSON arguments across multiple deltas.
-const mapFinishReason = (reason: string | null | undefined): FinishReason => {
-  if (reason === "stop") return "stop"
-  if (reason === "length") return "length"
-  if (reason === "content_filter") return "content-filter"
-  if (reason === "function_call" || reason === "tool_calls") return "tool-calls"
-  if (reason === "error") return "error"
-  return "unknown"
-}
+const finishReasonError = (event: OpenAIChatEvent, reason: AIError["reason"]) =>
+  new AIError({
+    module: ADAPTER,
+    method: "stream",
+    body: ProviderShared.encodeJson(event),
+    reason,
+  })
+
+const mapFinishReason = Effect.fn("OpenAIChat.mapFinishReason")(function* (event: OpenAIChatEvent, reason: string) {
+  switch (reason) {
+    case "error":
+      return yield* finishReasonError(
+        event,
+        new UnknownProviderReason({ message: "Provider reported an error (finish_reason: error)" }),
+      )
+    case "network_error":
+      return yield* finishReasonError(
+        event,
+        new ProviderInternalReason({ message: "Provider reported a network error (finish_reason: network_error)" }),
+      )
+    case "stop":
+    case "end":
+      return "stop" as const
+    case "length":
+      return "length" as const
+    case "content_filter":
+      return "content-filter" as const
+    case "function_call":
+    case "tool_calls":
+      return "tool-calls" as const
+    default:
+      return "unknown" as const
+  }
+})
 
 // OpenAI Chat reports `prompt_tokens` (inclusive total) with a
 // cached-read and cache-write subsets, and `completion_tokens` (inclusive
@@ -846,16 +881,20 @@ const reasoningMetadata = (field: ParserState["reasoningField"], details?: Reado
 
 const step = (state: ParserState, event: OpenAIChatEvent) =>
   Effect.gen(function* () {
-    if (event.error)
+    if (event.error) {
+      const body = ProviderShared.encodeJson(event)
       return yield* new AIError({
         module: ADAPTER,
         method: "stream",
+        body,
         reason: classifyProviderFailure({
           message: event.error.message,
           code: event.error.code === undefined || event.error.code === null ? undefined : String(event.error.code),
           status: typeof event.error.code === "number" ? event.error.code : undefined,
+          rawBody: body,
         }),
       })
+    }
     const events: LLMEvent[] = []
     const choice = event.choices?.[0]
     // Moonshot (and a few other OpenAI-compatible providers) attach usage to
@@ -864,8 +903,11 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
     const usage = mapUsage(event.usage) ?? (choiceUsage ? mapUsage(choiceUsage) : undefined) ?? state.usage
     const rawFinishReason = choice?.finish_reason
     const finishReason =
-      rawFinishReason !== undefined && rawFinishReason !== null
-        ? { normalized: mapFinishReason(rawFinishReason), raw: choice?.native_finish_reason ?? rawFinishReason }
+      rawFinishReason
+        ? {
+            normalized: yield* mapFinishReason(event, rawFinishReason),
+            raw: choice?.native_finish_reason ?? rawFinishReason,
+          }
         : state.finishReason
     const delta = choice?.delta
     const toolDeltas = delta?.tool_calls ?? []
@@ -885,7 +927,11 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
       toolDeltas.some((tool) => Boolean(tool.id) || Boolean(tool.function?.name) || Boolean(tool.function?.arguments))
     if (state.finishReason !== undefined) {
       if (hasLateContent)
-        return yield* ProviderShared.eventError(ADAPTER, "OpenAI Chat received content after the finish reason")
+        return yield* ProviderShared.eventError(
+          ADAPTER,
+          "OpenAI Chat received content after the finish reason",
+          ProviderShared.encodeJson(event),
+        )
       return [{ ...state, usage }, events] as const
     }
 
@@ -957,14 +1003,19 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
         { id: id || undefined, name: name || undefined, text },
         "OpenAI Chat tool call delta is missing id or name",
       )
-      if (ToolStream.isError(result)) return yield* result
+      if (ToolStream.isError(result))
+        return yield* ProviderShared.eventError(ADAPTER, result.reason.message, ProviderShared.encodeJson(event))
       tools = result.tools
       if (result.events.length) lifecycle = Lifecycle.stepStart(lifecycle, events)
       events.push(...result.events)
     }
 
     if (finishReason !== undefined && state.finishReason === undefined && Object.keys(pendingTools).length > 0)
-      return yield* ProviderShared.eventError(ADAPTER, "OpenAI Chat tool call delta is missing id or name")
+      return yield* ProviderShared.eventError(
+        ADAPTER,
+        "OpenAI Chat tool call delta is missing id or name",
+        ProviderShared.encodeJson(event),
+      )
 
     // Finalize accumulated tool inputs eagerly when finish_reason arrives so
     // valid calls and malformed local calls settle independently.
@@ -987,16 +1038,19 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
         reasoningEmitted,
         latestToolIndex,
         nextToolIndex,
+        requireFinishReason: state.requireFinishReason,
       },
       events,
     ] as const
   })
 
-const finishEvents = (state: ParserState): ReadonlyArray<LLMEvent> => {
+const finishEvents = Effect.fn("OpenAIChat.finishEvents")(function* (state: ParserState) {
+  if (state.finishReason === undefined && state.requireFinishReason)
+    return yield* ProviderShared.eventError(ADAPTER, "OpenAI Chat stream ended without finish_reason")
   const events: LLMEvent[] = []
   const toolCallEvents =
     state.finishReason === undefined && Object.keys(state.tools).length > 0
-      ? Effect.runSync(ToolStream.finishAll(ADAPTER, state.tools)).events
+      ? (yield* ToolStream.finishAll(ADAPTER, state.tools)).events
       : state.toolCallEvents
   const hasToolCalls = toolCallEvents.length > 0
   const reason = state.finishReason
@@ -1005,7 +1059,7 @@ const finishEvents = (state: ParserState): ReadonlyArray<LLMEvent> => {
         normalized:
           state.finishReason.normalized === "stop" && hasToolCalls ? "tool-calls" : state.finishReason.normalized,
       }
-    : { normalized: hasToolCalls ? ("tool-calls" as const) : ("unknown" as const) }
+    : { normalized: hasToolCalls ? ("tool-calls" as const) : ("stop" as const) }
   const metadata = reasoningMetadata(
     state.reasoningField,
     state.reasoningDetailsObserved ? state.reasoningDetails : undefined,
@@ -1019,7 +1073,7 @@ const finishEvents = (state: ParserState): ReadonlyArray<LLMEvent> => {
   events.push(...toolCallEvents)
   Lifecycle.finish(lifecycle, events, { reason, usage: state.usage })
   return events
-}
+})
 
 // =============================================================================
 // Protocol And OpenAI Route
@@ -1048,6 +1102,7 @@ export const protocol = Protocol.make({
       reasoningDetailsObserved: false,
       reasoningEmitted: false,
       nextToolIndex: 0,
+      requireFinishReason: request.model.compatibility?.requireFinishReason ?? true,
     }),
     step,
     onHalt: finishEvents,
