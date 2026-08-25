@@ -169,6 +169,56 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("preserves observed reasoning fields when reasoning is required", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model: LanguageModel.update(model, { compatibility: { requireReasoning: true } }),
+          messages: [
+            Message.assistant([
+              {
+                type: "reasoning",
+                text: "thinking",
+                providerMetadata: { openai: { reasoningField: "reasoning_text" } },
+              },
+              { type: "text", text: "Hello" },
+            ]),
+            Message.assistant("Done"),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        { role: "assistant", content: "Hello", reasoning_text: "thinking" },
+        { role: "assistant", content: "Done", reasoning_content: "" },
+      ])
+    }),
+  )
+
+  it.effect("omits empty configured reasoning fields when reasoning is explicitly optional", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model: LanguageModel.update(model, {
+            compatibility: { reasoningField: "reasoning_text", requireReasoning: false },
+          }),
+          messages: [
+            Message.assistant([
+              { type: "reasoning", text: "thinking" },
+              { type: "text", text: "Hello" },
+            ]),
+            Message.assistant("Done"),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        { role: "assistant", content: "Hello", reasoning_text: "thinking" },
+        { role: "assistant", content: "Done" },
+      ])
+    }),
+  )
+
   it.effect("rejects reasoning fields that conflict with assistant message fields", () =>
     Effect.gen(function* () {
       const error = yield* compileRequest(

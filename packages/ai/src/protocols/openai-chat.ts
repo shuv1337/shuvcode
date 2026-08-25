@@ -364,8 +364,9 @@ const lowerUserMessage = Effect.fn("OpenAIChat.lowerUserMessage")(function* (
 
 const lowerAssistantMessage = Effect.fn("OpenAIChat.lowerAssistantMessage")(function* (
   message: OpenAIChatRequestMessage,
-  configuredField?: string,
-  options: LoweringOptions = {},
+  configuredField: string | undefined,
+  requireReasoning: boolean,
+  options: LoweringOptions,
 ) {
   const content: TextPart[] = []
   const reasoning: ReasoningPart[] = []
@@ -392,15 +393,17 @@ const lowerAssistantMessage = Effect.fn("OpenAIChat.lowerAssistantMessage")(func
   const nativeReasoning = openAICompatibleReasoningContent(message.native?.openaiCompatible)
   const fullyStructured = reasoning.every((part) => Array.isArray(part.providerMetadata?.openai?.reasoningDetails))
   const field = (() => {
-    if (configuredField !== undefined) return configuredField
-    if (reasoning.length === 0) return undefined
+    if (configuredField !== undefined && (requireReasoning || reasoning.length > 0 || nativeReasoning !== undefined))
+      return configuredField
+    if (reasoning.length === 0) return requireReasoning ? "reasoning_content" : undefined
     if (observedField !== undefined) return observedField
     if (nativeReasoning !== undefined) return "reasoning_content"
-    if (!fullyStructured) return "reasoning_content"
+    if (!fullyStructured || requireReasoning) return "reasoning_content"
   })()
   const reasoningText = (() => {
-    if (configuredField !== undefined) return reasoning.length === 0 ? (nativeReasoning ?? "") : text
-    if (reasoning.length === 0) return nativeReasoning
+    if (configuredField !== undefined)
+      return reasoning.length === 0 ? (nativeReasoning ?? (requireReasoning ? "" : undefined)) : text
+    if (reasoning.length === 0) return nativeReasoning ?? (requireReasoning ? "" : undefined)
     return text
   })()
   const cached = message.content.findLast((part) => "cache" in part && part.cache !== undefined)
@@ -454,11 +457,13 @@ const lowerToolMessages = Effect.fn("OpenAIChat.lowerToolMessages")(function* (
 
 const lowerMessage = Effect.fn("OpenAIChat.lowerMessage")(function* (
   message: OpenAIChatRequestMessage,
-  reasoningField?: string,
-  options: LoweringOptions = {},
+  reasoningField: string | undefined,
+  requireReasoning: boolean,
+  options: LoweringOptions,
 ) {
   if (message.role === "user") return [yield* lowerUserMessage(message, options)]
-  if (message.role === "assistant") return [yield* lowerAssistantMessage(message, reasoningField, options)]
+  if (message.role === "assistant")
+    return [yield* lowerAssistantMessage(message, reasoningField, requireReasoning, options)]
   return (yield* lowerToolMessages(message, options)).messages
 })
 
@@ -480,6 +485,13 @@ const lowerMessages = Effect.fn("OpenAIChat.lowerMessages")(function* (request: 
         : [{ role: "system", content: ProviderShared.joinText(request.system) }]
   const messages = [...system]
   const modelID = request.model.id.toLowerCase()
+  const requireReasoning =
+    request.model.compatibility?.requireReasoning ??
+    (request.model.compatibility?.reasoningField !== undefined ||
+      request.model.provider === "deepseek" ||
+      request.model.route.endpoint.baseURL?.toLowerCase().includes("deepseek.com") ||
+      modelID.includes("deepseek"))
+  const reasoningField = request.model.compatibility?.reasoningField
   const mistral = ["mistral", "devstral", "codestral", "pixtral", "mixtral"].some((family) => modelID.includes(family))
   const lowering = {
     ...options,
@@ -554,7 +566,7 @@ const lowerMessages = Effect.fn("OpenAIChat.lowerMessages")(function* (request: 
       continue
     }
     flushImages()
-    messages.push(...(yield* lowerMessage(message, request.model.compatibility?.reasoningField, lowering)))
+    messages.push(...(yield* lowerMessage(message, reasoningField, requireReasoning, lowering)))
   }
   flushImages()
   return messages
