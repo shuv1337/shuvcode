@@ -45,6 +45,7 @@ const SUBMIT = Symbol("submit")
 export function integrationOptions(list: IntegrationInfo[]) {
   return list.toSorted(
     (a, b) =>
+      Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
       (INTEGRATION_PRIORITY[a.id] ?? 99) - (INTEGRATION_PRIORITY[b.id] ?? 99) ||
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
@@ -103,6 +104,7 @@ export function DialogIntegration(
       let category = "Services"
       if (integration.id in INTEGRATION_PRIORITY) category = "Popular"
       if (provider) category = "Web search"
+      if (integration.metadata?.source === "mcp") category = "MCP"
       return {
         title: integration.name,
         value: integration.id,

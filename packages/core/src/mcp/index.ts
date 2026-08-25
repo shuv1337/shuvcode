@@ -228,6 +228,7 @@ export const layer = (options?: Options) =>
           .transform((draft) => {
             draft.update(integrationID, (ref) => {
               ref.name = name
+              ref.metadata = { source: "mcp" }
             })
             draft.method.update({
               integrationID,

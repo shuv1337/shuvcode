@@ -2133,6 +2133,7 @@ export type SessionMessagesResponse = {
 export type IntegrationInfo = {
   id: string
   name: string
+  metadata?: { [x: string]: any }
   methods: Array<IntegrationMethod>
   connections: Array<ConnectionInfo>
 }
