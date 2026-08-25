@@ -1,5 +1,5 @@
 import { Effect, Option } from "effect"
-import { AIError, LLMEvent, type ProviderMetadata, type ToolCall, type ToolInputError } from "../../schema/index.js"
+import { AIError, LLMEvent, type ProviderMetadata, type ToolCall } from "../../schema/index.js"
 import { eventError, parseToolInput, type ToolAccumulator } from "../shared.js"
 import { parse } from "./partial-json.js"
 
@@ -59,46 +59,44 @@ const inputStart = (tool: PendingTool) =>
     providerMetadata: tool.providerMetadata,
   })
 
-const inputDelta = (tool: PendingTool, text: string) => {
-  const input = parsePartialInput(tool.input)
-  return LLMEvent.toolInputDelta({
+const inputDelta = (tool: PendingTool, text: string) =>
+  LLMEvent.toolInputDelta({
     id: tool.id,
     name: tool.name,
     text,
-    ...(Option.isSome(input) ? { input: input.value } : {}),
+    input: Option.getOrElse(parsePartialInput(tool.input), () => ({})),
   })
-}
 
 const toolCall = (route: string, tool: PendingTool, inputOverride?: string) => {
   const raw = inputOverride ?? tool.input
   return parseToolInput(route, tool.name, raw).pipe(
-    Effect.map((input): ToolCall | ToolInputError =>
-      LLMEvent.toolCall({
-        id: tool.id,
-        name: tool.name,
-        input,
-        providerExecuted: tool.providerExecuted ? true : undefined,
-        providerMetadata: tool.providerMetadata,
-      }),
-    ),
     Effect.catch((error) =>
       tool.providerExecuted
         ? Effect.fail(error)
         : Effect.succeed(
-            LLMEvent.toolInputError({
-              id: tool.id,
-              name: tool.name,
-              raw,
-            }),
+            Option.getOrElse(
+              Option.map(parsePartialInput(raw), (input) => input ?? {}),
+              () => ({}),
+            ),
           ),
+    ),
+    Effect.map(
+      (input): ToolCall =>
+        LLMEvent.toolCall({
+          id: tool.id,
+          name: tool.name,
+          input,
+          providerExecuted: tool.providerExecuted ? true : undefined,
+          providerMetadata: tool.providerMetadata,
+        }),
     ),
   )
 }
 
-const finishEvents = (tool: PendingTool, event: ToolCall | ToolInputError): ReadonlyArray<LLMEvent> =>
-  event.type === "tool-input-error"
-    ? [event]
-    : [LLMEvent.toolInputEnd({ id: tool.id, name: tool.name, providerMetadata: tool.providerMetadata }), event]
+const finishEvents = (tool: PendingTool, event: ToolCall): ReadonlyArray<LLMEvent> => [
+  LLMEvent.toolInputEnd({ id: tool.id, name: tool.name, providerMetadata: tool.providerMetadata }),
+  event,
+]
 
 /** Store the updated tool and produce the optional public delta event. */
 const appendTool = <K extends StreamKey>(
@@ -181,7 +179,7 @@ export const appendExisting = <K extends StreamKey>(
 
 /**
  * Finalize one pending tool call: parse the accumulated raw JSON, remove it
- * from state, and return either a call or a non-executable local input error.
+ * from state, and recover incomplete local arguments when needed.
  * Missing keys are a no-op because some providers emit stop events for
  * non-tool content blocks.
  */
