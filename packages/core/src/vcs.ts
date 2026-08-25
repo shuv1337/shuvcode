@@ -13,7 +13,6 @@ import { Location } from "./location.js"
 import { AppProcess } from "@opencode-ai/util/process"
 import { Bus } from "./bus.js"
 import { State } from "./state.js"
-import { VcsGit } from "./vcs/git.js"
 import { VcsHg } from "./vcs/hg.js"
 import { emptyPatch, MAX_TOTAL_PATCH_BYTES, PATCH_CONTEXT_LINES } from "./vcs/patch.js"
 
@@ -49,7 +48,6 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Vc
 // results so callers never need to special-case.
 const adapter = (proc: AppProcess.Interface, fs: FSUtil.Interface, location: Location.Interface) => {
   const scope = { directory: location.directory, worktree: location.project.directory }
-  if (location.vcs?.type === "git") return VcsGit.make(proc, scope)
   if (location.vcs?.type === "hg") return VcsHg.make(proc, fs, scope)
 }
 
@@ -69,7 +67,7 @@ const layer = Layer.effect(
       canonical: location.project.canonical,
       ...(vcs ? { store: vcs.store } : {}),
     }
-    const decodeInfo = Schema.decodeUnknownEffect(Info)
+    const decodeInfo = Schema.decodeUnknownEffect(Schema.toType(Info))
     const decodeBranches = Schema.decodeUnknownEffect(BranchList)
     const decodeStatus = Schema.decodeUnknownEffect(Schema.Array(FileStatus))
     const decodeDiff = Schema.decodeUnknownEffect(Schema.Array(FileDiff.Info))
@@ -112,7 +110,7 @@ const layer = Layer.effect(
       if (changed) yield* bus.publish(VcsEvent.BranchUpdated, { branch: next.branch.current })
     })
 
-    if (vcs && native) {
+    if (vcs) {
       const store = yield* fs.realPath(vcs.store).pipe(Effect.orElseSucceed(() => vcs.store))
       const isBranchMetadata =
         vcs.type === "git"
