@@ -7,6 +7,7 @@ import { ScopedKey, type ServerScope } from "@/runtime/server/scope"
 export type WorkspaceDefaultDestination = "last-used" | "local" | "new"
 export type WorkspaceLastUsed = "local" | "workspace"
 export type TerminalPlacement = "side" | "bottom"
+export type FollowUpBehavior = "queue" | "steer"
 
 export interface NotificationSettings {
   agent: boolean
@@ -39,6 +40,7 @@ export interface Settings {
     showCustomAgents: boolean
     mobileTitlebarPosition: "top" | "bottom"
     terminalPlacement: TerminalPlacement
+    followUpBehavior: FollowUpBehavior
   }
   appearance: {
     fontSize: number
@@ -126,6 +128,7 @@ const defaultSettings: Settings = {
     showCustomAgents: false,
     mobileTitlebarPosition: "top",
     terminalPlacement: "side",
+    followUpBehavior: "steer",
   },
   appearance: {
     fontSize: 14,
@@ -255,6 +258,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         ),
         setTerminalPlacement(value: TerminalPlacement) {
           setStore("general", "terminalPlacement", value)
+        },
+        followUpBehavior: withFallback(() => store.general?.followUpBehavior, defaultSettings.general.followUpBehavior),
+        setFollowUpBehavior(value: FollowUpBehavior) {
+          setStore("general", "followUpBehavior", value)
         },
       },
       visibility: {
