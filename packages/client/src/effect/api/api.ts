@@ -978,6 +978,19 @@ export type SessionLogOutput =
           readonly id: Event.ID
           readonly created: number
           readonly metadata?: { readonly [x: string]: unknown } | undefined
+          readonly type: "session.message.content.updated"
+          readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
+          readonly location?: Location.Ref | undefined
+          readonly data: {
+            readonly sessionID: Session.ID
+            readonly messageID: SessionMessage.ID
+            readonly content: ReadonlyArray<SessionMessage.AssistantContentEncoded>
+          }
+        }
+      | {
+          readonly id: Event.ID
+          readonly created: number
+          readonly metadata?: { readonly [x: string]: unknown } | undefined
           readonly type: "session.usage.recorded"
           readonly durable: { readonly aggregateID: string; readonly seq: Event.Seq; readonly version: Event.Version }
           readonly location?: Location.Ref | undefined
@@ -1012,6 +1025,18 @@ export type SessionBackgroundOperation<E = never> = (
 export type SessionMessageInput = { readonly sessionID: Session.ID; readonly messageID: SessionMessage.ID }
 export type SessionMessageOutput = SessionMessage.Info
 export type SessionMessageOperation<E = never> = (input: SessionMessageInput) => Effect.Effect<SessionMessageOutput, E>
+
+export type SessionMessageUpdateInput = {
+  readonly sessionID: Session.ID
+  readonly messageID: SessionMessage.ID
+  readonly content: ReadonlyArray<
+    SessionMessage.AssistantText | SessionMessage.AssistantReasoning | SessionMessage.AssistantTool
+  >
+}
+export type SessionMessageUpdateOutput = SessionMessage.Assistant
+export type SessionMessageUpdateOperation<E = never> = (
+  input: SessionMessageUpdateInput,
+) => Effect.Effect<SessionMessageUpdateOutput, E>
 
 export type SessionEnvironmentInput = {
   readonly sessionID: Session.ID
@@ -1071,6 +1096,7 @@ export interface SessionApi<E = never> {
   readonly interrupt: SessionInterruptOperation<E>
   readonly background: SessionBackgroundOperation<E>
   readonly message: SessionMessageOperation<E>
+  readonly messageUpdate: SessionMessageUpdateOperation<E>
   readonly environment: SessionEnvironmentOperation<E>
   readonly view: SessionViewOperation<E>
 }

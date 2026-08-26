@@ -117,6 +117,18 @@ export const Viewed = Event.durable({
 })
 export type Viewed = typeof Viewed.Type
 
+export const MessageContentUpdated = Event.durable({
+  type: "session.message.content.updated",
+  ...options,
+  schema: {
+    ...Base,
+    messageID: SessionMessage.ID,
+    // Public events are framed directly, so timestamps must already be encoded.
+    content: Schema.Array(SessionMessage.AssistantContentEncoded),
+  },
+})
+export type MessageContentUpdated = typeof MessageContentUpdated.Type
+
 export const UsageRecorded = Event.durable({
   type: "session.usage.recorded",
   ...options,
@@ -639,6 +651,7 @@ export const Definitions = Event.inventory(
   RevertEvent.Staged,
   RevertEvent.Cleared,
   RevertEvent.Committed,
+  MessageContentUpdated,
 )
 
 // UsageRecorded is durable but internal: excluded from Definitions so it never reaches the public manifest.
