@@ -6,6 +6,7 @@ describe("Provider", () => {
   test("loads bundled native provider entrypoints", async () => {
     const packages = [
       "@opencode-ai/ai/providers/cerebras",
+      "@opencode-ai/ai/providers/deepinfra",
       "@opencode-ai/ai/providers/google-vertex",
       "@opencode-ai/ai/providers/google-vertex/gemini",
       "@opencode-ai/ai/providers/google-vertex/chat",
