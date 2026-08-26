@@ -27,6 +27,7 @@ import { newTabTooltipKeybind } from "@/shell/commands/tooltip-keybind"
 import { TitlebarRightMount } from "@/shell/titlebar/right-slot"
 
 const titlebarHeight = 36
+const windowsTitlebarHeight = 44 // Includes the content inset; matches the native Windows overlay.
 const minTitlebarZoom = 0.25
 const windowsControlsBaseWidth = 138 // 3 native Windows caption buttons at 46px each.
 const macTrafficLightsBaseWidth = 84
@@ -59,7 +60,7 @@ export function Titlebar(props: {
   const titlebarZoom = () => (windows() ? Math.max(zoom(), minTitlebarZoom) : zoom())
   const minHeight = () => {
     if (mac()) return `${titlebarHeight / zoom()}px`
-    if (windows()) return `env(titlebar-area-height, ${titlebarHeight / Math.min(titlebarZoom(), 1)}px)`
+    if (windows()) return `env(titlebar-area-height, ${windowsTitlebarHeight / Math.min(titlebarZoom(), 1)}px)`
     return undefined
   }
   const windowsControlsWidth = () => `${windowsControlsBaseWidth / Math.max(titlebarZoom(), 1)}px`

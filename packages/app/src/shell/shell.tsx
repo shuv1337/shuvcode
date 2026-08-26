@@ -43,6 +43,13 @@ export default function Layout(props: ParentProps) {
         style={{
           "padding-top": "env(safe-area-inset-top, 0px)",
           "padding-bottom": "env(safe-area-inset-bottom, 0px)",
+          // The native Windows titlebar already includes the gap above the content panels.
+          "--shell-top-inset":
+            platform.platform === "desktop" &&
+            platform.os === "windows" &&
+            !(mobile() && preferences.general.mobileTitlebarPosition() === "bottom")
+              ? "0px"
+              : "8px",
         }}
       >
         <Titlebar
@@ -59,7 +66,7 @@ export default function Layout(props: ParentProps) {
             <aside
               ref={(element) => setState("tabsMount", element)}
               data-slot="vertical-tabs-sidebar"
-              class="relative flex min-h-0 shrink-0 flex-col bg-v2-background-bg-deep px-2.5 py-2"
+              class="relative flex min-h-0 shrink-0 flex-col bg-v2-background-bg-deep px-2.5 pb-2 pt-[var(--shell-top-inset,8px)]"
               style={{ width: `${state.tabsWidth}px` }}
             >
               <ResizeHandle

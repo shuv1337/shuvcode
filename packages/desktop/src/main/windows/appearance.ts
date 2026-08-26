@@ -17,7 +17,8 @@ const oc2Background = {
 }
 const titlebarThemes = new WeakMap<BrowserWindow, Partial<TitlebarTheme>>()
 const pinchZoomEnabled = new WeakMap<BrowserWindow, boolean>()
-const titlebarHeight = 40
+// Match the renderer's 36px titlebar plus its former 8px content inset.
+const titlebarHeight = 44
 const maxZoomLevel = 10
 const minZoomLevel = 0.2
 let backgroundColor: string | undefined
