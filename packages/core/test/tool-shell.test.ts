@@ -790,6 +790,48 @@ describe("ShellTool", () => {
     ),
   )
 
+  it.live("persists a silent command that finishes before backgrounding", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        return withSession(tmp.path, (registry) =>
+          Effect.gen(function* () {
+            const bus = yield* Bus.Service
+            const jobs = yield* Job.Service
+            const shell = yield* Shell.Service
+            const persisted = yield* Deferred.make<readonly Job.Background[]>()
+            yield* bus.project(SessionEvent.InboxEnqueued, (event) =>
+              event.data.sessionID === sessionID && event.data.item.type === "synthetic"
+                ? jobs.pendingBackground.pipe(
+                    Effect.flatMap((background) => Deferred.succeed(persisted, background)),
+                    Effect.asVoid,
+                  )
+                : Effect.void,
+            )
+            yield* executeTool(registry, {
+              ...call({ command: "exit 7", background: true }, "call-background-silent-nonzero"),
+              // The command can finish while its initial progress update is being published.
+              progress: (update) =>
+                typeof update.shellID === "string"
+                  ? shell.wait(ShellSchema.ID.make(update.shellID)).pipe(Effect.orDie, Effect.asVoid)
+                  : Effect.void,
+            })
+
+            expect(yield* Deferred.await(persisted)).toMatchObject([
+              {
+                id: "call-background-silent-nonzero",
+                status: "completed",
+                output: "(no output)\n\nCommand exited with code 7.",
+              },
+            ])
+          }),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]().then(() => undefined)),
+    ),
+  )
+
   it.live(
     "updates and clears a running shell timeout",
     () =>
