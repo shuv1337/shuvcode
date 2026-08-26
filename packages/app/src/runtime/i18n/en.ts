@@ -884,6 +884,7 @@ export const dict = {
 
   "settings.section.desktop": "Desktop",
   "settings.section.server": "Server",
+  "settings.backToApp": "Back to app",
   "settings.tab.general": "General",
   "settings.tab.preferences": "Preferences",
   "settings.tab.shortcuts": "Shortcuts",
