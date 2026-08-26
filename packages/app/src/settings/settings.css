@@ -15,6 +15,7 @@
   overflow: hidden;
   background: var(--v2-background-bg-deep);
   outline: none;
+  container: settings-screen / inline-size;
 }
 
 .settings-screen > .settings {
@@ -104,6 +105,7 @@
   overflow-y: auto;
   scrollbar-width: none;
   user-select: none;
+  container: settings-panel / inline-size;
 }
 
 .settings-panel :is(input, textarea, [contenteditable="true"]) {
@@ -260,6 +262,10 @@
   max-width: 100%;
 }
 
+:is([data-component="dialog-v2"][data-variant="settings"], .settings-screen) [data-component="select-v2"] {
+  max-width: 100%;
+}
+
 :is([data-component="dialog-v2"][data-variant="settings"], .settings-screen) [data-component="button-v2"] {
   width: fit-content;
   max-width: 100%;
@@ -299,6 +305,66 @@
   }
 }
 
+@container settings-screen (min-width: 800px) and (max-width: 1047px) {
+  .settings-screen > .settings {
+    padding-inline: 24px;
+  }
+
+  .settings-screen
+    > .settings[data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"]
+    > [data-slot="tabs-v2-list"] {
+    width: 240px;
+    min-width: 240px;
+    padding-inline-start: 16px;
+    padding-inline-end: 24px;
+  }
+}
+
+@container settings-screen (max-width: 799px) {
+  .settings-screen .settings-nav {
+    width: 100%;
+  }
+
+  .settings-screen > .settings > .settings-panel {
+    padding-inline-end: 16px;
+  }
+
+  .settings-screen .settings-tab-header {
+    padding-top: 24px;
+  }
+
+  .settings-screen
+    > .settings[data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"]
+    > [data-slot="tabs-v2-list"] {
+    width: 160px;
+    min-width: 160px;
+    padding-block: 24px;
+    padding-inline: 12px;
+  }
+}
+
+@container settings-panel (max-width: 520px) {
+  .settings-tab-header-row {
+    flex-wrap: wrap;
+  }
+
+  .settings-tab-header-row [data-component="select-v2-root"] {
+    width: 100%;
+  }
+
+  .settings-tab-header-row [data-component="select-v2"] {
+    width: 100%;
+  }
+
+  [data-component="settings-row"] {
+    flex-wrap: wrap;
+  }
+
+  [data-slot="settings-row-control"] {
+    width: 100%;
+  }
+}
+
 .settings-provider-row {
   display: flex;
   flex-wrap: wrap;
@@ -316,6 +382,12 @@
 @media (min-width: 640px) {
   .settings-provider-row {
     flex-wrap: nowrap;
+  }
+}
+
+@container settings-panel (max-width: 520px) {
+  .settings-provider-row {
+    flex-wrap: wrap;
   }
 }
 
@@ -993,6 +1065,40 @@
   }
 }
 
+@container settings-panel (max-width: 520px) {
+  .settings-workspaces-toolbar,
+  .settings-workspaces-main {
+    align-items: flex-start;
+  }
+
+  .settings-workspaces-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .settings-workspaces-toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .settings-workspaces-inventory [data-component="settings-list"] {
+    max-height: none;
+    overflow-y: visible;
+    padding: 14px;
+  }
+
+  .settings-workspaces-path {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .settings-workspaces-active {
+    display: none;
+  }
+}
+
 [data-component="dialog-v2"].settings-server-dialog [data-slot="dialog-container"] {
   width: 480px;
   max-width: calc(100vw - 32px);
@@ -1038,7 +1144,7 @@
 }
 
 .settings-extensions-tabs[data-component="tabs-v2"][data-variant="pill"] > [data-slot="tabs-v2-list"] {
-  width: 280px;
+  width: min(280px, 100%);
   padding-inline: 0 !important;
 }
 
