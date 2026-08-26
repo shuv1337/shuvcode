@@ -150,6 +150,8 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3000"}`,
     ).port
     if (url.origin !== server && url.port !== appPort) return route.fallback()
+    // Production serves the UI and API from one origin; leave app assets to Vite.
+    if (!url.pathname.startsWith("/api/")) return route.fallback()
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: corsHeaders })
     }
