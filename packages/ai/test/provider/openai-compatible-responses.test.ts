@@ -195,19 +195,19 @@ describe("Open Responses-compatible route", () => {
           model,
           messages: [
             Message.assistant([
-              { type: "text", text: "Kept.", providerMetadata: { openresponses: { itemId: "history_1" } } },
+              { type: "text", text: "Kept.", providerMetadata: { "openai-compatible": { itemId: "history_1" } } },
               {
                 type: "text",
                 text: "Long.",
-                providerMetadata: { openresponses: { itemId: `history_${"a".repeat(64)}` } },
+                providerMetadata: { "openai-compatible": { itemId: `history_${"a".repeat(64)}` } },
               },
               {
                 type: "text",
                 text: "Opaque.",
-                providerMetadata: { openresponses: { itemId: "provider_value/with+symbols" } },
+                providerMetadata: { "openai-compatible": { itemId: "provider_value/with+symbols" } },
               },
-              { type: "text", text: "No suffix.", providerMetadata: { openresponses: { itemId: "msg_" } } },
-              { type: "text", text: "No prefix.", providerMetadata: { openresponses: { itemId: "_item" } } },
+              { type: "text", text: "No suffix.", providerMetadata: { "openai-compatible": { itemId: "msg_" } } },
+              { type: "text", text: "No prefix.", providerMetadata: { "openai-compatible": { itemId: "_item" } } },
             ]),
           ],
         }),
@@ -267,7 +267,7 @@ describe("Open Responses-compatible route", () => {
               name: item.type,
               result: { type: "json", value: item },
               providerExecuted: true,
-              providerMetadata: { openresponses: { itemId: item.id } },
+              providerMetadata: { example: { itemId: item.id } },
             }),
           ),
         }),
@@ -302,7 +302,7 @@ describe("Open Responses-compatible route", () => {
       )
 
       expect(response.message.content).toEqual([
-        { type: "text", text: "Indexed", providerMetadata: { openresponses: { itemId: "msg_1" } } },
+        { type: "text", text: "Indexed", providerMetadata: { "openai-compatible": { itemId: "msg_1" } } },
       ])
     }),
   )
@@ -368,7 +368,7 @@ describe("Open Responses-compatible route", () => {
                 ),
               )
 
-              const metadata = { openresponses: { itemId: routing.id } }
+              const metadata = { "openai-compatible": { itemId: routing.id } }
               if (fixture.item.type === "function_call") {
                 expect(response.toolCalls).toEqual([
                   expect.objectContaining({
@@ -386,7 +386,7 @@ describe("Open Responses-compatible route", () => {
                     type: "reasoning",
                     text: "Preserved",
                     providerMetadata: {
-                      openresponses: { itemId: routing.id, reasoningEncryptedContent: "encrypted-state" },
+                      "openai-compatible": { itemId: routing.id, reasoningEncryptedContent: "encrypted-state" },
                     },
                   },
                 ])
@@ -438,22 +438,26 @@ describe("Open Responses-compatible route", () => {
             {
               type: "reasoning",
               text: "First.",
-              providerMetadata: { openresponses: { itemId: routing.id } },
+              providerMetadata: { "openai-compatible": { itemId: routing.id } },
             },
             {
               type: "reasoning",
               text: "Second.",
-              providerMetadata: { openresponses: { itemId: routing.id, reasoningEncryptedContent: "final-state" } },
+              providerMetadata: {
+                "openai-compatible": { itemId: routing.id, reasoningEncryptedContent: "final-state" },
+              },
             },
           ])
           expect(response.events.filter(LLMEvent.is.reasoningEnd)).toEqual([
             expect.objectContaining({
               id: `${routing.id}:0`,
-              providerMetadata: { openresponses: { itemId: routing.id } },
+              providerMetadata: { "openai-compatible": { itemId: routing.id } },
             }),
             expect.objectContaining({
               id: `${routing.id}:1`,
-              providerMetadata: { openresponses: { itemId: routing.id, reasoningEncryptedContent: "final-state" } },
+              providerMetadata: {
+                "openai-compatible": { itemId: routing.id, reasoningEncryptedContent: "final-state" },
+              },
             }),
           ])
         }),
@@ -483,7 +487,7 @@ describe("Open Responses-compatible route", () => {
             id: "call_1",
             name: "lookup",
             input: { query: "complete" },
-            providerMetadata: { openresponses: { itemId: "" } },
+            providerMetadata: { "openai-compatible": { itemId: "" } },
           }),
         ])
       }),
@@ -510,7 +514,7 @@ describe("Open Responses-compatible route", () => {
         )
 
         expect(response.message.content).toEqual([
-          { type: "text", text: "Before after", providerMetadata: { openresponses: { itemId: "msg_1" } } },
+          { type: "text", text: "Before after", providerMetadata: { "openai-compatible": { itemId: "msg_1" } } },
         ])
         expect(response.events.map((event) => event.type)).toEqual([
           "step-start",
@@ -662,7 +666,7 @@ describe("Open Responses-compatible route", () => {
 
       expect(response.events.find(LLMEvent.is.toolCall)).toMatchObject({
         input: { query: "complete" },
-        providerMetadata: { openresponses: { itemId: "item_1" } },
+        providerMetadata: { example: { itemId: "item_1" } },
       })
     }),
   )
@@ -694,7 +698,7 @@ describe("Open Responses-compatible route", () => {
       )
 
       expect(response.events.find((event) => event.type === "reasoning-end")).toMatchObject({
-        providerMetadata: { openresponses: { itemId: "rs_raw", reasoningEncryptedContent: "raw-state" } },
+        providerMetadata: { "openai-compatible": { itemId: "rs_raw", reasoningEncryptedContent: "raw-state" } },
       })
     }),
   )
@@ -743,7 +747,7 @@ describe("Open Responses-compatible route", () => {
             Message.assistant({
               type: "text",
               text: "Unclassified.",
-              providerMetadata: { openresponses: { phase: null } },
+              providerMetadata: { "openai-compatible": { phase: null } },
             }),
           ],
         }),
@@ -802,7 +806,7 @@ describe("Open Responses-compatible route", () => {
         {
           type: "text",
           text: "I can't help with that.",
-          providerMetadata: { openresponses: { itemId: "msg_refusal" } },
+          providerMetadata: { example: { itemId: "msg_refusal" } },
         },
       ])
 
@@ -891,7 +895,7 @@ describe("Open Responses-compatible route", () => {
 
       expect(response.toolCalls).toEqual([])
       expect(response.events.find(LLMEvent.is.finish)).toMatchObject({
-        providerMetadata: { openresponses: { responseId: "resp_1" } },
+        providerMetadata: { example: { responseId: "resp_1" } },
       })
     }),
   )
