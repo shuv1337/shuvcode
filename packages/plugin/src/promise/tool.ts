@@ -23,6 +23,8 @@ export type Info<
 }
 
 interface ToolDraft {
+  list(): readonly (Info & { readonly id: string })[]
+  get(id: string): (Info & { readonly id: string }) | undefined
   add<Input extends Tool.ValueSchema<any>, Output extends Tool.ValueSchema<any> | undefined>(
     tool: Info<Input, Output>,
   ): void

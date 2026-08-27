@@ -24,13 +24,15 @@ export class RegistrationError extends Schema.TaggedError<RegistrationError>()("
 }) {}
 
 export interface Draft {
+  readonly list: () => readonly (Tool.Info & { readonly id: string })[]
+  readonly get: (id: string) => (Tool.Info & { readonly id: string }) | undefined
   readonly add: (tool: Tool.Info) => void
   readonly update: (id: string, update: (tool: Types.Mutable<Tool.Info>) => void) => void
   readonly remove: (id: string) => void
 }
 
 type Data = {
-  tools: Map<string, Tool.Info>
+  tools: Map<string, Tool.Info & { readonly id: string }>
   errors: { tool: Tool.Info; error: RegistrationError }[]
 }
 
@@ -150,13 +152,16 @@ const layer = Layer.effect(
         errors: [],
       }),
       draft: (draft) => ({
+        list: () => Array.from(draft.tools.values()),
+        get: (id) => draft.tools.get(id),
         add: (tool) => {
           const error = registrationError(tool)
           if (error) {
             draft.errors.push({ tool, error })
             return
           }
-          draft.tools.set(effectiveName(tool), { ...tool, options: tool.options && { ...tool.options } })
+          const id = effectiveName(tool)
+          draft.tools.set(id, { ...tool, id, options: tool.options && { ...tool.options } })
         },
         update: (id, update) => {
           const current = draft.tools.get(id)
@@ -164,6 +169,7 @@ const layer = Layer.effect(
           const tool = { ...current, options: current.options && { ...current.options } }
           update(tool)
           tool.name = current.name
+          tool.id = id
           if (tool.options?.namespace !== current.options?.namespace)
             tool.options = { ...tool.options, namespace: current.options?.namespace }
           const error = registrationError(tool)

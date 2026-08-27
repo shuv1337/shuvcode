@@ -6,6 +6,8 @@ import type { Effect, JsonSchema, Types } from "effect"
 import type { Hooks, Transform } from "./registration.js"
 
 export interface ToolDraft {
+  list(): readonly (Tool.Info & { readonly id: string })[]
+  get(id: string): (Tool.Info & { readonly id: string }) | undefined
   add<Input extends Tool.ValueSchema<any>, Output extends Tool.ValueSchema<any> | undefined>(
     tool: Tool.Info<Input, Output>,
   ): void
