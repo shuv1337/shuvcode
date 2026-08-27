@@ -5,6 +5,7 @@ import {
   compactionEnded,
   compactionFailed,
   compactionStarted,
+  directory,
   event,
   session,
   sessionID,
@@ -348,6 +349,24 @@ test("separates blocking and already-backgrounded work into two rows", async ({ 
     },
   })
 
+  await timeline.transport.send({
+    id: "evt_background_shell_created",
+    created: 3,
+    type: "shell.created",
+    location: { directory },
+    data: {
+      info: {
+        id: "shell_backgrounded",
+        status: "running",
+        command: "sleep 120",
+        cwd: directory,
+        shell: "bash",
+        file: "/tmp/background.out",
+        metadata: { sessionID },
+        time: { started: 2 },
+      },
+    },
+  })
   const backgroundCard = page.locator('[data-timeline-part-id="call_backgrounded"]')
   await expect(page.getByText(/move running work to the background/i)).toBeVisible()
   await page.getByRole("button", { name: "Session details" }).click()

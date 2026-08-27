@@ -1411,28 +1411,37 @@ ToolRegistry.register({
     const i18n = useI18n()
     const data = useData()
     const streaming = () => props.status === "streaming"
-    const pending = () => streaming() || props.status === "running" || props.metadata.status === "running"
+    const pending = () =>
+      streaming() ||
+      props.status === "running" ||
+      (typeof props.metadata.shellID === "string" && data.shellRunning?.(props.metadata.shellID) === true)
     const sawStreaming = streaming()
     const [streamed, setStreamed] = createSignal("")
     createEffect(() => {
       const id = props.metadata.shellID
       const shellOutput = data.shellOutput
-      if (typeof id !== "string" || !pending() || !shellOutput) return
+      if (typeof id !== "string" || !shellOutput) return
       const directory = data.directory
+      const running = pending()
       let cursor = 0
       let loading = false
       let disposed = false
       const load = async () => {
         if (loading) return
         loading = true
-        const response = await shellOutput({ id, location: { directory }, cursor }).catch(() => undefined)
-        if (disposed) return
-        if (response?.data.output) setStreamed((output) => output + response.data.output)
-        if (response) cursor = response.data.cursor
+        do {
+          const response = await shellOutput({ id, location: { directory }, cursor }).catch(() => undefined)
+          if (disposed || !response) break
+          setStreamed((output) => (cursor === 0 ? response.data.output : output + response.data.output))
+          if (response.data.cursor <= cursor) break
+          cursor = response.data.cursor
+          if (running || cursor >= response.data.size) break
+        } while (!disposed)
         loading = false
       }
       void load()
-      const interval = setInterval(() => void load(), 1_000)
+      // Refresh the final snapshot on exit, but poll only while the shell is live.
+      const interval = running ? setInterval(() => void load(), 1_000) : undefined
       onCleanup(() => {
         disposed = true
         clearInterval(interval)
@@ -1443,7 +1452,12 @@ ToolRegistry.register({
       if (typeof props.metadata.command === "string") return props.metadata.command
       return ""
     }
-    const output = createMemo(() => stripAnsi((pending() && streamed()) || props.output || "").replace(/\r\n?/g, "\n"))
+    const output = createMemo(() =>
+      stripAnsi((typeof props.metadata.shellID === "string" && streamed()) || props.output || "").replace(
+        /\r\n?/g,
+        "\n",
+      ),
+    )
     return (
       <BasicTool
         {...props}
