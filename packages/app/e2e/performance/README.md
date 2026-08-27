@@ -79,6 +79,15 @@ Benchmarks do not assert machine-dependent performance budgets. Streaming proces
 
 Committed smoke and regression tests continue to own correctness coverage for pagination, tab paint, context resize, collapse state, and composer spacing.
 
+Tab-switch timing starts at `mousedown`, when mouse-selected tabs actually navigate, with a `click` fallback for keyboard activation. The probe excludes hidden/transparent content and intersects answers with their virtual-row clip and viewport. The tab workload requires the destination's final answer to be visible with Markdown ready. These results are not directly comparable to older click-start, geometry-only measurements. `stableObservedMs` includes confirmation across three correct samples; `firstCorrectObservedMs` is the first sample meeting all content and geometry checks. Neither is a compositor presentation timestamp.
+
+Each tab scenario reports one sample, including its raw observations. Use Playwright's `--repeat-each=5` for repeated measurements. Cached scenarios warm the destination at the same panel width before leaving it; a separate resized scenario validates reuse after opening the review pane changes that width.
+
+```sh
+bunx playwright test --config e2e/performance/playwright.config.ts \
+  timeline/session-tab-switch-benchmark.spec.ts --repeat-each=5
+```
+
 ## Retained renderer memory
 
 Run the catalog workload against the production app bundle:
