@@ -475,11 +475,13 @@ export function createSessionTimelineRowRenderer(input: {
         if (value._tag !== "AssistantPart") throw new Error("Expected an assistant-part timeline row")
         return value
       }
+      // Construct once per row key, not inside JSX that reruns when group refs change.
+      const content = renderAssistant(current, onSizeChange)
       return (
         <Frame row={current()}>
           <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>
             <div data-slot="session-turn-assistant-content" aria-hidden={workingTurn(current().userMessageID)}>
-              {renderAssistant(current, onSizeChange)}
+              {content}
             </div>
           </div>
         </Frame>
