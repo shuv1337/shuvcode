@@ -67,6 +67,24 @@ test("adds configured environment variables with native promises", async () => {
   expect(await Bun.file(registration + ".environment").text()).toBe("configured")
 })
 
+test("passes the prepared handoff to the replacement server", async () => {
+  await using fixture = await serviceFixture()
+  const registration = fixture.registration
+  fixture.spawn("handoff")
+  await fixture.waitForFile()
+  await ensure({
+    file: registration,
+    version: "test",
+    command: fixture.command("environment"),
+    env: { OPENCODE_PTY_HANDOFF: "must-not-inherit" },
+  })
+  const replacement = await Bun.file(registration).json()
+  fixture.track(replacement.pid)
+
+  expect(await Bun.file(registration + ".handoff").json()).toEqual(await Bun.file(registration + ".prepared").json())
+  expect(await Bun.file(registration + ".pty-handoff").exists()).toBe(false)
+})
+
 test("waits for a live contender when another native contender fails", async () => {
   await using fixture = await serviceFixture()
   const registration = fixture.registration

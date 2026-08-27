@@ -199,6 +199,7 @@ import type {
   ExperimentalPersistentPtyCreateInput,
   ExperimentalPersistentPtyCreateOutput,
   ExperimentalPersistentPtyShutdownOutput,
+  ExperimentalPersistentPtyHandoffOutput,
   ExperimentalPersistentPtyGetInput,
   ExperimentalPersistentPtyGetOutput,
   ExperimentalPersistentPtyUpdateInput,
@@ -1720,6 +1721,17 @@ export function make(options: ClientOptions) {
               successStatus: 204,
               declaredStatuses: [503, 401, 400],
               empty: true,
+            },
+            requestOptions,
+          ),
+        handoff: (requestOptions?: RequestOptions) =>
+          request<ExperimentalPersistentPtyHandoffOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/persistent-pty/handoff`,
+              successStatus: 200,
+              declaredStatuses: [503, 401, 400],
+              empty: false,
             },
             requestOptions,
           ),
