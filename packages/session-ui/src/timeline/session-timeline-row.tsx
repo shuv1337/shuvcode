@@ -368,7 +368,7 @@ export function createSessionTimelineRowRenderer(input: {
                         fallback={
                           <div
                             data-slot="session-timeline-notice"
-                            class={`w-full pt-3 pb-1 text-13-regular text-text-weak ${padding()}`}
+                            class={`w-full truncate pt-3 pb-1 text-13-regular text-text-weak ${padding()}`}
                           >
                             <bdi dir="auto" class="text-13-medium">
                               {content().label}
