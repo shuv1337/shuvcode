@@ -983,6 +983,11 @@ export const dict = {
   "settings.general.row.followUpBehavior.steer": "Steer",
   "settings.general.row.reasoningSummaries.title": "Show reasoning summaries",
   "settings.general.row.reasoningSummaries.description": "Display model reasoning summaries in the timeline",
+  "settings.general.row.reasoningMode.title": "Model reasoning",
+  "settings.general.row.reasoningMode.description": "Choose how model reasoning is displayed in the timeline",
+  "settings.general.row.reasoningMode.hidden": "Hidden",
+  "settings.general.row.reasoningMode.compact": "Compact",
+  "settings.general.row.reasoningMode.full": "Full",
   "settings.general.row.shellToolPartsExpanded.title": "Expand shell tool parts",
   "settings.general.row.shellToolPartsExpanded.description":
     "Show shell tool parts expanded by default in the timeline",

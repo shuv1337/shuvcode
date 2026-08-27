@@ -458,7 +458,7 @@ function MessageTimelineView(
       }
     },
     actions: props.actions,
-    showReasoningSummaries: props.data.showReasoningSummaries,
+    reasoningMode: props.data.reasoningMode,
     shellToolDefaultOpen: props.data.shellToolPartsExpanded,
     editToolDefaultOpen: props.data.editToolPartsExpanded,
     disclosure: virtualized.disclosure,

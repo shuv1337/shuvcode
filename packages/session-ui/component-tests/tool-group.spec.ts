@@ -1,5 +1,66 @@
 import { expect, story } from "../../storybook/playwright/story"
 
+for (const reasoningDefaultOpen of [false, true]) {
+  story(
+    `keeps ordered thoughts and tool-only counts with reasoning ${reasoningDefaultOpen ? "expanded" : "collapsed"}`,
+    async ({ mount }) => {
+      const root = await mount("current-tool-group--mixed-reasoning", { args: { reasoningDefaultOpen } })
+      const group = root.locator('[data-component="collapsed-tool-group"]')
+      const used = group.getByRole("button", { name: "Used Read, Skill", exact: true })
+      const first = group.locator('[data-timeline-part-id="reasoning_first"]')
+      const second = group.locator('[data-timeline-part-id="reasoning_second"]')
+      await expect(used).toHaveAttribute("aria-expanded", "true")
+      await expect(group.locator('[data-component="tag"]')).toHaveText("4")
+      await expect(group.locator('[data-slot="context-tool-group-item"]')).toHaveText([
+        /Read.*group\.ts/,
+        /Thought/,
+        /Loaded.*opencode.*frontend-design.*skills/,
+        /Thought/,
+        /Loaded.*rtl-aware-development.*skill/,
+      ])
+      await expect(
+        group.locator('[data-timeline-part-ids="reasoning_skill_first,reasoning_skill_second"]'),
+      ).toBeVisible()
+      await expect(first.getByRole("button", { name: "Thought", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        String(reasoningDefaultOpen),
+      )
+      await expect(second.getByRole("button", { name: "Thought", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        String(reasoningDefaultOpen),
+      )
+      await first.getByRole("button", { name: "Thought", exact: true }).click()
+      await root.getByRole("button", { name: "Append follow-up read", exact: true }).click()
+      await expect(group.locator('[data-component="tag"]')).toHaveText("5")
+      await expect(group.locator('[data-slot="context-tool-group-item"]')).toHaveText([
+        /Read.*group\.ts/,
+        /Thought/,
+        /Loaded.*opencode.*frontend-design.*skills/,
+        /Thought/,
+        /Loaded.*rtl-aware-development.*skill/,
+        /Read.*group\.test\.ts/,
+      ])
+      await expect(first.getByRole("button", { name: "Thought", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        String(!reasoningDefaultOpen),
+      )
+      await expect(second.getByRole("button", { name: "Thought", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        String(reasoningDefaultOpen),
+      )
+      if (reasoningDefaultOpen) {
+        await expect(
+          first.getByText("The renderer groups adjacent tools. Check the relevant skills before changing it."),
+        ).toBeHidden()
+        return
+      }
+      await expect(
+        first.getByText("The renderer groups adjacent tools. Check the relevant skills before changing it."),
+      ).toBeVisible()
+    },
+  )
+}
+
 story("summarizes subagents as Agent while retaining their card titles", async ({ mount }) => {
   const root = await mount("current-tool-group--mixed-tools")
   const group = root.locator('[data-component="collapsed-tool-group"]')
