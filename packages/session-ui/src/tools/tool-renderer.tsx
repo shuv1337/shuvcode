@@ -503,6 +503,15 @@ export function CurrentContextToolGroup(props: {
     props.tools.reduce<SessionMessageAssistantTool[][]>((groups, tool) => {
       const previous = groups.at(-1)
       if (
+        tool.name === "patch" &&
+        tool.state.status !== "error" &&
+        previous?.[0]?.name === "patch" &&
+        previous[0].state.status !== "error"
+      ) {
+        previous.push(tool)
+        return groups
+      }
+      if (
         tool.name === "skill" &&
         tool.state.status !== "error" &&
         skillToolName(currentToolInput(tool), currentToolMetadata(tool)) &&
@@ -567,19 +576,26 @@ export function CurrentContextToolGroup(props: {
                       <Show
                         when={tool().name === "skill" && group().length > 1 && skills().length === group().length}
                         fallback={
-                          <ToolDisplay
-                            id={tool().id}
-                            tool={tool().name}
-                            input={currentToolInput(tool())}
-                            metadata={currentToolMetadata(tool())}
-                            output={currentToolOutput(tool())}
-                            error={currentToolError(tool())}
-                            status={tool().state.status}
-                            defaultOpen={false}
-                            deferContent
-                            virtualizeDiff={false}
-                            onContentRendered={props.onSizeChange}
-                          />
+                          <Show
+                            when={tool().name === "patch" && tool().state.status !== "error"}
+                            fallback={
+                              <ToolDisplay
+                                id={tool().id}
+                                tool={tool().name}
+                                input={currentToolInput(tool())}
+                                metadata={currentToolMetadata(tool())}
+                                output={currentToolOutput(tool())}
+                                error={currentToolError(tool())}
+                                status={tool().state.status}
+                                defaultOpen={false}
+                                deferContent
+                                virtualizeDiff={false}
+                                onContentRendered={props.onSizeChange}
+                              />
+                            }
+                          >
+                            <CurrentFileToolGroup tools={group()} onSizeChange={props.onSizeChange} />
+                          </Show>
                         }
                       >
                         <div
@@ -662,8 +678,8 @@ export function CurrentContextToolGroup(props: {
 
 export function CurrentFileToolGroup(props: {
   tools: SessionMessageAssistantTool[]
-  fileOpen: (path: string) => boolean | undefined
-  onFileOpenChange: (path: string, open: boolean) => void
+  fileOpen?: (path: string) => boolean | undefined
+  onFileOpenChange?: (path: string, open: boolean) => void
   onSizeChange?: () => void
 }) {
   const files = createMemo((previous: { key: string; value: unknown }[]) => {

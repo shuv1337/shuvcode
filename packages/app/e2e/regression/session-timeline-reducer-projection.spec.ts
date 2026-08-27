@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { createTwoFilesPatch } from "diff"
 import {
   assistantMessage,
   completedAssistantInfo,
@@ -76,6 +77,61 @@ test("leaves tools expanded by settings outside the collapsed stack", async ({ p
   await expect(group.getByRole("button", { name: "Used Patch, Read" })).toBeVisible()
   await expect(group.locator('[data-component="tag"]')).toHaveText("2")
   await expect(page.locator('[data-timeline-spacing="tool"]')).toHaveCSS("padding-top", "8px")
+})
+
+test("combines follow-up patches into one three-file stack inside Used", async ({ page }) => {
+  const file = (path: string, before: number, after: number) => ({
+    file: path,
+    status: "modified",
+    additions: 1,
+    deletions: 1,
+    patch: createTwoFilesPatch(
+      path,
+      path,
+      `export const value = ${before}\n`,
+      `export const value = ${after}\n`,
+      "",
+      "",
+      { context: Infinity },
+    ),
+  })
+  const timeline = await setupTimeline(page, {
+    messages: [
+      userMessage(),
+      assistantMessage([
+        shell("patch_shell", "completed"),
+        toolPart(
+          "patch_first",
+          "patch",
+          "completed",
+          {},
+          {
+            metadata: { files: [file("src/a.ts", 0, 1), file("src/b.ts", 0, 1)] },
+          },
+        ),
+      ]),
+    ],
+  })
+  const group = page.locator('[data-component="collapsed-tool-group"]')
+  await group.getByRole("button", { name: "Used Shell, Patch", exact: true }).click()
+  await expect(group.getByText("2 files", { exact: true })).toBeVisible()
+  await timeline.send(
+    partUpdated(
+      toolPart(
+        "patch_next",
+        "patch",
+        "completed",
+        {},
+        {
+          metadata: { files: [file("src/a.ts", 1, 2), file("src/c.ts", 0, 1)] },
+        },
+      ),
+    ),
+  )
+  await expect(group.locator('[data-component="tag"]')).toHaveText("3")
+  await expect(group.locator('[data-component="apply-patch-tool"]')).toHaveCount(1)
+  await expect(group.getByText("3 files", { exact: true })).toBeVisible()
+  await expect(group.locator('[data-slot="apply-patch-filename"]')).toHaveText(["a.ts", "b.ts", "c.ts"])
 })
 
 test("keeps failed search calls and their error cards inside the collapsed stack", async ({ page }) => {
