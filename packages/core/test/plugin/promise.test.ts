@@ -611,6 +611,11 @@ describe("fromPromise", () => {
               },
             })
           })
+          await ctx.tool.hook("execute.before", (event) => {
+            expect(event.tool).toBe("helllo")
+            expect(event).not.toHaveProperty("inputSchema")
+            event.tool = "hello"
+          })
         },
       })
 
@@ -624,7 +629,7 @@ describe("fromPromise", () => {
           agent: Agent.ID.make("build"),
           messageID: SessionMessage.ID.make("msg_promise_tool"),
           progress: (update) => Effect.sync(() => progress.push(update)),
-          call: { type: "tool-call", id: "call_promise_tool", name: "hello", input: { name: "world" } },
+          call: { type: "tool-call", id: "call_promise_tool", name: "helllo", input: { name: "world" } },
         }),
       ).toMatchObject({
         output: "Hello, world!",
