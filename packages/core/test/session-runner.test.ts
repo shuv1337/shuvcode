@@ -7,10 +7,10 @@ import {
   LanguageModel,
   SystemPart,
   ToolFailure,
-  TransportReason,
-  InvalidProviderOutputReason,
-  InvalidRequestReason,
-  RateLimitReason,
+  TransportError,
+  InvalidProviderOutputError,
+  InvalidRequestError,
+  RateLimitError,
 } from "@opencode-ai/ai"
 import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
 import { TestLLM } from "@opencode-ai/ai/testing"
@@ -558,9 +558,7 @@ const setup = Effect.gen(function* () {
 
 const providerUnavailable = () =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new TransportReason({
+    reason: new TransportError({
       message: "Provider unavailable",
       transport: "http",
       operation: "request",
@@ -569,9 +567,7 @@ const providerUnavailable = () =>
 
 const streamDisconnected = () =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new TransportReason({
+    reason: new TransportError({
       message: "The socket connection was closed unexpectedly",
       transport: "http",
       operation: "read",
@@ -580,9 +576,7 @@ const streamDisconnected = () =>
 
 const continuationRejected = (recovery: "retry-full" | "rotate-and-retry-full") =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new TransportReason({
+    reason: new TransportError({
       message: "Continuation rejected",
       transport: "websocket",
       operation: "read",
@@ -594,9 +588,7 @@ const continuationRejected = (recovery: "retry-full" | "rotate-and-retry-full") 
 
 const incompleteStream = () =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new InvalidProviderOutputReason({
+    reason: new InvalidProviderOutputError({
       classification: "incomplete-stream",
       message: "The provider response ended unexpectedly.",
     }),
@@ -607,16 +599,12 @@ const INCOMPLETE_STREAM_CONTINUATION =
 
 const invalidRequest = () =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new InvalidRequestReason({ message: "Invalid request" }),
+    reason: new InvalidRequestError({ message: "Invalid request" }),
   })
 
 const rateLimited = (retryAfterMs?: number) =>
   new AIError({
-    module: "test",
-    method: "stream",
-    reason: new RateLimitReason({ message: "Rate limited", retryAfterMs }),
+    reason: new RateLimitError({ message: "Rate limited", retryAfterMs }),
   })
 
 const setupOverflowRecovery = Effect.gen(function* () {
@@ -2786,9 +2774,7 @@ describe("SessionRunnerLLM", () => {
       yield* TestLLM.push(
         Stream.fail(
           new AIError({
-            module: "test",
-            method: "stream",
-            reason: new InvalidRequestReason({
+            reason: new InvalidRequestError({
               message: "prompt too long",
               classification: "context-overflow",
             }),
@@ -5300,9 +5286,7 @@ describe("SessionRunnerLLM", () => {
     Effect.gen(function* () {
       const session = yield* setup
       const failure = new AIError({
-        module: "test",
-        method: "stream",
-        reason: new InvalidProviderOutputReason({ message: "Invalid JSON input for tool call echo" }),
+        reason: new InvalidProviderOutputError({ message: "Invalid JSON input for tool call echo" }),
       })
       yield* TestLLM.push(
         TestLLM.failAfter(
@@ -5507,9 +5491,7 @@ describe("SessionRunnerLLM", () => {
     Effect.gen(function* () {
       const session = yield* setup
       const failure = new AIError({
-        module: "test",
-        method: "stream",
-        reason: new InvalidProviderOutputReason({ message: "Invalid hosted tool input" }),
+        reason: new InvalidProviderOutputError({ message: "Invalid hosted tool input" }),
       })
       yield* TestLLM.push(
         TestLLM.failAfter(
@@ -5534,9 +5516,7 @@ describe("SessionRunnerLLM", () => {
     Effect.gen(function* () {
       const session = yield* setup
       const failure = new AIError({
-        module: "test",
-        method: "stream",
-        reason: new InvalidProviderOutputReason({ message: "Provider failed after malformed input" }),
+        reason: new InvalidProviderOutputError({ message: "Provider failed after malformed input" }),
       })
       yield* TestLLM.push(
         TestLLM.failAfter(

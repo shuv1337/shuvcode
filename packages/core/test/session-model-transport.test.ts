@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { AIError, TransportReason } from "@opencode-ai/ai"
+import { AIError, HttpContext, TransportError } from "@opencode-ai/ai"
 import type {
   ChannelObservation,
   WebSocketChannelExchange,
@@ -16,11 +16,9 @@ const session = Session.ID.make("ses_transport")
 const otherSession = Session.ID.make("ses_transport_other")
 const queue = <A, E = never>() => Effect.runSync(Queue.unbounded<A, E>())
 
-const error = (message: string, delivery?: TransportReason["delivery"]) =>
+const error = (message: string, delivery?: TransportError["delivery"]) =>
   new AIError({
-    module: "test",
-    method: "websocket",
-    reason: new TransportReason({ message, transport: "websocket", operation: "write", phase: "send", delivery }),
+    reason: new TransportError({ message, transport: "websocket", operation: "write", phase: "send", delivery }),
   })
 
 const exchange = (
@@ -106,6 +104,34 @@ const automatic = () => {
 }
 
 describe("SessionModelTransport", () => {
+  test("exposes response metadata once the lazy connection opens", async () => {
+    const http = new HttpContext({
+      url: "https://provider.test/responses",
+      status: 101,
+      headers: { "x-request-id": "upgrade-request" },
+    })
+    const messages = queue<string | Uint8Array, AIError>()
+    const connector: WebSocketConnector = {
+      open: () =>
+        Effect.succeed({
+          http,
+          sendText: () => Effect.sync(() => Queue.offerUnsafe(messages, "completed")).pipe(Effect.asVoid),
+          messages: Stream.fromQueue(messages),
+          close: Queue.shutdown(messages).pipe(Effect.asVoid),
+        }),
+    }
+    await run(
+      connector,
+      Effect.gen(function* () {
+        const transport = yield* SessionModelTransport.Service
+        const execution = yield* transport.bind(session).execute(exchange("first"))
+        expect(execution.http).toBeUndefined()
+        yield* execution.frames.pipe(Stream.runForEach(() => Effect.sync(() => expect(execution.http).toBe(http))))
+        expect(execution.http).toBe(http)
+      }).pipe(Effect.scoped),
+    )
+  })
+
   test("commits checkpoints only after successful outer completion", async () => {
     const messages = queue<string | Uint8Array, AIError>()
     const checkpoints: Array<unknown> = []
@@ -193,9 +219,7 @@ describe("SessionModelTransport", () => {
                 type: "rejected",
                 recovery: "retry-full",
                 error: new AIError({
-                  module: "test",
-                  method: "stream",
-                  reason: new TransportReason({
+                  reason: new TransportError({
                     message: "missing response",
                     transport: "websocket",
                     operation: "read",
@@ -235,9 +259,7 @@ describe("SessionModelTransport", () => {
             type: "rejected",
             recovery: "rotate-and-retry-full",
             error: new AIError({
-              module: "test",
-              method: "stream",
-              reason: new TransportReason({
+              reason: new TransportError({
                 message: "connection limit",
                 transport: "websocket",
                 operation: "read",
@@ -562,9 +584,7 @@ describe("SessionModelTransport", () => {
                   messages,
                   Cause.fail(
                     new AIError({
-                      module: "test",
-                      method: "websocket",
-                      reason: new TransportReason({
+                      reason: new TransportError({
                         message: "message too big",
                         transport: "websocket",
                         operation: "read",
@@ -603,43 +623,79 @@ describe("SessionModelTransport", () => {
     )
   })
 
-  test("does not fall back after an ambiguous send failure", async () => {
-    const messages = queue<string | Uint8Array, AIError>()
-    let fallbacks = 0
-    let closed = 0
-    const connector: WebSocketConnector = {
-      open: () =>
-        Effect.succeed({
-          sendText: () => Effect.fail(error("send failed")),
-          messages: Stream.fromQueue(messages),
-          close: Effect.sync(() => closed++).pipe(Effect.andThen(Queue.shutdown(messages)), Effect.asVoid),
+  for (const fromConnection of [false, true]) {
+    test(`preserves ${fromConnection ? "connection" : "error"} HTTP context on an ambiguous send failure without fallback`, async () => {
+      const messages = queue<string | Uint8Array, AIError>()
+      const cause = new Error("socket write failed")
+      const http = new HttpContext({
+        url: "https://provider.test/responses",
+        status: 101,
+        headers: { "x-request-id": "one" },
+      })
+      const failure = new AIError({
+        reason: new TransportError({
+          message: "send failed",
+          transport: "websocket",
+          operation: "write",
+          code: "ECONNRESET",
+          body: '{"error":"connection reset"}',
+          http: fromConnection ? undefined : http,
+          cause,
         }),
-    }
+      })
+      let fallbacks = 0
+      let closed = 0
+      const connector: WebSocketConnector = {
+        open: () =>
+          Effect.succeed({
+            http: fromConnection ? http : undefined,
+            sendText: () => Effect.fail(failure),
+            messages: Stream.fromQueue(messages),
+            close: Effect.sync(() => closed++).pipe(Effect.andThen(Queue.shutdown(messages)), Effect.asVoid),
+          }),
+      }
 
-    await run(
-      connector,
-      Effect.gen(function* () {
-        const transport = yield* SessionModelTransport.Service
-        const result = yield* Effect.result(
-          collect(
-            transport.bind(session),
-            exchange("first", {
-              fallback: () => {
-                fallbacks++
-                return Stream.make("http")
+      await run(
+        connector,
+        Effect.gen(function* () {
+          const transport = yield* SessionModelTransport.Service
+          const result = yield* Effect.result(
+            collect(
+              transport.bind(session),
+              exchange("first", {
+                fallback: () => {
+                  fallbacks++
+                  return Stream.make("http")
+                },
+              }),
+            ),
+          )
+          expect(result).toMatchObject({
+            _tag: "Failure",
+            failure: {
+              message: "send failed",
+              reason: {
+                _tag: "Transport",
+                message: "send failed",
+                body: failure.reason.body,
+                http,
+                phase: "send",
+                delivery: "ambiguous",
+                code: "ECONNRESET",
               },
-            }),
-          ),
-        )
-        expect(result).toMatchObject({
-          _tag: "Failure",
-          failure: { reason: { _tag: "Transport", phase: "send", delivery: "ambiguous" } },
-        })
-        expect(fallbacks).toBe(0)
-        expect(closed).toBe(1)
-      }),
-    )
-  })
+            },
+          })
+          if (result._tag !== "Failure") throw new Error("Expected transport failure")
+          expect(result.failure.reason).toBeInstanceOf(TransportError)
+          expect(result.failure.reason).toBeInstanceOf(Error)
+          expect(result.failure.cause).toBe(result.failure.reason)
+          expect(result.failure.reason.cause).toBe(cause)
+          expect(fallbacks).toBe(0)
+          expect(closed).toBe(1)
+        }),
+      )
+    })
+  }
 
   test("rotates when refreshed authorization changes handshake affinity", async () => {
     const fixture = automatic()

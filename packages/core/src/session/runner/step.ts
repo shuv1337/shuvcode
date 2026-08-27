@@ -2,7 +2,7 @@ export * as SessionStep from "./step.js"
 
 import {
   AIError,
-  InvalidProviderOutputReason,
+  InvalidProviderOutputError,
   LLMClient,
   LLMEvent,
   isContextOverflowFailure,
@@ -149,11 +149,9 @@ export const make = Effect.gen(function* () {
         const unknownFinish =
           stream._tag === "Success" && recorded.finish?.finish === "unknown"
             ? new AIError({
-                module: "session",
-                method: "stream",
-                reason: new InvalidProviderOutputReason({
-                  classification: "incomplete-stream",
+                reason: new InvalidProviderOutputError({
                   message: "The provider response ended with an unknown finish reason.",
+                  classification: "incomplete-stream",
                 }),
               })
             : undefined
