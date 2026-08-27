@@ -30,6 +30,9 @@ const sentry =
 
 export default defineConfig(({ command }) => ({
   main: {
+    resolve: {
+      dedupe: ["effect"],
+    },
     define: {
       "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
     },
@@ -50,7 +53,11 @@ const require = __cjs_mod__.createRequire(import.meta.url);
 `,
         },
       },
-      externalizeDeps: { include: [nodePtyPkg] },
+      externalizeDeps: {
+        // Bundle the Effect family together; native MessagePack acceleration stays optional and external.
+        exclude: ["effect", "@effect/platform-node", "@effect/platform-node-shared", "drizzle-orm"],
+        include: [nodePtyPkg, "msgpackr-extract"],
+      },
     },
     plugins: [
       {
