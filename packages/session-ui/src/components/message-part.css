@@ -724,7 +724,9 @@
       width: 100%;
     }
 
-    > [data-component="tool-part-wrapper"] > [data-component="collapsible"] > [data-slot="collapsible-trigger"] {
+    > [data-component="tool-part-wrapper"]
+      > [data-component="collapsible"]
+      > [data-slot="collapsible-trigger"]:not([data-hide-details="true"]) {
       height: 28px;
     }
 

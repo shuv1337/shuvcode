@@ -44,7 +44,7 @@ test("expands a mixed collapsed tool stack without expanding its individual call
   const group = page.locator(
     '[data-timeline-part-ids="prt_stack_shell_1,prt_stack_explore,prt_stack_patch,prt_stack_shell_2"]',
   )
-  const summary = group.getByRole("button", { name: "Used Shell, Explore, Patch" })
+  const summary = group.getByRole("button", { name: "Used Shell, Agent, Patch" })
   await expect(summary).toHaveAttribute("aria-expanded", "false")
   await expect(summary).toHaveCSS("height", "28px")
   await expect(group.locator('[data-component="tag"]')).toHaveText("4")

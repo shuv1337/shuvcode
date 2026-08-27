@@ -487,8 +487,7 @@ export function CurrentContextToolGroup(props: {
         props.tools.map((tool) => {
           const input = currentToolInput(tool)
           if (tool.name === "skill") return i18n.t("ui.tool.skill")
-          if (tool.name === "subagent" && typeof input.agent === "string" && input.agent)
-            return input.agent[0]!.toUpperCase() + input.agent.slice(1)
+          if (tool.name === "subagent") return i18n.t("ui.tool.agent.default")
           return getToolInfo(tool.name, input, currentToolMetadata(tool)).title
         }),
       ),

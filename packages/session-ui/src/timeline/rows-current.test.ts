@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionMessageAssistantTool, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { Timeline, TimelineRow } from "./projection"
+import { storyDocument, storyTool } from "../storybook/current-session-scenarios"
+import { createTimelineProjection, Timeline, TimelineRow } from "./projection"
 
 describe("current session timeline rows", () => {
   test("derives turns and tagged rows from chronological current messages", () => {
@@ -724,7 +725,72 @@ describe("current session timeline rows", () => {
     expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual([...types])
   })
 
-  test("keeps active and background work visible outside collapsed stacks", () => {
+  test.each(["shell", "execute", "subagent"])("keeps %s in an existing group throughout execution", (name) => {
+    const initial = createTimelineProjection({
+      sessionMessages: storyDocument([storyTool("earlier", "read", "completed", {})]).messages,
+      status: { type: "busy" },
+      showReasoningSummaries: false,
+    })
+    const phases = [
+      { status: "streaming" },
+      { status: "running" },
+      { status: "completed", metadata: { status: "running" } },
+      { status: "completed" },
+      { status: "error" },
+    ] as const
+    phases.reduce((previousRows, phase, index) => {
+      const result = createTimelineProjection({
+        sessionMessages: [
+          ...storyDocument([storyTool("earlier", "read", "completed", {})]).messages,
+          ...storyDocument([
+            storyTool("active", name, phase.status, {}, "metadata" in phase ? { metadata: phase.metadata } : {}),
+          ])
+            .messages.filter((message) => message.type === "assistant")
+            .map((message) => ({ ...message, id: "next-step" })),
+        ],
+        status: { type: "busy" },
+        showReasoningSummaries: false,
+        previousRows,
+      })
+      const groups = result.rows.filter((row) => row._tag === "AssistantPart")
+      expect(groups).toHaveLength(1)
+      expect(groups[0].group).toMatchObject({
+        type: "context",
+        refs: [
+          { messageID: "msg_tool_projection_assistant", partID: "earlier" },
+          { messageID: "next-step", partID: "active" },
+        ],
+      })
+      expect(TimelineRow.key(groups[0])).toBe(TimelineRow.key(initial.rows[1]))
+      if (index > 0) expect(groups[0]).toBe(previousRows.find((row) => row._tag === "AssistantPart")!)
+      return result.rows
+    }, initial.rows)
+  })
+
+  test.each([
+    { name: "shell", expanded: true, types: ["context", "part"] },
+    { name: "execute", expanded: true, types: ["context", "part"] },
+    { name: "subagent", expanded: true, types: ["context"] },
+    { name: "shell", separator: "text", types: ["context", "part", "part"] },
+    { name: "shell", separator: "reasoning", showReasoning: true, types: ["context", "part", "part"] },
+    { name: "shell", separator: "reasoning", showReasoning: false, types: ["context"] },
+  ] as const)("respects active tool grouping boundaries: %j", (profile) => {
+    const content = [
+      storyTool("earlier", "read", "completed", {}),
+      ...(profile.separator ? [{ type: profile.separator, text: "Visible boundary" }] : []),
+      storyTool("active", profile.name, "running", {}),
+    ]
+    const rows = Timeline.constructSessionMessageRows(
+      storyDocument(content).messages,
+      profile.showReasoning ?? false,
+      { type: "busy" },
+      undefined,
+      profile.expanded ?? false,
+    ).rows
+    expect(rows.flatMap((row) => (row._tag === "AssistantPart" ? [row.group.type] : []))).toEqual([...profile.types])
+  })
+
+  test("keeps active and background work standalone when no group precedes them", () => {
     const source: SessionMessageInfo[] = [
       { id: "msg_user", type: "user", text: "work", time: { created: 1 } },
       {

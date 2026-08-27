@@ -1,5 +1,32 @@
 import { expect, story } from "../../storybook/playwright/story"
 
+for (const tool of ["shell", "execute", "subagent"]) {
+  for (const open of [false, true]) {
+    story(`keeps ${tool} inside an existing ${open ? "open" : "closed"} group through execution`, async ({ mount }) => {
+      const timeline = await mount("current-session-terminal-work--terminal-commands", {
+        args: { existingGroup: true, tool },
+      })
+      const group = timeline.locator('[data-component="collapsed-tool-group"]')
+      const trigger = group.locator(':scope > [data-component="collapsible"] > [data-slot="collapsible-trigger"]')
+      await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle")
+      if (open) await trigger.click()
+      await expect(trigger).toHaveAttribute("aria-expanded", String(open))
+      await timeline.getByRole("button", { name: "Start tool", exact: true }).click()
+      await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle,tool_shell_lifecycle")
+      const original = await group.elementHandle()
+      for (const action of [undefined, "Complete input", "Run command", "Complete command"]) {
+        if (action) await timeline.getByRole("button", { name: action, exact: true }).click()
+        await expect(group).toHaveAttribute("data-timeline-part-ids", "tool_context_lifecycle,tool_shell_lifecycle")
+        await expect(group.locator('[data-component="tag"]')).toHaveText("2")
+        await expect(timeline.locator('[data-timeline-row="AssistantPart"]')).toHaveCount(1)
+        await expect(trigger).toHaveAttribute("aria-expanded", String(open))
+        expect(await original!.evaluate((node) => node.isConnected)).toBe(true)
+        if (open) await expect(group.locator('[data-timeline-part-id="tool_shell_lifecycle"]')).toBeVisible()
+      }
+    })
+  }
+}
+
 for (const expanded of [false, true]) {
   // Moved from packages/app/e2e/regression/session-timeline-lifecycle-state.spec.ts
   story(`preserves shell user intent from a ${expanded ? "expanded" : "collapsed"} default`, async ({ mount }) => {

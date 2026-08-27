@@ -508,7 +508,9 @@ function groupContent(
 
   items.forEach((item) => {
     const type =
-      item.content.type === "tool" ? toolGroupType(item.content, shellToolDefaultOpen, editToolDefaultOpen) : undefined
+      item.content.type === "tool"
+        ? toolGroupType(item.content, shellToolDefaultOpen, editToolDefaultOpen, adjacent?.type === "context")
+        : undefined
     if (type) {
       if (adjacent?.type !== type) flush()
       adjacent ??= { type, refs: [] }
@@ -526,7 +528,12 @@ function groupContent(
   return groups
 }
 
-function toolGroupType(content: Extract<Content, { type: "tool" }>, shellExpanded: boolean, editExpanded: boolean) {
+function toolGroupType(
+  content: Extract<Content, { type: "tool" }>,
+  shellExpanded: boolean,
+  editExpanded: boolean,
+  hasContextGroup: boolean,
+) {
   if (content.name === "question" || hasLoadedFiles(content)) return undefined
   if (content.state.status === "error") {
     if ((content.name === "shell" || content.name === "execute") && shellExpanded) return undefined
@@ -535,6 +542,7 @@ function toolGroupType(content: Extract<Content, { type: "tool" }>, shellExpande
     return "context"
   }
   if (
+    !hasContextGroup &&
     (content.state.status !== "completed" ||
       ("metadata" in content.state && content.state.metadata?.status === "running")) &&
     (content.name === "shell" || content.name === "execute" || content.name === "subagent")
