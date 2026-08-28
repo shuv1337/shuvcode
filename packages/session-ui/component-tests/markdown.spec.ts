@@ -217,6 +217,97 @@ story("replaces completed DOM before live rendering and retains streamed code co
   await expect(markdown).toHaveCount(0)
 })
 
+story("highlights streamed code across comment and string boundaries", async ({ page }) => {
+  await page.evaluate(async (fixture) => {
+    const { mountMarkdown } = await import(fixture)
+    await mountMarkdown({ text: "```ts\n", streaming: true })
+  }, fixture)
+  const harness = page.getByTestId("markdown-fixture")
+  const markdown = harness.locator('[data-component="markdown"]')
+  const code = markdown.locator("pre code")
+  const chunks = ["/* multi", "line\ncomment *", "/\nconst message = `hel", "lo ${1 + 2}`\n", "const pattern = /a+b/g"]
+  for (let index = 1; index <= chunks.length; index++) {
+    const text = chunks.slice(0, index).join("")
+    await harness.getByLabel("Markdown text").fill(`\`\`\`ts\n${text}`)
+    await expect(code).toHaveText(text)
+  }
+  await expect(code.locator('span[style*="color"]')).not.toHaveCount(0)
+  await harness.getByLabel("Markdown text").fill(`\`\`\`ts\n${chunks.join("")}\n\`\`\``)
+  await harness.getByLabel("Streaming").uncheck()
+  await expect(markdown.locator("[data-markdown-complete]")).toHaveAttribute("data-markdown-complete", "true")
+  await expect(code).toHaveText(chunks.join(""))
+  await expect(code).toContainText("const pattern = /a+b/g")
+  expect(
+    await code
+      .locator("span[style]")
+      .evaluateAll((spans) => new Set(spans.map((span) => getComputedStyle(span).color)).size),
+  ).toBeGreaterThan(1)
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(code).toHaveText(chunks.join(""))
+  await expect(code.locator('span[style*="color"]')).not.toHaveCount(0)
+  await harness.getByLabel("Markdown text").fill("```unknown-language\n<plain> & text\n```")
+  await expect(code).toHaveText("<plain> & text")
+  await expect(code.locator("plain")).toHaveCount(0)
+})
+
+story("preserves streamed math through completion and a fresh render", async ({ page }) => {
+  await page.evaluate(async (fixture) => {
+    const { mountMarkdown } = await import(fixture)
+    await mountMarkdown({ text: "Formula: \\(P(x_{t+1})\\)", streaming: true })
+  }, fixture)
+  const harness = page.getByTestId("markdown-fixture")
+  const markdown = harness.locator('[data-component="markdown"]')
+  await expect(markdown.locator(".katex")).toHaveCount(1)
+  await expect(markdown.locator(".katex-mathml")).toContainText("P(x_{t+1})")
+  expect(await markdown.locator(".katex").evaluate((element) => element.nextSibling?.textContent ?? "")).toBe("")
+  await harness.getByLabel("Markdown text").fill("Formula: \\(P(x_{t+1})\\) and \\(w^{*}\\).\n\n$$\nx^2 + y^2\n$$\n")
+  await expect(markdown.locator(".katex")).toHaveCount(3)
+  await expect(markdown.locator(".katex-display")).toHaveCount(1)
+  await expect(markdown.locator(".katex-mathml")).toContainText(["P(x_{t+1})", "w^{*}", "x^2 + y^2"])
+  await expect(markdown.locator(".katex-error, em, strong")).toHaveCount(0)
+  await harness.getByLabel("Streaming").uncheck()
+  await expect(markdown.locator(".katex")).toHaveCount(3)
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(markdown.locator(".katex")).toHaveCount(3)
+  await expect(markdown.locator(".katex-display")).toHaveCount(1)
+  await expect(markdown.locator(".katex-error")).toHaveCount(0)
+})
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [390, 1280]) {
+    story(`renders class and connected subgraph diagrams in ${theme} at ${width}px`, async ({ mount, page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await mount("components-markdown--complete-response", { globals: { theme } })
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme))
+      await page.evaluate(async (fixture) => {
+        const { mountMarkdown } = await import(fixture)
+        await mountMarkdown({
+          text: [
+            "```mermaid\nclassDiagram\nAnimal <|-- Duck\nAnimal : +int age\nDuck : +swim()\n```",
+            "```mermaid\nflowchart LR\nsubgraph Input\ndirection TB\nA[Prompt] --> B[Parse]\nend\nsubgraph Output\ndirection TB\nC[Render] --> D[Display]\nend\nB --> C\n```",
+          ].join("\n\n"),
+          streaming: true,
+        })
+      }, fixture)
+      const harness = page.getByTestId("markdown-fixture")
+      const diagrams = harness.locator('[data-component="markdown-mermaid"] > svg')
+      await expect(diagrams).toHaveCount(2)
+      await expect(diagrams.nth(0)).toBeVisible()
+      await expect(diagrams.nth(0)).toContainText("swim()")
+      await expect(diagrams.nth(1)).toBeVisible()
+      await expect(diagrams.nth(1)).toContainText("Display")
+      await expect(diagrams.nth(1).locator(".edgePaths path")).toHaveCount(3)
+      await expect(harness.locator('[data-mermaid-ready="true"] > pre:visible')).toHaveCount(0)
+      await harness.getByLabel("Streaming").uncheck()
+      await expect(diagrams).toHaveCount(2)
+      await expect(diagrams.nth(0)).toBeVisible()
+      await expect(diagrams.nth(1)).toBeVisible()
+    })
+  }
+}
+
 for (const streaming of [false, true]) {
   story(
     `loads local images in ${streaming ? "streaming" : "cached"} Markdown and releases their URLs`,
