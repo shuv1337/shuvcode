@@ -4,6 +4,7 @@ import { makeMemoryDriver } from "@opencode-ai/core/environment/index"
 import { Workspace } from "@opencode-ai/core/workspace"
 import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
 import { Effect } from "effect"
+import { tmpdir } from "../../core/test/fixture/tmpdir"
 import { it } from "../../core/test/lib/effect"
 import { ServerFetch } from "../src/fetch"
 
@@ -273,6 +274,129 @@ it.live("serves the session view operation and missing-session error", () =>
       ),
     )
     expect(missing.status).toBe(404)
+  }),
+)
+
+it.live("does not load a location when reading pending session requests", () =>
+  Effect.gen(function* () {
+    const config = yield* Effect.acquireDisposable(Effect.promise(() => tmpdir("opencode-pending-read-")))
+    const handler = yield* ServerFetch.make({
+      ...options,
+      config: {
+        directory: config.path,
+        project: false,
+        content: JSON.stringify({ permissions: [{ action: "shell", resource: "*", effect: "ask" }] }),
+      },
+    })
+    const created = (yield* Effect.promise(() =>
+      handler(
+        new Request("http://opencode.local/api/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        }),
+      ).then((response) => response.json()),
+    )) as { data: { id: string } }
+
+    const loaded = () =>
+      Effect.promise(() =>
+        handler(new Request("http://opencode.local/api/debug/location")).then(
+          (response) => response.json() as Promise<unknown[]>,
+        ),
+      )
+
+    expect(yield* loaded()).toEqual([])
+    for (const resource of ["permission", "form"]) {
+      const response = yield* Effect.promise(() =>
+        handler(new Request(`http://opencode.local/api/session/${created.data.id}/${resource}`)),
+      )
+      expect(response.status).toBe(200)
+      expect(yield* Effect.promise(() => response.json())).toEqual({ data: [] })
+
+      const missing = yield* Effect.promise(() =>
+        handler(new Request(`http://opencode.local/api/session/ses_missing_pending/${resource}`)),
+      )
+      expect(missing.status).toBe(404)
+    }
+    const global = yield* Effect.promise(() =>
+      handler(
+        new Request("http://opencode.local/api/session/global/form", {
+          headers: { "x-opencode-directory": encodeURIComponent(process.cwd()) },
+        }),
+      ),
+    )
+    expect(global.status).toBe(200)
+    expect(yield* Effect.promise(() => global.json())).toEqual({ data: [] })
+    expect(yield* loaded()).toEqual([])
+
+    const createdForm = yield* Effect.promise(() =>
+      handler(
+        new Request(`http://opencode.local/api/session/${created.data.id}/form`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "Test form", fields: [{ key: "answer", type: "string" }] }),
+        }),
+      ),
+    )
+    expect(createdForm.status).toBe(200)
+
+    const forms = yield* Effect.promise(() =>
+      handler(new Request(`http://opencode.local/api/session/${created.data.id}/form`)),
+    )
+    expect(forms.status).toBe(200)
+    expect(yield* Effect.promise(() => forms.json())).toMatchObject({
+      data: [{ title: "Test form" }],
+    })
+    expect(yield* loaded()).toHaveLength(1)
+
+    const globalForm = yield* Effect.promise(() =>
+      handler(
+        new Request("http://opencode.local/api/session/global/form", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencode-directory": encodeURIComponent(process.cwd()),
+          },
+          body: JSON.stringify({ title: "Global form", fields: [{ key: "answer", type: "string" }] }),
+        }),
+      ),
+    )
+    expect(globalForm.status).toBe(200)
+
+    const globalForms = yield* Effect.promise(() =>
+      handler(
+        new Request("http://opencode.local/api/session/global/form", {
+          headers: { "x-opencode-directory": encodeURIComponent(process.cwd()) },
+        }),
+      ),
+    )
+    expect(globalForms.status).toBe(200)
+    expect(yield* Effect.promise(() => globalForms.json())).toMatchObject({ data: [{ title: "Global form" }] })
+
+    // Agent permission policy is installed by plugin activation.
+    expect((yield* ready(handler)).status).toBe(200)
+    const createdPermission = yield* Effect.promise(() =>
+      handler(
+        new Request(`http://opencode.local/api/session/${created.data.id}/permission`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: "per_pending_read", action: "shell", resources: ["pwd"] }),
+        }),
+      ),
+    )
+    expect(createdPermission.status).toBe(200)
+    expect(yield* Effect.promise(() => createdPermission.json())).toEqual({
+      data: { id: "per_pending_read", effect: "ask" },
+    })
+
+    const permissions = yield* Effect.promise(() =>
+      handler(new Request(`http://opencode.local/api/session/${created.data.id}/permission`)),
+    )
+    expect(permissions.status).toBe(200)
+    expect(yield* Effect.promise(() => permissions.json())).toMatchObject({
+      data: [{ id: "per_pending_read", sessionID: created.data.id, action: "shell", resources: ["pwd"] }],
+    })
+    expect(yield* loaded()).toHaveLength(1)
   }),
 )
 
