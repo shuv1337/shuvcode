@@ -223,6 +223,87 @@ test("session title generated while an untitled session is loading remains visib
   }
 })
 
+test("automatic rename refreshes the displayed title before settling, even without a renamed event", async () => {
+  await using state = await tmpdir()
+  const setup = await createTestRenderer({ width: 90, height: 20, useThread: false, kittyKeyboard: true })
+  setup.renderer.start()
+  const events = createEventStream()
+  const response = Promise.withResolvers<Response>()
+  const bodies: unknown[] = []
+  const location = { directory, project: { id: "project", directory, canonical: directory } }
+  const session = {
+    id: "ses_rename",
+    title: "Compiler cleanup",
+    projectID: "project",
+    location: { directory },
+    agent: "build",
+    model: { providerID: "provider", id: "model" },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 0, updated: 0 },
+  }
+  const calls = createFetch(async (url, request) => {
+    if (url.pathname === "/api/location") return json(location)
+    if (url.pathname === "/api/agent")
+      return json({ location, data: [{ id: "build", mode: "primary", hidden: false, permissions: [] }] })
+    if (url.pathname === "/api/model")
+      return json({ location, data: [{ id: "model", providerID: "provider", name: "Model", variants: [] }] })
+    if (url.pathname === "/api/provider") return json({ location, data: [{ id: "provider", name: "Provider" }] })
+    if (url.pathname === "/api/session") return json({ data: [], cursor: {} })
+    if (url.pathname === "/api/session/ses_rename") return json({ data: session })
+    if (/^\/api\/session\/ses_rename\/(message|inbox|permission)$/.test(url.pathname))
+      return json({ data: [], cursor: {} })
+    if (url.pathname === "/api/session/ses_rename/rename") {
+      bodies.push(await request.json())
+      return response.promise
+    }
+    return undefined
+  }, events)
+  const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
+
+  try {
+    const { run } = await import("../src/app")
+    const task = Effect.runPromise(
+      run({
+        app: { name: "test", version: "test", channel: "test" },
+        server: { endpoint: { url: server.url.toString() } },
+        config: {
+          get: async () => ({
+            tabs: { enabled: true, layout: "vertical" },
+            session: { sidebar: "hide" },
+          }),
+          update: async () => ({}),
+        },
+        packages: { resolve: async () => undefined },
+        terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: () => {} }),
+        args: { sessionID: session.id },
+        log: () => {},
+      }).pipe(Effect.provide(Global.layerWith({ state: state.path })), Effect.provide(FileSystem.layerNoop({}))),
+    )
+
+    await setup.waitForFrame((frame) => frame.includes(session.title) && frame.includes("Build · Model Provider"))
+    await setup.mockInput.typeText("/rename")
+    setup.mockInput.pressEscape()
+    setup.mockInput.pressEnter()
+    await setup.waitFor(() => bodies.length === 1)
+    await setup.renderOnce()
+    expect(bodies[0]).toEqual({ title: "" })
+    expect(setup.captureCharFrame()).toContain("Compiler cleanup")
+
+    session.title = "Simplify compiler parsing"
+    response.resolve(new Response(null, { status: 204 }))
+    await setup.waitForFrame((frame) => frame.includes(session.title), { maxPasses: 60 })
+    expect(setup.captureCharFrame()).not.toContain("Compiler cleanup")
+
+    setup.renderer.destroy()
+    await task
+  } finally {
+    response.resolve(new Response(null, { status: 204 }))
+    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
+    await server.stop()
+  }
+})
+
 test("session startup prompt is submitted exactly once", async () => {
   const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
   const events = createEventStream()
