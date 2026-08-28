@@ -67,11 +67,13 @@ for (const channel of ["dev", "beta"] as const) {
     else process.env.OPENCODE_CHANNEL = previous
 
     expect(config.files).toContain("!resources/opencode-cli*")
-    expect(config.extraResources).toContainEqual({
-      from: "resources/",
-      to: "",
-      filter: ["opencode-cli*"],
-    })
+    expect(config.extraResources).toEqual([
+      {
+        from: "resources/",
+        to: "",
+        filter: ["opencode-cli*"],
+      },
+    ])
   })
 }
 
@@ -83,9 +85,5 @@ test("does not bundle the CLI in prod builds", async () => {
   if (previous === undefined) delete process.env.OPENCODE_CHANNEL
   else process.env.OPENCODE_CHANNEL = previous
 
-  expect(config.extraResources).not.toContainEqual({
-    from: "resources/",
-    to: "",
-    filter: ["opencode-cli*"],
-  })
+  expect(config.extraResources).toEqual([])
 })

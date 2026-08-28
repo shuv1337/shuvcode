@@ -18,8 +18,7 @@
     "package": "electron-builder --config electron-builder.config.ts",
     "package:mac": "electron-builder --mac --config electron-builder.config.ts",
     "package:win": "electron-builder --win --config electron-builder.config.ts",
-    "package:linux": "electron-builder --linux --config electron-builder.config.ts",
-    "native:build": "bun install --cwd native"
+    "package:linux": "electron-builder --linux --config electron-builder.config.ts"
   },
   "main": "./out/main/index.js",
   "dependencies": {
@@ -65,14 +64,6 @@
     "@lydell/node-pty-linux-x64": "1.2.0-beta.12",
     "@lydell/node-pty-win32-arm64": "1.2.0-beta.12",
     "@lydell/node-pty-win32-x64": "1.2.0-beta.12",
-    "@parcel/watcher-darwin-arm64": "2.5.1",
-    "@parcel/watcher-darwin-x64": "2.5.1",
-    "@parcel/watcher-linux-arm64-glibc": "2.5.1",
-    "@parcel/watcher-linux-arm64-musl": "2.5.1",
-    "@parcel/watcher-linux-x64-glibc": "2.5.1",
-    "@parcel/watcher-linux-x64-musl": "2.5.1",
-    "@parcel/watcher-win32-arm64": "2.5.1",
-    "@parcel/watcher-win32-x64": "2.5.1",
     "msgpackr-extract": "3.0.4"
   }
 }

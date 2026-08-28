@@ -26,6 +26,23 @@ test("does not package external copies of bundled dependencies", () => {
   expect(pkg.optionalDependencies["msgpackr-extract"]).toBe("3.0.4")
 })
 
+test("keeps PTY binaries without stale native packaging", () => {
+  expect(Object.keys(pkg.scripts)).not.toContain("native:build")
+  expect(
+    Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies }).filter((name) =>
+      name.startsWith("@parcel/watcher"),
+    ),
+  ).toEqual([])
+  expect(Object.keys(pkg.optionalDependencies).filter((name) => name.startsWith("@lydell/node-pty-"))).toEqual([
+    "@lydell/node-pty-darwin-arm64",
+    "@lydell/node-pty-darwin-x64",
+    "@lydell/node-pty-linux-arm64",
+    "@lydell/node-pty-linux-x64",
+    "@lydell/node-pty-win32-arm64",
+    "@lydell/node-pty-win32-x64",
+  ])
+})
+
 test("bundles one Effect runtime and Drizzle while keeping native dependencies external", async () => {
   const result = await loadConfigFromFile(
     { command: "build", mode: "production" },
