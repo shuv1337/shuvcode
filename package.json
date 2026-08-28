@@ -96,7 +96,7 @@
       "solid-list": "0.3.0",
       "string-width": "7.2.0",
       "tailwindcss": "4.1.11",
-      "vite": "7.1.4",
+      "vite": "7.3.6",
       "@solidjs/meta": "0.29.4",
       "@solidjs/router": "0.15.4",
       "@solidjs/start": "https://pkg.pr.new/@solidjs/start@dfb2020",
