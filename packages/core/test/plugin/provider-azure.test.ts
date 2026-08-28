@@ -2,7 +2,6 @@ import { chmod } from "node:fs/promises"
 import { Agent } from "@opencode-ai/core/agent"
 import { AISDK } from "@opencode-ai/core/aisdk"
 import { describe, expect } from "bun:test"
-import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { Effect, Schedule } from "effect"
 import { Catalog } from "@opencode-ai/core/catalog"
 import { Credential } from "@opencode-ai/core/credential"
@@ -17,6 +16,7 @@ import { Location } from "@opencode-ai/core/location"
 import { Session } from "@opencode-ai/core/session"
 import { State } from "@opencode-ai/core/state"
 import { AppProcess } from "@opencode-ai/util/process"
+import { fakeSelectorSdk } from "../fixture/selector"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
@@ -117,20 +117,6 @@ const azureCredential = Effect.gen(function* () {
     }),
   })
 })
-
-function fakeSelectorSdk(calls: string[]) {
-  const make = (method: string) => (id: string) => {
-    calls.push(`${method}:${id}`)
-    return { modelId: id, provider: method, specificationVersion: "v3" } as unknown as LanguageModelV3
-  }
-  return {
-    responses: make("responses"),
-    messages: make("messages"),
-    chat: make("chat"),
-    languageModel: make("languageModel"),
-  }
-}
-
 describe("AzurePlugin", () => {
   it.effect("registers a resource name form when the environment does not provide one", () =>
     withEnv({ AZURE_RESOURCE_NAME: undefined, AZURE_COGNITIVE_SERVICES_RESOURCE_NAME: undefined }, () =>
