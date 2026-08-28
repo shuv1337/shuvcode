@@ -72,6 +72,7 @@ test("bundles one Effect runtime and Drizzle while keeping native dependencies e
   expect(new Set(effect).size).toBe(effect.length)
   expect(imports).toContain("electron")
   expect(imports).toContain("node:sqlite")
+  expect(chunks.some((chunk) => chunk.dynamicImports.includes("@zip.js/zip.js"))).toBe(true)
   expect(imports).toContain(`@lydell/node-pty-${process.platform}-${process.arch}`)
   expect(modules.some((id) => id.includes("/node_modules/msgpackr-extract/"))).toBe(false)
   expect(chunks.some((chunk) => chunk.code.includes("msgpackr-extract"))).toBe(true)
