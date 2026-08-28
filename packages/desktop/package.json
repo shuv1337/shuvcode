@@ -30,7 +30,6 @@
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
-    "@actions/artifact": "4.0.0",
     "@brendonovich/vite-plugin-opencode": "0.1.1",
     "@effect/platform-node": "catalog:",
     "@lydell/node-pty": "catalog:",
@@ -45,17 +44,14 @@
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "@valibot/to-json-schema": "1.6.0",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "electron": "42.10.1",
     "electron-builder": "26.15.2",
     "electron-vite": "6.0.0-beta.1",
     "solid-js": "catalog:",
-    "sury": "11.0.0-alpha.4",
     "typescript": "~5.6.2",
-    "vite": "8.2.1",
-    "zod-openapi": "5.4.6"
+    "vite": "8.2.1"
   },
   "optionalDependencies": {
     "@lydell/node-pty-darwin-arm64": "1.2.0-beta.12",

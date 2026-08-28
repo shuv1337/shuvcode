@@ -56,9 +56,7 @@
     "@playwright/test": "catalog:",
     "@tsconfig/node22": "catalog:",
     "@types/bun": "catalog:",
-    "@types/luxon": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "typescript": "catalog:",
     "vite": "catalog:"
   },
   "dependencies": {
@@ -75,16 +73,12 @@
     "diff": "catalog:",
     "effect": "catalog:",
     "dompurify": "3.4.14",
-    "fuzzysort": "catalog:",
-    "luxon": "catalog:",
     "marked": "catalog:",
     "mermaid": "11.16.1",
     "motion": "12.34.5",
-    "remeda": "catalog:",
     "remend": "catalog:",
     "shiki": "catalog:",
     "solid-js": "catalog:",
-    "solid-list": "catalog:",
     "strip-ansi": "7.1.2"
   }
 }
