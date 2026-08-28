@@ -32,6 +32,8 @@ import { getCachedMarkdown, sanitizeMarkdown, touchCachedMarkdown, type Markdown
 import { inlineCodeKind } from "./markdown-inline-code-kind"
 import { renderMermaidSvg } from "./markdown-mermaid"
 import { createMarkdownRenderer } from "./markdown-solid"
+import { useMarkdown, type ReadMarkdownImage } from "../context/markdown"
+import { createMarkdownImages } from "./markdown-image"
 
 type RenderedBlock =
   | (MarkdownCacheEntry & { key: string; mode: Exclude<Block["mode"], "code"> })
@@ -385,6 +387,7 @@ export function Markdown(
 ) {
   const [local, others] = splitProps(props, ["text", "cacheKey", "streaming", "deferUntilReady", "class", "classList"])
   const i18n = useI18n()
+  const markdown = useMarkdown()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const owner = createUniqueId()
   const activeCodeKeys = new Set<string>()
@@ -507,6 +510,8 @@ export function Markdown(
   )
 
   let copyCleanup: (() => void) | undefined
+  let readImage: ReadMarkdownImage | undefined
+  let images: ReturnType<typeof createMarkdownImages> | undefined
 
   createEffect(() => {
     const container = root()
@@ -515,11 +520,17 @@ export function Markdown(
     const content = local.text ? pendingBlocks(result, projected, local.cacheKey, owner, local.deferUntilReady) : []
     if (!container) return
     if (isServer) return
+    if (readImage !== markdown?.readImage) {
+      images?.dispose()
+      readImage = markdown?.readImage
+      images = readImage ? createMarkdownImages(readImage) : undefined
+    }
     delete container.dataset.markdownReady
     if (content.length === 0) {
       disposeCopyButtons(container)
       disposeRenderedMarkdown(container)
       container.innerHTML = ""
+      images?.update(container)
       if (result?.ready && result.text === local.text) container.dataset.markdownReady = ""
       return
     }
@@ -542,6 +553,7 @@ export function Markdown(
       disposeRenderedMarkdown(child)
       child.remove()
     }
+    images?.update(container)
     container
       .querySelectorAll<HTMLElement>('[data-slot="markdown-copy-button"]')
       .forEach((button) => setCopyState(button, labels, button.dataset.copied === "true"))
@@ -554,6 +566,7 @@ export function Markdown(
   })
 
   onCleanup(() => {
+    images?.dispose()
     if (copyCleanup) copyCleanup()
     const container = root()
     if (container) disposeRenderedMarkdown(container)
