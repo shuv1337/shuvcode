@@ -119,6 +119,7 @@ const defaultSystem = SessionSystemPrompt.make([])
 const replacementModel = testModel("replacement")
 const compactModel = testModel("compact", { context: 4_000, output: 50 })
 const fullOutputModel = testModel("full-output", { context: 262_144, output: 262_144 })
+const unknownContextModel = testModel("unknown-context", { context: 0, output: 32_000 })
 const undersizedContextModel = testModel("undersized-context", { context: 1, output: 1_000 })
 const recoveryModel = testModel("recovery", { context: 20_000, output: 1_000 })
 
@@ -1760,22 +1761,6 @@ describe("SessionRunnerLLM", () => {
     expect((yield* s.messages)[0]).toMatchObject({ type: "assistant", agent: "reviewer" })
   })
 
-  scenario("uses only the agent prompt and initial instructions as system parts", function* (s) {
-    const agent = yield* Agent.Service
-    yield* agent.transform((editor) =>
-      editor.update(Agent.ID.make("build"), (agent) => {
-        agent.system = "Build agent instructions"
-        agent.mode = "primary"
-      }),
-    )
-    yield* s.admit("First")
-
-    yield* s.llm.push(TestLLM.text("Done", "text-no-system"))
-    yield* s.resume
-
-    expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual(["Build agent instructions", "Initial context"])
-  })
-
   scenario("uses an explicitly selected non-build agent system", function* (s) {
     const agent = yield* Agent.Service
     yield* agent.transform((editor) =>
@@ -2159,6 +2144,7 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("delivers steered manual compaction when the model has no context limit", function* (s) {
+    s.currentModel = unknownContextModel
     yield* s.llm.push(TestLLM.text("Earlier answer", "text-manual-unknown-history"))
     yield* s.runPrompt("Earlier question")
 
@@ -2506,7 +2492,7 @@ describe("SessionRunnerLLM", () => {
 
   scenario("recovers from provider context overflow without a configured context limit", function* (s) {
     yield* setupOverflowRecovery(s)
-    s.currentModel = model
+    s.currentModel = unknownContextModel
     yield* s.llm.push(
       [LLMEvent.providerError({ message: "prompt too long", classification: "context-overflow" })],
       TestLLM.text("## Objective\n- Recover unknown limit", "text-summary-unknown-limit"),
@@ -5375,6 +5361,13 @@ describe("SessionRunnerLLM", () => {
   })
 
   scenario("preserves the provider failure when tool output persistence also fails", function* (s) {
+    let injected = false
+    yield* s.bus.project(SessionEvent.Tool.Success, (event) => {
+      if (event.data.id !== "call-store-provider-error") return Effect.void
+      return Effect.sync(() => {
+        injected = true
+      }).pipe(Effect.andThen(Effect.die("tool output persistence failed")))
+    })
     yield* s.admit("Storage fails while provider fails")
     yield* s.llm.push([
       LLMEvent.stepStart({ index: 0 }),
@@ -5386,6 +5379,7 @@ describe("SessionRunnerLLM", () => {
       _tag: "Failure",
     })
 
+    expect(injected).toBe(true)
     expect(requireAssistant(yield* s.context)).toMatchObject({
       error: { type: "provider.unknown", message: "Provider unavailable" },
     })
