@@ -37,7 +37,7 @@ import { testEffect } from "./lib/effect"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
 import { promptLocationLayer } from "./fixture/prompt-location"
 import { globalProjectLayer } from "./lib/project"
-import { tmpdir } from "./fixture/tmpdir"
+import { tmpdirScoped } from "./fixture/tmpdir"
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -96,10 +96,7 @@ const assertCreateInputTypes = (session: Session.Interface) => {
 void assertCreateInputTypes
 
 function withTmp<A, E, R>(f: (directory: string) => Effect.Effect<A, E, R>) {
-  return Effect.acquireRelease(
-    Effect.promise(() => tmpdir()),
-    (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
-  ).pipe(Effect.flatMap((tmp) => f(tmp.path)))
+  return tmpdirScoped().pipe(Effect.flatMap((tmp) => f(tmp.path)))
 }
 
 describe("Session.create", () => {
@@ -967,10 +964,7 @@ describe("Session.create", () => {
         data: event.data,
       }))
 
-      const tmp = yield* Effect.acquireRelease(
-        Effect.promise(() => tmpdir()),
-        (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
-      )
+      const tmp = yield* tmpdirScoped()
       const targetLayer = AppNodeBuilder.build(
         LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node]),
         [
