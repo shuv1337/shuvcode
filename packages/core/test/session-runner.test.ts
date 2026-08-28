@@ -3811,11 +3811,18 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
-  scenario("interrupts runner continuation when permission approval is declined", function* (s) {
+  scenario("interrupts runner continuation on a decline after settling an ordinary tool error", function* (s) {
     const registry = yield* Tool.Service
     yield* transformTools(
       registry,
       {
+        failed: {
+          name: "failed",
+          description: "Fail normally before the declined call",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => Effect.fail(new Tool.Error({ message: "Ordinary tool failure" })),
+        },
         declined: {
           name: "declined",
           description: "Fail because the user declined approval",
@@ -3828,7 +3835,12 @@ describe("SessionRunnerLLM", () => {
     )
     yield* s.admit("Call declined")
 
-    yield* s.llm.push(TestLLM.tool("call-declined", "declined", {}))
+    yield* s.llm.push(
+      TestLLM.toolCalls(
+        LLMEvent.toolCall({ id: "call-failed", name: "failed", input: {} }),
+        LLMEvent.toolCall({ id: "call-declined", name: "declined", input: {} }),
+      ),
+    )
 
     const exit = yield* s.resume.pipe(Effect.exit)
 
@@ -3838,6 +3850,7 @@ describe("SessionRunnerLLM", () => {
     expect(yield* s.context).toMatchObject([
       Expected.user("Call declined"),
       Expected.assistant({}, [
+        Expected.failedTool({ id: "call-failed" }, { error: { message: "Ordinary tool failure" } }),
         Expected.failedTool(
           { id: "call-declined" },
           { error: { type: "aborted", message: "The user declined this tool call" } },
