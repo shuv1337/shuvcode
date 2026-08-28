@@ -307,6 +307,7 @@ export function createData(config: CreateDataInput) {
   // submission order. Each waits for the previous POST to settle, so one
   // failure does not block the next.
   const sending = new Map<string, Promise<unknown>>()
+  const messageLoads = new Map<string, Promise<unknown>>()
   const compacting = new Map<string, { id: string; observed: Set<string>; request: Promise<SessionInboxCompaction> }>()
   onCleanup(() => compacting.clear())
 
@@ -1529,20 +1530,70 @@ export function createData(config: CreateDataInput) {
         loading(sessionID: string) {
           return store.session.messageLoading[sessionID] ?? false
         },
-        async loadMore(sessionID: string) {
+        async loadMore(
+          sessionID: string,
+          options?: {
+            all?: boolean
+            signal?: AbortSignal
+            /** Runs synchronously inside the store-publication batch. */
+            beforePublish?: () => void
+          },
+        ) {
+          const signal = options?.signal
+          if (signal?.aborted) return
+          while (messageLoads.has(sessionID)) {
+            const published = await (() => {
+              const pending = messageLoads.get(sessionID)
+              if (!signal) return pending
+              const aborted = Promise.withResolvers<void>()
+              const cancel = () => aborted.resolve()
+              signal.addEventListener("abort", cancel, { once: true })
+              return Promise.race([pending, aborted.promise])
+                .catch((error) => {
+                  if (!signal.aborted) throw error
+                })
+                .finally(() => signal.removeEventListener("abort", cancel))
+            })()
+            if ((!options?.all && published) || signal?.aborted) return
+          }
           const cursor = store.session.messageCursor[sessionID]
-          if (!cursor || store.session.messageLoading[sessionID]) return
+          if (!cursor || signal?.aborted) return
           setStore("session", "messageLoading", sessionID, true)
-          const response = await api()
-            .message.list({ sessionID, limit: messagePageLimit, cursor })
+          const request = (async () => {
+            const fetched: SessionMessageInfo[] = []
+            let next: string | undefined = cursor
+            do {
+              const response = await api().message.list(
+                {
+                  sessionID,
+                  limit: options?.all ? 200 : messagePageLimit,
+                  cursor: next,
+                },
+                { signal },
+              )
+              if (signal?.aborted) return
+              fetched.push(...response.data)
+              next = response.cursor.next ?? undefined
+              if (!options?.all) break
+            } while (next)
+            // A jump through history publishes once, not once per page of offscreen messages.
+            const existing = store.session.message[sessionID] ?? []
+            const ids = new Set(existing.map((item) => item.id))
+            const messages = [...fetched.reverse().filter((item) => !ids.has(item.id)), ...existing]
+            batch(() => {
+              options?.beforePublish?.()
+              messageIndex.set(sessionID, new Map(messages.map((item, position) => [item.id, position])))
+              setStore("session", "message", sessionID, reconcile(messages))
+              setStore("session", "messageCursor", sessionID, next)
+            })
+            return true
+          })()
+            .catch((error) => {
+              if (!signal?.aborted) throw error
+            })
             .finally(() => setStore("session", "messageLoading", sessionID, false))
-          const older = response.data.toReversed()
-          const existing = store.session.message[sessionID] ?? []
-          const ids = new Set(existing.map((item) => item.id))
-          const messages = [...older.filter((item) => !ids.has(item.id)), ...existing]
-          messageIndex.set(sessionID, new Map(messages.map((item, position) => [item.id, position])))
-          setStore("session", "message", sessionID, reconcile(messages))
-          setStore("session", "messageCursor", sessionID, response.cursor.next ?? undefined)
+          track(messageLoads, sessionID, request)
+          await request
         },
         invalidate(sessionID: string) {
           sync.invalidate(`session.message:${sessionID}`)
