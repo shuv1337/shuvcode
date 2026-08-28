@@ -171,7 +171,7 @@ describe("Worktree", () => {
           { directory: created.directory, strategy: "git" },
         ].toSorted((a, b) => a.directory.localeCompare(b.directory)),
       )
-      expect(Array.from(yield* Fiber.join(fiber))[0]?.data).toEqual({ projectID: input.projectID })
+      expect((yield* Fiber.join(fiber))[0]?.data).toEqual({ projectID: input.projectID })
 
       yield* worktree.remove({ projectID: input.projectID, directory: created.directory, force: false })
 
@@ -550,7 +550,7 @@ describe("Worktree", () => {
           { directory: existing, strategy: "git" },
         ].toSorted((a, b) => a.directory.localeCompare(b.directory)),
       )
-      expect(Array.from(yield* Fiber.join(fiber))[0]?.data).toEqual({ projectID: input.projectID })
+      expect((yield* Fiber.join(fiber))[0]?.data).toEqual({ projectID: input.projectID })
 
       yield* Effect.promise(() => $`git worktree remove --force ${target}`.cwd(input.root.path).quiet())
       yield* Effect.promise(() => $`git worktree remove --force ${unchanged}`.cwd(input.root.path).quiet())
