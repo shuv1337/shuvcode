@@ -631,6 +631,7 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
   const rendered = renderedMarkdown.get(next)
   // Keep live renderers in control of their DOM, including after completion.
   const source = rendered || block.mode === "live" ? document.createElement("div") : next
+  if (source === next) disposeCopyButtons(next)
   source.innerHTML = block.html
   markInlineCode(source)
   markCodeLinks(source)
@@ -645,6 +646,23 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
     renderedMarkdown.set(next, {
       renderer: createMarkdownRenderer(next, source.innerHTML, true),
       raw: block.raw,
+    })
+  }
+  if (block.mode !== "live") {
+    next.querySelectorAll<HTMLElement>("pre > code").forEach((code) => {
+      const pre = code.parentElement!
+      const wrapper = document.createElement("div")
+      wrapper.dataset.component = "markdown-code"
+      applyCodeMetadata(
+        wrapper,
+        Array.from(code.classList)
+          .find((name) => name.startsWith("language-"))
+          ?.slice(9),
+      )
+      pre.replaceWith(wrapper)
+      wrapper.appendChild(pre)
+      wrapper.appendChild(createCopyButton(labels))
+      decorateMermaid(wrapper, code, true)
     })
   }
 

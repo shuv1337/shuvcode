@@ -3,6 +3,9 @@ import { render } from "solid-js/web"
 import { Markdown } from "../src/components/markdown"
 import { preloadMarkdown } from "../src/components/markdown-cache"
 
+export { sanitizeMarkdown } from "../src/components/markdown-cache"
+export { renderMermaidSvg } from "../src/components/markdown-mermaid"
+
 export async function mountMarkdown(options: { text: string; streaming?: boolean; cached?: boolean }) {
   if (options.cached) await preloadMarkdown(options.text, "markdown-test")
   const host = document.createElement("div")

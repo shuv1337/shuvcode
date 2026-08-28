@@ -8,6 +8,79 @@ story.beforeEach(async ({ mount }) => {
   await expect(root.locator('[data-component="markdown"]')).toHaveAttribute("data-markdown-ready", "")
 })
 
+story("sanitizes raw HTML while preserving supported Markdown markup", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const { sanitizeMarkdown } = await import(fixture)
+    return [
+      "<p><strong>Safe</strong> <em>formatting</em> <code>const x = 1</code></p>",
+      '<script>alert(1)</script><style>body { display: none }</style><img src="safe.png" onerror="alert(2)"><a href="java&#x73;cript:alert(3)">unsafe</a>',
+      '<a href="https://example.com" target="_blank" rel="nofollow">external</a><a href="/local">local</a>',
+      '<form id="location" name="document"><input name="cookie"></form>',
+      "<math><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow></math>",
+      '<svg viewBox="0 0 10 10"><path d="M0 0L10 10" onload="alert(4)"></path><script>alert(5)</script></svg>',
+    ].map(sanitizeMarkdown)
+  }, fixture)
+  expect(result).toEqual([
+    "<p><strong>Safe</strong> <em>formatting</em> <code>const x = 1</code></p>",
+    '<img src="safe.png"><a>unsafe</a>',
+    '<a href="https://example.com" target="_blank" rel="nofollow noopener noreferrer">external</a><a href="/local">local</a>',
+    '<form name="user-content-document" id="user-content-location"><input name="user-content-cookie"></form>',
+    "<math><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow></math>",
+    '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"></path></svg>',
+  ])
+})
+
+story("keeps Markdown sanitization and link protections after Mermaid renders", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const { renderMermaidSvg, sanitizeMarkdown } = await import(fixture)
+    const html =
+      '<a href="https://example.com" target="_blank" rel="nofollow">external</a><img src="safe.png" onerror="alert(1)">'
+    const before = sanitizeMarkdown(html)
+    const renders = []
+    for (const source of [
+      "flowchart LR\n A[Start] --> B[End]",
+      "sequenceDiagram\n Alice->>Bob: Hello",
+      '%%{init: {"flowchart": {"htmlLabels": true}}}%%\nflowchart LR\n A["<a href=\'https://example.com\' target=\'_blank\'>External</a>"] --> B[End]',
+    ]) {
+      const svg = await renderMermaidSvg(source)
+      const document = new DOMParser().parseFromString(svg, "image/svg+xml")
+      renders.push({
+        root: document.documentElement.localName,
+        text: document.documentElement.textContent,
+        unsafe: document.querySelectorAll('script, [onerror], [onload], [href^="javascript:"]').length,
+        links: Array.from(document.querySelectorAll("a")).map((link) => ({
+          href: link.getAttribute("href"),
+          target: link.getAttribute("target"),
+          rel: link.getAttribute("rel"),
+        })),
+        markdown: sanitizeMarkdown(html),
+      })
+    }
+    return {
+      before,
+      renders,
+      invalid: await renderMermaidSvg("not a diagram"),
+      afterInvalid: sanitizeMarkdown(html),
+    }
+  }, fixture)
+  expect(result.before).toBe(
+    '<a href="https://example.com" target="_blank" rel="nofollow noopener noreferrer">external</a><img src="safe.png">',
+  )
+  expect(result.renders).toEqual([
+    { root: "svg", text: expect.stringContaining("Start"), unsafe: 0, links: [], markdown: result.before },
+    { root: "svg", text: expect.stringContaining("Hello"), unsafe: 0, links: [], markdown: result.before },
+    {
+      root: "svg",
+      text: expect.stringContaining("External"),
+      unsafe: 0,
+      links: [{ href: "https://example.com", target: "_blank", rel: "noopener" }],
+      markdown: result.before,
+    },
+  ])
+  expect(result.invalid).toBeUndefined()
+  expect(result.afterInvalid).toBe(result.before)
+})
+
 story("mounts cached completed Markdown with sanitized HTML and decorations", async ({ page }) => {
   await page.evaluate(
     async ({ fixture, text }) => {
@@ -36,6 +109,7 @@ story("mounts cached completed Markdown with sanitized HTML and decorations", as
     "noopener noreferrer",
   )
   await expect(markdown.locator("pre code")).toContainText("const answer = 42")
+  await expect(markdown.getByRole("button", { name: "Copy", exact: true })).toBeVisible()
   await expect(markdown.locator("[data-markdown-word]")).toHaveCount(0)
 
   await harness.getByLabel("Markdown text").fill("## Replacement\n\n`new/file.ts`")
@@ -51,6 +125,25 @@ story("mounts cached completed Markdown with sanitized HTML and decorations", as
   await harness.getByLabel("Markdown text").fill("")
   await expect(markdown).toBeEmpty()
   await expect(markdown).toHaveAttribute("data-markdown-ready", "")
+})
+
+story("renders cached Mermaid blocks and falls back to code for invalid diagrams", async ({ page }) => {
+  await page.evaluate(async (fixture) => {
+    const { mountMarkdown } = await import(fixture)
+    await mountMarkdown({ text: "```mermaid\nflowchart LR\n A[Start] --> B[End]\n```", cached: true })
+  }, fixture)
+  const harness = page.getByTestId("markdown-fixture")
+  const markdown = harness.locator('[data-component="markdown"]')
+  await expect(markdown.locator('[data-component="markdown-mermaid"] > svg')).toBeVisible()
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(markdown).toHaveCount(0)
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(markdown.locator('[data-component="markdown-mermaid"] > svg')).toBeVisible()
+  await harness.getByLabel("Markdown text").fill("```mermaid\nnot a diagram\n```")
+  await expect(markdown.locator('[data-component="markdown-mermaid"]')).toHaveCount(0)
+  await expect(markdown.locator("pre code")).toBeVisible()
+  await expect(markdown.locator("pre code")).toHaveText("not a diagram")
+  await expect(markdown.getByRole("button", { name: "Copy", exact: true })).toBeVisible()
 })
 
 story("keeps live elements and selection when a stream completes and later changes", async ({ page }) => {
