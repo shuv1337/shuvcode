@@ -1,10 +1,10 @@
 import fs from "fs/promises"
-import { tmpdir as osTmpdir } from "os"
+import os from "os"
 import path from "path"
 import { Effect } from "effect"
 
 export const tmpdir = async (prefix = "opencode-core-test-") => {
-  const dir = await fs.realpath(await fs.mkdtemp(path.join(osTmpdir(), prefix)))
+  const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), prefix)))
   return {
     path: dir,
     async [Symbol.asyncDispose]() {
