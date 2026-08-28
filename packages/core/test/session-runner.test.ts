@@ -13,7 +13,7 @@ import {
   RateLimitError,
   UnknownProviderError,
 } from "@opencode-ai/ai"
-import * as OpenAIChat from "@opencode-ai/ai/protocols/openai-chat"
+import { OpenAIChat } from "@opencode-ai/ai/protocols/openai-chat"
 import { TestLLM } from "@opencode-ai/ai/testing"
 import { Catalog } from "@opencode-ai/core/catalog"
 import { Database } from "@opencode-ai/core/database/database"
@@ -44,7 +44,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator"
 import { SessionRunner } from "@opencode-ai/core/session/runner/index"
-import * as SessionRunnerLLM from "@opencode-ai/core/session/runner/llm"
+import { SessionRunnerLLM } from "@opencode-ai/core/session/runner/llm"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionUsage } from "@opencode-ai/core/session/usage"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
