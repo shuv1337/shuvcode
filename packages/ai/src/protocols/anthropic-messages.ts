@@ -1343,20 +1343,28 @@ const onMessageDelta = (
   event: AnthropicEvent & { readonly delta?: AnthropicStreamDelta },
 ): StepResult => {
   const usage = mergeUsage(state.usage, mapUsage(event.usage, state.providerMetadataKey), state.providerMetadataKey)
+  const pendingFinish = (() => {
+    const stopReason = event.delta?.stop_reason
+    if (stopReason === null || stopReason === undefined) return state.pendingFinish
+
+    const stopSequence = event.delta?.stop_sequence
+    const finishMetadata =
+      stopSequence === null || stopSequence === undefined
+        ? state.pendingFinish?.providerMetadata
+        : providerMetadata(state.providerMetadataKey, { stopSequence })
+    return {
+      reason: {
+        normalized: mapFinishReason(stopReason),
+        raw: stopReason,
+      },
+      providerMetadata: finishMetadata,
+    }
+  })()
   return [
     {
       ...state,
       usage,
-      pendingFinish: {
-        reason: {
-          normalized: mapFinishReason(event.delta?.stop_reason),
-          raw: event.delta?.stop_reason ?? undefined,
-        },
-        providerMetadata:
-          event.delta?.stop_sequence === null || event.delta?.stop_sequence === undefined
-            ? undefined
-            : providerMetadata(state.providerMetadataKey, { stopSequence: event.delta.stop_sequence }),
-      },
+      pendingFinish,
     },
     NO_EVENTS,
   ]
