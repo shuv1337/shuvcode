@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, Match, createSignal, Show, Switch, untrack } from "solid-js"
+import { createEffect, createMemo, createResource, Match, Show, Switch, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import { useLocation, useNavigate } from "@solidjs/router"
@@ -336,8 +336,6 @@ export function Titlebar(props: {
               ].filter((v) => v !== undefined)
             })
 
-            const [tabsAreOverflowing, setTabsAreOverflowing] = createSignal(false)
-
             return (
               <div
                 class="h-full flex-1 overflow-hidden flex flex-row items-center gap-1.5 px-2 md:pr-3"
@@ -382,8 +380,6 @@ export function Titlebar(props: {
                       <TitlebarTabStrip
                         tabs={tabsStore}
                         currentTab={currentTab()}
-                        forceTruncate={tabsAreOverflowing()}
-                        onOverflowChange={setTabsAreOverflowing}
                         onNavigate={(tab, el) => {
                           tabs.select(tab)
                           el?.scrollIntoView({ behavior: "instant" })
@@ -424,8 +420,6 @@ export function Titlebar(props: {
                             orientation="vertical"
                             tabs={tabsStore}
                             currentTab={currentTab()}
-                            forceTruncate={false}
-                            onOverflowChange={setTabsAreOverflowing}
                             onNavigate={(tab, el) => {
                               tabs.select(tab)
                               el?.scrollIntoView({ behavior: "instant", block: "nearest" })

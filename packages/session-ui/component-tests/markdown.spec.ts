@@ -13,6 +13,27 @@ story.beforeEach(async ({ mount }) => {
   await expect(root.locator('[data-component="markdown"]')).toHaveAttribute("data-markdown-ready", "")
 })
 
+story("renders small completed Markdown immediately without skipping sanitization", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const { mountMarkdown } = await import(fixture)
+    await mountMarkdown({
+      text: '**Small response**\n\n<img src="missing" onerror="alert(1)"><script>alert(2)</script>',
+    })
+    const markdown = document.querySelector('[data-testid="markdown-fixture"] [data-component="markdown"]')!
+    return {
+      ready: markdown.hasAttribute("data-markdown-ready"),
+      bold: markdown.querySelector("strong")?.textContent,
+      unsafe: markdown.querySelectorAll("script, [onerror]").length,
+    }
+  }, fixture)
+  expect(result).toEqual({ ready: true, bold: "Small response", unsafe: 0 })
+  const harness = page.getByTestId("markdown-fixture")
+  await harness.getByLabel("Markdown text").fill("```ts\nconst value = 42\n```")
+  await expect(harness.locator('[data-component="markdown"]')).toHaveAttribute("data-markdown-ready", "")
+  await expect(harness.locator("pre code")).toHaveText("const value = 42")
+  await expect(harness.locator("pre.shiki")).toBeVisible()
+})
+
 story("sanitizes raw HTML while preserving supported Markdown markup", async ({ page }) => {
   const result = await page.evaluate(async (fixture) => {
     const { sanitizeMarkdown } = await import(fixture)
@@ -130,6 +151,49 @@ story("mounts cached completed Markdown with sanitized HTML and decorations", as
   await harness.getByLabel("Markdown text").fill("")
   await expect(markdown).toBeEmpty()
   await expect(markdown).toHaveAttribute("data-markdown-ready", "")
+})
+
+story("shares in-flight Markdown rendering without overwriting a reclaimed cache entry", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const { getCachedMarkdown, renderCachedMarkdown } = await import(fixture)
+    const raw = "**Shared result**"
+    const first = renderCachedMarkdown({ raw, src: raw }, "in-flight")
+    const second = renderCachedMarkdown({ raw, src: raw }, "in-flight")
+    const [left, right] = await Promise.all([first, second])
+    const abandoned = renderCachedMarkdown({ raw: "abandoned", src: "abandoned" }, "in-flight")
+    await renderCachedMarkdown({ raw, src: raw }, "in-flight")
+    await abandoned
+    return {
+      shared: left === right,
+      html: left.html,
+      cached: getCachedMarkdown("in-flight") === left,
+    }
+  }, fixture)
+  expect(result).toMatchObject({ shared: true, cached: true })
+  expect(result.html).toContain("<strong>Shared result</strong>")
+})
+
+story("keeps a reopened cached answer recent under cache pressure", async ({ page }) => {
+  await page.evaluate(async (fixture) => {
+    const { mountMarkdown, touchCachedMarkdown } = await import(fixture)
+    await mountMarkdown({ text: "**Cached answer**", cached: true })
+    Array.from({ length: 199 }, (_, index) =>
+      touchCachedMarkdown(`filler-${index}`, { raw: "filler", hash: "filler", html: "<p>filler</p>" }),
+    )
+  }, fixture)
+  const harness = page.getByTestId("markdown-fixture")
+  const markdown = harness.locator('[data-component="markdown"]')
+  await expect(markdown.locator("strong")).toHaveText("Cached answer")
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(markdown).toHaveCount(0)
+  await harness.getByRole("button", { name: "Toggle Markdown" }).click()
+  await expect(markdown.locator("strong")).toHaveText("Cached answer")
+  const cached = await page.evaluate(async (fixture) => {
+    const { getCachedMarkdown, touchCachedMarkdown } = await import(fixture)
+    touchCachedMarkdown("newest", { raw: "newest", hash: "newest", html: "<p>newest</p>" })
+    return getCachedMarkdown("markdown-test:0:full")?.raw
+  }, fixture)
+  expect(cached).toBe("**Cached answer**")
 })
 
 story("renders cached Mermaid blocks and falls back to code for invalid diagrams", async ({ page }) => {

@@ -150,7 +150,6 @@ export function ComposerEditor(props: ComposerEditorProps) {
             ref={(element) => {
               editor = element
               props.controller.setEditor(element)
-              renderComposerEditor(element, props.controller.parts())
             }}
             data-component="composer-editor"
             role="textbox"

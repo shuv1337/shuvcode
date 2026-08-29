@@ -28,7 +28,6 @@ export function TabNavItem(props: {
   onClose: () => void
   onNavigate: () => void
   active?: boolean
-  forceTruncate?: boolean
   suppressNavigation?: boolean
   dragging?: boolean
   pressed?: boolean
@@ -98,11 +97,13 @@ export function TabNavItem(props: {
 
   createEffect(() => {
     title()
-    props.forceTruncate
+    props.active
+    props.orientation
     editing()
     scheduleTitleOverflow()
   })
 
+  // The overflow fade changes title padding; observe the stable tab box, not that feedback.
   createResizeObserver(() => tabRoot, scheduleTitleOverflow)
   onCleanup(() => {
     if (measureFrame !== undefined) cancelAnimationFrame(measureFrame)
