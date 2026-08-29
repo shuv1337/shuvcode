@@ -21,6 +21,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { fromRow } from "@opencode-ai/core/session/info"
 import { SessionInbox } from "@opencode-ai/core/session/inbox"
+import { SessionStore } from "@opencode-ai/core/session/store"
 import { Shell } from "@opencode-ai/schema/shell"
 import {
   InstructionStateTable,
@@ -32,9 +33,10 @@ import { testEffect } from "./lib/effect"
 import { Snapshot } from "@opencode-ai/core/snapshot"
 
 const it = testEffect(
-  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
-  ]),
+  AppNodeBuilder.build(
+    LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionInbox.node, SessionStore.node]),
+    [[Bus.node, Bus.configured({ persist: true })]],
+  ),
 )
 const sessionsLayer = AppNodeBuilder.build(Session.node, [[SessionExecution.node, SessionExecution.noopLayer]])
 const sessionID = Session.ID.make("ses_projector_test")
@@ -278,12 +280,29 @@ describe("SessionProjector", () => {
       yield* db.run(sql`update session_message set data = '{"time":{"created":0}}' where id = ${messageID}`)
 
       const sessions = yield* Session.Service
+      const store = yield* SessionStore.Service
       const expected = { _tag: "Session.MessageDecodeError", sessionID, messageID }
+      expect(yield* store.messages({ sessionID }).pipe(Effect.flip)).toMatchObject(expected)
       expect(yield* sessions.messages({ sessionID }).pipe(Effect.flip)).toMatchObject(expected)
       expect(yield* sessions.context(sessionID).pipe(Effect.flip)).toMatchObject(expected)
       expect(yield* sessions.message({ sessionID, messageID }).pipe(Effect.catchDefect(Effect.succeed))).toMatchObject(
         expected,
       )
+    }).pipe(Effect.provide(sessionsLayer)),
+  )
+
+  it.effect("checks session existence before resolving a missing message cursor", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const missing = Session.ID.make("ses_missing")
+      expect(
+        yield* sessions
+          .messages({
+            sessionID: missing,
+            cursor: { id: SessionMessage.ID.make("msg_missing"), direction: "next" },
+          })
+          .pipe(Effect.flip),
+      ).toEqual(new Session.NotFoundError({ sessionID: missing }))
     }).pipe(Effect.provide(sessionsLayer)),
   )
 

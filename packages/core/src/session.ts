@@ -3,9 +3,8 @@ export * from "./session/schema.js"
 
 import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
 import { ListAnchor } from "@opencode-ai/schema/session"
-import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { Project } from "./project.js"
-import { Workspace } from "@opencode-ai/schema/workspace"
 import { Model } from "@opencode-ai/schema/model"
 import { Location } from "./location.js"
 import { SessionMessage } from "./session/message.js"
@@ -13,14 +12,13 @@ import { PromptInput } from "@opencode-ai/schema/prompt-input"
 import { Bus } from "./bus.js"
 import { Database } from "./database/database.js"
 import { SessionProjector } from "./session/projector.js"
-import { SessionMessageTable, SessionTable } from "./session/sql.js"
+import { SessionMessageTable } from "./session/sql.js"
 import { SessionSchema } from "./session/schema.js"
-import { AbsolutePath, PositiveInt, RelativePath } from "./schema.js"
+import { AbsolutePath, RelativePath } from "./schema.js"
 import { Agent } from "@opencode-ai/schema/agent"
 import { App } from "./app.js"
 import { Slug } from "./util/slug.js"
 import path from "path"
-import { fromRow } from "./session/info.js"
 import { SessionRunner } from "./session/runner/index.js"
 import { SessionStore } from "./session/store.js"
 import { SessionExecution } from "./session/execution.js"
@@ -58,7 +56,6 @@ import { Job } from "./job.js"
 import { Command } from "./command.js"
 import { Global } from "@opencode-ai/util/global"
 import { SessionEnvironment } from "./session/environment.js"
-import { SessionHistory } from "./session/history.js"
 import { InstructionEntry } from "./session/instruction-entry.js"
 
 // get project -> project.locations
@@ -72,30 +69,8 @@ import { InstructionEntry } from "./session/instruction-entry.js"
 
 export { ListAnchor }
 
-const ListInputBase = {
-  workspaceID: Workspace.ID.pipe(Schema.optional),
-  search: Schema.String.pipe(Schema.optional),
-  limit: PositiveInt.pipe(Schema.optional),
-  order: Schema.Literals(["asc", "desc"]).pipe(Schema.optional),
-  parentID: Schema.NullOr(SessionSchema.ID).pipe(Schema.optional),
-  anchor: ListAnchor.pipe(Schema.optional),
-}
-
-const ListDirectoryInput = Schema.Struct({
-  ...ListInputBase,
-  directory: AbsolutePath,
-})
-
-const ListProjectInput = Schema.Struct({
-  ...ListInputBase,
-  project: Project.ID,
-  subpath: RelativePath.pipe(Schema.optional),
-})
-
-const ListAllInput = Schema.Struct(ListInputBase)
-
-export const ListInput = Schema.Union([ListDirectoryInput, ListProjectInput, ListAllInput])
-export type ListInput = typeof ListInput.Type
+export const ListInput = SessionStore.ListInput
+export type ListInput = SessionStore.ListInput
 
 type CreateBaseInput = {
   id?: SessionSchema.ID
@@ -161,15 +136,9 @@ export interface Interface {
   }) => Effect.Effect<SessionEnvironment.Variables | undefined, NotFoundError>
   readonly view: (input: { sessionID: SessionSchema.ID; idle: number }) => Effect.Effect<void, NotFoundError>
   readonly remove: (sessionID: SessionSchema.ID) => Effect.Effect<void, NotFoundError>
-  readonly messages: (input: {
-    sessionID: SessionSchema.ID
-    limit?: number
-    order?: "asc" | "desc"
-    cursor?: {
-      id: SessionMessage.ID
-      direction: "previous" | "next"
-    }
-  }) => Effect.Effect<SessionMessage.Info[], NotFoundError | MessageDecodeError>
+  readonly messages: (
+    input: SessionStore.MessagesInput,
+  ) => Effect.Effect<SessionMessage.Info[], NotFoundError | MessageDecodeError>
   readonly message: (input: {
     sessionID: SessionSchema.ID
     messageID: SessionMessage.ID
@@ -409,83 +378,12 @@ const layer = Layer.effect(
         yield* bus.publish(SessionEvent.Deleted, { sessionID })
         yield* bus.remove(sessionID)
       }),
-      list: Effect.fn("Session.list")(function* (input = {}) {
-        const direction = input.anchor?.direction ?? "next"
-        const requestedOrder = input.order ?? "desc"
-        const order = direction === "previous" ? (requestedOrder === "asc" ? "desc" : "asc") : requestedOrder
-        const sortColumn = SessionTable.time_updated
-        const conditions: SQL[] = []
-        if ("directory" in input) conditions.push(eq(SessionTable.directory, input.directory))
-        if (input.workspaceID) conditions.push(eq(SessionTable.workspace_id, input.workspaceID))
-        if ("project" in input) conditions.push(eq(SessionTable.project_id, input.project))
-        if ("project" in input && input.subpath !== undefined) conditions.push(eq(SessionTable.path, input.subpath))
-        if (input.search) conditions.push(like(SessionTable.title, `%${input.search}%`))
-        if (input.parentID !== undefined)
-          conditions.push(
-            input.parentID === null ? isNull(SessionTable.parent_id) : eq(SessionTable.parent_id, input.parentID),
-          )
-        if (input.anchor) {
-          conditions.push(
-            order === "asc"
-              ? or(
-                  gt(sortColumn, input.anchor.time),
-                  and(eq(sortColumn, input.anchor.time), gt(SessionTable.id, input.anchor.id)),
-                )!
-              : or(
-                  lt(sortColumn, input.anchor.time),
-                  and(eq(sortColumn, input.anchor.time), lt(SessionTable.id, input.anchor.id)),
-                )!,
-          )
-        }
-        const query = db
-          .select()
-          .from(SessionTable)
-          .where(conditions.length > 0 ? and(...conditions) : undefined)
-          .orderBy(
-            order === "asc" ? asc(sortColumn) : desc(sortColumn),
-            order === "asc" ? asc(SessionTable.id) : desc(SessionTable.id),
-          )
-        const rows = yield* (input.limit === undefined ? query.all() : query.limit(input.limit).all()).pipe(
-          Effect.orDie,
-        )
-        return { data: (direction === "previous" ? rows.toReversed() : rows).map((row) => fromRow(row)) }
+      list: Effect.fn("Session.list")(function* (input) {
+        return { data: yield* store.list(input) }
       }),
       messages: Effect.fn("Session.messages")(function* (input) {
         yield* result.get(input.sessionID)
-        const direction = input.cursor?.direction ?? "next"
-        const requestedOrder = input.order ?? "desc"
-        const order = direction === "previous" ? (requestedOrder === "asc" ? "desc" : "asc") : requestedOrder
-        const anchor = input.cursor
-          ? yield* db
-              .select({ seq: SessionMessageTable.seq })
-              .from(SessionMessageTable)
-              .where(
-                and(eq(SessionMessageTable.session_id, input.sessionID), eq(SessionMessageTable.id, input.cursor.id)),
-              )
-              .get()
-              .pipe(Effect.orDie)
-          : undefined
-        if (input.cursor && !anchor) return []
-        const boundary = anchor
-          ? order === "asc"
-            ? gt(SessionMessageTable.seq, anchor.seq)
-            : lt(SessionMessageTable.seq, anchor.seq)
-          : undefined
-        const where = boundary
-          ? and(eq(SessionMessageTable.session_id, input.sessionID), boundary)
-          : eq(SessionMessageTable.session_id, input.sessionID)
-        const query = db
-          .select()
-          .from(SessionMessageTable)
-          .where(where)
-          .orderBy(order === "asc" ? asc(SessionMessageTable.seq) : desc(SessionMessageTable.seq))
-        const rows = yield* (input.limit === undefined ? query.all() : query.limit(input.limit).all()).pipe(
-          Effect.orDie,
-        )
-        return yield* Effect.forEach(
-          direction === "previous" ? rows.toReversed() : rows,
-          SessionHistory.decodeMessageRow,
-        )
+        return yield* store.messages(input)
       }),
       message: (input) => sessions.forSession(input.sessionID).message(input.messageID),
       updateMessage: (input) => sessions.forSession(input.sessionID).updateMessage(input),
