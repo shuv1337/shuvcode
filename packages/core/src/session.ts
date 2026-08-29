@@ -1,7 +1,7 @@
 export * as Session from "./session.js"
 export * from "./session/schema.js"
 
-import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
+import { Cause, Effect, Fiber, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
 import { ListAnchor } from "@opencode-ai/schema/session"
 import { and, asc, desc, eq, gt, isNull, like, lt, or, type SQL } from "drizzle-orm"
 import { Project } from "./project.js"
@@ -50,8 +50,7 @@ import { Job } from "./job.js"
 import { Command } from "./command.js"
 import { Shell } from "./shell.js"
 import { Global } from "@opencode-ai/util/global"
-import { Shell as ShellSchema } from "@opencode-ai/schema/shell"
-import { KeyedMutex } from "./effect/keyed-mutex.js"
+import { ShellResult } from "./shell/result.js"
 import { fileURLToPath } from "url"
 import { SessionEnvironment } from "./session/environment.js"
 import { SessionHistory } from "./session/history.js"
@@ -347,8 +346,6 @@ const layer = Layer.effect(
     const jobs = yield* Job.Service
     const environments = yield* SessionEnvironment.Service
     const scope = yield* Scope.Scope
-    const activeShells = new Set<SessionSchema.ID>()
-    const shellLocks = KeyedMutex.makeUnsafe<SessionSchema.ID>()
     const closeTransport = Effect.fn("Session.closeTransport")(function* (session: SessionSchema.Info) {
       const location = Location.Ref.make({
         directory: session.location.directory,
@@ -680,10 +677,7 @@ const layer = Layer.effect(
             // retried payload, metadata, and delivery mode.
             if (admitted.type !== "user" || admitted.sessionID !== input.sessionID)
               return yield* new PromptConflictError({ sessionID: input.sessionID, messageID })
-            if (input.resume !== false) {
-              if (activeShells.has(admitted.sessionID)) return admitted
-              yield* execution.wake(admitted.sessionID)
-            }
+            if (input.resume !== false) yield* execution.wake(admitted.sessionID)
             return admitted
           }),
         ),
@@ -717,60 +711,62 @@ const layer = Layer.effect(
       }),
       shell: Effect.fn("Session.shell")(function* (input) {
         const session = yield* result.get(input.sessionID)
-        yield* shellLocks.withLock(input.sessionID)(
-          Effect.gen(function* () {
-            activeShells.add(input.sessionID)
-            yield* execution.awaitIdle(input.sessionID)
-            const started = yield* Effect.gen(function* () {
-              const plugins = yield* PluginSupervisor.Service
-              yield* plugins.flush
-              const shell = yield* Shell.Service
-              return yield* shell
-                .create({
-                  command: input.command,
-                  cwd: session.location.directory,
-                  timeout: 0,
-                  metadata: { sessionID: input.sessionID },
-                })
-                .pipe(Effect.orDie)
-            }).pipe(Effect.provide(locations.get(session.location)))
-            yield* bus.publish(
-              SessionEvent.Shell.Started,
-              {
-                sessionID: input.sessionID,
-                shell: started,
-              },
-              { id: input.id },
-            )
-            const completed = yield* Effect.gen(function* () {
-              const shell = yield* Shell.Service
-              const terminal = yield* shell.wait(started.id).pipe(
-                Effect.map((info) => ({ info, retained: true as const })),
-                Effect.catchTag("Shell.NotFoundError", () =>
-                  Effect.succeed({ info: synthesizeTerminalShellInfo(started), retained: false as const }),
-                ),
-              )
-              const output = terminal.retained
-                ? yield* shell
-                    .output(started.id, { limit: SHELL_MAX_CAPTURE_BYTES })
-                    .pipe(Effect.catchTag("Shell.NotFoundError", () => Effect.succeed(missingShellOutput())))
-                : missingShellOutput()
-              return { shell: terminal.info, output }
-            }).pipe(Effect.provide(locations.get(session.location)))
-            yield* bus.publish(SessionEvent.Shell.Ended, {
-              sessionID: input.sessionID,
-              shell: completed.shell,
-              output: completed.output,
+        // The server owns completion recording even if the submitting client disconnects.
+        const running = yield* Effect.gen(function* () {
+          // Resolve shell services here without pinning Session events to this Location after a move.
+          const shell = yield* Effect.gen(function* () {
+            const plugins = yield* PluginSupervisor.Service
+            yield* plugins.flush
+            return yield* Shell.Service
+          }).pipe(Effect.provide(locations.get(session.location)))
+          const started = yield* shell
+            .create({
+              command: input.command,
+              cwd: session.location.directory,
+              timeout: 0,
+              metadata: { sessionID: input.sessionID, background: true },
             })
-          }).pipe(
-            Effect.ensuring(
-              Effect.gen(function* () {
-                activeShells.delete(input.sessionID)
-                yield* execution.wake(input.sessionID)
-              }),
-            ),
-          ),
-        )
+            .pipe(
+              Effect.tapError((error) =>
+                result.synthetic({
+                  sessionID: input.sessionID,
+                  text: `User shell command failed to start:\n${input.command}\n\n${error.message}`,
+                  description: input.command,
+                  metadata: { source: "shell", state: "error" },
+                  resume: false,
+                }),
+              ),
+              Effect.orDie,
+            )
+          yield* bus.publish(
+            SessionEvent.Shell.Started,
+            {
+              sessionID: input.sessionID,
+              shell: started,
+            },
+            { id: input.id },
+          )
+          const terminal = yield* shell.result(started)
+          const preview = yield* shell
+            .output(started.id, { limit: SHELL_MAX_CAPTURE_BYTES })
+            .pipe(Effect.catchTag("Shell.NotFoundError", () => Effect.succeed(ShellResult.unavailable)))
+          yield* bus.publish(SessionEvent.Shell.Ended, {
+            sessionID: input.sessionID,
+            shell: terminal.info,
+            output: preview,
+          })
+          yield* result
+            .synthetic({
+              ...ShellResult.userNotification(terminal),
+              sessionID: input.sessionID,
+              resume: false,
+            })
+            .pipe(
+              Effect.catchTag("Session.NotFoundError", () => Effect.void),
+              Effect.orDie,
+            )
+        }).pipe(Effect.forkIn(scope, { startImmediately: true }))
+        yield* Fiber.join(running)
       }),
       skill: Effect.fn("Session.skill")(function* (input) {
         const session = yield* result.get(input.sessionID)
@@ -993,26 +989,6 @@ const layer = Layer.effect(
     return result
   }),
 )
-
-function missingShellOutput() {
-  const output = "Shell command output is no longer available."
-  return {
-    output,
-    cursor: Buffer.byteLength(output),
-    size: Buffer.byteLength(output),
-    truncated: false,
-  }
-}
-
-function synthesizeTerminalShellInfo(started: ShellSchema.Info): ShellSchema.Info {
-  return {
-    ...started,
-    // The Shell record was removed before waiters could observe it; publish a terminal
-    // boundary instead of leaving the Session shell message permanently running.
-    status: "killed",
-    time: { ...started.time, completed: Date.now() },
-  }
-}
 
 const preparePrompt = Effect.fn("Session.preparePrompt")(function* (
   request: Parameters<Interface["prompt"]>[0],
