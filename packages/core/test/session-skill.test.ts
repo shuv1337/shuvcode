@@ -17,12 +17,14 @@ import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Session } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
+import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionPrompt } from "@opencode-ai/core/session/prompt"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionStore } from "@opencode-ai/core/session/store"
 import { SessionInbox } from "@opencode-ai/core/session/inbox"
 import { Skill } from "@opencode-ai/core/skill"
+import { Event } from "@opencode-ai/schema/event"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
 
@@ -32,7 +34,7 @@ const info = Skill.Info.make({
   name: Skill.Name.make("Effect"),
   description: "Effect guidance",
   location: AbsolutePath.make(path.resolve("/skills/effect.md")),
-  content: "Use Effect",
+  content: "  Use Effect\n",
 })
 const locations = makeGlobalNode({
   service: LocationServiceMap.Service,
@@ -146,17 +148,32 @@ describe("Session.skill", () => {
     }),
   )
 
-  it.effect("projects the caller-supplied message ID", () =>
+  it.effect("publishes raw standalone content under the caller-supplied ID without inbox admission", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
+      const bus = yield* Bus.Service
       const session = yield* sessions.create({ location })
       const id = SessionMessage.ID.make("msg_caller_skill")
+      const events: Event.Payload[] = []
+      yield* bus.listen((event) =>
+        Effect.sync(() => {
+          events.push(event)
+        }),
+      )
 
       yield* sessions.skill({ id, sessionID: session.id, skill: Skill.ID.make("effect"), resume: false })
 
-      expect(yield* sessions.messages({ sessionID: session.id })).toContainEqual(
-        expect.objectContaining({ id, type: "skill", skill: "effect", name: "Effect", text: "Use Effect" }),
-      )
+      expect(events).toEqual([
+        expect.objectContaining({
+          id: "evt_caller_skill",
+          type: SessionEvent.Skill.Activated.type,
+          data: { sessionID: session.id, id: info.id, name: info.name, text: info.content },
+        }),
+      ])
+      expect(yield* sessions.messages({ sessionID: session.id })).toEqual([
+        expect.objectContaining({ id, type: "skill", skill: "effect", name: "Effect", text: info.content }),
+      ])
+      expect(yield* sessions.inbox(session.id)).toEqual([])
     }),
   )
 })

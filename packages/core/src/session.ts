@@ -1,7 +1,7 @@
 export * as Session from "./session.js"
 export * from "./session/schema.js"
 
-import { Cause, Effect, Layer, Schema, Context, RcMap, Stream, Scope } from "effect"
+import { Cause, Effect, Layer, Schema, Context, RcMap, Stream } from "effect"
 import { ListAnchor } from "@opencode-ai/schema/session"
 import { and, desc, eq } from "drizzle-orm"
 import { Project } from "./project.js"
@@ -50,8 +50,6 @@ import { Session } from "./session/session.js"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { PluginSupervisor } from "./plugin/supervisor-service.js"
 import type { EventLog } from "@opencode-ai/schema/event-log"
-import { Event } from "@opencode-ai/schema/event"
-import { Skill } from "./skill.js"
 import { Job } from "./job.js"
 import { Command } from "./command.js"
 import { Global } from "@opencode-ai/util/global"
@@ -202,12 +200,9 @@ export interface Interface {
   readonly shell: (
     input: Parameters<Session.Handle["shell"]>[0] & { sessionID: SessionSchema.ID },
   ) => ReturnType<Session.Handle["shell"]>
-  readonly skill: (input: {
-    id?: SessionMessage.ID
-    sessionID: SessionSchema.ID
-    skill: Skill.ID
-    resume?: boolean
-  }) => Effect.Effect<void, NotFoundError | SkillNotFoundError>
+  readonly skill: (
+    input: Parameters<Session.Handle["skill"]>[0] & { sessionID: SessionSchema.ID },
+  ) => ReturnType<Session.Handle["skill"]>
   readonly compact: (
     input: CompactInput,
   ) => Effect.Effect<SessionInbox.Compaction, NotFoundError | CompactionConflictError>
@@ -247,7 +242,6 @@ const layer = Layer.effect(
     const fs = yield* FSUtil.Service
     const jobs = yield* Job.Service
     const environments = yield* SessionEnvironment.Service
-    const scope = yield* Scope.Scope
     const sessions = yield* Session.make((ref) => locations.get(ref))
     const admission = yield* SessionInbox.Service
     const closeTransport = Effect.fn("Session.closeTransport")(function* (session: SessionSchema.Info) {
@@ -435,26 +429,7 @@ const layer = Layer.effect(
         })
       }),
       shell: (input) => sessions.forSession(input.sessionID).shell(input),
-      skill: Effect.fn("Session.skill")(function* (input) {
-        const session = yield* result.get(input.sessionID)
-        const skills = yield* Skill.Service.pipe(Effect.provide(locations.get(session.location)))
-        const skill = yield* skills.get(input.skill)
-        if (!skill) return yield* new SkillNotFoundError({ skill: input.skill })
-        yield* bus.publish(
-          SessionEvent.Skill.Activated,
-          {
-            sessionID: input.sessionID,
-            id: skill.id,
-            name: skill.name,
-            text: skill.content,
-          },
-          { id: input.id ? Event.ID.make(input.id.replace(/^msg_/, "evt_")) : undefined },
-        )
-        if (input.resume !== false)
-          yield* execution
-            .resume(input.sessionID)
-            .pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
-      }),
+      skill: (input) => sessions.forSession(input.sessionID).skill(input),
       switchAgent: (input) => sessions.forSession(input.sessionID).switchAgent(input),
       switchModel: (input) => sessions.forSession(input.sessionID).switchModel(input),
       rename: (input) => sessions.forSession(input.sessionID).rename(input),

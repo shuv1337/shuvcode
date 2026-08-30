@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm"
 import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
 import { Agent } from "@opencode-ai/schema/agent"
 import { Event } from "@opencode-ai/schema/event"
-import { Location } from "@opencode-ai/schema/location"
 import { Model } from "@opencode-ai/schema/model"
 import { Money } from "@opencode-ai/schema/money"
 import { Project } from "@opencode-ai/schema/project"
@@ -16,6 +15,7 @@ import { Bus } from "../src/bus.js"
 import { Database } from "../src/database/database.js"
 import { EventTable } from "../src/event/sql.js"
 import { Image } from "../src/image.js"
+import { Location } from "../src/location.js"
 import { PluginHooks } from "../src/plugin/hooks.js"
 import { PluginSupervisor } from "../src/plugin/supervisor-service.js"
 import { ProjectTable } from "../src/project/sql.js"
@@ -37,6 +37,7 @@ import { Shell } from "../src/shell.js"
 import { Skill } from "../src/skill.js"
 import { Snapshot } from "../src/snapshot.js"
 import { tempGlobalLayer } from "./fixture/global"
+import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(
@@ -58,10 +59,18 @@ const it = testEffect(
 const sessionID = SessionSchema.ID.make("ses_owned")
 const otherID = SessionSchema.ID.make("ses_owned_other")
 const source = Location.Ref.make({ directory: AbsolutePath.make("/project") })
+const skillInfo = Skill.Info.make({
+  id: Skill.ID.make("guide"),
+  name: Skill.Name.make("Guide"),
+  description: "Session guidance",
+  location: AbsolutePath.make("/skills/guide/SKILL.md"),
+  content: "  Raw guidance\n",
+})
 
 const setup = Effect.fnUntraced(function* (options?: {
   execution?: SessionExecution.Interface
   shell?: Layer.Layer<Shell.Service>
+  skills?: (ref: Location.Ref) => Layer.Layer<Skill.Service>
   snapshot?: (ref: Location.Ref) => Layer.Layer<Snapshot.Service>
 }) {
   const database = yield* Database.Service
@@ -86,11 +95,15 @@ const setup = Effect.fnUntraced(function* (options?: {
   const hooks = yield* PluginHooks.Service.pipe(Effect.provide(LayerNode.compile(PluginHooks.node)))
   const locations: Location.Ref[] = []
   const flushes: Location.Ref[] = []
+  const resumes: SessionSchema.ID[] = []
   const wakes: Array<{ sessionID: SessionSchema.ID; pending: SessionMessage.ID[]; enqueued: number }> = []
   const execution = SessionExecution.Service.of({
     active: Effect.succeed(new Set<SessionSchema.ID>()),
     isActive: () => Effect.succeed(false),
-    resume: () => Effect.void,
+    resume: (id) =>
+      Effect.sync(() => {
+        resumes.push(id)
+      }),
     awaitIdle: () => Effect.void,
     interrupt: () => Effect.succeed(false),
     wake: (id) =>
@@ -113,7 +126,6 @@ const setup = Effect.fnUntraced(function* (options?: {
   const services = Layer.mergeAll(
     Layer.succeed(PluginHooks.Service, hooks),
     Layer.mock(Image.Service, {}),
-    Layer.mock(Skill.Service, {}),
     options?.shell ?? Layer.mock(Shell.Service, {}),
   )
   const servicesFor = (ref: Location.Ref): Layer.Layer<Session.Services> => {
@@ -122,6 +134,11 @@ const setup = Effect.fnUntraced(function* (options?: {
       Layer.provideMerge(
         Layer.mergeAll(
           services,
+          Layer.succeed(Location.Service, location(ref)),
+          options?.skills?.(ref) ??
+            Layer.mock(Skill.Service, {
+              get: (id) => Effect.succeed(id === skillInfo.id ? skillInfo : undefined),
+            }),
           options?.snapshot?.(ref) ?? Layer.mock(Snapshot.Service, {}),
           Layer.succeed(PluginSupervisor.Service, {
             flush: Effect.sync(() => {
@@ -146,7 +163,7 @@ const setup = Effect.fnUntraced(function* (options?: {
     >(),
     Effect.provideService(SessionExecution.Service, options?.execution ?? execution),
   )
-  return { sessions, hooks, locations, flushes, wakes, db: database.db, bus, store }
+  return { sessions, hooks, locations, flushes, resumes, wakes, db: database.db, bus, store }
 })
 
 describe("Session-owned handles", () => {
@@ -336,6 +353,144 @@ describe("Session-owned handles", () => {
       expect(fixture.locations).toEqual([source, destination])
       expect(fixture.flushes).toEqual([source, destination])
       expect((yield* fixture.sessions.forSession(otherID).get()).location).toEqual(source)
+    }),
+  )
+
+  it.live("activates skills through detached handles using fresh placement and ambient publication context", () =>
+    Effect.gen(function* () {
+      const fixture = yield* setup({
+        skills: (ref) =>
+          Layer.mock(Skill.Service, { get: () => Effect.succeed({ ...skillInfo, content: ref.directory }) }),
+      })
+      const handle = fixture.sessions.forSession(sessionID)
+      const { skill } = handle
+      const events: Event.Payload[] = []
+      yield* fixture.bus.listen((event) =>
+        Effect.sync(() => {
+          events.push(event)
+        }),
+      )
+      const initial = SessionMessage.ID.make("msg_owned_skill_initial")
+      yield* skill({ id: initial, skill: skillInfo.id, resume: false }).pipe(
+        Effect.satisfiesServicesType<never>(),
+        Effect.setContext(Context.empty()),
+      )
+      const moved = SessionMessage.ID.make("msg_owned_skill_moved")
+      const activation = skill({ id: moved, skill: skillInfo.id, resume: false })
+      const destination = Location.Ref.make({ directory: AbsolutePath.make("/project/moved") })
+      yield* fixture.bus.publish(SessionEvent.Moved, {
+        sessionID,
+        location: destination,
+        projectID: Project.ID.global,
+        subpath: RelativePath.make("moved"),
+      })
+
+      yield* activation.pipe(Effect.satisfiesServicesType<never>(), Effect.setContext(Context.empty()))
+      yield* skill({ skill: skillInfo.id, resume: false }).pipe(
+        Effect.provideService(Location.Service, location(source)),
+      )
+
+      expect(fixture.locations).toEqual([source, destination, destination])
+      expect(yield* handle.message(initial)).toMatchObject({ type: "skill", text: source.directory })
+      expect(yield* handle.message(moved)).toMatchObject({ type: "skill", text: destination.directory })
+      expect(
+        events.filter((event) => event.type === SessionEvent.Skill.Activated.type).map((event) => event.location),
+      ).toEqual([undefined, undefined, source])
+      expect(fixture.flushes).toEqual([])
+      expect(fixture.resumes).toEqual([])
+      expect(fixture.wakes).toEqual([])
+    }),
+  )
+
+  it.live("checks Session existence before skill lookup and leaves missing activations untouched", () =>
+    Effect.gen(function* () {
+      const fixture = yield* setup()
+      const events: Event.Payload[] = []
+      yield* fixture.bus.listen((event) =>
+        Effect.sync(() => {
+          events.push(event)
+        }),
+      )
+      const missingID = SessionSchema.ID.make("ses_missing_skill")
+      expect(
+        yield* fixture.sessions.forSession(missingID).skill({ skill: skillInfo.id }).pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Session.NotFoundError", sessionID: missingID })
+      expect(fixture.locations).toEqual([])
+      const handle = fixture.sessions.forSession(sessionID)
+      const before = yield* handle.get()
+      const missing = Skill.ID.make("missing")
+
+      expect(yield* handle.skill({ skill: missing }).pipe(Effect.flip)).toMatchObject({
+        _tag: "Session.SkillNotFoundError",
+        skill: missing,
+      })
+
+      expect(fixture.locations).toEqual([source])
+      expect(events).toEqual([])
+      expect(yield* handle.get()).toEqual(before)
+      expect(yield* handle.inbox()).toEqual([])
+      expect(yield* fixture.store.context(sessionID)).toEqual([])
+      expect(fixture.flushes).toEqual([])
+      expect(fixture.resumes).toEqual([])
+      expect(fixture.wakes).toEqual([])
+    }),
+  )
+
+  it.live("publishes skills before detached resumes and owns those resumes in the host scope", () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.Scope
+      const host = yield* Scope.fork(scope, "sequential")
+      const calls: string[] = []
+      const stopped: SessionSchema.ID[] = []
+      const execution = yield* SessionExecution.Service.pipe(Effect.provide(SessionExecution.noopLayer))
+      const fixture = yield* setup({
+        execution: {
+          ...execution,
+          resume: (id) =>
+            Effect.gen(function* () {
+              calls.push(`resume:${id}`)
+              yield* Effect.never
+            }).pipe(
+              Effect.onInterrupt(() =>
+                Effect.sync(() => {
+                  stopped.push(id)
+                }),
+              ),
+            ),
+          wake: () =>
+            Effect.sync(() => {
+              calls.push("wake")
+            }),
+        },
+      }).pipe(Scope.provide(host))
+      yield* fixture.bus.listen((event) =>
+        Effect.sync(() => {
+          if (event.type === SessionEvent.Skill.Activated.type) calls.push(`published:${event.id}`)
+        }),
+      )
+      const { skill } = fixture.sessions.forSession(sessionID)
+
+      yield* skill({ id: SessionMessage.ID.make("msg_skill_no_resume"), skill: skillInfo.id, resume: false })
+      expect(calls).toEqual(["published:evt_skill_no_resume"])
+      yield* Effect.forEach(
+        [
+          { id: SessionMessage.ID.make("msg_skill_default_resume"), skill: skillInfo.id },
+          { id: SessionMessage.ID.make("msg_skill_explicit_resume"), skill: skillInfo.id, resume: true },
+        ],
+        (input) => skill(input).pipe(Effect.scoped, Effect.forkScoped, Effect.flatMap(Fiber.join)),
+      )
+
+      expect(calls).toEqual([
+        "published:evt_skill_no_resume",
+        "published:evt_skill_default_resume",
+        `resume:${sessionID}`,
+        "published:evt_skill_explicit_resume",
+        `resume:${sessionID}`,
+      ])
+      expect(stopped).toEqual([])
+      yield* Scope.close(host, Exit.void)
+      expect(stopped).toEqual([sessionID, sessionID])
+      expect(yield* fixture.sessions.forSession(sessionID).inbox()).toEqual([])
     }),
   )
 

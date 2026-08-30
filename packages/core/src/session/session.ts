@@ -9,6 +9,7 @@ import { Location } from "../location.js"
 import { PluginSupervisor } from "../plugin/supervisor-service.js"
 import { Shell } from "../shell.js"
 import { ShellResult } from "../shell/result.js"
+import { Skill } from "../skill.js"
 import {
   BusyError,
   CompactionConflictError,
@@ -19,6 +20,7 @@ import {
   MessageToolIncompleteError,
   NotFoundError,
   PromptConflictError,
+  SkillNotFoundError,
   SyntheticConflictError,
 } from "./error.js"
 import { SessionEvent } from "./event.js"
@@ -30,7 +32,12 @@ import { SessionRevert } from "./revert.js"
 import { SessionSchema } from "./schema.js"
 import { SessionStore } from "./store.js"
 
-export type Services = PluginSupervisor.Service | SessionPrompt.Service | SessionRevert.Service | Shell.Service
+export type Services =
+  | PluginSupervisor.Service
+  | SessionPrompt.Service
+  | SessionRevert.Service
+  | Shell.Service
+  | Skill.Service
 
 type PromptRequest = SessionPrompt.Input & {
   id?: SessionMessage.ID
@@ -238,6 +245,29 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     }).pipe(Effect.forkIn(scope, { startImmediately: true }))
     yield* Fiber.join(running)
   })
+  const skill = Effect.fn("Session.skill")(function* (
+    sessionID: SessionSchema.ID,
+    input: { id?: SessionMessage.ID; skill: Skill.ID; resume?: boolean },
+  ) {
+    const session = yield* get(sessionID)
+    const skills = yield* Skill.Service.pipe(Effect.provide(servicesFor(session.location)))
+    const skill = yield* skills.get(input.skill)
+    if (!skill) return yield* new SkillNotFoundError({ skill: input.skill })
+    yield* bus.publish(
+      SessionEvent.Skill.Activated,
+      {
+        sessionID,
+        id: skill.id,
+        name: skill.name,
+        text: skill.content,
+      },
+      { id: input.id ? Event.ID.make(input.id.replace(/^msg_/, "evt_")) : undefined },
+    )
+    if (input.resume !== false)
+      yield* execution
+        .resume(sessionID)
+        .pipe(Effect.ignore, Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
+  })
   const compact = Effect.fn("Session.compact")(function* (
     sessionID: SessionSchema.ID,
     input: { id?: SessionMessage.ID; delivery?: SessionInbox.Delivery },
@@ -346,6 +376,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     prompt,
     synthetic,
     shell,
+    skill,
     compact,
     wait,
     resume,
@@ -368,6 +399,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
     const prompt = operations.prompt.bind(undefined, sessionID)
     const synthetic = operations.synthetic.bind(undefined, sessionID)
     const shell = operations.shell.bind(undefined, sessionID)
+    const skill = operations.skill.bind(undefined, sessionID)
     const compact = operations.compact.bind(undefined, sessionID)
     const wait = operations.wait.bind(undefined, sessionID)
     const resume = operations.resume.bind(undefined, sessionID)
@@ -393,6 +425,7 @@ export const make = Effect.fn("Session.make")(function* (servicesFor: (ref: Loca
       prompt,
       synthetic,
       shell,
+      skill,
       compact,
       wait,
       resume,
