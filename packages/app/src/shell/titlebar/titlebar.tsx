@@ -298,7 +298,7 @@ export function Titlebar(props: {
                 id: "home.toggle",
                 title: language.t("home.title"),
                 category: language.t("command.category.view"),
-                keybind: "mod+b",
+                keybind: windows() ? "alt+home" : "mod+b",
                 hidden: true,
                 onSelect: toggleHome,
               },
