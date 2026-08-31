@@ -29,7 +29,6 @@ export function PluginsDialog(props: {
   const [locked, setLocked] = createSignal(false)
   const [focused, setFocused] = createSignal<string>()
   const [detail, setDetail] = createSignal<Entry>()
-  const [initial, setInitial] = createSignal<string>()
   const [showInternal, setShowInternal] = createSignal(false)
   const [server] = createResource(
     () => (props.server ? undefined : (props.context.location ?? props.context.data.location.default())),
@@ -73,11 +72,9 @@ export function PluginsDialog(props: {
   })
   const visibleEntries = createMemo(() => entries().filter((entry) => showInternal() || !entry.internal))
   createEffect(() => {
-    if (initial()) return
+    if (visibleEntries().some((entry) => entry.key === focused())) return
     const first = visibleEntries().find((entry) => entry.runtime === "tui") ?? visibleEntries()[0]
-    if (!first) return
-    setInitial(first.key)
-    setFocused(first.key)
+    setFocused(first?.key)
   })
 
   const options = createMemo(() =>
@@ -139,7 +136,6 @@ export function PluginsDialog(props: {
           <DialogSelect
             title="Plugins"
             options={options()}
-            current={initial()}
             locked={locked()}
             preserveSelection={true}
             bindings={[
