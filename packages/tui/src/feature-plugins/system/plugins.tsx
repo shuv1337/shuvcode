@@ -142,21 +142,17 @@ export function PluginsDialog(props: {
             current={initial()}
             locked={locked()}
             preserveSelection={true}
-            bindings={
-              showInternal()
-                ? []
-                : [
-                    {
-                      bind: "ctrl+a",
-                      title: "Show internal plugins",
-                      group: "Plugins",
-                      run: () => {
-                        setShowInternal(true)
-                      },
-                    },
-                  ]
-            }
-            footerHints={showInternal() ? [] : [{ title: "ctrl+a", label: "show internal" }]}
+            bindings={[
+              {
+                bind: "ctrl+a",
+                title: "Toggle internal plugins",
+                group: "Plugins",
+                run: () => {
+                  setShowInternal((value) => !value)
+                },
+              },
+            ]}
+            footerHints={[{ title: "ctrl+a", label: `${showInternal() ? "hide" : "show"} internal` }]}
             onMove={(option) => setFocused(option.value)}
             onSelect={(option) => {
               const entry = entries().find((entry) => entry.key === option.value)
