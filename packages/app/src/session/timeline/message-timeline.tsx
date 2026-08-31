@@ -485,6 +485,7 @@ function MessageTimelineView(
   }
 
   const saveTitleEditor = async () => {
+    if (!title.editing || props.pending.rename()) return
     if (await props.action.rename(title.draft)) setTitle("editing", false)
   }
 
@@ -634,6 +635,7 @@ function MessageTimelineView(
                       onInput={(event) => setTitle("draft", event.currentTarget.value)}
                       onKeyDown={(event) => {
                         event.stopPropagation()
+                        if (event.isComposing || event.keyCode === 229) return
                         if (event.key === "Enter") {
                           event.preventDefault()
                           void saveTitleEditor()
@@ -644,7 +646,7 @@ function MessageTimelineView(
                           closeTitleEditor()
                         }
                       }}
-                      onBlur={closeTitleEditor}
+                      onBlur={() => void saveTitleEditor()}
                     />
                   </Show>
                 </Show>
