@@ -1,5 +1,34 @@
 import { expect, story } from "../../storybook/playwright/story"
 
+for (const draft of ["empty-draft", "multiline-draft", "mixed-attachments"]) {
+  story(`select all stays inside the composer with ${draft}`, async ({ mount, page }) => {
+    const component = await mount(`opencode-composer-flow--${draft}`)
+    const input = component.getByRole("textbox", { name: "Prompt", exact: true })
+    const text = await input.textContent()
+
+    for (let count = 0; count < 2; count++) {
+      await input.press("ControlOrMeta+a")
+      expect(
+        await input.evaluate((editor) => {
+          const selection = window.getSelection()
+          return {
+            text: selection?.toString(),
+            inside: editor.contains(selection?.anchorNode ?? null) && editor.contains(selection?.focusNode ?? null),
+          }
+        }),
+      ).toEqual({ text, inside: true })
+    }
+
+    await page.keyboard.type("Replacement draft")
+    await expect(input).toHaveText("Replacement draft")
+    await expect(component.getByRole("status")).toHaveText("Ready")
+    if (draft === "mixed-attachments") {
+      await expect(component.getByAltText("layout.png")).toBeVisible()
+      await expect(component.getByText("Keep the normal flow flat", { exact: true })).toBeVisible()
+    }
+  })
+}
+
 story("renders a draft once and supports editing, caret restoration, and failure recovery", async ({ mount, page }) => {
   await page.addInitScript(() => {
     const replace = Element.prototype.replaceChildren

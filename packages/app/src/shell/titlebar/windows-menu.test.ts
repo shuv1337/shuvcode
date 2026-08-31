@@ -9,6 +9,11 @@ describe("Windows app menu", () => {
     )
   })
 
+  test("leaves select all to the focused browser editor", () => {
+    expect(windowsMenuAccelerator(new KeyboardEvent("keydown", { key: "a", ctrlKey: true }))).toBeUndefined()
+    expect(windowsMenuAccelerator(new KeyboardEvent("keydown", { key: "A", ctrlKey: true }))).toBeUndefined()
+  })
+
   test("ignores the accelerator without its modifiers", () => {
     expect(windowsMenuAccelerator(new KeyboardEvent("keydown", { key: "N" }))).toBeUndefined()
   })
