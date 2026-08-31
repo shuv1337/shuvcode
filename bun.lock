@@ -183,6 +183,7 @@
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
         "solid-js": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "effect": "4.0.0-rc.112",

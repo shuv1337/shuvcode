@@ -30,6 +30,7 @@ import { Pty } from "./pty.js"
 import { Shell } from "./shell.js"
 import { ShellSelect } from "./shell/select.js"
 import { Reference } from "./reference.js"
+import { Rpc } from "./rpc.js"
 import { WebSearch } from "./websearch.js"
 import { ReferenceInstructions } from "./reference/instructions.js"
 import { SessionRunnerLLM } from "./session/runner/llm.js"
@@ -62,6 +63,7 @@ const nodes = [
   Agent.node,
   Command.node,
   Reference.node,
+  Rpc.node,
   WebSearch.node,
   Integration.node,
   Catalog.node,

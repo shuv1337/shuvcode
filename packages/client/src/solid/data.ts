@@ -51,6 +51,7 @@ import type { SessionInbox } from "@opencode-ai/schema/session-inbox"
 import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
+type OpenCodeEventMap = { [Type in OpenCodeEvent["type"]]: Extract<OpenCodeEvent, { type: Type }> }
 
 export type CreateDataInput = {
   readonly api: () => OpenCodeClient
@@ -58,7 +59,7 @@ export type CreateDataInput = {
   readonly event: {
     readonly on: <Type extends OpenCodeEvent["type"]>(
       type: Type,
-      handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+      handler: (event: OpenCodeEventMap[Type]) => void,
     ) => () => void
     readonly listen: (handler: (event: { name: OpenCodeEvent["type"]; details: OpenCodeEvent }) => void) => () => void
   }
