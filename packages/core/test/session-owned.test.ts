@@ -19,6 +19,7 @@ import { Location } from "../src/location.js"
 import { PluginHooks } from "../src/plugin/hooks.js"
 import { PluginSupervisor } from "../src/plugin/supervisor-service.js"
 import { ProjectTable } from "../src/project/sql.js"
+import { Reference } from "../src/reference.js"
 import { AbsolutePath, RelativePath } from "../src/schema.js"
 import { InboxConflictError, NotFoundError, PromptConflictError } from "../src/session/error.js"
 import { SessionEvent } from "../src/session/event.js"
@@ -124,6 +125,7 @@ const setup = Effect.fnUntraced(function* (options?: {
       }),
   })
   const services = Layer.mergeAll(
+    Layer.mock(Reference.Service, { refresh: () => Effect.void }),
     Layer.succeed(PluginHooks.Service, hooks),
     Layer.mock(Image.Service, {}),
     options?.shell ?? Layer.mock(Shell.Service, {}),

@@ -4,6 +4,7 @@ import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
 import type { LocationServices } from "@opencode-ai/core/location-services"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor-service"
+import { Reference } from "@opencode-ai/core/reference"
 import { SessionPrompt } from "@opencode-ai/core/session/prompt"
 import { Skill } from "@opencode-ai/core/skill"
 import type { Location } from "@opencode-ai/schema/location"
@@ -12,7 +13,7 @@ import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Effect, Layer, LayerMap } from "effect"
 
-// Plain-prompt unit fixtures use virtual directories and need only prompt preparation services.
+// Plain-prompt unit fixtures use virtual directories without configured references.
 export const promptLocationNode = makeGlobalNode({
   service: LocationServiceMap.Service,
   layer: Layer.effect(
@@ -30,6 +31,7 @@ export const promptLocationNode = makeGlobalNode({
                 ]),
                 Layer.succeed(FSUtil.Service, fs),
                 Layer.succeed(PluginSupervisor.Service, { flush: Effect.void }),
+                Layer.mock(Reference.Service, { refresh: () => Effect.void }),
               ),
             ),
           ) as Layer.Layer<LocationServices>,

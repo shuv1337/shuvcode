@@ -24,6 +24,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionStore } from "@opencode-ai/core/session/store"
 import { SessionInbox } from "@opencode-ai/core/session/inbox"
 import { Skill } from "@opencode-ai/core/skill"
+import { Reference } from "@opencode-ai/core/reference"
 import { Event } from "@opencode-ai/schema/event"
 import { testEffect } from "./lib/effect"
 import { globalProjectNode } from "./lib/project"
@@ -52,6 +53,7 @@ const locations = makeGlobalNode({
               list: () => Effect.succeed([info]),
             }),
             Layer.succeed(PluginSupervisor.Service, { flush: Effect.void }),
+            Layer.mock(Reference.Service, { refresh: () => Effect.void }),
           ),
         ),
       )
