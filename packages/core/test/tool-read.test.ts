@@ -46,8 +46,10 @@ const readCalls: {
   input: AbsolutePath
   page: ReadToolFileSystem.PageInput
 }[] = []
+const listCalls: AbsolutePath[] = []
 let resolveFailure: unknown
 let directoryEntries: string[] = []
+let directoryEntryDetails: Environment.DirEntry[] = []
 let readResult: ReadToolFileSystem.FileContent | ReadToolFileSystem.TextPage | ReadToolFileSystem.ListPage = {
   type: "file",
   uri: "file:///README.md",
@@ -57,12 +59,18 @@ let readResult: ReadToolFileSystem.FileContent | ReadToolFileSystem.TextPage | R
   mime: "text/plain",
 }
 let readFailure: ReadToolFileSystem.ReadError | undefined
+let readOverride: ReadToolFileSystem.Interface["read"] | undefined
 const reader = Layer.succeed(
   ReadToolFileSystem.Service,
   ReadToolFileSystem.Service.of({
-    read: (input, _resource, page = {}) => {
+    list: (input) => {
+      listCalls.push(input)
+      return Effect.succeed(directoryEntryDetails)
+    },
+    read: (input, resource, page = {}) => {
       readCalls.push({ input, page })
       if (resolveFailure !== undefined) return Effect.die(resolveFailure)
+      if (readOverride) return readOverride(input, resource, page)
       if (readFailure !== undefined) return Effect.fail(readFailure)
       return Effect.succeed(readResult)
     },
@@ -155,9 +163,11 @@ describe("ReadTool", () => {
   beforeEach(() => {
     assertions.length = 0
     readCalls.length = 0
+    listCalls.length = 0
     allow = true
     resolveFailure = undefined
     directoryEntries = []
+    directoryEntryDetails = []
     readResult = {
       type: "file",
       uri: "file:///README.md",
@@ -167,6 +177,7 @@ describe("ReadTool", () => {
       mime: "text/plain",
     }
     readFailure = undefined
+    readOverride = undefined
   })
 
   it.effect("registers, authorizes, and reads through the location filesystem", () =>
@@ -202,6 +213,7 @@ describe("ReadTool", () => {
           page: { offset: undefined, limit: undefined },
         },
       ])
+      expect(listCalls).toEqual([])
     }),
   )
 
@@ -671,6 +683,88 @@ describe("ReadTool", () => {
           page: { offset: undefined, limit: undefined },
         },
       ])
+    }),
+  )
+
+  it.effect("recovers a unique file whose non-breaking spaces differ", () =>
+    Effect.gen(function* () {
+      const requested = "Screenshot 2026-08-27 3.15 PM.png"
+      const recovered = "Screenshot 2026-08-27 3.15\u202fPM.png"
+      const requestedAbsolute = path.join(process.cwd(), requested)
+      const recoveredAbsolute = path.join(process.cwd(), recovered)
+      directoryEntryDetails = [{ name: recovered, type: "file" }]
+      readOverride = (input) =>
+        input === requestedAbsolute
+          ? Effect.fail(new Environment.NotFound({ path: requestedAbsolute }))
+          : Effect.succeed(readResult)
+      const registry = yield* Tool.Service
+
+      const result = yield* executeTool(registry, {
+        sessionID,
+        ...toolIdentity,
+        call: { type: "tool-call", id: "call-recovered-path", name: "read", input: { path: requested } },
+      })
+
+      expect(result).toMatchObject({
+        status: "completed",
+        content: [{ type: "text", text: `Read file ${recovered}, lines 1-1\n1: hello` }],
+      })
+      expect(assertions).toMatchObject([
+        { action: "read", resources: [requested] },
+        { action: "read", resources: [recovered] },
+      ])
+      expect(readCalls.map((call) => call.input)).toEqual([
+        AbsolutePath.make(requestedAbsolute),
+        AbsolutePath.make(recoveredAbsolute),
+      ])
+      expect(listCalls).toEqual([AbsolutePath.make(process.cwd())])
+    }),
+  )
+
+  it.effect("does not recover ambiguous files", () =>
+    Effect.gen(function* () {
+      const requested = "report final.txt"
+      const requestedAbsolute = path.join(process.cwd(), requested)
+      readFailure = new Environment.NotFound({ path: requestedAbsolute })
+      directoryEntryDetails = [
+        { name: "report\u00a0final.txt", type: "file" },
+        { name: "report\u202ffinal.txt", type: "file" },
+      ]
+      const registry = yield* Tool.Service
+
+      expect(
+        yield* executeTool(registry, {
+          sessionID,
+          ...toolIdentity,
+          call: { type: "tool-call", id: "call-ambiguous-path", name: "read", input: { path: requested } },
+        }),
+      ).toMatchObject({ status: "error", error: { message: `File not found: ${requested}` } })
+      expect(assertions).toHaveLength(1)
+      expect(readCalls).toHaveLength(1)
+    }),
+  )
+
+  it.effect("does not recover a directory", () =>
+    Effect.gen(function* () {
+      const requested = "report final"
+      const recovered = "report\u00a0final"
+      const requestedAbsolute = path.join(process.cwd(), requested)
+      directoryEntryDetails = [{ name: recovered, type: "directory" }]
+      readOverride = (input) =>
+        input === requestedAbsolute
+          ? Effect.fail(new Environment.NotFound({ path: requestedAbsolute }))
+          : Effect.succeed(new ReadToolFileSystem.ListPage({ type: "list-page", entries: [], truncated: false }))
+      const registry = yield* Tool.Service
+
+      expect(
+        yield* executeTool(registry, {
+          sessionID,
+          ...toolIdentity,
+          call: { type: "tool-call", id: "call-directory-recovery", name: "read", input: { path: requested } },
+        }),
+      ).toMatchObject({ status: "error", error: { message: `File not found: ${requested}` } })
+      expect(assertions).toHaveLength(1)
+      expect(readCalls).toHaveLength(1)
     }),
   )
 
