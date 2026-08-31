@@ -9,10 +9,11 @@ import { useDialog } from "../../ui/dialog"
 const id = "opencode.plugins"
 
 type Entry =
-  | { readonly key: string; readonly runtime: "server"; readonly plugin: PluginInfo }
+  | { readonly key: string; readonly runtime: "server"; readonly internal: boolean; readonly plugin: PluginInfo }
   | {
       readonly key: string
       readonly runtime: "tui"
+      readonly internal: boolean
       readonly id?: string
       readonly target: string
       readonly status: "active" | "inactive" | "failed"
@@ -29,6 +30,7 @@ export function PluginsDialog(props: {
   const [focused, setFocused] = createSignal<string>()
   const [detail, setDetail] = createSignal<Entry>()
   const [initial, setInitial] = createSignal<string>()
+  const [showInternal, setShowInternal] = createSignal(false)
   const [server] = createResource(
     () => (props.server ? undefined : (props.context.location ?? props.context.data.location.default())),
     (location) => props.context.client.plugin.list({ location }).then((result) => result.data),
@@ -41,6 +43,7 @@ export function PluginsDialog(props: {
       .map((plugin) => ({
         key: `tui:${plugin.id}`,
         runtime: "tui" as const,
+        internal: true,
         id: plugin.id,
         target: plugin.id,
         status: plugin.active ? ("active" as const) : ("inactive" as const),
@@ -51,6 +54,7 @@ export function PluginsDialog(props: {
       .map((plugin) => ({
         key: `tui:${plugin.id ?? plugin.target}`,
         runtime: "tui" as const,
+        internal: false,
         id: plugin.id,
         target: plugin.target,
         status: plugin.status,
@@ -59,6 +63,7 @@ export function PluginsDialog(props: {
     const serverEntries: Entry[] = (props.server?.() ?? server() ?? []).map((plugin) => ({
       key: `server:${plugin.id ?? source(plugin, props.context)}`,
       runtime: "server" as const,
+      internal: plugin.source.type === "builtin",
       plugin,
     }))
     return [
@@ -66,16 +71,17 @@ export function PluginsDialog(props: {
       ...serverEntries.sort((a, b) => label(a, props.context).localeCompare(label(b, props.context))),
     ]
   })
+  const visibleEntries = createMemo(() => entries().filter((entry) => showInternal() || !entry.internal))
   createEffect(() => {
     if (initial()) return
-    const first = entries().find((entry) => entry.runtime === "tui")
+    const first = visibleEntries().find((entry) => entry.runtime === "tui") ?? visibleEntries()[0]
     if (!first) return
     setInitial(first.key)
     setFocused(first.key)
   })
 
   const options = createMemo(() =>
-    entries().map(
+    visibleEntries().map(
       (entry): DialogSelectOption<string> => ({
         title: label(entry, props.context),
         value: entry.key,
@@ -136,6 +142,21 @@ export function PluginsDialog(props: {
             current={initial()}
             locked={locked()}
             preserveSelection={true}
+            bindings={
+              showInternal()
+                ? []
+                : [
+                    {
+                      bind: "ctrl+a",
+                      title: "Show internal plugins",
+                      group: "Plugins",
+                      run: () => {
+                        setShowInternal(true)
+                      },
+                    },
+                  ]
+            }
+            footerHints={showInternal() ? [] : [{ title: "ctrl+a", label: "show internal" }]}
             onMove={(option) => setFocused(option.value)}
             onSelect={(option) => {
               const entry = entries().find((entry) => entry.key === option.value)
