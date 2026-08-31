@@ -4,8 +4,7 @@ import { Script } from "@opencode-ai/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 import path from "path"
-import { UpdateArtifact } from "./update-artifact"
-import { currentRepository, forkRepository, publishPlan } from "./publish-plan"
+import { currentRepository, publishPlan } from "./publish-plan"
 import { archiveReleaseAssets } from "../packages/cli/script/release-assets"
 import { restoreExecutableBinaries } from "../packages/cli/script/binary-modes"
 import { preflightForkPublish } from "../packages/cli/script/publish-ownership"
@@ -21,7 +20,7 @@ const plan = publishPlan(repository)
 const source = process.env.GITHUB_SHA ?? (await $`git rev-parse HEAD`.text()).trim()
 const releaseID = releaseDatabaseID()
 const prerelease = isPrereleaseVersion(Script.version)
-const preflight = repository === forkRepository ? await preflightForkPublish(repository, Script.version) : undefined
+const preflight = await preflightForkPublish(repository, Script.version)
 process.chdir(dir)
 
 function releaseDatabaseID(): number | undefined {
@@ -66,7 +65,7 @@ const releaseAssets = await (async () => {
   return archiveReleaseAssets(path.join(dir, "packages", "cli", "dist"))
 })()
 
-if (Script.release && repository === forkRepository) {
+if (Script.release) {
   if (!releaseID) throw new Error("Fork release publication requires a GitHub release ID")
   await replaceDraftReleaseAssets({
     repository,
@@ -83,11 +82,6 @@ for (const name of plan.packages) {
   await $`bun ${`./packages/${name}/script/publish.ts`}`
 }
 
-if (Script.release && plan.desktop) {
-  await $`bun ./packages/desktop/scripts/finalize-latest-json.ts`
-  await $`bun ./packages/desktop/scripts/finalize-latest-yml.ts`
-}
-
 if (Script.release && !Script.preview) {
   await $`git commit -am "release: ${tag}"`
   await $`git tag -d ${tag}`.nothrow()
@@ -95,36 +89,12 @@ if (Script.release && !Script.preview) {
   await $`git push origin refs/tags/${tag} --force-with-lease --no-verify`
 }
 
-if (Script.release && !Script.preview && repository !== forkRepository) {
-  await new Promise((resolve) => setTimeout(resolve, 5_000))
-  await $`git fetch origin`
-  await $`git checkout -B dev origin/dev`
-  await prepareReleaseFiles()
-  await $`git commit -am "sync release versions for ${tag}"`
-  await $`git push origin HEAD:dev --no-verify`
-}
-
 if (Script.release) {
-  const repo = repository === forkRepository ? repository : (process.env.GH_REPO ?? repository)
-  if (!repo) throw new Error("Release repository is required")
-  if (repository === forkRepository) {
-    if (!releaseID) throw new Error("Fork release publication requires a GitHub release ID")
-    const remoteTarget = await $`gh api ${`repos/${repository}/git/ref/tags/${tag}`} --jq .object.sha`.text()
-    const localTarget = await $`git rev-parse ${`refs/tags/${tag}`}`.text()
-    if (remoteTarget.trim() !== localTarget.trim()) {
-      throw new Error(`Remote tag ${tag} does not match the validated local release commit`)
-    }
-    await publishDraftRelease({ repository, databaseId: releaseID, tag, target: source, prerelease })
-  } else {
-    await $`gh release edit ${tag} --draft=false --repo ${repo}`
+  if (!releaseID) throw new Error("Fork release publication requires a GitHub release ID")
+  const remoteTarget = await $`gh api ${`repos/${repository}/git/ref/tags/${tag}`} --jq .object.sha`.text()
+  const localTarget = await $`git rev-parse ${`refs/tags/${tag}`}`.text()
+  if (remoteTarget.trim() !== localTarget.trim()) {
+    throw new Error(`Remote tag ${tag} does not match the validated local release commit`)
   }
-  if (plan.updateArtifacts) {
-    await UpdateArtifact.publish({
-      channel: Script.channel,
-      name: "desktop",
-      distribution: "github",
-      version: Script.version,
-      metadata: await UpdateArtifact.desktopMetadata(Script.version, repo),
-    })
-  }
+  await publishDraftRelease({ repository, databaseId: releaseID, tag, target: source, prerelease })
 }

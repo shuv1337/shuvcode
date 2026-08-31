@@ -1,4 +1,4 @@
-# Contributing to OpenCode
+# Contributing to Shuvcode
 
 The changes most likely to be accepted are:
 
@@ -9,7 +9,7 @@ The changes most likely to be accepted are:
 - Missing standard behavior
 - Documentation improvements
 
-UI and core product features require design review before implementation. If you are unsure whether a change fits, ask a maintainer or choose an issue labeled [`help wanted`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3Ahelp-wanted), [`good first issue`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22), [`bug`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug), or [`perf`](https://github.com/anomalyco/opencode/issues?q=is%3Aopen%20is%3Aissue%20label%3A%22perf%22).
+UI and core product features require design review before implementation. If you are unsure whether a change fits, ask a maintainer or review the [Shuvcode issue tracker](https://github.com/Latitudes-Dev/shuvcode/issues).
 
 Want to take on an issue? Leave a comment and a maintainer may assign it unless it is already being worked on.
 
@@ -22,7 +22,7 @@ New providers should rarely require OpenCode changes. Add the provider to [model
 
 ## Development
 
-OpenCode requires Bun 1.3 or newer. From the repository root:
+Shuvcode requires Bun 1.3 or newer. From the repository root:
 
 ```bash
 bun install
@@ -31,7 +31,7 @@ bun dev [directory]
 
 `bun dev` runs the V2 CLI and TUI. Pass a directory to open another project, or `.` to open this repository.
 
-To test a development TUI against your installed OpenCode V2 background service and live sessions:
+To test a development TUI against your installed Shuvcode background service and live sessions:
 
 ```bash
 bun run dev:live [directory]

@@ -47,28 +47,19 @@ const permission = permissionLayer({
       ),
     ),
 })
-const form = Layer.succeed(
-  Form.Service,
-  Form.Service.of({
-    ask: (input: Form.CreateInput) =>
-      Effect.sync(() => {
-        captured = input
-      }).pipe(
-        Effect.andThen(
-          Effect.sync(
-            (): Form.TerminalState =>
-              reject ? { status: "cancelled" } : { status: "answered", answer: { q0: "Build", q1: ["Dev"] } },
-          ),
+const form = Layer.mock(Form.Service, {
+  ask: (input: Form.CreateInput) =>
+    Effect.sync(() => {
+      captured = input
+    }).pipe(
+      Effect.andThen(
+        Effect.sync(
+          (): Form.TerminalState =>
+            reject ? { status: "cancelled" } : { status: "answered", answer: { q0: "Build", q1: ["Dev"] } },
         ),
       ),
-    create: () => Effect.die("unused"),
-    get: () => Effect.die("unused"),
-    list: () => Effect.die("unused"),
-    state: () => Effect.die("unused"),
-    reply: () => Effect.die("unused"),
-    cancel: () => Effect.die("unused"),
-  }),
-)
+    ),
+})
 const questionToolNode = makeLocationNode({
   name: "test/question-tool-plugin",
   layer: Layer.effectDiscard(registerToolPlugin(QuestionTool.Plugin)),
@@ -103,7 +94,11 @@ describe("QuestionTool", () => {
         }),
       ).toMatchObject({
         status: "error",
-        error: { type: "tool.execution", message: expect.stringContaining("Invalid tool input") },
+        error: {
+          type: "tool.execution",
+          message:
+            'Invalid arguments for tool "question":\n- questions: Expected a value with a length of at least 1\n\nArguments provided:\n{\n  "questions": []\n}\n\nUpdate the arguments and call the tool again.',
+        },
       })
       expect(capturedInput()).toBeUndefined()
     }),
@@ -113,6 +108,7 @@ describe("QuestionTool", () => {
     Effect.gen(function* () {
       captured = undefined
       deny = true
+      yield* Effect.addFinalizer(() => Effect.sync(() => (deny = false)))
       const registry = yield* Tool.Service
 
       expect(
@@ -134,7 +130,6 @@ describe("QuestionTool", () => {
         },
       })
       expect(capturedInput()).toBeUndefined()
-      deny = false
     }),
   )
 

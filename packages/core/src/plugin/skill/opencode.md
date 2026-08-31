@@ -76,11 +76,13 @@ to every project for that user. Project configuration can live in any directory
 as `opencode.json(c)` or `.opencode/opencode.json(c)`, including nested packages
 in a monorepo.
 
-When OpenCode starts, it searches from the current directory up to the project
-root. It merges direct `opencode.json(c)` files from root to current directory,
+During ordinary project discovery, OpenCode searches the current Location
+directory and every ancestor through the filesystem root, including directories
+above the detected project or repository root. It merges direct
+`opencode.json(c)` files from the farthest ancestor to the current directory,
 then does the same for `.opencode/opencode.json(c)` files. This means every
-`.opencode` config overrides every direct config. Global configuration has the
-lowest precedence.
+discovered `.opencode` config overrides every discovered direct config. Global
+filesystem configuration has lower precedence than these discovered documents.
 
 Common configuration fields include `model`, `default_agent`, `permissions`,
 `agents`, `commands`, `plugins`, `providers`, `mcp`, `skills`, `instructions`,
@@ -106,16 +108,16 @@ for themselves without limiting it to the current project; omit it when they
 explicitly want project-local configuration.
 
 ```sh
-opencode2 mcp add <name> --global --url <remote-url>
-opencode2 mcp list
+shuvcode mcp add <name> --global --url <remote-url>
+shuvcode mcp list
 ```
 
 Remote servers use OAuth by default. If `mcp list` reports that a server needs
 authentication, run the OAuth flow and then verify the connection:
 
 ```sh
-opencode2 mcp auth <name>
-opencode2 mcp list
+shuvcode mcp auth <name>
+shuvcode mcp list
 ```
 
 The auth command prints an authorization URL, waits for the browser redirect,
@@ -130,7 +132,7 @@ secret into configuration.
 For any request to migrate OpenCode configuration, agents, commands, skills,
 plugins, integrations, or other behavior from V1 to V2, read the full
 [migration guide](https://opencode.ai/v2/docs/migrate-v1) before acting. In
-the repository, its source is `packages/www/content/docs/migrate-v1.mdx`.
+the repository, its source is `packages/www/src/docs/content/migrate-v1.mdx`.
 
 V1 config files and `.opencode/` definitions are intended to remain compatible.
 The only intentional breaking changes are the server API and plugin API. Native
@@ -146,8 +148,10 @@ bug.
 
 For questions about creating, configuring, loading, publishing, or migrating
 plugins, fetch the full [plugins guide](https://opencode.ai/v2/docs/build/plugins)
-before answering. This includes questions about the Effect plugin API, hooks,
-transforms, tools, plugin context capabilities, and package entrypoints.
+before answering. Refer to this guide when the user wants to build a plugin. It
+covers hooks, transforms, tools, plugin context capabilities, and package
+entrypoints. Plugins can also extend the TUI; for those, fetch the
+[CLI plugin guide](https://opencode.ai/v2/docs/build/plugins/cli).
 
 ## [Service](https://opencode.ai/v2/docs/troubleshooting#check-the-background-service)
 

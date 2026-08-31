@@ -16,37 +16,37 @@ export function resolveChannel(): Channel {
 export const CLI_BINARIES: Array<{ target: string; package: string; os: string; cpu: string }> = [
   {
     target: "aarch64-apple-darwin",
-    package: "@opencode-ai/cli-darwin-arm64",
+    package: "shuvcode-darwin-arm64",
     os: "darwin",
     cpu: "arm64",
   },
   {
     target: "x86_64-apple-darwin",
-    package: "@opencode-ai/cli-darwin-x64-baseline",
+    package: "shuvcode-darwin-x64-baseline",
     os: "darwin",
     cpu: "x64",
   },
   {
     target: "aarch64-pc-windows-msvc",
-    package: "@opencode-ai/cli-windows-arm64",
+    package: "shuvcode-windows-arm64",
     os: "win32",
     cpu: "arm64",
   },
   {
     target: "x86_64-pc-windows-msvc",
-    package: "@opencode-ai/cli-windows-x64-baseline",
+    package: "shuvcode-windows-x64-baseline",
     os: "win32",
     cpu: "x64",
   },
   {
     target: "x86_64-unknown-linux-gnu",
-    package: "@opencode-ai/cli-linux-x64-baseline",
+    package: "shuvcode-linux-x64-baseline",
     os: "linux",
     cpu: "x64",
   },
   {
     target: "aarch64-unknown-linux-gnu",
-    package: "@opencode-ai/cli-linux-arm64",
+    package: "shuvcode-linux-arm64",
     os: "linux",
     cpu: "arm64",
   },
@@ -75,7 +75,7 @@ export async function downloadCliToResources(version = CLI_VERSION, dest = windo
   try {
     await $`bun install --no-save --cwd ${directory} ${`${cli.package}@${version}`} ${`--os=${cli.os}`} ${`--cpu=${cli.cpu}`}`
     await copyCliToResources(
-      join(directory, "node_modules", cli.package, "bin", cli.os === "win32" ? "opencode2.exe" : "opencode2"),
+      join(directory, "node_modules", cli.package, "bin", cli.os === "win32" ? "shuvcode.exe" : "shuvcode"),
       dest,
     )
   } finally {
@@ -87,8 +87,8 @@ export async function downloadCliToResources(version = CLI_VERSION, dest = windo
 
 export async function copyBuiltCliToResources(root: string, dest = windowsify("resources/opencode-cli")) {
   const cli = getCurrentCli()
-  const directory = cli.package.replace("@opencode-ai/", "")
-  await copyCliToResources(join(root, directory, "bin", cli.os === "win32" ? "opencode2.exe" : "opencode2"), dest)
+  const directory = cli.package
+  await copyCliToResources(join(root, directory, "bin", cli.os === "win32" ? "shuvcode.exe" : "shuvcode"), dest)
 }
 
 async function copyCliToResources(source: string, dest: string) {
@@ -98,9 +98,6 @@ async function copyCliToResources(source: string, dest: string) {
 
 async function prepareCli(dest: string) {
   if (process.platform !== "win32") await chmod(dest, 0o755)
-  if (process.platform === "win32" && process.env.GITHUB_ACTIONS === "true") {
-    await $`pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ../../script/sign-windows.ps1 ${dest}`
-  }
   if (process.platform === "darwin") await $`codesign --force --sign - ${dest}`
 }
 

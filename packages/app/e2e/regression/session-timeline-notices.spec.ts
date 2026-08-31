@@ -1,6 +1,16 @@
 import { expect, test } from "@playwright/test"
 import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode-ai/client/promise"
-import { event, session, sessionID, setupTimeline, toolPart } from "../performance/timeline-stability/fixture"
+import {
+  compactionDelta,
+  compactionEnded,
+  compactionFailed,
+  compactionStarted,
+  directory,
+  event,
+  session,
+  sessionID,
+  setupTimeline,
+} from "../performance/timeline-stability/fixture"
 
 const user = { id: "msg_user", type: "user", text: "Run it", time: { created: 1 } } satisfies SessionMessageInfo
 
@@ -73,79 +83,81 @@ test("renders current protocol notices in CLI order", async ({ page }) => {
   expect(ownerWarnings).toEqual([])
 })
 
-test("shows a delegating row while subagent input streams", async ({ page }) => {
-  await setupTimeline(page, {
-    sessionMessages: [
-      user,
-      {
-        ...assistant(false),
-        content: [toolPart("call_subagent", "subagent", "streaming", {})],
-      },
-    ],
-  })
+test("renders a compaction summary while it streams and after completion", async ({ page }) => {
+  const timeline = await setupTimeline(page, { sessionMessages: [user, assistant(true)] })
 
-  const delegating = page.locator('[data-component="task-tool-delegating"]')
-  await expect(delegating).toBeVisible()
-  await expect(delegating.locator('[data-component="text-shimmer"]')).toHaveAttribute(
-    "aria-label",
-    "Delegating agent...",
+  await timeline.send(
+    compactionStarted({
+      sessionID,
+      reason: "manual",
+      recent: "",
+    }),
   )
-  const icon = delegating.locator('[data-slot="icon-svg"]')
-  await expect(icon.locator('use[href="#opencode-v2-icon-subagent"]')).toBeVisible()
-  await expect(icon).toHaveCSS("color", "rgb(174, 174, 174)")
-  await expect(page.locator('[data-component="task-tool-card"]')).toHaveCount(0)
-  await expect(page.locator('[data-timeline-row="Thinking"]')).toHaveCount(0)
+
+  const compaction = page.locator('[data-component="session-compaction-message"]')
+  await expect(compaction.getByText("Session compacted", { exact: true })).toBeVisible()
+
+  await timeline.send(
+    compactionDelta({
+      sessionID,
+      text: "## Checkpoint\n\nStreamed implementation details.",
+    }),
+  )
+  await expect(compaction.getByRole("heading", { name: "Checkpoint" })).toBeVisible()
+  await expect(compaction).toContainText("Streamed implementation details.")
+
+  await timeline.send(
+    compactionEnded({
+      sessionID,
+      reason: "manual",
+      text: "## Checkpoint\n\nFinal implementation details.",
+      recent: "",
+    }),
+  )
+  await expect(compaction).toContainText("Final implementation details.")
+  await expect(compaction).not.toContainText("Streamed implementation details.")
 })
 
-test("renders the moved location notice in its compact timeline style", async ({ page }) => {
-  const directory = `/Users/usrnk1/Developer/opencode/${"nested-directory/".repeat(24)}session`
-  await page.setViewportSize({ width: 480, height: 720 })
-  await setupTimeline(page, {
-    sessionMessages: [
-      user,
-      {
-        id: "msg_location",
-        type: "location-switched",
-        location: { directory },
-        time: { created: 2 },
+test("updates running compactions to failed and cancelled boundaries", async ({ page }) => {
+  const timeline = await setupTimeline(page, { sessionMessages: [user, assistant(true)] })
+
+  await timeline.send(compactionStarted({ sessionID, reason: "auto", recent: "" }))
+  await timeline.send(compactionDelta({ sessionID, text: "Partial summary that should be discarded." }))
+  await expect(page.getByText("Partial summary that should be discarded.", { exact: true })).toBeVisible()
+  await timeline.send(
+    compactionFailed({
+      sessionID,
+      reason: "auto",
+      error: {
+        type: "compaction.failed",
+        message: 'Error: {"error":{"type":"ProviderError","message":"The provider rejected the summary."}}',
       },
-    ],
-  })
+    }),
+  )
 
-  const notice = page.locator('[data-slot="session-timeline-notice"][data-type="location-switched"]')
-  const label = notice.locator('[data-slot="session-timeline-notice-label"]')
-  const value = notice.locator('[data-slot="session-timeline-notice-value"]')
-  const tooltipTrigger = notice.locator('[data-component="tooltip-v2-trigger"]')
+  const compactions = page.locator('[data-component="session-compaction-message"]')
+  const failed = compactions.filter({ hasText: "The provider rejected the summary." })
+  await expect(failed.getByText("Session compacted", { exact: true })).toBeVisible()
+  await expect(failed.getByText("ProviderError: The provider rejected the summary.", { exact: true })).toBeVisible()
+  await expect(failed).not.toContainText("Partial summary that should be discarded.")
 
-  await expect(label).toHaveText("Moved to")
-  await expect(value).toHaveText(directory)
-  await expect(notice).not.toContainText("·")
-  await expect(notice.locator("svg")).toHaveCount(0)
-  await expect(notice).toHaveCSS("height", "28px")
-  await expect(notice).toHaveCSS("gap", "8px")
-  await expect(notice).toHaveCSS("padding-top", "4px")
-  await expect(notice).toHaveCSS("padding-bottom", "4px")
-  await expect(label).toHaveCSS("font-size", "13px")
-  await expect(label).toHaveCSS("font-weight", "530")
-  await expect(label).toHaveCSS("line-height", "13px")
-  await expect(label).toHaveCSS("color", "rgb(128, 128, 128)")
-  await expect(value).toHaveCSS("font-size", "13px")
-  await expect(value).toHaveCSS("font-weight", "440")
-  await expect(value).toHaveCSS("line-height", "13px")
-  await expect(value).toHaveCSS("color", "rgb(128, 128, 128)")
-  await expect(value).toHaveCSS("text-overflow", "ellipsis")
-  await expect(value).toHaveCSS("white-space", "nowrap")
-  await expect(value).toHaveAttribute("dir", "ltr")
-  await expect.poll(() => value.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  await timeline.send(compactionStarted({ sessionID, reason: "manual", recent: "" }))
+  await expect(compactions).toHaveCount(2)
+  await timeline.send(compactionDelta({ sessionID, text: "Summary before cancellation." }))
+  await expect(page.getByText("Summary before cancellation.", { exact: true })).toBeVisible()
+  await timeline.send(
+    compactionFailed({
+      sessionID,
+      reason: "manual",
+      error: { type: "aborted", message: "Cancellation detail should stay hidden." },
+    }),
+  )
 
-  const tooltip = page.getByText("Session working directory changed", { exact: true })
-  await label.hover()
-  await expect(tooltip).toBeVisible()
-  await page.mouse.move(0, 0)
-  await expect(tooltip).toBeHidden()
-  await tooltipTrigger.focus()
-  await expect(tooltipTrigger).toBeFocused()
-  await expect(tooltip).toBeVisible()
+  await expect(compactions).toHaveCount(2)
+  const cancelled = compactions.filter({ hasNotText: "The provider rejected the summary." })
+  await expect(cancelled.getByText("Session compacted", { exact: true })).toBeVisible()
+  await expect(cancelled).not.toContainText("Cancellation detail should stay hidden.")
+  await expect(cancelled).not.toContainText("Summary before cancellation.")
 })
 
 test("moves blocking work to the background with Ctrl+B", async ({ page }) => {
@@ -183,11 +195,6 @@ test("moves blocking work to the background with Ctrl+B", async ({ page }) => {
   await request
 })
 
-test("waits for completion before labeling requested background work", async ({ page }) => {
-  await setupTimeline(page, { sessionMessages: [user, assistant(false, true, undefined, true)] })
-  await expect(page.locator('[data-component="task-tool-card"]')).not.toContainText("(background)")
-})
-
 test("navigates from a running subagent card and hides background controls in the child", async ({ page }) => {
   const childID = "ses_running_child"
   await setupTimeline(page, {
@@ -201,6 +208,56 @@ test("navigates from a running subagent card and hides background controls in th
   await expect(page).toHaveURL(new RegExp(`/session/${childID}$`))
   await expect(page.getByText(/move running work to the background/i)).toHaveCount(0)
 })
+
+for (const name of ["shell", "subagent"] as const) {
+  test(`keeps the background shortcut available for a grouped running ${name}`, async ({ page }) => {
+    const message = assistant(false, true)
+    await setupTimeline(page, {
+      sessionMessages: [
+        user,
+        {
+          ...message,
+          content: [
+            {
+              type: "tool",
+              id: "call_read",
+              name: "read",
+              state: {
+                status: "completed",
+                input: { path: "src/example.ts" },
+                content: [{ type: "text", text: "export const example = true" }],
+                metadata: {},
+              },
+              time: { created: 1, completed: 2 },
+            },
+            {
+              type: "tool",
+              id: "call_running",
+              name,
+              state: {
+                status: "running",
+                input:
+                  name === "shell" ? { command: "echo checking" } : { agent: "general", description: "Inspect code" },
+                metadata: {},
+              },
+              time: { created: 3 },
+            },
+          ],
+        },
+      ],
+    })
+    const group = page.locator('[data-timeline-part-ids="call_read,call_running"]')
+    await expect(group).toBeVisible()
+    await expect(group.locator('[data-slot="collapsible-trigger"]')).toHaveAttribute("aria-expanded", "false")
+    await expect(page.locator('[data-component="session-background-hint"]')).toBeVisible()
+    const request = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && new URL(request.url()).pathname === `/api/session/${sessionID}/background`,
+    )
+    await page.keyboard.press("Control+b")
+    await request
+  })
+}
 
 test("shows a badge for active background work", async ({ page }) => {
   const childID = "ses_background_child"
@@ -292,6 +349,24 @@ test("separates blocking and already-backgrounded work into two rows", async ({ 
     },
   })
 
+  await timeline.transport.send({
+    id: "evt_background_shell_created",
+    created: 3,
+    type: "shell.created",
+    location: { directory },
+    data: {
+      info: {
+        id: "shell_backgrounded",
+        status: "running",
+        command: "sleep 120",
+        cwd: directory,
+        shell: "bash",
+        file: "/tmp/background.out",
+        metadata: { sessionID },
+        time: { started: 2 },
+      },
+    },
+  })
   const backgroundCard = page.locator('[data-timeline-part-id="call_backgrounded"]')
   await expect(page.getByText(/move running work to the background/i)).toBeVisible()
   await page.getByRole("button", { name: "Session details" }).click()

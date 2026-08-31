@@ -3,6 +3,7 @@ import { Effect } from "effect"
 // of heavy runtime modules; provisioning happens in main.ts.
 import type { FileSystem, Scope } from "effect"
 import { Command } from "effect/unstable/cli"
+import { PrintLogs } from "../commands/commands"
 import { Spec } from "./spec"
 import type { Global } from "@opencode-ai/util/global"
 import type { Updater } from "../services/updater"
@@ -80,7 +81,11 @@ export function handlers<const Root extends Spec.Any>(root: Root, handlers: Hand
 }
 
 export function run(commands: Spec.Any, handlers: ReadonlyArray<LazyHandler>, options: { readonly version: string }) {
-  return Command.run(provide(commands, handlers), options) as Effect.Effect<void, unknown, Command.Environment>
+  return Command.run(provide(commands, handlers).pipe(Command.withGlobalFlags([PrintLogs])), options) as Effect.Effect<
+    void,
+    unknown,
+    Command.Environment
+  >
 }
 
 function provide(node: Spec.Any, handlers: ReadonlyArray<LazyHandler>): ProvidedCommand {
@@ -89,6 +94,7 @@ function provide(node: Spec.Any, handlers: ReadonlyArray<LazyHandler>): Provided
     ? node.spec.pipe(
         Command.withHandler((input) =>
           Effect.gen(function* () {
+            if (yield* PrintLogs) process.env.OPENCODE_PRINT_LOGS = "1"
             const module = yield* Effect.promise(handler.load)
             return yield* module.default(input)
           }),

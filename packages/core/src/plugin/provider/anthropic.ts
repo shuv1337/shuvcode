@@ -2,6 +2,7 @@ import type { IntegrationOAuthMethodRegistration } from "@opencode-ai/plugin/eff
 import { define } from "@opencode-ai/plugin/effect/plugin"
 import { Effect, Semaphore, Stream } from "effect"
 import { Bus } from "../../bus"
+import { Credential } from "../../credential"
 import { Integration } from "../../integration"
 import { Provider } from "../../provider.js"
 import { AnthropicClaudeCode } from "./anthropic-claude-code.js"
@@ -55,7 +56,7 @@ export const AnthropicPlugin = define({
     const load = Effect.fn("AnthropicPlugin.load")(function* () {
       const connection = yield* ctx.integration.connection.active(AnthropicClaudeCode.integrationID)
       const credential = connection
-        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
         : undefined
       subscription = AnthropicClaudeCode.isSubscription(credential)
       return subscription
@@ -68,7 +69,7 @@ export const AnthropicPlugin = define({
     const accessToken = Effect.fn("AnthropicPlugin.accessToken")(function* () {
       const connection = yield* ctx.integration.connection.active(AnthropicClaudeCode.integrationID)
       const credential = connection
-        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
         : undefined
       if (!AnthropicClaudeCode.isSubscription(credential)) return undefined
       if (credential?.type === "oauth") return credential.access
@@ -90,7 +91,7 @@ export const AnthropicPlugin = define({
       }
       proxy = yield* Effect.promise(() =>
         AnthropicClaudeCodeProxy.start({ getAccessToken: () => Effect.runPromise(accessToken()) }),
-      ).pipe(Effect.catch(() => Effect.succeed(undefined)))
+      ).pipe(Effect.orElseSucceed(() => undefined))
     })
     yield* Effect.addFinalizer(() =>
       Effect.promise(() => {
@@ -158,7 +159,7 @@ export const AnthropicPlugin = define({
 
     const reload = () =>
       loading.withPermit(load().pipe(Effect.andThen(syncProxy()), Effect.andThen(ctx.catalog.reload())))
-    yield* bus.subscribe(Integration.Event.ConnectionUpdated).pipe(
+    yield* bus.subscribe(Credential.Event.Switched).pipe(
       Stream.filter((event) => event.data.integrationID === AnthropicClaudeCode.integrationID),
       Stream.runForEach(reload),
       Effect.forkScoped({ startImmediately: true }),

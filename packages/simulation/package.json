@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/Latitudes-Dev/shuvcode.git",
     "directory": "packages/simulation"
   },
   "publishConfig": {

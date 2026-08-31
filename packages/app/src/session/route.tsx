@@ -1,21 +1,27 @@
 import { ErrorBoundary, createEffect, createMemo, Show, type ParentProps } from "solid-js"
 import { useParams } from "@solidjs/router"
+import { DataProvider } from "@opencode-ai/session-ui/context"
+import { SessionUserMessage } from "@opencode-ai/session-ui/message"
+import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { CommentsProvider } from "@/composer/comments"
+import { readPromptPresentation } from "@/composer/comment-note"
 import { FileProvider } from "@/workspaces/files/model"
-import { LocationProvider, useWorkspaceLocation } from "@/workspaces/location"
+import { LocationProvider } from "@/workspaces/location"
 import { ModelsProvider } from "@/providers/models/models"
+import { useProviders } from "@/providers/catalog/providers"
+import { useLanguage } from "@/runtime/i18n/language"
 import { useNotification } from "@/shell/notifications/notification"
 import { ComposerPersistenceProvider } from "@/composer/persistence"
 import { useData, useServer } from "@/runtime/server/current"
-import { useServerSDK } from "@/runtime/server/client"
 import { ServerConnection } from "@/runtime/server/registry"
 import { TerminalProvider } from "@/session/terminal/context"
 import { useSettingsCommand } from "@/settings/command"
 import { SessionUIProvider } from "@/shell/routes/session-ui-provider"
-import { useTabs } from "@/shell/tabs/tabs"
+import { useTabs, type PendingSession } from "@/shell/tabs/tabs"
 import { requireServerKey } from "@/shell/routes/session"
 import { useSessionModel } from "./model"
-import { SessionPanelFrame, SessionRouteFrame } from "./session-frame"
+import { SessionPanelFrame } from "./session-frame"
+import { SessionIdentityHeader } from "./session-identity-header"
 import { IncompatibleServerPanel } from "./incompatible-server-panel"
 import { SessionErrorFallback } from "./route-error"
 import { createSessionResolution } from "./session-resolution"
@@ -24,6 +30,8 @@ import { SessionScreen } from "./screen"
 export function TargetSessionRouteContent() {
   const params = useParams<{ serverKey: string; id: string }>()
   const data = useData()
+  const server = useServer()
+  const tabs = useTabs()
   const directory = createMemo(() => data.session.get(params.id)?.location.directory)
 
   return (
@@ -31,11 +39,53 @@ export function TargetSessionRouteContent() {
       <MarkSessionNotificationsViewed sessionID={() => params.id} />
       <ModelsProvider directory={directory}>
         <TargetSessionSettingsCommand />
-        <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)} padded>
-          <ResolvedTargetSessionRoute />
+        <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)}>
+          <Show when={tabs.pendingSession(server.key, params.id)} fallback={<ResolvedTargetSessionRoute />}>
+            {(pending) => <PreparingSession sessionID={params.id} pending={pending()} />}
+          </Show>
         </SessionRouteErrorBoundary>
       </ModelsProvider>
     </>
+  )
+}
+
+function PreparingSession(props: { sessionID: string; pending: PendingSession }) {
+  const language = useLanguage()
+  const providers = useProviders(() => props.pending.draft.directory)
+  return (
+    <SessionStatePanel>
+      <DataProvider
+        directory={props.pending.draft.directory}
+        data={{
+          session: [],
+          session_status: {},
+          session_diff: {},
+          provider: { all: providers.all(), default: providers.default(), connected: [] },
+        }}
+      >
+        <div data-component="session-preparing" class="min-h-0 flex-1 overflow-y-auto">
+          <div class="mx-auto w-full min-w-0 max-w-[1000px] px-4 pt-5 pb-5 md:px-5">
+            <SessionUserMessage
+              sessionID={props.sessionID}
+              message={props.pending.message}
+              comments={readPromptPresentation(props.pending.message.metadata)?.comments}
+              historicalAgent={props.pending.selection.agent}
+              historicalModel={{
+                id: props.pending.selection.model.modelID,
+                providerID: props.pending.selection.model.providerID,
+                variant: props.pending.selection.variant,
+              }}
+            />
+            <div
+              role="status"
+              class="mt-3 flex min-h-6 items-center text-[13px] font-medium leading-[var(--line-height-compact)] text-v2-text-text-muted"
+            >
+              <TextShimmer text={language.t("session.new.worktree.creating")} active />
+            </div>
+          </div>
+        </div>
+      </DataProvider>
+    </SessionStatePanel>
   )
 }
 
@@ -44,17 +94,13 @@ function TargetSessionSettingsCommand() {
   return null
 }
 
-function SessionRouteErrorBoundary(
-  props: ParentProps<{ sessionID?: string; serverKey?: ServerConnection.Key; padded?: boolean }>,
-) {
+function SessionRouteErrorBoundary(props: ParentProps<{ sessionID?: string; serverKey?: ServerConnection.Key }>) {
   return (
     <ErrorBoundary
       fallback={(error) => (
-        <SessionRouteFrame padded={props.padded}>
-          <SessionPanelFrame raised={!!props.sessionID}>
-            <SessionErrorFallback error={error} sessionID={props.sessionID} serverKey={props.serverKey} />
-          </SessionPanelFrame>
-        </SessionRouteFrame>
+        <SessionStatePanel>
+          <SessionErrorFallback error={error} sessionID={props.sessionID} serverKey={props.serverKey} />
+        </SessionStatePanel>
       )}
     >
       {props.children}
@@ -78,18 +124,16 @@ function ResolvedTargetSessionRoute() {
     <Show
       when={!server.health?.incompatible}
       fallback={
-        <SessionRouteFrame padded>
-          <SessionPanelFrame raised>
-            <IncompatibleServerPanel
-              onClose={() => tabs.removeSessionTab({ server: server.key, sessionId: params.id })}
-            />
-          </SessionPanelFrame>
-        </SessionRouteFrame>
+        <SessionStatePanel>
+          <IncompatibleServerPanel
+            onClose={() => tabs.removeSessionTab({ server: server.key, sessionId: params.id })}
+          />
+        </SessionStatePanel>
       }
     >
-      <Show when={directory()}>
+      <Show when={directory()} fallback={<PendingSessionState sessionID={params.id} />}>
         {(value) => (
-          <LocationProvider directory={value()}>
+          <LocationProvider directory={value}>
             <SessionUIProvider directory={value()} server={server.key}>
               <TargetSessionPage />
             </SessionUIProvider>
@@ -100,24 +144,35 @@ function ResolvedTargetSessionRoute() {
   )
 }
 
-function TargetSessionPage() {
-  const location = useWorkspaceLocation()
-  const server = useServerSDK()
-
+function PendingSessionState(props: { sessionID: string }) {
   return (
-    // Keep workspace-scoped file, prompt, comment, and terminal state alive when
-    // the user switches between Sessions in the same workspace.
-    <Show when={`${server.scope}\0${location().directory}`} keyed>
-      <TerminalProvider>
-        <FileProvider>
-          <ComposerPersistenceProvider>
-            <CommentsProvider>
-              <SessionPage />
-            </CommentsProvider>
-          </ComposerPersistenceProvider>
-        </FileProvider>
-      </TerminalProvider>
-    </Show>
+    <SessionStatePanel>
+      <SessionIdentityHeader sessionID={props.sessionID} />
+    </SessionStatePanel>
+  )
+}
+
+function SessionStatePanel(props: ParentProps) {
+  return (
+    <div class="flex min-h-0 flex-1 px-2 pb-2 pt-[var(--shell-top-inset,8px)]">
+      <SessionPanelFrame raised>{props.children}</SessionPanelFrame>
+    </div>
+  )
+}
+
+function TargetSessionPage() {
+  return (
+    // These providers select their scoped state reactively and retain bounded caches,
+    // so keep their owners alive while navigating between workspaces on this server.
+    <TerminalProvider>
+      <FileProvider>
+        <ComposerPersistenceProvider>
+          <CommentsProvider>
+            <SessionPage />
+          </CommentsProvider>
+        </ComposerPersistenceProvider>
+      </FileProvider>
+    </TerminalProvider>
   )
 }
 

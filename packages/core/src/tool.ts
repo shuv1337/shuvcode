@@ -1,22 +1,22 @@
 export * as Tool from "./tool.js"
 export { CallID, Content, Error, FileContent, PolicyDeniedError, TextContent } from "@opencode-ai/schema/tool"
-export type { Context, Metadata, Options, Result } from "@opencode-ai/schema/tool"
+export type { Context, Info, Metadata, Options, Result } from "@opencode-ai/schema/tool"
 
 import { ToolDefinition, type ToolCall } from "@opencode-ai/ai"
 import { Tool } from "@opencode-ai/schema/tool"
-import { Context, Effect, Layer, Schema, SchemaIssue, Scope, Semaphore } from "effect"
+import { Context, Effect, Layer, Result, Schema, SchemaIssue, Types } from "effect"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import type { Agent } from "./agent.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
 import { CodeModeTool } from "./codemode/tool.js"
 import { Config } from "./config.js"
-import { ConfigCodeMode } from "./config/codemode.js"
 import { Image } from "./image.js"
 import { Permission } from "./permission.js"
 import { PluginHooks } from "./plugin/hooks.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
-import { definition, execute, normalizeContent } from "./tool/runtime.js"
+import { State } from "./state.js"
+import { definition, effectiveName, execute, normalizedName, normalizeContent } from "./tool/runtime.js"
 import { Wildcard } from "./util/wildcard.js"
 import type { SessionPolicy } from "@opencode-ai/schema/session-policy"
 
@@ -28,10 +28,20 @@ export class RegistrationError extends Schema.TaggedError<RegistrationError>()("
   message: Schema.String,
 }) {}
 
-export interface Interface {
-  readonly transform: (
-    callback: (draft: { readonly add: (tool: Tool.Info) => void }) => void,
-  ) => Effect.Effect<void, RegistrationError, Scope.Scope>
+export interface Draft {
+  readonly list: () => readonly (Tool.Info & { readonly id: string })[]
+  readonly get: (id: string) => (Tool.Info & { readonly id: string }) | undefined
+  readonly add: (tool: Tool.Info) => void
+  readonly update: (id: string, update: (tool: Types.Mutable<Tool.Info>) => void) => void
+  readonly remove: (id: string) => void
+}
+
+type Data = {
+  tools: Map<string, Tool.Info & { readonly id: string }>
+  errors: { tool: Tool.Info; error: RegistrationError }[]
+}
+
+export interface Interface extends State.Transformable<Draft> {
   readonly snapshot: (
     permissions?: Permission.Ruleset,
     policy?: SessionPolicy.Info,
@@ -48,6 +58,8 @@ export interface Snapshot {
     readonly messageID: SessionMessage.ID
     readonly call: ToolCall
     readonly progress?: (update: Tool.Metadata) => Effect.Effect<void>
+    /** Surviving request definitions, keyed by the names advertised after session context hooks. */
+    readonly definitions?: ReadonlyMap<string, ToolDefinition>
   }) => Effect.Effect<Tool.Result & { readonly content: ReadonlyArray<Tool.Content> }, Tool.Error>
 }
 
@@ -58,47 +70,6 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* PluginHooks.Service
     const image = yield* Image.Service
-    const config = yield* Config.Service
-
-    const codeModeLimits = Effect.fn("Tool.codeModeLimits")(function* () {
-      const configured: ConfigCodeMode.Info = Object.assign(
-        {},
-        ...(yield* config.entries()).flatMap((entry) =>
-          entry.type === "document" && entry.info.codemode ? [entry.info.codemode] : [],
-        ),
-      )
-      return {
-        timeoutMs: configured.timeout_ms ?? CodeModeTool.DEFAULT_LIMITS.timeoutMs,
-        maxToolCalls: configured.max_tool_calls ?? CodeModeTool.DEFAULT_LIMITS.maxToolCalls,
-        maxOutputBytes: configured.max_output_bytes ?? CodeModeTool.DEFAULT_LIMITS.maxOutputBytes,
-      }
-    })
-
-    const terminalMetadata = Effect.fn("Tool.terminalMetadata")(function* (
-      tool: string,
-      callID: string,
-      metadata: Tool.Metadata | undefined,
-    ) {
-      if (metadata === undefined) return undefined
-      const validation = (() => {
-        try {
-          if (!Schema.is(Metadata)(metadata)) return { reason: "not valid JSON" }
-          const bytes = Buffer.byteLength(JSON.stringify(metadata), "utf8")
-          if (bytes > MAX_METADATA_BYTES) return { reason: "exceeds size limit", bytes }
-          return { metadata }
-        } catch {
-          return { reason: "not valid JSON" }
-        }
-      })()
-      if ("metadata" in validation) return validation.metadata
-      yield* Effect.logWarning("Dropping tool result metadata", {
-        tool,
-        callID,
-        reason: validation.reason,
-        ...(validation.bytes === undefined ? {} : { bytes: validation.bytes, limit: MAX_METADATA_BYTES }),
-      })
-      return undefined
-    })
 
     type NormalizedItem = Tool.Content | "decode" | "size"
     const normalizeImages = Effect.fnUntraced(function* (content: ReadonlyArray<Tool.Content>) {
@@ -130,8 +101,41 @@ const layer = Layer.effect(
       ]
     })
 
-    const local = new Map<string, Array<{ readonly token: object; readonly tool: Tool.Info }>>()
-    const lock = Semaphore.makeUnsafe(1)
+    const beforeExecute = (name: string, input: unknown, context: Tool.Context) =>
+      hooks.trigger("tool", "execute.before", {
+        tool: name,
+        sessionID: context.sessionID,
+        agent: context.agent,
+        messageID: context.messageID,
+        id: context.id,
+        input,
+      })
+
+    const terminalMetadata = Effect.fn("Tool.terminalMetadata")(function* (
+      tool: string,
+      callID: string,
+      metadata: Tool.Metadata | undefined,
+    ) {
+      if (metadata === undefined) return undefined
+      const validation = (() => {
+        try {
+          if (!Schema.is(Metadata)(metadata)) return { reason: "not valid JSON" }
+          const bytes = Buffer.byteLength(JSON.stringify(metadata), "utf8")
+          if (bytes > MAX_METADATA_BYTES) return { reason: "exceeds size limit", bytes }
+          return { metadata }
+        } catch {
+          return { reason: "not valid JSON" }
+        }
+      })()
+      if ("metadata" in validation) return validation.metadata
+      yield* Effect.logWarning("Dropping tool result metadata", {
+        tool,
+        callID,
+        reason: validation.reason,
+        ...(validation.bytes === undefined ? {} : { bytes: validation.bytes, limit: MAX_METADATA_BYTES }),
+      })
+      return undefined
+    })
 
     const executeTool = Effect.fn("Tool.execute")(function* (
       tool: Tool.Info,
@@ -139,16 +143,7 @@ const layer = Layer.effect(
       input: unknown,
       context: Tool.Context,
     ) {
-      const beforeEvent: PluginHooks.Domains["tool"]["execute.before"] = {
-        tool: name,
-        sessionID: context.sessionID,
-        agent: context.agent,
-        messageID: context.messageID,
-        id: context.id,
-        input,
-      }
-      yield* hooks.trigger("tool", "execute.before", beforeEvent)
-      const execution = yield* execute(tool, beforeEvent.input, context).pipe(
+      const execution = yield* execute(tool, input, context).pipe(
         Effect.map((value) => ({ value })),
         Effect.catchTag("Tool.Error", (failure) => Effect.succeed({ failure })),
       )
@@ -158,7 +153,7 @@ const layer = Layer.effect(
         agent: context.agent,
         messageID: context.messageID,
         id: context.id,
-        input: beforeEvent.input,
+        input,
       }
       if ("failure" in execution) {
         const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
@@ -207,156 +202,187 @@ const layer = Layer.effect(
       }
     })
 
-    const transform: Interface["transform"] = Effect.fn("Tool.transform")(function* (callback) {
-      const tools: Array<Tool.Info> = []
-      yield* Effect.sync(() => callback({ add: (tool) => tools.push(tool) }))
-      yield* Effect.forEach(
-        tools.flatMap((tool) => (tool.options?.namespace === undefined ? [] : [tool.options.namespace])),
-        validateNamespace,
-        { discard: true },
-      )
-      const entries = normalizedEntries(tools)
-      yield* Effect.forEach(entries, (entry) => validateName(normalizedName(entry.tool)), { discard: true })
-      const collision = entries.find(
-        (entry, index) => entries.findIndex((candidate) => candidate.key === entry.key) !== index,
-      )
-      if (collision)
-        return yield* Effect.fail(
-          new RegistrationError({
-            name: collision.key,
-            message: `Duplicate normalized tool name: ${collision.key}`,
-          }),
-        )
-      const reserved = entries.find((entry) => entry.tool.options?.codemode === false && entry.key === "execute")
-      if (reserved)
-        return yield* Effect.fail(
-          new RegistrationError({
-            name: reserved.key,
-            message: 'Tool name "execute" is reserved for CodeMode',
-          }),
-        )
-      if (entries.length === 0) return
-      yield* Effect.forEach(
-        entries,
-        (entry) =>
-          Effect.try({
-            try: () => ToolDefinition.make(definition(entry.tool)),
-            catch: (error) =>
-              new RegistrationError({
-                name: entry.key,
-                message: `Invalid tool definition ${entry.key}: ${schemaMakeError(error)}`,
-              }),
-          }),
-        { discard: true },
-      )
-      yield* Effect.uninterruptible(
-        lock.withPermit(
-          Effect.gen(function* () {
-            const token = {}
-            for (const entry of entries)
-              local.set(entry.key, [...(local.get(entry.key) ?? []), { token, tool: entry.tool }])
-            yield* Effect.addFinalizer(() =>
-              lock.withPermit(
-                Effect.sync(() => {
-                  for (const entry of entries) {
-                    const remaining = local.get(entry.key)?.filter((item) => item.token !== token) ?? []
-                    if (remaining.length > 0) local.set(entry.key, remaining)
-                    else local.delete(entry.key)
-                  }
-                }),
-              ),
-            )
-          }),
+    const state: State.Interface<Data, Draft> = State.create<Data, Draft>({
+      name: "tool",
+      initial: () => ({
+        tools: new Map(),
+        errors: [],
+      }),
+      draft: (draft) => ({
+        list: () => Array.from(draft.tools.values()),
+        get: (id) => draft.tools.get(id),
+        add: (tool) => {
+          const error = registrationError(tool)
+          if (error) {
+            draft.errors.push({ tool, error })
+            return
+          }
+          const id = effectiveName(tool)
+          draft.tools.set(id, { ...tool, id, options: tool.options && { ...tool.options } })
+        },
+        update: (id, update) => {
+          const current = draft.tools.get(id)
+          if (!current) return
+          const tool = { ...current, options: current.options && { ...current.options } }
+          update(tool)
+          tool.name = current.name
+          tool.id = id
+          if (tool.options?.namespace !== current.options?.namespace)
+            tool.options = { ...tool.options, namespace: current.options?.namespace }
+          const error = registrationError(tool)
+          if (error) {
+            draft.errors.push({ tool, error })
+            return
+          }
+          draft.tools.set(id, tool)
+        },
+        remove: (id) => {
+          draft.tools.delete(id)
+        },
+      }),
+      finalize: () =>
+        Effect.forEach(
+          state.get().errors,
+          ({ tool, error }) =>
+            Effect.logError("Skipping invalid tool registration", {
+              name: tool.name,
+              namespace: tool.options?.namespace,
+              error: error.message,
+            }),
+          { discard: true },
         ),
-      )
+    })
+
+    const transform: Interface["transform"] = Effect.fn("Tool.transform")(function* (callback) {
+      let batchError: RegistrationError | undefined
+      const registration = yield* state.transform((draft) => {
+        const pending: Tool.Info[] = []
+        callback({
+          list: draft.list,
+          get: draft.get,
+          add: (tool) => {
+            pending.push(tool)
+            draft.add(tool)
+          },
+          update: draft.update,
+          remove: (id) => {
+            const index = pending.findLastIndex((tool) => effectiveName(tool) === id)
+            if (index >= 0) pending.splice(index, 1)
+            draft.remove(id)
+          },
+        })
+        const entries = pending.map((tool) => ({ tool, key: effectiveName(tool), error: registrationError(tool) }))
+        const invalid = entries.find((entry) => entry.error)?.error
+        const collision = entries.find(
+          (entry, index) => entries.findIndex((candidate) => candidate.key === entry.key) !== index,
+        )
+        batchError =
+          invalid ??
+          (collision
+            ? new RegistrationError({
+                name: collision.key,
+                message: `Duplicate normalized tool name: ${collision.key}`,
+              })
+            : undefined)
+        if (batchError) return
+      })
+      if (!batchError) return registration
+      yield* registration.dispose
+      return yield* Effect.die(batchError)
     })
 
     return Service.of({
       transform,
+      reload: state.reload,
       snapshot: Effect.fn("Tool.snapshot")((permissions, policy, session) =>
-        lock.withPermit(
-          Effect.gen(function* () {
-            const active = new Map<string, Tool.Info>()
-            const rules = permissions ?? []
-            const allowed = policy ? new Set(policy.tools.allow) : undefined
-            const policyDenied = new Set<string>()
-            // Session-scoped tools overlay the shared registry; a colliding
-            // name shadows the location-shared tool for this snapshot only.
-            const candidates = [
-              ...Array.from(local, ([name, entries]) => [name, entries.at(-1)?.tool] as const),
-              ...(session ?? []).map((tool) => [effectiveName(tool), tool] as const),
-            ]
-            for (const [name, tool] of candidates) {
-              if (!tool) continue
-              if (allowed && (!allowed.has(name) || whollyDisabled(tool.options?.permission ?? name, rules))) {
-                policyDenied.add(name)
-                continue
+        Effect.gen(function* () {
+          const active = new Map<string, Tool.Info>()
+          const rules = permissions ?? []
+          const allowed = policy ? new Set(policy.tools.allow) : undefined
+          const policyDenied = new Set<string>()
+          const candidates = [
+            ...state.get().tools,
+            ...(session ?? []).map((tool) => [effectiveName(tool), tool] as const),
+          ]
+          for (const [name, tool] of candidates) {
+            if (allowed && (!allowed.has(name) || whollyDisabled(tool.options?.permission ?? name, rules))) {
+              policyDenied.add(name)
+              continue
+            }
+            if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
+            active.set(name, tool)
+          }
+          const direct = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode === false))
+          const codemode = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode !== false))
+          const config = yield* Effect.serviceOption(Config.Service)
+          const configured =
+            config._tag === "Some" ? Config.latest(yield* config.value.entries(), "codemode") : undefined
+          const limits = {
+            timeoutMs: configured?.timeout_ms ?? CodeModeTool.DEFAULT_LIMITS.timeoutMs,
+            maxToolCalls: configured?.max_tool_calls ?? CodeModeTool.DEFAULT_LIMITS.maxToolCalls,
+            maxOutputBytes: configured?.max_output_bytes ?? CodeModeTool.DEFAULT_LIMITS.maxOutputBytes,
+          }
+          const codemodeEnabled =
+            (allowed === undefined || allowed.has("execute") || codemode.size > 0) &&
+            !whollyDisabled("execute", rules)
+          const codemodeTool = codemodeEnabled
+            ? CodeModeTool.create(
+                codemode,
+                (name, tool, input, context) =>
+                  beforeExecute(name, input, context).pipe(
+                    Effect.flatMap((event) => executeTool(tool, name, event.input, context)),
+                  ),
+                limits,
+              )
+            : undefined
+          const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
+          return {
+            ...(codeModeCatalog === undefined ? {} : { codeModeCatalog }),
+            definitions: [
+              ...Array.from(direct)
+                .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+                .map(([, tool]) => definition(tool)),
+              ...(codemodeTool ? [definition(codemodeTool)] : []),
+            ],
+            execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
+              const context: Tool.Context = {
+                sessionID: input.sessionID,
+                agent: input.agent,
+                messageID: input.messageID,
+                id: Tool.CallID.make(input.call.id),
+                progress: input.progress ?? (() => Effect.void),
               }
-              if (whollyDisabled(tool.options?.permission ?? name, rules)) continue
-              active.set(name, tool)
-            }
-            const direct = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode === false))
-            const codemode = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode !== false))
-            const executeRule = rules.findLast((rule) => Wildcard.match("execute", rule.action))
-            const codemodeEnabled =
-              (allowed === undefined || codemode.size > 0) &&
-              (executeRule?.resource !== "*" || executeRule.effect !== "deny")
-            const codemodeTool = codemodeEnabled
-              ? CodeModeTool.create(
-                  codemode,
-                  (name, tool, input, context) => executeTool(tool, name, input, context),
-                  yield* codeModeLimits(),
-                )
-              : undefined
-            const codeModeCatalog = codemodeEnabled ? CodeModeTool.catalog(codemode) : undefined
-            return {
-              ...(codeModeCatalog === undefined ? {} : { codeModeCatalog }),
-              definitions: [
-                ...Array.from(direct)
-                  .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-                  .map(([, tool]) => definition(tool)),
-                ...(codemodeTool ? [definition(codemodeTool)] : []),
-              ],
-              execute: (input: {
-                readonly sessionID: SessionSchema.ID
-                readonly agent: Agent.ID
-                readonly messageID: SessionMessage.ID
-                readonly call: ToolCall
-                readonly progress?: (update: Tool.Metadata) => Effect.Effect<void>
-              }) => {
-                const context: Tool.Context = {
+              const event = yield* beforeExecute(input.call.name, input.call.input, context)
+              const requested = input.definitions?.get(event.tool)
+              // Preserve session context removal and alias resolution, now after the repair hook.
+              if (!requested && input.definitions && (direct.has(event.tool) || codemodeTool?.name === event.tool))
+                return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
+              const name = requested?.name ?? event.tool
+              if (name === "execute" && codemodeTool)
+                return yield* executeTool(codemodeTool, name, event.input, context)
+              if (allowed && (!allowed.has(name) || policyDenied.has(name))) {
+                const tool = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name) ? name : "<invalid>"
+                return yield* Effect.logWarning("Session tool policy denied execution", {
                   sessionID: input.sessionID,
-                  agent: input.agent,
-                  messageID: input.messageID,
-                  id: Tool.CallID.make(input.call.id),
-                  progress: input.progress ?? (() => Effect.void),
-                }
-                if (input.call.name === "execute" && codemodeTool)
-                  return executeTool(codemodeTool, input.call.name, input.call.input, context)
-                if (allowed && (!allowed.has(input.call.name) || policyDenied.has(input.call.name))) {
-                  const tool = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(input.call.name) ? input.call.name : "<invalid>"
-                  return Effect.logWarning("Session tool policy denied execution", {
-                    sessionID: input.sessionID,
-                    tool,
-                  }).pipe(
-                    Effect.andThen(
-                      new Tool.Error({
+                  tool,
+                }).pipe(
+                  Effect.andThen(
+                    new Tool.Error({
+                      message: `Tool denied by session policy: ${tool}`,
+                      error: new Tool.PolicyDeniedError({
+                        tool,
                         message: `Tool denied by session policy: ${tool}`,
-                        error: new Tool.PolicyDeniedError({
-                          tool,
-                          message: `Tool denied by session policy: ${tool}`,
-                        }),
                       }),
-                    ),
-                  )
-                }
-                const tool = direct.get(input.call.name)
-                if (tool) return executeTool(tool, input.call.name, input.call.input, context)
-                return new Tool.Error({ message: `Unknown tool: ${input.call.name}` })
-              },
-            }
-          }),
-        ),
+                    }),
+                  ),
+                )
+              }
+              const tool = direct.get(name)
+              if (tool) return yield* executeTool(tool, name, event.input, context)
+              return yield* new Tool.Error({ message: `Unknown tool: ${name}` })
+            }),
+          }
+        }),
       ),
     })
   }),
@@ -374,36 +400,25 @@ function schemaMakeError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-const validateName = (name: string) =>
-  /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)
-    ? Effect.void
-    : Effect.fail(new RegistrationError({ name, message: `Invalid tool name: ${name}` }))
-
-const validateNamespace = (namespace: string) =>
-  namespace.split(".").every((segment) => /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(segment))
-    ? Effect.void
-    : Effect.fail(
-        new RegistrationError({
-          name: namespace,
-          message: `Invalid tool namespace: ${JSON.stringify(namespace)}`,
-        }),
-      )
-
-const normalizedName = (tool: Tool.Info) => tool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-
-const effectiveName = (tool: Tool.Info) =>
-  tool.options?.namespace === undefined
-    ? normalizedName(tool)
-    : `${tool.options.namespace.replaceAll(".", "_")}_${normalizedName(tool)}`
-
-const normalizedEntries = (tools: ReadonlyArray<Tool.Info>) =>
-  tools.map((tool) => ({
-    key: effectiveName(tool),
-    tool,
-  }))
+export function registrationError(tool: Tool.Info) {
+  const namespace = tool.options?.namespace
+  if (namespace !== undefined && !namespace.split(".").every((segment) => /^[A-Za-z0-9_-]{1,64}$/.test(segment)))
+    return new RegistrationError({ name: namespace, message: `Invalid tool namespace: ${JSON.stringify(namespace)}` })
+  const name = normalizedName(tool)
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) return new RegistrationError({ name, message: `Invalid tool name: ${name}` })
+  const id = effectiveName(tool)
+  if (tool.options?.codemode === false && id === "execute")
+    return new RegistrationError({ name: id, message: 'Tool name "execute" is reserved for CodeMode' })
+  const result = Result.try({
+    try: () => ToolDefinition.make(definition(tool)),
+    catch: (error) =>
+      new RegistrationError({ name: id, message: `Invalid tool definition ${id}: ${schemaMakeError(error)}` }),
+  })
+  return Result.isFailure(result) ? result.failure : undefined
+}
 
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [PluginHooks.node, Image.node, Config.node],
+  deps: [PluginHooks.node, Image.node],
 })

@@ -17,7 +17,8 @@ const oc2Background = {
 }
 const titlebarThemes = new WeakMap<BrowserWindow, Partial<TitlebarTheme>>()
 const pinchZoomEnabled = new WeakMap<BrowserWindow, boolean>()
-const titlebarHeight = 40
+// Match the renderer's 36px titlebar plus its former 8px content inset.
+const titlebarHeight = 44
 const maxZoomLevel = 10
 const minZoomLevel = 0.2
 let backgroundColor: string | undefined
@@ -25,7 +26,7 @@ let backgroundColor: string | undefined
 export function windowAppearance(path: Path.Path, paths: DesktopPaths.Resolved) {
   const mode = tone()
   return {
-    title: "OpenCode",
+    title: "Shuvcode",
     icon: iconPath(path, paths),
     backgroundColor: getBackgroundColor() ?? oc2Background[mode],
     ...(process.platform === "darwin"
@@ -72,8 +73,10 @@ export function getBackgroundColor() {
 
 export function setTitlebar(win: BrowserWindow, theme: Partial<TitlebarTheme> = {}) {
   titlebarThemes.set(win, theme)
-  // The macOS frame follows nativeTheme, not the renderer theme.
-  if (process.platform === "darwin") nativeTheme.themeSource = theme.scheme ?? theme.mode ?? "system"
+  // Native window controls follow nativeTheme, not the renderer theme.
+  if (process.platform === "darwin" || process.platform === "win32") {
+    nativeTheme.themeSource = theme.scheme ?? theme.mode ?? "system"
+  }
   updateTitlebar(win)
 }
 

@@ -20,7 +20,6 @@ import { showCliInstaller } from "./native/install-cli"
 import { createMenu, sendMenuCommand } from "./native/menu"
 import { DesktopCli } from "./service/desktop-cli"
 import { DesktopStorage } from "./storage"
-import { Updater } from "./updater"
 import { getLastFocusedWindow } from "./windows"
 import { Wsl } from "./wsl/start"
 
@@ -45,14 +44,12 @@ export const registerIpcHandlers = Effect.gen(function* () {
   const handoff = yield* IpcPortHandoff
   const lifecycle = yield* ApplicationLifecycle.Service
   const desktopCli = yield* DesktopCli.Service
-  const updater = yield* Updater.Service
   const runFork = Effect.runForkWith(yield* Effect.context())
   const menu = {
     trigger: (id: string) => {
       const win = getLastFocusedWindow()
       if (win) sendMenuCommand(win, id)
     },
-    checkForUpdates: () => runFork(updater.show),
     installCli: () => runFork(showCliInstaller(desktopCli)),
     createWindow: lifecycle.createWindow,
     openExternal: (url: string) => runFork(openExternalURL(url)),

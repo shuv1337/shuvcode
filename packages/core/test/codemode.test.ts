@@ -3,6 +3,7 @@ import { CodeModeTool } from "@opencode-ai/core/codemode/tool"
 import { Config } from "@opencode-ai/core/config"
 import { ConfigCodeMode } from "@opencode-ai/core/config/codemode"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Location } from "@opencode-ai/core/location"
 import { Permission } from "@opencode-ai/core/permission"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -23,12 +24,11 @@ const configLayer = (info?: ConfigCodeMode.Info) =>
             : [new Config.Document({ type: "document", info: new Config.Info({ codemode: info }) })],
         ),
       changes: () => Stream.empty,
-      update: () => Effect.succeed(new Config.Info({ codemode: info })), 
     }),
   )
 
 const node = (info?: ConfigCodeMode.Info) =>
-  AppNodeBuilder.build(Tool.node, [
+  AppNodeBuilder.build(LayerNode.group([Tool.node, Config.node]), [
     [Location.node, Location.boundNode({ directory: AbsolutePath.make("/project") })],
     [Config.node, configLayer(info)],
   ])

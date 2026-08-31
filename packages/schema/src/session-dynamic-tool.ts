@@ -23,7 +23,7 @@ export const Call = Schema.Struct({
   callID: Schema.String,
   sessionID: SessionID,
   tool: Schema.String,
-  input: Schema.Unknown,
+  input: Schema.Json,
   time: Schema.Struct({ requested: Schema.Finite }),
 }).annotate({ identifier: "SessionDynamicTool.Call" })
 

@@ -76,6 +76,7 @@ export async function streamTurn(input: {
   readonly cwd: string
   readonly start: TurnStart
   readonly writeTextFile: boolean
+  readonly action?: boolean
   readonly submit: (signal: AbortSignal) => Promise<unknown>
   readonly control: TurnControl
   readonly childSessionUpdate?: (update: ChildSessionUpdate) => Promise<void>
@@ -345,6 +346,11 @@ export async function streamTurn(input: {
     await input.submit(control.admission.signal).catch((error) => {
       if (!control.cancelled) throw error
     })
+    if (input.action) {
+      streamController.abort()
+      await completed.catch(() => {})
+      return response(undefined, undefined, "succeeded", control.cancelled, undefined)
+    }
     if (control.cancelled) {
       await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
       if (!started) {
@@ -468,17 +474,6 @@ async function replayMessage(
           sessionUpdate: "agent_thought_chunk",
           messageId: message.id,
           content: { type: "text", text: part.text },
-        },
-      })
-      continue
-    }
-    if (part.type === "structured") {
-      await connection.sessionUpdate({
-        sessionId: sessionID,
-        update: {
-          sessionUpdate: "agent_message_chunk",
-          messageId: message.id,
-          content: { type: "text", text: JSON.stringify(part.value, null, 2) },
         },
       })
       continue

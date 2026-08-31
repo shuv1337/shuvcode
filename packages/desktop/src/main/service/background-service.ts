@@ -2,9 +2,10 @@ import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
 import { promisify } from "node:util"
 import { app } from "electron"
-import { Context, Effect, Exit, Layer, Path } from "effect"
+import { Context, Effect, FileSystem, Layer, Path } from "effect"
 import type { ServerReadyData } from "../../shared/ipc-contract"
 import { selectBackgroundStateHome } from "./background-state"
+import { BackgroundServiceState } from "./background-service-state"
 import { cleanStages, DesktopCli } from "./desktop-cli"
 
 export * as BackgroundService from "./background-service"
@@ -14,6 +15,7 @@ const desktopStateNames = ["ai.opencode.desktop.dev", "ai.opencode.desktop.beta"
 
 export interface Interface {
   readonly connection: Effect.Effect<ServerReadyData>
+  readonly reconnect: Effect.Effect<ServerReadyData>
 }
 
 export class Service extends Context.Service<Service, Interface>()("opencode/desktop/BackgroundService") {}
@@ -21,27 +23,23 @@ export class Service extends Context.Service<Service, Interface>()("opencode/des
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const result = yield* start().pipe(Effect.exit)
-    return Service.of({
-      connection: Exit.isSuccess(result)
-        ? Effect.succeed(result.value)
-        : Effect.failCause(result.cause).pipe(Effect.orDie),
-    })
+    const context = yield* Effect.context<FileSystem.FileSystem | Path.Path | DesktopCli.Service>()
+    return Service.of(
+      yield* BackgroundServiceState.make({
+        initial: connect("initial").pipe(Effect.provide(context)),
+        reconnect: connect("reconnect").pipe(Effect.provide(context), Effect.orDie),
+      }),
+    )
   }),
 )
 
-// The desktop attaches to the host-managed background service through the
-// bundled CLI (`service start` / `service get password`) instead of calling
-// `Service.ensure` from Electron: on systemd hosts, an Electron-spawned server
-// would race the configured `shuvcode.service` user unit and leave a second
-// unmanaged daemon behind.
-const start = Effect.fn("BackgroundService.start")(function* () {
+// Desktop delegates discovery and startup to the bundled CLI so a configured
+// systemd unit remains the sole owner; portable installs still use CLI election.
+const connect = Effect.fn("BackgroundService.connect")(function* (mode: "initial" | "reconnect") {
   yield* Effect.logInfo("starting v2 background service")
   const path = yield* Path.Path
   const desktopCli = yield* DesktopCli.Service
   const cli = yield* desktopCli.resolve
-  // preferApplicationEnvironment has already merged the login shell env, so
-  // XDG_STATE_HOME here is the shell's state home when one is configured.
   const shellStateHome = process.env.XDG_STATE_HOME
   const candidates = [
     ...new Set([shellStateHome, ...desktopStateNames.map((name) => path.join(app.getPath("appData"), name))]),
@@ -71,7 +69,7 @@ const start = Effect.fn("BackgroundService.start")(function* () {
     version: cli.version,
     ...endpoint(url),
   })
-  if (app.isPackaged && cli.binary) yield* cleanStages(cli.binary).pipe(Effect.orDie)
+  if (mode === "initial" && app.isPackaged && cli.binary) yield* cleanStages(cli.binary).pipe(Effect.orDie)
   return {
     url,
     username: "opencode",

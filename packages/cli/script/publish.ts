@@ -3,7 +3,6 @@ import { $ } from "bun"
 import pkg from "../package.json"
 import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
-import { UpdateArtifact } from "../../../script/update-artifact"
 import { currentRepository, publishPlan } from "../../../script/publish-plan"
 import { preflightForkPublish, type ForkDistribution } from "./publish-ownership"
 import { publishDistributions } from "./publish-order"
@@ -11,7 +10,7 @@ import { restoreExecutableBinaries } from "./binary-modes"
 import { smokeDistribution } from "./package-smoke"
 
 const repository = currentRepository()
-const plan = publishPlan(repository)
+publishPlan(repository)
 const preflight = await preflightForkPublish(repository, Script.version)
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
@@ -76,12 +75,3 @@ await publishDistributions(preflight.distributions, {
   },
   publish,
 })
-if (plan.updateArtifacts) {
-  await UpdateArtifact.publish({
-    channel: Script.channel,
-    name: "cli",
-    distribution: "npm",
-    version: Script.version,
-    metadata: {},
-  })
-}

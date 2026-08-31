@@ -16,10 +16,14 @@ export function action(current: string, latest: string, policy: Policy): Action 
   if (currentFork) {
     const latestFork = forkVersion(latestVersion)
     if (!latestFork) return "none"
-    if (currentVersion.core === latestVersion.core) return latestFork > currentFork ? "upgrade" : "none"
-    return compareCore(latestVersion.core, currentVersion.core) > 0 ? "upgrade" : "none"
+    const available =
+      currentVersion.core === latestVersion.core
+        ? latestFork > currentFork
+        : compareCore(latestVersion.core, currentVersion.core) > 0
+    if (!available) return "none"
+    return policy === "notify" ? "none" : "upgrade"
   }
-  return "upgrade"
+  return policy === "notify" ? "none" : "upgrade"
 }
 
 function parseReleaseVersion(input: string) {

@@ -9,13 +9,11 @@ import {
 import { MenuCommandTriggered } from "../../shared/ipc-rpc/events"
 import { emitIpcEvent } from "../ipc-events"
 
-import { UPDATER_ENABLED } from "../constants"
 import { runDesktopMenuAction } from "./menu-actions"
 import { nativeT } from "./translations"
 
 type Deps = {
   trigger: (id: string) => void
-  checkForUpdates: () => void
   installCli: () => void
   createWindow: () => void
   openExternal: (url: string) => void
@@ -49,7 +47,6 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOpt
   const item: MenuItemConstructorOptions = {
     label: entry.labelKey ? nativeT(entry.labelKey) : undefined,
     accelerator: entry.accelerator?.macos,
-    enabled: entry.enabled === "updater" ? UPDATER_ENABLED : undefined,
   }
 
   if (entry.command) {
@@ -60,7 +57,6 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOpt
     const action = entry.action
     item.click = () =>
       runDesktopMenuAction(BrowserWindow.getFocusedWindow(), action, {
-        checkForUpdates: deps.checkForUpdates,
         installCli: deps.installCli,
         createWindow: deps.createWindow,
         relaunch: deps.relaunch,

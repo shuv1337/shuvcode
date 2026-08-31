@@ -1,4 +1,5 @@
-import type { SessionInfo } from "@opencode-ai/client/promise"
+import type { SessionInfo, SessionMessageUser } from "@opencode-ai/client/promise"
+import type { ComposerSelection } from "@/composer/adapter"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createStore, produce } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/runtime/persistence/storage"
@@ -19,6 +20,8 @@ export type SessionTab = {
   type: "session"
   server: ServerConnection.Key
   sessionId: string
+  routeSessionId?: string
+  routeParentId?: string
 }
 
 export type DraftTab = {
@@ -27,9 +30,16 @@ export type DraftTab = {
   server: ServerConnection.Key
   directory: string
   worktree?: string
+  branch?: string
 }
 
 export type Tab = SessionTab | DraftTab
+
+export type PendingSession = {
+  draft: DraftTab
+  message: SessionMessageUser
+  selection: ComposerSelection
+}
 
 export type TabInfo = {
   title?: string
@@ -43,12 +53,22 @@ type RecentTab = {
 export const draftHref = (draftID: string) => `/new-session?draftId=${encodeURIComponent(draftID)}`
 
 export const tabHref = (tab: Tab) =>
-  tab.type === "draft" ? draftHref(tab.draftID) : sessionHref(tab.server, tab.sessionId)
+  tab.type === "draft" ? draftHref(tab.draftID) : sessionHref(tab.server, tab.routeSessionId ?? tab.sessionId)
 
-export const tabKey = (tab: Tab) => (tab.type === "draft" ? `draft:${tab.draftID}` : `${tab.server}\n${tabHref(tab)}`)
+export const tabKey = (tab: Tab) =>
+  tab.type === "draft" ? `draft:${tab.draftID}` : `${tab.server}\n${sessionHref(tab.server, tab.sessionId)}`
 
 export function sessionHasOpenTab(tabs: Tab[], server: ServerConnection.Key, session: SessionInfo) {
-  return tabs.some((tab) => tab.type === "session" && tab.server === server && tab.sessionId === session.id)
+  return sessionIDHasOpenTab(tabs, server, session.id)
+}
+
+export function sessionIDHasOpenTab(tabs: Tab[], server: ServerConnection.Key, sessionID: string) {
+  return tabs.some(
+    (tab) =>
+      tab.type === "session" &&
+      tab.server === server &&
+      (tab.sessionId === sessionID || tab.routeSessionId === sessionID),
+  )
 }
 
 export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
@@ -65,8 +85,12 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       createStore<Tab[]>([]),
     )
     const [recent, setRecent, , recentReady] = persisted(Persist.window("tabs.recent"), createStore<RecentTab>({}))
-    const [info, setInfo] = persisted(Persist.window("tabs.info"), createStore<Record<string, TabInfo>>({}))
+    const [info, setInfo, , infoReady] = persisted(
+      Persist.window("tabs.info"),
+      createStore<Record<string, TabInfo>>({}),
+    )
     const [closed, setClosed, , closedReady] = persisted(Persist.window("tabs.closed"), createStore<ClosedTab[]>([]))
+    const [pending, setPending] = createStore<Record<string, PendingSession | undefined>>({})
 
     const params = useParams()
     const navigate = useNavigate()
@@ -229,6 +253,14 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           )
         })
       },
+      initializeDraftWorktrees(server: ServerConnection.Key, directory: string, worktree: string) {
+        setStore(
+          (tab) => tab.type === "draft" && tab.server === server && tab.directory === directory && !tab.worktree,
+          produce((tab) => {
+            if (tab.type === "draft") tab.worktree = worktree
+          }),
+        )
+      },
       promoteDraft(draftID: string, session: Omit<SessionTab, "type">) {
         // Keep the replacement and navigation atomic so /new-session never renders
         // after its backing draft tab has been removed from the store.
@@ -246,6 +278,74 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         })
         memory.remove(`draft:${draftID}`)
         removeDraftPersisted(draftID)
+      },
+      pendingSession(server: ServerConnection.Key, sessionID: string): PendingSession | undefined {
+        return pending[tabKey({ type: "session", server, sessionId: sessionID })]
+      },
+      prepareSession(
+        draftID: string,
+        session: Omit<SessionTab, "type">,
+        preview: { message: SessionMessageUser; selection: ComposerSelection },
+      ) {
+        // Snapshot the draft before replacing its store entry; keep its composer alive for rollback.
+        const draft = { ...actions.draft(draftID) }
+        const next = { type: "session" as const, ...session }
+        const key = tabKey(next)
+        const ready = startTransition(() => {
+          setPending(key, { draft, ...preview })
+          const index = store.findIndex((tab) => tab.type === "draft" && tab.draftID === draftID)
+          if (index === -1) return
+          const active = location.pathname === "/new-session" && location.query.draftId === draftID
+          setStore(
+            produce((tabs) => {
+              tabs[index] = next
+            }),
+          )
+          if (recentKey() === tabKey(draft)) setRecentKey(key)
+          if (active) navigateTab(next)
+        })
+
+        return {
+          ready,
+          async complete() {
+            await ready
+            if (!pending[key]) return
+            await startTransition(() => setPending(key, undefined))
+            memory.remove(tabKey(draft))
+            removeDraftPersisted(draftID)
+          },
+          async rollback(worktree?: string) {
+            await ready
+            if (!pending[key]) return
+            await startTransition(() => {
+              const index = store.findIndex((tab) => tabKey(tab) === key)
+              if (index !== -1) {
+                const restored = worktree === undefined ? draft : { ...draft, worktree, branch: undefined }
+                const route = currentRoute()
+                setStore(
+                  produce((tabs) => {
+                    tabs[index] = restored
+                  }),
+                )
+                if (recentKey() === key) setRecentKey(tabKey(restored))
+                if (
+                  route.type === "session" &&
+                  route.server === session.server &&
+                  route.sessionId === session.sessionId
+                ) {
+                  navigateTab(restored)
+                }
+              }
+              setPending(key, undefined)
+            })
+            updateClosed((stack) => removeClosedTabs(stack, session.server, [session.sessionId]))
+            memory.remove(key)
+            removeInfo(key)
+            if (store.some((tab) => tab.type === "draft" && tab.draftID === draftID)) return
+            memory.remove(tabKey(draft))
+            removeDraftPersisted(draftID)
+          },
+        }
       },
       removeTab,
       // User-initiated close: records the tab so it can be reopened.
@@ -281,7 +381,10 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       removeSessionTab(input: Omit<SessionTab, "type">) {
         updateClosed((stack) => removeClosedTabs(stack, input.server, [input.sessionId]))
         const index = store.findIndex(
-          (tab) => tab.type === "session" && tab.server === input.server && tab.sessionId === input.sessionId,
+          (tab) =>
+            tab.type === "session" &&
+            tab.server === input.server &&
+            (tab.sessionId === input.sessionId || tab.routeSessionId === input.sessionId),
         )
         if (index !== -1) removeTab(index)
       },
@@ -357,6 +460,18 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         const key = tabKey(tab)
         if (recentKey() !== key) setRecentKey(key)
       },
+      rememberSessionRoute(tab: SessionTab, sessionId: string, parentId?: string) {
+        const index = store.findIndex((item) => tabKey(item) === tabKey(tab))
+        if (index === -1) return
+        setStore(
+          index,
+          produce((item) => {
+            if (item.type !== "session") return
+            item.routeSessionId = sessionId === item.sessionId ? undefined : sessionId
+            item.routeParentId = sessionId === item.sessionId ? undefined : parentId
+          }),
+        )
+      },
       toggleHome(input: { home: boolean; current?: Tab }) {
         if (input.home) {
           const tab = store.find((tab) => tabKey(tab) === recentKey())
@@ -378,6 +493,6 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       },
     }
 
-    return { ...actions, store, info, ready, recentReady }
+    return { ...actions, store, info, ready, infoReady, recentReady }
   },
 })

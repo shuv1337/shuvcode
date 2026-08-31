@@ -14,20 +14,61 @@ import { Bus } from "@opencode-ai/core/bus"
 import { Integration } from "@opencode-ai/core/integration"
 import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Provider } from "@opencode-ai/core/provider"
 import { Reference } from "@opencode-ai/core/reference"
 import { Skill } from "@opencode-ai/core/skill"
+import { ShellSelect } from "@opencode-ai/core/shell/select"
 import { Global } from "@opencode-ai/util/global"
-import { Effect, Schema } from "effect"
+import { AppProcess } from "@opencode-ai/util/process"
+import { Effect, Layer, Schema } from "effect"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "../plugin/fixture"
 
-const it = testEffect(PluginTestLayer)
+const it = testEffect(
+  Layer.merge(PluginTestLayer, AppNodeBuilder.build(LayerNode.group([AppProcess.node, ShellSelect.node]))),
+)
 const decode = Schema.decodeUnknownSync(Info)
 const document = path.join(import.meta.dir, "opencode.json")
 
 describe("config plugin reloads", () => {
+  it.effect("preserves reference precedence and insertion order across documents", () =>
+    Effect.gen(function* () {
+      const plugins = yield* Plugin.Service
+      const references = yield* Reference.Service
+      const host = yield* PluginHost.make(plugins)
+      yield* references.transform((draft) =>
+        draft.add(
+          "external",
+          Reference.LocalSource.make({ type: "local", path: AbsolutePath.make("/references/external") }),
+        ),
+      )
+      yield* ConfigReferencePlugin.Plugin.effect(host)
+
+      const result = yield* references.list()
+      expect(result.map((reference) => reference.name)).toEqual(["external", "shared", "first", "second"])
+      expect(result.find((reference) => reference.name === "shared")?.path).toBe(
+        AbsolutePath.make(path.resolve("/config/second/shared")),
+      )
+    }).pipe(
+      Effect.provide(
+        Config.testLayer([
+          referenceConfig("/config/first/opencode.json", {
+            shared: "./shared",
+            first: "./first",
+          }),
+          referenceConfig("/config/second/opencode.json", {
+            shared: "./shared",
+            second: "./second",
+          }),
+        ]),
+      ),
+      Effect.provideService(Global.Service, Global.Service.of(Global.make())),
+    ),
+  )
+
   it.live("reloads config-backed domains without reloading external plugins", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
@@ -93,6 +134,14 @@ function config(name: string) {
       references: { [name]: `/references/${name}` },
       providers: { [name]: { models: { chat: { name: `${title(name)} model` } } } },
     }),
+  })
+}
+
+function referenceConfig(file: string, references: Record<string, string>) {
+  return new Document({
+    type: "document",
+    path: AbsolutePath.make(file),
+    info: decode({ references }),
   })
 }
 

@@ -15,7 +15,6 @@ import { finishFirstLaunchOnboarding, isFirstLaunchOnboardingPending } from "../
 import { BackgroundService } from "../service/background-service"
 import { DesktopCli } from "../service/desktop-cli"
 import { getDefaultServerUrl, setDefaultServerUrl } from "../service/server-settings"
-import { Updater } from "../updater"
 import { getLastFocusedWindow, setBackgroundColor } from "../windows"
 import { sender } from "./context"
 
@@ -25,11 +24,11 @@ export const appHandlers = AppRpcs.toLayer(
     const lifecycle = yield* ApplicationLifecycle.Service
     const background = yield* BackgroundService.Service
     const desktopCli = yield* DesktopCli.Service
-    const updater = yield* Updater.Service
     const logging = yield* DesktopLogging.Service
     const runFork = Effect.runForkWith(yield* Effect.context())
     return AppRpcs.of({
       AppAwaitInitialization: () => background.connection,
+      AppReconnectService: () => background.reconnect,
       AppConsumeInitialDeepLinks: () => Effect.sync(lifecycle.consumeInitialDeepLinks),
       AppGetDefaultServerUrl: () => Effect.sync(getDefaultServerUrl),
       AppSetDefaultServerUrl: ({ url }) => Effect.sync(() => setDefaultServerUrl(url)),
@@ -58,7 +57,6 @@ export const appHandlers = AppRpcs.toLayer(
               const win = getLastFocusedWindow()
               if (win) sendMenuCommand(win, id)
             },
-            checkForUpdates: () => runFork(updater.show),
             installCli: () => runFork(showCliInstaller(desktopCli)),
             createWindow: lifecycle.createWindow,
             openExternal: (url) => runFork(openExternalURL(url)),

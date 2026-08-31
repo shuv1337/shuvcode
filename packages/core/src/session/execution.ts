@@ -3,6 +3,7 @@ export * as SessionExecution from "./execution.js"
 import { Cause, Context, Effect, Exit, Layer } from "effect"
 import { Bus } from "../bus.js"
 import { Database } from "../database/database.js"
+import { Job } from "../job.js"
 import { LocationServiceMap } from "../location-service-map.js"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
 import { SessionEvent } from "./event.js"
@@ -17,6 +18,8 @@ import { SessionInbox } from "./inbox.js"
 export interface Interface {
   /** Snapshots active execution owned by this process. */
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
+  /** Checks process-local ownership, including interruption cleanup and terminal settlement. */
+  readonly isActive: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
   /** Starts execution while idle or joins the active execution. */
   readonly resume: (sessionID: SessionSchema.ID) => Effect.Effect<void, SessionRunner.RunError>
   /** Registers newly recorded work. Repeated wakeups may coalesce. */
@@ -24,9 +27,10 @@ export interface Interface {
   /**
    * Interrupt active work owned by this process. Idle interruption is a no-op. Resolves once
    * the interruption is accepted; cleanup settles asynchronously in the execution fiber.
-   * Compose with `awaitIdle` when settlement matters.
+   * Returns whether an active execution was interrupted. Compose with `awaitIdle` when
+   * settlement matters.
    */
-  readonly interrupt: (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) => Effect.Effect<void>
+  readonly interrupt: (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) => Effect.Effect<boolean>
   /** Resolves once this process owns no active execution for the Session. Returns immediately when idle and never starts work. */
   readonly awaitIdle: (sessionID: SessionSchema.ID) => Effect.Effect<void>
 }
@@ -51,6 +55,7 @@ export const layer = Layer.effect(
     const store = yield* SessionStore.Service
     const locations = yield* LocationServiceMap.Service
     const bus = yield* Bus.Service
+    const jobs = yield* Job.Service
     const db = (yield* Database.Service).db
     const reportLifecycle = <A>(sessionID: SessionSchema.ID, effect: Effect.Effect<A>) =>
       effect.pipe(
@@ -77,29 +82,29 @@ export const layer = Layer.effect(
     const releaseOnCommit = (sessionID: SessionSchema.ID) => ({
       commit: () => store.release(sessionID),
     })
-    function drain(
+    const drain = Effect.fnUntraced(function* (
       sessionID: SessionSchema.ID,
       force: boolean,
       continuation?: SessionRunner.Continuation,
       promotable: SessionInbox.Promotable = "input",
-    ): Effect.Effect<void, SessionRunner.RunError> {
-      return Effect.gen(function* () {
-        const session = yield* store.get(sessionID)
-        if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
-        const result = yield* SessionRunner.Service.use((runner) =>
-          runner.drain({ sessionID, force, continuation, promotable }),
-        ).pipe(
-          Effect.provide(locations.get(session.location)),
-          Effect.tapCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.void
-              : Effect.logError("Failed to drain Session", cause).pipe(Effect.annotateLogs({ sessionID })),
-          ),
-        )
-        if (result.type === "complete") return
-        return yield* drain(sessionID, false, result.continuation, promotable)
+    ): Effect.fn.Return<void, SessionRunner.RunError> {
+      const session = yield* store.get(sessionID)
+      if (!session) return yield* Effect.die(new Error(`Session not found: ${sessionID}`))
+      const result = yield* SessionRunner.Service.use((runner) =>
+        runner.drain({ sessionID, force, continuation, promotable }),
+      ).pipe(
+        Effect.provide(locations.get(session.location)),
+        Effect.tapCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logError("Failed to drain Session", cause).pipe(Effect.annotateLogs({ sessionID })),
+        ),
+      )
+      return yield* SessionRunner.DrainResult.$match(result, {
+        Complete: () => Effect.void,
+        Moved: (result) => drain(sessionID, false, result.continuation, promotable),
       })
-    }
+    })
     const coordinator = yield* SessionRunCoordinator.make<SessionSchema.ID, SessionRunner.RunError, InterruptReason>({
       started: (sessionID) =>
         reportLifecycle(
@@ -120,6 +125,7 @@ export const layer = Layer.effect(
             if (outcome.type === "interrupted") {
               // A user cancel (or a superseding execution) releases the claim: the turn is settled.
               // Shutdown interruption keeps the claim as an inert marker of unfinished work.
+              if (outcome.reason === "user") yield* jobs.cancel(sessionID)
               yield* bus.publish(
                 SessionEvent.Execution.Interrupted,
                 { sessionID, reason: outcome.reason },
@@ -141,22 +147,24 @@ export const layer = Layer.effect(
 
     return Service.of({
       active: coordinator.active,
+      isActive: coordinator.isActive,
       interrupt: (sessionID, options) =>
         Effect.gen(function* () {
-          yield* coordinator.interrupt(sessionID, "user")
-          if (!options?.continue) return
+          const interrupted = yield* coordinator.interrupt(sessionID, "user")
+          if (!options?.continue) return interrupted
           // Resume steering input and between-turn control work from the interrupted
-          // intent. Queued next-turn prompts stay parked: a steer-scoped drain never
-          // promotes them, and a control item behind a queued prompt waits its turn.
+          // intent, including an idle Session that still has a pending steer. Queued
+          // next-turn prompts stay parked: a steer-scoped drain never promotes them,
+          // and a control item behind a queued prompt waits its turn.
           // Interruption acknowledges before cleanup settles, so this wake usually lands
           // on the stopping execution's doorbell and starts the successor at settle.
           // Reading the inbox concurrently with the dying drain is safe: delivery consumes
           // rows inside uninterruptible publications, so a steer row is either still
           // promotable here or was fully delivered and needs no resumption.
           const next = yield* SessionInbox.nextPromotable(db, sessionID, "input")
-          if (next === undefined) return
-          if (next.delivery === "steer" || next.type === "compaction" || next.type === "move")
+          if (next !== undefined && (next.delivery === "steer" || next.type === "compaction" || next.type === "move"))
             yield* coordinator.wake(sessionID, "steer")
+          return interrupted
         }),
       resume: coordinator.run,
       wake: coordinator.wake,
@@ -168,7 +176,7 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [SessionStore.node, LocationServiceMap.node, Bus.node, Database.node],
+  deps: [SessionStore.node, LocationServiceMap.node, Bus.node, Database.node, Job.node],
 })
 
 /** Low-level compatibility layer for callers that only need durable Session recording. */
@@ -176,9 +184,10 @@ export const noopLayer = Layer.succeed(
   Service,
   Service.of({
     active: Effect.succeed(new Set()),
+    isActive: () => Effect.succeed(false),
     resume: () => Effect.void,
     wake: () => Effect.void,
-    interrupt: () => Effect.void,
+    interrupt: () => Effect.succeed(false),
     awaitIdle: () => Effect.void,
   }),
 )

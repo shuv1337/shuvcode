@@ -49,11 +49,12 @@ export namespace TimelineRow {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    spacing?: "tool" | "content"
   }> {}
 
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string
-    reasoningHeading?: string
+    ref: PartRef
   }> {}
 
   export class Error extends Data.TaggedClass("Error")<{
@@ -88,8 +89,11 @@ export namespace TimelineRow {
         return `notice:${row.messageID}`
       case "TurnDivider":
         return `turn-divider:${row.userMessageID}`
+      // Keyed by part identity alone: a page boundary can truncate the leading turn,
+      // and its rows regroup under the real user message once older history loads.
+      // The group key already carries the owning message and part IDs.
       case "AssistantPart":
-        return `assistant-part:${row.userMessageID}:${row.group.key}`
+        return `assistant-part:${row.group.type}:${row.group.key}`
       case "Thinking":
         return `thinking:${row.userMessageID}`
       case "Error":
@@ -115,8 +119,9 @@ export type TimelineRowMap = {
     userMessageID: string
     group: PartGroup
     previousAssistantPart: boolean
+    spacing?: "tool" | "content"
   }
-  Thinking: { userMessageID: string; reasoningHeading?: string }
+  Thinking: { userMessageID: string; ref: PartRef }
   Retry: { userMessageID: string }
   Error: { userMessageID: string; text: string }
 }

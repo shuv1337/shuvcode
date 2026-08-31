@@ -27,6 +27,26 @@ test("health.get decodes the readiness response", async () => {
   expect(result).toEqual({ healthy: true, version: "old", pid: 123 })
 })
 
+test("vcs.base decodes nullable review-base metadata", async () => {
+  const location = { directory: "/repo", project: { id: "global", directory: "/repo", canonical: "/repo" } }
+  const base = {
+    name: "release",
+    ref: "refs/remotes/origin/release",
+    source: "reflog",
+  }
+  for (const data of [base, null]) {
+    const httpClient = HttpClient.make((request) =>
+      Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({ location, data }))),
+    )
+    const result = await Effect.gen(function* () {
+      const client = yield* OpenCode.make({ baseUrl: "http://localhost:3000" })
+      return yield* client.vcs.base({ location: { directory: AbsolutePath.make("/repo") } })
+    }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient), Effect.runPromise)
+    expect(result.data).toEqual(data)
+    expect(result.location.directory).toBe("/repo")
+  }
+})
+
 test("session.get returns the decoded Effect projection", async () => {
   const httpClient = HttpClient.make((request) =>
     Effect.succeed(HttpClientResponse.fromWeb(request, Response.json(session))),
@@ -172,7 +192,14 @@ test("session methods retain decoded Effect inputs and outputs", async () => {
       return Effect.succeed(HttpClientResponse.fromWeb(request, Response.json(session)))
     }
     if (request.method === "POST") {
-      return Effect.succeed(HttpClientResponse.fromWeb(request, new Response(null, { status: 204 })))
+      return Effect.succeed(
+        HttpClientResponse.fromWeb(
+          request,
+          request.url.includes("/interrupt")
+            ? Response.json({ interrupted: true })
+            : new Response(null, { status: 204 }),
+        ),
+      )
     }
     return Effect.succeed(
       HttpClientResponse.fromWeb(request, Response.json({ data: [session.data], cursor: { next: "next" } })),
@@ -202,12 +229,12 @@ test("session methods retain decoded Effect inputs and outputs", async () => {
     const log = yield* client.session
       .log({ sessionID: Session.ID.make("ses_test"), after: Event.Seq.make(0) })
       .pipe(Stream.runCollect)
-    yield* client.session.interrupt({ sessionID: Session.ID.make("ses_test") })
+    const interrupted = yield* client.session.interrupt({ sessionID: Session.ID.make("ses_test") })
     const message = yield* client.session.message({
       sessionID: Session.ID.make("ses_test"),
       messageID: SessionMessage.ID.make("msg_model"),
     })
-    return { page, active, created, admitted, context, log, message }
+    return { page, active, created, admitted, context, log, interrupted, message }
   }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient), Effect.runPromise)
 
   const listed = result.page.data[0]
@@ -216,6 +243,7 @@ test("session methods retain decoded Effect inputs and outputs", async () => {
   expect(DateTime.toEpochMillis(listed.time.idle)).toBe(1_717_171_717_002)
   expect(DateTime.toEpochMillis(listed.time.viewed)).toBe(1_717_171_717_001)
   expect(result.active).toEqual({ ses_test: { type: "running" } })
+  expect(result.interrupted).toEqual({ interrupted: true })
   expect(Object.getPrototypeOf(result.page.data[0])).toBe(Object.prototype)
   expect(Object.getPrototypeOf(result.created)).toBe(Object.prototype)
   expect(result.created.id).toBe("ses_test")

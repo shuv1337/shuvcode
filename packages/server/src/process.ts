@@ -2,8 +2,16 @@ export * as ServerProcess from "./process"
 
 import { NodeHttpServer } from "@effect/platform-node"
 import { hasPtyConnectTicketURL } from "@opencode-ai/protocol/groups/pty"
+import { hasPersistentPtyConnectTicketURL } from "@opencode-ai/protocol/groups/persistent-pty"
 import { Cause, Context, Effect, Exit, Latch, Layer, Option, Ref, Scope } from "effect"
-import { HttpMiddleware, HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import {
+  HttpMiddleware,
+  HttpPlatform,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/unstable/http"
 import { createServer } from "node:http"
 import { ServerAuth } from "./auth"
 import { isAllowedCorsOrigin } from "./cors"
@@ -41,6 +49,7 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
   options: ServerOptions,
   lifecycle?: Lifecycle<E, R>,
   transform?: Transform,
+  advertisedURLs: ReadonlyArray<string> = [],
 ) {
   const password = options.password
   if (!password) return yield* Effect.fail(new Error("Missing server password"))
@@ -49,12 +58,13 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
   const shutdown = yield* Latch.make()
   const status = yield* Status.make()
   const bound = yield* listen({ hostname, port })
+  const advertised = ServerInfo.advertisedURLs(advertisedURLs)
   const application = yield* Ref.make(Option.none<App>())
   // Request fibers may continue inbound trace context, but must not inherit the server startup parent.
   yield* bound.http
     .serve(
       dispatch(password, status, application, options.app?.version ?? "unknown").pipe(
-        HttpMiddleware.cors({ allowedOrigins: isAllowedCorsOrigin, maxAge: 86_400 }),
+        HttpMiddleware.cors({ allowedOrigins: (origin) => isAllowedCorsOrigin(origin, options), maxAge: 86_400 }),
       ),
       errorResponseLogger,
     )
@@ -84,17 +94,20 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
           password,
         },
         () => {
-          if (options.advertisedURLs && options.advertisedURLs.length > 0)
-            return ServerInfo.advertisedURLs(options.advertisedURLs)
           const address = bound.server.address()
           if (address === null || typeof address === "string") return []
           const host = address.family === "IPv6" ? `[${address.address}]` : address.address
-          return ServerInfo.connectionURLs(`http://${host}:${address.port}`, hostname)
+          return [...ServerInfo.connectionURLs(`http://${host}:${address.port}`, hostname), ...advertised]
         },
-      ).pipe(Layer.provide(NodeHttpServer.layerHttpServices)),
+      ).pipe(Layer.provideMerge(NodeHttpServer.layerHttpServices)),
       applicationScope,
     )
-    const app = Context.get(context, HttpRouter.HttpRouter).asHttpEffect()
+    const app = Context.get(context, HttpRouter.HttpRouter)
+      .asHttpEffect()
+      .pipe(
+        HttpMiddleware.compression(),
+        Effect.provideService(HttpPlatform.HttpPlatform, Context.get(context, HttpPlatform.HttpPlatform)),
+      )
     yield* Ref.set(application, Option.some(transform ? transform(app) : app))
     yield* status.ready
     return { address: bound.http.address, shutdown: shutdown.await }
@@ -159,15 +172,18 @@ function dispatch(
   return Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.url, "http://localhost")
-    const state = yield* status.current
-    const app = yield* Ref.get(application)
-    const ready = state.type === "ready" && Option.isSome(app)
     if (request.method === "GET" && url.pathname === "/api/health") {
       if (!(yield* authorizedRequest(request, auth))) return unauthorized()
       return yield* healthResponse(status, version)
     }
-    if (ready && hasPtyConnectTicketURL(url)) return yield* app.value
-    if (!(yield* authorizedRequest(request, auth))) return unauthorized()
+    const state = yield* status.current
+    const app = yield* Ref.get(application)
+    const ready = state.type === "ready" && Option.isSome(app)
+    if (
+      (!ready || (!hasPtyConnectTicketURL(url) && !hasPersistentPtyConnectTicketURL(url))) &&
+      !(yield* authorizedRequest(request, auth))
+    )
+      return unauthorized()
     if (ready) return yield* app.value
     return unavailable(state)
   })
@@ -206,7 +222,3 @@ function unavailable(status: Status.State) {
     { status: 503, headers: { "retry-after": "1" } },
   )
 }
-
-// Boot deliberately performs no execution recovery: an unreleased claim from a
-// dead process stays inert and no provider work is replayed. Continuing an
-// interrupted turn is a user-initiated prompt, not a start-up side effect.

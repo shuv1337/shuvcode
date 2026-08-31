@@ -263,31 +263,8 @@
   }
 }
 
-[data-component="compaction-part"] {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-
-  [data-slot="compaction-part-divider"] {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    width: 100%;
-  }
-
-  [data-slot="compaction-part-line"] {
-    flex: 1 1 auto;
-    height: 1px;
-    background: var(--v2-border-border-base);
-  }
-
-  [data-slot="compaction-part-label"] {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    text-align: center;
-  }
+[data-timeline-row="AssistantPart"][data-timeline-spacing="content"] [data-component="text-part"] {
+  margin-top: 0;
 }
 
 [data-component="reasoning-part"] {
@@ -296,10 +273,22 @@
   line-height: var(--line-height-normal);
 
   [data-component="markdown"] {
-    margin-top: 16px;
+    margin-top: 0;
     font-style: normal;
     font-size: 13px;
+    line-height: var(--line-height-base);
     color: var(--v2-text-text-muted);
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-size: inherit;
+      font-weight: inherit;
+      color: inherit;
+    }
 
     strong,
     b {
@@ -419,9 +408,42 @@
     overflow-wrap: anywhere;
   }
 
-  [data-slot="bash-prompt"] {
-    user-select: none;
+  &[data-variant="shell"] {
+    background: var(--v2-background-bg-base);
+
+    [data-slot="bash-pre"] {
+      padding: 0;
+    }
+
+    [data-slot="bash-pre"] code {
+      font-family: var(--v2-font-family-code);
+      font-weight: 440;
+      line-height: var(--line-height-base);
+      letter-spacing: -0.04px;
+    }
+
+    [data-slot="bash-command"],
+    [data-slot="bash-result"] {
+      display: block;
+      padding: 12px;
+    }
+
+    [data-slot="bash-result"] {
+      border-block-start: 0.5px solid var(--v2-border-border-base);
+      background: var(--v2-background-bg-layer-01);
+      color: var(--v2-text-text-muted);
+    }
+
+    [data-slot="bash-command"] {
+      color: var(--v2-text-text-base);
+    }
   }
+}
+
+[data-component="collapsible"].tool-collapsible:has(
+    > [data-slot="collapsible-content"] [data-component="bash-output"][data-variant="shell"]
+  ) {
+  --tool-content-gap: 6px;
 }
 
 [data-component="edit-trigger"],
@@ -609,7 +631,7 @@
   font-family: var(--font-family-sans);
   font-size: 13px;
   font-weight: var(--font-weight-regular, 440);
-  line-height: 13px;
+  line-height: var(--line-height-compact);
   letter-spacing: -0.04px;
   color: var(--v2-text-text-faint, #808080);
   user-select: none;
@@ -657,8 +679,27 @@
   cursor: default;
 
   [data-slot="context-tool-group-title"] {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 1;
     min-width: 0;
+  }
+
+  [data-slot="context-tool-group-prefix"] {
+    flex-shrink: 0;
+    color: var(--v2-text-text-muted);
+    font-family: var(--v2-font-family-sans);
+    font-size: 13px;
+    font-weight: 440;
+    line-height: var(--line-height-compact);
+    letter-spacing: -0.04px;
+  }
+
+  [data-slot="basic-tool-tool-title"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   [data-slot="collapsible-arrow"] {
@@ -667,15 +708,75 @@
   }
 }
 
+[data-component="collapsed-tool-group"] > [data-component="collapsible"].tool-collapsible {
+  --tool-content-gap: 8px;
+}
+
 [data-component="context-tool-group-list"] {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 
   [data-slot="context-tool-group-item"] {
     min-width: 0;
+    min-height: 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     padding: 0;
+
+    > [data-component="tool-part-wrapper"] {
+      width: 100%;
+    }
+
+    > [data-component="tool-part-wrapper"]
+      > [data-component="collapsible"]
+      > [data-slot="collapsible-trigger"]:not([data-hide-details="true"]) {
+      height: 28px;
+    }
+
+    [data-slot="basic-tool-tool-info-structured"] {
+      gap: 6px;
+    }
+
+    [data-slot="basic-tool-tool-title"],
+    [data-slot="basic-tool-tool-subtitle"],
+    [data-slot="basic-tool-tool-arg"],
+    [data-slot="context-tool-group-matches"] {
+      font-family: var(--v2-font-family-sans);
+      font-size: 13px;
+      font-weight: 440;
+      line-height: var(--line-height-compact);
+      letter-spacing: -0.04px;
+    }
+
+    [data-slot="basic-tool-tool-subtitle"] {
+      color: var(--v2-text-text-faint);
+    }
+
+    [data-slot="context-tool-group-dot"] {
+      flex-shrink: 0;
+      width: 6px;
+      height: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+
+      &::before {
+        content: "";
+        width: 2.25px;
+        height: 2.25px;
+        border-radius: 50%;
+        background-color: var(--v2-icon-icon-muted);
+      }
+    }
+
+    [data-slot="context-tool-group-matches"] {
+      flex-shrink: 0;
+      white-space: nowrap;
+      color: var(--v2-text-text-faint);
+    }
   }
 }
 
@@ -1347,7 +1448,8 @@
   max-width: 100%;
   font-family: var(--font-family-sans);
   font-size: 13px;
-  line-height: 13px;
+  /* Loaded values truncate, so they require the full compact line box for descenders. */
+  line-height: var(--line-height-compact);
   letter-spacing: -0.04px;
   color: var(--v2-text-text-base);
 

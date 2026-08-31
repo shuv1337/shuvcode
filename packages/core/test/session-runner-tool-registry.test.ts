@@ -74,6 +74,13 @@ const transform = (service: Tool.Interface, tools: Readonly<Record<string, Info>
     Object.entries(tools).forEach(([name, tool]) => draft.add({ ...tool, name, options: options ?? tool.options })),
   )
 
+function registrationError(exit: Exit.Exit<unknown, never>) {
+  if (!Exit.isFailure(exit)) throw new Error("Expected a failed registration")
+  const defect = Cause.squash(exit.cause)
+  if (!(defect instanceof Tool.RegistrationError)) throw new Error("Expected Tool.RegistrationError")
+  return defect
+}
+
 describe("Tool", () => {
   it.effect("overlays session-scoped tools only onto the requesting snapshot", () =>
     Effect.gen(function* () {
@@ -102,9 +109,9 @@ describe("Tool", () => {
   it.effect("rejects invalid dotted namespaces", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
-      const error = yield* transform(service, { echo: make() }, { namespace: "slack..admin" }).pipe(Effect.flip)
-
-      expect(error).toBeInstanceOf(Tool.RegistrationError)
+      const error = registrationError(
+        yield* transform(service, { echo: make() }, { namespace: "slack..admin" }).pipe(Effect.exit),
+      )
       expect(error.message).toBe('Invalid tool namespace: "slack..admin"')
       expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
     }),
@@ -113,11 +120,13 @@ describe("Tool", () => {
   it.effect("rejects invalid and colliding normalized names", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
-      const invalid = yield* transform(service, { "123": make() }, { codemode: false }).pipe(Effect.flip)
-      expect(invalid.message).toBe("Invalid tool name: 123")
+      const invalid = registrationError(
+        yield* transform(service, { "": make() }, { codemode: false }).pipe(Effect.exit),
+      )
+      expect(invalid.message).toBe("Invalid tool name: ")
 
-      const collision = yield* transform(service, { "echo.tool": make(), echo_tool: make() }, { codemode: false }).pipe(
-        Effect.flip,
+      const collision = registrationError(
+        yield* transform(service, { "echo.tool": make(), echo_tool: make() }, { codemode: false }).pipe(Effect.exit),
       )
       expect(collision.message).toBe("Duplicate normalized tool name: echo_tool")
       expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
@@ -127,13 +136,14 @@ describe("Tool", () => {
   it.effect("validates a registration batch before installing any tools", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
-      const error = yield* service
-        .transform((draft) => {
-          draft.add({ ...make(), name: "first", options: { codemode: false } })
-          draft.add({ ...make(), name: "second", options: { namespace: "invalid..namespace", codemode: false } })
-        })
-        .pipe(Effect.flip)
-
+      const error = registrationError(
+        yield* service
+          .transform((draft) => {
+            draft.add({ ...make(), name: "first", options: { codemode: false } })
+            draft.add({ ...make(), name: "second", options: { namespace: "invalid..namespace", codemode: false } })
+          })
+          .pipe(Effect.exit),
+      )
       expect(error).toBeInstanceOf(Tool.RegistrationError)
       expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
     }),
@@ -142,19 +152,19 @@ describe("Tool", () => {
   it.effect("rejects invalid tool definitions before installing any tools", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
-      const error = yield* service
-        .transform((draft) => {
-          draft.add({ ...make(), name: "healthy", options: { codemode: false } })
-          draft.add({
-            name: "phone_type",
-            input: Schema.Struct({}),
-            execute: () => Effect.succeed({ content: "ok" }),
-            options: { codemode: false },
-          } as unknown as Info)
-        })
-        .pipe(Effect.flip)
-
-      expect(error).toBeInstanceOf(Tool.RegistrationError)
+      const error = registrationError(
+        yield* service
+          .transform((draft) => {
+            draft.add({ ...make(), name: "healthy", options: { codemode: false } })
+            draft.add({
+              name: "phone_type",
+              input: Schema.Struct({}),
+              execute: () => Effect.succeed({ content: "ok" }),
+              options: { codemode: false },
+            } as unknown as Info)
+          })
+          .pipe(Effect.exit),
+      )
       expect(error.name).toBe("phone_type")
       expect(error.message).toContain('Expected string\n  at ["description"]')
       expect((yield* service.snapshot()).definitions.map((tool) => tool.name)).toEqual(["execute"])
@@ -615,7 +625,7 @@ describe("Tool", () => {
         }),
       ).toMatchObject({
         status: "error",
-        error: { type: "tool.execution", message: expect.stringContaining("Invalid tool input") },
+        error: { type: "tool.execution", message: expect.stringContaining("Invalid arguments for tool") },
       })
       expect(executed).toEqual(["yes"])
 

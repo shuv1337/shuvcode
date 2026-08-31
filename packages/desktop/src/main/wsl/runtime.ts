@@ -291,9 +291,8 @@ export const installWslCli = Effect.fn("Wsl.installCli")(function* (
 })
 
 export function wslCliInstallCommand(cli: WslCliBuild) {
-  const installer = "curl -fsSL https://raw.githubusercontent.com/anomalyco/opencode/v2/install | bash -s --"
-  if (!cli.binary) return `${installer} --version ${shellEscape(cli.version)}`
-  return `${installer} --binary "$(wslpath -a ${shellEscape(cli.binary)})"`
+  if (!cli.binary) throw new Error("A bundled Shuvcode CLI is required for WSL installation")
+  return `install -Dm755 "$(wslpath -a ${shellEscape(cli.binary)})" "$HOME/.local/bin/shuvcode"`
 }
 
 export async function probeWslDistro(name: string, opts?: RunWslOptions): Promise<WslDistroProbe> {
@@ -331,7 +330,7 @@ export async function resolveWslCli(distro: string, opts?: RunWslOptions) {
   return firstLine(
     (
       await runWslSh(
-        'if [ -x "$HOME/.opencode/bin/opencode2" ]; then printf "%s\\n" "$HOME/.opencode/bin/opencode2"; fi',
+        'if [ -x "$HOME/.local/bin/shuvcode" ]; then printf "%s\\n" "$HOME/.local/bin/shuvcode"; fi',
         distro,
         opts,
       )

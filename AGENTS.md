@@ -1,14 +1,15 @@
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit generated client files directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk` composes Client, Core, and Server.
 - Implementation changes should land in the V2 package set: `packages/core`, `packages/cli`, `packages/server`, `packages/protocol`, `packages/schema`, and related generated client surfaces when required. The deleted V1 `packages/opencode` tree is available from `fork-v1-final` when historical reference is needed.
+- This repository does not use Changesets. Do not add `.changeset` files; follow the existing release workflow instead.
 - The default branch in this repo is `integration-v2`.
 - Local `main` and `dev` refs may not exist; use `integration-v2` or `origin/integration-v2` for diffs.
 
 ## Live V2 TUI Testing
 
-- Run `bun run dev:live` from a development worktree to test its TUI against the currently elected `opencode2` background server and live sessions.
+- Run `bun run dev:live` from a development worktree to test its TUI against the currently elected `shuvcode` background server and live sessions.
 - Pass a directory after the script when needed, for example `bun run dev:live /path/to/project`.
-- The script discovers the server with `opencode2 service status`, injects its private local credential from `opencode2 service get password`, and uses the `dev` TUI storage channel so tabs and other client-local state match the installed client.
+- The script discovers the server with `shuvcode service status`, injects its private local credential from `shuvcode service get password`, and uses the `dev` TUI storage channel so tabs and other client-local state match the installed client.
 - Prefer `dev:live` over plain `bun run dev` for this workflow. An implicit managed-service connection may replace the live server when the worktree client version differs; explicit `--server` warns and continues without replacing it.
 
 ## V2 TUI Stories
@@ -195,15 +196,19 @@ const table = sqliteTable("session", {
 - Record upstream sync state in `.github/last-synced-tag` as a V2 commit SHA.
 - The CLI binary and npm package are named `shuvcode`.
 - Keep `packages/util/src/global.ts` `app = "opencode"` for XDG path compatibility.
+- Built-in administrator pairing is intentionally absent. Do not add a CLI `pair` command, TUI `/pair` or `/web` command, or `server.pair` keybind; provision trusted clients out of band.
+- Generated Client and WWW OpenAPI files must come from their package generators. Never hand-edit them during conflict resolution.
 - Releases are cut by dispatching the `publish` workflow on `integration-v2` with an explicit version, e.g. `gh workflow run publish.yml --ref integration-v2 -f version=2.0.0-alpha-6`. The run creates the tag, draft release, npm packages (trusted publishing), and takes ~15 minutes.
 
 ## Host service lifecycle
 
 - Host deployments persist `manager: "systemd"` in the channel service config. Managed CLI auto-start and `shuvcode service start|stop|restart|status` must delegate to `shuvcode.service`; portable installs without a manager retain detached `Service.ensure` startup.
 - `deploy/install-host.sh` installs the user unit, persists the manager before restart, and verifies systemd activity, the configured manager, and registered ownership. Keep `docs/shared-service.md` aligned with lifecycle changes.
+- `GET /api/server` remains authenticated and returns only non-secret connection URL metadata.
 
 ## Anthropic Claude Pro/Max subscription path
 
 - Subscription support is fully in-tree (ported from the retired external `opencode-anthropic-oauth` plugin): `packages/core/src/plugin/provider/anthropic-claude-code.ts` owns OAuth + wire shaping (system identity, `<env>` normalization with billing canary, tool-name casing, headers), and `anthropic-claude-code-proxy.ts` is a loopback authorizer proxy that resolves a fresh access token per request. When a subscription connection is active, `anthropic.ts` points the provider `settings.baseURL` at the proxy; an explicitly configured baseURL wins.
 - Shaping lives only in the claude-code route transport; the proxy is auth-only. Do not duplicate shaping into the proxy.
 - Anthropic OAuth refresh tokens rotate on use. `Integration.connection.resolve` single-flights refreshes per credential; never run concurrent refreshes with the same refresh token (the loser invalidates the stored credential). When testing anthropic from the dev tree, remember the dev channel uses `opencode-local.db` while the installed service uses `opencode.db` — copying a credential between them and then refreshing in one desyncs the other.
+- Google Antigravity lives in `packages/antigravity-plugin` (`@shuvcode/antigravity-plugin`) and uses only public `@opencode-ai/plugin` entrypoints, a vendored OAuth callback page, and `ctx.event.subscribe()` for credential events. Core keeps only the narrow default-activation adapter `packages/core/src/plugin/provider/google-antigravity-adapter.ts` (via the `#antigravity-plugin` import map, with a workerd noop); do not reintroduce an internal provider implementation or private Core imports in the plugin.

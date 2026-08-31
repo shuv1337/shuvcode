@@ -7,11 +7,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/Latitudes-Dev/shuvcode.git",
     "directory": "packages/http-recorder"
   },
-  "homepage": "https://github.com/anomalyco/opencode/tree/dev/packages/http-recorder",
-  "bugs": "https://github.com/anomalyco/opencode/issues",
+  "homepage": "https://github.com/Latitudes-Dev/shuvcode/tree/integration-v2/packages/http-recorder",
+  "bugs": "https://github.com/Latitudes-Dev/shuvcode/issues",
   "keywords": [
     "effect",
     "http",
@@ -52,7 +52,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@effect/platform-node-shared": "4.0.0-rc.110"
+    "@effect/platform-node-shared": "4.0.0-rc.112"
   },
   "peerDependencies": {
     "effect": "catalog:"

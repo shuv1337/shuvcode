@@ -37,3 +37,4 @@ logs/
 *.bun-build
 tsconfig.tsbuildinfo
 .shuv2code/
+.opencode/goals/

@@ -1,0 +1,58 @@
+---
+title: "Intro"
+---
+
+Run the CLI in a project to open the full-screen terminal interface:
+
+```bash
+shuvcode
+```
+
+Pass a directory to work in a different project:
+
+```bash
+shuvcode ~/code/my-project
+```
+
+Suggested terminals:
+
+- [Ghostty](https://ghostty.org)
+- [WezTerm](https://wezterm.org)
+- [Alacritty](https://alacritty.org)
+- [Kitty](https://sw.kovidgoyal.net/kitty/)
+
+Truecolor support gives themes their most accurate colors; terminals without it use an approximation of the available
+palette.
+
+## Automation
+
+Use `shuvcode run` to submit a prompt without opening the interactive interface. It is designed for scripts, CI jobs, and
+other workflows that need model output directly in the terminal.
+
+```bash
+shuvcode run "Explain this repository"
+```
+
+## Mini
+
+Use `shuvcode mini` to start Shuvcode's minimal interactive interface instead of the full-screen TUI.
+
+```bash
+shuvcode mini
+```
+
+Run `shuvcode mini --help` to see its session, model, agent, prompt, and replay options.
+
+## Background service
+
+By default, Shuvcode discovers or starts one shared background server for your user account. Every local Shuvcode client
+connects to that server, which owns sessions, configuration, integrations, permissions, and tool execution.
+
+Use `--standalone` to run with a private server, or `--server` to connect to a specific server URL:
+
+```bash
+shuvcode --standalone
+shuvcode --server http://localhost:4096
+```
+
+See [Troubleshooting](/troubleshooting) for shared service diagnostics and the [API reference](/api) for server endpoints.

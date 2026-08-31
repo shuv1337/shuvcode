@@ -8,9 +8,9 @@ type ControllerOptions = Parameters<typeof createWslServersController>[0]
 
 let persistedServers: WslServerConfig[] = []
 
-test("passes a local CLI path directly to the V2 installer", () => {
-  expect(wslCliInstallCommand({ version: "local", binary: "C:\\build\\opencode2" })).toBe(
-    `curl -fsSL https://raw.githubusercontent.com/anomalyco/opencode/v2/install | bash -s -- --binary "$(wslpath -a 'C:\\build\\opencode2')"`,
+test("installs the bundled Shuvcode CLI without an upstream installer", () => {
+  expect(wslCliInstallCommand({ version: "local", binary: "C:\\build\\shuvcode" })).toBe(
+    `install -Dm755 "$(wslpath -a 'C:\\build\\shuvcode')" "$HOME/.local/bin/shuvcode"`,
   )
 })
 
@@ -23,7 +23,7 @@ test("installs and verifies the bundled CLI version", async () => {
         installCli: async (distro, cli) => {
           installs.push([distro, cli.version])
         },
-        resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+        resolveCli: async () => "/home/me/.local/bin/shuvcode",
       }),
     ),
   )
@@ -40,14 +40,14 @@ test("rejects a WSL CLI version that differs from the bundled version", async ()
     createWslServersController(
       testControllerOptions({
         installCli: async () => undefined,
-        resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+        resolveCli: async () => "/home/me/.local/bin/shuvcode",
         readCliVersion: async () => "0.0.0-dev-older",
       }),
     ),
   )
 
   await expect(controller.installOpencode("Debian")).rejects.toThrow(
-    "OpenCode update finished but Debian still reports 0.0.0-dev-older; expected 0.0.0-dev-16365",
+    "Shuvcode update finished but Debian still reports 0.0.0-dev-older; expected 0.0.0-dev-16365",
   )
 })
 
@@ -129,7 +129,7 @@ test("probes addable distros in parallel before checking OpenCode", async () => 
         },
         resolveCli: async (distro) => {
           opencode.push(distro)
-          return "/home/me/.opencode/bin/opencode2"
+          return "/home/me/.local/bin/shuvcode"
         },
       }),
     ),
@@ -164,7 +164,7 @@ test("does not check OpenCode in addable distros that cannot execute commands", 
         }),
         resolveCli: async (distro) => {
           opencode.push(distro)
-          return "/home/me/.opencode/bin/opencode2"
+          return "/home/me/.local/bin/shuvcode"
         },
       }),
     ),
@@ -202,7 +202,7 @@ function testControllerOptions(overrides: Partial<ControllerOptions> = {}): Cont
       persistedServers = servers
     },
     readCliVersion: async () => "0.0.0-dev-16365",
-    resolveCli: async () => "/home/me/.opencode/bin/opencode2",
+    resolveCli: async () => "/home/me/.local/bin/shuvcode",
     ...overrides,
   }
 }

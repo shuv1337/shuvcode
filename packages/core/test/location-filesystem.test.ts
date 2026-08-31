@@ -6,16 +6,20 @@ import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { FileSystem } from "@opencode-ai/core/filesystem"
 import { Location } from "@opencode-ai/core/location"
 import { AbsolutePath, RelativePath } from "@opencode-ai/core/schema"
+import { Workspace } from "@opencode-ai/core/workspace"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
 import { it } from "./lib/effect"
 
-const provide = (directory: string) =>
+const provide = (directory: string, workspaceID?: Workspace.ID) =>
   Effect.provide(
     LayerNode.compile(FileSystem.node, [
       [
         Location.node,
-        Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(directory) }))),
+        Layer.succeed(
+          Location.Service,
+          Location.Service.of(location({ directory: AbsolutePath.make(directory), workspaceID })),
+        ),
       ],
     ]),
   )
@@ -47,7 +51,8 @@ describe("FileSystem", () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => fs.mkdir(path.join(directory, "src")))
         yield* Effect.promise(() => fs.writeFile(path.join(directory, "README.md"), "# Test"))
-        const entries = yield* (yield* FileSystem.Service).list()
+        const filesystem = yield* FileSystem.Service
+        const entries = yield* filesystem.list()
         expect(entries.map((entry) => ({ path: entry.path, type: entry.type }))).toEqual([
           { path: RelativePath.make("src" + path.sep), type: "directory" },
           { path: RelativePath.make("README.md"), type: "file" },
@@ -56,12 +61,51 @@ describe("FileSystem", () => {
     ),
   )
 
+  it.live("skips host canonicalization for workspace locations at boot", () =>
+    withTmp((directory) =>
+      Effect.gen(function* () {
+        // The directory exists only inside the workspace, so boot must not
+        // require it to exist on the host. Operations still access the host
+        // filesystem per call (#44568); only boot canonicalization is skipped.
+        const missing = path.join(directory, "workspace-only")
+        const workspace = yield* FileSystem.Service.pipe(
+          provide(missing, Workspace.ID.make("wrk_filesystem")),
+          Effect.exit,
+        )
+        expect(Exit.isSuccess(workspace)).toBe(true)
+
+        // A local ref with the same missing directory keeps failing boot:
+        // host realpath canonicalization stays load-bearing for local placements.
+        const local = yield* FileSystem.Service.pipe(provide(missing), Effect.exit)
+        expect(Exit.isFailure(local)).toBe(true)
+      }),
+    ),
+  )
+
+  it.live("canonicalizes local symlinked directories", () =>
+    withTmp((directory) =>
+      Effect.gen(function* () {
+        const real = path.join(directory, "real")
+        yield* Effect.promise(() => fs.mkdir(real))
+        yield* Effect.promise(() => fs.writeFile(path.join(real, "file.txt"), "linked"))
+        const link = path.join(directory, "link")
+        yield* Effect.promise(() => fs.symlink(real, link))
+        // Reads resolve through the symlink only because boot canonicalized
+        // the location root to the real directory.
+        const read = yield* FileSystem.Service.pipe(
+          Effect.flatMap((service) => service.read({ path: RelativePath.make("file.txt") })),
+          provide(link),
+        )
+        expect(new TextDecoder().decode(read.content)).toBe("linked")
+      }),
+    ),
+  )
+
   it.live("rejects lexical escapes", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
-        const result = yield* (yield* FileSystem.Service)
-          .read({ path: RelativePath.make("../outside.txt") })
-          .pipe(Effect.exit)
+        const filesystem = yield* FileSystem.Service
+        const result = yield* filesystem.read({ path: RelativePath.make("../outside.txt") }).pipe(Effect.exit)
         expect(Exit.isFailure(result)).toBe(true)
       }).pipe(provide(directory)),
     ),

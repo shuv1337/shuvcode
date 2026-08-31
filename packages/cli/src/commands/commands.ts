@@ -1,5 +1,13 @@
-import { Argument, Flag } from "effect/unstable/cli"
+import { Argument, Flag, GlobalFlag } from "effect/unstable/cli"
+import { Schema } from "effect"
 import { Spec } from "../framework/spec"
+
+export const PrintLogs = GlobalFlag.setting("print-logs")({
+  flag: Flag.boolean("print-logs").pipe(
+    Flag.withDescription("Print logs to stderr (server logs require --standalone)"),
+    Flag.withDefault(false),
+  ),
+})
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
@@ -71,6 +79,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       commands: [
         Spec.make("agents", { description: "List all agents" }),
         Spec.make("config", { description: "List configuration sources" }),
+        Spec.make("paths", { description: "Show global paths (data, config, cache, state)" }),
       ],
     }),
     Spec.make("console", {
@@ -172,7 +181,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("add", {
           description: "Install a plugin and add it to the global configuration",
           params: {
-            package: Argument.string("package").pipe(Argument.withDescription("npm registry package specifier")),
+            package: Argument.string("package").pipe(Argument.withDescription("npm registry or Git package specifier")),
           },
         }),
         Spec.make("remove", {
@@ -186,6 +195,37 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("models", {
       description: "List all available models",
       params: ServerParams,
+    }),
+    Spec.make("stats", {
+      description: "Show shareable usage statistics",
+      params: {
+        ...ServerParams,
+        days: Flag.integer("days").pipe(
+          Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+          Flag.withDescription("Show the last N days; 0 means today"),
+          Flag.optional,
+        ),
+        year: Flag.integer("year").pipe(
+          Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1970, maximum: 9_999 }))),
+          Flag.withDescription("Show a calendar year"),
+          Flag.optional,
+        ),
+        all: Flag.boolean("all").pipe(Flag.withDescription("Show lifetime statistics"), Flag.withDefault(false)),
+        project: Flag.string("project").pipe(
+          Flag.withDescription('Filter by project ID, or use "." for the current project'),
+          Flag.optional,
+        ),
+        models: Flag.boolean("models").pipe(Flag.withDescription("Show model usage"), Flag.withDefault(false)),
+        tools: Flag.boolean("tools").pipe(Flag.withDescription("Show tool reliability"), Flag.withDefault(false)),
+        cost: Flag.boolean("cost").pipe(Flag.withDescription("Show cost and token details"), Flag.withDefault(false)),
+        full: Flag.boolean("full").pipe(Flag.withDescription("Show every detailed section"), Flag.withDefault(false)),
+        limit: Flag.integer("limit").pipe(
+          Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+          Flag.withDescription("Number of rows in detailed sections"),
+          Flag.withDefault(5),
+        ),
+        json: Flag.boolean("json").pipe(Flag.withDescription("Output statistics as JSON"), Flag.withDefault(false)),
+      },
     }),
     Spec.make("export", {
       description: "Export session data as JSON",
@@ -334,6 +374,11 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       params: {
         hostname: Flag.string("hostname").pipe(Flag.optional),
         port: Flag.integer("port").pipe(Flag.optional),
+        cors: Flag.string("cors").pipe(
+          Flag.withSchema(Schema.NonEmptyString),
+          Flag.withDescription("Additional allowed CORS origin (repeat for multiple origins)"),
+          Flag.atLeast(0),
+        ),
         service: Flag.boolean("service").pipe(Flag.withDefault(false)),
         stdio: Flag.boolean("stdio").pipe(Flag.withDefault(false)),
       },

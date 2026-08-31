@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
+    "url": "git+https://github.com/Latitudes-Dev/shuvcode.git",
     "directory": "packages/client"
   },
   "publishConfig": {
@@ -38,7 +38,7 @@
     "@opencode-ai/protocol": "workspace:*"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.110",
+    "effect": "4.0.0-rc.112",
     "solid-js": ">=1.9.0"
   },
   "peerDependenciesMeta": {

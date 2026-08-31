@@ -51,7 +51,7 @@ export const Plugin = define<HttpClient.HttpClient | Scope.Scope>({
               HttpClientRequest.acceptJson,
               HttpClientRequest.setHeaders({
                 "User-Agent": App.useragent(ctx.app),
-                "X-Client-Name": "opencode2",
+                "X-Client-Name": "shuvcode",
                 ...(credential?.type === "key"
                   ? { Authorization: `Bearer ${credential.key}` }
                   : { "X-Tavily-Access-Mode": "keyless" }),

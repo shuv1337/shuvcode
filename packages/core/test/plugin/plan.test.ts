@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Message, ToolFailure } from "@opencode-ai/ai"
-import { DateTime, Effect, Stream, Types } from "effect"
+import { DateTime, Effect, Option, Stream, Types } from "effect"
 import type { SessionContext } from "@opencode-ai/plugin/effect/session"
 import type { ToolHooks } from "@opencode-ai/plugin/effect/tool"
 import { Agent } from "@opencode-ai/core/agent"
@@ -72,6 +72,7 @@ const run = Effect.fnUntraced(function* (events: ReadonlyArray<SessionEvent.Agen
       },
       tool: {
         transform: () => Effect.die("unused tool.transform"),
+        reload: () => Effect.die("unused tool.reload"),
         hook: (name, callback) => {
           if (name === "execute.after") {
             // Hook names and callbacks are correlated, but TypeScript does not narrow this generic registration API.
@@ -123,6 +124,8 @@ const request = (agent: Agent.ID, messages: Array<Message>): SessionContext => (
   system: [],
   messages,
   tools: {},
+  generation: {},
+  providerOptions: {},
 })
 
 type ToolErrorEvent = Extract<ToolHooks["execute.after"], { readonly status: "error" }>
@@ -242,10 +245,10 @@ describe("plan plugin reminders", () => {
 })
 
 describe("plan plugin mutations", () => {
-  it.effect("creates the Plan directory", () =>
+  it.effect("does not create the Plan directory during activation", () =>
     Effect.gen(function* () {
       const { files } = yield* run()
-      expect((yield* files.stat(planDirectory)).type).toBe("directory")
+      expect(Option.isNone(yield* files.stat(planDirectory).pipe(Effect.option))).toBe(true)
     }),
   )
 

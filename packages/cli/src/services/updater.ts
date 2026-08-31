@@ -140,8 +140,10 @@ export const layer = Layer.effect(
             current: OPENCODE_VERSION,
             latest: version,
           })
-          const next = action(OPENCODE_VERSION, version, policy)
+          const next = action(OPENCODE_VERSION, version, policy === "notify" ? true : policy)
           if (next === "none") return yield* Effect.logInfo("update check done", { action: "up-to-date" })
+          if (policy === "notify")
+            return yield* Effect.logInfo("OpenCode update available", { current: OPENCODE_VERSION, latest: version })
           const detected = yield* method()
           if (!detected) return yield* Effect.logWarning("automatic update skipped: installation method not found")
           yield* upgrade(detected, version)

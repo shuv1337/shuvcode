@@ -198,7 +198,7 @@ const text = (content: string): ComposerPersistedState["prompt"] => [
 ]
 
 export default {
-  title: "OpenCode/Composer/Flow",
+  title: "Shuvcode/Composer/Flow",
   component: Composer,
   parameters: { layout: "centered" },
 }

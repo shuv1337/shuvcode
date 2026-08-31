@@ -1,11 +1,12 @@
 export * as SessionRunner from "./index.js"
 
 import type { AIError } from "@opencode-ai/ai"
-import { Context, Effect } from "effect"
+import { Context, Data, Effect } from "effect"
 import { SessionSchema } from "../schema.js"
 import type { Promotable } from "../inbox.js"
 import type { AgentNotFoundError, MessageDecodeError, StepFailedError, UserInterruptedError } from "../error.js"
 import { SessionRunnerModel } from "./model.js"
+import type { PersistenceError } from "./publish-llm-event.js"
 import type { Instructions } from "../../instructions/index.js"
 
 export type RunError =
@@ -16,12 +17,15 @@ export type RunError =
   | StepFailedError
   | UserInterruptedError
   | Instructions.InitializationBlocked
+  | PersistenceError
 
 export type Continuation = { readonly step: number }
 
-export type DrainResult =
-  | { readonly type: "complete" }
-  | { readonly type: "moved"; readonly continuation?: Continuation }
+export type DrainResult = Data.TaggedEnum<{
+  Complete: {}
+  Moved: { readonly continuation?: Continuation }
+}>
+export const DrainResult = Data.taggedEnum<DrainResult>()
 
 /** Runs one local continuation from already-recorded Session history. */
 export interface Interface {

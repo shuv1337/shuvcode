@@ -58,6 +58,15 @@ function managedService() {
   }
 }
 
+export const shutdownPersistentPty = Effect.fn("cli.server-connection.shutdown-persistent-pty")(function* (
+  options: EnsureOptions,
+) {
+  const endpoint = yield* Service.discover({ ...options, version: undefined })
+  if (!endpoint) return
+  const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+  yield* Effect.tryPromise(() => client.experimental.persistentPty.shutdown())
+})
+
 const resolveManaged = Effect.fnUntraced(function* (options: EnsureOptions, mismatch: NonNullable<Args["mismatch"]>) {
   if (mismatch === "replace")
     return yield* ServiceLifecycle.ensure({ version: typeof options.version === "string" ? options.version : undefined, onStart: options.onStart })

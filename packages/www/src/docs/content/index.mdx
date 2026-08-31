@@ -1,0 +1,36 @@
+---
+title: "Intro"
+---
+
+These docs describe Shuvcode V2. APIs, configuration, and plugin interfaces may change while V2 is in beta.
+
+## Install
+
+<div data-install-code>
+  <CodeBlock
+    code={`$ npm install -g shuvcode
+$ bun install -g --trust shuvcode
+$ pnpm add -g --allow-build=shuvcode shuvcode
+$ yarn global add shuvcode`}
+  />
+</div>
+
+The package uses a trusted postinstall script to select the native `shuvcode` binary for your platform. The Bun and pnpm
+commands above explicitly allow that script to run.
+
+Homebrew, Arch Linux, Windows package managers, Docker, and standalone binaries are not supported during the beta.
+
+---
+
+## Connect
+
+Shuvcode has built in support for many LLM providers - you can connect to them
+directly [in the TUI](/cli/providers) with `/connect`.
+
+See [Providers](/providers) to configure custom providers.
+
+## Customize
+
+Make Shuvcode your own by editing the [Shuvcode config](/config), [loading plugins](/plugins), [connecting MCP
+servers](/mcp-servers), or [creating commands](/commands). For terminal interface themes and keybindings, see [CLI
+configuration](/cli/config).

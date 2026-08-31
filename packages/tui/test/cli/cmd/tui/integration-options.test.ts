@@ -25,6 +25,16 @@ describe("integrationOptions", () => {
       ]).map((item) => item.id),
     ).toEqual(["openai", "anthropic", "xai", "mistral", "custom-z"])
   })
+
+  test("keeps MCP integrations above popular integrations without relying on their IDs", () => {
+    expect(
+      integrationOptions([
+        integration({ id: "openai", name: "OpenAI" }),
+        integration({ id: "linear", name: "Linear", metadata: { source: "mcp" } }),
+        integration({ id: "github", name: "GitHub", metadata: { source: "mcp" } }),
+      ]).map((item) => item.id),
+    ).toEqual(["github", "linear", "openai"])
+  })
 })
 
 describe("connectMethods", () => {

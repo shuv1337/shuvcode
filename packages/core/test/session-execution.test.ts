@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { AIError, TransportReason } from "@opencode-ai/ai"
+import { AIError, TransportError } from "@opencode-ai/ai"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
-import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
-import type { LocationServices } from "@opencode-ai/core/location-services"
+import { Job } from "@opencode-ai/core/job"
+import { KV } from "@opencode-ai/core/kv"
+import { SessionRunCoordinator } from "@opencode-ai/core/session/run-coordinator"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -18,10 +19,15 @@ import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionRunner } from "@opencode-ai/core/session/runner/index"
 import { SessionInboxTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionStore } from "@opencode-ai/core/session/store"
-import { Context, Deferred, Effect, Exit, Fiber, Layer, LayerMap, Scope } from "effect"
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
+import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionStore.node])))
+const it = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([Database.node, Bus.node, SessionStore.node, SessionInbox.node, Job.node, KV.node, Session.node]),
+  ),
+)
 
 describe("SessionExecution lifecycle", () => {
   test("classifies success and typed failure terminals", () => {
@@ -30,9 +36,7 @@ describe("SessionExecution lifecycle", () => {
       SessionExecution.terminal(
         Exit.fail(
           new AIError({
-            module: "test",
-            method: "stream",
-            reason: new TransportReason({ message: "Disconnected", transport: "http", operation: "request" }),
+            reason: new TransportError({ message: "Disconnected", transport: "http", operation: "request" }),
           }),
         ),
       ),
@@ -49,7 +53,7 @@ describe("SessionExecution lifecycle", () => {
     })
   })
 
-  it.effect("lists claimed top-level Sessions for inspection without touching any claim", () =>
+  it.effect("listSuspended only lists claimed top-level Sessions", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const store = yield* SessionStore.Service
@@ -60,16 +64,12 @@ describe("SessionExecution lifecycle", () => {
       yield* seedSessions(database, [idle])
       yield* seedSessions(database, [child], { time_suspended: Date.now(), parent_id: parent })
 
-      // Child claims are excluded: a parent owns its subagents' work.
       expect(yield* store.listSuspended()).toEqual([parent])
-
-      // Listing is a read: every orphaned claim survives untouched, because
-      // nothing may act on it without an explicit user-initiated prompt.
       expect(yield* claims(database)).toEqual({ [parent]: true, [child]: true, [idle]: false })
     }),
   )
 
-  it.effect("claims at execution start, releases on completion, and preserves through teardown", () =>
+  it.live("claims at execution start, releases on completion, and preserves through teardown", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const interrupted = Session.ID.make("ses_claim_interrupted")
@@ -81,34 +81,43 @@ describe("SessionExecution lifecycle", () => {
       const completedRunning = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
       const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
       const context = yield* buildExecution(scope, ({ sessionID }) =>
         sessionID === completed
           ? Deferred.succeed(completedRunning, undefined).pipe(Effect.andThen(Deferred.await(release)))
           : Deferred.succeed(interruptedRunning, undefined).pipe(Effect.andThen(Effect.never)),
       )
       const execution = Context.get(context, SessionExecution.Service)
-      yield* execution.resume(interrupted).pipe(Effect.forkScoped)
-      const completing = yield* execution.resume(completed).pipe(Effect.forkIn(scope))
+      const completedActive = execution.isActive(completed)
+      expect(yield* completedActive).toBe(false)
+      yield* execution.resume(interrupted).pipe(Effect.forkChild)
+      const completing = yield* execution.resume(completed).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
       yield* Deferred.await(interruptedRunning)
       yield* Deferred.await(completedRunning)
 
       // The write-ahead claim exists WHILE the turns run — no shutdown hook involved.
       expect(yield* claims(database)).toEqual({ [interrupted]: true, [completed]: true })
+      expect(yield* completedActive).toBe(true)
+      expect(yield* execution.isActive(interrupted)).toBe(true)
 
       // A drain that finishes on its own releases its claim.
       yield* Deferred.succeed(release, undefined)
       yield* Fiber.join(completing)
       yield* execution.awaitIdle(completed)
       expect((yield* claims(database))[completed]).toBe(false)
+      expect(yield* completedActive).toBe(false)
+      expect(yield* execution.isActive(interrupted)).toBe(true)
 
       // Teardown interruption (graceful twin of an unclean death) preserves the claim
       // for the next server start.
       yield* Scope.close(scope, Exit.void)
       expect((yield* claims(database))[interrupted]).toBe(true)
+      expect(yield* execution.isActive(interrupted)).toBe(false)
     }),
   )
 
-  it.effect("a user interrupt releases the claim so the turn never resurrects", () =>
+  it.live("a user interrupt releases the claim so the turn never resurrects", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const sessionID = Session.ID.make("ses_claim_user_cancel")
@@ -121,13 +130,28 @@ describe("SessionExecution lifecycle", () => {
         Deferred.succeed(draining, undefined).pipe(Effect.andThen(Effect.never)),
       )
       const execution = Context.get(context, SessionExecution.Service)
-      yield* execution.resume(sessionID).pipe(Effect.forkScoped)
+      yield* execution.resume(sessionID).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
       yield* Deferred.await(draining)
       expect((yield* claims(database))[sessionID]).toBe(true)
 
-      yield* execution.interrupt(sessionID)
+      expect(yield* execution.interrupt(sessionID)).toBeTrue()
       yield* execution.awaitIdle(sessionID)
       expect((yield* claims(database))[sessionID]).toBe(false)
+    }),
+  )
+
+  it.effect("reports an idle interrupt as a no-op", () =>
+    Effect.gen(function* () {
+      const sessionID = Session.ID.make("ses_idle_cancel")
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const context = yield* buildExecution(scope, () => Effect.never)
+      const execution = Context.get(context, SessionExecution.Service)
+
+      expect(yield* execution.interrupt(sessionID)).toBeFalse()
+      expect(yield* execution.active).not.toContain(sessionID)
+      expect(yield* execution.isActive(sessionID)).toBe(false)
     }),
   )
 
@@ -136,7 +160,6 @@ describe("SessionExecution lifecycle", () => {
       const database = yield* Database.Service
       const bus = yield* Bus.Service
       const orphaned = Array.from({ length: 3 }, (_, index) => Session.ID.make(`ses_orphan_${index}`))
-      // Claims left behind by a process that died mid-turn.
       yield* seedSessions(database, orphaned, { time_suspended: Date.now() })
 
       const drained: Session.ID[] = []
@@ -147,7 +170,6 @@ describe("SessionExecution lifecycle", () => {
       yield* bus.project(SessionEvent.Synthetic, (event) => Effect.sync(() => void continued.push(event)))
       yield* bus.project(SessionEvent.Execution.Started, (event) => Effect.sync(() => void started.push(event)))
 
-      // Building the execution graph is everything boot does; there is no sweep.
       const context = yield* buildExecution(scope, ({ sessionID }) => Effect.sync(() => void drained.push(sessionID)))
       const execution = Context.get(context, SessionExecution.Service)
       yield* Effect.yieldNow
@@ -156,40 +178,13 @@ describe("SessionExecution lifecycle", () => {
       expect(started).toEqual([])
       expect(continued).toEqual([])
       expect([...(yield* execution.active)]).toEqual([])
-      // The claims survive as inert markers for a later explicit recovery design.
       expect(yield* claims(database)).toEqual(Object.fromEntries(orphaned.map((id) => [id, true])))
-    }),
-  )
-
-  it.effect("only an explicit resume runs a claimed Session, without injecting a continuation", () =>
-    Effect.gen(function* () {
-      const database = yield* Database.Service
-      const bus = yield* Bus.Service
-      const sessionID = Session.ID.make("ses_orphan_explicit")
-      yield* seedSessions(database, [sessionID], { time_suspended: Date.now() })
-
-      const drained: Session.ID[] = []
-      const continued: SessionEvent.Synthetic[] = []
-      const scope = yield* Scope.make()
-      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
-      yield* bus.project(SessionEvent.Synthetic, (event) => Effect.sync(() => void continued.push(event)))
-      const context = yield* buildExecution(scope, ({ sessionID: id }) => Effect.sync(() => void drained.push(id)))
-      const execution = Context.get(context, SessionExecution.Service)
-
-      yield* execution.resume(sessionID)
-      yield* execution.awaitIdle(sessionID)
-
-      // A user-initiated resume drains durable work only; no synthetic
-      // "continue where you left off" prompt is ever fabricated.
-      expect(drained).toEqual([sessionID])
-      expect(continued).toEqual([])
-      expect((yield* claims(database))[sessionID]).toBe(false)
     }),
   )
 })
 
 describe("SessionExecution interrupt continuation", () => {
-  it.effect("resumes only steering input after an interrupt with continue", () =>
+  it.live("resumes only steering input after an interrupt with continue", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const sessionID = Session.ID.make("ses_continue_steer")
@@ -208,10 +203,12 @@ describe("SessionExecution interrupt continuation", () => {
         }),
       )
       const execution = Context.get(context, SessionExecution.Service)
-      yield* execution.resume(sessionID).pipe(Effect.forkScoped)
+      yield* execution.resume(sessionID).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
       yield* Deferred.await(draining)
 
       yield* execution.interrupt(sessionID, { continue: true })
+      yield* Effect.yieldNow
       yield* execution.awaitIdle(sessionID)
 
       // The successor drain is steer-scoped: queued next-turn work stays parked.
@@ -222,7 +219,7 @@ describe("SessionExecution interrupt continuation", () => {
     }),
   )
 
-  it.effect("stays parked after an interrupt with continue when only queued work remains", () =>
+  it.live("stays parked after an interrupt with continue when only queued work remains", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const sessionID = Session.ID.make("ses_continue_parked")
@@ -240,10 +237,12 @@ describe("SessionExecution interrupt continuation", () => {
         }),
       )
       const execution = Context.get(context, SessionExecution.Service)
-      yield* execution.resume(sessionID).pipe(Effect.forkScoped)
+      yield* execution.resume(sessionID).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
       yield* Deferred.await(draining)
 
       yield* execution.interrupt(sessionID, { continue: true })
+      yield* Effect.yieldNow
       yield* execution.awaitIdle(sessionID)
 
       expect(drains).toEqual(["input"])
@@ -265,15 +264,22 @@ describe("SessionExecution interrupt continuation", () => {
         Effect.sync(() => void drains.push({ force: input.force, promotable: input.promotable })),
       )
       const execution = Context.get(context, SessionExecution.Service)
+      const pending = yield* database.db.select().from(SessionInboxTable).all().pipe(Effect.orDie)
+      expect(pending).toHaveLength(1)
+      expect(yield* SessionInbox.nextPromotable(database.db, sessionID, "input")).toMatchObject({
+        delivery: "steer",
+        type: "user",
+      })
 
       yield* execution.interrupt(sessionID, { continue: true })
+      yield* Effect.yieldNow
       yield* execution.awaitIdle(sessionID)
 
       expect(drains).toEqual([{ force: false, promotable: "steer" }])
     }),
   )
 
-  it.effect("an interrupt with continue resumes a queued compaction next in line", () =>
+  it.live("an interrupt with continue resumes a queued compaction next in line", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const sessionID = Session.ID.make("ses_continue_compaction")
@@ -292,10 +298,12 @@ describe("SessionExecution interrupt continuation", () => {
         }),
       )
       const execution = Context.get(context, SessionExecution.Service)
-      yield* execution.resume(sessionID).pipe(Effect.forkScoped)
+      yield* execution.resume(sessionID).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
       yield* Deferred.await(draining)
 
       yield* execution.interrupt(sessionID, { continue: true })
+      yield* Effect.yieldNow
       yield* execution.awaitIdle(sessionID)
 
       // Control work is housekeeping, not next-turn input: continue runs it.
@@ -330,6 +338,27 @@ describe("SessionExecution interrupt continuation", () => {
   )
 })
 
+function seedBackground(
+  jobs: Job.Interface,
+  sessionID: Session.ID,
+  background: ReadonlyArray<{ readonly id: string; readonly shellID: string; readonly command: string }>,
+) {
+  return Effect.forEach(
+    background,
+    (job) =>
+      Effect.gen(function* () {
+        yield* jobs.start({
+          id: job.id,
+          type: "shell",
+          recovery: { kind: "shell", sessionID, shellID: job.shellID, command: job.command },
+          run: Effect.never,
+        })
+        yield* jobs.background(job.id)
+      }),
+    { discard: true },
+  )
+}
+
 /** Plain deliveries seed user prompts; objects seed control items. */
 function seedInbox(
   database: Database.Service["Service"],
@@ -360,7 +389,7 @@ function seedInbox(
 function seedSessions(
   database: Database.Service["Service"],
   sessionIDs: ReadonlyArray<Session.ID>,
-  values: Partial<Pick<typeof SessionTable.$inferInsert, "time_suspended" | "parent_id">> = {},
+  values: Partial<Pick<typeof SessionTable.$inferInsert, "time_suspended" | "resume_attempts" | "parent_id">> = {},
 ) {
   return Effect.gen(function* () {
     yield* database.db
@@ -398,7 +427,19 @@ function claims(database: Database.Service["Service"]) {
     )
 }
 
-/** Builds the local execution layer against the test harness services, exactly as boot does. */
+function attempts(database: Database.Service["Service"], sessionID: Session.ID) {
+  return database.db
+    .select({ attempts: SessionTable.resume_attempts })
+    .from(SessionTable)
+    .where(eq(SessionTable.id, sessionID))
+    .get()
+    .pipe(
+      Effect.orDie,
+      Effect.map((row) => row?.attempts),
+    )
+}
+
+/** Builds process-local execution with the production claim/continue contracts, without Location routing. */
 function buildExecution(
   scope: Scope.Closeable,
   drain: (input: Parameters<SessionRunner.Interface["drain"]>[0]) => Effect.Effect<void, SessionRunner.RunError>,
@@ -407,27 +448,55 @@ function buildExecution(
     const database = yield* Database.Service
     const bus = yield* Bus.Service
     const store = yield* SessionStore.Service
-    const runner = Layer.succeed(
-      SessionRunner.Service,
-      SessionRunner.Service.of({ drain: (input) => drain(input).pipe(Effect.as({ type: "complete" as const })) }),
-    )
-    const locations = Layer.effect(
-      LocationServiceMap.Service,
-      LayerMap.make(
-        () =>
-          // The local execution test only needs the Session runner from the Location graph.
-          // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-          runner as unknown as Layer.Layer<LocationServices>,
-      ),
-    )
-    return yield* Layer.buildWithScope(
-      SessionExecution.layer.pipe(
-        Layer.provide(Layer.succeed(Database.Service, database)),
-        Layer.provide(Layer.succeed(Bus.Service, bus)),
-        Layer.provide(Layer.succeed(SessionStore.Service, store)),
-        Layer.provide(locations),
-      ),
-      scope,
+    const jobs = yield* Job.Service
+    const db = database.db
+    const claimOnCommit = (sessionID: Session.ID) => ({ commit: () => store.claim(sessionID) })
+    const releaseOnCommit = (sessionID: Session.ID) => ({ commit: () => store.release(sessionID) })
+    const coordinator = yield* SessionRunCoordinator.make<Session.ID, SessionRunner.RunError, "user" | "shutdown">({
+      started: (sessionID) => bus.publish(SessionEvent.Execution.Started, { sessionID }, claimOnCommit(sessionID)),
+      drain: (sessionID, force, promotable) =>
+        drain({ sessionID, force, promotable }).pipe(Effect.as(undefined)),
+      settled: (sessionID, exit, reason) =>
+        Effect.gen(function* () {
+          const outcome = SessionExecution.terminal(exit, reason)
+          if (outcome.type === "succeeded") {
+            yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID }, releaseOnCommit(sessionID))
+            return
+          }
+          if (outcome.type === "interrupted") {
+            if (outcome.reason === "user") yield* jobs.cancel(sessionID)
+            yield* bus.publish(
+              SessionEvent.Execution.Interrupted,
+              { sessionID, reason: outcome.reason },
+              outcome.reason === "shutdown" ? undefined : releaseOnCommit(sessionID),
+            )
+            return
+          }
+          yield* bus.publish(
+            SessionEvent.Execution.Failed,
+            { sessionID, error: outcome.error },
+            releaseOnCommit(sessionID),
+          )
+        }),
+    }).pipe(Scope.provide(scope))
+    return Context.make(
+      SessionExecution.Service,
+      SessionExecution.Service.of({
+        active: coordinator.active,
+        isActive: coordinator.isActive,
+        interrupt: (sessionID, options) =>
+          Effect.gen(function* () {
+            const interrupted = yield* coordinator.interrupt(sessionID, "user")
+            if (!options?.continue) return interrupted
+            const next = yield* SessionInbox.nextPromotable(db, sessionID, "input")
+            if (next !== undefined && (next.delivery === "steer" || next.type === "compaction" || next.type === "move"))
+              yield* coordinator.wake(sessionID, "steer")
+            return interrupted
+          }),
+        resume: coordinator.run,
+        wake: coordinator.wake,
+        awaitIdle: coordinator.awaitIdle,
+      }),
     )
   })
 }

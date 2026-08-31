@@ -4,20 +4,35 @@ import { describe, expect } from "bun:test"
 import { Effect, Exit } from "effect"
 import { Catalog } from "@opencode-ai/core/catalog"
 import { Credential } from "@opencode-ai/core/credential"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Integration } from "@opencode-ai/core/integration"
+import { Location } from "@opencode-ai/core/location"
+import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { Model } from "@opencode-ai/core/model"
 import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
-import { GoogleAntigravityPlugin } from "@opencode-ai/core/plugin/provider/google-antigravity"
-import { GoogleAntigravityOAuth } from "@opencode-ai/core/plugin/provider/google-antigravity-oauth"
-import { GoogleAntigravityWire } from "@opencode-ai/core/plugin/provider/google-antigravity-wire"
+import { GoogleAntigravityPlugin } from "@opencode-ai/core/plugin/provider/google-antigravity-adapter"
+import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
+import { AbsolutePath } from "@opencode-ai/core/schema"
+import { GoogleAntigravityOAuth, GoogleAntigravityWire } from "@shuvcode/antigravity-plugin"
+import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Global } from "@opencode-ai/util/global"
 import { Provider } from "@opencode-ai/core/provider"
+import { Database } from "../../src/database/database"
+import { Bus } from "../../src/bus"
+import { tmpdir } from "../fixture/tmpdir"
+import { tempGlobalLayer } from "../fixture/global"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
+const itDefault = testEffect(
+  AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, LocationServiceMap.node]), [
+    [Global.node, tempGlobalLayer],
+  ]),
+)
 
 const addPlugin = Effect.fn(function* () {
   const plugin = yield* Plugin.Service
@@ -56,10 +71,11 @@ const nativeBody = {
 }
 
 describe("GoogleAntigravityOAuth", () => {
-  it.effect("is registered in ProviderPlugins", () =>
-    Effect.sync(() =>
-      expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.google-antigravity"),
-    ),
+  it.effect("is registered in ProviderPlugins by the default-activation adapter", () =>
+    Effect.sync(() => {
+      expect(ProviderPlugins.map((item) => item.id)).toContain("opencode.provider.google-antigravity")
+      expect(ProviderPlugins.find((item) => item.id === GoogleAntigravityPlugin.id)).toBe(GoogleAntigravityPlugin)
+    }),
   )
 
   it.effect("builds an official CLI user agent and authorize URL", () =>
@@ -196,6 +212,36 @@ describe("GoogleAntigravityWire", () => {
 })
 
 describe("GoogleAntigravityPlugin", () => {
+  itDefault.live("exposes Google AI Pro OAuth on /connect when installed by default", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const google = yield* Effect.gen(function* () {
+            yield* (yield* PluginSupervisor.Service).flush
+            const plugins = yield* (yield* Plugin.Service).list()
+            expect(plugins.some((plugin) => plugin.id === GoogleAntigravityPlugin.id && plugin.status === "active")).toBe(
+              true,
+            )
+            return required(yield* (yield* Integration.Service).get(Integration.ID.make("google")))
+          }).pipe(
+            Effect.scoped,
+            Effect.provide(
+              LocationServiceMap.Service.get(Location.Ref.make({ directory: AbsolutePath.make(dir.path) })),
+            ),
+          )
+          expect(google.methods).toContainEqual({
+            id: Integration.MethodID.make("google-ai-pro"),
+            type: "oauth",
+            label: "Google AI Pro / Antigravity",
+          })
+        }),
+      ),
+    ),
+  )
+
   it.effect("registers the Google AI Pro OAuth method on google", () =>
     Effect.gen(function* () {
       yield* addPlugin()
@@ -205,6 +251,17 @@ describe("GoogleAntigravityPlugin", () => {
         type: "oauth",
         label: "Google AI Pro / Antigravity",
       })
+    }),
+  )
+
+  it.effect("filters http hooks to Google so OpenAI remains WebSocket-eligible", () =>
+    Effect.gen(function* () {
+      yield* addPlugin()
+      const hooks = yield* PluginHooks.Service
+      expect(yield* hooks.has("session", "http.request", Provider.ID.google)).toBe(true)
+      expect(yield* hooks.has("session", "http.response", Provider.ID.google)).toBe(true)
+      expect(yield* hooks.has("session", "http.request", Provider.ID.openai)).toBe(false)
+      expect(yield* hooks.has("session", "http.response", Provider.ID.openai)).toBe(false)
     }),
   )
 

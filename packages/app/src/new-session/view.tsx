@@ -48,7 +48,7 @@ export function NewSessionView(props: {
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             <Wordmark class="h-auto w-full text-v2-background-bg-inverse" />
             <div class="mt-8 flex flex-col gap-8">
-              <Composer model={props.composer} accentSubmit={props.workspace.selection.workspace()} />
+              <Composer model={props.composer} />
               <Show when={props.project.empty()}>
                 <PromptProjectAddButton controller={props.project} />
               </Show>
@@ -69,9 +69,12 @@ export function NewSessionView(props: {
                       value={props.workspace.selection.value()}
                       projectRoot={props.workspace.project.root()}
                       workspaces={props.workspace.project.workspaces()}
+                      branches={props.workspace.project.branches()}
                       branch={props.workspace.bar.branch()}
                       onboarding={onboardingReady() && !onboarding.used}
                       onChange={select}
+                      onCreate={props.workspace.selection.create}
+                      onSearch={props.workspace.project.searchBranches}
                       onDone={props.composer.restoreFocus}
                       onViewAll={props.workspace.project.openAll}
                     />
@@ -139,7 +142,7 @@ function ProviderTip() {
         >
           <button
             type="button"
-            class="flex h-6 min-w-0 items-center rounded-[4px] pl-1.5 text-[13px] leading-none tracking-[-0.04px] text-v2-text-text-faint transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-muted focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-muted focus-visible:outline-none"
+            class="flex h-6 min-w-0 items-center rounded-[4px] pl-1.5 text-[13px] leading-text-compact tracking-[-0.04px] text-v2-text-text-faint transition-[background-color,color] duration-150 ease-in-out hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-muted focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-muted focus-visible:outline-none"
             onClick={openProviders}
           >
             <span class="truncate">{language.t("home.providerTip")}</span>

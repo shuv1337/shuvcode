@@ -97,10 +97,12 @@ export const ProjectSettingsExtensions: Component = () => {
   const [globalPluginList] = createResource(
     () => serverSDK.connection.status() === "connected",
     () => serverSDK.api.plugin.list().then((result) => result.data),
+    { initialValue: [] },
   )
   const [projectPluginList] = createResource(
     () => (serverSDK.connection.status() === "connected" ? directorySDK().directory : undefined),
     (directory) => serverSDK.api.plugin.list({ location: { directory } }).then((result) => result.data),
+    { initialValue: [] },
   )
   const globalPlugins = createMemo(() => pluginLabels(globalPluginList.latest ?? []))
   const projectPlugins = createMemo(() => {
@@ -187,7 +189,7 @@ export const ProjectSettingsExtensions: Component = () => {
           <div class="project-settings-extension-section">
             <div class="project-settings-extension-section-header">
               <span>{language.t("project.settings.extensions.added")}</span>
-              <ExternalLink class="project-settings-extension-link" href="https://opencode.ai/docs/skills/">
+              <ExternalLink class="project-settings-extension-link" href="https://shuv.ai/v2/docs/skills/">
                 {language.t("settings.extensions.addSkills")}
               </ExternalLink>
             </div>

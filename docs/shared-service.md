@@ -28,10 +28,10 @@ not create caller-specific Shuvcode configuration domains.
   administrator credential and managed-service registration used by trusted
   loopback clients. Use `shuvcode service` commands instead of selecting a file
   by name.
-- Pairing presents the administrator credential and advertised URLs as a QR
-  code for trusted setup. It does not issue independently revocable device
-  credentials. A bridge may keep its own client-facing credential domain while
-  using the administrator credential on loopback.
+- Shuvcode has one shared administrator principal. Provision additional trusted
+  clients out of band with the existing administrator credential and advertised
+  URL metadata. Rotation is global; there is no built-in pairing flow or
+  per-device revocation.
 
 Install the user unit from this repository:
 
@@ -114,13 +114,11 @@ test "$(readlink -f ~/.config/opencode/opencode.json)" = \
 ss -ltnp | rg '127\.0\.0\.1:4096'
 tailscale serve status
 shuvcode service get
-shuvcode pair
 ```
 
-Verify that interactive TUI sessions and paired mobile sessions appear in the
-same session list, and that every configured V2 provider appears through the
-model endpoint. For providers supplied by plugins, verify the required login
-methods too; an Anthropic subscription deployment must advertise an OAuth
-method, not only API-key or environment methods. Logs and verification output
-must not contain administrator passwords, invitation tokens, or device
-credentials.
+Verify that interactive TUI and explicitly provisioned clients see the same
+session list, and that every configured V2 provider appears through the model
+endpoint. For providers supplied by plugins, verify the required login methods
+too; an Anthropic subscription deployment must advertise an OAuth method, not
+only API-key or environment methods. Logs and verification output must not
+contain administrator passwords or authorization headers.

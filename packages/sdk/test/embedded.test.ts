@@ -1,15 +1,21 @@
 import fs from "fs/promises"
 import path from "path"
 import { expect } from "bun:test"
+import { LanguageModel, LLMClient } from "@opencode-ai/ai"
+import { OpenAIChat } from "@opencode-ai/ai/protocols"
+import { TestLLM } from "@opencode-ai/ai/testing"
+import { llmClient } from "@opencode-ai/core/effect/app-node-platform"
 import { makeMemoryDriver } from "@opencode-ai/core/environment/index"
+import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
+import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { WorkspaceDriver } from "@opencode-ai/core/workspace/driver"
-import { Deferred, Effect, Latch, Layer, Option, Ref, Schema, Stream } from "effect"
+import { Deferred, Effect, Fiber, Latch, Layer, Option, Ref, Schema, Stream } from "effect"
 import { testEffect } from "../../core/test/lib/effect"
 import { tmpdir } from "../../core/test/fixture/tmpdir"
-import type { OpenCodeEvent } from "../src"
+import type { OpenCodeEvent } from "../src/effect"
 
 const it = testEffect(Layer.empty)
-type Sdk = typeof import("../src")
+type Sdk = typeof import("../src/effect")
 type Fixture = { readonly directory: string; readonly sdk: Sdk }
 
 const withEmbedded = <A, E, R>(prefix: string, f: (fixture: Fixture) => Effect.Effect<A, E, R>) =>
@@ -18,7 +24,9 @@ const withEmbedded = <A, E, R>(prefix: string, f: (fixture: Fixture) => Effect.E
     (directory) => Effect.promise(() => directory[Symbol.asyncDispose]()),
   ).pipe(
     Effect.flatMap((directory) =>
-      Effect.promise(() => import("../src")).pipe(Effect.flatMap((sdk) => f({ directory: directory.path, sdk }))),
+      Effect.promise(() => import("../src/effect")).pipe(
+        Effect.flatMap((sdk) => f({ directory: directory.path, sdk })),
+      ),
     ),
   )
 
@@ -26,6 +34,71 @@ const sessionID = (fixture: Fixture) => fixture.sdk.Session.ID.create()
 
 const location = (fixture: Fixture) =>
   fixture.sdk.Location.Ref.make({ directory: fixture.sdk.AbsolutePath.make(fixture.directory) })
+
+for (const selection of ["explicit", "default"] as const) {
+  it.live(`first generate.text waits for inline providers with ${selection} model selection`, () =>
+    withEmbedded("opencode-embedded-generate-", (fixture) =>
+      Effect.gen(function* () {
+        const release = yield* Latch.make()
+        const llm = yield* TestLLM.Test.pipe(
+          Effect.provide(TestLLM.testLayer({ fallback: TestLLM.text("ready", "answer") })),
+        )
+        const supervisor = Layer.effect(
+          PluginSupervisor.Service,
+          Effect.gen(function* () {
+            const plugins = yield* PluginSupervisor.Service
+            return { flush: release.open.pipe(Effect.andThen(plugins.flush)) }
+          }),
+        ).pipe(Layer.provide(PluginSupervisor.layer))
+        const opencode = yield* fixture.sdk.OpenCode.create(
+          {
+            config: {
+              directory: fixture.directory,
+              project: false,
+              content: JSON.stringify({
+                model: "custom/fictional-chat",
+                providers: {
+                  custom: {
+                    package: "aisdk:@ai-sdk/openai-compatible",
+                    settings: { baseURL: "https://provider.example/v1" },
+                    models: { "fictional-chat": {} },
+                  },
+                },
+              }),
+            },
+            models: { fetch: false },
+            fs: { filewatcher: false },
+          },
+          {
+            overrides: [
+              [llmClient, Layer.succeed(LLMClient.Service, llm)],
+              [PluginSupervisor.node, { ...PluginSupervisor.node, implementation: supervisor }],
+            ],
+          },
+        )
+        // Hold provider activation until the request reaches readiness, regardless of startup speed.
+        yield* opencode.plugin({ id: "gate-catalog", effect: () => release.await })
+
+        const result = yield* opencode.generate.text({
+          prompt: "Say ready",
+          ...(selection === "explicit"
+            ? {
+                model: fixture.sdk.Model.Ref.make({
+                  providerID: fixture.sdk.Provider.ID.make("custom"),
+                  id: fixture.sdk.Model.ID.make("fictional-chat"),
+                }),
+              }
+            : {}),
+        })
+
+        expect(result.text).toBe("ready")
+        const requests = yield* llm.requests()
+        expect(requests).toHaveLength(1)
+        expect(requests[0]?.model).toMatchObject({ provider: "custom", id: "fictional-chat" })
+      }),
+    ),
+  )
+}
 
 it.live("exposes app metadata to plugins", () =>
   withEmbedded("opencode-embedded-app-", (fixture) =>
@@ -160,6 +233,87 @@ it.live(
         yield* Deferred.await(recommitted).pipe(Effect.timeout("5 seconds"))
 
         expect((yield* opencode.plugin.list({ location: ref })).data.map((plugin) => String(plugin.id))).toContain(id)
+      }),
+    ),
+  15_000,
+)
+
+it.live(
+  "evicts a Location without triggering connected client refetches",
+  () =>
+    withEmbedded("opencode-embedded-quiet-eviction-", (fixture) =>
+      Effect.gen(function* () {
+        const opencode = yield* fixture.sdk.OpenCode.create({
+          config: { directory: fixture.directory, project: false, content: "{}" },
+        })
+        const ref = location(fixture)
+        const connected = yield* Latch.make(false)
+        const booted = yield* Deferred.make<void>()
+        const boots = yield* Ref.make(0)
+        const updates = yield* Ref.make<string[]>([])
+
+        yield* opencode.plugin({
+          id: `quiet-eviction-${crypto.randomUUID()}`,
+          effect: (ctx) =>
+            Effect.gen(function* () {
+              yield* Ref.update(boots, (count) => count + 1)
+              yield* ctx.catalog.transform((catalog) => catalog.provider.update("eviction-test", () => {}))
+              yield* ctx.agent.transform((agents) => agents.update("eviction-test", () => {}))
+              yield* ctx.command.transform((commands) =>
+                commands.add({ name: "eviction-test", execute: () => Effect.void }),
+              )
+            }),
+        })
+        const subscriber = yield* opencode.events.subscribe().pipe(
+          Stream.runForEach((event) =>
+            Effect.gen(function* () {
+              if (event.type === "server.connected") {
+                yield* connected.open
+                return
+              }
+              if (event.location?.directory !== fixture.directory) return
+              if (event.type === "plugin.updated") {
+                yield* Deferred.succeed(booted, undefined)
+                return
+              }
+              if (
+                event.type !== "catalog.updated" &&
+                event.type !== "agent.updated" &&
+                event.type !== "command.updated"
+              )
+                return
+              yield* Ref.update(updates, (types) => [...types, event.type])
+              // A connected consumer re-reads invalidated resources through the real router.
+              if (event.type === "catalog.updated") {
+                yield* opencode.model.list({ location: ref })
+                yield* opencode.provider.list({ location: ref })
+                return
+              }
+              if (event.type === "agent.updated") {
+                yield* opencode.agent.list({ location: ref })
+                return
+              }
+              yield* opencode.command.list({ location: ref })
+            }),
+          ),
+          Effect.forkScoped,
+        )
+        yield* connected.await
+        yield* opencode.plugin.list({ location: ref })
+        yield* Deferred.await(booted).pipe(Effect.timeout("5 seconds"))
+        expect(yield* Ref.get(updates)).toEqual(
+          expect.arrayContaining(["catalog.updated", "agent.updated", "command.updated"]),
+        )
+        yield* Ref.set(updates, [])
+
+        yield* opencode.debug.location.evict({ location: ref })
+        // Allow the live event stream to deliver teardown notifications and any refetches.
+        yield* Effect.sleep("200 millis")
+
+        expect(yield* Ref.get(updates)).toEqual([])
+        expect(yield* Ref.get(boots)).toBe(1)
+        expect(yield* opencode.debug.location.list()).toEqual([])
+        expect(subscriber.pollUnsafe()).toBeUndefined()
       }),
     ),
   15_000,
@@ -455,7 +609,14 @@ it.live("configures workspace providers through the SDK facade", () =>
         },
       })
       const opencode = yield* fixture.sdk.OpenCode.create({ workspaceProviders: { fake: driver } })
-      const workspace = yield* opencode.workspace.create({ provider: "fake" })
+      const requestedID = fixture.sdk.Workspace.ID.create()
+      const workspaceID = yield* opencode.workspace.create({ id: requestedID, provider: "fake" })
+
+      expect(workspaceID).toBe(requestedID)
+      expect(yield* opencode.workspace.create({ id: requestedID, provider: "fake" })).toBe(requestedID)
+      expect(calls).toEqual([])
+
+      const workspace = yield* opencode.workspace.provision({ workspaceID })
 
       expect(workspace.provider).toBe("fake")
       expect(workspace.binding).toEqual({ externalID: workspace.id })
@@ -468,13 +629,199 @@ it.live("configures workspace providers through the SDK facade", () =>
       const session = yield* opencode.sessions.create({ location: workspaceLocation })
       expect(session.location.workspaceID).toBe(workspace.id)
 
-      yield* opencode.workspace.destroy({ workspaceID: workspace.id })
+      expect(yield* opencode.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: true })
       expect(calls.map((call) => call.operation)).toEqual(["create", "destroy"])
-      expect((yield* opencode.workspace.destroy({ workspaceID: workspace.id }).pipe(Effect.flip))._tag).toBe(
-        "Workspace.NotFound",
-      )
+      expect(yield* opencode.workspace.destroy({ workspaceID: workspace.id })).toEqual({ destroyed: false })
+      expect(calls.map((call) => call.operation)).toEqual(["create", "destroy"])
     }),
   ),
+)
+
+const workspaceModelScenario = (fixture: Fixture, policy: "eager" | "lazy") =>
+  Effect.gen(function* () {
+    const calls: string[] = []
+    const createStarted = yield* Deferred.make<void>()
+    const createRelease = yield* Deferred.make<void>()
+    const modelStarted = yield* Deferred.make<void>()
+    yield* Effect.addFinalizer(() => Deferred.succeed(createRelease, undefined).pipe(Effect.asVoid))
+    const model = LanguageModel.make({ id: "workspace-test", provider: "test", route: OpenAIChat.route })
+    const client = TestLLM.testLayer({
+      fallback: TestLLM.text("ready", "answer"),
+      transformRequest: (request) => {
+        Deferred.doneUnsafe(modelStarted, Effect.void)
+        return request
+      },
+    })
+    const models = Layer.mock(SessionRunnerModel.Service, {
+      resolve: () =>
+        Effect.succeed(
+          SessionRunnerModel.resolved(model, {
+            capabilities: { tools: true, input: ["text"], output: ["text"] },
+            cost: [],
+            limit: { context: 100_000, output: 1_000 },
+          }),
+        ),
+    })
+    const driver = WorkspaceDriver.make({
+      create: ({ workspaceID }) => {
+        calls.push("create")
+        return Deferred.succeed(createStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(createRelease)),
+          Effect.as({ binding: { workspaceID } }),
+        )
+      },
+      connect: () => {
+        calls.push("connect")
+        return Effect.succeed(makeMemoryDriver())
+      },
+      suspendForIdle: () => Effect.void,
+      destroy: () => Effect.void,
+    })
+    const configDirectory = path.join(fixture.directory, "config")
+    yield* Effect.promise(() => fs.mkdir(configDirectory))
+    const opencode = yield* fixture.sdk.OpenCode.create(
+      {
+        config: { directory: configDirectory, project: false, content: "{}" },
+        workspaceProviders: { fake: driver },
+      },
+      {
+        overrides: [
+          [llmClient, client],
+          [SessionRunnerModel.node, models],
+        ],
+      },
+    )
+    const workspaceID = yield* opencode.workspace.create({ provider: "fake" })
+    const provisioning =
+      policy === "eager"
+        ? yield* opencode.workspace.provision({ workspaceID }).pipe(Effect.forkScoped({ startImmediately: true }))
+        : undefined
+    if (provisioning) {
+      yield* Deferred.await(createStarted).pipe(
+        Effect.timeoutOrElse({ duration: "4 seconds", orElse: () => Effect.die("provider create did not start") }),
+      )
+    }
+
+    const session = yield* opencode.sessions.create({
+      location: fixture.sdk.Location.Ref.make({
+        directory: fixture.sdk.AbsolutePath.make(fixture.directory),
+        workspaceID,
+      }),
+    })
+    yield* opencode.sessions.prompt({ sessionID: session.id, text: "Answer without using tools" })
+    yield* Deferred.await(modelStarted).pipe(
+      Effect.timeoutOrElse({ duration: "8 seconds", orElse: () => Effect.die("model stream did not start") }),
+    )
+
+    if (!provisioning) {
+      expect(calls).toEqual([])
+      return
+    }
+    expect(provisioning.pollUnsafe()).toBeUndefined()
+    expect(calls).toEqual(["create"])
+    yield* Deferred.succeed(createRelease, undefined)
+    expect((yield* Fiber.join(provisioning)).binding).toEqual({ workspaceID })
+    expect(calls).toEqual(["create"])
+  })
+
+it.live(
+  "starts model execution while eager workspace provisioning is blocked",
+  () => withEmbedded("opencode-embedded-workspace-eager-", (fixture) => workspaceModelScenario(fixture, "eager")),
+  15_000,
+)
+
+it.live(
+  "starts model execution without provisioning a lazy workspace",
+  () => withEmbedded("opencode-embedded-workspace-lazy-", (fixture) => workspaceModelScenario(fixture, "lazy")),
+  15_000,
+)
+
+it.live(
+  "blocks the model-selected first tool on lazy provisioning",
+  () =>
+    withEmbedded("opencode-embedded-workspace-tool-", (fixture) =>
+      Effect.gen(function* () {
+        const calls: string[] = []
+        const createStarted = yield* Deferred.make<void>()
+        const createRelease = yield* Deferred.make<void>()
+        yield* Effect.addFinalizer(() => Deferred.succeed(createRelease, undefined).pipe(Effect.asVoid))
+        const model = LanguageModel.make({ id: "workspace-tool-test", provider: "test", route: OpenAIChat.route })
+        // The first tool-advertising request selects the shell tool; everything else
+        // (including title generation, which carries no tools) answers with text.
+        let toolIssued = false
+        const llm = yield* TestLLM.Test.pipe(Effect.provide(TestLLM.testLayer()))
+        yield* llm.serve((request) => {
+          const wantsTool = !toolIssued && request.tools.some((tool) => tool.name === "shell")
+          if (!wantsTool) return TestLLM.text("done", "answer")
+          toolIssued = true
+          return TestLLM.tool("call-shell", "shell", { command: "echo hi" })
+        })
+        const models = Layer.mock(SessionRunnerModel.Service, {
+          resolve: () =>
+            Effect.succeed(
+              SessionRunnerModel.resolved(model, {
+                capabilities: { tools: true, input: ["text"], output: ["text"] },
+                cost: [],
+                limit: { context: 100_000, output: 1_000 },
+              }),
+            ),
+        })
+        const driver = WorkspaceDriver.make({
+          create: ({ workspaceID }) => {
+            calls.push("create")
+            return Deferred.succeed(createStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(createRelease)),
+              Effect.as({ binding: { workspaceID } }),
+            )
+          },
+          connect: () => {
+            calls.push("connect")
+            return Effect.succeed(makeMemoryDriver())
+          },
+          suspendForIdle: () => Effect.void,
+          destroy: () => Effect.void,
+        })
+        const configDirectory = path.join(fixture.directory, "config")
+        yield* Effect.promise(() => fs.mkdir(configDirectory))
+        const opencode = yield* fixture.sdk.OpenCode.create(
+          {
+            config: { directory: configDirectory, project: false, content: "{}" },
+            workspaceProviders: { fake: driver },
+          },
+          {
+            overrides: [
+              [llmClient, Layer.succeed(LLMClient.Service, llm)],
+              [SessionRunnerModel.node, models],
+            ],
+          },
+        )
+        const workspaceID = yield* opencode.workspace.create({ provider: "fake" })
+        const session = yield* opencode.sessions.create({
+          location: fixture.sdk.Location.Ref.make({
+            directory: fixture.sdk.AbsolutePath.make(fixture.directory),
+            workspaceID,
+          }),
+        })
+        expect(calls).toEqual([])
+
+        yield* opencode.sessions.prompt({ sessionID: session.id, text: "Run echo" })
+        // The model-selected shell tool is the first execution-plane demand: it alone
+        // starts provisioning and blocks inside the tool call until the provider is ready.
+        yield* Deferred.await(createStarted).pipe(
+          Effect.timeoutOrElse({ duration: "8 seconds", orElse: () => Effect.die("first tool did not provision") }),
+        )
+        expect(calls).toEqual(["create"])
+
+        yield* Deferred.succeed(createRelease, undefined)
+        yield* opencode.sessions.wait({ sessionID: session.id })
+        // Provisioning settled, the workspace connected, and the turn completed. The
+        // memory driver rejects the actual spawn, which surfaces to the model as an
+        // ordinary tool error before the final text response.
+        expect(calls).toEqual(["create", "connect"])
+        expect(toolIssued).toBe(true)
+      }),
+    ),
+  15_000,
 )
 
 it.live("preserves unknown workspace provider errors", () =>

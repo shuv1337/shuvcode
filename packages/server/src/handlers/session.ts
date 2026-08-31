@@ -1,4 +1,6 @@
 import { Session } from "@opencode-ai/core/session"
+import { SessionStats } from "@opencode-ai/core/session/stats"
+import { SessionTitle } from "@opencode-ai/core/session/title"
 import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
 import { SessionDynamicTool } from "@opencode-ai/core/session/dynamic-tool"
@@ -9,7 +11,7 @@ import { Api } from "../api"
 import { SessionsCursor } from "@opencode-ai/protocol/groups/session"
 import {
   ConflictError,
-  CommandEvaluationError,
+  CommandExecutionError,
   CommandNotFoundError,
   InvalidRequestError,
   InvalidCursorError,
@@ -92,6 +94,27 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         }),
       )
       .handle(
+        "session.stats",
+        Effect.fn(function* (ctx) {
+          const timezone = ctx.query.timezone ?? "UTC"
+          yield* Effect.try({
+            try: () => new Intl.DateTimeFormat("en-US", { timeZone: timezone }),
+            catch: () => new InvalidRequestError({ message: `Invalid time zone: ${timezone}` }),
+          })
+          return {
+            data: yield* SessionStats.get({
+              from: ctx.query.from,
+              to: ctx.query.to,
+              projectID: ctx.query.project,
+              timezone,
+              tools: ctx.query.tools,
+            }).pipe(
+              Effect.mapError(() => new InvalidRequestError({ message: "Stats range must end after it starts" })),
+            ),
+          }
+        }),
+      )
+      .handle(
         "session.create",
         Effect.fn(function* (ctx) {
           const created = yield* session
@@ -103,14 +126,20 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
               location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
               policy: ctx.payload.policy,
               metadata: ctx.payload.metadata,
+              tools: ctx.payload.tools,
             })
-            .pipe(Effect.orDie)
-          if (ctx.payload.tools)
-            yield* SessionDynamicTool.Service.pipe(
-              Effect.flatMap((tools) => tools.set({ sessionID: created.id, tools: ctx.payload.tools! })),
-              Effect.provide(locations.get(created.location)),
+            .pipe(
+              Effect.catchTag(
+                "Session.PolicyWideningError",
+                (error) =>
+                  new InvalidRequestError({
+                    message: `Session policy cannot allow tools denied by its parent: ${error.tools.join(", ")}`,
+                    kind: "session.policy.widening",
+                    field: "policy.tools.allow",
+                  }),
+              ),
               Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
-              Effect.catchTag("Session.NotFoundError", (error) => Effect.die(error)),
+              Effect.orDie,
             )
           return { data: created }
         }),
@@ -125,6 +154,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                 location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
               })
               .pipe(
+                Effect.catchTag("Session.NotFoundError", missingSession),
                 Effect.catchTag(
                   "SessionTransfer.ImportConflictError",
                   (error) =>
@@ -202,6 +232,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
               sessionID: ctx.params.sessionID,
               boundary: ctx.payload.boundary,
               policy: ctx.payload.policy,
+              tools: ctx.payload.tools,
             })
             .pipe(
               Effect.catchTag("Session.NotFoundError", missingSession),
@@ -227,14 +258,8 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                     field: "policy.tools.allow",
                   }),
               ),
-            )
-          if (ctx.payload.tools) {
-            const tools = yield* SessionDynamicTool.Service
-            yield* tools.set({ sessionID: forked.id, tools: ctx.payload.tools }).pipe(
               Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
-              Effect.catchTag("Session.NotFoundError", (error) => Effect.die(error)),
             )
-          }
           return { data: forked }
         }),
       )
@@ -259,9 +284,14 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.rename",
         Effect.fn(function* (ctx) {
-          yield* session
-            .rename({ sessionID: ctx.params.sessionID, title: ctx.payload.title })
-            .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          if (ctx.payload.title) {
+            yield* session
+              .rename({ sessionID: ctx.params.sessionID, title: ctx.payload.title })
+              .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+            return HttpApiSchema.NoContent.make()
+          }
+          const title = yield* SessionTitle.Service
+          yield* title.generate(ctx.params.sessionID)
           return HttpApiSchema.NoContent.make()
         }),
       )
@@ -329,55 +359,36 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.command",
         Effect.fn(function* (ctx) {
-          return {
-            data: yield* session
-              .command({
-                sessionID: ctx.params.sessionID,
-                id: ctx.payload.id,
-                command: ctx.payload.command,
-                arguments: ctx.payload.arguments,
-                agent: ctx.payload.agent,
-                model: ctx.payload.model,
-                files: ctx.payload.files,
-                agents: ctx.payload.agents,
-                skills: ctx.payload.skills,
-                delivery: ctx.payload.delivery,
-                resume: ctx.payload.resume,
-              })
-              .pipe(
-                Effect.catchTag("Session.NotFoundError", missingSession),
-                Effect.catchTag("Command.NotFoundError", (error) =>
-                  Effect.fail(
-                    new CommandNotFoundError({
-                      command: error.command,
-                      message: error.message,
-                    }),
-                  ),
-                ),
-                Effect.catchTag("Command.EvaluationError", (error) =>
-                  Effect.fail(
-                    new CommandEvaluationError({
-                      command: error.command,
-                      message: error.message,
-                    }),
-                  ),
-                ),
-                Effect.catchTag("Session.PromptConflictError", (error) =>
-                  Effect.fail(
-                    new ConflictError({
-                      message: `Prompt message ID conflicts with an existing durable record: ${error.messageID}`,
-                      resource: error.messageID,
-                    }),
-                  ),
-                ),
-                Effect.catchTag("Session.AttachmentError", (error) =>
-                  Effect.fail(new InvalidRequestError({ message: error.message, field: "files" })),
-                ),
-                Effect.catchTag("Session.SkillNotFoundError", (error) =>
-                  Effect.fail(new InvalidRequestError({ message: `Skill not found: ${error.skill}`, field: "skills" })),
+          yield* session
+            .command({
+              sessionID: ctx.params.sessionID,
+              command: ctx.payload.command,
+              text: ctx.payload.text,
+              files: ctx.payload.files,
+              agents: ctx.payload.agents,
+              skills: ctx.payload.skills,
+              delivery: ctx.payload.delivery,
+            })
+            .pipe(
+              Effect.catchTag("Session.NotFoundError", missingSession),
+              Effect.catchTag("Command.NotFoundError", (error) =>
+                Effect.fail(
+                  new CommandNotFoundError({
+                    command: error.command,
+                    message: error.message,
+                  }),
                 ),
               ),
-          }
+              Effect.catchTag("Command.ExecutionError", (error) =>
+                Effect.fail(
+                  new CommandExecutionError({
+                    command: error.command,
+                    message: error.message,
+                  }),
+                ),
+              ),
+            )
+          return HttpApiSchema.NoContent.make()
         }),
       )
       .handle(
@@ -623,7 +634,10 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.tools.put",
         Effect.fn(function* (ctx) {
-          const tools = yield* SessionDynamicTool.Service
+          const sessionInfo = yield* session
+            .get(ctx.params.sessionID)
+            .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          const tools = yield* SessionDynamicTool.Service.pipe(Effect.provide(locations.get(sessionInfo.location)))
           yield* tools.set({ sessionID: ctx.params.sessionID, tools: ctx.payload.tools }).pipe(
             Effect.catchTag("SessionDynamicTool.InvalidToolError", (error) => Effect.fail(invalidTool(error))),
             Effect.catchTag("Session.NotFoundError", missingSession),
@@ -634,21 +648,30 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.tools.list",
         Effect.fn(function* (ctx) {
-          const tools = yield* SessionDynamicTool.Service
+          const sessionInfo = yield* session
+            .get(ctx.params.sessionID)
+            .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          const tools = yield* SessionDynamicTool.Service.pipe(Effect.provide(locations.get(sessionInfo.location)))
           return { data: yield* tools.list(ctx.params.sessionID) }
         }),
       )
       .handle(
         "session.tools.calls",
         Effect.fn(function* (ctx) {
-          const tools = yield* SessionDynamicTool.Service
+          const sessionInfo = yield* session
+            .get(ctx.params.sessionID)
+            .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          const tools = yield* SessionDynamicTool.Service.pipe(Effect.provide(locations.get(sessionInfo.location)))
           return { data: yield* tools.calls(ctx.params.sessionID) }
         }),
       )
       .handle(
         "session.tools.reply",
         Effect.fn(function* (ctx) {
-          const tools = yield* SessionDynamicTool.Service
+          const sessionInfo = yield* session
+            .get(ctx.params.sessionID)
+            .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          const tools = yield* SessionDynamicTool.Service.pipe(Effect.provide(locations.get(sessionInfo.location)))
           yield* tools
             .reply({ sessionID: ctx.params.sessionID, callID: ctx.params.callID, reply: ctx.payload })
             .pipe(
@@ -687,8 +710,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.interrupt",
         Effect.fn(function* (ctx) {
-          yield* session.interrupt(ctx.params.sessionID, { continue: ctx.query.continue })
-          return HttpApiSchema.NoContent.make()
+          return { interrupted: yield* session.interrupt(ctx.params.sessionID, { continue: ctx.query.continue }) }
         }),
       )
       .handle(
@@ -709,6 +731,37 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
             messageID: ctx.params.messageID,
             message: `Message not found: ${ctx.params.messageID}`,
           })
+        }),
+      )
+      .handle(
+        "session.messageUpdate",
+        Effect.fn(function* (ctx) {
+          const message = yield* session.updateMessage({ ...ctx.params, content: ctx.payload.content }).pipe(
+            Effect.catchTag("Session.NotFoundError", missingSession),
+            Effect.catchTag(
+              "Session.MessageNotFoundError",
+              (error) =>
+                new MessageNotFoundError({
+                  sessionID: error.sessionID,
+                  messageID: error.messageID,
+                  message: `Message not found: ${error.messageID}`,
+                }),
+            ),
+            Effect.catchTag("Session.BusyError", busySession),
+            Effect.catchTag(
+              "Session.MessageNotAssistantError",
+              () => new InvalidRequestError({ message: "Only assistant messages can be updated", field: "messageID" }),
+            ),
+            Effect.catchTag(
+              "Session.MessageIncompleteError",
+              (error) => new ConflictError({ message: "Assistant message is incomplete", resource: error.messageID }),
+            ),
+            Effect.catchTag(
+              "Session.MessageToolIncompleteError",
+              () => new InvalidRequestError({ message: "Tool content must be completed", field: "content" }),
+            ),
+          )
+          return { data: message }
         }),
       )
   }),

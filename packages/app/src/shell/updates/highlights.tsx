@@ -7,7 +7,7 @@ import { useSettings } from "@/settings/model"
 import { persisted } from "@/runtime/persistence/storage"
 import { DialogReleaseNotes, type Highlight } from "@/shell/updates/release-notes"
 
-const CHANGELOG_URL = "https://opencode.ai/changelog.json"
+const CHANGELOG_URL = "https://api.github.com/repos/Latitudes-Dev/shuvcode/releases"
 
 type Store = {
   version?: string

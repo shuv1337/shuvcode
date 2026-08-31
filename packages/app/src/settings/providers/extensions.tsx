@@ -27,6 +27,7 @@ export const SettingsExtensions: Component = () => {
   const [mcpList, { refetch: refetchMcp }] = createResource(
     () => serverSdk.connection.status() === "connected",
     () => serverSdk.api.mcp.list().then((result) => result.data),
+    { initialValue: [] },
   )
   const toggleMcp = useMcpToggle(() => undefined, refetchMcp)
   const mcps = createMemo<McpRowItem[]>(() => {
@@ -44,6 +45,7 @@ export const SettingsExtensions: Component = () => {
   const [pluginList] = createResource(
     () => serverSdk.connection.status() === "connected",
     () => serverSdk.api.plugin.list().then((result) => result.data),
+    { initialValue: [] },
   )
   const plugins = createMemo<PluginRowItem[]>(() => pluginLabels(pluginList.latest ?? []).map((name) => ({ name })))
 
@@ -130,7 +132,7 @@ export const SettingsExtensions: Component = () => {
                 </span>
                 <ExternalLink
                   class="text-13-regular text-v2-text-accent hover:underline"
-                  href="https://opencode.ai/docs/skills/"
+                  href="https://shuv.ai/v2/docs/skills/"
                 >
                   {language.t("settings.extensions.addSkills")}
                 </ExternalLink>

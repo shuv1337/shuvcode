@@ -11,15 +11,17 @@ import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
+import { PersistentPty } from "@opencode-ai/core/persistent-pty"
 import { Project } from "@opencode-ai/core/project"
 import { Session } from "@opencode-ai/core/session"
 import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { ShellSelect } from "@opencode-ai/core/shell/select"
 import { Job } from "@opencode-ai/core/job"
-import { MCP } from "@opencode-ai/core/mcp/index"
+import { Mcp } from "@opencode-ai/core/mcp/index"
 import { Global } from "@opencode-ai/util/global"
 import { InstructionDiscovery } from "@opencode-ai/core/instruction-discovery"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { LocationActivity } from "@opencode-ai/core/location-activity"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
@@ -32,6 +34,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Context, Effect, Layer, Option } from "effect"
 import { Api } from "./api"
 import { ServerAuth } from "./auth"
+import { CorsConfig } from "./cors"
 import { handlers } from "./handlers"
 import { authorizationLayer } from "./middleware/authorization"
 import { schemaErrorLayer } from "./middleware/schema-error"
@@ -57,13 +60,15 @@ const applicationServiceNodes = [
   SdkPlugins.node,
   PermissionSaved.node,
   PtyTicket.node,
+  PersistentPty.node,
   Credential.node,
   WellKnown.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
+  LocationActivity.node,
+  Workspace.node,
 ] as const
 const applicationServices = LayerNode.group(applicationServiceNodes)
-const embeddedApplicationServices = LayerNode.group([...applicationServiceNodes, Workspace.node])
 
 export function createRoutes(
   options: ServerOptions = {},
@@ -77,12 +82,11 @@ export function createRoutes(
     options,
     serviceURLs,
     overrides,
-    false,
   )
 }
 
 export function createEmbeddedRoutes(options: ServerOptions = {}, overrides: LayerNode.Replacements = []) {
-  return makeRoutes(ServerAuth.Config.configLayer({ password: Option.none() }), options, () => [], overrides, true)
+  return makeRoutes(ServerAuth.Config.configLayer({ password: Option.none() }), options, () => [], overrides)
 }
 
 function makeRoutes<AuthError, AuthServices>(
@@ -91,11 +95,11 @@ function makeRoutes<AuthError, AuthServices>(
   serviceURLs: () => ReadonlyArray<string>,
   // Runtime-profile replacements (e.g. workerd) applied after the standard set, so later entries win.
   overrides: LayerNode.Replacements,
-  embedded: boolean,
 ) {
   const pluginRuntimeCell = PluginRuntime.makeCell()
   const standard: LayerNode.Replacements = [
     [Database.node, Database.configured(options.database)],
+    [PersistentPty.node, PersistentPty.configured(options.pty)],
     [Bus.node, Bus.configured({ persist: options.events?.persist })],
     [App.node, App.configured(options.app)],
     [ModelsDev.node, ModelsDev.configured(options.models)],
@@ -113,8 +117,8 @@ function makeRoutes<AuthError, AuthServices>(
     [InstructionDiscovery.node, InstructionDiscovery.configured({ project: options.config?.project })],
     [ShellSelect.node, ShellSelect.configured({ gitbash: options.windows?.gitbash })],
     [
-      MCP.node,
-      MCP.configured({
+      Mcp.node,
+      Mcp.configured({
         clientInfo: {
           name: options.app?.name ?? "opencode",
           version: options.app?.version ?? "unknown",
@@ -130,13 +134,10 @@ function makeRoutes<AuthError, AuthServices>(
         Effect.gen(function* () {
           const { simulationReplacements } = yield* Effect.promise(() => import("@opencode-ai/simulation/backend"))
           const simulation = yield* simulationReplacements({ version: App.make(options.app).version })
-          return AppNodeBuilder.build(embedded ? embeddedApplicationServices : applicationServices, [
-            ...replacements,
-            ...simulation,
-          ])
+          return AppNodeBuilder.build(applicationServices, [...replacements, ...simulation])
         }),
       )
-    : AppNodeBuilder.build(embedded ? embeddedApplicationServices : applicationServices, replacements)
+    : AppNodeBuilder.build(applicationServices, replacements)
   return serviceLayer.pipe(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
@@ -147,7 +148,7 @@ function makeRoutes<AuthError, AuthServices>(
         ServerInfo.layer(serviceURLs, options.app),
       )
       const api = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-        Layer.provide(handlers.pipe(Layer.provide(services))),
+        Layer.provide(handlers.pipe(Layer.provide(services), Layer.provide(Layer.succeed(CorsConfig, options)))),
         Layer.provide(formLocationLayer),
         Layer.provide(sessionLocationLayer),
         Layer.provide(layer),

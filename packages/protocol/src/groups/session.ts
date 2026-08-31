@@ -3,6 +3,7 @@ import { SessionTransfer } from "@opencode-ai/schema/session-transfer"
 import { SessionInbox } from "@opencode-ai/schema/session-inbox"
 import { PromptInput } from "@opencode-ai/schema/prompt-input"
 import { Session } from "@opencode-ai/schema/session"
+import { SessionStats } from "@opencode-ai/schema/session-stats"
 import { InstructionEntry } from "@opencode-ai/schema/instruction-entry"
 import { Project } from "@opencode-ai/schema/project"
 import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@opencode-ai/schema/schema"
@@ -12,7 +13,7 @@ import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from 
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import {
   ConflictError,
-  CommandEvaluationError,
+  CommandExecutionError,
   CommandNotFoundError,
   InvalidCursorError,
   InvalidRequestError,
@@ -148,6 +149,25 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       ),
     )
     .add(
+      HttpApiEndpoint.get("session.stats", "/api/session/stats", {
+        query: Schema.Struct({
+          from: Schema.NumberFromString.pipe(Schema.optional),
+          to: Schema.NumberFromString.pipe(Schema.optional),
+          project: Project.ID.pipe(Schema.optional),
+          timezone: Schema.String.pipe(Schema.optional),
+          tools: SessionStats.ToolMode.pipe(Schema.optional),
+        }),
+        success: Schema.Struct({ data: SessionStats.Info }),
+        error: InvalidRequestError,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.stats",
+          summary: "Get session statistics",
+          description: "Aggregate local session activity, usage, and tool reliability for a time range.",
+        }),
+      ),
+    )
+    .add(
       HttpApiEndpoint.post("session.create", "/api/session", {
         payload: Schema.Struct({
           id: Session.ID.pipe(Schema.optional),
@@ -156,7 +176,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           model: Model.Ref.pipe(Schema.optional),
           location: Location.Ref.pipe(Schema.optional),
           policy: Session.Policy.pipe(Schema.optional),
-          metadata: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.optional),
+          metadata: Session.Metadata.pipe(Schema.optional),
           tools: Schema.Array(SessionDynamicTool.Definition).pipe(Schema.optional),
         }),
         success: Schema.Struct({ data: Session.Info }),
@@ -176,12 +196,13 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           location: Location.Ref.pipe(Schema.optional),
         }),
         success: Schema.Struct({ data: Session.Info }),
-        error: ConflictError,
+        error: [ConflictError, SessionNotFoundError],
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "v2.session.import",
           summary: "Import session",
-          description: "Import a projected session transcript at the requested location.",
+          description:
+            "Import a projected session transcript at the requested location. If parentID is supplied, the parent session must already exist; import parents before children.",
         }),
       ),
     )
@@ -347,27 +368,19 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.command", "/api/session/:sessionID/command", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({
-          id: SessionMessage.ID.pipe(Schema.optional),
           command: Schema.String,
-          arguments: Schema.String.pipe(Schema.optional),
-          agent: Agent.ID.pipe(Schema.optional),
-          model: Model.Ref.pipe(Schema.optional),
-          files: PromptInput.Prompt.fields.files,
-          agents: PromptInput.Prompt.fields.agents,
-          skills: PromptInput.Prompt.fields.skills,
+          ...PromptInput.Prompt.fields,
           delivery: SessionInbox.Delivery.pipe(Schema.optional),
-          resume: Schema.Boolean.pipe(Schema.optional),
         }),
-        success: Schema.Struct({ data: SessionInbox.User }),
-        error: [ConflictError, InvalidRequestError, SessionNotFoundError, CommandNotFoundError, CommandEvaluationError],
+        success: HttpApiSchema.NoContent,
+        error: [SessionNotFoundError, CommandNotFoundError, CommandExecutionError],
       })
         .middleware(sessionLocationMiddleware)
         .annotateMerge(
           OpenApi.annotations({
             identifier: "v2.session.command",
             summary: "Run command",
-            description:
-              "Resolve a slash command into prompt input, admit it durably, and schedule execution unless resume is false.",
+            description: "Execute a slash command callback immediately.",
           }),
         ),
     )
@@ -726,7 +739,11 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.interrupt", "/api/session/:sessionID/interrupt", {
         params: { sessionID: Session.ID },
         query: { continue: BooleanFromString.pipe(Schema.optional) },
-        success: HttpApiSchema.NoContent,
+        success: Schema.Struct({
+          interrupted: Schema.Boolean.annotate({
+            description: "Whether an active execution owned by this OpenCode process was interrupted.",
+          }),
+        }).annotate({ identifier: "SessionInterruptResponse" }),
         error: SessionNotFoundError,
       })
         .middleware(sessionLocationMiddleware)
@@ -735,7 +752,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             identifier: "v2.session.interrupt",
             summary: "Interrupt session execution",
             description:
-              "Interrupt active execution owned by this OpenCode process. Idle interruption is a no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
+              "Interrupt active execution owned by this OpenCode process. Returns interrupted=true when an active execution was interrupted and false for the idle no-op. When continue=true, execution resumes pending steering input and next-in-line control items (manual compaction, moves) while queued prompts remain parked.",
           }),
         ),
     )
@@ -765,6 +782,20 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           identifier: "v2.session.message",
           summary: "Get session message",
           description: "Retrieve one projected message owned by the Session.",
+        }),
+      ),
+    )
+    .add(
+      HttpApiEndpoint.patch("session.messageUpdate", "/api/session/:sessionID/message/:messageID", {
+        params: { sessionID: Session.ID, messageID: SessionMessage.ID },
+        payload: Schema.Struct({ content: Schema.Array(SessionMessage.AssistantContent) }),
+        success: Schema.Struct({ data: SessionMessage.Assistant }),
+        error: [SessionNotFoundError, MessageNotFoundError, InvalidRequestError, SessionBusyError, ConflictError],
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.messageUpdate",
+          summary: "Update assistant message content",
+          description: "Replace the content of a completed assistant message in an idle session.",
         }),
       ),
     )

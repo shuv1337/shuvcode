@@ -1,4 +1,5 @@
-.blume/
+.astro/
+.wrangler/
 dist/
 node_modules/
-.blume-verify/
+public/cli.json

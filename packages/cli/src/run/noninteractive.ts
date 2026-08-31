@@ -571,26 +571,6 @@ export async function runNonInteractivePrompt(input: Input) {
           writeReasoning(part, timestamp)
           continue
         }
-        if (item.type === "structured") {
-          const ordinal = textOrdinal++
-          const key = contentKey(message.id, ordinal)
-          const text = JSON.stringify(item.value, null, 2)
-          if (renderedText.get(key) === text) continue
-          writeText(
-            {
-              id: projectedPartID(message.id, `structured-${ordinal}`),
-              sessionID: input.sessionID,
-              messageID: message.id,
-              type: "text",
-              text,
-              time: { start: message.time.created, end: timestamp },
-            },
-            timestamp,
-          )
-          renderedText.set(key, text)
-          continue
-        }
-
         const key = toolKey(message.id, item.id)
         if (renderedTools.has(key) || item.state.status === "streaming" || item.state.status === "running") continue
         const part: MiniToolPart = {

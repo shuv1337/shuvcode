@@ -261,7 +261,6 @@ describe("LocationWatcher subscriptions", () => {
       Config.Service,
       Config.Service.of({
         entries: () => Effect.sync(() => entries.current),
-        update: () => Effect.die("unused config.update"),
         changes: () => Stream.never,
       }),
     )

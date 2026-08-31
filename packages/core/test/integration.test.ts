@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
-import { Cause, Clock, Deferred, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
-import * as TestClock from "effect/testing/TestClock"
+import { Cause, Clock, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { makeGlobalNode } from "@opencode-ai/util/effect/app-node"
@@ -20,6 +20,7 @@ const failingCredentialNode = makeGlobalNode({
       list: () => Effect.succeed([]),
       get: () => Effect.undefined,
       create: () => Effect.die(new Error("credential persistence failed")),
+      activate: () => Effect.void,
       update: () => Effect.void,
       remove: () => Effect.void,
     }),
@@ -45,78 +46,6 @@ function eventually<A, E, R>(
 }
 
 describe("Integration", () => {
-  it.effect("reports no authentication as not ready", () =>
-    Effect.gen(function* () {
-      const integrations = yield* Integration.Service
-      expect(yield* integrations.auth.status()).toEqual({
-        ready: false,
-        storage: "available",
-        verification: "not_performed",
-        profiles: [],
-      })
-    }),
-  )
-
-  it.effect("reports stored and environment authentication with local-only semantics", () => {
-    const environmentProvider = Integration.ID.make("environment-provider")
-    return Effect.acquireUseRelease(
-      Effect.sync(() => {
-        const previous = process.env.INTEGRATION_AUTH_STATUS_SECRET
-        process.env.INTEGRATION_AUTH_STATUS_SECRET = "environment-secret"
-        return previous
-      }),
-      () =>
-        Effect.gen(function* () {
-          const integrations = yield* Integration.Service
-          const credentials = yield* Credential.Service
-          const storedProvider = Integration.ID.make("stored-provider")
-          yield* integrations.transform((editor) =>
-            editor.method.update({
-              integrationID: environmentProvider,
-              method: { type: "env", names: ["INTEGRATION_AUTH_STATUS_SECRET"] },
-            }),
-          )
-          const stored = yield* credentials.create({
-            integrationID: storedProvider,
-            value: Credential.Key.make({ type: "key", key: "stored-secret" }),
-          })
-
-          const status = yield* integrations.auth.status()
-          expect(status).toEqual({
-            ready: true,
-            storage: "available",
-            verification: "not_performed",
-            profiles: [
-              {
-                providerID: environmentProvider,
-                source: "environment",
-                type: "key",
-                usable: true,
-                reason: "configured",
-              },
-              {
-                providerID: storedProvider,
-                profileID: stored.id,
-                source: "stored",
-                type: "key",
-                usable: true,
-                reason: "configured",
-              },
-            ],
-          })
-          const serialized = JSON.stringify(status)
-          expect(serialized).not.toContain("environment-secret")
-          expect(serialized).not.toContain("stored-secret")
-          expect(serialized).not.toContain("INTEGRATION_AUTH_STATUS_SECRET")
-        }),
-      (previous) =>
-        Effect.sync(() => {
-          if (previous === undefined) delete process.env.INTEGRATION_AUTH_STATUS_SECRET
-          else process.env.INTEGRATION_AUTH_STATUS_SECRET = previous
-        }),
-    )
-  })
-
   it.effect("registers integrations through the editor", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service
@@ -124,10 +53,21 @@ describe("Integration", () => {
       const openai = Integration.ID.make("openai")
 
       yield* integrations
-        .transform((editor) => editor.update(openai, (integration) => (integration.name = "OpenAI")))
+        .transform((editor) =>
+          editor.update(openai, (integration) => {
+            integration.name = "OpenAI"
+            integration.metadata = { source: "plugin", featured: true }
+          }),
+        )
         .pipe(Scope.provide(scope))
       expect(yield* integrations.get(openai)).toEqual(
-        Integration.Info.make({ id: openai, name: "OpenAI", methods: [], connections: [] }),
+        Integration.Info.make({
+          id: openai,
+          name: "OpenAI",
+          metadata: { source: "plugin", featured: true },
+          methods: [],
+          connections: [],
+        }),
       )
 
       yield* Scope.close(scope, Exit.void)
@@ -220,9 +160,9 @@ describe("Integration", () => {
           },
         }),
       )
-      const updated = yield* bus
-        .subscribe(Integration.Event.Updated)
-        .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped)
+      const created = yield* bus
+        .subscribe([Credential.Event.Updated, Credential.Event.Switched])
+        .pipe(Stream.take(2), Stream.runCollect, Effect.forkScoped)
       yield* Effect.yieldNow
 
       expect(
@@ -239,14 +179,42 @@ describe("Integration", () => {
         label: "Work",
       })
 
-      expect(yield* credentials.list(integrationID)).toEqual([
+      const stored = yield* credentials.list(integrationID)
+      expect(stored).toEqual([
         expect.objectContaining({
           integrationID,
           label: "Work",
           value: Credential.Key.make({ type: "key", key: "secret", configuration: { accountId: "account" } }),
         }),
       ])
-      expect((yield* Fiber.join(updated)).length).toBe(1)
+      expect((yield* Fiber.join(created)).map((event) => ({ type: event.type, data: event.data }))).toEqual([
+        { type: Credential.Event.Updated.type, data: {} },
+        { type: Credential.Event.Switched.type, data: { credentialID: stored[0]?.id, integrationID } },
+      ])
+    }),
+  )
+
+  it.effect("names unlabeled credentials after the integration", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const credentials = yield* Credential.Service
+      const integrationID = Integration.ID.make("openai")
+      yield* integrations.transform((editor) => {
+        editor.update(integrationID, (integration) => (integration.name = "OpenAI"))
+        editor.method.update({ integrationID, method: { type: "key", label: "API key" } })
+      })
+
+      yield* integrations.connection.key({ integrationID, key: "first" })
+      yield* integrations.connection.key({ integrationID, key: "second" })
+      yield* integrations.connection.key({ integrationID, key: "work", label: "Work" })
+      yield* integrations.connection.key({ integrationID, key: "third" })
+
+      expect((yield* credentials.list(integrationID)).map((credential) => credential.label)).toEqual([
+        "OpenAI",
+        "OpenAI 2",
+        "Work",
+        "OpenAI 3",
+      ])
     }),
   )
 
@@ -533,93 +501,6 @@ describe("Integration", () => {
     }),
   )
 
-  it.effect("coalesces concurrent refreshes into a single flight", () =>
-    Effect.gen(function* () {
-      const integrations = yield* Integration.Service
-      const credentials = yield* Credential.Service
-      const integrationID = Integration.ID.make("anthropic")
-      const methodID = Integration.MethodID.make("claude-pro-max")
-      const latch = yield* Deferred.make<void>()
-      let refreshes = 0
-      yield* integrations.transform((editor) =>
-        editor.method.update({
-          integrationID,
-          method: { id: methodID, type: "oauth", label: "Claude Pro/Max" },
-          authorize: () =>
-            Effect.succeed({
-              mode: "auto" as const,
-              url: "https://example.com/authorize",
-              instructions: "Sign in",
-              callback: Effect.never,
-            }),
-          // Providers rotate refresh tokens, so a second concurrent refresh
-          // with the same token would be rejected upstream; resolve must run
-          // exactly one flight and share its result.
-          refresh: (credential) =>
-            Deferred.await(latch).pipe(
-              Effect.map(() => {
-                refreshes++
-                return { ...credential, access: "fresh", expires: Number.MAX_SAFE_INTEGER }
-              }),
-            ),
-        }),
-      )
-      yield* credentials.create({
-        integrationID,
-        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
-      })
-
-      const connection = yield* integrations.connection.active(integrationID)
-      const first = yield* integrations.connection
-        .resolve(connection!)
-        .pipe(Effect.forkChild({ startImmediately: true }))
-      const second = yield* integrations.connection
-        .resolve(connection!)
-        .pipe(Effect.forkChild({ startImmediately: true }))
-      yield* Effect.yieldNow
-      yield* Deferred.succeed(latch, undefined)
-      const values = [yield* Fiber.join(first), yield* Fiber.join(second)]
-
-      expect(refreshes).toBe(1)
-      for (const value of values) expect(value).toMatchObject({ type: "oauth", access: "fresh" })
-      expect((yield* credentials.list(integrationID))[0]?.value).toMatchObject({ access: "fresh" })
-    }),
-  )
-
-  it.effect("fails resolve with AuthorizationError when refresh dies", () =>
-    Effect.gen(function* () {
-      const integrations = yield* Integration.Service
-      const credentials = yield* Credential.Service
-      const integrationID = Integration.ID.make("anthropic")
-      const methodID = Integration.MethodID.make("claude-pro-max")
-      yield* integrations.transform((editor) =>
-        editor.method.update({
-          integrationID,
-          method: { id: methodID, type: "oauth", label: "Claude Pro/Max" },
-          authorize: () =>
-            Effect.succeed({
-              mode: "auto" as const,
-              url: "https://example.com/authorize",
-              instructions: "Sign in",
-              callback: Effect.never,
-            }),
-          // A broken plugin refresh (e.g. returning a non-Promise to a promise
-          // bridge) surfaces as a defect; resolve must contain it.
-          refresh: () => Effect.die(new TypeError("result.then is not a function")),
-        }),
-      )
-      yield* credentials.create({
-        integrationID,
-        value: Credential.OAuth.make({ type: "oauth", methodID, access: "stale", refresh: "refresh", expires: 1 }),
-      })
-
-      const connection = yield* integrations.connection.active(integrationID)
-      expect(connection).toBeDefined()
-      const error = yield* integrations.connection.resolve(connection!).pipe(Effect.flip)
-      expect(error).toBeInstanceOf(Integration.AuthorizationError)
-    }),
-  )
-
   it.effect("projects credential and env connections", () => {
     const integrationID = Integration.ID.make("acme")
     return Effect.acquireUseRelease(
@@ -642,6 +523,11 @@ describe("Integration", () => {
               },
             }),
           )
+          const archived = yield* credentials.create({
+            integrationID,
+            label: "Archived",
+            value: Credential.Key.make({ type: "key", key: "c" }),
+          })
           const work = yield* credentials.create({
             integrationID,
             label: "Work",
@@ -660,6 +546,16 @@ describe("Integration", () => {
               id: personal.id,
               label: "Personal",
             },
+            {
+              type: "credential",
+              id: work.id,
+              label: "Work",
+            },
+            {
+              type: "credential",
+              id: archived.id,
+              label: "Archived",
+            },
             { type: "env", name: "INTEGRATION_TEST_ACME_KEY" },
           ])
           expect(yield* integrations.connection.active(integrationID)).toEqual({
@@ -667,7 +563,52 @@ describe("Integration", () => {
             id: personal.id,
             label: "Personal",
           })
-          expect(work.id).not.toBe(personal.id)
+
+          const bus = yield* Bus.Service
+          const events = new Array<{ type: string; data: unknown }>()
+          yield* bus.listen((event) => Effect.sync(() => events.push({ type: event.type, data: event.data })))
+          yield* integrations.connection.activate(work.id)
+
+          expect(yield* integrations.connection.active(integrationID)).toEqual({
+            type: "credential",
+            id: work.id,
+            label: "Work",
+          })
+          expect((yield* integrations.get(integrationID))?.connections.map((connection) => connection.type)).toEqual([
+            "credential",
+            "credential",
+            "credential",
+            "env",
+          ])
+          expect(events).toEqual([
+            { type: Credential.Event.Switched.type, data: { credentialID: work.id, integrationID } },
+          ])
+
+          yield* integrations.connection.remove(archived.id)
+          expect(events).toEqual([
+            { type: Credential.Event.Switched.type, data: { credentialID: work.id, integrationID } },
+            { type: Credential.Event.Updated.type, data: {} },
+          ])
+
+          yield* integrations.connection.remove(work.id)
+          expect(yield* integrations.connection.active(integrationID)).toEqual({
+            type: "credential",
+            id: personal.id,
+            label: "Personal",
+          })
+          yield* integrations.connection.remove(personal.id)
+          expect(yield* integrations.connection.active(integrationID)).toEqual({
+            type: "env",
+            name: "INTEGRATION_TEST_ACME_KEY",
+          })
+          expect(events).toEqual([
+            { type: Credential.Event.Switched.type, data: { credentialID: work.id, integrationID } },
+            { type: Credential.Event.Updated.type, data: {} },
+            { type: Credential.Event.Updated.type, data: {} },
+            { type: Credential.Event.Switched.type, data: { credentialID: personal.id, integrationID } },
+            { type: Credential.Event.Updated.type, data: {} },
+            { type: Credential.Event.Switched.type, data: { credentialID: null, integrationID } },
+          ])
         }),
       (previous) =>
         Effect.sync(() => {

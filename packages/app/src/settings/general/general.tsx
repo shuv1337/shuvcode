@@ -4,20 +4,25 @@ import { Button } from "@opencode-ai/ui/button"
 import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { TextInput } from "@opencode-ai/ui/text-input"
+import type { ReasoningMode } from "@opencode-ai/session-ui/timeline/projection"
 import { useLanguage } from "@/runtime/i18n/language"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useUpdaterAction } from "@/shell/updates/action"
-import { type TerminalPlacement, type WorkspaceDefaultDestination, useSettings } from "@/settings/model"
+import {
+  type FollowUpBehavior,
+  type TerminalPlacement,
+  type WorkspaceDefaultDestination,
+  useSettings,
+} from "@/settings/model"
+import { formatKeybind } from "@/shell/commands/command"
 import { ExternalLink } from "@/runtime/platform/external-link"
 import { SettingsList } from "@/settings/list"
 import { SettingsRow } from "@/settings/row"
 import {
   createAppearanceSettingsController,
-  createPermissionScopeController,
   createShellOptions,
   createShellSettingsController,
   type AppearanceSettingsController,
-  type PermissionScopeController,
   type ShellSettingsController,
 } from "./controllers"
 import "@/settings/settings.css"
@@ -47,8 +52,9 @@ const fontSettings = {
     input: "setTerminal",
   },
 } as const
-const PermissionScopeSetting: Component<{ controller: PermissionScopeController }> = (props) => {
+const AutoApprovePermissionsSetting: Component = () => {
   const language = useLanguage()
+  const settings = useSettings()
   return (
     <SettingsRow
       title={language.t("command.permissions.autoaccept.enable")}
@@ -56,9 +62,8 @@ const PermissionScopeSetting: Component<{ controller: PermissionScopeController 
     >
       <div data-action="settings-auto-accept-permissions">
         <Switch
-          checked={props.controller.accepting()}
-          disabled={!props.controller.enabled()}
-          onChange={props.controller.set}
+          checked={settings.permissions.autoApprove()}
+          onChange={(checked) => settings.permissions.setAutoApprove(checked)}
         />
       </div>
     </SettingsRow>
@@ -150,6 +155,63 @@ const TerminalPlacementSetting: Component = () => {
   )
 }
 
+const FollowUpBehaviorSetting: Component = () => {
+  const language = useLanguage()
+  const settings = useSettings()
+  const options = createMemo((): { value: FollowUpBehavior; label: string }[] => [
+    { value: "queue", label: language.t("settings.general.row.followUpBehavior.queue") },
+    { value: "steer", label: language.t("settings.general.row.followUpBehavior.steer") },
+  ])
+
+  return (
+    <SettingsRow
+      title={language.t("settings.general.row.followUpBehavior.title")}
+      description={language.t("settings.general.row.followUpBehavior.description", {
+        keybind: formatKeybind("mod+enter", language.t),
+      })}
+    >
+      <Select
+        data-action="settings-follow-up-behavior"
+        options={options()}
+        current={options().find((option) => option.value === settings.general.followUpBehavior())}
+        value={(option) => option.value}
+        label={(option) => option.label}
+        placement="bottom-end"
+        gutter={6}
+        onSelect={(option) => option && settings.general.setFollowUpBehavior(option.value)}
+      />
+    </SettingsRow>
+  )
+}
+
+const ReasoningModeSetting: Component = () => {
+  const language = useLanguage()
+  const settings = useSettings()
+  const options = createMemo((): { value: ReasoningMode; label: string }[] => [
+    { value: "hidden", label: language.t("settings.general.row.reasoningMode.hidden") },
+    { value: "compact", label: language.t("settings.general.row.reasoningMode.compact") },
+    { value: "full", label: language.t("settings.general.row.reasoningMode.full") },
+  ])
+
+  return (
+    <SettingsRow
+      title={language.t("settings.general.row.reasoningMode.title")}
+      description={language.t("settings.general.row.reasoningMode.description")}
+    >
+      <Select
+        data-action="settings-reasoning-mode"
+        options={options()}
+        current={options().find((option) => option.value === settings.general.reasoningMode())}
+        value={(option) => option.value}
+        label={(option) => option.label}
+        placement="bottom-end"
+        gutter={6}
+        onSelect={(option) => option && settings.general.setReasoningMode(option.value)}
+      />
+    </SettingsRow>
+  )
+}
+
 const AppearanceSection: Component<{ controller: AppearanceSettingsController }> = (props) => {
   const language = useLanguage()
   return (
@@ -180,7 +242,7 @@ const AppearanceSection: Component<{ controller: AppearanceSettingsController }>
           description={
             <>
               {language.t("settings.general.row.theme.description")}{" "}
-              <ExternalLink class="settings-link" href="https://opencode.ai/docs/themes/">
+              <ExternalLink class="settings-link" href="https://shuv.ai/v2/docs/themes/">
                 {language.t("common.learnMore")}
               </ExternalLink>
             </>
@@ -262,7 +324,6 @@ const LanguageSetting = () => {
 }
 
 export const SettingsGeneral: Component<{
-  sessionID?: string
   server?: ServerConnection.Any
 }> = (props) => {
   const language = useLanguage()
@@ -270,10 +331,6 @@ export const SettingsGeneral: Component<{
   const settings = useSettings()
   const mobile = createMediaQuery("(max-width: 767px)")
   const updater = useUpdaterAction()
-  const permissionScope = createPermissionScopeController(
-    () => props.server,
-    () => props.sessionID,
-  )
   const shell = createShellSettingsController(() => props.server)
   const desktop = createMemo(() => platform.platform === "desktop")
 
@@ -297,22 +354,13 @@ export const SettingsGeneral: Component<{
         <LanguageSetting />
 
         <WorkspaceDestinationSetting />
-        <PermissionScopeSetting controller={permissionScope} />
+        <AutoApprovePermissionsSetting />
 
         <ShellSetting controller={shell} />
         <TerminalPlacementSetting />
+        <FollowUpBehaviorSetting />
 
-        <SettingsRow
-          title={language.t("settings.general.row.reasoningSummaries.title")}
-          description={language.t("settings.general.row.reasoningSummaries.description")}
-        >
-          <div data-action="settings-feed-reasoning-summaries">
-            <Switch
-              checked={settings.general.showReasoningSummaries()}
-              onChange={(checked) => settings.general.setShowReasoningSummaries(checked)}
-            />
-          </div>
-        </SettingsRow>
+        <ReasoningModeSetting />
 
         <SettingsRow
           title={language.t("settings.general.row.shellToolPartsExpanded.title")}
@@ -337,6 +385,20 @@ export const SettingsGeneral: Component<{
             />
           </div>
         </SettingsRow>
+
+        <Show when={import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"}>
+          <SettingsRow
+            title={language.t("settings.general.row.showProjectIcon.title")}
+            description={language.t("settings.general.row.showProjectIcon.description")}
+          >
+            <div data-action="settings-show-project-icon">
+              <Switch
+                checked={settings.general.showProjectIcon()}
+                onChange={(checked) => settings.general.setShowProjectIcon(checked)}
+              />
+            </div>
+          </SettingsRow>
+        </Show>
 
         <Show when={mobile() && import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"}>
           <SettingsRow

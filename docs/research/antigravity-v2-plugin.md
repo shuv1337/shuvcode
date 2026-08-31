@@ -213,7 +213,7 @@ No `packages/ai` Cloud Code protocol in v1 of this work unless hooks get too ugl
 4. `fetchAvailableModels` → enable Google recommended models only. Default `gemini-3.7-flash-high`.
 5. Request hook: Bearer, CLI UA, envelope, schema clean, `used_claude=false`.
 6. Response hook: unwrap SSE `response`.
-7. Prove `shuvcode` / `opencode2` `/connect` shows the method and a 3.7 Flash prompt completes. Dev db is `opencode-local.db`; installed is `opencode.db`.
+7. Prove `shuvcode` `/connect` shows the method and a 3.7 Flash prompt completes. Dev db is `opencode-local.db`; installed is `opencode.db`.
 8. Tests: envelope wrap/unwrap, header rewrite, Google-only catalog filter, refresh single-flight. No live Google in CI.
 9. Never add Claude/GPT model ids without a new explicit decision.
 

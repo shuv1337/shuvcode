@@ -1,9 +1,10 @@
-import { For, type JSX } from "solid-js"
+import { makeEventListener } from "@solid-primitives/event-listener"
+import { For, onMount, type JSX } from "solid-js"
 import { Menu } from "@opencode-ai/ui/menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 
-import { useCommand } from "@/shell/commands/command"
+import { matchKeybind, parseKeybind, useCommand } from "@/shell/commands/command"
 import {
   DESKTOP_MENU,
   desktopMenuVisible,
@@ -12,6 +13,15 @@ import {
 } from "@/shell/commands/desktop-menu"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useLanguage } from "@/runtime/i18n/language"
+
+const accelerators = DESKTOP_MENU.flatMap((menu) => menu.items ?? []).flatMap((entry) => {
+  if (entry.type === "separator" || !entry.action || !entry.accelerator?.windows) return []
+  return [{ action: entry.action, keybind: parseKeybind(entry.accelerator.windows) }]
+})
+
+export function windowsMenuAccelerator(event: KeyboardEvent) {
+  return accelerators.find((entry) => matchKeybind(entry.keybind, event))?.action
+}
 
 export function WindowsAppMenu(props: {
   command: ReturnType<typeof useCommand>
@@ -50,6 +60,22 @@ export function WindowsAppMenu(props: {
     if (entry.href) props.platform.openExternal(entry.href)
   }
 
+  onMount(() => {
+    makeEventListener(
+      document,
+      "keydown",
+      (event) => {
+        if (event.defaultPrevented) return
+        const action = windowsMenuAccelerator(event)
+        if (!action) return
+        event.preventDefault()
+        event.stopPropagation()
+        runAction(action)
+      },
+      { capture: true },
+    )
+  })
+
   return (
     <Menu appearance="standard" gutter={4} modal={false} placement="bottom-start">
       <div
@@ -69,7 +95,7 @@ export function WindowsAppMenu(props: {
       <Menu.Portal>
         <Menu.Content class="desktop-app-menu">
           <Menu.Group>
-            <Menu.GroupLabel class="desktop-app-menu-heading">OpenCode</Menu.GroupLabel>
+            <Menu.GroupLabel class="desktop-app-menu-heading">Shuvcode</Menu.GroupLabel>
             <For each={DESKTOP_MENU.filter((menu) => desktopMenuVisible(menu, "windows"))}>
               {(menu) => (
                 <DesktopMenuSubmenu label={language.t(menu.labelKey)}>

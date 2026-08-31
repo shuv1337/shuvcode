@@ -2,7 +2,7 @@
 
 import { Script } from "@opencode-ai/script"
 import { $ } from "bun"
-import { currentRepository, forkRepository, publishPlan } from "./publish-plan"
+import { currentRepository, publishPlan } from "./publish-plan"
 import {
   decodeReleaseCommit,
   decodeReleaseSummary,
@@ -67,26 +67,9 @@ async function forkReleases() {
 }
 
 if (!Script.preview) {
-  const fork = repository === forkRepository
-  if (fork) {
-    const release = await prepareForkDraft()
-    output.push(`release=${release.databaseId}`)
-    output.push(`tag=${release.tagName}`)
-  }
-  if (!fork) {
-    await $`bun script/changelog.ts --to ${sha}`.cwd(process.cwd())
-    const file = `${process.cwd()}/UPCOMING_CHANGELOG.md`
-    const body = await Bun.file(file)
-      .text()
-      .catch(() => "No notable changes")
-    const dir = process.env.RUNNER_TEMP ?? "/tmp"
-    const notesFile = `${dir}/opencode-release-notes.txt`
-    await Bun.write(notesFile, body)
-    await $`gh release create ${tag} -d --repo ${repository} --target ${sha} --title ${tag} --notes-file ${notesFile}`
-    const release = await $`gh release view ${tag} --repo ${repository} --json tagName,databaseId`.json()
-    output.push(`release=${release.databaseId}`)
-    output.push(`tag=${release.tagName}`)
-  }
+  const release = await prepareForkDraft()
+  output.push(`release=${release.databaseId}`)
+  output.push(`tag=${release.tagName}`)
 } else if (Script.channel === "beta") {
   await $`gh release create ${tag} -d --prerelease --title ${tag} --repo ${repository}`
   const release = await $`gh release view ${tag} --json tagName,databaseId --repo ${repository}`.json()

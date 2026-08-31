@@ -2,13 +2,12 @@ export * as PlanPlugin from "./plan.js"
 
 import { Message, ToolFailure } from "@opencode-ai/ai"
 import { define } from "@opencode-ai/plugin/effect/plugin"
+import { Agent } from "@opencode-ai/schema/agent"
+import type { SessionEvent } from "@opencode-ai/schema/session-event"
 import { Global } from "@opencode-ai/util/global"
 import { Effect, Stream } from "effect"
 import path from "path"
-import { Agent } from "../agent.js"
-import { Environment } from "../environment/index.js"
 import { Permission } from "../permission.js"
-import { SessionEvent } from "../session/event.js"
 
 const plan = Agent.ID.make("plan")
 
@@ -28,12 +27,9 @@ You are NO LONGER in Plan mode. The previous Plan restrictions no longer apply. 
 export const Plugin = define({
   id: "opencode.plan",
   effect: Effect.fn(function* (ctx) {
-    const environment = yield* Environment.Service
     const global = yield* Global.Service
     const directory = path.join(global.home, ".opencode", "plan")
     const enterReminder = enter(directory)
-    yield* environment.files.mkdir(directory).pipe(Effect.orDie)
-
     yield* ctx.agent.transform((draft) => {
       draft.update(plan, (item) => {
         item.name = Agent.Name.make("Plan")

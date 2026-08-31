@@ -19,13 +19,14 @@ export const Info = Schema.Struct({
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535))),
   password: Schema.optional(Schema.String),
+  cors: Schema.optional(Schema.Array(Schema.String)),
   env: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   advertisedUrls: Schema.optional(Schema.Array(Schema.String)),
   manager: Schema.optional(Manager),
 })
 export type Info = typeof Info.Type
 
-const keys = ["hostname", "port", "password", "env", "advertised-urls", "manager"] as const
+const keys = ["hostname", "port", "password", "cors", "env", "advertised-urls", "manager"] as const
 type Key = (typeof keys)[number]
 
 const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
@@ -167,6 +168,9 @@ export const get = Effect.fn("cli.service-config.get")(function* (key?: string, 
     case "password": {
       return yield* password()
     }
+    case "cors": {
+      return JSON.stringify((yield* read()).cors ?? [], null, 2)
+    }
     case "env": {
       const env = (yield* read()).env ?? {}
       return name === undefined ? JSON.stringify(env, null, 2) : (env[name] ?? "")
@@ -201,6 +205,19 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
     case "password": {
       yield* Service.stop(yield* options())
       yield* password(value)
+      return
+    }
+    case "cors": {
+      const cors = value.split(",").map((origin) => origin.trim())
+      if (
+        cors.some((origin) => {
+          const url = URL.parse(origin)
+          return !url || (url.protocol !== "http:" && url.protocol !== "https:") || url.origin !== origin
+        })
+      )
+        throw new Error("CORS must be a comma-separated list of HTTP(S) origins without paths or trailing slashes")
+      yield* Service.stop(yield* options())
+      yield* write({ ...(yield* read()), cors })
       return
     }
     case "env": {
@@ -248,6 +265,12 @@ export const unset = Effect.fn("cli.service-config.unset")(function* (key: strin
     case "password": {
       yield* Service.stop(yield* options())
       const { password: _password, ...next } = yield* read()
+      yield* write(next)
+      return
+    }
+    case "cors": {
+      yield* Service.stop(yield* options())
+      const { cors: _cors, ...next } = yield* read()
       yield* write(next)
       return
     }

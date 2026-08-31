@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@shuvcode/antigravity-plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Google AI Pro / Antigravity OAuth plugin for OpenCode V2. Rewrites native Gemini HTTP into Cloud Code v1internal and adds the Google AI Pro method on /connect.",
+  "scripts": {
+    "test": "bun test --timeout 5000",
+    "typecheck": "tsgo --noEmit",
+    "pack:check": "bun pm pack --dry-run"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "@opencode-ai/plugin": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

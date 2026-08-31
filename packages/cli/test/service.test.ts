@@ -10,6 +10,7 @@ import path from "node:path"
 import { ServiceConfig } from "../src/services/service-config"
 import { ServiceRegistration } from "../src/services/service-registration"
 import { ServiceLifecycle } from "../src/services/service-lifecycle"
+import { isolatedEnv } from "./fixture/environment"
 
 test("managed service ports are stable per installation channel", () => {
   expect(ServiceConfig.defaultPort("latest")).toBe(0xc0de)
@@ -407,16 +408,11 @@ test("clean managed service shutdown removes its registration", async () => {
 test("concurrent service processes elect one server", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-election-"))
   const database = path.join(root, "opencode.db")
-  const env = {
-    ...process.env,
-    HOME: root,
+  const env = isolatedEnv(root, {
+    OPENCODE_CONFIG_DIR: undefined,
     OPENCODE_DB: database,
-    OPENCODE_TEST_HOME: root,
-    XDG_CACHE_HOME: path.join(root, "cache"),
     XDG_CONFIG_HOME: path.join(root, "config"),
-    XDG_DATA_HOME: path.join(root, "data"),
-    XDG_STATE_HOME: path.join(root, "state"),
-  }
+  })
   const command = [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"]
   const registration = path.join(root, "state", "opencode", "service-local.json")
   const port = await availablePort()
@@ -479,14 +475,14 @@ test("concurrent service processes elect one server", async () => {
   }
 }, 120_000)
 
-test("configured managed service port overrides the channel default", async () => {
+test("managed service applies configured port and advertised URLs", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-port-"))
   const port = await availablePort()
   const env = serviceEnv(root)
   const registration = path.join(root, "state", "opencode", "service-local.json")
   const config = path.join(root, "config", "opencode", "service-local.json")
   await fs.mkdir(path.join(root, "config", "opencode"), { recursive: true })
-  await fs.writeFile(config, JSON.stringify({ port, password: "" }))
+  await fs.writeFile(config, JSON.stringify({ port, password: "", advertisedUrls: ["https://shuvdev.example:10001"] }))
   const owner = Bun.spawn([process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"], {
     env,
     stderr: "pipe",
@@ -497,6 +493,16 @@ test("configured managed service port overrides the channel default", async () =
     expect(new URL(info.url).port).toBe(String(port))
     expect(info.password).not.toBe("")
     expect((await Bun.file(config).json()).password).toBe(info.password)
+    const denied = await fetch(new URL("/api/server", info.url))
+    expect(denied.status).toBe(401)
+    const response = await fetch(new URL("/api/server", info.url), {
+      headers: { authorization: "Basic " + btoa(`opencode:${info.password}`) },
+    })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({ urls: expect.arrayContaining(["https://shuvdev.example:10001"]) })
+    expect(JSON.stringify(body)).not.toContain(info.password)
+    expect(JSON.stringify(body).toLowerCase()).not.toContain("authorization")
     await Effect.runPromise(Service.stop({ file: registration }).pipe(Effect.provide(NodeFileSystem.layer)))
     await owner.exited
   } finally {
@@ -505,6 +511,48 @@ test("configured managed service port overrides the channel default", async () =
     await fs.rm(root, { recursive: true, force: true })
   }
 }, 30_000)
+
+test.each([
+  { args: [], origins: ["http://192.0.2.10:3001", "https://configured.example.com"] },
+  {
+    args: ["--cors", "http://192.0.2.20:3001", "--cors", "https://override.example.com"],
+    origins: ["http://192.0.2.20:3001", "https://override.example.com"],
+  },
+])(
+  "managed service applies CORS configuration with flag overrides: $args",
+  async ({ args, origins }) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-cors-"))
+    const config = path.join(root, "config", ServiceConfig.filename())
+    const registration = path.join(root, "state", "opencode", ServiceConfig.filename())
+    const cors = ["http://192.0.2.10:3001", "https://configured.example.com"]
+    await fs.mkdir(path.dirname(config), { recursive: true })
+    await fs.writeFile(config, JSON.stringify({ cors }))
+    const owner = Bun.spawn(
+      [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service", "--port", "0", ...args],
+      { env: isolatedEnv(root), stderr: "pipe", stdout: "ignore" },
+    )
+    try {
+      const info = await waitForInfo(registration)
+      await Promise.all(
+        [...new Set([...cors, ...origins, "https://unlisted.example.com"])].map(async (origin) => {
+          const response = await fetch(new URL("/api/health", info.url), {
+            method: "OPTIONS",
+            headers: { Origin: origin, "Access-Control-Request-Method": "GET" },
+          })
+          expect(response.headers.get("access-control-allow-origin")).toBe(
+            origins.some((value) => value === origin) ? origin : null,
+          )
+        }),
+      )
+      expect((await Bun.file(config).json()).cors).toEqual(cors)
+    } finally {
+      owner.kill("SIGTERM")
+      await owner.exited
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  },
+  30_000,
+)
 
 test("unrelated managed port occupancy reports an actionable conflict", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-conflict-"))

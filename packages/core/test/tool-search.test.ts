@@ -18,7 +18,7 @@ import { GrepTool } from "@opencode-ai/core/tool/plugin/grep"
 import { Tool } from "@opencode-ai/core/tool"
 import { location } from "./fixture/location"
 import { tmpdir } from "./fixture/tmpdir"
-import { testEffect } from "./lib/effect"
+import { it } from "./lib/effect"
 import { permissionLayer } from "./lib/permission"
 import { executeTool, registerToolPlugin, toolIdentity } from "./lib/tool"
 import { Config } from "@opencode-ai/core/config"
@@ -42,7 +42,8 @@ const withTools = <A, E, R>(
   assertions?: Permission.AssertInput[],
 ) =>
   Effect.gen(function* () {
-    return yield* body(yield* Tool.Service)
+    const registry = yield* Tool.Service
+    return yield* body(registry)
   }).pipe(
     Effect.provide(
       AppNodeBuilder.build(LayerNode.group([Tool.node, globToolNode, grepToolNode]), [
@@ -69,8 +70,6 @@ const call = (name: "glob" | "grep", input: unknown) => ({
   ...toolIdentity,
   call: { type: "tool-call" as const, id: `call-${name}`, name, input },
 })
-
-const it = testEffect(Layer.empty)
 
 describe("search tools", () => {
   it.live("bounds omitted glob and grep limits", () =>
@@ -121,7 +120,8 @@ describe("search tools", () => {
               status: "error",
               error: {
                 type: "tool.execution",
-                message: 'Invalid tool input: Pattern must not be empty\n  at ["pattern"]',
+                message:
+                  'Invalid arguments for tool "grep":\n- pattern: Pattern must not be empty\n\nArguments provided:\n{\n  "pattern": ""\n}\n\nUpdate the arguments and call the tool again.',
               },
             })
           }),
@@ -350,9 +350,10 @@ describe("search tools", () => {
               expect(result.status).toBe("completed")
               expect(assertions.map((input) => input.action)).toEqual(["external_directory", "glob"])
               expect(assertions[0]?.resources).toEqual([path.join(outside.path, "*").replaceAll("\\", "/")])
+              // Authorization follows the realpath; result paths stay lexical like upstream.
               expect(result).toMatchObject({
-                output: [{ path: path.relative(active.path, path.join(outside.path, "outside.txt")), type: "file" }],
-                content: [{ type: "text", text: path.join(outside.path, "outside.txt") }],
+                output: [{ path: path.join("linked", "outside.txt"), type: "file" }],
+                content: [{ type: "text", text: path.join(active.path, "linked", "outside.txt") }],
               })
             }),
           ),

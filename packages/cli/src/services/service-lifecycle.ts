@@ -1,4 +1,5 @@
 import { Service, type EnsureOptions } from "@opencode-ai/client/effect/service"
+import { OpenCode } from "@opencode-ai/client/promise"
 import { Effect, FileSystem, Option, Schema } from "effect"
 import { ServiceConfig } from "./service-config"
 
@@ -15,6 +16,7 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
   if (!(yield* systemdActive())) {
     // A healthy registered daemon may predate supervisor configuration. Stop it
     // before starting the unit so the configured supervisor becomes the owner.
+    yield* shutdownPersistentPty(options)
     yield* Service.stop(options)
     yield* systemd("start")
   }
@@ -29,6 +31,7 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
     manager: "systemd",
     unit,
   })
+  yield* shutdownPersistentPty(options)
   yield* Service.stop(options)
   yield* systemd("restart")
   const supervised = yield* Service.ensure(options)
@@ -39,6 +42,7 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
 export const stop = Effect.fn("cli.service-lifecycle.stop")(function* () {
   const config = yield* ServiceConfig.read()
   const options = yield* ServiceConfig.options({ config })
+  yield* shutdownPersistentPty(options)
   if (config.manager === "systemd") yield* systemd("stop")
   yield* Service.stop(options)
 })
@@ -46,6 +50,7 @@ export const stop = Effect.fn("cli.service-lifecycle.stop")(function* () {
 export const restart = Effect.fn("cli.service-lifecycle.restart")(function* (input: EnsureInput = {}) {
   const config = yield* ServiceConfig.read()
   const options = withVersion(yield* ServiceConfig.options({ config }), input)
+  yield* shutdownPersistentPty(options)
   yield* Service.stop(options)
   if (config.manager === "systemd") yield* systemd("restart")
   const endpoint = yield* Service.ensure(options)
@@ -69,6 +74,15 @@ function withVersion(options: EnsureOptions, input: EnsureInput) {
     ...(input.onStart === undefined ? {} : { onStart: input.onStart }),
   }
 }
+
+const shutdownPersistentPty = Effect.fn("cli.service-lifecycle.shutdown-persistent-pty")(function* (
+  options: EnsureOptions,
+) {
+  const endpoint = yield* Service.discover({ ...options, version: undefined })
+  if (!endpoint) return
+  const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+  yield* Effect.tryPromise(() => client.experimental.persistentPty.shutdown()).pipe(Effect.ignore)
+})
 
 const systemd = Effect.fn("cli.service-lifecycle.systemd")(function* (action: SystemdAction) {
   const startedAt = performance.now()

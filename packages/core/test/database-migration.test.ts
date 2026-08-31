@@ -8,17 +8,18 @@ import { Effect, Layer } from "effect"
 import { sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { migrations } from "@opencode-ai/core/database/migration.gen"
+import workspaceNameMigration from "@opencode-ai/core/database/migration/20260410174513_workspace-name"
 import { Database } from "@opencode-ai/core/database/database"
 import { tmpdir } from "./fixture/tmpdir"
 import type { SqlClient } from "effect/unstable/sql/SqlClient"
 import legacyCredentialsMigration from "@opencode-ai/core/database/migration/20260805200742_import_legacy_credentials"
-import forkPendingToInboxMigration from "@opencode-ai/core/database/migration/20260812181747_fork_pending_to_inbox"
 import worktreeMigration from "@opencode-ai/core/database/migration/20260812213948_worktree"
 import previousV2Migration from "@opencode-ai/core/database/migration/20260804233008_loose_psylocke"
 import workspaceMigration from "@opencode-ai/core/database/migration/20260808023530_workspace_domain"
 import executionClaimsMigration from "@opencode-ai/core/database/migration/20260811161259_execution_claim_attempts"
 import sessionInboxMigration from "@opencode-ai/core/database/migration/20260812181746_session_inbox"
 import sessionViewedStateMigration from "@opencode-ai/core/database/migration/20260819222447_session_viewed_state"
+import nullableWorkspaceBindingMigration from "@opencode-ai/core/database/migration/20260823191254_nullable_workspace_binding"
 import { Global } from "@opencode-ai/util/global"
 
 const run = <A, E>(
@@ -36,6 +37,68 @@ const run = <A, E>(
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
 
 describe("DatabaseMigration", () => {
+  test("defaults missing workspace names while preserving legacy workspace data", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`
+          CREATE TABLE workspace (
+            id text PRIMARY KEY,
+            type text NOT NULL,
+            branch text,
+            directory text,
+            extra text,
+            project_id text NOT NULL
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO workspace (id, type, branch, directory, extra, project_id)
+          VALUES ('wrk_legacy', 'remote', 'main', '/repo', '{}', 'proj_legacy')
+        `)
+
+        yield* DatabaseMigration.applyOnly(db, [workspaceNameMigration])
+
+        expect(yield* db.get(sql`SELECT id, name, branch, directory, extra FROM workspace`)).toEqual({
+          id: "wrk_legacy",
+          name: "",
+          branch: "main",
+          directory: "/repo",
+          extra: "{}",
+        })
+      }),
+    )
+  })
+
+  test("imports unnamed legacy Drizzle journal entries by their actual migration timestamps", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE __drizzle_migrations (id integer PRIMARY KEY, hash text, created_at integer)`)
+        yield* db.run(sql`
+          INSERT INTO __drizzle_migrations (hash, created_at)
+          VALUES ('', ${Date.UTC(2026, 3, 10, 17, 45, 13)})
+        `)
+
+        yield* DatabaseMigration.applyOnly(db, [workspaceNameMigration])
+
+        expect(yield* db.all(sql`SELECT id FROM migration`)).toEqual([{ id: "20260410174513_workspace-name" }])
+      }),
+    )
+  })
+
+  test("rejects unknown legacy Drizzle journal timestamps instead of guessing completed migrations", async () => {
+    await expect(
+      run(
+        Effect.gen(function* () {
+          const db = yield* makeDb
+          yield* db.run(sql`CREATE TABLE __drizzle_migrations (id integer PRIMARY KEY, hash text, created_at integer)`)
+          yield* db.run(sql`INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('', 1234567890000)`)
+          yield* DatabaseMigration.applyOnly(db, [workspaceNameMigration])
+        }),
+      ),
+    ).rejects.toThrow("does not match any known migration")
+  })
+
   test("serializes concurrent embedded initialization for one database path", async () => {
     await using tmp = await tmpdir()
     const filename = path.join(tmp.path, "embedded.sqlite")
@@ -75,86 +138,6 @@ describe("DatabaseMigration", () => {
           yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_pending'`),
         ).toEqual({ name: "session_pending" })
         expect(yield* db.get(sql`SELECT count(*) AS count FROM migration`)).toEqual({ count: migrations.length })
-      }),
-    )
-  })
-
-  test("bridges a fork-tip database to session_v2 without replaying the upstream squash", async () => {
-    await run(
-      Effect.gen(function* () {
-        const db = yield* makeDb
-        yield* DatabaseMigration.apply(db)
-        yield* db.transaction((tx) =>
-          Effect.gen(function* () {
-            yield* tx.run(sql`DELETE FROM migration WHERE id = '20260804233008_loose_psylocke'`)
-            yield* tx.run(sql`DROP INDEX session_v2_project_idx`)
-            yield* tx.run(sql`DROP INDEX session_v2_workspace_idx`)
-            yield* tx.run(sql`DROP INDEX session_v2_parent_idx`)
-            yield* tx.run(sql`DROP INDEX session_v2_time_suspended_idx`)
-            yield* tx.run(sql`ALTER TABLE session_v2 RENAME TO session`)
-            yield* tx.run(sql`CREATE INDEX session_project_idx ON session (project_id)`)
-            yield* tx.run(sql`CREATE INDEX session_workspace_idx ON session (workspace_id)`)
-            yield* tx.run(sql`CREATE INDEX session_parent_idx ON session (parent_id)`)
-            // Match drizzle's qualified partial-index form. Renaming the table while this
-            // index exists fails unless indexes are dropped first (alpha-10 production bug).
-            yield* tx.run(
-              sql`CREATE INDEX session_time_suspended_idx ON session (time_suspended) WHERE "session"."time_suspended" is not null`,
-            )
-            yield* tx.run(sql`
-              INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
-              VALUES ('project', '/tmp/project', 1, 1, '[]')
-            `)
-            yield* tx.run(sql`
-              INSERT INTO session (
-                id, project_id, slug, directory, version, cost, tokens_input, tokens_output,
-                tokens_reasoning, tokens_cache_read, tokens_cache_write, policy, time_created, time_updated
-              ) VALUES ('session', 'project', 'session', '/tmp/project', '1', 0, 0, 0, 0, 0, 0, '{"tools":{"allow":["read"]}}', 1, 1)
-            `)
-            yield* tx.run(sql`
-              INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data)
-              VALUES ('message', 'session', 'user', 1, 1, 1, '{"text":"kept","time":{"created":1}}')
-            `)
-            yield* tx.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('session', 1)`)
-            yield* tx.run(sql`
-              INSERT INTO event (id, aggregate_id, seq, created, type, data)
-              VALUES ('event', 'session', 1, 1, 'session.created.v2', '{}')
-            `)
-          }),
-        )
-
-        const before = {
-          sessions: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM session`),
-          messages: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM session_message`),
-          events: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM event`),
-        }
-        yield* DatabaseMigration.apply(db)
-
-        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session'`)).toBeUndefined()
-        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_v2'`)).toEqual({
-          name: "session_v2",
-        })
-        expect({
-          sessions: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM session_v2`),
-          messages: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM session_message`),
-          events: yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM event`),
-        }).toEqual(before)
-        expect(yield* db.get(sql`SELECT id FROM migration WHERE id = '20260804233008_loose_psylocke'`)).toEqual({
-          id: "20260804233008_loose_psylocke",
-        })
-        expect(
-          yield* db.all<{ name: string }>(sql`
-            SELECT name FROM sqlite_master
-            WHERE type = 'index' AND name LIKE 'session_v2_%'
-            ORDER BY name
-          `),
-        ).toEqual([
-          { name: "session_v2_parent_idx" },
-          { name: "session_v2_project_idx" },
-          { name: "session_v2_time_suspended_idx" },
-          { name: "session_v2_workspace_idx" },
-        ])
-        const messageForeignKeys = yield* db.all<{ table: string }>(sql`PRAGMA foreign_key_list('session_message')`)
-        expect(messageForeignKeys.some((foreignKey) => foreignKey.table === "session_v2")).toBe(true)
       }),
     )
   })
@@ -232,84 +215,6 @@ describe("DatabaseMigration", () => {
           { id: "first" },
           { id: "second" },
         ])
-      }),
-    )
-  })
-
-  test("copies fork session_pending rows into session_inbox without dropping pending", async () => {
-    await run(
-      Effect.gen(function* () {
-        const db = yield* makeDb
-        yield* db.run(sql`CREATE TABLE session_v2 (id text PRIMARY KEY)`)
-        yield* db.run(sql`INSERT INTO session_v2 (id) VALUES ('session')`)
-        yield* db.run(sql`
-          CREATE TABLE session_pending (
-            id text PRIMARY KEY,
-            session_id text NOT NULL,
-            type text NOT NULL,
-            data text NOT NULL,
-            delivery text,
-            admitted_seq integer NOT NULL,
-            time_created integer NOT NULL
-          )
-        `)
-        yield* db.run(sql`
-          INSERT INTO session_pending (id, session_id, type, data, delivery, admitted_seq, time_created)
-          VALUES
-            ('user-steer', 'session', 'user', ${JSON.stringify({ text: "steer me", output: { schema: { type: "object" } } })}, 'steer', 1, 10),
-            ('user-queue', 'session', 'user', ${JSON.stringify({ text: "queue me" })}, 'queue', 2, 20),
-            ('synthetic', 'session', 'synthetic', ${JSON.stringify({ text: "sys", description: "note" })}, 'queue', 3, 30),
-            ('compaction', 'session', 'compaction', '{}', NULL, 4, 40)
-        `)
-
-        yield* DatabaseMigration.applyOnly(db, [sessionInboxMigration, forkPendingToInboxMigration])
-
-        expect(
-          yield* db.all(sql`
-            SELECT id, type, payload, delivery, enqueued_seq, time_created
-            FROM session_inbox
-            ORDER BY enqueued_seq ASC
-          `),
-        ).toEqual([
-          {
-            id: "user-steer",
-            type: "user",
-            // The retired structured-output request is dropped when legacy
-            // pending payloads are decoded during migration.
-            payload: JSON.stringify({ text: "steer me" }),
-            delivery: "steer",
-            enqueued_seq: 1,
-            time_created: 10,
-          },
-          {
-            id: "user-queue",
-            type: "user",
-            payload: JSON.stringify({ text: "queue me" }),
-            delivery: "queue",
-            enqueued_seq: 2,
-            time_created: 20,
-          },
-          {
-            id: "synthetic",
-            type: "synthetic",
-            payload: JSON.stringify({ text: "sys", description: "note" }),
-            delivery: "queue",
-            enqueued_seq: 3,
-            time_created: 30,
-          },
-          {
-            id: "compaction",
-            type: "compaction",
-            payload: JSON.stringify({}),
-            delivery: "queue",
-            enqueued_seq: 4,
-            time_created: 40,
-          },
-        ])
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM session_pending`)).toEqual({ count: 4 })
-        expect(
-          yield* db.get(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_pending'`),
-        ).toEqual({ name: "session_pending" })
       }),
     )
   })
@@ -481,7 +386,10 @@ describe("DatabaseMigration", () => {
     const content = JSON.stringify({
       openai: { type: "oauth", refresh: "refresh", access: "access", expires: 123, accountId: "account" },
       anthropic: { type: "oauth", refresh: "claude-refresh", access: "claude-access", expires: 456 },
-      existing: { type: "api", key: "legacy-key", metadata: { region: "us" } },
+      "anthropic-api": { type: "api", key: "legacy-key", metadata: { region: "us" } },
+      google: { type: "api", key: "google-key", metadata: { region: "us" } },
+      "github-copilot": { type: "oauth", refresh: "refresh", access: "access", expires: 123 },
+      "custom-provider": { type: "api", key: "custom-key" },
       "https://example.com/": { type: "wellknown", key: "TOKEN", token: "wellknown-key" },
       invalid: { type: "unknown" },
     })
@@ -499,12 +407,13 @@ describe("DatabaseMigration", () => {
 
         yield* db.run(sql`DELETE FROM migration WHERE id = ${legacyCredentialsMigration.id}`)
         yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
+        yield* DatabaseMigration.applyOnly(db, [legacyCredentialsMigration])
 
         expect(yield* db.all(sql`SELECT integration_id, label, value FROM credential ORDER BY integration_id`)).toEqual(
           [
             {
               integration_id: "anthropic",
-              label: "default",
+              label: "OAuth",
               value: JSON.stringify({
                 type: "oauth",
                 methodID: "claude-pro-max",
@@ -514,18 +423,44 @@ describe("DatabaseMigration", () => {
               }),
             },
             {
+              integration_id: "anthropic-api",
+              label: "API key",
+              value: JSON.stringify({ type: "key", key: "legacy-key", metadata: { region: "us" } }),
+            },
+            {
+              integration_id: "custom-provider",
+              label: "API key",
+              value: JSON.stringify({ type: "key", key: "custom-key" }),
+            },
+            {
               integration_id: "existing",
               label: "Existing",
               value: JSON.stringify({ type: "key", key: "current-key" }),
             },
             {
+              integration_id: "github-copilot",
+              label: "OAuth",
+              value: JSON.stringify({
+                type: "oauth",
+                methodID: "device",
+                refresh: "refresh",
+                access: "access",
+                expires: 123,
+              }),
+            },
+            {
+              integration_id: "google",
+              label: "API key",
+              value: JSON.stringify({ type: "key", key: "google-key", metadata: { region: "us" } }),
+            },
+            {
               integration_id: "https://example.com",
-              label: "default",
+              label: "API key",
               value: JSON.stringify({ type: "key", key: "wellknown-key" }),
             },
             {
               integration_id: "openai",
-              label: "default",
+              label: "OAuth",
               value: JSON.stringify({
                 type: "oauth",
                 methodID: "chatgpt-browser",
@@ -637,6 +572,53 @@ describe("DatabaseMigration", () => {
         yield* db.run(sql`UPDATE __drizzle_migrations SET name = 'ignored'`)
         yield* DatabaseMigration.applyOnly(db, [])
         expect(yield* db.all(sql`SELECT id FROM migration ORDER BY id`)).toEqual([{ id: "existing" }, { id: "legacy" }])
+      }),
+    )
+  })
+
+  test("nullable workspace binding keeps workspace and session_v2 ids with foreign keys enabled", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.run(sql`PRAGMA foreign_keys = ON`)
+        yield* db.run(sql`CREATE TABLE migration (id text PRIMARY KEY, time_completed integer NOT NULL)`)
+        yield* db.run(sql`
+          CREATE TABLE workspace (
+            id text PRIMARY KEY,
+            provider text NOT NULL,
+            binding text NOT NULL,
+            created_at integer NOT NULL,
+            last_used_at integer NOT NULL
+          )
+        `)
+        yield* db.run(sql`
+          CREATE TABLE session_v2 (
+            id text PRIMARY KEY,
+            workspace_id text
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO workspace (id, provider, binding, created_at, last_used_at)
+          VALUES ('wrk_bound', 'fake', '{"workspaceID":"wrk_bound"}', 1, 1)
+        `)
+        yield* db.run(sql`INSERT INTO session_v2 (id, workspace_id) VALUES ('ses_bound', 'wrk_bound')`)
+
+        yield* DatabaseMigration.applyOnly(db, [
+          {
+            ...nullableWorkspaceBindingMigration,
+            foreignKeys: true,
+          },
+        ])
+
+        expect(yield* db.get(sql`SELECT id, binding FROM workspace`)).toEqual({
+          id: "wrk_bound",
+          binding: '{"workspaceID":"wrk_bound"}',
+        })
+        expect(yield* db.get(sql`SELECT id, workspace_id FROM session_v2`)).toEqual({
+          id: "ses_bound",
+          workspace_id: "wrk_bound",
+        })
+        expect(yield* db.all<{ from: string }>(sql`PRAGMA foreign_key_list(session_v2)`)).toEqual([])
       }),
     )
   })

@@ -59,6 +59,30 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Se
 
 const NamePattern = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
 
+/** Rejects reserved, duplicate, non-JSON, or illegal names before any Session write. */
+export const validate = (tools: ReadonlyArray<Definition>): Effect.Effect<void, InvalidToolError> => {
+  const invalid = tools.find((tool) => !NamePattern.test(tool.name))
+  if (invalid) return new InvalidToolError({ name: invalid.name, message: `Invalid tool name: ${invalid.name}` })
+  const duplicate = tools.find((tool, index) => tools.findIndex((candidate) => candidate.name === tool.name) !== index)
+  if (duplicate)
+    return new InvalidToolError({ name: duplicate.name, message: `Duplicate tool name: ${duplicate.name}` })
+  const reserved = tools.find((tool) => tool.name === "execute")
+  if (reserved)
+    return new InvalidToolError({
+      name: reserved.name,
+      message: 'Tool name "execute" is reserved for CodeMode',
+    })
+  const nonJson = tools.find(
+    (tool) => tool.parameters !== undefined && !Schema.is(Schema.Record(Schema.String, Schema.Json))(tool.parameters),
+  )
+  if (nonJson)
+    return new InvalidToolError({
+      name: nonJson.name,
+      message: `Dynamic tool parameters must be JSON: ${nonJson.name}`,
+    })
+  return Effect.void
+}
+
 interface Pending {
   readonly call: Call
   readonly deferred: Deferred.Deferred<Tool.Result, Tool.Error>
@@ -85,7 +109,11 @@ const layer = Layer.effect(
         .pipe(Effect.orDie)
     })
 
-    const toDefinition = (row: { name: string; description: string; parameters: Record<string, unknown> | null }) =>
+    const toDefinition = (row: {
+      name: string
+      description: string
+      parameters: Record<string, unknown> | null
+    }) =>
       Definition.make({
         name: row.name,
         description: row.description,
@@ -108,6 +136,8 @@ const layer = Layer.effect(
       (input: unknown, context: Tool.Context): Effect.Effect<Tool.Result, Tool.Error> =>
         Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
+            if (!Schema.is(Schema.Json)(input))
+              return yield* new Tool.Error({ message: `Dynamic tool input is not JSON: ${tool}` })
             const deferred = yield* Deferred.make<Tool.Result, Tool.Error>()
             const call = Call.make({
               callID: context.id,
@@ -128,23 +158,7 @@ const layer = Layer.effect(
 
     const service = Service.of({
       set: Effect.fn("SessionDynamicTool.set")(function* (input) {
-        const invalid = input.tools.find((tool) => !NamePattern.test(tool.name))
-        if (invalid)
-          return yield* new InvalidToolError({ name: invalid.name, message: `Invalid tool name: ${invalid.name}` })
-        const duplicate = input.tools.find(
-          (tool, index) => input.tools.findIndex((candidate) => candidate.name === tool.name) !== index,
-        )
-        if (duplicate)
-          return yield* new InvalidToolError({
-            name: duplicate.name,
-            message: `Duplicate tool name: ${duplicate.name}`,
-          })
-        const reserved = input.tools.find((tool) => tool.name === "execute")
-        if (reserved)
-          return yield* new InvalidToolError({
-            name: reserved.name,
-            message: 'Tool name "execute" is reserved for CodeMode',
-          })
+        yield* validate(input.tools)
         const session = yield* db
           .select({ id: SessionTable.id })
           .from(SessionTable)

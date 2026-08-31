@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Effect, Fiber, Stream } from "effect"
+import { DateTime, Effect, Fiber, Schema, Stream } from "effect"
 import { eq } from "drizzle-orm"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Bus } from "@opencode-ai/core/bus"
@@ -12,17 +12,16 @@ import { Agent } from "@opencode-ai/core/agent"
 import { SessionDynamicTool } from "@opencode-ai/core/session/dynamic-tool"
 import { SessionEvent } from "@opencode-ai/core/session/event"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionInbox } from "@opencode-ai/core/session/inbox"
 import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionDynamicToolTable } from "@opencode-ai/core/session/sql"
+import { SessionDynamicToolTable, SessionMessageTable } from "@opencode-ai/core/session/sql"
 import { SessionStore } from "@opencode-ai/core/session/store"
 import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { Tool } from "@opencode-ai/schema/tool"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
-import { globalProjectLayer } from "./lib/project"
+import { globalProjectNode } from "./lib/project"
 
 const it = testEffect(
   AppNodeBuilder.build(
@@ -38,7 +37,7 @@ const it = testEffect(
     ]),
     [
       [Bus.node, Bus.configured({ persist: true })],
-      [Project.node, globalProjectLayer],
+      [Project.node, globalProjectNode],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],
   ),
@@ -125,6 +124,33 @@ describe("SessionDynamicTool", () => {
       expect(
         (yield* Effect.flip(tools.set({ sessionID: created.id, tools: [{ ...lookup, name: "execute" }] })))._tag,
       ).toBe("SessionDynamicTool.InvalidToolError")
+      expect(
+        (
+          yield* Effect.flip(
+            tools.set({
+              sessionID: created.id,
+              tools: [{ ...lookup, parameters: { type: "object", fn: () => 1 } as never }],
+            }),
+          )
+        )._tag,
+      ).toBe("SessionDynamicTool.InvalidToolError")
+    }),
+  )
+
+  it.effect("rolls back session creation when initial dynamic tools fail to insert", () =>
+    Effect.gen(function* () {
+      const session = yield* Session.Service
+      expect(
+        (
+          yield* Effect.flip(
+            session.create({
+              location,
+              tools: [{ name: "execute", description: "reserved" }],
+            }),
+          )
+        )._tag,
+      ).toBe("SessionDynamicTool.InvalidToolError")
+      expect((yield* session.list({ directory: location.directory })).data).toEqual([])
     }),
   )
 
@@ -188,12 +214,27 @@ describe("SessionDynamicTool", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       const tools = yield* SessionDynamicTool.Service
-      const bus = yield* Bus.Service
       const { db } = yield* Database.Service
       const parent = yield* session.create({ location })
       yield* tools.set({ sessionID: parent.id, tools: [lookup, report] })
-      yield* session.prompt({ sessionID: parent.id, text: "First", resume: false })
-      yield* SessionInbox.promote(db, bus, parent.id, "steer")
+      const messageID = SessionMessage.ID.create()
+      const {
+        id: _id,
+        type,
+        ...data
+      } = Schema.encodeSync(SessionMessage.Info)(
+        SessionMessage.User.make({
+          id: messageID,
+          type: "user",
+          text: "First",
+          time: { created: DateTime.makeUnsafe(0) },
+        }),
+      )
+      yield* db
+        .insert(SessionMessageTable)
+        .values({ id: messageID, session_id: parent.id, type, seq: 0, time_created: 0, data })
+        .run()
+        .pipe(Effect.orDie)
 
       const forked = yield* session.fork({ sessionID: parent.id, boundary: { type: "through" } })
 

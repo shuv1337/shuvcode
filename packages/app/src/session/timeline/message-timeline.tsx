@@ -1,6 +1,6 @@
-import { createEffect, createMemo, createSignal, For, on, Show, type Accessor } from "solid-js"
-import createPresence from "solid-presence"
+import { createEffect, createMemo, createSignal, For, on, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
+import { createAnimatedPresence } from "@/runtime/animated-presence"
 import type { SessionUserActions } from "@opencode-ai/session-ui/actions"
 import { Badge } from "@opencode-ai/ui/badge"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -17,18 +17,21 @@ import { getFilename } from "@opencode-ai/util/path"
 import { Popover } from "@kobalte/core/popover"
 import { SessionContextUsage } from "@/session/timeline/session-context-usage"
 import { useLanguage } from "@/runtime/i18n/language"
-import { useData } from "@/runtime/server/current"
+import { useData, useServer } from "@/runtime/server/current"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { Timeline, TimelineRow } from "@opencode-ai/session-ui/timeline/projection"
 import { createSessionTimelineRowRenderer } from "@opencode-ai/session-ui/timeline/row"
+import { getReadyMarkdown, preloadMarkdown } from "@opencode-ai/session-ui/markdown-cache"
 import { createTimelineController, type TimelineController, type TimelineSessionSource } from "./controller"
 import { createTimelineVirtualizer } from "./virtualizer"
 import { containsDirectory, isWorkspaceDirectory, workspaceDirectories } from "@/workspaces/paths"
 import { SessionWorkspaceMenu } from "@/session/timeline/session-workspace-menu"
 import { getProjectAvatarVariant } from "@/shell/state/layout"
-import { displayName, getProjectAvatarSource } from "@/shell/layout/helpers"
+import { displayName, getProjectAvatarSource, projectForSession } from "@/shell/layout/helpers"
 import { parseCommentNote, readPromptPresentation } from "@/composer/comment-note"
 import { useCommand } from "@/shell/commands/command"
+import { useSettings } from "@/settings/model"
+import { SessionTitleHeader } from "../session-identity-header"
 
 type BackgroundTask = {
   id: string
@@ -180,6 +183,7 @@ function WorkspaceMoveAction(props: {
 
 function SessionSummaryPanel(props: {
   project: Project
+  avatar?: JSX.Element
   directory: string
   local: boolean
   branch?: string
@@ -206,11 +210,13 @@ function SessionSummaryPanel(props: {
     <div data-component="session-summary-panel" class="w-[280px]">
       <div class="relative z-10 flex flex-col gap-1 overflow-hidden rounded-[6px] bg-v2-background-bg-base px-0.5 py-1.5 shadow-[var(--v2-elevation-raised)]">
         <div class={row}>
-          <ProjectAvatar
-            fallback={displayName(props.project)}
-            src={getProjectAvatarSource(props.project.id, props.project.icon)}
-            variant={getProjectAvatarVariant(props.project.icon?.color)}
-          />
+          {props.avatar ?? (
+            <ProjectAvatar
+              fallback={displayName(props.project)}
+              src={getProjectAvatarSource(props.project.id, props.project.icon)}
+              variant={getProjectAvatarVariant(props.project.icon?.color)}
+            />
+          )}
           <span class="min-w-0 flex-1 truncate text-v2-text-text-muted">{displayName(props.project)}</span>
         </div>
         <SessionWorkspaceMenu
@@ -311,6 +317,16 @@ type MessageTimelineProps = {
 
 export function MessageTimeline(props: MessageTimelineProps) {
   const controller = createTimelineController({ session: props.session })
+  const tail = props.pinned ? controller.data.projection.rows().at(-1) : undefined
+  if (tail?._tag === "AssistantPart" && tail.group.type === "part") {
+    const message = controller.data.projection.messageByID().get(tail.group.ref.messageID)
+    if (message?.type === "assistant" && message.time.completed !== undefined) {
+      const content = Timeline.resolveContent(message, tail.group.ref.partID)
+      // Start the required worker job while the rest of the selected view is constructed.
+      if (content?.type === "text" && content.text.trim())
+        void preloadMarkdown(content.text, tail.group.ref.partID).catch(() => undefined)
+    }
+  }
   return (
     <MessageTimelineView {...props} data={controller.data} action={controller.action} pending={controller.pending} />
   )
@@ -325,6 +341,8 @@ function MessageTimelineView(
 ) {
   const language = useLanguage()
   const data = useData()
+  const server = useServer()
+  const settings = useSettings()
   const sdk = useWorkspaceLocation()
   const sessionID = props.data.sessionID
   const sessionStatus = props.data.status
@@ -335,14 +353,27 @@ function MessageTimelineView(
   const projection = props.data.projection
   const sessionDirectory = createMemo(() => props.session.data.info()?.location.directory ?? sdk().directory)
   const project = createMemo(() => {
-    const projectID = props.session.data.info()?.projectID
-    const value = projectID
-      ? data.project.get(projectID)
-      : data.project.list().find((item) => containsDirectory(item.canonical, sessionDirectory()))
-    if (!value) return undefined
-    return { ...value, worktree: value.canonical, worktrees: [] }
+    const session = props.session.data.info()
+    const projects = server.ctx.sync.data.project
+    return session
+      ? projectForSession(session, projects)
+      : projects.find((item) => containsDirectory(item.worktree, sessionDirectory()))
   })
   const workspaceSession = createMemo(() => isWorkspaceDirectory(project(), sessionDirectory()))
+  const showProjectIcon = () => import.meta.env.VITE_OPENCODE_CHANNEL !== "prod" && settings.general.showProjectIcon()
+  const avatarProject = createMemo(() => {
+    if (!showProjectIcon()) return
+    const session = props.session.data.info()
+    if (!session) return
+    return projectForSession(session, server.ctx.projects.list())
+  })
+  const projectAvatar = () => (
+    <ProjectAvatar
+      fallback={displayName(avatarProject() ?? { worktree: sessionDirectory() })}
+      src={getProjectAvatarSource(avatarProject()?.id, avatarProject()?.icon)}
+      variant={getProjectAvatarVariant(avatarProject()?.icon?.color)}
+    />
+  )
   createEffect(() => {
     const directory = project()?.worktree
     if (!directory) return
@@ -366,7 +397,7 @@ function MessageTimelineView(
   const pinned = createMemo(() => props.pinned)
   const messageByID = projection.messageByID
   const virtualized = createTimelineVirtualizer({
-    sessionKey: props.data.sessionKey,
+    sessionKey: () => `${server.key}/${props.data.sessionID()}`,
     projection,
     showHeader,
     pinned,
@@ -380,6 +411,38 @@ function MessageTimelineView(
     onSelectionInteraction: props.onSelectionInteraction,
     onUserScroll: props.onUserScroll,
     onHistoryScroll: props.onHistoryScroll,
+    canRenderImmediately: (row, disclosure) => {
+      if (row._tag === "TurnGap" || row._tag === "TurnDivider") return true
+      if (row._tag === "Notice") {
+        const message = messageByID().get(row.messageID)
+        return (
+          (message?.type === "system" || message?.type === "synthetic") &&
+          (message.description ?? message.text).length <= 1024
+        )
+      }
+      if (row._tag === "UserMessage") {
+        const message = messageByID().get(row.userMessageID)
+        if (message?.type !== "user" || message.text.length > 1024 || message.files?.length || message.agents?.length)
+          return false
+        const presentation = readPromptPresentation(message.metadata)
+        return (
+          (presentation?.displayText ?? message.text).length <= 1024 &&
+          !presentation?.comments?.length &&
+          !parseCommentNote(message.text)
+        )
+      }
+      if (row._tag !== "AssistantPart" || row.group.type !== "part") return false
+      const message = messageByID().get(row.group.ref.messageID)
+      if (message?.type !== "assistant" || message.time.completed === undefined) return false
+      const content = Timeline.resolveContent(message, row.group.ref.partID)
+      if (content?.type === "reasoning")
+        return !(disclosure[row.group.ref.partID] ?? props.data.reasoningMode() === "full")
+      return (
+        content?.type === "text" &&
+        content.text.length <= 1024 &&
+        !!getReadyMarkdown({ raw: content.text, src: content.text }, `${row.group.ref.partID}:0:full`)
+      )
+    },
     setRevealMessage: props.setRevealMessage,
     setScrollToEnd: props.setScrollToEnd,
   })
@@ -438,7 +501,7 @@ function MessageTimelineView(
       }
     },
     actions: props.actions,
-    showReasoningSummaries: props.data.showReasoningSummaries,
+    reasoningMode: props.data.reasoningMode,
     shellToolDefaultOpen: props.data.shellToolPartsExpanded,
     editToolDefaultOpen: props.data.editToolPartsExpanded,
     disclosure: virtualized.disclosure,
@@ -448,26 +511,16 @@ function MessageTimelineView(
   })
   const backgroundHintPartID = createMemo(() => {
     const blocking = new Set(props.background.blocking().map((task) => task.partID))
-    const row = projection
+    if (blocking.size === 0) return
+    return projection
       .rows()
-      .findLast(
-        (row) => row._tag === "AssistantPart" && row.group.type === "part" && blocking.has(row.group.ref.partID),
+      .flatMap((row) =>
+        row._tag === "AssistantPart" ? (row.group.type === "part" ? [row.group.ref] : row.group.refs) : [],
       )
-    if (row?._tag !== "AssistantPart" || row.group.type !== "part") return
-    return row.group.ref.partID
+      .findLast((ref) => blocking.has(ref.partID))?.partID
   })
   const [backgroundHintRef, setBackgroundHintRef] = createSignal<HTMLDivElement>()
-  const backgroundHintVisibility = createMemo<{ show: boolean; animate: boolean }>(
-    (previous) => {
-      const show = backgroundHintPartID() !== undefined
-      return { show, animate: previous.animate || previous.show !== show }
-    },
-    { show: backgroundHintPartID() !== undefined, animate: false },
-  )
-  const backgroundHintPresence = createPresence({
-    show: () => backgroundHintVisibility().show,
-    element: () => backgroundHintRef() ?? null,
-  })
+  const backgroundHintPresence = createAnimatedPresence(backgroundHintPartID, () => backgroundHintRef() ?? null)
   return (
     <VirtualizedTimeline
       workspaceSession={workspaceSession}
@@ -477,17 +530,17 @@ function MessageTimelineView(
             data-component="session-background-hint-row"
             classList={{
               "min-w-0 w-full max-w-full": true,
-              "md:max-w-200 2xl:max-w-[1000px] md:mx-auto": props.centered,
+              "md:max-w-[1000px] md:mx-auto": props.centered,
             }}
           >
             <div
               ref={setBackgroundHintRef}
               class="duration-150 motion-reduce:animate-none"
               classList={{
-                [`flex h-8 items-start pt-2 ${turnPadding()}`]: true,
-                "animate-in fade-in": backgroundHintVisibility().animate && backgroundHintVisibility().show,
+                [`flex h-9 items-start pt-3 ${turnPadding()}`]: true,
+                "animate-in fade-in": backgroundHintPresence.animate() && backgroundHintPresence.show(),
                 "animate-out fade-out fill-mode-forwards":
-                  backgroundHintVisibility().animate && !backgroundHintVisibility().show,
+                  backgroundHintPresence.animate() && !backgroundHintPresence.show(),
               }}
             >
               <BackgroundMoveHint />
@@ -502,10 +555,7 @@ function MessageTimelineView(
       }}
       renderRow={(row, onSizeChange) => <rowRenderer.Row row={row} onSizeChange={onSizeChange} />}
       header={
-        <div
-          data-session-title
-          class="sticky top-0 z-30 bg-[linear-gradient(to_bottom,var(--v2-background-bg-base)_48px,transparent)] w-full pb-4 pr-3 pl-2.5"
-        >
+        <SessionTitleHeader>
           <div class="h-12 w-full flex items-center justify-between gap-2">
             <div class="flex items-center gap-1 min-w-0 flex-1">
               <div class="flex items-center min-w-0 flex-1 w-full">
@@ -513,7 +563,9 @@ function MessageTimelineView(
                   when={workspaceSession()}
                   fallback={
                     <span class="flex size-6 shrink-0 items-center justify-center text-v2-icon-icon-muted">
-                      <Icon name="monitor" />
+                      <Show when={showProjectIcon()} fallback={<Icon name="monitor" />}>
+                        {projectAvatar()}
+                      </Show>
                     </span>
                   }
                 >
@@ -525,9 +577,14 @@ function MessageTimelineView(
                     <span
                       tabIndex={0}
                       aria-label={sessionDirectory()}
-                      class="flex size-6 shrink-0 items-center justify-center text-v2-icon-icon-accent"
+                      classList={{
+                        "flex size-6 shrink-0 items-center justify-center": true,
+                        "text-v2-icon-icon-accent": !showProjectIcon(),
+                      }}
                     >
-                      <Icon name="workspace-isolated" />
+                      <Show when={showProjectIcon()} fallback={<Icon name="workspace-isolated" />}>
+                        {projectAvatar()}
+                      </Show>
                     </span>
                   </Tooltip>
                 </Show>
@@ -613,6 +670,7 @@ function MessageTimelineView(
                           <Popover.Content class="z-50 border-0 bg-transparent p-0 outline-none">
                             <SessionSummaryPanel
                               project={project()}
+                              avatar={showProjectIcon() ? projectAvatar() : undefined}
                               directory={sessionDirectory()}
                               local={!workspaceSession()}
                               branch={data.location.vcs.info({ directory: sdk().directory })?.branch.current}
@@ -687,7 +745,7 @@ function MessageTimelineView(
               )}
             </Show>
           </div>
-        </div>
+        </SessionTitleHeader>
       }
     />
   )
