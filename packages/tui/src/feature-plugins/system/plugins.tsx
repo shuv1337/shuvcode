@@ -156,6 +156,12 @@ export function PluginsDialog(props: {
             onMove={(option) => setFocused(option.value)}
             onSelect={(option) => {
               const entry = entries().find((entry) => entry.key === option.value)
+              if (
+                entry?.runtime === "tui" &&
+                entry.id &&
+                props.plugins.registered().some((plugin) => plugin.id === entry.id)
+              )
+                return toggle(entry)
               if (pluginError(entry)) setDetail(entry)
             }}
             actions={
