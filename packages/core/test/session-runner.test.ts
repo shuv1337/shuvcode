@@ -5541,6 +5541,29 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
+  scenario("broadcasts pending text while the provider stream is paused", function* (s) {
+    const paused = yield* Deferred.make<void>()
+    yield* s.admit("Check before running a command")
+    yield* s.llm.push(
+      Stream.concat(
+        Stream.fromIterable([
+          LLMEvent.textStart({ id: "text" }),
+          LLMEvent.textDelta({ id: "text", text: "Checking the project." }),
+        ]),
+        Stream.fromEffect(Deferred.succeed(paused, undefined)).pipe(Stream.flatMap(() => Stream.never)),
+      ),
+    )
+    const deltas = yield* s.bus
+      .subscribe(SessionEvent.Text.Delta)
+      .pipe(Stream.take(1), Stream.runCollect, Effect.forkScoped({ startImmediately: true }))
+    const running = yield* s.resume.pipe(Effect.forkScoped)
+    yield* Deferred.await(paused)
+    yield* TestClock.adjust("100 millis")
+    expect(deltas.pollUnsafe()).toBeDefined()
+    expect(Array.from(yield* Fiber.join(deltas)).map((event) => event.data.delta)).toEqual(["Checking the project."])
+    yield* Fiber.interrupt(running)
+  })
+
   for (const kind of fragmentKinds) {
     scenario(
       kind === "tool input"

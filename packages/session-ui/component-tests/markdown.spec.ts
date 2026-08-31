@@ -215,6 +215,22 @@ story("renders cached Mermaid blocks and falls back to code for invalid diagrams
   await expect(markdown.getByRole("button", { name: "Copy", exact: true })).toBeVisible()
 })
 
+story("renders the trailing chunk while the stream is paused", async ({ page }) => {
+  await page.evaluate(async (fixture) => {
+    const { mountMarkdown } = await import(fixture)
+    await mountMarkdown({ text: "Checking **the project** before running the comm", streaming: true, cached: true })
+  }, fixture)
+  const harness = page.getByTestId("markdown-fixture")
+  const markdown = harness.locator('[data-component="markdown"]')
+  await expect(markdown).toHaveAttribute("data-markdown-ready", "")
+  await expect(markdown.locator("p")).toHaveText("Checking the project before running the comm")
+  await harness.getByLabel("Markdown text").fill("Checking **the project** before running the command.")
+  await expect(markdown.locator("p")).toHaveText("Checking the project before running the command.")
+  await expect(markdown).toHaveAttribute("data-markdown-ready", "")
+  await expect(markdown.locator("strong")).toHaveText("the project")
+  await expect(harness.getByLabel("Streaming")).toBeChecked()
+})
+
 story("keeps live elements and selection when a stream completes and later changes", async ({ page }) => {
   await page.evaluate(async (fixture) => {
     const { mountMarkdown } = await import(fixture)
