@@ -185,7 +185,7 @@ const layer = Layer.effect(
           resolved: loaded.model,
           prepare: context.prepare,
         }
-        if (compaction.required(compactionInput)) {
+        if (compaction.required({ ...compactionInput, context: loaded })) {
           const compacted = yield* compaction.compact(compactionInput)
           if (compacted.status !== "completed") return yield* new StepFailedError({ error: compacted.error })
           assistantMessageID = SessionMessage.ID.create()
