@@ -13,6 +13,7 @@ import { useLocation } from "./location"
 import { useStorage } from "./storage"
 import { useTuiPaths } from "./runtime"
 import { newSessionLocation } from "../config/new-session-location"
+import { createSessionRetention } from "./session-retention"
 import {
   closeSessionTab,
   cycleSessionTab,
@@ -138,6 +139,13 @@ export const { use: useSessionTabs, provider: SessionTabsProvider } = createSimp
       unread: {},
     })
     const current = () => (route.data.type === "session" ? root(route.data.sessionID) : undefined)
+    createSessionRetention({
+      session: data.session,
+      current: () =>
+        route.data.type === "session" && route.data.sessionID !== "dummy" ? route.data.sessionID : undefined,
+      keep: () => (enabled() ? state().tabs.map((tab) => tab.sessionID) : []),
+      limit: 3,
+    })
     const newTab = createMemo((open = false) => {
       if (route.data.type === "home") return true
       if (!open) return false
