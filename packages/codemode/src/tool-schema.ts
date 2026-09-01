@@ -79,15 +79,19 @@ const docTags = (schema: JsonSchema): Array<string> => {
 }
 
 // Neutralize `*\/` so model-provided schema text cannot terminate generated documentation.
-const jsdoc = (description: string | undefined, tags: ReadonlyArray<string>, pad: string): string => {
-  const lines = [...(description === undefined ? [] : description.split("\n")), ...tags].map((line) =>
-    line.replaceAll("*/", "* /").replace(/\s+$/, ""),
-  )
+const jsdoc = (description: string | undefined, summary: string, pad: string): string => {
+  const lines = (description ?? "").split("\n").map((line) => line.replace(/\s+$/, ""))
   while (lines.length > 0 && lines[0]!.trim() === "") lines.shift()
   while (lines.length > 0 && lines[lines.length - 1]!.trim() === "") lines.pop()
-  if (lines.length === 0) return ""
-  if (lines.length === 1) return `${pad}/** ${lines[0]} */\n`
-  const body = lines.map((line) => `${pad} *${line === "" ? "" : ` ${line}`}`).join("\n")
+  const inline = lines.length === 1 ? `${lines[0]}${lines[0].endsWith(".") ? "" : "."} ${summary}` : summary
+  const content =
+    summary && lines.length === 1 && !summary.includes("\n") && pad.length + inline.length + 7 <= 120
+      ? [inline]
+      : [...lines, ...(summary ? summary.split("\n") : [])]
+  if (content.length === 0) return ""
+  const escaped = content.map((line) => line.replaceAll("*/", "* /"))
+  if (escaped.length === 1 && pad.length + escaped[0].length + 7 <= 120) return `${pad}/** ${escaped[0]} */\n`
+  const body = escaped.map((line) => `${pad} *${line === "" ? "" : ` ${line}`}`).join("\n")
   return `${pad}/**\n${body}\n${pad} */\n`
 }
 
@@ -167,7 +171,7 @@ const renderSchema = (
     if (properties.length === 0 && indexType === undefined) return "{}"
     const pad = "  ".repeat(depth + 1)
     const lines = properties.map(
-      (entry) => `${jsdoc(entry[1].description, docTags(entry[1]), pad)}${pad}${field(entry)},`,
+      (entry) => `${jsdoc(entry[1].description, docTags(entry[1]).join(" "), pad)}${pad}${field(entry)},`,
     )
     if (indexType !== undefined) lines.push(`${pad}[key: string]: ${indexType},`)
     return `{\n${lines.join("\n")}\n${"  ".repeat(depth)}}`
