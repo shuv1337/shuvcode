@@ -167,7 +167,7 @@ describe("fromPromise", () => {
         }),
       )
 
-      yield* plugins.activate([{ ...adapted, version: "1" }])
+      yield* plugins.activate([{ ...adapted, revision: "1" }])
     }),
   )
 
