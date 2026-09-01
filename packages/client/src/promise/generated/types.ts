@@ -2585,6 +2585,18 @@ export type PluginListOutput = {
   data: Array<PluginInfo>
 }
 
+export type PluginCheckInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly target?: { readonly target?: string | undefined }["target"]
+}
+
+export type PluginCheckOutput = {
+  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  data: Array<PluginInfo>
+}
+
 export type PluginUpdateInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined

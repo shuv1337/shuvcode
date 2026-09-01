@@ -162,8 +162,10 @@ export const layer = Layer.effect(
     const reloads = Stream.merge(
       Stream.merge(sources.changes(), bus.subscribe([Event.Updated, SdkPlugins.Updated])),
       updates.changes().pipe(
-        Stream.filter((target) => packages.has(target)),
-        Stream.tap((target) => Effect.sync(() => outdated.delete(target))),
+        Stream.filter((update) => packages.has(update.target)),
+        Stream.tap((update) =>
+          Effect.sync(() => (update.outdated ? outdated.add(update.target) : outdated.delete(update.target))),
+        ),
         Stream.map(() => undefined),
       ),
     ).pipe(
