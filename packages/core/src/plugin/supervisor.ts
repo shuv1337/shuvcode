@@ -169,7 +169,7 @@ export const layer = Layer.effect(
         Stream.map(() => undefined),
       ),
     ).pipe(
-      // Make accepted work visible to flush before coalescing the burst.
+      // Make accepted work visible to awaitActivation before coalescing the burst.
       Stream.mapEffect(() =>
         Effect.gen(function* () {
           observed++
@@ -191,7 +191,7 @@ export const layer = Layer.effect(
       Effect.forkScoped({ startImmediately: true }),
     )
     yield* Effect.sleep("24 hours").pipe(Effect.andThen(activate()), Effect.forever, Effect.forkScoped)
-    return Service.of({ flush: ready.await })
+    return Service.of({ awaitActivation: ready.await })
   }),
 )
 
