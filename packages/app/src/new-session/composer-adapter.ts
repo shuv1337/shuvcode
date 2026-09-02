@@ -194,6 +194,7 @@ async function resolveSessionDirectory(input: {
 
   return createWorktree({
     api: input.serverSDK.api,
+    data: input.data,
     directory: input.projectDirectory,
     project: input.data.location.info({ directory: input.projectDirectory })?.project,
     branch: input.branch,

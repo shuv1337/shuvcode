@@ -116,7 +116,7 @@ function ResolvedTargetSessionRoute() {
   const current = createSessionResolution(
     () => params.id,
     () => data.session,
-    { children: true },
+    { children: true, connected: () => server.ctx.sdk.connection.status() === "connected" },
   )
   const directory = createMemo(() => current()?.location.directory)
 
@@ -133,7 +133,7 @@ function ResolvedTargetSessionRoute() {
     >
       <Show when={directory()} fallback={<PendingSessionState sessionID={params.id} />}>
         {(value) => (
-          <LocationProvider directory={value}>
+          <LocationProvider directory={value} workspaceID={() => current()?.location.workspaceID}>
             <SessionUIProvider directory={value()} server={server.key}>
               <TargetSessionPage />
             </SessionUIProvider>
