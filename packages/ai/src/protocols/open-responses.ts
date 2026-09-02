@@ -39,6 +39,7 @@ const OpenResponsesInputText = Schema.Struct({
 const OpenResponsesInputImage = Schema.Struct({
   type: Schema.tag("input_image"),
   image_url: Schema.String,
+  detail: Schema.optional(Schema.String),
 })
 const OpenResponsesInputFile = Schema.Struct({
   type: Schema.tag("input_file"),
@@ -504,7 +505,13 @@ const lowerMedia = Effect.fn("OpenResponses.lowerMedia")(function* (
       ...(url ? { file_url: url } : { file_data: media.dataUrl }),
     }
   }
-  return { type: "input_image" as const, image_url: url ?? media.dataUrl }
+  return {
+    type: "input_image" as const,
+    image_url: url ?? media.dataUrl,
+    detail: yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(OpenResponsesInputImage.fields.detail))(
+      part.providerMetadata?.[request.model.route.providerMetadataKey ?? "openresponses"]?.detail,
+    ),
+  }
 })
 
 const lowerUserContent = Effect.fnUntraced(function* (
