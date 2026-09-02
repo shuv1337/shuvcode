@@ -44,7 +44,7 @@ export default {
           payload: {
             method: request.method,
             path: url.pathname,
-            user_agent: request.headers.get("user-agent"),
+            useragent: request.headers.get("user-agent"),
             ip: request.headers.get("cf-connecting-ip"),
             cf_country: request.cf?.country,
             cf_colo: request.cf?.colo,
