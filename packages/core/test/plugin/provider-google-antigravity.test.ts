@@ -199,6 +199,7 @@ describe("GoogleAntigravityWire", () => {
   it.effect("filters Claude, GPT, tab, and image models out of the Cloud Code catalog", () =>
     Effect.sync(() => {
       const filtered = GoogleAntigravityWire.filterGoogleModels([
+        { id: "gemini-3.8-flash", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
         { id: "gemini-3.7-flash-high", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
         { id: "claude-sonnet-4-6", provider: "MODEL_PROVIDER_ANTHROPIC", recommended: true },
         { id: "gpt-oss-120b-medium", provider: "MODEL_PROVIDER_OPENAI", recommended: true },
@@ -206,7 +207,7 @@ describe("GoogleAntigravityWire", () => {
         { id: "gemini-3.1-flash-image", provider: "MODEL_PROVIDER_GOOGLE" },
         { id: "chat_20706", provider: "MODEL_PROVIDER_GOOGLE", internal: true },
       ])
-      expect(filtered.map((model) => model.id)).toEqual(["gemini-3.7-flash-high"])
+      expect(filtered.map((model) => model.id)).toEqual(["gemini-3.8-flash", "gemini-3.7-flash-high"])
     }),
   )
 })
@@ -298,6 +299,13 @@ describe("GoogleAntigravityPlugin", () => {
       const flash = required(yield* catalog.model.get(Provider.ID.google, Model.ID.make("gemini-3.7-flash-high")))
       expect(flash).toMatchObject({
         name: "Gemini 3.7 Flash (High)",
+        enabled: true,
+        cost: [],
+        limit: { context: 1_048_576, output: 65_536 },
+      })
+      const flash38 = required(yield* catalog.model.get(Provider.ID.google, Model.ID.make("gemini-3.8-flash")))
+      expect(flash38).toMatchObject({
+        name: "Gemini 3.8 Flash",
         enabled: true,
         cost: [],
         limit: { context: 1_048_576, output: 65_536 },

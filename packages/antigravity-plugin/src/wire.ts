@@ -20,6 +20,10 @@ export type ShippedModel = {
 }
 
 export const shippedModels: readonly ShippedModel[] = [
+  { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)" },
+  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)" },
+  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },
   { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", modelEnum: "MODEL_PLACEHOLDER_M298" },
   { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", modelEnum: "MODEL_PLACEHOLDER_M299" },
   { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", modelEnum: "MODEL_PLACEHOLDER_M300" },

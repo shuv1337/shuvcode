@@ -145,6 +145,8 @@ From live `fetchAvailableModels`. Ship recommended Gemini agent models. Primary 
 
 | Catalog id | Display | Variants / notes |
 | --- | --- | --- |
+| `gemini-3.8-flash` | Gemini 3.8 Flash | Canonical model ID |
+| `gemini-3.8-flash-{high,medium,low}` | Gemini 3.8 Flash | Variants |
 | `gemini-3.7-flash-high` | Gemini 3.7 Flash (High) | **Default.** `MODEL_PLACEHOLDER_M298`. Official `defaultAgentModelId` |
 | `gemini-3.7-flash-medium` | Gemini 3.7 Flash (Medium) | `M299` |
 | `gemini-3.7-flash-low` | Gemini 3.7 Flash (Low) | `M300`. Live generate used this when flags ate the prompt |
