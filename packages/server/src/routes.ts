@@ -25,7 +25,6 @@ import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
 import { LocationActivity } from "@opencode-ai/core/location-activity"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { SessionRestart } from "@opencode-ai/core/session/execution/restart"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
 import { PluginUpdate } from "@opencode-ai/core/plugin/update"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
 import { WellKnown } from "@opencode-ai/core/wellknown"
@@ -58,9 +57,8 @@ const applicationServiceNodes = [
   Project.node,
   Worktree.node,
   Session.node,
-  Instance.byLocationNode,
+  Instance.node,
   SessionTransfer.node,
-  PluginRuntime.providerNode,
   SdkPlugins.node,
   PluginUpdate.node,
   PermissionSaved.node,
@@ -102,7 +100,6 @@ function makeRoutes<AuthError, AuthServices>(
   // Runtime-profile replacements (e.g. workerd) applied after the standard set, so later entries win.
   overrides: LayerNode.Replacements,
 ) {
-  const pluginRuntimeCell = PluginRuntime.makeCell()
   const standard: LayerNode.Replacements = [
     Database.node.replace(Database.configured(options.database)),
     PersistentPty.node.replace(PersistentPty.configured(options.pty)),
@@ -129,8 +126,6 @@ function makeRoutes<AuthError, AuthServices>(
         },
       }),
     ),
-    PluginRuntime.node.replace(PluginRuntime.layerWithCell(pluginRuntimeCell)),
-    PluginRuntime.providerNode.replace(PluginRuntime.providerNodeWithCell(pluginRuntimeCell)),
   ]
   const replacements: LayerNode.Replacements = [...standard, ...overrides]
   const serviceLayer = options.simulation
@@ -147,9 +142,13 @@ function makeRoutes<AuthError, AuthServices>(
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
         Layer.succeedContext(
-          Context.pick(Database.Service, PermissionSaved.Service, PluginUpdate.Service, Project.Service, WellKnown.Service)(
-            context,
-          ),
+          Context.pick(
+            Database.Service,
+            PermissionSaved.Service,
+            PluginUpdate.Service,
+            Project.Service,
+            WellKnown.Service,
+          )(context),
         ),
         ServerInfo.layer(serviceURLs, options.app),
       )

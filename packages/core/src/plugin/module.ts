@@ -11,7 +11,7 @@ import type { ConfigPluginSource } from "../config/plugin/source.js"
 import type { Generation } from "../plugin.js"
 import { PluginPromise } from "./promise.js"
 
-const Definition = Schema.Struct({
+const Module = Schema.Struct({
   default: Schema.Union([
     Schema.Struct({
       id: Schema.String,
@@ -50,7 +50,7 @@ export const load = Effect.fn("PluginModule.load")(function* (
   const source = operation.mtime === undefined ? entrypoint : `${target}?mtime=${operation.mtime}`
   yield* Effect.log({ msg: "loading plugin", id: operation.target, entrypoint: source })
   const mod = yield* Effect.promise(() => importModule(source))
-  const value = (yield* Schema.decodeUnknownEffect(Definition)(mod).pipe(
+  const value = (yield* Schema.decodeUnknownEffect(Module)(mod).pipe(
     Effect.mapError(
       (cause) =>
         new LoadError({

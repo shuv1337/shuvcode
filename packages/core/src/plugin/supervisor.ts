@@ -1,8 +1,7 @@
 export * as PluginSupervisor from "./supervisor.js"
-export { Service, type Interface } from "./supervisor-service.js"
 
 import { Event } from "@opencode-ai/schema/config"
-import { Cause, Effect, Latch, Layer, Stream } from "effect"
+import { Cause, Effect, Layer, Stream } from "effect"
 import path from "path"
 import { ConfigPluginSource } from "../config/plugin/source.js"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
@@ -13,7 +12,6 @@ import { InstancePlugins } from "./instance.js"
 import { PluginInternal } from "./internal.js"
 import { PluginModule } from "./module.js"
 import { SdkPlugins } from "./sdk.js"
-import { Service } from "./supervisor-service.js"
 import { PluginUpdate } from "./update.js"
 
 const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
@@ -93,8 +91,7 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
   }
 })
 
-export const layer = Layer.effect(
-  Service,
+export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const registry = yield* Plugin.Service
     const sdk = yield* SdkPlugins.Service
@@ -102,7 +99,11 @@ export const layer = Layer.effect(
     const sources = yield* ConfigPluginSource.Service
     const bus = yield* Bus.Service
     const updates = yield* PluginUpdate.Service
-    const ready = yield* Latch.make()
+    const internal = yield* PluginInternal.list()
+    let release: Effect.Effect<void> | undefined = yield* registry.hold()
+    yield* Effect.addFinalizer(() => release ?? Effect.void)
+    // Built-ins capture services from this layer; unload them before those services close.
+    yield* Effect.addFinalizer(registry.close)
     let packages = new Set<string>()
     let outdated = new Set<string>()
     let generation = 0
@@ -110,8 +111,6 @@ export const layer = Layer.effect(
 
     const activate = Effect.fn("PluginSupervisor.activate")(function* () {
       const current = ++generation
-      // Resolve OpenCode's internal plugins with their privileged Location services.
-      const internal = yield* PluginInternal.list()
       // Combine internal plugins with host-contributed plugins in boot order.
       // Instance-bound plugins come last: later activation can override earlier
       // container writes, so the instance's explicit choices win over globals.
@@ -173,7 +172,7 @@ export const layer = Layer.effect(
       Stream.mapEffect(() =>
         Effect.gen(function* () {
           observed++
-          yield* ready.close
+          if (!release) release = yield* registry.hold()
           return observed
         }),
       ),
@@ -185,13 +184,25 @@ export const layer = Layer.effect(
       Stream.runForEach((target) =>
         Effect.gen(function* () {
           yield* activate().pipe(Effect.catchCause((cause) => Effect.logError("failed to reload plugins", { cause })))
-          if (observed === target) yield* ready.open
+          if (observed !== target) return
+          const settled = release
+          release = undefined
+          if (settled) yield* settled
         }),
       ),
       Effect.forkScoped({ startImmediately: true }),
     )
-    yield* Effect.sleep("24 hours").pipe(Effect.andThen(activate()), Effect.forever, Effect.forkScoped)
-    return Service.of({ awaitActivation: ready.await })
+    yield* Effect.sleep("24 hours").pipe(
+      Effect.andThen(
+        Effect.acquireUseRelease(
+          registry.hold(),
+          () => activate(),
+          (release) => release,
+        ),
+      ),
+      Effect.forever,
+      Effect.forkScoped,
+    )
   }),
 )
 
@@ -211,4 +222,4 @@ function pluginSource(target: string): Plugin.Source {
   return { type: "package", target }
 }
 
-export const node = makeLocationNode({ service: Service, layer, deps: nodeDeps })
+export const node = makeLocationNode({ name: "plugin-supervisor", layer, deps: nodeDeps })

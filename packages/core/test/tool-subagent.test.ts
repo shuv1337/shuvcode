@@ -29,7 +29,7 @@ import { SessionInbox } from "@opencode-ai/core/session/inbox"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { SessionStore } from "@opencode-ai/core/session/store"
-import { PluginRuntime } from "@opencode-ai/core/plugin/runtime"
+import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { Permission } from "@opencode-ai/core/permission"
 import { SubagentTool } from "@opencode-ai/core/tool/plugin/subagent"
@@ -104,14 +104,9 @@ const executionNode = makeGlobalNode({
 })
 
 const subagentPluginSupervisor = makeLocationNode({
-  service: PluginSupervisor.Service,
-  layer: Layer.effect(
-    PluginSupervisor.Service,
-    registerToolPlugin(SubagentTool.Plugin).pipe(
-      Effect.as(PluginSupervisor.Service.of({ awaitActivation: Effect.void })),
-    ),
-  ),
-  deps: [Agent.node, Config.node, Permission.node, PluginRuntime.node, Tool.node],
+  name: "test/subagent-plugins",
+  layer: Layer.effectDiscard(registerToolPlugin(SubagentTool.Plugin)),
+  deps: [Agent.node, Config.node, Permission.node, Session.node, Job.node, Tool.node],
 })
 
 const nodes = LayerNode.group([
@@ -120,7 +115,6 @@ const nodes = LayerNode.group([
   Job.node,
   Session.node,
   SessionExecution.node,
-  PluginRuntime.providerNode,
   LocationServiceMap.node,
 ])
 const replacements = [
@@ -157,9 +151,7 @@ const completionIt = testEffect(
 const withSubagent = (location: Location.Ref) =>
   Effect.gen(function* () {
     const locations = yield* LocationServiceMap.Service
-    yield* PluginSupervisor.Service.use((supervisor) => supervisor.awaitActivation).pipe(
-      Effect.provide(locations.get(location)),
-    )
+    yield* Plugin.Service.use((plugins) => plugins.awaitActivation).pipe(Effect.provide(locations.get(location)))
     yield* Agent.Service.use((agents) =>
       agents.transform((draft) => {
         // The caller identity used by executeTool; subagent permission asserts against it.
