@@ -34,7 +34,8 @@ export default defineConfig(({ command }) => ({
       dedupe: ["effect"],
     },
     define: {
-      "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      // Local renderer/server mode still uses the dev application identity and updater policy.
+      "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel === "local" ? "dev" : channel),
     },
     build: {
       minify: command === "build",

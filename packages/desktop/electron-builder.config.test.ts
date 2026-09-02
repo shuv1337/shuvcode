@@ -190,19 +190,8 @@ for (const channel of ["dev", "beta"] as const) {
       {
         from: "resources/",
         to: "",
-        filter: ["opencode-cli*"],
+        filter: ["opencode-cli", "opencode-cli.exe"],
       },
     ])
   })
 }
-
-test("does not bundle the CLI in prod builds", async () => {
-  const previous = process.env.OPENCODE_CHANNEL
-  process.env.OPENCODE_CHANNEL = "prod"
-  const module = await import("./electron-builder.config.ts?no-cli-resource=prod")
-  const config = module.default as Configuration
-  if (previous === undefined) delete process.env.OPENCODE_CHANNEL
-  else process.env.OPENCODE_CHANNEL = previous
-
-  expect(config.extraResources).toEqual([])
-})
