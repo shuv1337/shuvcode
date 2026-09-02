@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, on, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
 import type { SessionUserActions } from "@opencode-ai/session-ui/actions"
@@ -342,8 +342,11 @@ export function MessageTimeline(props: MessageTimelineProps) {
     if (message?.type === "assistant" && message.time.completed !== undefined) {
       const content = Timeline.resolveContent(message, tail.group.ref.partID)
       // Start the required worker job while the rest of the selected view is constructed.
-      if (content?.type === "text" && content.text.trim())
-        void preloadMarkdown(content.text, tail.group.ref.partID).catch(() => undefined)
+      if (content?.type === "text" && content.text.trim()) {
+        const preload = new AbortController()
+        onCleanup(() => preload.abort())
+        void preloadMarkdown(content.text, tail.group.ref.partID, preload.signal).catch(() => undefined)
+      }
     }
   }
   return (
