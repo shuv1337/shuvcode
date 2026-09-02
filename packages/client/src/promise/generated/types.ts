@@ -2585,6 +2585,14 @@ export type PluginListOutput = {
   data: Array<PluginInfo>
 }
 
+export type PluginAwaitActivationInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type PluginAwaitActivationOutput = void
+
 export type PluginCheckInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
