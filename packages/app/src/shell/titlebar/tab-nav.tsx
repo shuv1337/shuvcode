@@ -11,6 +11,7 @@ import { useLanguage } from "@/runtime/i18n/language"
 import { ServerConnection, serverName, useServers } from "@/runtime/server/registry"
 import { displayName, projectForSession } from "@/shell/layout/helpers"
 import { SessionTabAvatar } from "@/shell/layout/session-tab-avatar"
+import { SessionProgressIndicatorV2 } from "@opencode-ai/session-ui/v2/session-progress-indicator-v2"
 import type { SessionInfo } from "@opencode-ai/client/promise"
 import { sessionLabel } from "@/session/title"
 import { canOpenTabRename, forwardTabRef } from "./tab-gesture"
@@ -25,6 +26,7 @@ export function TabNavItem(props: {
   href: string
   server: ServerConnection.Key
   session: SessionInfo | undefined
+  preparing: boolean
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
   onClose: () => void
@@ -239,7 +241,14 @@ export function TabNavItem(props: {
             when={props.session}
             keyed
             fallback={
-              <span class="block size-4 rounded-[3px] border border-v2-border-border-muted" aria-hidden="true" />
+              <Show
+                when={props.preparing}
+                fallback={
+                  <span class="block size-4 rounded-[3px] border border-v2-border-border-muted" aria-hidden="true" />
+                }
+              >
+                <SessionProgressIndicatorV2 />
+              </Show>
             }
           >
             {(session) => (

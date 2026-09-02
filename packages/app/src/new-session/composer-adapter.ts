@@ -117,12 +117,13 @@ export function createNewSessionComposerAdapter(props: {
             { dir: base64Encode(sessionDirectory), id: created.id },
             { server: server.key, scope: serverSDK.scope },
           ),
+          { preserveDraft: !!pending },
         )
       })
 
       return {
         cleanupReady,
-        complete: pending?.complete,
+        complete: pending ? () => pending.complete(submission.target()) : undefined,
         session: {
           id: created.id,
           directory: sessionDirectory,

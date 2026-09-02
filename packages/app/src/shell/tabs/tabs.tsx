@@ -12,7 +12,13 @@ import { SessionTabsRemovedDetail } from "@/shell/titlebar/session-events"
 import { sessionHref } from "@/shell/routes/session"
 import { createTabMemory } from "./memory"
 import { nextTabAfterClose, pushClosedTab, removeClosedTabs, takeClosedTab, type ClosedTab } from "./closed"
-import { createDraftComposerState, type PromptModel } from "@/composer/state"
+import {
+  createDraftComposerState,
+  createMemoryComposerState,
+  type ComposerState,
+  type PromptModel,
+} from "@/composer/state"
+import { appendPrompt, promptLength } from "@/composer/prompt-parts"
 import { TabStorage } from "./schema"
 import { useCurrentRoute } from "@/shell/state/layout"
 
@@ -24,6 +30,7 @@ export type PendingSession = {
   draft: DraftTab
   message: SessionMessageUser
   selection: ComposerSelection
+  composer: ComposerState
 }
 
 export type TabInfo = typeof TabStorage.Info.Type
@@ -285,8 +292,9 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
         const draft = { ...actions.draft(draftID) }
         const next = { type: "session" as const, ...session }
         const key = tabKey(next)
+        const composer = createMemoryComposerState()
         const ready = startTransition(() => {
-          setPending(key, { draft, ...preview })
+          setPending(key, { draft, ...preview, composer })
           const index = store.findIndex((tab) => tab.type === "draft" && tab.draftID === draftID)
           if (index === -1) return
           const active = location.pathname === "/new-session" && location.query.draftId === draftID
@@ -301,9 +309,11 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
 
         return {
           ready,
-          async complete() {
+          async complete(target: ReturnType<ComposerState["capture"]>) {
             await ready
             if (!pending[key]) return
+            await memory.get<ComposerState>(key, "prompt")?.ready.promise
+            if (promptLength(composer.current())) target.set(composer.current(), composer.cursor())
             await startTransition(() => setPending(key, undefined))
             memory.remove(tabKey(draft))
             removeDraftPersisted(draftID)
@@ -311,6 +321,12 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           async rollback(worktree?: string) {
             await ready
             if (!pending[key]) return
+            const original = memory.get<ComposerState>(tabKey(draft), "prompt")
+            if (original && promptLength(composer.current())) {
+              // Nothing was submitted: recover both inputs in the original draft.
+              const restored = appendPrompt(original.current(), composer.current())
+              original.set(restored, promptLength(restored))
+            }
             await startTransition(() => {
               const index = store.findIndex((tab) => tabKey(tab) === key)
               if (index !== -1) {

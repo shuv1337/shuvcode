@@ -28,6 +28,7 @@ import { TitlebarRightMount } from "@/shell/titlebar/right-slot"
 import { MobileDrawer, MobileDrawerContent, MobileDrawerLabel, MobileDrawerTrigger } from "@/shell/mobile-drawer"
 import { sessionLabel } from "@/session/title"
 import { SessionTabAvatar } from "@/shell/layout/session-tab-avatar"
+import { SessionProgressIndicatorV2 } from "@opencode-ai/session-ui/v2/session-progress-indicator-v2"
 import { projectForSession } from "@/shell/layout/helpers"
 import { useSettingsDialog } from "@/settings/command"
 
@@ -171,11 +172,15 @@ export function Titlebar(props: {
             const tabs = useTabs()
             const tabsStore = tabs.store
             const tabsStoreActions = tabs
+            const preparing = createMemo(() => {
+              const route = layout.route()
+              return route.type === "session" && !!tabs.pendingSession(route.server, route.sessionId)
+            })
             const [loadedSession] = createResource(
               () => {
                 const route = layout.route()
                 if (route.type !== "session") return undefined
-                if (tabs.pendingSession(route.server, route.sessionId)) return undefined
+                if (preparing()) return undefined
                 const conn = global.servers.list().find((item) => ServerConnection.key(item) === route.server)
                 return conn ? { route, ctx: global.ensureServerCtx(conn) } : undefined
               },
@@ -184,7 +189,7 @@ export function Titlebar(props: {
             const session = createMemo(() => {
               const route = layout.route()
               if (route.type !== "session") return
-              if (tabs.pendingSession(route.server, route.sessionId)) return
+              if (preparing()) return
               const conn = global.servers.list().find((item) => ServerConnection.key(item) === route.server)
               const cached = conn ? global.ensureServerCtx(conn).data.session.get(route.sessionId) : undefined
               if (cached) return cached
@@ -441,10 +446,17 @@ export function Titlebar(props: {
                                   tab().type === "draft" ? (
                                     <Icon name="edit" />
                                   ) : (
-                                    <span
-                                      class="block size-4 rounded-[3px] border border-v2-border-border-muted"
-                                      aria-hidden="true"
-                                    />
+                                    <Show
+                                      when={preparing()}
+                                      fallback={
+                                        <span
+                                          class="block size-4 rounded-[3px] border border-v2-border-border-muted"
+                                          aria-hidden="true"
+                                        />
+                                      }
+                                    >
+                                      <SessionProgressIndicatorV2 />
+                                    </Show>
                                   )
                                 }
                               >

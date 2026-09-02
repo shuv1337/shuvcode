@@ -26,6 +26,7 @@ import { IncompatibleServerPanel } from "./incompatible-server-panel"
 import { SessionErrorFallback } from "./route-error"
 import { createSessionResolution } from "./session-resolution"
 import { SessionScreen } from "./screen"
+import { PreparingComposer } from "./preparing-composer"
 
 export function TargetSessionRouteContent() {
   const params = useParams<{ serverKey: string; id: string }>()
@@ -64,7 +65,8 @@ function PreparingSession(props: { sessionID: string; pending: PendingSession })
         }}
       >
         <div data-component="session-preparing" class="min-h-0 flex-1 overflow-y-auto">
-          <div class="mx-auto w-full min-w-0 max-w-[1000px] px-4 pt-5 pb-5 md:px-5">
+          <SessionIdentityHeader sessionID={props.sessionID} />
+          <div class="mx-auto w-full min-w-0 max-w-[1000px] px-4 pb-5 md:px-5">
             <SessionUserMessage
               sessionID={props.sessionID}
               message={props.pending.message}
@@ -84,6 +86,7 @@ function PreparingSession(props: { sessionID: string; pending: PendingSession })
             </div>
           </div>
         </div>
+        <PreparingComposer pending={props.pending} />
       </DataProvider>
     </SessionStatePanel>
   )

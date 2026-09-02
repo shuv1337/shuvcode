@@ -27,6 +27,7 @@ function SessionTabSlot(props: {
   active: boolean
   orientation: "horizontal" | "vertical"
   session: SessionInfo | undefined
+  preparing: boolean
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
   onNavigate: (element: HTMLDivElement) => void
@@ -62,6 +63,7 @@ function SessionTabSlot(props: {
         href={tabHref(props.tab)}
         server={props.tab.server}
         session={props.session}
+        preparing={props.preparing}
         fallbackTitle={props.fallbackTitle}
         onRename={props.onRename}
         onNavigate={() => props.onNavigate(ref)}
@@ -167,6 +169,7 @@ function SessionTabEntry(props: {
         active={props.active}
         orientation={props.orientation}
         session={session()}
+        preparing={!!pending()}
         fallbackTitle={
           pending()
             ? language.t("command.session.new")
