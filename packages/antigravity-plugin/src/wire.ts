@@ -20,7 +20,6 @@ export type ShippedModel = {
 }
 
 export const shippedModels: readonly ShippedModel[] = [
-  { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
   { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)" },
   { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)" },
   { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },

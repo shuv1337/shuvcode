@@ -151,7 +151,9 @@ describe("GoogleAntigravityWire", () => {
 
   test("filters Claude, GPT, tab, and image models out of the Cloud Code catalog", () => {
     const filtered = GoogleAntigravityWire.filterGoogleModels([
-      { id: "gemini-3.8-flash", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+      { id: "gemini-3.8-flash-high", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+      { id: "gemini-3.8-flash-medium", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+      { id: "gemini-3.8-flash-low", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
       { id: "gemini-3.7-flash-high", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
       { id: "claude-sonnet-4-6", provider: "MODEL_PROVIDER_ANTHROPIC", recommended: true },
       { id: "gpt-oss-120b-medium", provider: "MODEL_PROVIDER_OPENAI", recommended: true },
@@ -159,21 +161,30 @@ describe("GoogleAntigravityWire", () => {
       { id: "gemini-3.1-flash-image", provider: "MODEL_PROVIDER_GOOGLE" },
       { id: "chat_20706", provider: "MODEL_PROVIDER_GOOGLE", internal: true },
     ])
-    expect(filtered.map((model) => model.id)).toEqual(["gemini-3.8-flash", "gemini-3.7-flash-high"])
+    expect(filtered.map((model) => model.id)).toEqual([
+      "gemini-3.8-flash-high",
+      "gemini-3.8-flash-medium",
+      "gemini-3.8-flash-low",
+      "gemini-3.7-flash-high",
+    ])
   })
 
-  test("ships gemini-3.8-flash in the model catalog", () => {
-    expect(GoogleAntigravityWire.shippedModels.some((model) => model.id === "gemini-3.8-flash")).toBe(true)
-    const wrapped = GoogleAntigravityWire.wrapGenerateRequest({
-      body: nativeBody,
-      projectId: "canvas-wallaby-dvmxc",
-      model: "gemini-3.8-flash",
-      sessionID: "ses_test",
-      now: 1_700_000_000_000,
-      trajectory: "traj-38",
-    }) as { model: string; project: string }
-    expect(wrapped.model).toBe("gemini-3.8-flash")
-    expect(wrapped.project).toBe("canvas-wallaby-dvmxc")
+  test("ships the gemini-3.8-flash variants and forwards their IDs unchanged", () => {
+    const ids = GoogleAntigravityWire.shippedModels.map((model) => model.id)
+    expect(ids).not.toContain("gemini-3.8-flash")
+    for (const model of ["gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low"]) {
+      expect(ids).toContain(model)
+      const wrapped = GoogleAntigravityWire.wrapGenerateRequest({
+        body: nativeBody,
+        projectId: "canvas-wallaby-dvmxc",
+        model,
+        sessionID: "ses_test",
+        now: 1_700_000_000_000,
+        trajectory: "traj-38",
+      }) as { model: string; project: string }
+      expect(wrapped.model).toBe(model)
+      expect(wrapped.project).toBe("canvas-wallaby-dvmxc")
+    }
   })
 })
 
