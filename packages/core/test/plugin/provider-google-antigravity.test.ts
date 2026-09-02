@@ -115,7 +115,12 @@ describe("GoogleAntigravityOAuth", () => {
       expect(imported).toMatchObject({ refresh: "1//abc", projectId: "canvas-wallaby-dvmxc" })
       expect(
         GoogleAntigravityOAuth.parseOAuthTokenBlob(
-          JSON.stringify({ refresh_token: "1//blob", access_token: "ya29.a", expires_in: 3600, email: "user@gmail.com" }),
+          JSON.stringify({
+            refresh_token: "1//blob",
+            access_token: "ya29.a",
+            expires_in: 3600,
+            email: "user@gmail.com",
+          }),
         ),
       ).toMatchObject({ refresh: "1//blob", access: "ya29.a", email: "user@gmail.com" })
       expect(GoogleAntigravityOAuth.parseOAuthTokenBlob("not-json")).toBeUndefined()
@@ -230,9 +235,9 @@ describe("GoogleAntigravityPlugin", () => {
           const google = yield* Effect.gen(function* () {
             yield* (yield* PluginSupervisor.Service).flush
             const plugins = yield* (yield* Plugin.Service).list()
-            expect(plugins.some((plugin) => plugin.id === GoogleAntigravityPlugin.id && plugin.status === "active")).toBe(
-              true,
-            )
+            expect(
+              plugins.some((plugin) => plugin.id === GoogleAntigravityPlugin.id && plugin.status === "active"),
+            ).toBe(true)
             return required(yield* (yield* Integration.Service).get(Integration.ID.make("google")))
           }).pipe(
             Effect.scoped,
@@ -382,11 +387,14 @@ describe("GoogleAntigravityPlugin", () => {
       }
       const request = yield* hooks.trigger("session", "http.request", {
         ...context,
-        request: new Request("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash-high:streamGenerateContent?alt=sse", {
-          method: "POST",
-          headers: { "x-goog-api-key": "ya29.live", "content-type": "application/json" },
-          body: JSON.stringify(nativeBody),
-        }),
+        request: new Request(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash-high:streamGenerateContent?alt=sse",
+          {
+            method: "POST",
+            headers: { "x-goog-api-key": "ya29.live", "content-type": "application/json" },
+            body: JSON.stringify(nativeBody),
+          },
+        ),
       })
       expect(request.request.url).toBe(GoogleAntigravityWire.generateURL)
       expect(request.request.headers.get("authorization")).toBe("Bearer ya29.live")

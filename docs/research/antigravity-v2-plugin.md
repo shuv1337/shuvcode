@@ -14,28 +14,28 @@ Live MITM of official `agy` 1.1.13 on this host (2026-08-14 PDT) is the wire sou
 
 ## Decisions locked
 
-| Decision | Choice | Why |
-| --- | --- | --- |
-| Where it lives | In-tree `packages/core/src/plugin/provider/google-antigravity.ts` (+ helpers), registered in `ProviderPlugins` | User wants it on `/connect` by default, same as Claude Pro/Max |
-| Integration id | `google` | `/connect` already ranks Google. Add a method, do not invent a second provider row unless API-key Gemini must stay fully separate |
-| Method id | `google-ai-pro` | Label: `Google AI Pro / Antigravity` |
-| Models | Google Gemini only | Claude/GPT share a separate quota group; third-party models are what got similar projects banned |
-| Primary model | `gemini-3.7-flash-high` | Official `defaultAgentModelId` today. Variants low/medium/high |
-| Client identity | Official **CLI**, not Electron webview | That is what `agy` actually sends |
-| Endpoint | `https://daily-cloudcode-pa.googleapis.com` | Live `agy` host. Not `*.sandbox.googleapis.com` |
-| Accounts | One. No rotator | Rotation is the abuse pattern |
-| Token source | Import official `agy`/IDE first, OAuth `/connect` second | Tokens minted by random third-party clients have a worse reputation |
+| Decision        | Choice                                                                                                         | Why                                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Where it lives  | In-tree `packages/core/src/plugin/provider/google-antigravity.ts` (+ helpers), registered in `ProviderPlugins` | User wants it on `/connect` by default, same as Claude Pro/Max                                                                    |
+| Integration id  | `google`                                                                                                       | `/connect` already ranks Google. Add a method, do not invent a second provider row unless API-key Gemini must stay fully separate |
+| Method id       | `google-ai-pro`                                                                                                | Label: `Google AI Pro / Antigravity`                                                                                              |
+| Models          | Google Gemini only                                                                                             | Claude/GPT share a separate quota group; third-party models are what got similar projects banned                                  |
+| Primary model   | `gemini-3.7-flash-high`                                                                                        | Official `defaultAgentModelId` today. Variants low/medium/high                                                                    |
+| Client identity | Official **CLI**, not Electron webview                                                                         | That is what `agy` actually sends                                                                                                 |
+| Endpoint        | `https://daily-cloudcode-pa.googleapis.com`                                                                    | Live `agy` host. Not `*.sandbox.googleapis.com`                                                                                   |
+| Accounts        | One. No rotator                                                                                                | Rotation is the abuse pattern                                                                                                     |
+| Token source    | Import official `agy`/IDE first, OAuth `/connect` second                                                       | Tokens minted by random third-party clients have a worse reputation                                                               |
 
 ## Live capture (2026-08-14)
 
 `agy` honors `HTTPS_PROXY` + `SSL_CERT_FILE`. One Flash session through mitmproxy produced this outbound set:
 
-| Host | Paths | Plugin should |
-| --- | --- | --- |
+| Host                                | Paths                                                                                                                                                                                                         | Plugin should                                                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `daily-cloudcode-pa.googleapis.com` | `loadCodeAssist`, `fetchUserInfo`, `retrieveUserQuotaSummary`, `fetchAdminControls`, `fetchAvailableModels`, `setUserSettings`, `listExperiments`, `streamGenerateContent?alt=sse`, `recordCodeAssistMetrics` | Call the first five at connect / catalog refresh. Generate via `streamGenerateContent`. Skip Unleash, Play log, auto-updater, avatar |
-| `www.googleapis.com` | `GET /oauth2/v2/userinfo` | Optional label after OAuth |
-| `antigravity-unleash.goog` | feature flags | Ignore |
-| `play.googleapis.com` | `/log` | Ignore |
+| `www.googleapis.com`                | `GET /oauth2/v2/userinfo`                                                                                                                                                                                     | Optional label after OAuth                                                                                                           |
+| `antigravity-unleash.goog`          | feature flags                                                                                                                                                                                                 | Ignore                                                                                                                               |
+| `play.googleapis.com`               | `/log`                                                                                                                                                                                                        | Ignore                                                                                                                               |
 
 `agy models` and `fetchAvailableModels` agree: default agent model is `gemini-3.7-flash-high`.
 
@@ -143,20 +143,20 @@ Do not mint tokens with a different client id.
 
 From live `fetchAvailableModels`. Ship recommended Gemini agent models. Primary first.
 
-| Catalog id | Display | Variants / notes |
-| --- | --- | --- |
-| `gemini-3.8-flash-high` | Gemini 3.8 Flash (High) | No `modelEnum` captured. Live generate succeeds |
-| `gemini-3.8-flash-medium` | Gemini 3.8 Flash (Medium) | No `modelEnum` captured |
-| `gemini-3.8-flash-low` | Gemini 3.8 Flash (Low) | No `modelEnum` captured |
-| `gemini-3.8-flash` | — | **Not shipped.** Live generate returns `Requested entity was not found` |
-| `gemini-3.7-flash-high` | Gemini 3.7 Flash (High) | **Default.** `MODEL_PLACEHOLDER_M298`. Official `defaultAgentModelId` |
-| `gemini-3.7-flash-medium` | Gemini 3.7 Flash (Medium) | `M299` |
-| `gemini-3.7-flash-low` | Gemini 3.7 Flash (Low) | `M300`. Live generate used this when flags ate the prompt |
-| `gemini-3.6-flash-{high,medium,low}` | Gemini 3.6 Flash | Bonus |
-| `gemini-3-flash-agent` | Gemini 3.5 Flash (High) | Bonus |
-| `gemini-3.5-flash-low` | Gemini 3.5 Flash (Medium) | Bonus |
-| `gemini-3.1-pro-high` / `gemini-pro-agent` | Gemini 3.1 Pro (High) | Bonus. Deprecated alias `gemini-3.1-pro-high` → `gemini-pro-agent` |
-| `gemini-3.1-pro-low` | Gemini 3.1 Pro (Low) | Bonus |
+| Catalog id                                 | Display                   | Variants / notes                                                        |
+| ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------- |
+| `gemini-3.8-flash-high`                    | Gemini 3.8 Flash (High)   | No `modelEnum` captured. Live generate succeeds                         |
+| `gemini-3.8-flash-medium`                  | Gemini 3.8 Flash (Medium) | No `modelEnum` captured                                                 |
+| `gemini-3.8-flash-low`                     | Gemini 3.8 Flash (Low)    | No `modelEnum` captured                                                 |
+| `gemini-3.8-flash`                         | —                         | **Not shipped.** Live generate returns `Requested entity was not found` |
+| `gemini-3.7-flash-high`                    | Gemini 3.7 Flash (High)   | **Default.** `MODEL_PLACEHOLDER_M298`. Official `defaultAgentModelId`   |
+| `gemini-3.7-flash-medium`                  | Gemini 3.7 Flash (Medium) | `M299`                                                                  |
+| `gemini-3.7-flash-low`                     | Gemini 3.7 Flash (Low)    | `M300`. Live generate used this when flags ate the prompt               |
+| `gemini-3.6-flash-{high,medium,low}`       | Gemini 3.6 Flash          | Bonus                                                                   |
+| `gemini-3-flash-agent`                     | Gemini 3.5 Flash (High)   | Bonus                                                                   |
+| `gemini-3.5-flash-low`                     | Gemini 3.5 Flash (Medium) | Bonus                                                                   |
+| `gemini-3.1-pro-high` / `gemini-pro-agent` | Gemini 3.1 Pro (High)     | Bonus. Deprecated alias `gemini-3.1-pro-high` → `gemini-pro-agent`      |
+| `gemini-3.1-pro-low`                       | Gemini 3.1 Pro (Low)      | Bonus                                                                   |
 
 Do **not** ship: `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium`, internal `chat_*`, tab models, image models (until asked).
 
