@@ -128,6 +128,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     external: ["node-gyp"],
     format: "esm",
     minify: true,
+    bytecode: true,
     sourcemap: Script.channel === "dev" || Script.channel === "local" ? "inline" : "none",
     splitting: true,
     compile: {
