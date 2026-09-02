@@ -693,13 +693,30 @@ const lowerMessages = Effect.fn("OpenResponses.lowerMessages")(function* (
   return input
 })
 
-const lowerOptions = (request: LLMRequest) => {
-  const options = OpenResponsesOptions.resolve(request)
+export const lowerConversation = Effect.fn("OpenResponses.lowerConversation")(function* (
+  request: LLMRequest,
+  adapter: ProviderAdapter,
+) {
   const instructions = ProviderShared.joinText(request.system)
+  return {
+    model: request.model.id,
+    input: yield* lowerMessages(request, adapter),
+    ...(instructions ? { instructions } : {}),
+  }
+})
+
+export const lowerGeneration = (request: LLMRequest) => {
+  const options = OpenResponsesOptions.resolve(request)
+  const generation = request.generation
   const cacheKey = ProviderShared.promptCacheKey(request)
   const parallelToolCalls = resolveParallelToolCalls(request)
   return {
-    ...(instructions ? { instructions } : {}),
+    stream: true as const,
+    max_output_tokens: generation?.maxTokens,
+    temperature: generation?.temperature,
+    top_p: generation?.topP,
+    presence_penalty: generation?.presencePenalty,
+    frequency_penalty: generation?.frequencyPenalty,
     ...(options.store !== undefined ? { store: options.store } : {}),
     ...(options.metadata ? { metadata: options.metadata } : {}),
     ...(options.safetyIdentifier ? { safety_identifier: options.safetyIdentifier } : {}),
@@ -727,7 +744,7 @@ export const resolveParallelToolCalls = (request: LLMRequest) => {
   return disabled === undefined ? undefined : !disabled
 }
 
-const allowedToolChoice = (request: LLMRequest) => {
+export const allowedToolChoice = (request: LLMRequest) => {
   const allowed = OpenResponsesOptions.resolve(request).allowedTools
   if (!allowed) return undefined
   return {
@@ -741,11 +758,10 @@ export const fromRequestWithAdapter = Effect.fn("OpenResponses.fromRequestWithAd
   request: LLMRequest,
   adapter: ProviderAdapter,
 ) {
-  const generation = request.generation
   const toolSchemaCompatibility = request.model.compatibility?.toolSchema
   return {
-    model: request.model.id,
-    input: yield* lowerMessages(request, adapter),
+    ...(yield* lowerConversation(request, adapter)),
+    ...lowerGeneration(request),
     tools:
       request.tools.length === 0
         ? undefined
@@ -759,13 +775,6 @@ export const fromRequestWithAdapter = Effect.fn("OpenResponses.fromRequestWithAd
     tool_choice:
       allowedToolChoice(request) ??
       (request.toolChoice ? yield* lowerToolChoice(adapter.name, request.toolChoice) : undefined),
-    stream: true as const,
-    max_output_tokens: generation?.maxTokens,
-    temperature: generation?.temperature,
-    top_p: generation?.topP,
-    presence_penalty: generation?.presencePenalty,
-    frequency_penalty: generation?.frequencyPenalty,
-    ...lowerOptions(request),
   }
 })
 
