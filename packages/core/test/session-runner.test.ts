@@ -1589,8 +1589,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
-      expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
+      defaultSystem,
       "Initial context",
+      expect.stringContaining("# Delegation"),
     ])
   })
 
@@ -1609,8 +1610,9 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([
-      expect.stringContaining("You are OpenCode, You and the user share the same workspace"),
+      defaultSystem,
       "Initial context",
+      expect.stringContaining("# Delegation"),
     ])
   })
 
