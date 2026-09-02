@@ -21,9 +21,9 @@ The Worker has `workers_dev` and preview URLs disabled so the custom hostname is
 Every request reaching the Worker emits an unsampled event at request start to the shared production
 Cloudflare lake stream through the `EVENTS` Pipelines binding. Events use
 `source: "update"`, `type: "request"`, an ISO `timestamp`, and a `payload` containing
-the method, path, `user_agent`, country,
-and Cloudflare colo. Query strings, request bodies, cookies, authorization headers,
-and IP addresses are not included. Response status and duration are not recorded.
+the method, path, `user_agent`, `ip` (from Cloudflare's `CF-Connecting-IP` header),
+country, and Cloudflare colo. Query strings, request bodies, cookies, and authorization
+headers are not included. Response status and duration are not recorded.
 
 Delivery runs in `waitUntil` without delaying the response. Delivery failures are
 logged but do not fail requests or retry; this is not lossless audit logging.
