@@ -1027,7 +1027,9 @@ function toolErrorSubtitle(props: ToolProps, i18n: UiI18n) {
   if (props.tool === "websearch") return text(props.input.query)
   if (props.tool === "skill") return skillToolName(props.input, props.metadata)
   if (props.tool === "patch") {
-    const count = patchFileGroups(props.metadata.files).length
+    const count = new Set(
+      Array.isArray(props.metadata.files) ? props.metadata.files.filter(changedFileDiff).map((file) => file.file) : [],
+    ).size
     if (count === 0) return undefined
     return `${count} ${i18n.plural("ui.common.file", count)}`
   }
