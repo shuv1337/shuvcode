@@ -529,13 +529,11 @@ export function CurrentContextToolGroup(props: {
   )
   const label = createMemo(() => {
     const notices = props.parts.filter((part) => part.type === "notice").length
-    if (!names() && !notices) {
-      const title = i18n.t("ui.messagePart.context.reasoning")
-      return { text: title, title, before: "", after: "" }
-    }
-    const title = [names(), notices ? i18n.plural("ui.messagePart.context.notice", notices) : undefined]
-      .filter(Boolean)
-      .join(", ")
+    const title =
+      [names(), notices ? i18n.plural("ui.messagePart.context.notice", notices) : undefined]
+        .filter(Boolean)
+        .join(", ") ||
+      i18n.plural("ui.messagePart.context.thought", props.parts.filter((part) => part.type === "reasoning").length)
     const text = i18n.t("ui.messagePart.tools.used", { tools: title })
     const index = text.indexOf(title)
     return { text, title, before: text.slice(0, index).trim(), after: text.slice(index + title.length).trim() }
