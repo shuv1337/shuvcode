@@ -1398,13 +1398,13 @@ ToolRegistry.register({
                 <span data-slot="basic-tool-tool-subtitle">{subtitle()}</span>
               </Show>
             </div>
+            <Show when={clickable()}>
+              <div data-component="task-tool-action">
+                <Icon name="chevron-right" size="small" />
+              </div>
+            </Show>
           </div>
         </div>
-        <Show when={clickable()}>
-          <div data-component="task-tool-action">
-            <Icon name="square-arrow-top-right" size="small" />
-          </div>
-        </Show>
       </div>
     )
 
