@@ -650,7 +650,7 @@ export function Titlebar(props: {
                               onClick={openNewTab}
                               aria-label={language.t("command.session.new")}
                             >
-                              <Icon name="plus" />
+                              <Icon name="edit" />
                               {language.t("command.session.new")}
                             </button>
                             <div class="h-4 w-full shrink-0" aria-hidden="true" />
