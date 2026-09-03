@@ -71,6 +71,8 @@ export function createSessionTimelineRowRenderer(input: {
     input.projection.rows().forEach((row) => {
       if (row._tag !== "AssistantPart" || row.group.type !== "context") return
       row.group.refs.forEach((ref) => {
+        const content = Timeline.resolveContent(input.projection.messageByID().get(ref.messageID), ref.partID)
+        if (content?.type !== "tool" || content.name !== "patch" || content.state.status === "error") return
         const part = `${ref.messageID}:${ref.partID}`
         const key = patchGroupKeys.get(part)
         if (key && !owners.has(key)) owners.set(key, part)
@@ -273,8 +275,14 @@ export function createSessionTimelineRowRenderer(input: {
 
   function contentDefaultOpen(item: SessionMessageAssistant["content"][number]) {
     if (input.timelineDetail) {
-      if (item.type === "tool" && currentToolFailed(item)) return true
       const category = timelineCategory(item)
+      if (
+        category &&
+        input.timelineDetail()[category].placement === "hidden" &&
+        item.type === "tool" &&
+        currentToolFailed(item)
+      )
+        return true
       if (category === "shell" || category === "edit" || category === "thinking")
         return input.timelineDetail()[category].details === "expanded"
     }
@@ -488,8 +496,8 @@ export function createSessionTimelineRowRenderer(input: {
       const value = message()
       return (
         input.timelineDetail().shell.details === "expanded" ||
-        value?.status === "timeout" ||
-        (value?.status === "exited" && value.exit !== undefined && value.exit !== 0)
+        (input.timelineDetail().shell.placement === "hidden" &&
+          (value?.status === "timeout" || (value?.status === "exited" && value.exit !== undefined && value.exit !== 0)))
       )
     })
     return (
