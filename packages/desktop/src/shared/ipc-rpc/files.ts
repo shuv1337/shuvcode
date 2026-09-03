@@ -35,9 +35,9 @@ export const FilesReadPickedFile = Rpc.make("FilesReadPickedFile", {
 export const FilesReleasePickedFiles = Rpc.make("FilesReleasePickedFiles", {
   payload: { token: Schema.String },
 })
-export const FilesSaveFilePicker = Rpc.make("FilesSaveFilePicker", {
-  payload: { options: Schema.optional(SavePickerOptions) },
-  success: Schema.NullOr(Schema.String),
+export const FilesSaveFile = Rpc.make("FilesSaveFile", {
+  payload: { options: SavePickerOptions, content: Schema.String },
+  success: Schema.Boolean,
 })
 export const FilesOpenExternal = Rpc.make("FilesOpenExternal", {
   payload: { url: Schema.String },
@@ -65,7 +65,7 @@ export const FileRpcs = RpcGroup.make(
   FilesOpenFilePicker,
   FilesReadPickedFile,
   FilesReleasePickedFiles,
-  FilesSaveFilePicker,
+  FilesSaveFile,
   FilesOpenExternal,
   FilesOpenLocalFile,
   FilesOpenPath,
