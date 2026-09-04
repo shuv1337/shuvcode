@@ -65,7 +65,7 @@ describe("worktree creation", () => {
           branch: "clone-only",
         })
         expect(requests.find((request) => request.method === "POST")?.url).toBe(
-          "http://localhost:3000/api/worktree/proj_clone",
+          `http://localhost:3000/api/worktree?location%5Bdirectory%5D=${encodeURIComponent(input.directory)}`,
         )
         expect(
           requests
