@@ -442,9 +442,11 @@ export function Titlebar(props: {
                   "pt-[max(0px,calc(8px-env(safe-area-inset-top,0px)))]": !bottom() && !windows(),
                   "pb-[max(0px,calc(8px-env(safe-area-inset-bottom,0px)))]": bottom(),
                   "pl-4": macTrafficLights(),
+                  // Center the 20px app icon over the sidebar's 16px icon column.
+                  "ps-3.5": windows(),
                 }}
               >
-                <Show when={!mobile() && !props.verticalTabs}>
+                <Show when={!mobile() && (!props.verticalTabs || windows())}>
                   <ChannelIndicator horizontal debugTools={props.debugTools} />
                 </Show>
                 <Show when={windows() || linux()}>
@@ -641,7 +643,9 @@ export function Titlebar(props: {
                                 data-tauri-drag-region
                               />
                             </Show>
-                            <ChannelIndicator sidebar debugTools={props.debugTools} />
+                            <Show when={!windows()}>
+                              <ChannelIndicator sidebar debugTools={props.debugTools} />
+                            </Show>
                             {homeButton(true)}
                             <button
                               type="button"
