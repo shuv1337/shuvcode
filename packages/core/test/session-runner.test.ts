@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   AIError,
+  HttpContext,
   LLMEvent,
   LLMRequest,
   Message,
@@ -2260,20 +2261,150 @@ describe("SessionRunnerLLM", () => {
     }
   }
 
-  scenario("preserves typed provider failures from manual compaction", function* (s) {
+  scenario("restarts compaction drafts after transient failures and unsuccessful finishes", function* (s) {
     yield* s.llm.push(TestLLM.text("Earlier answer", "text-manual-failure-history"))
     yield* s.runPrompt("Earlier question")
-
-    yield* s.llm.push(Stream.fail(providerUnavailable()))
+    s.requests.length = 0
+    const hooks = yield* PluginHooks.Service
+    const retries: PluginHooks.Domains["session"]["retry"][] = []
+    yield* hooks.register("session", "retry", (event) =>
+      Effect.sync(() => {
+        retries.push({ ...event })
+        event.decision = { retry: true, delay: 0 }
+      }),
+    )
+    const draft = TestLLM.complete(
+      {
+        reason: { normalized: "unknown" },
+        usage: { nonCachedInputTokens: 10 },
+        providerMetadata: { openai: { responseId: "discarded-draft" } },
+      },
+      LLMEvent.textDelta({ id: "draft", text: "## Objective\n- Partial draft" }),
+    )
+    yield* s.llm.push(
+      TestLLM.failAfter(streamDisconnected(), ...draft.slice(0, -1)),
+      draft,
+      TestLLM.complete(
+        { reason: { normalized: "error" } },
+        LLMEvent.textDelta({ id: "failed", text: "## Objective\n- Failed draft" }),
+      ),
+      Stream.fail(rateLimited(60_000)),
+      TestLLM.textWithUsage("## Objective\n- Accepted summary", "accepted", 30),
+    )
     const compaction = yield* s.session.compact({ sessionID })
     yield* s.resume
 
+    expect(s.requests).toHaveLength(5)
+    for (const request of s.requests) expect(request).toEqual(s.requests[0])
+    expect(retries.map((event) => event.attempt)).toEqual([2, 3, 4, 5])
+    expect(retries.every((event) => event.sessionID === sessionID && event.agent === "compaction")).toBe(true)
+    expect(retries[3].decision).toEqual({ retry: true, delay: 60_000 })
     expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
-      type: "compaction",
+      status: "completed",
+      summary: "## Objective\n- Accepted summary",
+    })
+    expect(JSON.stringify(yield* s.messages)).not.toContain("discarded-draft")
+    expect((yield* s.session.get(sessionID))?.tokens.input).toBe(50)
+  })
+
+  scenario("bounds compaction network retries across a template correction", function* (s) {
+    yield* s.llm.push(TestLLM.text("Earlier answer", "history"))
+    yield* s.runPrompt("Earlier question")
+    s.requests.length = 0
+    const hooks = yield* PluginHooks.Service
+    const attempts: number[] = []
+    yield* hooks.register("session", "retry", (event) =>
+      Effect.sync(() => {
+        attempts.push(event.attempt)
+        expect(event.decision).toMatchObject({ retry: true })
+        event.decision = { retry: true, delay: 0 }
+      }),
+    )
+    yield* s.llm.push(Stream.fail(providerUnavailable()), TestLLM.text("Not a summary", "invalid"))
+    yield* s.llm.always(Stream.fail(providerUnavailable()))
+    const compaction = yield* s.session.compact({ sessionID })
+    yield* s.resume
+
+    expect(attempts).toEqual([2, 3, 4, 5])
+    expect(s.requests).toHaveLength(6)
+    expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
       status: "failed",
       error: { type: "provider.transport", message: "Provider unavailable" },
     })
+    expect((yield* s.context).some((message) => message.type === "user" && message.text === "Earlier question")).toBe(
+      true,
+    )
   })
+
+  for (const header of [false, true]) {
+    scenario(`stops compaction retries through the ${header ? "provider header" : "retry hook"}`, function* (s) {
+      yield* s.llm.push(TestLLM.text("Earlier answer", "history"))
+      yield* s.runPrompt("Earlier question")
+      s.requests.length = 0
+      const hooks = yield* PluginHooks.Service
+      yield* hooks.register("session", "retry", (event) =>
+        Effect.sync(() => {
+          expect(event.decision.retry).toBe(!header)
+          event.decision = { retry: false }
+        }),
+      )
+      yield* s.llm.push(
+        Stream.fail(
+          header
+            ? new AIError({
+                reason: new TransportError({
+                  message: "Connection closed",
+                  transport: "http",
+                  operation: "read",
+                  http: new HttpContext({
+                    url: "https://example.com",
+                    status: 200,
+                    headers: { "x-should-retry": "false" },
+                  }),
+                }),
+              })
+            : incompleteStream(),
+        ),
+      )
+      const compaction = yield* s.session.compact({ sessionID })
+      yield* s.resume
+
+      expect(s.requests).toHaveLength(1)
+      expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({
+        status: "failed",
+        error: { type: header ? "provider.transport" : "provider.invalid-output" },
+      })
+    })
+  }
+
+  for (const response of ["length", "content-filter", "context overflow"] as const) {
+    scenario(`rejects compaction ${response} without retrying or committing its draft`, function* (s) {
+      yield* s.llm.push(TestLLM.text("Earlier answer", "history"))
+      yield* s.runPrompt("Earlier question")
+      s.requests.length = 0
+      yield* s.llm.push(
+        response === "context overflow"
+          ? Stream.fail(
+              new AIError({
+                reason: new InvalidRequestError({ message: "Too long", classification: "context-overflow" }),
+              }),
+            )
+          : TestLLM.complete(
+              { reason: { normalized: response } },
+              LLMEvent.textDelta({ id: "truncated", text: "## Objective\n- Incomplete summary" }),
+            ),
+      )
+      const compaction = yield* s.session.compact({ sessionID })
+      yield* s.resume
+
+      expect(s.requests).toHaveLength(1)
+      expect((yield* s.messages).find((message) => message.id === compaction.id)).toMatchObject({ status: "failed" })
+      yield* s.llm.push(TestLLM.text("Continued", "continued"))
+      yield* s.runPrompt("Continue")
+      expect(userTexts(s.requests[1])).toContain("Earlier question")
+      expect(JSON.stringify(s.requests[1])).not.toContain("Incomplete summary")
+    })
+  }
 
   scenario("records cancelled manual compaction without surfacing an internal failure", function* (s) {
     yield* s.llm.push(TestLLM.text("Earlier answer", "text-manual-interrupt-history"))
