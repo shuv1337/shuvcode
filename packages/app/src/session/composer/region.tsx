@@ -5,7 +5,7 @@ import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode-ai/ui/sc
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, on, onMount } from "solid-js"
-import { Composer } from "@/composer/composer"
+import { Composer, type ComposerDropState } from "@/composer/composer"
 import { createComposerModel, type ComposerModel } from "@/composer/model"
 import { useComposerState } from "@/composer/persistence"
 import { createComposerControls } from "@/composer/selection"
@@ -217,6 +217,7 @@ export function ActiveSessionComposerRegion(props: {
   model: ActiveSessionRegionModel
   session: SessionModel
   onResponseSubmit: () => void
+  onDropStateChange?: (state: ComposerDropState) => void
 }) {
   const settings = useSettings()
   const region = createSessionComposerRegionController({
@@ -250,7 +251,7 @@ export function ActiveSessionComposerRegion(props: {
         <div class="relative">
           <SessionQueuePanel queue={queue} />
           <div class="relative z-10">
-            <Composer model={composer} borderUnderlay />
+            <Composer model={composer} borderUnderlay onDropStateChange={props.onDropStateChange} />
           </div>
         </div>
       }
