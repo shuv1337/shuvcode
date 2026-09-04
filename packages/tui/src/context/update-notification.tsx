@@ -5,18 +5,22 @@ import { useStorage } from "./storage"
 import { useEvent } from "./event"
 import { errorMessage } from "../util/error"
 import { useExit } from "./exit"
+import { useDialog } from "../ui/dialog"
+import { DialogUpdate } from "../component/dialog-update"
 
 type ClientNotice = { readonly type: "available" | "installed"; readonly version: string }
 type Notice = ClientNotice & ({ readonly source: "client" } | { readonly source: "server"; readonly remote: boolean })
-export type UpdateNotificationState =
-  | Notice
-  | { readonly source: "client"; readonly type: "installing"; readonly version: string }
-  | { readonly source: "client"; readonly type: "install-success"; readonly version: string }
-  | { readonly source: "client"; readonly type: "failed"; readonly version: string; readonly message: string }
+export type UpdateState =
+  | ClientNotice
+  | { readonly type: "installing"; readonly version: string }
+  | { readonly type: "failed"; readonly message: string }
 
 export type UpdateSource = {
   readonly remote: boolean
   readonly subscribe: (notify: (notice: ClientNotice) => void, signal: AbortSignal) => Promise<void>
+  readonly check: (
+    signal: AbortSignal,
+  ) => Promise<ClientNotice | { readonly type: "unavailable"; readonly message: string } | undefined>
   readonly apply: (version: string) => Promise<void>
 }
 
@@ -25,68 +29,84 @@ export const { use: useUpdateNotification, provider: UpdateNotificationProvider 
   init: (props: { updater?: UpdateSource }) => {
     const event = useEvent()
     const exit = useExit()
+    const dialog = useDialog()
     const log = useLog({ component: "update-notification" })
-    const [state, setState] = createSignal<UpdateNotificationState>()
+    const [state, setState] = createSignal<UpdateState>()
+    const [notification, setNotification] = createSignal<Notice>()
     const [notifications, markNotification] = useStorage().store<{ versions: string[] }>("update-notifications", {
       initial: { versions: [] },
     })
 
     const notify = (notice: Notice) => {
+      if (!props.updater) return
       if (
-        !props.updater ||
         notifications.versions.includes(`${notice.source}:${notice.version}`) ||
         (notice.source === "client" && notifications.versions.includes(notice.version))
       )
         return
-      setState((current) => {
+      setNotification((current) => {
         if (notice.source === "server" && current?.source === "client") return current
         return notice
       })
     }
 
-    const seen = (source: Notice["source"], version: string) =>
-      markNotification((draft) => {
-        draft.versions = [...draft.versions, `${source}:${version}`].slice(-100)
+    const dismiss = () => {
+      const current = notification()
+      if (!current) return
+      setNotification(undefined)
+      // Only interactions with the automatic notification update its history.
+      void markNotification((draft) => {
+        draft.versions = [...draft.versions, `${current.source}:${current.version}`].slice(-100)
       }).catch((error) => log.error("failed to persist update notification", { error }))
-
-    const skip = () => {
-      const current = state()
-      if (!current || current.type !== "available" || (current.source === "server" && current.remote)) return
-      setState(undefined)
-      void seen(current.source, current.version)
-    }
-
-    const close = () => {
-      const current = state()
-      if (!current || current.source !== "server") return
-      setState(undefined)
-      void seen(current.source, current.version)
     }
 
     const install = async () => {
       const updater = props.updater
       const current = state()
-      if (!updater || !current || current.type !== "available" || (current.source === "server" && current.remote))
-        return
-      setState({ source: "client", type: "installing", version: current.version })
-      void seen(current.source, current.version)
+      if (!updater || !current || current.type !== "available") return
+      setState({ type: "installing", version: current.version })
       await updater.apply(current.version).then(
-        () => setState({ source: "client", type: "install-success", version: current.version }),
-        (error) =>
-          setState({ source: "client", type: "failed", version: current.version, message: errorMessage(error) }),
+        () => setState({ type: "installed", version: current.version }),
+        (error) => setState({ type: "failed", message: errorMessage(error) }),
       )
+    }
+
+    const check = async (signal: AbortSignal) => {
+      const updater = props.updater
+      if (!updater || state()?.type === "installing") return
+      const result = await updater.check(signal)
+      if (signal.aborted) return
+      if (result?.type === "unavailable") return result.message
+      setState(result)
     }
 
     const restart = () => {
       const current = state()
-      if (!current || (current.type !== "installed" && current.type !== "install-success")) return
+      if (current?.type !== "installed") return
       exit()
     }
 
-    const later = () => {
-      const current = state()
-      if (!current || (current.type !== "installed" && current.type !== "install-success")) return
-      setState(undefined)
+    const open = (origin: "manual" | "notification") => {
+      if (!props.updater) return
+      const current = notification()
+      const known = current && (current.source === "client" || !current.remote) ? current : undefined
+      if (origin === "notification" && !known) return
+      const active = state()
+      // The notification can predate an installation through /update.
+      if (known && active?.type !== "installing" && !(active?.type === "installed" && active.version === known.version))
+        setState({ type: known.type, version: known.version })
+      // Manual checks hide the current notice without marking the version as seen.
+      if (origin === "manual") setNotification(undefined)
+      if (origin === "notification") dismiss()
+      const status = state()?.type
+      dialog.replace(() => (
+        <DialogUpdate
+          check={status === undefined || status === "failed" ? check : undefined}
+          state={state}
+          install={install}
+          restart={restart}
+        />
+      ))
     }
 
     onMount(() => {
@@ -122,6 +142,10 @@ export const { use: useUpdateNotification, provider: UpdateNotificationProvider 
       ),
     )
 
-    return { state, skip, close, install, restart, later }
+    return {
+      notification,
+      dismiss,
+      open: props.updater ? open : undefined,
+    }
   },
 })
