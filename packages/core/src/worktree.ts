@@ -5,6 +5,7 @@ import { and, asc, desc, eq, isNotNull, isNull, ne, or } from "drizzle-orm"
 import path from "path"
 import { AbsolutePath } from "./schema.js"
 import { FSUtil } from "@opencode-ai/util/fs-util"
+import { Global } from "@opencode-ai/util/global"
 import { Git } from "./git.js"
 import { makeGlobalNode, makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { ProjectSchema } from "./project/schema.js"
@@ -149,6 +150,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
+    const global = yield* Global.Service
     const db = (yield* Database.Service).db
     const bus = yield* Bus.Service
     const processService = yield* AppProcess.Service
@@ -243,14 +245,15 @@ const layer = Layer.effect(
     const create = Effect.fn("Worktree.create")(function* (input: CreateInput) {
       const selected = yield* getStrategy(input.strategy)
       const sourceDirectory = yield* source(input.from, input.projectID)
-      yield* fs.makeDirectory(input.directory, { recursive: true }).pipe(Effect.orDie)
+      const directory = input.directory ?? path.join(global.data, "worktree", input.projectID.slice(0, 6))
+      yield* fs.makeDirectory(directory, { recursive: true }).pipe(Effect.orDie)
       const name = input.name ?? Slug.create()
       let suffix = 1
-      let worktreeDirectory = AbsolutePath.make(path.join(input.directory, name))
+      let worktreeDirectory = AbsolutePath.make(path.join(directory, name))
       while (yield* fs.existsSafe(worktreeDirectory)) {
         suffix++
         if (suffix > 10) return yield* new DestinationExistsError({ directory: worktreeDirectory })
-        worktreeDirectory = AbsolutePath.make(path.join(input.directory, `${name}-${suffix}`))
+        worktreeDirectory = AbsolutePath.make(path.join(directory, `${name}-${suffix}`))
       }
 
       const result = yield* selected.create({
@@ -368,7 +371,7 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer: layer,
-  deps: [FSUtil.node, Git.node, Bus.node, Database.node, AppProcess.node],
+  deps: [FSUtil.node, Global.node, Git.node, Bus.node, Database.node, AppProcess.node],
 })
 
 export const refreshNode = makeLocationNode({

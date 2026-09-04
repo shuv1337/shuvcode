@@ -6,6 +6,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Fiber, Stream } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
+import { Global } from "@opencode-ai/util/global"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Git } from "@opencode-ai/core/git"
 import { Database } from "@opencode-ai/core/database/database"
@@ -17,11 +18,17 @@ import { WorktreeDirectory } from "@opencode-ai/core/worktree/directory"
 import { WorktreeTable } from "@opencode-ai/core/worktree/sql"
 import { initRepo } from "./fixture/git"
 import { tmpdir } from "./fixture/tmpdir"
+import { tempGlobalLayer } from "./fixture/global"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Worktree.node, Database.node, Bus.node])))
 const projectIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([Project.node, Worktree.node, Database.node, Bus.node])),
+)
+const defaultIt = testEffect(
+  AppNodeBuilder.build(LayerNode.group([Worktree.node, Database.node, Global.node]), [
+    Global.node.replace(tempGlobalLayer),
+  ]),
 )
 
 function abs(input: string) {
@@ -177,6 +184,34 @@ describe("Worktree", () => {
 
       expect(yield* stored(input.projectID)).toEqual([{ directory: input.sourceDirectory, strategy: null }])
       expect(yield* Effect.promise(() => Bun.file(target).exists())).toBe(false)
+    }),
+  )
+
+  defaultIt.live("defaults to the TUI worktree directory and suffixes duplicate names", () =>
+    Effect.gen(function* () {
+      const input = yield* setup()
+      const worktree = yield* Worktree.Service
+      const global = yield* Global.Service
+      const parent = path.join(global.data, "worktree", "worktr")
+
+      const created = yield* worktree.create({
+        projectID: input.projectID,
+        strategy: gitWorktree,
+        from: input.sourceDirectory,
+        name: "task",
+      })
+      const duplicate = yield* worktree.create({
+        projectID: input.projectID,
+        strategy: gitWorktree,
+        from: input.sourceDirectory,
+        name: "task",
+      })
+
+      expect(created.directory).toBe(abs(path.join(parent, "task")))
+      expect(duplicate.directory).toBe(abs(path.join(parent, "task-2")))
+      expect(yield* Effect.promise(() => Bun.file(path.join(created.directory, ".git")).exists())).toBe(true)
+      yield* worktree.remove({ projectID: input.projectID, directory: created.directory, force: false })
+      yield* worktree.remove({ projectID: input.projectID, directory: duplicate.directory, force: false })
     }),
   )
 

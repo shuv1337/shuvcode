@@ -14,7 +14,10 @@ export const CreateInput = Schema.Struct({
   strategy: StrategyID,
   from: optional(AbsolutePath),
   branch: optional(Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))),
-  directory: AbsolutePath,
+  directory: optional(AbsolutePath).annotate({
+    description:
+      "Parent directory for the new worktree. Defaults to the server's data directory under worktree/<first six project ID characters>.",
+  }),
   name: optional(Schema.String),
 }).annotate({ identifier: "Worktree.CreateInput" })
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}

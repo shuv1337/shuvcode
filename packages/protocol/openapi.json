@@ -12124,7 +12124,7 @@
                     "type": "string"
                   }
                 },
-                "required": ["strategy", "directory"],
+                "required": ["strategy"],
                 "additionalProperties": false
               }
             }

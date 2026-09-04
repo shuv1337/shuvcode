@@ -6087,35 +6087,35 @@ export type WorktreeCreateInput = {
     readonly strategy: string
     readonly from?: string
     readonly branch?: string
-    readonly directory: string
+    readonly directory?: string
     readonly name?: string
   }["strategy"]
   readonly from?: {
     readonly strategy: string
     readonly from?: string
     readonly branch?: string
-    readonly directory: string
+    readonly directory?: string
     readonly name?: string
   }["from"]
   readonly branch?: {
     readonly strategy: string
     readonly from?: string
     readonly branch?: string
-    readonly directory: string
+    readonly directory?: string
     readonly name?: string
   }["branch"]
-  readonly directory: {
+  readonly directory?: {
     readonly strategy: string
     readonly from?: string
     readonly branch?: string
-    readonly directory: string
+    readonly directory?: string
     readonly name?: string
   }["directory"]
   readonly name?: {
     readonly strategy: string
     readonly from?: string
     readonly branch?: string
-    readonly directory: string
+    readonly directory?: string
     readonly name?: string
   }["name"]
 }
