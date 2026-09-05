@@ -53,7 +53,7 @@ describe("debug paths command", () => {
 async function cli(args: string[], env?: Record<string, string>) {
   const child = Bun.spawn([process.execPath, "run", path.join(import.meta.dir, "../src/index.ts"), ...args], {
     cwd: path.join(import.meta.dir, ".."),
-    env: { ...process.env, ...env },
+    env: { ...process.env, OPENCODE_CONFIG_DIR: undefined, ...env },
     stdout: "pipe",
     stderr: "pipe",
   })

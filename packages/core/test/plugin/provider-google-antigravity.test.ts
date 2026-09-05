@@ -14,7 +14,6 @@ import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
 import { GoogleAntigravityPlugin } from "@opencode-ai/core/plugin/provider/google-antigravity-adapter"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { GoogleAntigravityOAuth, GoogleAntigravityWire } from "@shuvcode/antigravity-plugin"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
@@ -24,13 +23,15 @@ import { Database } from "../../src/database/database"
 import { Bus } from "../../src/bus"
 import { tmpdir } from "../fixture/tmpdir"
 import { tempGlobalLayer } from "../fixture/global"
+import { offlineModels } from "../fixture/models"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
 const itDefault = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, LocationServiceMap.node]), [
-    [Global.node, tempGlobalLayer],
+    Global.node.replace(tempGlobalLayer),
+    offlineModels,
   ]),
 )
 
@@ -233,12 +234,14 @@ describe("GoogleAntigravityPlugin", () => {
       Effect.flatMap((dir) =>
         Effect.gen(function* () {
           const google = yield* Effect.gen(function* () {
-            yield* (yield* PluginSupervisor.Service).flush
-            const plugins = yield* (yield* Plugin.Service).list()
+            const plugin = yield* Plugin.Service
+            yield* plugin.awaitActivation
+            const plugins = yield* plugin.list()
             expect(
-              plugins.some((plugin) => plugin.id === GoogleAntigravityPlugin.id && plugin.status === "active"),
+              plugins.some((plugin) => plugin.id === GoogleAntigravityPlugin.id && plugin.state.status === "active"),
             ).toBe(true)
-            return required(yield* (yield* Integration.Service).get(Integration.ID.make("google")))
+            const integration = yield* Integration.Service
+            return required(yield* integration.get(Integration.ID.make("google")))
           }).pipe(
             Effect.scoped,
             Effect.provide(
@@ -258,8 +261,9 @@ describe("GoogleAntigravityPlugin", () => {
   it.effect("registers the Google AI Pro OAuth method on google", () =>
     Effect.gen(function* () {
       yield* addPlugin()
-      const integration = required(yield* (yield* Integration.Service).get(Integration.ID.make("google")))
-      expect(integration.methods).toContainEqual({
+      const integration = yield* Integration.Service
+      const google = required(yield* integration.get(Integration.ID.make("google")))
+      expect(google.methods).toContainEqual({
         id: Integration.MethodID.make("google-ai-pro"),
         type: "oauth",
         label: "Google AI Pro / Antigravity",
@@ -387,6 +391,7 @@ describe("GoogleAntigravityPlugin", () => {
       }
       const request = yield* hooks.trigger("session", "http.request", {
         ...context,
+        kind: "primary",
         request: new Request(
           "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash-high:streamGenerateContent?alt=sse",
           {
@@ -413,6 +418,7 @@ describe("GoogleAntigravityPlugin", () => {
       const native = { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] }
       const response = yield* hooks.trigger("session", "http.response", {
         ...context,
+        kind: "primary",
         request: request.request,
         response: new Response(`data: ${JSON.stringify({ response: native, traceId: "t" })}\n\n`, {
           headers: { "content-type": "text/event-stream" },
@@ -436,8 +442,10 @@ describe("GoogleAntigravityPlugin", () => {
         }),
       })
       yield* addPlugin()
-      const exit = yield* (yield* PluginHooks.Service)
+      const hooks = yield* PluginHooks.Service
+      const exit = yield* hooks
         .trigger("session", "http.request", {
+          kind: "primary",
           sessionID: Session.ID.make("ses_missing"),
           agent: Agent.ID.make("build"),
           model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-3.7-flash-high") }),

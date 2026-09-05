@@ -117,8 +117,8 @@ describe("mini command", () => {
     const result = await cli(["--help"])
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain("mini       Start the minimal interactive interface")
-    expect(result.stdout).toContain("run        Run shuvcode with a message")
+    expect(result.stdout).toMatch(/^  mini[ \t]+Start the minimal interactive interface\r?$/m)
+    expect(result.stdout).toMatch(/^  run[ \t]+Run shuvcode with a message\r?$/m)
   })
 
   test("exposes run without legacy interactive, attach, or command modes", async () => {

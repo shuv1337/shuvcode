@@ -10,7 +10,9 @@ ExecStart=%h/.local/bin/shuvcode serve --service
 SuccessExitStatus=130
 Restart=on-failure
 RestartSec=2s
-KillMode=control-group
+# The detached PTY daemon must survive a ticketed service restart. Without a
+# handoff, its owner lease closes terminals; `shuvcode service stop` shuts it down.
+KillMode=process
 TimeoutStopSec=20s
 UMask=0077
 

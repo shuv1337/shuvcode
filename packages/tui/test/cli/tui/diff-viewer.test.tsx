@@ -1,11 +1,14 @@
 /** @jsxImportSource @opentui/solid */
 import { afterAll, expect, test } from "bun:test"
+import { once } from "node:events"
 import { readdir } from "node:fs/promises"
 import path from "node:path"
 import {
   BoxRenderable,
+  CliRenderEvents,
   DiffRenderable,
   ImageRenderable,
+  InputRenderable,
   MouseButton,
   type Renderable,
   ScrollBoxRenderable,
@@ -294,7 +297,7 @@ test("opening the source chooser from initial Uncommitted does not resolve a bra
     viewer.app.mockInput.pressKey("d")
     await viewer.app.waitForFrame((frame) => frame.includes("Diff source"))
     expect(viewer.app.captureCharFrame()).toContain("Uncommitted · vs HEAD")
-    expect(viewer.app.captureCharFrame()).toMatch(/Base\s+Choose\.\.\./)
+    expect(viewer.app.captureCharFrame()).toMatch(/Base\s+Choose…/)
     expect(viewer.baseRequests).toHaveLength(0)
     expect(viewer.diffRequests).toHaveLength(1)
   } finally {
@@ -315,6 +318,9 @@ test.each(["branch", "committed", "working"] as const)(
       expect(viewer.app.captureCharFrame()).toMatch(/●\s+v2/)
       expect(viewer.branchesRequests[0].searchParams.get("location[directory]")).toBe("/repo/session")
       expect(viewer.branchesRequests[0].searchParams.get("limit")).toBe("100")
+      // The picker can paint before its deferred input focus.
+      if (!viewer.app.renderer.currentFocusedEditor) await once(viewer.app.renderer, CliRenderEvents.FOCUSED_EDITOR)
+      expect(viewer.app.renderer.currentFocusedEditor).toBeInstanceOf(InputRenderable)
       await viewer.app.mockInput.typeText("origin/release")
       await Bun.sleep(160)
       await viewer.app.waitFor(() => viewer.branchesRequests.at(-1)?.searchParams.get("search") === "origin/release")

@@ -1,6 +1,6 @@
 export * as GoogleAntigravityWire from "./wire"
 
-import type { CatalogDraft } from "@opencode-ai/plugin/effect/catalog"
+import type { CatalogEditor } from "@opencode-ai/plugin/effect/catalog"
 import { Model, Provider } from "@opencode-ai/plugin/effect"
 import { createHash, randomUUID } from "node:crypto"
 import { Option, Schema } from "effect"
@@ -213,7 +213,7 @@ export function unwrapSSE() {
   })
 }
 
-export function applyCatalog(evt: CatalogDraft, active: boolean) {
+export function applyCatalog(evt: CatalogEditor, active: boolean) {
   if (!active) return
   evt.provider.update(googleProviderID, (provider) => {
     if (!provider.package) provider.package = "@opencode-ai/ai/providers/google"

@@ -1,19 +1,19 @@
-export type Policy = boolean | "notify"
-export type Action = "none" | "upgrade"
+export type Policy = "disable" | "notify" | "auto"
+export type Action = "none" | "notify" | "auto"
 
 const maximumComponent = "9007199254740991"
 const versionPattern =
   /^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
 export function action(current: string, latest: string, policy: Policy): Action {
-  if (policy === false) return "none"
+  if (policy === "disable") return "none"
   const currentVersion = parseReleaseVersion(current)
   const latestVersion = parseReleaseVersion(latest)
   if (!currentVersion || !latestVersion || sameRelease(currentVersion, latestVersion)) return "none"
-  // Major upgrades are never installed automatically.
-  if (currentVersion.major !== latestVersion.major) return "none"
   const currentFork = forkVersion(currentVersion)
   if (currentFork) {
+    // Fork builds carry a bare numeric prerelease. They must never cross back to an
+    // upstream release, and only ever move forward along the fork line.
     const latestFork = forkVersion(latestVersion)
     if (!latestFork) return "none"
     const available =
@@ -21,12 +21,11 @@ export function action(current: string, latest: string, policy: Policy): Action 
         ? latestFork > currentFork
         : compareCore(latestVersion.core, currentVersion.core) > 0
     if (!available) return "none"
-    return policy === "notify" ? "none" : "upgrade"
   }
-  return policy === "notify" ? "none" : "upgrade"
+  return policy
 }
 
-function parseReleaseVersion(input: string) {
+export function parseReleaseVersion(input: string) {
   if (input.length > 256) return
   const match = input.trim().match(versionPattern)
   if (!match) return

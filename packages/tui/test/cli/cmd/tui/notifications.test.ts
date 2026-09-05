@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import Notifications from "../../../../src/feature-plugins/system/notifications"
 import type { OpenCodeEvent, PermissionAsked } from "@opencode-ai/client"
-import type { AttentionNotifyOptions, Context } from "@opencode-ai/plugin/tui/context"
+import type { AttentionNotifyOptions, Context, Route, ToastOptions } from "@opencode-ai/plugin/tui/context"
 
 type Session = { id: string; title: string; parentID?: string }
 
-async function setup() {
+async function setup(route: Route = { type: "session", sessionID: "session" }) {
   const notifications: AttentionNotifyOptions[] = []
-  const toasts: { variant: string; title?: string; message: string }[] = []
+  const toasts: ToastOptions[] = []
   const messages: Record<string, { type: string; error?: { type: string; message: string } }[]> = {}
   const handlers = new Map<OpenCodeEvent["type"], ((event: OpenCodeEvent) => void)[]>()
   const session = (id: string, title: string, parentID?: string): Session => ({
@@ -23,6 +23,10 @@ async function setup() {
   }
 
   await Notifications.setup({
+    ui: {
+      router: { current: () => route },
+      toast: { show: (toast: ToastOptions) => toasts.push(toast) },
+    },
     attention: {
       async notify(input: AttentionNotifyOptions) {
         notifications.push(input)
@@ -51,11 +55,6 @@ async function setup() {
         message: {
           list: (sessionID: string) => messages[sessionID] ?? [],
         },
-      },
-    },
-    ui: {
-      toast: {
-        show: (options: { variant: string; title?: string; message: string }) => toasts.push(options),
       },
     },
   } as unknown as Context)
@@ -154,6 +153,27 @@ const permissionNotification: AttentionNotifyOptions = {
 }
 
 describe("internal notifications TUI plugin", () => {
+  test("shows execution failures in the viewed session without needing an assistant message", async () => {
+    const harness = await setup()
+    harness.emit(executionStarted("started"))
+    harness.emit(executionFailed("failed"))
+    harness.emit(executionFailed("duplicate"))
+    expect(harness.toasts).toEqual([{ title: "Session failed", message: "boom", variant: "error" }])
+    harness.emit(executionStarted("retry"))
+    harness.emit(executionFailed("failed-again"))
+    expect(harness.toasts).toHaveLength(2)
+  })
+
+  test.each<Route>([{ type: "home" }, { type: "session", sessionID: "other" }])(
+    "keeps other sessions' failures out of the current composer (%j)",
+    async (route) => {
+      const harness = await setup(route)
+      harness.emit(executionFailed("failed"))
+      expect(harness.toasts).toEqual([])
+      expect(harness.notifications).toHaveLength(1)
+    },
+  )
+
   test("notifies for form and permission requests with blurred notifications and always-on sounds", async () => {
     const harness = await setup()
 

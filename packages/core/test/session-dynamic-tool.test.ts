@@ -36,9 +36,9 @@ const it = testEffect(
       SessionDynamicTool.node,
     ]),
     [
-      [Bus.node, Bus.configured({ persist: true })],
-      [Project.node, globalProjectNode],
-      [SessionExecution.node, SessionExecution.noopLayer],
+      Bus.node.replace(Bus.configured({ persist: true })),
+      Project.node.replace(globalProjectNode),
+      SessionExecution.node.replace(SessionExecution.noopLayer),
     ],
   ),
 )
@@ -125,14 +125,12 @@ describe("SessionDynamicTool", () => {
         (yield* Effect.flip(tools.set({ sessionID: created.id, tools: [{ ...lookup, name: "execute" }] })))._tag,
       ).toBe("SessionDynamicTool.InvalidToolError")
       expect(
-        (
-          yield* Effect.flip(
-            tools.set({
-              sessionID: created.id,
-              tools: [{ ...lookup, parameters: { type: "object", fn: () => 1 } as never }],
-            }),
-          )
-        )._tag,
+        (yield* Effect.flip(
+          tools.set({
+            sessionID: created.id,
+            tools: [{ ...lookup, parameters: { type: "object", fn: () => 1 } as never }],
+          }),
+        ))._tag,
       ).toBe("SessionDynamicTool.InvalidToolError")
     }),
   )
@@ -141,14 +139,12 @@ describe("SessionDynamicTool", () => {
     Effect.gen(function* () {
       const session = yield* Session.Service
       expect(
-        (
-          yield* Effect.flip(
-            session.create({
-              location,
-              tools: [{ name: "execute", description: "reserved" }],
-            }),
-          )
-        )._tag,
+        (yield* Effect.flip(
+          session.create({
+            location,
+            tools: [{ name: "execute", description: "reserved" }],
+          }),
+        ))._tag,
       ).toBe("SessionDynamicTool.InvalidToolError")
       expect((yield* session.list({ directory: location.directory })).data).toEqual([])
     }),

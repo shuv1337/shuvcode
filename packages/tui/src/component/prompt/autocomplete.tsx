@@ -25,19 +25,14 @@ import { Skill } from "@opencode-ai/schema/skill"
 import { stringWidth } from "../../util/string-width"
 import { parseFileLineRange, stripFileLineRange } from "../../prompt/parse"
 import { moveSelection, reconcileSelectionWindow, revealSelectionOffset } from "../../ui/select-controller"
-import {
-  directoryAutocompleteExactValue,
-  directoryAutocompleteMatches,
-  directoryAutocompleteResultValue,
-  directoryAutocompleteSearch,
-  slashArgumentAutocomplete,
-} from "../../prompt/directory-completion"
+import { directoryAutocomplete, slashArgumentAutocomplete } from "../../prompt/directory-completion"
 import { usePlugin } from "../../plugin/context"
 import type { PromptAutocompleteProvider } from "@opencode-ai/plugin/tui/context"
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
   visible: false | "reference" | "command" | "directory" | (string & {})
+  completeQueueableCommand: () => boolean
 }
 
 /**
@@ -82,6 +77,7 @@ export type AutocompleteOption = {
   absolute?: string
   destructive?: { id: string; confirm: string; run: () => void }
   kind?: "skill"
+  queueable?: boolean
 }
 
 type AutocompleteResults = {
@@ -124,7 +120,6 @@ export function Autocomplete(props: {
     index: 0,
     selected: 0,
     visible: false as AutocompleteRef["visible"],
-    input: "keyboard" as "keyboard" | "mouse",
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
@@ -186,14 +181,6 @@ export function Autocomplete(props: {
   createEffect(() => {
     const next = filter()
     setSearch(next ? next : "")
-  })
-
-  // When the filter changes due to how TUI works, the mousemove might still be triggered
-  // via a synthetic event as the layout moves underneath the cursor. This is a workaround to make sure the input mode remains keyboard so
-  // that the mouseover event doesn't trigger when filtering.
-  createEffect(() => {
-    filter()
-    setStore("input", "keyboard")
   })
 
   function insertPart(
@@ -390,20 +377,38 @@ export function Autocomplete(props: {
       if (referenceMatch())
         return { options: [], failed: false, mode: input.visible, query: input.query, resolved: true }
       const { lineRange, base } = parseFileLineRange(input.query ?? "")
-      const directorySearch =
-        input.visible === "directory"
-          ? directoryAutocompleteSearch(base, input.location?.directory ?? paths.cwd, paths.home)
-          : undefined
-
       const requestLocation = {
-        directory: directorySearch?.directory ?? input.location?.directory,
+        directory: input.location?.directory,
         workspace: input.location?.workspaceID ?? data.location.default().workspaceID,
       }
-      const result = await (
-        input.visible === "directory"
-          ? client.api.file.list({ location: requestLocation })
-          : client.api.file.find({ query: base, limit: 20, location: requestLocation })
-      ).then(
+      const width = props.anchor().width - 4
+      if (input.visible === "directory") {
+        const result = await directoryAutocomplete(
+          client.api.file,
+          { ...requestLocation, directory: requestLocation.directory ?? paths.cwd },
+          base,
+          paths.home,
+        ).catch(() => undefined)
+        if (!result)
+          return info.value?.mode === input.visible
+            ? { ...info.value, failed: true }
+            : { options: [], failed: true, mode: input.visible, query: input.query, resolved: false }
+        return {
+          options: result.map((item) => ({
+            display: Locale.truncateMiddle(item.value, width),
+            value: item.value,
+            isDirectory: true,
+            path: item.value,
+            absolute: item.absolute,
+            onSelect: () => insertDirectory(item.value),
+          })),
+          failed: false,
+          mode: input.visible,
+          query: input.query,
+          resolved: true,
+        }
+      }
+      const result = await client.api.file.find({ query: base, limit: 20, location: requestLocation }).then(
         (result) => result,
         () => undefined,
       )
@@ -415,38 +420,8 @@ export function Autocomplete(props: {
 
       const options: AutocompleteOption[] = []
 
-      const width = props.anchor().width - 4
-      const exact = directorySearch ? directoryAutocompleteExactValue(base, directorySearch) : undefined
-      if (exact) {
-        options.push({
-          display: Locale.truncateMiddle(exact, width),
-          value: exact,
-          isDirectory: true,
-          path: exact,
-          absolute: result.location.directory,
-          onSelect: () => insertDirectory(exact),
-        })
-      }
-      const entries =
-        input.visible === "directory"
-          ? result.data.filter(
-              (item) =>
-                item.type === "directory" && directoryAutocompleteMatches(item.path, directorySearch?.query ?? ""),
-            )
-          : result.data
       options.push(
-        ...entries.map((item): AutocompleteOption => {
-          if (input.visible === "directory") {
-            const directory = directorySearch ? directoryAutocompleteResultValue(item.path, directorySearch) : item.path
-            return {
-              display: Locale.truncateMiddle(directory, width),
-              value: directory,
-              isDirectory: true,
-              path: directory,
-              absolute: path.resolve(result.location.directory, item.path),
-              onSelect: () => insertDirectory(directory),
-            }
-          }
+        ...result.data.map((item): AutocompleteOption => {
           const { filename, part } = createFilePart(item, path.join(result.location.directory, item.path), lineRange)
           return {
             display: Locale.truncateMiddle(filename, width),
@@ -591,6 +566,7 @@ export function Autocomplete(props: {
       results.push({
         display: "/" + serverCommand.name,
         description: serverCommand.description,
+        queueable: true,
         onSelect: () => insertSlash(serverCommand.name),
       })
     }
@@ -805,13 +781,13 @@ export function Autocomplete(props: {
     mode: "autocomplete",
     target: props.input,
     enabled: () => Boolean(store.visible),
+    bindings: ["prompt.queue"],
     commands: [
       {
         id: "prompt.autocomplete.prev",
         title: "Previous autocomplete item",
         group: "Autocomplete",
         run() {
-          setStore("input", "keyboard")
           move(-1)
         },
       },
@@ -820,7 +796,6 @@ export function Autocomplete(props: {
         title: "Next autocomplete item",
         group: "Autocomplete",
         run() {
-          setStore("input", "keyboard")
           move(1)
         },
       },
@@ -909,6 +884,11 @@ export function Autocomplete(props: {
     props.ref({
       get visible() {
         return store.visible
+      },
+      completeQueueableCommand() {
+        if (store.visible !== "command" || !options()[store.selected]?.queueable) return false
+        select()
+        return true
       },
       onInput(value) {
         if (dismissedValue() === value) return
@@ -1034,17 +1014,8 @@ export function Autocomplete(props: {
                       : undefined
                 }
                 flexDirection="row"
-                onMouseMove={() => {
-                  setStore("input", "mouse")
-                }}
-                onMouseOver={() => {
-                  if (store.input !== "mouse") return
-                  moveTo(index)
-                }}
-                onMouseDown={() => {
-                  setStore("input", "mouse")
-                  moveTo(index)
-                }}
+                onMouseMove={() => moveTo(index)}
+                onMouseDown={() => moveTo(index)}
                 onMouseUp={() => select()}
               >
                 <text

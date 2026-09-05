@@ -75,10 +75,15 @@ for (const theme of ["light", "dark"] as const) {
         await expectBackground(view.send, "contrast")
         const message = page.locator('[data-slot="user-message-text"]')
         await expect(message).toHaveText("Check this fixture workspace.")
-        await expectBackground(
+        await expectToken(
           message,
-          scenario.accent ? "accent" : theme === "light" ? "layer-02" : "layer-01",
           "background-color",
+          scenario.accent ? "--v2-background-bg-accent" : theme === "light" ? "--v2-blue-100" : "--v2-blue-1200",
+        )
+        await expectToken(
+          message,
+          "color",
+          scenario.accent ? "--v2-text-text-contrast" : theme === "light" ? "--v2-blue-700" : "--v2-blue-300",
         )
       })
     }
@@ -92,7 +97,9 @@ for (const theme of ["light", "dark"] as const) {
 
       const refreshed = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === `/api/worktree/${projectID}` && response.request().method() === "GET",
+          new URL(response.url()).pathname === "/api/worktree" &&
+          new URL(response.url()).searchParams.get("location[directory]") === root &&
+          response.request().method() === "GET",
       )
       view.worktrees.push({ directory: workspace, strategy: "git" })
       view.events.push({
@@ -133,8 +140,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(view.send).toBeDisabled()
       await expectBackground(view.send, "contrast")
       await page.getByRole("button", { name: "Local", exact: true }).click()
-      await page.getByRole("menuitem", { name: "New workspace", exact: true }).click()
-      await expect(page.getByRole("button", { name: "New workspace", exact: true })).toBeVisible()
+      await page.getByRole("menuitem", { name: "New worktree", exact: true }).click()
+      await expect(page.getByRole("button", { name: "New worktree", exact: true })).toBeVisible()
       await view.input.fill("Inspect this fixture workspace.")
       await expect(view.send).toBeEnabled()
       await expectBackground(view.send, "contrast")
@@ -194,10 +201,13 @@ async function openSession(page: Page, directory: string, worktrees = [...invent
     events: () => events.splice(0),
   })
   // Keep authoritative inventory independent of the raw project's empty sandboxes.
-  await page.route(`**/api/worktree/${projectID}`, (route) => {
-    if (route.request().method() !== "GET") return route.fallback()
-    return route.fulfill({ json: worktrees, headers: { "access-control-allow-origin": "*" } })
-  })
+  await page.route(
+    (url) => url.pathname === "/api/worktree",
+    (route) => {
+      if (route.request().method() !== "GET") return route.fallback()
+      return route.fulfill({ json: worktrees, headers: { "access-control-allow-origin": "*" } })
+    },
+  )
   if (draft)
     await page.addInitScript(
       ({ root, server }) => {
@@ -217,7 +227,9 @@ async function openSession(page: Page, directory: string, worktrees = [...invent
     )
   const loaded = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `/api/worktree/${projectID}` && response.request().method() === "GET",
+      new URL(response.url()).pathname === "/api/worktree" &&
+      new URL(response.url()).searchParams.get("location[directory]") === root &&
+      response.request().method() === "GET",
   )
   await page.goto(
     draft ? "/new-session?draftId=draft_workspace_accent" : `/server/${base64Encode(server)}/session/${sessionID}`,
@@ -244,4 +256,17 @@ async function expectBackground(element: Locator, token: string, property = "bac
     return color
   }, token)
   await expect(element).toHaveCSS(property, new RegExp(color.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+}
+
+async function expectToken(element: Locator, property: string, token: string) {
+  const color = await element.evaluate((element, token) => {
+    const probe = document.createElement("span")
+    probe.hidden = true
+    probe.style.color = `var(${token})`
+    element.append(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  }, token)
+  await expect(element).toHaveCSS(property, color)
 }

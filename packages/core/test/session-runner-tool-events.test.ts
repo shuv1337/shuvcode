@@ -30,7 +30,11 @@ const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
 
 const capture = (
   providerMetadataKey = "anthropic",
-  options?: { readonly interruptProgress?: boolean; readonly failToolSuccess?: boolean },
+  options?: {
+    readonly interruptProgress?: boolean
+    readonly failToolSuccess?: boolean
+    readonly beforeTextDelta?: Effect.Effect<void>
+  },
 ) => {
   const published: Array<{ readonly type: string; readonly data: unknown }> = []
   const bus: Pick<Bus.Interface, "publish"> = {
@@ -43,6 +47,8 @@ const capture = (
         })
         return event
       })
+      if (definition.type === SessionEvent.Text.Delta.type && options?.beforeTextDelta)
+        return options.beforeTextDelta.pipe(Effect.andThen(publish))
       if (definition.type === SessionEvent.Tool.Progress.type && options?.interruptProgress)
         return publish.pipe(Effect.andThen(Effect.interrupt))
       if (definition.type === SessionEvent.Tool.Success.type && options?.failToolSuccess)
@@ -132,7 +138,7 @@ test("provider-executed success derives content and retains provider result stat
 
 testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SessionProjector.node]), [
-    [Bus.node, Bus.configured({ persist: true })],
+    Bus.node.replace(Bus.configured({ persist: true })),
   ]),
 ).effect("commits a hosted tool result when cancellation races with the aggregate lock", () =>
   Effect.gen(function* () {
@@ -328,6 +334,30 @@ test("reasoning state from start, empty delta, and end is merged", async () => {
   })
 })
 
+for (const kind of ["text", "reasoning"] as const) {
+  it.effect(`publishes the trailing ${kind} chunk while the provider is paused`, () =>
+    Effect.gen(function* () {
+      const { published, publisher } = capture()
+      yield* publisher.publish(LLMEvent[kind === "text" ? "textStart" : "reasoningStart"]({ id: kind }))
+      yield* publisher.publish(
+        LLMEvent[kind === "text" ? "textDelta" : "reasoningDelta"]({ id: kind, text: "Running the comm" }),
+      )
+      yield* TestClock.adjust("100 millis")
+      expect(
+        published.filter((event) => event.type === `session.${kind}.delta`).map((event) => event.data),
+      ).toMatchObject([{ delta: "Running the comm" }])
+
+      yield* publisher.publish(LLMEvent[kind === "text" ? "textDelta" : "reasoningDelta"]({ id: kind, text: "and." }))
+      yield* TestClock.adjust("100 millis")
+      expect(
+        published.filter((event) => event.type === `session.${kind}.delta`).map((event) => event.data),
+      ).toMatchObject([{ delta: "Running the comm" }, { delta: "and." }])
+      expect(published.some((event) => event.type === `session.${kind}.ended.1`)).toBe(false)
+      yield* publisher.flush()
+    }),
+  )
+}
+
 it.effect("batches text deltas and flushes pending text before the terminal event", () =>
   Effect.gen(function* () {
     const { published, publisher } = capture()
@@ -346,15 +376,44 @@ it.effect("batches text deltas and flushes pending text before the terminal even
     yield* TestClock.adjust("99 millis")
     expect(published.filter((event) => event.type === "session.text.delta")).toHaveLength(0)
     yield* TestClock.adjust("1 millis")
-    yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " four" }))
     expect(published.filter((event) => event.type === "session.text.delta").map((event) => event.data)).toMatchObject([
-      { delta: "one two three four" },
+      { delta: "one two three" },
     ])
 
+    yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " four" }))
     yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: " five" }))
     yield* publisher.publish(LLMEvent.textEnd({ id: "text" }))
     expect(published.slice(-2).map((event) => event.type)).toEqual(["session.text.delta", "session.text.ended.1"])
-    expect(published.at(-2)?.data).toMatchObject({ delta: " five" })
+    expect(published.at(-2)?.data).toMatchObject({ delta: " four five" })
+    const count = published.length
+    yield* TestClock.adjust("1 second")
+    expect(published).toHaveLength(count)
+  }),
+)
+
+it.effect("retains new chunks and orders text-end behind an in-flight timer publication", () =>
+  Effect.gen(function* () {
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    const { published, publisher } = capture("anthropic", {
+      beforeTextDelta: Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+    })
+    yield* publisher.publish(LLMEvent.textStart({ id: "text" }))
+    yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: "comm" }))
+    yield* TestClock.adjust("100 millis")
+    yield* Deferred.await(entered)
+    yield* publisher.publish(LLMEvent.textDelta({ id: "text", text: "and." }))
+    const ending = yield* publisher
+      .publish(LLMEvent.textEnd({ id: "text" }))
+      .pipe(Effect.forkChild({ startImmediately: true }))
+    expect(published.some((event) => event.type === "session.text.ended.1")).toBe(false)
+    yield* Deferred.succeed(release, undefined)
+    yield* Fiber.join(ending)
+    expect(published.slice(-3)).toMatchObject([
+      { type: "session.text.delta", data: { delta: "comm" } },
+      { type: "session.text.delta", data: { delta: "and." } },
+      { type: "session.text.ended.1", data: { text: "command." } },
+    ])
   }),
 )
 
@@ -475,7 +534,10 @@ test("failed success persistence leaves the tool available for durable failure s
   expect(
     Exit.isFailure(
       await Effect.runPromiseExit(
-        publisher.toolExecution(call.id, call.name, { output: {}, content: "unpersisted output" }),
+        publisher.toolExecution(call.id, call.name, {
+          output: {},
+          content: [{ type: "text", text: "unpersisted output" }],
+        }),
       ),
     ),
   ).toBe(true)

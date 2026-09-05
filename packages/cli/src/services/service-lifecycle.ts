@@ -16,8 +16,7 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
   if (!(yield* systemdActive())) {
     // A healthy registered daemon may predate supervisor configuration. Stop it
     // before starting the unit so the configured supervisor becomes the owner.
-    yield* shutdownPersistentPty(options)
-    yield* Service.stop(options)
+    yield* Service.stop({ ...options, pty: "handoff" })
     yield* systemd("start")
   }
 
@@ -31,8 +30,7 @@ export const ensure = Effect.fn("cli.service-lifecycle.ensure")(function* (input
     manager: "systemd",
     unit,
   })
-  yield* shutdownPersistentPty(options)
-  yield* Service.stop(options)
+  yield* Service.stop({ ...options, pty: "handoff" })
   yield* systemd("restart")
   const supervised = yield* Service.ensure(options)
   yield* requireSystemdOwner(options.file)
@@ -50,8 +48,7 @@ export const stop = Effect.fn("cli.service-lifecycle.stop")(function* () {
 export const restart = Effect.fn("cli.service-lifecycle.restart")(function* (input: EnsureInput = {}) {
   const config = yield* ServiceConfig.read()
   const options = withVersion(yield* ServiceConfig.options({ config }), input)
-  yield* shutdownPersistentPty(options)
-  yield* Service.stop(options)
+  yield* Service.stop({ ...options, pty: "handoff" })
   if (config.manager === "systemd") yield* systemd("restart")
   const endpoint = yield* Service.ensure(options)
   if (config.manager === "systemd") yield* requireSystemdOwner(options.file)

@@ -100,6 +100,37 @@ test("replaces an incompatible registered service", async () => {
   expect(starts).toEqual(["version-mismatch"])
 })
 
+test("a supervisor can read the prepared ticket without inheriting a client environment", async () => {
+  await using fixture = await serviceFixture()
+  const existing = fixture.spawn("handoff")
+  await fixture.waitForFile()
+
+  await run(Service.stop({ file: fixture.registration, pty: "handoff" }))
+  expect(await existing.exited).toBe(0)
+  expect(await run(Service.handoff({ file: fixture.registration }))).toEqual(
+    await Bun.file(fixture.registration + ".prepared").json(),
+  )
+
+  await run(Service.stop({ file: fixture.registration }))
+  expect(await run(Service.handoff({ file: fixture.registration }))).toBeUndefined()
+})
+
+test("a supervisor ignores expired and superseded handoff tickets", async () => {
+  await using fixture = await serviceFixture()
+  fixture.spawn("handoff")
+  await fixture.waitForFile()
+  await run(Service.stop({ file: fixture.registration, pty: "handoff" }))
+  const file = fixture.registration + ".pty-handoff"
+  const ticket = await Bun.file(file).json()
+
+  await writeFile(file, JSON.stringify({ ...ticket, expiresAt: Date.now() - 1 }))
+  expect(await run(Service.handoff({ file: fixture.registration }))).toBeUndefined()
+
+  await writeFile(file, JSON.stringify(ticket))
+  await writeFile(fixture.registration, JSON.stringify({ ...ticket.source, id: "replacement" }))
+  expect(await run(Service.handoff({ file: fixture.registration }))).toBeUndefined()
+})
+
 test("waits for a registered service to finish starting", async () => {
   await using fixture = await serviceFixture()
   const registration = fixture.registration

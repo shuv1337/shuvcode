@@ -76,15 +76,21 @@ async function publish(file: string, info: Info, handoff: PersistentPty.Handoff 
 }
 
 export async function environment(file: string, env?: Readonly<Record<string, string>>) {
+  const handoff = await forStartup(file)
+  return { ...env, OPENCODE_PTY_HANDOFF: handoff === undefined ? undefined : JSON.stringify(handoff) }
+}
+
+/** Resolve a pending ticket for a supervisor that does not inherit the client's environment. */
+export async function forStartup(file: string) {
   const record = await read(file)
   const current: Info | undefined = await readFile(file, "utf8")
     .then((text) => JSON.parse(text))
     .catch(() => undefined)
-  const handoff =
-    record !== undefined && record.expiresAt > Date.now() && (current === undefined || same(record.source, current))
-      ? record.handoff
-      : undefined
-  return { ...env, OPENCODE_PTY_HANDOFF: handoff == null ? undefined : JSON.stringify(handoff) }
+  return record !== undefined &&
+    record.expiresAt > Date.now() &&
+    (current === undefined || same(record.source, current))
+    ? (record.handoff ?? undefined)
+    : undefined
 }
 
 export async function complete(file: string, info: Info) {

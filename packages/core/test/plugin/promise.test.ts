@@ -167,7 +167,8 @@ describe("fromPromise", () => {
         }),
       )
 
-      yield* plugins.activate([{ ...adapted, version: "1" }])
+      yield* plugins.activate([{ ...adapted, revision: "1" }])
+      expect((yield* plugins.list())[0]?.state).toEqual({ status: "active" })
     }),
   )
 
@@ -500,12 +501,14 @@ describe("fromPromise", () => {
             await ctx.session.hook(
               "http.request",
               (event) => {
+                expect(event.kind).toBe("primary")
                 event.request = new Request("https://provider.test/changed", event.request)
                 event.request.headers.set("x-hook", "promise")
               },
               { providerID: "test" },
             )
             await ctx.session.hook("http.response", async (event) => {
+              expect(event.kind).toBe("primary")
               event.response = new Response(`${await event.response.text()}-response`, {
                 status: event.response.status,
               })
@@ -514,6 +517,7 @@ describe("fromPromise", () => {
         }),
       ).effect(host)
       const context = {
+        kind: "primary" as const,
         sessionID: Session.ID.make("ses_promise_session_http"),
         agent: Agent.ID.make("build"),
         model: Model.Ref.make({ providerID: Provider.ID.make("test"), id: Model.ID.make("model") }),
@@ -963,7 +967,7 @@ describe("fromPromise", () => {
       })
       const original = yield* registry.snapshot()
       expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
-      expect(original.codeModeCatalog).toEqual([])
+      expect(original.codeModeCatalog).toEqual({ tools: [] })
 
       yield* PluginPromise.fromPromise(
         define({
@@ -981,7 +985,15 @@ describe("fromPromise", () => {
 
       const snapshot = yield* registry.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.map((tool) => tool.path)).toEqual(["acme.hello"])
+      expect(snapshot.codeModeCatalog).toEqual({
+        tools: [
+          {
+            type: "namespace",
+            name: "acme",
+            tools: [expect.objectContaining({ type: "tool", name: "hello", description: "Hello" })],
+          },
+        ],
+      })
       expect(original.definitions.map((tool) => tool.name)).toEqual(["acme_hello", "execute"])
       expect(
         yield* snapshot.execute({
