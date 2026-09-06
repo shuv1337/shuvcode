@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test"
-import { createRequestQueue, isSlowRequest } from "./request-queue"
+import { createRequestQueue, isSetupRequest, isSlowRequest } from "./request-queue"
 
-function setup(input?: { limit?: number; slowLimit?: number; stallMs?: number; headersTimeoutMs?: number }) {
+function setup(input?: {
+  limit?: number
+  slowLimit?: number
+  stallMs?: number
+  headersTimeoutMs?: number
+  setupHeadersTimeoutMs?: number
+}) {
   const pending: Array<{ url: string; signal: AbortSignal; resolve: () => void }> = []
   const logs: Array<{ message: string; data: Record<string, unknown> }> = []
   let clock = 0
@@ -10,12 +16,13 @@ function setup(input?: { limit?: number; slowLimit?: number; stallMs?: number; h
     slowLimit: input?.slowLimit,
     stallMs: input?.stallMs,
     headersTimeoutMs: input?.headersTimeoutMs,
+    setupHeadersTimeoutMs: input?.setupHeadersTimeoutMs,
     now: () => clock,
     log: (message, data) => logs.push({ message, data }),
     fetch: Object.assign(
-      (resource: RequestInfo | URL) =>
+      (resource: RequestInfo | URL, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const request = new Request(resource)
+          const request = new Request(resource, init)
           request.signal.addEventListener("abort", () => reject(request.signal.reason), { once: true })
           pending.push({ url: request.url, signal: request.signal, resolve: () => resolve(new Response("ok")) })
         }),
@@ -43,7 +50,12 @@ describe("createRequestQueue", () => {
 
   test("slow endpoints hold at most their share of slots so small reads go first", async () => {
     const input = setup({ limit: 4, slowLimit: 2 })
-    const paths = ["/api/vcs?location[directory]=%2Fa", "/api/vcs/diff?location[directory]=%2Fa", "/api/worktree", "/api/session/ses_1"]
+    const paths = [
+      "/api/vcs?location[directory]=%2Fa",
+      "/api/vcs/diff?location[directory]=%2Fa",
+      "/api/worktree",
+      "/api/session/ses_1",
+    ]
     const responses = paths.map((path) => input.queue.fetch(`http://server${path}`))
     await input.settle()
     const started = () => input.pending.map((item) => new URL(item.url).pathname)
@@ -107,6 +119,26 @@ describe("createRequestQueue", () => {
     input.pending[1]!.resolve()
     await expect(next).resolves.toBeInstanceOf(Response)
     expect(input.queue.inflight()).toBe(0)
+  })
+
+  test("worktree creation gets the setup deadline while worktree reads keep the normal one", async () => {
+    const input = setup({ limit: 4, headersTimeoutMs: 10, setupHeadersTimeoutMs: 200 })
+    const create = input.queue.fetch("http://server/api/worktree?location[directory]=%2Fa", { method: "POST" })
+    const list = input.queue.fetch("http://server/api/worktree?location[directory]=%2Fa")
+    const listError = await list.catch((cause: unknown) => cause)
+    expect((listError as DOMException).name).toBe("TimeoutError")
+    // Past the normal deadline, the create is still on the wire.
+    expect(input.pending[0]!.signal.aborted).toBe(false)
+    input.pending[0]!.resolve()
+    await expect(create).resolves.toBeInstanceOf(Response)
+    expect(input.queue.inflight()).toBe(0)
+  })
+
+  test("only worktree creation counts as a setup request", () => {
+    expect(isSetupRequest("POST", "/api/worktree")).toBe(true)
+    expect(isSetupRequest("GET", "/api/worktree")).toBe(false)
+    expect(isSetupRequest("POST", "/api/worktree/refresh")).toBe(false)
+    expect(isSetupRequest("DELETE", "/api/worktree")).toBe(false)
   })
 
   test("caller aborts still reach the underlying request", async () => {
