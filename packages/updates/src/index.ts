@@ -70,7 +70,8 @@ export default {
     }
 
     const resolved = resolveChannel(path[0])
-    const current = url.searchParams.get("current") ?? request.headers.get("User-Agent")?.match(/^opencode\/(.*)$/)?.[1]
+    const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:[^/]+\/([^/]+)\/cli|(.*))$/)
+    const current = url.searchParams.get("current") ?? agent?.[1] ?? agent?.[2]
     if (path.length === 1) return channel(env.DB, resolved, current)
     if (path.length === 2) return artifactName(env.DB, resolved, path[1], current)
     return artifactDistribution(env.DB, resolved, path[1], path[2], current)

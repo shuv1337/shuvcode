@@ -14,8 +14,10 @@ Each channel/name/distribution can mark one retained artifact as `minimum`, inde
 of its `active` artifact. Set or clear it from the admin page. Publishing a new active
 release preserves the minimum marker.
 
-Clients send their running version as `?current=<version>`. Existing clients fall back
-to `User-Agent: opencode/<version>`. A caller below the minimum receives that exact
+Clients send their running version as `?current=<version>` and use the CLI's default
+`User-Agent: opencode/<channel>/<version>/cli`. When `current` is absent, the service
+parses that User-Agent or the older `opencode/<version>` format.
+A caller below the minimum receives that exact
 artifact; callers at or above it receive the active artifact. An unparseable caller
 version receives the minimum. Requests with neither version source receive the active
 artifact. All three public API paths apply the same selection and use `Cache-Control:
