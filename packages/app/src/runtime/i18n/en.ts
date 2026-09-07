@@ -667,9 +667,11 @@ export const dict = {
   "session.tab.usage": "Usage",
   "session.view.select": "Session view",
   "session.tab.review": "Review",
+  "session.tab.browser": "Browser",
+  "session.tab.add": "Add tab",
   "session.tab.context": "Context",
   "session.tab.unknown": "Unknown Session",
-  "session.panel.reviewAndFiles": "Review and files",
+  "session.panel.reviewAndFiles": "Review, files, and browser",
   "session.error.notFound": "This session cannot be found",
   "session.error.notFound.description": "This tab points to a session that no longer exists on this server.",
   "session.error.notFound.closeTab": "Close Tab",
@@ -822,6 +824,10 @@ export const dict = {
   "terminal.connectTicket.csrfError":
     "PTY connect ticket rejected by origin or CSRF checks. Check the server CORS config.",
   "terminal.connectTicket.statusError": "PTY connect ticket failed with {{status}}",
+
+  "session.browser.address": "Browser address",
+  "session.browser.replaced": "Browser control moved to another desktop window.",
+  "session.browser.address.placeholder": "Enter a URL",
 
   "titlebar.update": "Update",
   "titlebar.tabs": "Tabs",
@@ -1049,6 +1055,8 @@ export const dict = {
   "settings.general.row.uiFont.description": "Customise the font used throughout the interface",
   "settings.general.row.showFileTree.title": "File tree",
   "settings.general.row.showFileTree.description": "Show the file tree panel in sessions",
+  "settings.general.row.browserPane.title": "Browser pane",
+  "settings.general.row.browserPane.description": "Allow agents to open and control an in-app development browser.",
   "settings.general.row.showNavigation.title": "Navigation controls",
   "settings.general.row.showNavigation.description": "Show the back and forward buttons in the desktop title bar",
   "settings.general.row.showSearch.title": "Command palette",
