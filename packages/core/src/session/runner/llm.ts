@@ -212,8 +212,9 @@ const layer = Layer.effect(
           prepare: context.prepare,
         }
         if (compaction.required({ messages: loaded.messages, resolved: loaded.model, context: loaded })) {
-          const compacted = yield* compaction.compact(compactionInput)
-          if (compacted.status !== "completed") return yield* new StepFailedError({ error: compacted.error })
+          const result = yield* compaction.compact(compactionInput)
+          if (result.status !== "completed") return yield* new StepFailedError({ error: result.error })
+          if (result.recoveredOverflow) recoverOverflow = false
           assistantMessageID = SessionMessage.ID.create()
           continue
         }
@@ -256,7 +257,9 @@ const layer = Layer.effect(
           recoverContinuation,
           recoverOverflow: Effect.suspend(() =>
             recoverOverflow && compaction.enabled()
-              ? compaction.compact(compactionInput).pipe(Effect.map((result) => result.status === "completed"))
+              ? compaction
+                  .compact({ ...compactionInput, overflow: true })
+                  .pipe(Effect.map((result) => result.status === "completed"))
               : Effect.succeed(false),
           ),
         })
