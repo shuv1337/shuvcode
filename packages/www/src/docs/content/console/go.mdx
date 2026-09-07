@@ -49,6 +49,85 @@ The current list of models includes:
 
 The list of models may change as we test and add new ones.
 
+## Where can I use it?
+
+OpenCode Go is designed for [OpenCode](https://opencode.ai) and other coding agents
+that produce similar types of requests. Traffic is monitored for abuse that
+degrades the experience for other users.
+
+Your client should:
+
+1. Avoid generating abusive traffic.
+2. Identify itself with its own user agent, such as `my-coding-agent/1.0`, rather
+   than a generic SDK or HTTP-library name.
+3. Send a stable session ID for each conversation so we can optimize routing and
+   prompt caching.
+
+### Clients with session support
+
+Use an up-to-date client and its OpenCode Go integration where available.
+
+| Client | Session support |
+| --- | --- |
+| **OpenCode** | Sends the session ID automatically. Update older installations. |
+| **Pi** | Current builds send session information for OpenCode. Update older installations. |
+| **Claude Code** | Go recognizes its native session header. No custom-header wrapper is needed. |
+| **ZCode** | Go recognizes its native session header. Our [request for `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) remains open, but it is no longer necessary to send that specific header. |
+| **Codex** | Go recognizes its native session header. Some versions and proxy setups still omit it; preserve the session header when forwarding requests. |
+| **jcode** | Update to **v0.81.6 or later**, which includes the [session-header fix](https://github.com/1jehuang/jcode/issues/1167). |
+| **Hermes** | Builds containing [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) send the header on main and auxiliary OpenCode requests. The fix was merged after v0.21.0; that release alone does not include it. |
+| **Kilo Code CLI** | Builds containing [PR #13752](https://github.com/Kilo-Org/kilocode/pull/13752) restore OpenCode session headers. This fix covers the CLI, not the VS Code extension. See [issue #13723](https://github.com/Kilo-Org/kilocode/issues/13723). |
+
+### Clients with outstanding integration work
+
+These clients have missing or incomplete session support in the versions we
+investigated. The linked reports track fixes and workarounds.
+
+| Client | Status and tracking |
+| --- | --- |
+| **DeepSeek Harness** | Session information arrives on some model paths, but is missing on others. We recognize its native header; the remaining work is to send it across all adapters. [Discussion #5495](https://github.com/deepseek-ai/deepseek-harness/discussions/5495). |
+| **GitHub Copilot Chat** | Automatic session-header support is requested in [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186). |
+| **Kimi Code** | Automatic session-header support is requested in [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506). |
+| **MiMo Code** | [Issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) has a proposed fix in [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327), which has not yet merged. |
+| **Cursor** | We have not verified automatic session support. Contact [Cursor support](https://forum.cursor.com/) about sending a stable conversation ID. |
+| **WorkBuddy** | We have not verified automatic session support. Contact the team through [WorkBuddy](https://workbuddy.ai/) about sending a stable conversation ID. |
+| **TauriTavern** | The maintainer reports a dedicated OpenCode provider with a stable ID, targeted at the Canary release. See [issue #221](https://github.com/Darkatse/TauriTavern/issues/221) for availability. This integration fix does not change Go's intended use for coding agents. |
+
+### SDKs and gateways
+
+SDKs do not necessarily own a conversation's lifecycle. If you build your own
+coding client, supply the session ID in your application and give the client a
+distinct user agent. If you use a gateway, preserve the ID from the original client.
+
+| Integration | What to do |
+| --- | --- |
+| **Vercel AI SDK** | Pass `x-opencode-session` through the `headers` option on each `generateText` or `streamText` call. [Issue #20271](https://github.com/vercel/ai/issues/20271) was closed: applications must supply the ID. |
+| **OpenAI Agents SDK for Python** | Set `ModelSettings.extra_headers` with the session header. [Issue #4841](https://github.com/openai/openai-agents-python/issues/4841) was closed with this supported configuration. |
+| **LangChain.js** | Add the header through your model client's request-header configuration. [Issue #11547](https://github.com/langchain-ai/langchainjs/issues/11547) tracks the request for automatic support. |
+| **LiteLLM** | Configure your gateway to forward or supply a per-conversation session header. [Issue #39503](https://github.com/BerriAI/litellm/issues/39503) remains open. |
+| **AxonHub** | Session-header support was added in the fix for [issue #2361](https://github.com/looplj/axonhub/issues/2361). Use a build containing that fix and the OpenCode Go channel, and pass a stable session ID from your client; a randomly generated fallback per request does not preserve conversation affinity. |
+| **OpenAI / Anthropic SDKs, fetch, and other HTTP clients** | Add the session header and your application's user agent explicitly. A generic `OpenAI/Python`, `node`, `Bun`, or browser user agent does not identify the coding agent. |
+
+For example, create an ID when a conversation starts and reuse it on every
+related request:
+
+```ts
+// Persist this with the conversation; do not generate a new ID for each request.
+const sessionID = crypto.randomUUID()
+const headers = {
+  "user-agent": "my-coding-agent/1.0",
+  "x-opencode-session": sessionID,
+}
+```
+
+Keep the same ID across follow-up messages, tool calls, retries, and resumed
+conversations. Start a new ID for a new conversation rather than sharing one
+fixed value across your entire installation.
+
+Go also accepts `x-claude-code-session-id`, `x-session-id`, `session-id`,
+`session_id`, and `x-deepseek-harness-session-id`. Clients that already send one
+of these do not need to duplicate it as `x-opencode-session`.
+
 ## Usage limits
 
 OpenCode Go includes the following limits:
