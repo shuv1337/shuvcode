@@ -23,5 +23,5 @@
 
 ## Validation
 
-- Run `bun typecheck` and `bun run build` from `packages/www` after changes.
+- Run `bun typecheck` and `bun run build` from `services/www` after changes.
 - Check desktop and mobile layouts when changing navigation or shared styles.

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@opencode/files",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --target browser --outfile dist/worker.js",
+    "preview": "bun run build && pulumi preview",
+    "deploy": "bun run build && pulumi up",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit --project tsconfig.pulumi.json"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@tsconfig/node22": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "pulumi": "3.246.0",
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "6.17.0",
+    "@pulumi/pulumi": "3.246.0"
+  }
+}
