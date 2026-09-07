@@ -16,14 +16,18 @@ versions installed and run them side by side.
 $ bun install -g --trust @opencode/cli@beta
 $ pnpm add -g --allow-build=@opencode/cli @opencode/cli@beta
 $ yarn global add @opencode/cli@beta
+$ paru -S opencode-beta
 $ curl -fsSL https://opencode.ai/v2/install | bash`}
   />
 </div>
 
-The package uses a trusted postinstall script to select the native `opencode2` binary for your platform. The Bun and pnpm
+The npm package uses a trusted postinstall script to select the native `opencode2` binary for your platform. The Bun and pnpm
 commands above explicitly allow that script to run.
 
-Homebrew, Arch Linux, Windows package managers, Docker, and standalone binaries are not supported during the beta.
+On Arch Linux, install [`opencode-beta`](https://aur.archlinux.org/packages/opencode-beta) from the AUR with `paru`.
+It provides the `opencode2` command; manage updates through your AUR helper.
+
+Homebrew, Windows package managers, Docker, and standalone binaries are not supported during the beta.
 
 ---
 

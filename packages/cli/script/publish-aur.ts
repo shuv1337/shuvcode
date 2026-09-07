@@ -17,7 +17,8 @@ if (!(beta ? /^\d+\.\d+\.\d+-beta[.-]\d+(?:\.\d+)?$/ : /^\d+\.\d+\.\d+$/).test(S
 }
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
-const outdir = path.join(dir, "dist", `aur-${name}`)
+const root = path.resolve(process.env.OPENCODE_CLI_DIST ?? path.join(dir, "dist"))
+const outdir = path.join(root, `aur-${name}`)
 const dryRun = process.argv.includes("--dry-run")
 const pkgver = Script.version.replaceAll("-", ".")
 const license = Bun.file(path.join(dir, "..", "..", "LICENSE"))
@@ -35,7 +36,7 @@ const sources = await Promise.all(
     { arch: "x86_64", target: "linux-x64-baseline" },
     { arch: "aarch64", target: "linux-arm64" },
   ].map(async (item) => {
-    const directory = path.join(dir, "dist", `cli-${item.target}`)
+    const directory = path.join(root, `cli-${item.target}`)
     const pkg: { name: string; version: string } = await Bun.file(path.join(directory, "package.json")).json()
     if (pkg.version !== Script.version) throw new Error(`Unexpected version for ${pkg.name}: ${pkg.version}`)
     const archive = Bun.file(path.join(directory, `${pkg.name.replace("@", "").replace("/", "-")}-${pkg.version}.tgz`))

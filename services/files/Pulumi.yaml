@@ -1,7 +1,0 @@
-name: files
-description: OpenCode public file distribution
-main: pulumi.ts
-runtime:
-  name: nodejs
-  options:
-    packagemanager: bun

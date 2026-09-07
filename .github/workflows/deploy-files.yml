@@ -13,7 +13,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   deploy:
@@ -28,12 +27,8 @@ jobs:
         working-directory: services/files
         run: bun typecheck
 
-      - name: Authenticate with Pulumi Cloud
-        uses: pulumi/auth-actions@141415910c3beb54e03b48e9057c204c97b956f2 # v2.1.0
-        with:
-          organization: anomalyco
-          requested-token-type: urn:pulumi:token-type:access_token:organization
-
       - name: Deploy
         working-directory: services/files
-        run: bun run deploy --stack anomalyco/files/${{ github.ref_name == 'v2' && 'production' || 'dev' }} --yes --non-interactive
+        run: bun run deploy --env ${{ github.ref_name == 'v2' && 'production' || 'dev' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

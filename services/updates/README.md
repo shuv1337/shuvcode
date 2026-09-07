@@ -11,6 +11,20 @@ curl 'https://opencode.ai/update/api/latest/cli/npm'
 The same Worker also serves the original `https://update.opencode.ai` hostname without
 the `/update` prefix. Admin forms, pagination, and redirects preserve the request's mount.
 
+## Desktop update feeds
+
+Electron updater manifests are available at `/api/<channel>/desktop/<distribution>/<filename>`:
+
+```sh
+curl 'https://opencode.ai/update/api/beta/desktop/opencode/latest-mac.yml'
+```
+
+Use `latest.yml` for Windows, `latest-mac.yml` for macOS, `latest-linux.yml` for Linux x64,
+and `latest-linux-arm64.yml` for Linux ARM64. The distribution selects the stored download
+URLs (`opencode` or `github`). Each manifest includes the selected artifact's version,
+file URLs, SHA-512 checksums, sizes, and release date. Existing minimum-version selection
+and `current`/User-Agent handling also apply to these feeds.
+
 ## Minimum releases
 
 Each channel/name/distribution can mark one retained artifact as `minimum`, independently
@@ -67,6 +81,21 @@ replaced. The stream is shared across release channels because the update servic
 has a single public deployment.
 
 ## Publishing
+
+The publish workflow also registers direct binary downloads with distribution
+`opencode`, after uploading every file to the public files bucket:
+
+```sh
+curl 'https://opencode.ai/update/api/dev/cli/opencode'
+curl 'https://opencode.ai/update/api/dev/cli-node/opencode'
+curl 'https://opencode.ai/update/api/latest/desktop/opencode'
+```
+
+`metadata.files` maps each filename to its direct
+`https://opencode.ai/files/bin/<version>/<filename>` URL, SHA-256 checksum, and
+byte size. Desktop records additionally contain `metadata.manifests`, with
+the CDN URLs and the original Electron update checksums. Existing `npm`,
+`github`, and `aur` distributions are published independently.
 
 GitHub Actions publishes artifacts through `POST https://opencode.ai/update/api/publish`
 using a short-lived OIDC token with audience `https://update.opencode.ai`. The original

@@ -1,9 +1,8 @@
 # Public Files
 
-Each stack owns one R2 bucket, a Worker, and a `/files/*` route on its domain.
-Production resources are Pulumi-protected.
+Each environment has one R2 bucket, a Worker, and a `/files/*` route on its domain.
 
-| Stack       | Bucket and Worker           | Public URL                       |
+| Environment | Bucket and Worker           | Public URL                       |
 | ----------- | --------------------------- | -------------------------------- |
 | Development | `opencode-dev-files`        | `https://dev.opencode.ai/files/` |
 | Production  | `opencode-production-files` | `https://opencode.ai/files/`     |
@@ -21,39 +20,27 @@ URL:    https://opencode.ai/files/videos/demo.mp4
 
 ## Deployment
 
-This directory is the standalone `anomalyco/files` Pulumi project. Pulumi manages
-the bucket, Worker source, R2 binding, and zone route. The preview and deploy
-scripts bundle the Worker with Bun first; Wrangler is unnecessary.
-The route uses the stage's existing proxied DNS record
-and takes precedence over broader website routes. Production uses `opencode.ai`;
-development uses `dev.opencode.ai`, and personal stages use `<stage>.dev.opencode.ai`.
+Wrangler bundles and deploys the Worker, its R2 binding, and its path route.
+`wrangler.jsonc` defines the `dev` and `production` environments. Their routes
+use the existing proxied stage hostnames and take precedence over broader website
+routes.
 
 ```bash
 bun typecheck
-bun run preview --stack anomalyco/files/dev
-bun run deploy --stack anomalyco/files/dev
-bun run preview --stack anomalyco/files/production
-bun run deploy --stack anomalyco/files/production
+bun run build
+bun run deploy --env dev
+bun run deploy --env production
 ```
 
-The stack exports `bucketName` and `url`. The Cloudflare credential
-comes from the stack's imported Pulumi ESC environment and needs R2, Workers
-Scripts, and Workers Routes write permissions, plus zone read access.
-
-Initialize new stacks once with `bunx pulumi stack init anomalyco/files/<stage>`.
-The checked-in development and production stack files import `shared/dev` and
-`shared/production` respectively. Personal stages need an ESC import providing
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, and a proxied stage hostname.
+The existing buckets are reused. For a fresh environment, create its bucket once
+with `bunx wrangler r2 bucket create opencode-<stage>-files` and add the matching
+environment to `wrangler.jsonc`.
 
 `.github/workflows/deploy-files.yml` deploys development on every push to `dev`
-and production on every push to `v2`. It uses the same Pulumi Cloud OIDC login as
-the platform workflow; Cloudflare credentials are supplied through ESC.
-
-The `anomalyco` Pulumi organization's GitHub OIDC issuer must allow organization
-tokens with audience `urn:pulumi:org:anomalyco` and these subjects:
-
-- `repo:anomalyco/opencode:ref:refs/heads/dev`
-- `repo:anomalyco/opencode:ref:refs/heads/v2`
+and production on every push to `v2`, using the existing
+`CLOUDFLARE_API_TOKEN` GitHub secret. The token needs Workers Scripts and Workers
+Routes write permissions, plus zone read access. Creating buckets and uploading
+objects also requires R2 write access.
 
 ## Uploading
 
@@ -77,6 +64,47 @@ validators, supports conditional GET/HEAD, and streams single byte ranges for
 video seeking and download resumption, including If-Range. Unsupported or
 malformed range formats fall back to a full response. Public CORS allows these
 files to be consumed from other origins.
+
+## Release Binaries
+
+Each package owns its publishing destinations. `packages/cli/script/publish.ts`
+publishes npm packages, Cloudflare archives, and AUR releases.
+`packages/desktop/scripts/publish.ts` publishes GitHub release assets, finalizes
+desktop manifests, uploads to Cloudflare, and registers its update artifacts.
+The root release script invokes these package publishers.
+
+Both publishers upload signed/packaged outputs to the production bucket for
+every release channel:
+
+```text
+R2 key: bin/0.0.0-dev-123/opencode2-linux-x64.tar.gz
+URL:    https://opencode.ai/files/bin/0.0.0-dev-123/opencode2-linux-x64.tar.gz
+
+R2 key: bin/2.0.0/opencode-desktop-mac-arm64.dmg
+URL:    https://opencode.ai/files/bin/2.0.0/opencode-desktop-mac-arm64.dmg
+```
+
+CLI and Node CLI archives contain the standalone executable at their root, with
+execute permissions restored after GitHub artifact downloads. Linux uses
+`.tar.gz`; macOS and Windows use `.zip`. Desktop uploads retain their GitHub
+release filenames, including blockmaps and `.app.tar.gz` bundles.
+
+The package publishers use the shared `UpdateArtifact.upload` helper with the
+existing GitHub `CLOUDFLARE_API_TOKEN` secret and R2 object write access. It derives
+S3 credentials from the verified token, streams uploads, and sets the content
+type, download filename, and immutable cache headers.
+
+The publishers register `cli`, `cli-node` (when built), and `desktop` (when
+released) with distribution `opencode`. Each record is published only after all
+of its files have uploaded successfully.
+Every `metadata.files` entry contains the direct CDN `url`, SHA-256 checksum,
+and byte size. Desktop `metadata.manifests` also use those CDN URLs and retain
+the original SHA-512 and blockmap metadata.
+
+For local verification, each package publisher accepts `--dry-run` with
+`OPENCODE_VERSION` and `OPENCODE_CHANNEL` matching the build. CLI reads its own
+`dist/` directory (or `OPENCODE_CLI_DIST`). Desktop reads `OPENCODE_DESKTOP_DIST`;
+its dry run expects already-finalized manifests in `RUNNER_TEMP`.
 
 ## Caching
 

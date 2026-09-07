@@ -35,7 +35,7 @@ export default {
     if (!key) return new Response(null, { status: 404, headers: cors })
 
     // Public object responses never vary by cookies, authorization, or origin.
-    const cacheKey = new Request(url, { method: "GET" })
+    const cacheKey = new Request(url.href, { method: "GET" })
     const cacheControl = request.headers.get("Cache-Control") ?? ""
     const noStore = /\bno-store\b/i.test(cacheControl)
     const bypass = noStore || /\bno-cache\b|\bmax-age=0\b/i.test(cacheControl)

@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "jose": "6.0.11",
-    "semver": "catalog:"
+    "semver": "catalog:",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

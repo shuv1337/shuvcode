@@ -1,6 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose"
 import type { Pipeline } from "cloudflare:pipelines"
 import semver from "semver"
+import { stringify } from "yaml"
 
 interface Env {
   DB: D1Database
@@ -71,7 +72,7 @@ export default {
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 })
 
     const [root, ...path] = pathname.split("/").filter(Boolean)
-    if (root !== "api" || path.length < 1 || path.length > 3 || !path.every(validIdentifier)) {
+    if (root !== "api" || path.length < 1 || path.length > 4 || !path.every(validIdentifier)) {
       return new Response("Not found", { status: 404 })
     }
 
@@ -80,6 +81,12 @@ export default {
     const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
     const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
     const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
+    if (path.length === 4) {
+      if (path[1] !== "desktop" || !/^latest(?:-mac|-linux(?:-arm64)?)?\.yml$/.test(path[3])) {
+        return new Response("Not found", { status: 404 })
+      }
+      return artifactDistribution(env.DB, resolved, path[1], path[2], caller, path[3])
+    }
     if (path.length === 1) return channel(env.DB, resolved, caller)
     if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller)
     return artifactDistribution(env.DB, resolved, path[1], path[2], caller)
@@ -112,6 +119,7 @@ async function artifactDistribution(
   name: string,
   distribution: string,
   current: string | undefined,
+  manifest?: string,
 ) {
   const result = await db
     .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND (active = 1 OR minimum = 1)`)
@@ -119,6 +127,17 @@ async function artifactDistribution(
     .all<ArtifactRow>()
   const artifact = selectArtifacts(result.results, current)[0]
   if (!artifact) return json({ error: "Artifact not found" }, 404)
+  if (manifest) {
+    const metadata = decodeMetadata(artifact.metadata)
+    const value =
+      isRecord(metadata) && isRecord(metadata.manifests)
+        ? metadata.manifests[manifest.replace(/^latest/, "desktop")]
+        : undefined
+    if (!isRecord(value)) return json({ error: "Manifest not found" }, 404)
+    return new Response(stringify({ ...value, version: artifact.version }), {
+      headers: { "Content-Type": "application/yaml; charset=utf-8", "Cache-Control": "no-store" },
+    })
+  }
   return updateResponse(decodeArtifact(artifact))
 }
 
