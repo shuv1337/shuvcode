@@ -49,6 +49,19 @@ migration rules remain explicit in their schemas.
   invalid entries individually. Valid entries still pass through their codecs.
 - Recovery is not a substitute for an explicit historical shape transformation.
 
+## Writes
+
+The setter returned by `persisted()` only marks the store dirty (`persist.ts`). The store is
+serialized once per save window (`persistSaveDelay`), on owner cleanup, and when the page
+hides, and the write is skipped when the serialized form did not change. Reactive observers
+therefore see every mutation immediately and a burst of setter calls costs one encode. Call
+`flushPersisted()` when a test or a shutdown path needs the write to have happened; the
+desktop platform calls it before flushing its namespaces on shutdown. A real unsaved local
+change wins over a value arriving from another window, and over a stored value that finishes
+loading after the user already edited. A remote value that arrives while the store is dirty
+is held until the save runs; if the local setter calls turned out not to change the
+serialized form, the remote value is adopted instead of being lost.
+
 ## Namespaces
 
 On desktop, `platform.storage(name)` returns a `NamespaceStorage` (`namespace.ts`): the
