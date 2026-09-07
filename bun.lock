@@ -63,11 +63,11 @@
         "@ibm/plex": "6.4.1",
         "@kobalte/core": "catalog:",
         "@opencode-ai/client": "workspace:*",
-        "@opencode-ai/plugin-browser": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
         "@opencode-ai/session-ui": "workspace:*",
         "@opencode-ai/ui": "workspace:*",
         "@opencode-ai/util": "workspace:*",
+        "@opencode/plugin-browser": "workspace:*",
         "@pierre/trees": "1.0.0-beta.4",
         "@sentry/solid": "catalog:",
         "@solid-primitives/event-bus": "1.1.2",
@@ -358,10 +358,10 @@
         "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/codemode": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
-        "@opencode-ai/plugin-browser": "workspace:*",
         "@opencode-ai/pty": "0.1.13",
         "@opencode-ai/schema": "workspace:*",
         "@opencode-ai/util": "workspace:*",
+        "@opencode/plugin-browser": "workspace:*",
         "@parcel/watcher": "2.5.1",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
@@ -425,9 +425,9 @@
         "@lydell/node-pty": "catalog:",
         "@opencode-ai/app": "workspace:*",
         "@opencode-ai/client": "workspace:*",
-        "@opencode-ai/plugin-browser": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
         "@opencode-ai/ui": "workspace:*",
+        "@opencode/plugin-browser": "workspace:*",
         "@sentry/solid": "catalog:",
         "@sentry/vite-plugin": "catalog:",
         "@solid-primitives/storage": "catalog:",
@@ -613,7 +613,7 @@
       ],
     },
     "packages/plugin-browser": {
-      "name": "@opencode-ai/plugin-browser",
+      "name": "@opencode/plugin-browser",
       "version": "0.0.0",
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
@@ -2176,8 +2176,6 @@
 
     "@opencode-ai/plugin": ["@opencode-ai/plugin@workspace:packages/plugin"],
 
-    "@opencode-ai/plugin-browser": ["@opencode-ai/plugin-browser@workspace:packages/plugin-browser"],
-
     "@opencode-ai/posts": ["@opencode-ai/posts@workspace:packages/posts"],
 
     "@opencode-ai/protocol": ["@opencode-ai/protocol@workspace:packages/protocol"],
@@ -2229,6 +2227,8 @@
     "@opencode-ai/web": ["@opencode-ai/web@workspace:packages/web"],
 
     "@opencode-ai/www": ["@opencode-ai/www@workspace:packages/www"],
+
+    "@opencode/plugin-browser": ["@opencode/plugin-browser@workspace:packages/plugin-browser"],
 
     "@openrouter/ai-sdk-provider": ["@openrouter/ai-sdk-provider@2.10.0", "", { "peerDependencies": { "ai": "^6.0.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-FMsAEjLUt5pWuRE2LDC/LCvVrFjLlrEzUITH5+5SZtfq7KZ2wrOHjQVxzz92sju8S9ltpzW87CLW8/b0oBXVCw=="],
 
