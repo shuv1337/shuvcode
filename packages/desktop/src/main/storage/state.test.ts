@@ -37,21 +37,24 @@ describe("state store", () => {
     store.flush()
     store.delete("global", "model")
     expect(store.get("global", "model")).toBeNull()
-    expect(store.keys("global")).toEqual([])
+    expect(store.items("global").items).toEqual({})
     store.flush()
     expect(rows(db)).toEqual([])
   })
 
-  test("keys and length merge stored rows with queued changes", () => {
-    const { store } = open()
-    store.set("w", "tabs", "[]")
-    store.set("w", "recent", "{}")
+  test("items merges stored rows with queued changes and update returns a rising revision", () => {
+    const { db, store } = open()
+    expect(store.items("w")).toEqual({ items: {}, revision: 0 })
+    expect(store.update("w", { tabs: "[]", recent: "{}" }, [])).toBe(1)
     store.flush()
-    store.set("w", "info", "{}")
-    store.delete("w", "recent")
-    expect(store.keys("w").sort()).toEqual(["info", "tabs"])
-    expect(store.length("w")).toBe(2)
-    expect(store.keys("other")).toEqual([])
+    expect(store.update("w", { info: "{}" }, ["recent"])).toBe(2)
+    expect(store.items("w")).toEqual({ items: { tabs: "[]", info: "{}" }, revision: 2 })
+    expect(store.items("other")).toEqual({ items: {}, revision: 2 })
+    store.flush()
+    expect(rows(db)).toEqual([
+      { name: "w", key: "info", value: "{}" },
+      { name: "w", key: "tabs", value: "[]" },
+    ])
   })
 
   test("clear drops a namespace including queued writes and leaves others alone", () => {

@@ -49,6 +49,23 @@ migration rules remain explicit in their schemas.
   invalid entries individually. Valid entries still pass through their codecs.
 - Recovery is not a substitute for an explicit historical shape transformation.
 
+## Namespaces
+
+On desktop, `platform.storage(name)` returns a `NamespaceStorage` (`namespace.ts`): the
+in-memory truth for one storage namespace, modelled on VS Code's `Storage` class. The
+namespace is loaded from the host once, reads are Map lookups from then on, and writes
+update the cache immediately while being batched into one host round trip per flush
+window (`namespaceFlushDelay`). `flush()` hands the batch to the driver synchronously, so a
+flush on page hide is on the wire before the page goes away; the desktop platform flushes
+every namespace before the IPC runtime is disposed and whenever the window is hidden. Each
+local write carries a sequence number that is kept until the host accepts that exact write;
+until then neither the initial load, a change from another window (`accept`), nor the retry
+of an older failed batch can replace the key. The host also stamps every update with a
+monotonic revision, returned in the ack and carried by change events and loads, so an event
+that reaches a window after a newer ack or load for the same key is recognised as stale and
+dropped; an event held back during an in-flight write is applied after the ack when the host
+ordered it later.
+
 ## Migrations
 
 Describe shipped representations with schemas and transform their typed values
