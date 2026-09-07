@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose"
 import type { Pipeline } from "cloudflare:pipelines"
+import semver from "semver"
 
 interface Env {
   DB: D1Database
@@ -13,13 +14,15 @@ type ArtifactRow = {
   version: string
   metadata: string
   active: number
+  minimum: number
   time_created: number
   time_updated: number
 }
 
-type Artifact = Omit<ArtifactRow, "metadata" | "active"> & {
+type Artifact = Omit<ArtifactRow, "metadata" | "active" | "minimum"> & {
   metadata: unknown
   active: boolean
+  minimum: boolean
 }
 
 type ArtifactInput = Pick<ArtifactRow, "channel" | "name" | "distribution" | "version"> & {
@@ -28,7 +31,8 @@ type ArtifactInput = Pick<ArtifactRow, "channel" | "name" | "distribution" | "ve
 
 const identifier = /^[a-zA-Z0-9._-]{1,64}$/
 const version = /^[a-zA-Z0-9.+_-]{1,128}$/
-const select = "SELECT channel, name, distribution, version, metadata, active, time_created, time_updated FROM artifact"
+const select =
+  "SELECT channel, name, distribution, version, metadata, active, minimum, time_created, time_updated FROM artifact"
 const audience = "https://update.opencode.ai"
 const githubKeys = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"))
 
@@ -55,7 +59,8 @@ export default {
 
     if (url.pathname === "/") return json({ service: "opencode-updates" })
     if (url.pathname === "/admin" && request.method === "GET") return admin(request, env)
-    if (url.pathname === "/admin/activate" && request.method === "POST") return activateArtifact(request, env)
+    if (url.pathname === "/admin/activate" && request.method === "POST") return markArtifact(request, env, "active")
+    if (url.pathname === "/admin/minimum" && request.method === "POST") return markArtifact(request, env, "minimum")
     if (url.pathname === "/api/publish" && request.method === "POST") return publishArtifact(request, env)
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 })
 
@@ -65,37 +70,74 @@ export default {
     }
 
     const resolved = resolveChannel(path[0])
-    if (path.length === 1) return channel(env.DB, resolved)
-    if (path.length === 2) return artifactName(env.DB, resolved, path[1])
-    return artifactDistribution(env.DB, resolved, path[1], path[2])
+    const current = url.searchParams.get("current") ?? request.headers.get("User-Agent")?.match(/^opencode\/(.*)$/)?.[1]
+    if (path.length === 1) return channel(env.DB, resolved, current)
+    if (path.length === 2) return artifactName(env.DB, resolved, path[1], current)
+    return artifactDistribution(env.DB, resolved, path[1], path[2], current)
   },
 } satisfies ExportedHandler<Env>
 
-async function channel(db: D1Database, channel: string) {
+async function channel(db: D1Database, channel: string, current: string | undefined) {
   const result = await db
-    .prepare(`${select} WHERE channel = ? AND active = 1 ORDER BY name, distribution`)
+    .prepare(`${select} WHERE channel = ? AND (active = 1 OR minimum = 1) ORDER BY name, distribution`)
     .bind(channel)
     .all<ArtifactRow>()
-  if (!result.results.length) return json({ error: "Channel not found" }, 404)
-  return cached({ channel, artifacts: result.results.map(decodeArtifact) })
+  const artifacts = selectArtifacts(result.results, current)
+  if (!artifacts.length) return json({ error: "Channel not found" }, 404)
+  return updateResponse({ channel, artifacts: artifacts.map(decodeArtifact) })
 }
 
-async function artifactName(db: D1Database, channel: string, name: string) {
+async function artifactName(db: D1Database, channel: string, name: string, current: string | undefined) {
   const result = await db
-    .prepare(`${select} WHERE channel = ? AND name = ? AND active = 1 ORDER BY distribution`)
+    .prepare(`${select} WHERE channel = ? AND name = ? AND (active = 1 OR minimum = 1) ORDER BY distribution`)
     .bind(channel, name)
     .all<ArtifactRow>()
-  if (!result.results.length) return json({ error: "Artifact not found" }, 404)
-  return cached({ channel, name, artifacts: result.results.map(decodeArtifact) })
+  const artifacts = selectArtifacts(result.results, current)
+  if (!artifacts.length) return json({ error: "Artifact not found" }, 404)
+  return updateResponse({ channel, name, artifacts: artifacts.map(decodeArtifact) })
 }
 
-async function artifactDistribution(db: D1Database, channel: string, name: string, distribution: string) {
-  const artifact = await db
-    .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND active = 1`)
+async function artifactDistribution(
+  db: D1Database,
+  channel: string,
+  name: string,
+  distribution: string,
+  current: string | undefined,
+) {
+  const result = await db
+    .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND (active = 1 OR minimum = 1)`)
     .bind(channel, name, distribution)
-    .first<ArtifactRow>()
+    .all<ArtifactRow>()
+  const artifact = selectArtifacts(result.results, current)[0]
   if (!artifact) return json({ error: "Artifact not found" }, 404)
-  return cached(decodeArtifact(artifact))
+  return updateResponse(decodeArtifact(artifact))
+}
+
+function selectArtifacts(rows: ArtifactRow[], current: string | undefined) {
+  const caller = current === undefined ? undefined : releaseVersion(current)
+  return rows
+    .filter((row) => row.active === 1)
+    .map((active) => {
+      if (current === undefined) return active
+      const minimum = rows.find(
+        (row) => row.minimum === 1 && row.name === active.name && row.distribution === active.distribution,
+      )
+      if (!minimum) return active
+      const floor = releaseVersion(minimum.version)
+      if (!floor) return minimum
+      return !caller || semver.lt(caller, floor) ? minimum : active
+    })
+}
+
+function releaseVersion(input: string) {
+  // Preview builds use a hyphen before the run number. Normalize it to a numeric
+  // prerelease identifier, and compare historical next builds in the beta channel.
+  return semver.valid(
+    input.replace(
+      /^(v?0\.0\.0)-(next|beta|dev)-(\d+)(?=\.|$)/,
+      (_, core, channel, build) => `${core}-${resolveChannel(channel)}.${build}`,
+    ),
+  )
 }
 
 async function admin(request: Request, env: Env) {
@@ -117,7 +159,8 @@ async function admin(request: Request, env: Env) {
         <td><code>${escape(artifact.distribution)}</code></td>
         <td><code>${escape(artifact.version)}</code></td>
         <td>${new Date(artifact.time_created).toISOString()}</td>
-        <td>${artifact.active ? '<span class="badge">Active</span>' : '<span class="badge" data-variant="secondary">Inactive</span>'}</td>
+        <td>${artifact.active ? '<span class="badge">Active</span>' : '<span class="badge" data-variant="secondary">Inactive</span>'}
+          ${artifact.minimum ? '<span class="badge">Minimum</span>' : ""}</td>
         <td>
           ${
             artifact.active
@@ -130,6 +173,14 @@ async function admin(request: Request, env: Env) {
                   <button class="btn" data-size="sm" data-variant="outline" type="submit">Activate</button>
                 </form>`
           }
+          <form action="/admin/minimum" method="post">
+            <input type="hidden" name="channel" value="${escape(artifact.channel)}">
+            <input type="hidden" name="name" value="${escape(artifact.name)}">
+            <input type="hidden" name="distribution" value="${escape(artifact.distribution)}">
+            <input type="hidden" name="version" value="${escape(artifact.version)}">
+            <input type="hidden" name="enabled" value="${artifact.minimum ? "0" : "1"}">
+            <button class="btn" data-size="sm" data-variant="outline" type="submit">${artifact.minimum ? "Clear minimum" : "Set minimum"}</button>
+          </form>
         </td>
       </tr>`,
     )
@@ -154,7 +205,7 @@ async function admin(request: Request, env: Env) {
     th, td { padding: .8rem 1rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
     th { color: var(--muted-foreground); font-size: .75rem; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; }
     tbody tr:last-child td { border-bottom: 0; }
-    td form { margin: 0; }
+    td form { margin: 0; display: inline-block; }
     .pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--border); padding: 1rem; }
     .pagination p { color: var(--muted-foreground); font-size: .875rem; }
     .pagination nav { display: flex; gap: .5rem; }
@@ -216,7 +267,7 @@ async function publishArtifact(request: Request, env: Env) {
   return json({ published: true })
 }
 
-async function activateArtifact(request: Request, env: Env) {
+async function markArtifact(request: Request, env: Env, flag: "active" | "minimum") {
   const invalid = validMutation(request)
   if (invalid) return invalid
   const form = await request.formData()
@@ -227,6 +278,10 @@ async function activateArtifact(request: Request, env: Env) {
     version: form.get("version"),
   })
   if (key instanceof Response) return key
+  const enabled = flag === "minimum" && form.get("enabled") === "0" ? 0 : 1
+  if (flag === "minimum" && enabled && !releaseVersion(key.version)) {
+    return json({ error: "Minimum must have a comparable release version" }, 400)
+  }
   const exists = await env.DB.prepare(
     "SELECT 1 FROM artifact WHERE channel = ? AND name = ? AND distribution = ? AND version = ?",
   )
@@ -234,10 +289,16 @@ async function activateArtifact(request: Request, env: Env) {
     .first()
   if (!exists) return json({ error: "Artifact not found" }, 404)
   await env.DB.batch([
-    deactivateStatement(env.DB, key),
+    ...(enabled
+      ? [
+          env.DB.prepare(
+            `UPDATE artifact SET ${flag} = 0 WHERE channel = ? AND name = ? AND distribution = ? AND ${flag} = 1`,
+          ).bind(key.channel, key.name, key.distribution),
+        ]
+      : []),
     env.DB.prepare(
-      "UPDATE artifact SET active = 1, time_updated = ? WHERE channel = ? AND name = ? AND distribution = ? AND version = ?",
-    ).bind(Date.now(), key.channel, key.name, key.distribution, key.version),
+      `UPDATE artifact SET ${flag} = ?, time_updated = ? WHERE channel = ? AND name = ? AND distribution = ? AND version = ?`,
+    ).bind(enabled, Date.now(), key.channel, key.name, key.distribution, key.version),
   ])
   return Response.redirect(new URL("/admin", request.url), 303)
 }
@@ -300,7 +361,7 @@ function parseKey(input: Record<string, unknown>): Omit<ArtifactInput, "metadata
 }
 
 function decodeArtifact(row: ArtifactRow): Artifact {
-  return { ...row, metadata: decodeMetadata(row.metadata), active: row.active === 1 }
+  return { ...row, metadata: decodeMetadata(row.metadata), active: row.active === 1, minimum: row.minimum === 1 }
 }
 
 function decodeMetadata(input: string) {
@@ -379,8 +440,8 @@ function isRecord(input: unknown): input is Record<string, unknown> {
   return typeof input === "object" && input !== null && !Array.isArray(input)
 }
 
-function cached(value: unknown) {
-  return json(value, 200, { "Cache-Control": "public, max-age=60" })
+function updateResponse(value: unknown) {
+  return json(value, 200, { "Cache-Control": "no-store" })
 }
 
 function json(value: unknown, status = 200, headers?: HeadersInit) {

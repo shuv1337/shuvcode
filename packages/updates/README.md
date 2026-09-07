@@ -8,6 +8,27 @@ curl 'https://update.opencode.ai/api/latest/cli'
 curl 'https://update.opencode.ai/api/latest/cli/npm'
 ```
 
+## Minimum releases
+
+Each channel/name/distribution can mark one retained artifact as `minimum`, independently
+of its `active` artifact. Set or clear it from the admin page. Publishing a new active
+release preserves the minimum marker.
+
+Clients send their running version as `?current=<version>`. Existing clients fall back
+to `User-Agent: opencode/<version>`. A caller below the minimum receives that exact
+artifact; callers at or above it receive the active artifact. An unparseable caller
+version receives the minimum. Requests with neither version source receive the active
+artifact. All three public API paths apply the same selection and use `Cache-Control:
+no-store` because responses can depend on the User-Agent.
+
+Version comparison uses semver, normalizing preview run numbers to numeric prerelease
+identifiers and historical `next` versions to `beta`. The `/api/next` channel also
+resolves to `beta`.
+
+Choose a minimum that older clients can install and that can itself consume the active
+release. For the CLI package migration, retain a package-aware release published as
+`@opencode-ai/cli` as the minimum before activating releases under `@opencode/cli`.
+
 The `/admin*` route must be protected by a Cloudflare Access self-hosted application. Configure the application with:
 
 - Public hostname: `update.opencode.ai`
