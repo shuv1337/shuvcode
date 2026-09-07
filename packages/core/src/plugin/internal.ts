@@ -31,6 +31,7 @@ import { ConfigWorktreePlugin } from "../config/plugin/worktree.js"
 import { Worktree } from "../worktree.js"
 import { Bus } from "../bus.js"
 import { Environment } from "../environment/index.js"
+import { FileAccess } from "../file-access.js"
 import { FileMutation } from "../file-mutation.js"
 import { Formatter } from "../formatter.js"
 import { Form } from "../form.js"
@@ -44,7 +45,6 @@ import { Integration } from "../integration.js"
 import { Job } from "../job.js"
 import { KV } from "../kv.js"
 import { Location } from "../location.js"
-import { LocationMutation } from "../location-mutation.js"
 import { ModelsDev } from "../models-dev.js"
 import { Mcp } from "../mcp/index.js"
 import { Npm } from "@opencode-ai/util/npm"
@@ -103,6 +103,7 @@ const services = [
   Credential.Service,
   Bus.Service,
   Environment.Service,
+  FileAccess.Service,
   FileMutation.Service,
   Formatter.Service,
   LocationWatcherPolicy.Service,
@@ -116,7 +117,6 @@ const services = [
   Job.Service,
   KV.Service,
   Location.Service,
-  LocationMutation.Service,
   ModelsDev.Service,
   Mcp.Service,
   Npm.Service,
@@ -152,6 +152,7 @@ export const requirements = LayerNode.group([
   Credential.node,
   Bus.node,
   Environment.node,
+  FileAccess.node,
   FileMutation.node,
   Formatter.node,
   LocationWatcherPolicy.node,
@@ -165,7 +166,6 @@ export const requirements = LayerNode.group([
   Job.node,
   KV.node,
   Location.node,
-  LocationMutation.node,
   ModelsDev.node,
   Mcp.node,
   Npm.node,
