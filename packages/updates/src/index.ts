@@ -70,11 +70,13 @@ export default {
     }
 
     const resolved = resolveChannel(path[0])
-    const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:[^/]+\/([^/]+)\/cli|(.*))$/)
-    const current = url.searchParams.get("current") ?? agent?.[1] ?? agent?.[2]
-    if (path.length === 1) return channel(env.DB, resolved, current)
-    if (path.length === 2) return artifactName(env.DB, resolved, path[1], current)
-    return artifactDistribution(env.DB, resolved, path[1], path[2], current)
+    const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:([^/]+)\/([^/]+)\/cli|(.*))$/)
+    const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
+    const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
+    const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
+    if (path.length === 1) return channel(env.DB, resolved, caller)
+    if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller)
+    return artifactDistribution(env.DB, resolved, path[1], path[2], caller)
   },
 } satisfies ExportedHandler<Env>
 

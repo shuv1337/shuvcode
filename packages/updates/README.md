@@ -17,6 +17,10 @@ release preserves the minimum marker.
 Clients send their running version as `?current=<version>` and use the CLI's default
 `User-Agent: opencode/<channel>/<version>/cli`. When `current` is absent, the service
 parses that User-Agent or the older `opencode/<version>` format.
+The caller's channel comes from the default User-Agent, or from a preview version
+such as `0.0.0-beta-18955` when that channel is absent. If an identified caller channel
+differs from the requested channel, the service serves the active release without
+applying the minimum. Historical `next` and `beta` count as the same channel.
 A caller below the minimum receives that exact
 artifact; callers at or above it receive the active artifact. An unparseable caller
 version receives the minimum. Requests with neither version source receive the active
