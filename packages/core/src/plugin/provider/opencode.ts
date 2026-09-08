@@ -2,18 +2,24 @@ import { Duration, Effect, Equal, Schema, Semaphore, Stream } from "effect"
 import type { Scope } from "effect"
 import type { IntegrationOAuthMethodRegistration } from "@opencode/plugin/effect/integration"
 import { define } from "@opencode/plugin/effect/plugin"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { Bus } from "../../bus.js"
 import { Credential } from "../../credential.js"
 import { Integration } from "../../integration.js"
 import { Provider } from "../../provider.js"
+import { WebSearch } from "../../websearch.js"
 import { ConfigProvider } from "@opencode/schema/config/provider"
 import { Money } from "@opencode/schema/money"
 
 const defaultServer = "https://opencode.ai/console"
 const clientID = "opencode-cli"
 const methodID = Integration.MethodID.make("device")
-const RemoteResponse = Schema.Struct({ providers: Schema.Record(Schema.String, ConfigProvider.Info) })
+const RemoteResponse = Schema.Struct({
+  providers: Schema.Record(Schema.String, ConfigProvider.Info),
+  websearch: Schema.Struct({
+    providerID: WebSearch.ID,
+  }).pipe(Schema.optional),
+})
 const Device = Schema.Struct({
   device_code: Schema.String,
   user_code: Schema.String,
@@ -61,10 +67,9 @@ function oauth(http: HttpClient.HttpClient) {
       }),
     refresh: (credential) =>
       Effect.gen(function* () {
-        const server = typeof credential.metadata?.server === "string" ? credential.metadata.server : defaultServer
         const token = yield* post(
           http,
-          `${server}/auth/device/token`,
+          `${serverUrl(credential)}/auth/device/token`,
           { grant_type: "refresh_token", refresh_token: credential.refresh, client_id: clientID },
           Token,
         )
@@ -85,24 +90,25 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
     const bus = yield* Bus.Service
     const http = yield* HttpClient.HttpClient
     const loading = Semaphore.makeUnsafe(1)
+    type ActiveConnection = Effect.Success<ReturnType<typeof ctx.integration.connection.active>>
     let snapshot: {
-      connected: boolean
-      providers: typeof RemoteResponse.Type.providers | undefined
-    } = { connected: false, providers: undefined }
+      config: typeof RemoteResponse.Type | undefined
+      connection: ActiveConnection
+    } = { config: undefined, connection: undefined }
 
     const load = Effect.fn("OpencodePlugin.load")(function* () {
       const connection = yield* ctx.integration.connection.active("opencode")
       const credential = connection
         ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
         : undefined
-      const providers = credential
-        ? yield* fetchProviders(http, credential).pipe(
+      const config = credential
+        ? yield* fetchConfig(http, credential).pipe(
             Effect.catch((cause) =>
               Effect.logWarning("failed to load OpenCode provider config", { cause }).pipe(Effect.as(undefined)),
             ),
           )
         : undefined
-      return { connected: connection !== undefined, providers }
+      return { config, connection }
     })
 
     yield* ctx.integration.transform((editor) => {
@@ -115,7 +121,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
 
     snapshot = yield* load()
     yield* ctx.catalog.transform((catalog) => {
-      for (const [providerID, item] of Object.entries(snapshot.providers ?? {})) {
+      for (const [providerID, item] of Object.entries(snapshot.config?.providers ?? {})) {
         const source = catalog.provider.get(item.canonical ?? providerID)
         catalog.provider.update(providerID, (provider) => {
           if (source && source.provider !== provider)
@@ -185,7 +191,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
 
       const item = catalog.provider.get(Provider.ID.opencode)
       if (!item) return
-      const hasKey = Boolean(process.env.OPENCODE_API_KEY || snapshot.connected || item.provider.settings?.apiKey)
+      const hasKey = Boolean(process.env.OPENCODE_API_KEY || snapshot.connection || item.provider.settings?.apiKey)
       catalog.provider.update(item.provider.id, (provider) => {
         if (!hasKey) {
           provider.activation = "enabled"
@@ -201,12 +207,68 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
       }
     })
 
+    yield* ctx.websearch.transform((editor) => {
+      const descriptor = snapshot.config?.websearch
+      const connection = snapshot.connection
+      if (!descriptor || !connection) return
+      editor.add({
+        id: descriptor.providerID,
+        name: "OpenCode",
+        execute: (input) =>
+          Effect.gen(function* () {
+            const active = yield* ctx.integration.connection.active("opencode")
+            if (
+              !active ||
+              (connection.type === "credential"
+                ? active.type !== "credential" || active.id !== connection.id
+                : active.type !== "env" || active.name !== connection.name)
+            ) {
+              return yield* Effect.fail(new Error("OpenCode Console connection changed"))
+            }
+            const credential = yield* ctx.integration.connection.resolve(active)
+            if (!credential) return yield* Effect.fail(new Error("OpenCode Console is not connected"))
+            const metadata = credential.metadata
+            const orgID = typeof metadata?.orgID === "string" ? metadata.orgID : undefined
+            const token = credential.type === "oauth" ? credential.access : credential.key
+            const server = yield* normalizeServer(serverUrl(credential))
+            const request = yield* HttpClientRequest.post(`${server}/api/websearch`).pipe(
+              HttpClientRequest.acceptJson,
+              HttpClientRequest.bearerToken(token),
+              HttpClientRequest.setHeaders(orgID ? { "x-org-id": orgID } : {}),
+              HttpClientRequest.schemaBodyJson(WebSearch.Input)({
+                query: input.query,
+                providerID: descriptor.providerID,
+              }),
+            )
+            const response = yield* HttpClient.withScope(HttpClient.filterStatusOk(http))
+              .execute(request)
+              .pipe(
+                Effect.provideService(FetchHttpClient.RequestInit, { redirect: "error" }),
+                Effect.flatMap(HttpClientResponse.schemaBodyJson(WebSearch.Response)),
+                Effect.scoped,
+                Effect.timeoutOrElse({
+                  duration: Duration.seconds(25),
+                  orElse: () => Effect.fail(new Error("OpenCode web search request timed out")),
+                }),
+              )
+            if (response.providerID !== descriptor.providerID) {
+              return yield* Effect.fail(
+                new Error(
+                  `OpenCode web search returned provider ${response.providerID} instead of ${descriptor.providerID}`,
+                ),
+              )
+            }
+            return response.results
+          }),
+      })
+      editor.default.set(descriptor.providerID)
+    })
+
     const apply = Effect.fn("OpencodePlugin.apply")(function* (next: typeof snapshot) {
       snapshot = next
-      yield* ctx.catalog.reload()
+      yield* Effect.all([ctx.catalog.reload(), ctx.websearch.reload()], { concurrency: 2, discard: true })
     })
     const refresh = () => loading.withPermit(load().pipe(Effect.andThen(apply)))
-
     yield* bus.subscribe(Credential.Event.Switched).pipe(
       Stream.filter((event) => event.data.integrationID === Integration.ID.make("opencode")),
       Stream.runForEach(refresh),
@@ -214,7 +276,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
     )
 
     // Console config can change independently of local credential activity, so re-fetch
-    // periodically and only rebuild the catalog when the loaded snapshot actually differs.
+    // periodically and only rebuild the catalog and search providers when the snapshot differs.
     yield* Effect.sleep(Duration.minutes(10)).pipe(
       Effect.andThen(
         loading.withPermit(
@@ -227,14 +289,13 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Scope
   }),
 })
 
-function fetchProviders(http: HttpClient.HttpClient, value: Credential.Value) {
+function fetchConfig(http: HttpClient.HttpClient, value: Credential.Value) {
   const metadata = value.metadata
-  const server = typeof metadata?.server === "string" ? metadata.server : defaultServer
   const orgID = typeof metadata?.orgID === "string" ? metadata.orgID : undefined
   const token = value.type === "oauth" ? value.access : value.key
   return http
     .execute(
-      HttpClientRequest.get(`${server}/api/v2/config`).pipe(
+      HttpClientRequest.get(`${serverUrl(value)}/api/v2/config`).pipe(
         HttpClientRequest.acceptJson,
         HttpClientRequest.bearerToken(token),
         HttpClientRequest.setHeaders(orgID ? { "x-org-id": orgID } : {}),
@@ -245,10 +306,13 @@ function fetchProviders(http: HttpClient.HttpClient, value: Credential.Value) {
         if (response.status === 404) return Effect.undefined
         return HttpClientResponse.filterStatusOk(response).pipe(
           Effect.flatMap(HttpClientResponse.schemaBodyJson(RemoteResponse)),
-          Effect.map((remote) => remote.providers),
         )
       }),
     )
+}
+
+function serverUrl(value: Credential.Value) {
+  return typeof value.metadata?.server === "string" ? value.metadata.server : defaultServer
 }
 
 function withoutCredentials<Value>(body: Readonly<Record<string, Value>> | undefined) {
