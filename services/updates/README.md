@@ -25,6 +25,31 @@ URLs (`opencode` or `github`). Each manifest includes the selected artifact's ve
 file URLs, SHA-512 checksums, sizes, and release date. Existing minimum-version selection
 and `current`/User-Agent handling also apply to these feeds.
 
+## Channel rollouts
+
+Set each channel's rollout duration in hours on the admin page. All channels default
+to `0` (immediate); fractional hours are supported. For example, `6` makes a release
+available to roughly half of IPs after three hours and all IPs after six hours.
+
+Eligibility uses the original publication time (`time_created`) and a SHA-256 hash
+of the channel and Cloudflare's `CF-Connecting-IP`. Each IP keeps the same rollout
+position across releases in that channel. Requests without this header wait for
+the full duration. `next` uses the `beta` channel's configuration.
+
+Until the active release is eligible, callers receive the newest eligible artifact
+published before it, for the same name and distribution. This also handles overlapping
+rollouts. Earlier inactive releases can be fallbacks, including manually deactivated
+releases; releases newer than the active release cannot. If no eligible artifact
+exists, it is omitted from listings and individual artifact requests return 404.
+
+Minimum releases bypass rollout for clients that need them, and identified clients
+are not sent a fallback below their configured minimum. Rollout applies to all JSON
+endpoints and desktop manifests. Responses, including unavailable artifacts, are not cached.
+
+Duration changes apply immediately to existing releases. Manual activation uses the
+original publication time too; set the duration to `0` to make it immediate.
+Apply the `0004_channel_rollout.sql` migration before deploying.
+
 ## Minimum releases
 
 Each channel/name/distribution can mark one retained artifact as `minimum`, independently

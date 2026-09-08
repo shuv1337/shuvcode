@@ -68,6 +68,7 @@ export default {
     if (pathname === "/admin" && request.method === "GET") return admin(request, env, prefix)
     if (pathname === "/admin/activate" && request.method === "POST") return markArtifact(request, env, "active", prefix)
     if (pathname === "/admin/minimum" && request.method === "POST") return markArtifact(request, env, "minimum", prefix)
+    if (pathname === "/admin/rollout" && request.method === "POST") return configureRollout(request, env, prefix)
     if (pathname === "/api/publish" && request.method === "POST") return publishArtifact(request, env)
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405 })
 
@@ -81,34 +82,53 @@ export default {
     const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
     const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
     const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
+    const rollout = await env.DB.prepare("SELECT duration_hours FROM channel_rollout WHERE channel = ?")
+      .bind(resolved)
+      .first<{ duration_hours: number }>()
+    const ip = request.headers.get("CF-Connecting-IP")
+    const hash =
+      rollout?.duration_hours && ip
+        ? new DataView(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${resolved}:${ip}`))).getUint32(
+            0,
+          )
+        : undefined
+    // Missing IPs wait for full rollout. The same IP keeps its position across releases.
+    const cutoff =
+      Date.now() - (rollout?.duration_hours ?? 0) * 3_600_000 * (hash === undefined ? 1 : (hash + 1) / 2 ** 32)
     if (path.length === 4) {
       if (path[1] !== "desktop" || !/^latest(?:-mac|-linux(?:-arm64)?)?\.yml$/.test(path[3])) {
         return new Response("Not found", { status: 404 })
       }
-      return artifactDistribution(env.DB, resolved, path[1], path[2], caller, path[3])
+      return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff, path[3])
     }
-    if (path.length === 1) return channel(env.DB, resolved, caller)
-    if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller)
-    return artifactDistribution(env.DB, resolved, path[1], path[2], caller)
+    if (path.length === 1) return channel(env.DB, resolved, caller, cutoff)
+    if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller, cutoff)
+    return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff)
   },
 } satisfies ExportedHandler<Env>
 
-async function channel(db: D1Database, channel: string, current: string | undefined) {
+async function channel(db: D1Database, channel: string, current: string | undefined, cutoff: number) {
   const result = await db
     .prepare(`${select} WHERE channel = ? AND (active = 1 OR minimum = 1) ORDER BY name, distribution`)
     .bind(channel)
     .all<ArtifactRow>()
-  const artifacts = selectArtifacts(result.results, current)
+  const artifacts = await selectArtifacts(db, result.results, current, cutoff)
   if (!artifacts.length) return json({ error: "Channel not found" }, 404)
   return updateResponse({ channel, artifacts: artifacts.map(decodeArtifact) })
 }
 
-async function artifactName(db: D1Database, channel: string, name: string, current: string | undefined) {
+async function artifactName(
+  db: D1Database,
+  channel: string,
+  name: string,
+  current: string | undefined,
+  cutoff: number,
+) {
   const result = await db
     .prepare(`${select} WHERE channel = ? AND name = ? AND (active = 1 OR minimum = 1) ORDER BY distribution`)
     .bind(channel, name)
     .all<ArtifactRow>()
-  const artifacts = selectArtifacts(result.results, current)
+  const artifacts = await selectArtifacts(db, result.results, current, cutoff)
   if (!artifacts.length) return json({ error: "Artifact not found" }, 404)
   return updateResponse({ channel, name, artifacts: artifacts.map(decodeArtifact) })
 }
@@ -119,13 +139,14 @@ async function artifactDistribution(
   name: string,
   distribution: string,
   current: string | undefined,
+  cutoff: number,
   manifest?: string,
 ) {
   const result = await db
     .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND (active = 1 OR minimum = 1)`)
     .bind(channel, name, distribution)
     .all<ArtifactRow>()
-  const artifact = selectArtifacts(result.results, current)[0]
+  const artifact = (await selectArtifacts(db, result.results, current, cutoff))[0]
   if (!artifact) return json({ error: "Artifact not found" }, 404)
   if (manifest) {
     const metadata = decodeMetadata(artifact.metadata)
@@ -141,20 +162,56 @@ async function artifactDistribution(
   return updateResponse(decodeArtifact(artifact))
 }
 
-function selectArtifacts(rows: ArtifactRow[], current: string | undefined) {
+async function selectArtifacts(db: D1Database, rows: ArtifactRow[], current: string | undefined, cutoff: number) {
   const caller = current === undefined ? undefined : releaseVersion(current)
-  return rows
-    .filter((row) => row.active === 1)
-    .map((active) => {
-      if (current === undefined) return active
-      const minimum = rows.find(
-        (row) => row.minimum === 1 && row.name === active.name && row.distribution === active.distribution,
-      )
-      if (!minimum) return active
-      const floor = releaseVersion(minimum.version)
-      if (!floor) return minimum
-      return !caller || semver.lt(caller, floor) ? minimum : active
-    })
+  const artifacts = await Promise.all(
+    rows
+      .filter((row) => row.active === 1)
+      .map(async (active) => {
+        const minimum = rows.find(
+          (row) => row.minimum === 1 && row.name === active.name && row.distribution === active.distribution,
+        )
+        const floor = minimum && releaseVersion(minimum.version)
+        if (current !== undefined && minimum && (!floor || !caller || semver.lt(caller, floor))) return minimum
+        if (active.time_created <= cutoff) return active
+        const previous = await db
+          .prepare(
+            `${select} WHERE channel = ? AND name = ? AND distribution = ? AND time_created < ? AND time_created <= ? ORDER BY time_created DESC, version DESC LIMIT 1`,
+          )
+          .bind(active.channel, active.name, active.distribution, active.time_created, cutoff)
+          .first<ArtifactRow>()
+        // A rollout must not send an identified client back below its compatibility floor.
+        if (current !== undefined && minimum) {
+          const version = previous && releaseVersion(previous.version)
+          if (!version || !floor || semver.lt(version, floor)) return minimum
+        }
+        return previous
+      }),
+  )
+  return artifacts.filter((artifact) => artifact !== null)
+}
+
+async function configureRollout(request: Request, env: Env, prefix: string) {
+  const invalid = validMutation(request)
+  if (invalid) return invalid
+  const form = await request.formData()
+  const channel = form.get("channel")
+  const input = form.get("duration_hours")
+  const duration = typeof input === "string" && input.trim() ? Number(input) : NaN
+  if (
+    !validIdentifier(channel) ||
+    !Number.isFinite(duration) ||
+    duration < 0 ||
+    !Number.isFinite(duration * 3_600_000)
+  ) {
+    return json({ error: "Channel and a non-negative rollout duration in hours are required" }, 400)
+  }
+  await env.DB.prepare(
+    "INSERT INTO channel_rollout (channel, duration_hours) VALUES (?, ?) ON CONFLICT (channel) DO UPDATE SET duration_hours = excluded.duration_hours",
+  )
+    .bind(resolveChannel(channel), duration)
+    .run()
+  return Response.redirect(new URL(`${prefix}/admin`, request.url), 303)
 }
 
 function releaseVersion(input: string) {
@@ -170,6 +227,11 @@ function releaseVersion(input: string) {
 
 async function admin(request: Request, env: Env, prefix: string) {
   const url = new URL(request.url)
+  const rollouts = await env.DB.prepare(
+    `SELECT channels.channel, COALESCE(channel_rollout.duration_hours, 0) AS duration_hours
+     FROM (SELECT channel FROM artifact UNION SELECT channel FROM channel_rollout) AS channels
+     LEFT JOIN channel_rollout ON channel_rollout.channel = channels.channel ORDER BY channels.channel`,
+  ).all<{ channel: string; duration_hours: number }>()
   const requestedPage = Number.parseInt(url.searchParams.get("page") ?? "1", 10)
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const pageSize = 100
@@ -246,6 +308,22 @@ async function admin(request: Request, env: Env, prefix: string) {
       <div><p>Release control</p><h1>Artifacts</h1></div>
       <span class="badge" data-variant="outline">${escape(request.headers.get("Cf-Access-Authenticated-User-Email") ?? "Cloudflare Access pending")}</span>
     </header>
+    <article class="card" style="margin-bottom: 2rem">
+      <header><h2>Channel rollouts</h2><p>Hours from publication to full availability. Zero is immediate. Changes apply immediately to existing releases.</p></header>
+      <section>
+        ${
+          rollouts.results
+            .map(
+              (rollout) => `<form action="${prefix}/admin/rollout" method="post">
+          <input type="hidden" name="channel" value="${escape(rollout.channel)}">
+          <label>${escape(rollout.channel)} — hours <input class="input" type="number" name="duration_hours" min="0" step="any" required value="${rollout.duration_hours}"></label>
+          <button class="btn" type="submit">Save</button>
+        </form>`,
+            )
+            .join("") || "<p>Publish a release to configure its channel.</p>"
+        }
+      </section>
+    </article>
     <article class="card">
       <header><h2>Published builds</h2><p>Every build received from the trusted publishing workflow, newest first.</p></header>
       <section class="table-wrap">
@@ -473,7 +551,7 @@ function updateResponse(value: unknown) {
 }
 
 function json(value: unknown, status = 200, headers?: HeadersInit) {
-  return Response.json(value, { status, headers })
+  return Response.json(value, { status, headers: { "Cache-Control": "no-store", ...headers } })
 }
 
 function escape(value: string) {
